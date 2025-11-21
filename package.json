@@ -1,16 +1,34 @@
 {
-  "name": "my-express-app",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "antigravity-warehouse",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "express": "^5.1.0"
+    "@tanstack/react-query": "^5.0.0",
+    "framer-motion": "^11.0.0",
+    "js-sha256": "^0.11.0",
+    "next": "15.0.3",
+    "qz-tray": "^2.2.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vercel": "^48.10.6",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.17",
+    "eslint": "^8",
+    "eslint-config-next": "15.0.3",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5",
+    "@types/pg": "^8.15.6"
   }
 }

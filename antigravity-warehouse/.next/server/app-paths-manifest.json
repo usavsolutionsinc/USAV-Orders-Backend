@@ -1,7 +1,0 @@
-{
-  "/api/packing-slip/route": "app/api/packing-slip/route.js",
-  "/api/orders/route": "app/api/orders/route.js",
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/orders/[id]/printed/route": "app/api/orders/[id]/printed/route.js",
-  "/page": "app/page.js"
-}
