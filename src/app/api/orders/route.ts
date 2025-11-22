@@ -1,44 +1,36 @@
 import { NextResponse } from 'next/server';
+import pool from '@/lib/db';
 
-const MOCK_ORDERS = [
-    {
-        id: 'ORD-8421',
-        buyerName: 'John Doe',
-        shipBy: '2025-11-22',
-        shippingSpeed: 'Standard',
-        trackingNumber: '1Z999AA10123456784',
-        shippingLabelZpl: '^XA^FO50,50^ADN,36,20^FDJohn Doe^FS^FO50,100^ADN,36,20^FD123 Gravity Ln^FS^XZ',
-        items: [
-            {
-                title: 'Anti-Gravity Hover Boots',
-                sku: 'HOV-001',
-                qty: 1,
-                skuDocuments: [
-                    { url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf' } // Mock PDF
-                ]
-            }
-        ]
-    },
-    {
-        id: 'ORD-8422',
-        buyerName: 'Jane Smith',
-        shipBy: '2025-11-21',
-        shippingSpeed: 'Expedited',
-        trackingNumber: '1Z999AA10123456785',
-        shippingLabelZpl: '^XA^FO50,50^ADN,36,20^FDJane Smith^FS^FO50,100^ADN,36,20^FD456 Zero G Rd^FS^XZ',
-        items: [
-            {
-                title: 'Zero-G Coffee Mug',
-                sku: 'ZCM-550',
-                qty: 2,
-                skuDocuments: [
-                    { url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf' }
-                ]
-            }
-        ]
-    }
-];
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
-    return NextResponse.json(MOCK_ORDERS);
+    try {
+        const client = await pool.connect();
+        try {
+            const result = await client.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 500');
+            // Transform data if necessary to match UI expectations
+            const orders = result.rows.map(row => ({
+                id: row.id,
+                buyerName: row.buyer_name,
+                items: [
+                    {
+                        title: row.product_title,
+                        qty: row.qty,
+                        sku: row.sku,
+                        skuDocuments: [] // Placeholder if not in DB yet
+                    }
+                ],
+                shipBy: row.ship_by,
+                shippingSpeed: row.shipping_speed,
+                trackingNumber: row.tracking_number,
+                status: row.status
+            }));
+            return NextResponse.json(orders);
+        } finally {
+            client.release();
+        }
+    } catch (error: any) {
+        console.error('Database Error:', error);
+        return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
+    }
 }

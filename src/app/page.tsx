@@ -1,15 +1,9 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import qz from 'qz-tray';
-import sha256 from 'js-sha256';
-
-// ==== QZ TRAY SECURITY ====
-// In a real app, these would be loaded from env vars
-// qz.security.setCertificatePromise(() => Promise.resolve("YOUR CERT HERE"));
-// qz.security.setSignaturePromise((toSign) => Promise.resolve(sha256(toSign + "YOUR PRIVATE KEY")));
+import Navigation from '@/components/Navigation';
 
 const queryClient = new QueryClient();
 
@@ -22,11 +16,10 @@ async function printEverything(order: any) {
 
         // Collect all manual PDFs from every SKU in the order
         const manualUrls = order.items.flatMap((item: any) =>
-            item.skuDocuments.map((doc: any) => doc.url)
+            item.skuDocuments ? item.skuDocuments.map((doc: any) => doc.url) : []
         );
 
         // 1. Normal printer → Packing slip + all manuals (as PDFs)
-        // Note: In a real scenario, you'd fetch the printer name from config
         const configDocs = qz.configs.create("Brother Laser");
         await qz.print(configDocs, [
             { type: 'pdf', data: `/api/packing-slip?orderId=${order.id}` },
@@ -34,82 +27,89 @@ async function printEverything(order: any) {
         ]).catch((e: any) => console.error("Printing Docs Error:", e));
 
         // 2. Thermal label printer → Shipping label
-        const configLabel = qz.configs.create("Zebra GX430t");
-        await qz.print(configLabel, [
-            { type: 'raw', format: 'zpl', data: order.shippingLabelZpl }
-        ]).catch((e: any) => console.error("Printing Label Error:", e));
+        if (order.shippingLabelZpl) {
+            const configLabel = qz.configs.create("Zebra GX430t");
+            await qz.print(configLabel, [
+                { type: 'raw', format: 'zpl', data: order.shippingLabelZpl }
+            ]).catch((e: any) => console.error("Printing Label Error:", e));
+        }
 
         // Mark as printed
         await fetch(`/api/orders/${order.id}/printed`, { method: 'POST' });
-        alert(`Printed Order ${order.id}`); // Temporary feedback
+        alert(`Printed Order ${order.id}`);
     } catch (err) {
         console.error("Print failed", err);
-        alert("Printing failed. Check console for details. Make sure QZ Tray is running.");
+        alert("Printing failed. Check console for details.");
     }
 }
 
 function Dashboard() {
-    const { data: orders = [] } = useQuery({
+    const { data: orders = [], isLoading } = useQuery({
         queryKey: ['orders'],
         queryFn: () => fetch('/api/orders').then(r => r.json())
     });
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-cyan-50 p-6">
-            <motion.h1
-                initial={{ y: -50, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className="text-4xl font-bold text-center mb-10 text-gray-800"
-            >
-                Antigravity Warehouse — Ready to Ship
-            </motion.h1>
+    const safeOrders = Array.isArray(orders) ? orders : [];
 
-            <div className="max-w-7xl mx-auto overflow-hidden rounded-2xl shadow-2xl bg-white/80 backdrop-blur">
-                <table className="w-full text-left">
-                    <thead className="bg-gradient-to-r from-purple-600 to-cyan-600 text-white">
-                        <tr>
-                            <th className="p-4">Order ID</th>
-                            <th className="p-4">Buyer Name</th>
-                            <th className="p-4">Product Title</th>
-                            <th className="p-4 text-center">QTY</th>
-                            <th className="p-4">Ship by date</th>
-                            <th className="p-4">SKU</th>
-                            <th className="p-4">As</th>
-                            <th className="p-4">Shipping TRK #</th>
-                            <th className="p-4 text-center">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {orders.map((order: any, i: number) => (
-                            <motion.tr
-                                key={order.id}
-                                initial={{ opacity: 0, x: -50 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.05 }}
-                                className="border-b hover:bg-purple-50/50 transition"
-                            >
-                                <td className="p-4 font-medium">{order.id}</td>
-                                <td className="p-4">{order.buyerName}</td>
-                                <td className="p-4">{order.items.map((it: any) => it.title).join(', ')}</td>
-                                <td className="p-4 text-center">{order.items.reduce((a: number, it: any) => a + it.qty, 0)}</td>
-                                <td className="p-4">{new Date(order.shipBy).toLocaleDateString()}</td>
-                                <td className="p-4">{order.items.map((it: any) => it.sku).join(', ')}</td>
-                                <td className="p-4">{order.shippingSpeed}</td>
-                                <td className="p-4 font-mono text-sm">{order.trackingNumber}</td>
-                                <td className="p-4 text-center">
-                                    <motion.button
-                                        whileHover={{ scale: 1.1 }}
-                                        whileTap={{ scale: 0.95 }}
-                                        onClick={() => printEverything(order)}
-                                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 text-white rounded-full shadow-lg font-medium"
-                                    >
-                                        Print Docs + Label
-                                    </motion.button>
-                                </td>
-                            </motion.tr>
-                        ))}
-                    </tbody>
-                </table>
+    if (isLoading) return <div className="p-4 text-sm">Loading orders...</div>;
+
+    return (
+        <div className="min-h-screen bg-white text-black font-sans">
+            <Navigation />
+
+            <div className="p-2">
+                <div className="overflow-x-auto border border-gray-300">
+                    <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-[#0a192f] text-white">
+                            <tr>
+                                <th className="p-2 border-r border-gray-600 font-semibold">Order ID</th>
+                                <th className="p-2 border-r border-gray-600 font-semibold">Buyer Name</th>
+                                <th className="p-2 border-r border-gray-600 font-semibold">Product Title</th>
+                                <th className="p-2 border-r border-gray-600 text-center font-semibold">QTY</th>
+                                <th className="p-2 border-r border-gray-600 font-semibold">Ship By</th>
+                                <th className="p-2 border-r border-gray-600 font-semibold">SKU</th>
+                                <th className="p-2 border-r border-gray-600 font-semibold">Speed</th>
+                                <th className="p-2 border-r border-gray-600 font-semibold">Tracking #</th>
+                                <th className="p-2 text-center font-semibold">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {safeOrders.map((order: any, i: number) => (
+                                <tr
+                                    key={order.id || i}
+                                    className="hover:bg-blue-50 transition-colors even:bg-gray-50"
+                                >
+                                    <td className="p-2 border-r border-gray-200 font-medium whitespace-nowrap">{order.id}</td>
+                                    <td className="p-2 border-r border-gray-200 whitespace-nowrap">{order.buyerName}</td>
+                                    <td className="p-2 border-r border-gray-200 truncate max-w-[200px]" title={order.items.map((it: any) => it.title).join(', ')}>
+                                        {order.items.map((it: any) => it.title).join(', ')}
+                                    </td>
+                                    <td className="p-2 border-r border-gray-200 text-center">
+                                        {order.items.reduce((a: number, it: any) => a + (it.qty || 0), 0)}
+                                    </td>
+                                    <td className="p-2 border-r border-gray-200 whitespace-nowrap">
+                                        {order.shipBy ? new Date(order.shipBy).toLocaleDateString() : '-'}
+                                    </td>
+                                    <td className="p-2 border-r border-gray-200 whitespace-nowrap">
+                                        {order.items.map((it: any) => it.sku).join(', ')}
+                                    </td>
+                                    <td className="p-2 border-r border-gray-200 whitespace-nowrap">{order.shippingSpeed}</td>
+                                    <td className="p-2 border-r border-gray-200 font-mono text-[10px] whitespace-nowrap">
+                                        {order.trackingNumber}
+                                    </td>
+                                    <td className="p-1 text-center">
+                                        <button
+                                            onClick={() => printEverything(order)}
+                                            className="px-2 py-1 bg-[#0a192f] text-white rounded hover:bg-blue-900 text-[10px] uppercase font-bold tracking-wider"
+                                        >
+                                            Print
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
@@ -122,3 +122,4 @@ export default function Home() {
         </QueryClientProvider>
     );
 }
+
