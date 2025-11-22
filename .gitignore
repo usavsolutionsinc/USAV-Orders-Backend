@@ -27,3 +27,7 @@ ts-debug.log*
 
 # vercel
 .vercel
+
+# next-swc binary
+next-swc.darwin-arm64.node
+*.node
