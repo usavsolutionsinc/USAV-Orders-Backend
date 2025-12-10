@@ -1,11 +1,23 @@
 {
+  "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/api/logs/route": "app/api/logs/route.js",
   "/api/orders/[id]/printed/route": "app/api/orders/[id]/printed/route.js",
-  "/api/packing-slip/route": "app/api/packing-slip/route.js",
-  "/api/shipped/route": "app/api/shipped/route.js",
   "/api/orders/route": "app/api/orders/route.js",
+  "/api/packing-slip/route": "app/api/packing-slip/route.js",
   "/api/receiving/route": "app/api/receiving/route.js",
-  "/receiving/page": "app/receiving/page.js",
+  "/api/scan/packer/route": "app/api/scan/packer/route.js",
+  "/api/scan/receiving/route": "app/api/scan/receiving/route.js",
+  "/api/scan/technician/route": "app/api/scan/technician/route.js",
+  "/api/shipped/route": "app/api/shipped/route.js",
+  "/api/sku-stock/route": "app/api/sku-stock/route.js",
+  "/api/skus/route": "app/api/skus/route.js",
+  "/logs/page": "app/logs/page.js",
+  "/packer/[id]/page": "app/packer/[id]/page.js",
   "/page": "app/page.js",
-  "/shipped/page": "app/shipped/page.js"
+  "/receiving/page": "app/receiving/page.js",
+  "/shipped/page": "app/shipped/page.js",
+  "/sku-stock/page": "app/sku-stock/page.js",
+  "/sku/page": "app/sku/page.js",
+  "/technician/[id]/page": "app/technician/[id]/page.js"
 }

@@ -12,18 +12,24 @@ interface DataTableProps<T> {
     columns: Column<T>[];
     keyField: keyof T;
     emptyMessage?: string;
+    variant?: 'default' | 'sheet';
 }
 
-export function DataTable<T>({ data, columns, keyField, emptyMessage = 'No data found.' }: DataTableProps<T>) {
+export function DataTable<T>({ data, columns, keyField, emptyMessage = 'No data found.', variant = 'default' }: DataTableProps<T>) {
+    const isSheet = variant === 'sheet';
+
     return (
-        <div className="overflow-x-auto border border-gray-300">
-            <table className="w-full text-left text-xs border-collapse">
+        <div className={`overflow-x-auto ${isSheet ? 'border border-gray-400' : 'border border-gray-300'}`}>
+            <table className={`w-full text-left border-collapse ${isSheet ? 'text-[10px]' : 'text-xs'}`}>
                 <thead className="bg-[#0a192f] text-white">
                     <tr>
                         {columns.map((col, idx) => (
                             <th
                                 key={idx}
-                                className={`p-2 border-r border-gray-600 font-semibold ${col.headerClassName || ''}`}
+                                className={`font-semibold ${col.headerClassName || ''} ${isSheet
+                                        ? 'p-1 border border-gray-500'
+                                        : 'p-2 border-r border-gray-600'
+                                    }`}
                             >
                                 {col.header}
                             </th>
@@ -41,12 +47,18 @@ export function DataTable<T>({ data, columns, keyField, emptyMessage = 'No data 
                         data.map((item, rowIdx) => (
                             <tr
                                 key={String(item[keyField]) || rowIdx}
-                                className="hover:bg-blue-50 transition-colors even:bg-gray-50"
+                                className={`transition-colors ${isSheet
+                                        ? 'hover:bg-blue-100 even:bg-white odd:bg-gray-50'
+                                        : 'hover:bg-blue-50 even:bg-gray-50'
+                                    }`}
                             >
                                 {columns.map((col, colIdx) => (
                                     <td
                                         key={colIdx}
-                                        className={`p-2 border-r border-gray-200 whitespace-nowrap ${col.className || ''}`}
+                                        className={`whitespace-nowrap ${col.className || ''} ${isSheet
+                                                ? 'p-1 border border-gray-300'
+                                                : 'p-2 border-r border-gray-200'
+                                            }`}
                                     >
                                         {typeof col.accessor === 'function'
                                             ? col.accessor(item)

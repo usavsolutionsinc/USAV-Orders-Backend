@@ -1,14 +1,11 @@
 'use client';
 
 import React from 'react';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import Navigation from '@/components/Navigation';
+import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/DataTable';
 import { usePrinter } from '@/hooks/usePrinter';
 
-const queryClient = new QueryClient();
-
-function Dashboard() {
+export default function Home() {
     const { data: orders = [], isLoading } = useQuery({
         queryKey: ['orders'],
         queryFn: () => fetch('/api/orders').then(r => r.json())
@@ -19,7 +16,6 @@ function Dashboard() {
 
     const columns = [
         { header: 'Order ID', accessor: 'id' as const, className: 'font-medium' },
-        { header: 'Buyer Name', accessor: 'buyerName' as const },
         {
             header: 'Product Title',
             accessor: (order: any) => (
@@ -29,21 +25,24 @@ function Dashboard() {
             )
         },
         {
-            header: 'QTY',
+            header: '#',
             accessor: (order: any) => order.items.reduce((a: number, it: any) => a + (it.qty || 0), 0),
-            className: 'text-center',
-            headerClassName: 'text-center'
+            className: 'text-center'
         },
         {
-            header: 'Ship By',
+            header: 'Ship by',
             accessor: (order: any) => order.shipBy ? new Date(order.shipBy).toLocaleDateString() : '-'
         },
         {
             header: 'SKU',
             accessor: (order: any) => order.items.map((it: any) => it.sku).join(', ')
         },
-        { header: 'Condition', accessor: 'shippingSpeed' as const }, // Mapped 'Speed' to 'Condition' per user request earlier, keeping key as shippingSpeed for now or should I check DB? The user changed header to Condition manually.
-        { header: 'Tracking #', accessor: 'trackingNumber' as const, className: 'font-mono text-[10px]' },
+        { header: 'Item #', accessor: 'item_index' as const }, // Placeholder or need to map
+        { header: 'As', accessor: 'asin' as const }, // Assuming 'As' means ASIN or Assigned
+        { header: 'Shipping TRK #', accessor: 'trackingNumber' as const, className: 'font-mono text-[10px]' },
+        { header: 'OOS - We Need', accessor: 'oos_needed' as const }, // Placeholder
+        { header: 'Notes', accessor: 'notes' as const },
+        { header: 'Receiving TRK #', accessor: 'receiving_tracking' as const }, // Placeholder
         {
             header: 'Action',
             accessor: (order: any) => (
@@ -64,7 +63,6 @@ function Dashboard() {
 
     return (
         <div className="min-h-screen bg-white text-black font-sans">
-            <Navigation />
             <div className="p-2">
                 <DataTable
                     data={safeOrders}
@@ -74,14 +72,6 @@ function Dashboard() {
                 />
             </div>
         </div>
-    );
-}
-
-export default function Home() {
-    return (
-        <QueryClientProvider client={queryClient}>
-            <Dashboard />
-        </QueryClientProvider>
     );
 }
 
