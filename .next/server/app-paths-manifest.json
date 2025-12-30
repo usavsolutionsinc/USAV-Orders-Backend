@@ -1,6 +1,8 @@
 {
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/api/daily-tasks/[id]/route": "app/api/daily-tasks/[id]/route.js",
+  "/api/daily-tasks/route": "app/api/daily-tasks/route.js",
   "/api/logs/route": "app/api/logs/route.js",
   "/api/orders/[id]/printed/route": "app/api/orders/[id]/printed/route.js",
   "/api/orders/route": "app/api/orders/route.js",
@@ -12,6 +14,7 @@
   "/api/shipped/route": "app/api/shipped/route.js",
   "/api/sku-stock/route": "app/api/sku-stock/route.js",
   "/api/skus/route": "app/api/skus/route.js",
+  "/api/sync-sheets/route": "app/api/sync-sheets/route.js",
   "/logs/page": "app/logs/page.js",
   "/packer/[id]/page": "app/packer/[id]/page.js",
   "/page": "app/page.js",
