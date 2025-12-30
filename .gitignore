@@ -31,3 +31,17 @@ ts-debug.log*
 # next-swc binary
 next-swc.darwin-arm64.node
 *.node
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
