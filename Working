@@ -232,6 +232,40 @@ function onEdit(e) {
     // FBA Plan logic removed
 
     // --- Begin Packer_0 to Packer_10 logic ---
+    
+    // Handle A column edits in Packer sheets - redirect to B column
+    if (/^Packer_([0-9]|10)$/.test(sheetName) && column === 1 && row >= 2) {
+      var inputValue = String(range.getValue()).trim();
+      if (inputValue !== "") {
+        // Find next available B column row (empty B cell)
+        var lastRow = sheet.getLastRow();
+        var targetRow = -1;
+        
+        for (var i = 2; i <= lastRow + 1; i++) {
+          var bValue = String(sheet.getRange(i, 2).getValue()).trim();
+          if (bValue === "") {
+            targetRow = i;
+            break;
+          }
+        }
+        
+        if (targetRow === -1) {
+          targetRow = lastRow + 1;
+        }
+        
+        // Move the input to the target B column
+        sheet.getRange(targetRow, 2).setValue(inputValue);
+        
+        // Clear the A column edit
+        range.setValue("");
+        
+        // Move cursor to the B column row
+        sheet.getRange(targetRow, 2).activate();
+        
+        return; // Exit early to prevent further processing
+      }
+    }
+
     if (/^Packer_([0-9]|10)$/.test(sheetName) && column === 2 && row >= 2) {
       var inputValue = String(range.getValue()).trim();
       if (inputValue === "") return;
@@ -326,7 +360,24 @@ function onEdit(e) {
       var carrier = detectCarrierOrFba(inputValue);
 
       // Only scan Shipped sheet if carrier is UPS, USPS, or FedEx
+      var trackingFoundInShipped = false;
+      var trackingFoundInOrders = false;
       if (carrier === "UPS" || carrier === "USPS" || carrier === "FedEx") {
+        // Check Orders sheet first for tracking validation
+        var ordersSheet = spreadsheet.getSheetByName("Orders");
+        if (ordersSheet) {
+          var ordersLastRow = ordersSheet.getLastRow();
+          if (ordersLastRow >= 2) {
+            var kDataOrders = ordersSheet.getRange("K2:K" + ordersLastRow).getValues(); // K column
+            for (var k = 0; k < kDataOrders.length; k++) {
+              if (getLastEightDigits(kDataOrders[k][0]) === getLastEightDigits(inputValue)) {
+                trackingFoundInOrders = true;
+                break;
+              }
+            }
+          }
+        }
+
         var shippedSheet = spreadsheet.getSheetByName("Shipped");
         if (shippedSheet) {
           var shippedLastRow = shippedSheet.getLastRow();
@@ -351,19 +402,25 @@ function onEdit(e) {
                 var timestamp = formatDate(new Date());
                 shippedSheet.getRange(i + 2, 1).setValue(timestamp); // A column
 
-
-                // Mark H column with Packer sheet name
-                shippedSheet.getRange(i + 2, 8).setValue(sheetName); // H column
+                // Mark H column with Packer name
+                var packerName = getPackerName(sheetName);
+                shippedSheet.getRange(i + 2, 8).setValue(packerName); // H column
 
                 // Sort Shipped sheet by A column (A to Z - earliest to latest)
                 var sortRange = shippedSheet.getRange(2, 1, shippedLastRow - 1, shippedSheet.getLastColumn());
                 sortRange.sort(1); // Sort by column 1 (A column)
 
                 logError("Packer Transfer", "Shipped row " + (i + 2) + " processed from " + sheetName);
+                trackingFoundInShipped = true;
                 break;
               }
             }
           }
+        }
+
+        // If tracking number not found in Orders or Shipped, highlight Packer B column red
+        if (!trackingFoundInOrders && !trackingFoundInShipped) {
+          sheet.getRange(row, 2).setBackground("#FF0000"); // Only B column red
         }
       }
       // For non-UPS/USPS/FedEx carriers (SKU, FBA, etc.), the existing logic below will handle them
@@ -460,10 +517,7 @@ function onEdit(e) {
       column === 6 && row >= 2 && row <= 1000
     ) {
       const input = String(range.getValue()).trim();
-      if (input) {
-        // When J is pasted to F column, highlight yellow (B-F per row)
-        sheet.getRange(row, 2, 1, 5).setBackground("#FFFF00"); // B-F yellow
-      }
+      // No special highlighting for F column edits - only tracking numbers should highlight yellow
     }
 
     // Tech_X Orders Handling (for Tech_0 to Tech_10)
@@ -547,29 +601,6 @@ function onEdit(e) {
 
     // --- Sku timestamp removed - now handled by Vercel server ---
 
-    // --- Orders P column scan for K match, highlight K green only ---
-    if (sheetName === "Orders" && column === 16 && row >= 2 && row <= 1000) { // P is column 16
-      var pInput = String(range.getValue()).trim();
-      if (pInput) {
-        var lastRow = sheet.getLastRow();
-        var kData = sheet.getRange(2, 11, lastRow - 1, 1).getValues(); // K
-        var matchRow = -1;
-        for (var i = 0; i < kData.length; i++) {
-          var kVal = String(kData[i][0]).trim();
-          if (getLastEightDigits(kVal) === getLastEightDigits(pInput)) {
-            matchRow = i + 2;
-            break;
-          }
-        }
-        if (matchRow !== -1) {
-          sheet.getRange(matchRow, 11).setBackground("#00FF00"); // Highlight K cell green
-          // Clear only the P column entry in Orders
-          sheet.getRange(row, 16).clearContent(); // Clear P column entry
-        } else {
-          sheet.getRange(row, 16).setBackground("#FF0000"); // Highlight P cell red if no match
-        }
-      }
-    }
   } catch (err) {
     logError("Main onEdit", err);
   }
@@ -692,6 +723,13 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
       // Capitalize first letter for display
       var statusValue = input.charAt(0).toUpperCase() + input.slice(1).toLowerCase();
       sheet.getRange(row, 6).setValue(statusValue); // F column
+    }
+
+    // Check if A column has red background - if so, don't transfer
+    var aBackground = sheet.getRange(row, 1).getBackground();
+    if (aBackground === "#ff0000" || aBackground === "#FF0000") {
+      // Tracking number not found in Shipped - don't transfer
+      return true; // Still return true to indicate progression was handled (input should be cleared)
     }
 
     // Change background to green for B-F
@@ -853,9 +891,9 @@ function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
 
           if (serialNumbers) {
             // Add serial numbers to column D in current row
-            var existingSerial = String(sheet.getRange(targetRow, 4).getValue()).trim();
-            if (existingSerial) {
-              sheet.getRange(targetRow, 4).setValue(existingSerial + ', ' + serialNumbers);
+            var existingSerialData = String(sheet.getRange(targetRow, 4).getValue()).trim();
+            if (existingSerialData) {
+              sheet.getRange(targetRow, 4).setValue(existingSerialData + ', ' + serialNumbers);
             } else {
               sheet.getRange(targetRow, 4).setValue(serialNumbers);
             }
@@ -917,28 +955,39 @@ function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
       const now = new Date();
       sheet.getRange(targetRow, 1).setValue(now);
 
-      // Set product name in B by matching Orders K and copying E
-      const outOfStockSheet = spreadsheet.getSheetByName("Orders");
-      if (outOfStockSheet) {
-        const outLastRow = outOfStockSheet.getLastRow();
-        const kData = outOfStockSheet.getRange("K2:K" + outLastRow).getValues();
-        for (let i = 0; i < kData.length; i++) {
-          if (getLastEightDigits(kData[i][0]) === getLastEightDigits(input)) {
-            const productName = outOfStockSheet.getRange(i + 2, 5).getValue(); // E
-            sheet.getRange(targetRow, 2).setValue(productName); // B
+      // Check if tracking number exists in Shipped sheet and copy data if found
+      const shippedSheet = spreadsheet.getSheetByName("Shipped");
+      var trackingFound = false;
+      if (shippedSheet) {
+        const shippedLastRow = shippedSheet.getLastRow();
+        if (shippedLastRow >= 2) {
+          const fData = shippedSheet.getRange("F2:F" + shippedLastRow).getValues(); // F column tracking
+          const cData = shippedSheet.getRange("C2:C" + shippedLastRow).getValues(); // C column titles
+          const dData = shippedSheet.getRange("D2:D" + shippedLastRow).getValues(); // D column status
+          
+          for (let i = 0; i < fData.length; i++) {
+            if (getLastEightDigits(fData[i][0]) === getLastEightDigits(input)) {
+              // Copy product title from Shipped C to Tech B
+              const productName = cData[i][0];
+              sheet.getRange(targetRow, 2).setValue(productName); // B
 
-            // Copy status from Orders J column to Tech F column and highlight yellow
-            var orderStatus = String(outOfStockSheet.getRange(i + 2, 10).getValue()).trim(); // J column in Orders
-            if (orderStatus) {
-              sheet.getRange(targetRow, 6).setValue(orderStatus); // F column in Tech
-              sheet.getRange(targetRow, 2, 1, 5).setBackground("#FFFF00"); // B-F yellow
+              // Copy status from Shipped D to Tech F
+              var shippedStatus = String(dData[i][0]).trim();
+              if (shippedStatus) {
+                sheet.getRange(targetRow, 6).setValue(shippedStatus); // F column in Tech
+                sheet.getRange(targetRow, 2, 1, 5).setBackground("#FFFF00"); // B-F yellow
+              }
+
+              trackingFound = true;
+              break;
             }
-
-            // Set background color to yellow for the matching row in Orders (C to I)
-            outOfStockSheet.getRange(i + 2, 3, 1, 7).setBackground("#FFFF00"); // C to I in Orders
-            break;
           }
         }
+      }
+
+      // If tracking number not found in Shipped, highlight only A column red
+      if (!trackingFound) {
+        sheet.getRange(targetRow, 1).setBackground("#FF0000"); // Only A column red
       }
 
       // Store this row number in PropertiesService for serial numbers (sheet-specific)
@@ -1149,20 +1198,24 @@ function updateReceivingDailyCount(sheet) {
 
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
-  ui.createMenu('Shipping Tools')
-    .addSubMenu(ui.createMenu('Shipping')
-      .addItem('Move Orders to Shipped', 'checkTrackingInShipped')
-      .addItem('Remove Duplicate Orders', 'removeDuplicateOrders')
-      .addItem('Remove Duplicate Shipped', 'removeDuplicateShipped'))
-    .addSubMenu(ui.createMenu('Orders')
-      .addItem('Packed SKU Matches', 'packedSkuMatches')
-      .addItem('Delete Shipped Orders', 'transferExistingOrdersToRestock')
-      .addItem('Calculate Late Orders', 'calculateLateOrders'))
-    .addSubMenu(ui.createMenu('Orders Check')
-      .addItem('Tech to Shipped', 'techToShipped'))
+  
+  ui.createMenu('Shipping')
+    .addItem('Move Orders to Shipped', 'checkTrackingInShipped')
+    .addItem('Remove Duplicate Orders', 'removeDuplicateOrders')
+    .addItem('Remove Duplicate Shipped', 'removeDuplicateShipped')
     .addToUi();
-  // FBA Shipping menu removed - sheet no longer used
-  // SKU Management menu removed - available SKUs system no longer used
+  
+  ui.createMenu('Orders')
+    .addItem('Packed SKU Matches', 'packedSkuMatches')
+    .addItem('Delete Shipped Orders', 'transferExistingOrdersToRestock')
+    .addItem('Calculate Late Orders', 'calculateLateOrders')
+    .addToUi();
+  
+  ui.createMenu('Integrity')
+    .addItem('Tech to Shipped', 'techToShipped')
+    .addItem('Recheck Tech Tracking', 'recheckTechTrackingIntegrity')
+    .addItem('Recheck Packer Tracking', 'recheckPackerTrackingIntegrity')
+    .addToUi();
 }
 
 // sendAvailableSkusToServer function removed - available SKUs system no longer used
@@ -1280,16 +1333,16 @@ function packedSkuMatches() {
       }
     }
 
-    // Get current backgrounds to update only matches
-    var range = sheet.getRange(2, 2, lastRow - 1, 8); // B to I
+    // Get current backgrounds to update only matches (C to I)
+    var range = sheet.getRange(2, 3, lastRow - 1, 7); // C to I
     var backgrounds = range.getBackgrounds();
     var hasChanges = false;
 
     for (var i = 0; i < hData.length; i++) {
       var sku = String(hData[i][0]).replace(/\s+/g, '').toLowerCase();
       if (sku && packedMap.has(sku) && packedMap.get(sku) >= 1) {
-        // Set row to green
-        for (var k = 0; k < 8; k++) {
+        // Set row to green (C to I columns)
+        for (var k = 0; k < 7; k++) {
           backgrounds[i][k] = "#00FF00";
         }
         hasChanges = true;
@@ -1333,8 +1386,11 @@ function checkTrackingInShipped() {
       shippedSheet.getRange(1, 1, 1, ordersHeaders.length).setFontWeight("bold");
     }
 
-    // Get Orders data (A to Q)
-    var ordersData = ordersSheet.getRange(2, 1, ordersLastRow - 1, 17).getValues();
+    // Get Orders data (A to K)
+    var ordersData = ordersSheet.getRange(2, 1, ordersLastRow - 1, 11).getValues();
+    
+    // Get K column backgrounds to check for white/clear backgrounds
+    var kBackgrounds = ordersSheet.getRange(2, 11, ordersLastRow - 1, 1).getBackgrounds();
 
     // Get Shipped F column for existence check
     var shippedLastRow = shippedSheet.getLastRow();
@@ -1348,16 +1404,27 @@ function checkTrackingInShipped() {
     }
 
     var rowsToAdd = [];
-    var qRangesToClear = [];
+    var kRowsToGreen = []; // Track which K rows to mark green
+
+    // Helper function to check if background is white/clear
+    function isWhiteOrClearBackground(bg) {
+      if (bg === null || bg === undefined) return true;
+      if (typeof bg === 'string') {
+        var bgLower = bg.toLowerCase();
+        return bgLower === '#ffffff' || bgLower === '#fff' || bgLower === 'white' || bgLower === '';
+      }
+      return false;
+    }
 
     for (var i = 0; i < ordersData.length; i++) {
       var row = ordersData[i];
-      var qValue = String(row[16]).trim(); // Q is index 16
       var kValue = String(row[10]).trim(); // K is index 10
+      var kBackground = kBackgrounds[i][0]; // Background color of K cell
 
-      if (qValue === "1" && kValue !== "") {
+      // Check if K has non-empty value and white/clear background
+      if (kValue !== "" && isWhiteOrClearBackground(kBackground)) {
         if (!shippedTrackingSet.has(getLastEightDigits(kValue))) {
-          // Prepare row for Shipped (size 11 to reach K)
+          // Tracking number not in Shipped - prepare row for transfer
           var newRow = new Array(11).fill("");
           newRow[1] = row[2]; // B = C
           newRow[2] = row[4]; // C = E
@@ -1369,21 +1436,32 @@ function checkTrackingInShipped() {
           newRow[10] = row[7]; // K = H
 
           rowsToAdd.push(newRow);
-          qRangesToClear.push("Q" + (i + 2));
-
           shippedTrackingSet.add(getLastEightDigits(kValue));
         }
+        
+        // Always mark K column green for white/clear backgrounds (whether transferred or already exists)
+        kRowsToGreen.push(i + 2); // Store actual row number for K column
       }
+    }
+
+    // Mark K column green for all white/clear background rows (whether transferred or already existed)
+    var rangesToGreen = [];
+    for (var j = 0; j < kRowsToGreen.length; j++) {
+      rangesToGreen.push("K" + kRowsToGreen[j]);
+    }
+    if (rangesToGreen.length > 0) {
+      ordersSheet.getRangeList(rangesToGreen).setBackground("#00FF00");
     }
 
     if (rowsToAdd.length > 0) {
       var startRow = shippedLastRow < 1 ? 2 : shippedLastRow + 1;
       shippedSheet.getRange(startRow, 1, rowsToAdd.length, 11).setValues(rowsToAdd);
-      ordersSheet.getRangeList(qRangesToClear).clearContent();
-
-      SpreadsheetApp.getUi().alert("Transfer completed.\n" + rowsToAdd.length + " rows transferred from Orders to Shipped.");
+      
+      SpreadsheetApp.getUi().alert("Transfer completed.\n" + rowsToAdd.length + " new rows transferred to Shipped.\n" + kRowsToGreen.length + " K column cells marked green (includes existing + transferred).");
+    } else if (kRowsToGreen.length > 0) {
+      SpreadsheetApp.getUi().alert("No new transfers needed.\n" + kRowsToGreen.length + " K column cells marked green (tracking numbers already exist in Shipped).");
     } else {
-      SpreadsheetApp.getUi().alert("No new rows to transfer.");
+      SpreadsheetApp.getUi().alert("No rows to process.");
     }
 
   } catch (err) {
@@ -1683,13 +1761,20 @@ function techToShipped() {
       var techLastRow = techSheet.getLastRow();
       if (techLastRow < 2) continue;
 
-      // Get Tech sheet data: C column (tracking/FNSKU), D column (serial numbers), F column (checklist status)
+      // Get Tech sheet data: A column backgrounds, C column (tracking/FNSKU), D column (serial numbers), F column (checklist status)
+      var techABackgrounds = techSheet.getRange(2, 1, techLastRow - 1, 1).getBackgrounds(); // A column backgrounds
       var techCData = techSheet.getRange(2, 3, techLastRow - 1, 1).getValues(); // C column
       var techDData = techSheet.getRange(2, 4, techLastRow - 1, 1).getValues(); // D column
       var techFData = techSheet.getRange(2, 6, techLastRow - 1, 1).getValues(); // F column
 
-      // Process each row in Tech sheet
+      // Process each row in Tech sheet - only rows with red A column highlighting
       for (var i = 0; i < techCData.length; i++) {
+        // Check if A column has red background
+        var aBackground = techABackgrounds[i][0];
+        if (aBackground !== "#ff0000" && aBackground !== "#FF0000") {
+          continue; // Skip rows without red A column
+        }
+        
         var techTracking = String(techCData[i][0]).trim();
         var techSerialNumbers = String(techDData[i][0]).trim();
         var techFStatus = String(techFData[i][0]).trim();
@@ -1848,5 +1933,237 @@ function calculateLateOrders() {
   } catch (err) {
     logError("Calculate Late Orders", err);
     SpreadsheetApp.getUi().alert("Error calculating late orders: " + err.toString());
+  }
+}
+
+// Function to determine packer name based on sheet name
+function getPackerName(sheetName) {
+  if (sheetName === "Packer_0") {
+    return "Tuan";
+  } else if (sheetName === "Packer_1") {
+    return "Thuy";
+  } else if (sheetName === "Packer_2") {
+    return "Packer_2";
+  } else if (sheetName === "Packer_3") {
+    return "Packer_3";
+  } else if (sheetName === "Packer_4") {
+    return "Packer_4";
+  } else if (sheetName === "Packer_5") {
+    return "Packer_5";
+  } else if (sheetName === "Packer_6") {
+    return "Packer_6";
+  } else if (sheetName === "Packer_7") {
+    return "Packer_7";
+  } else if (sheetName === "Packer_8") {
+    return "Packer_8";
+  } else if (sheetName === "Packer_9") {
+    return "Packer_9";
+  } else if (sheetName === "Packer_10") {
+    return "Packer_10";
+  }
+  return sheetName; // Default to sheet name if no mapping
+}
+
+// Function to recheck Tech sheet tracking numbers in red highlighted rows
+function recheckTechTrackingIntegrity() {
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var shippedSheet = spreadsheet.getSheetByName("Shipped");
+    
+    if (!shippedSheet) {
+      SpreadsheetApp.getUi().alert("Shipped sheet not found.");
+      return;
+    }
+
+    var shippedLastRow = shippedSheet.getLastRow();
+    var fDataShipped = [];
+    var cDataShipped = [];
+    if (shippedLastRow >= 2) {
+      fDataShipped = shippedSheet.getRange("F2:F" + shippedLastRow).getValues(); // F column tracking
+      cDataShipped = shippedSheet.getRange("C2:C" + shippedLastRow).getValues(); // C column titles
+    }
+
+    var processedCount = 0;
+    var fixedCount = 0;
+    var stillRedCount = 0;
+
+    // Process all Tech_X sheets (Tech_0 to Tech_10)
+    for (var t = 0; t <= 10; t++) {
+      var techSheetName = "Tech_" + t;
+      var techSheet = spreadsheet.getSheetByName(techSheetName);
+      
+      if (!techSheet) continue;
+
+      var techLastRow = techSheet.getLastRow();
+      if (techLastRow < 2) continue;
+
+      // Get all data and backgrounds for the sheet
+      var techRange = techSheet.getRange(2, 1, techLastRow - 1, techSheet.getLastColumn());
+      var techData = techRange.getValues();
+      var techBackgrounds = techRange.getBackgrounds();
+
+      var rowsToUpdate = [];
+      var backgroundsToUpdate = [];
+
+      for (var i = 0; i < techData.length; i++) {
+        // Check if A column has red background
+        if (techBackgrounds[i][0] === "#ff0000" || techBackgrounds[i][0] === "#FF0000") {
+          var trackingNumber = String(techData[i][2]).trim(); // Column C (index 2)
+          
+          if (trackingNumber) {
+            processedCount++;
+            var trackingFound = false;
+
+            // Check if tracking exists in Shipped F column
+            for (var s = 0; s < fDataShipped.length; s++) {
+              if (getLastEightDigits(fDataShipped[s][0]) === getLastEightDigits(trackingNumber)) {
+                trackingFound = true;
+                // Get product name from Shipped C column
+                var productName = cDataShipped[s][0];
+                techData[i][1] = productName; // Set in B column (index 1)
+
+                // Clear red background from A column only
+                techBackgrounds[i][0] = null;
+
+                fixedCount++;
+                break;
+              }
+            }
+
+            if (!trackingFound) {
+              stillRedCount++;
+            }
+
+            rowsToUpdate.push(i + 2); // Store actual row number
+          }
+        }
+      }
+
+      // Update the sheet with new data and backgrounds if any changes were made
+      if (rowsToUpdate.length > 0) {
+        techRange.setValues(techData);
+        techRange.setBackgrounds(techBackgrounds);
+      }
+    }
+
+    SpreadsheetApp.getUi().alert(
+      "Tech Tracking Integrity Check completed.\n" +
+      processedCount + " red highlighted rows processed.\n" +
+      fixedCount + " tracking numbers found and fixed.\n" +
+      stillRedCount + " tracking numbers still not found (remain red)."
+    );
+
+  } catch (err) {
+    logError("Recheck Tech Tracking Integrity", err);
+    SpreadsheetApp.getUi().alert("Error running Tech integrity check: " + err.toString());
+  }
+}
+
+// Function to recheck Packer sheet tracking numbers in red highlighted B column cells
+function recheckPackerTrackingIntegrity() {
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var shippedSheet = spreadsheet.getSheetByName("Shipped");
+    
+    if (!shippedSheet) {
+      SpreadsheetApp.getUi().alert("Shipped sheet not found.");
+      return;
+    }
+
+    var shippedLastRow = shippedSheet.getLastRow();
+    var fDataShipped = [];
+    var cDataShipped = [];
+    if (shippedLastRow >= 2) {
+      fDataShipped = shippedSheet.getRange("F2:F" + shippedLastRow).getValues(); // F column tracking
+      cDataShipped = shippedSheet.getRange("C2:C" + shippedLastRow).getValues(); // C column titles
+    }
+
+    var processedCount = 0;
+    var fixedCount = 0;
+    var stillRedCount = 0;
+
+    // Process all Packer_X sheets (Packer_0 to Packer_10)
+    for (var p = 0; p <= 10; p++) {
+      var packerSheetName = "Packer_" + p;
+      var packerSheet = spreadsheet.getSheetByName(packerSheetName);
+      
+      if (!packerSheet) continue;
+
+      var packerLastRow = packerSheet.getLastRow();
+      if (packerLastRow < 2) continue;
+
+      // Get all data and backgrounds for the sheet
+      var packerRange = packerSheet.getRange(2, 1, packerLastRow - 1, packerSheet.getLastColumn());
+      var packerData = packerRange.getValues();
+      var packerBackgrounds = packerRange.getBackgrounds();
+
+      var rowsToUpdate = [];
+
+      for (var i = 0; i < packerData.length; i++) {
+        // Check if B column has red background
+        if (packerBackgrounds[i][1] === "#ff0000" || packerBackgrounds[i][1] === "#FF0000") {
+          var trackingNumber = String(packerData[i][1]).trim(); // Column B (index 1)
+          
+          if (trackingNumber) {
+            // Only process if it's a tracking number (UPS, USPS, FedEx)
+            var carrier = detectCarrier(trackingNumber);
+            if (carrier === "UPS" || carrier === "USPS" || carrier === "FedEx") {
+              processedCount++;
+              var trackingFound = false;
+
+              // Check if tracking exists in Shipped F column
+              for (var s = 0; s < fDataShipped.length; s++) {
+                if (getLastEightDigits(fDataShipped[s][0]) === getLastEightDigits(trackingNumber)) {
+                  trackingFound = true;
+                  
+                  // Copy product title from Shipped C column to Packer D column
+                  var productTitle = cDataShipped[s][0]; // C column
+                  packerData[i][3] = productTitle; // D column (index 3)
+                  
+                  // Copy A column timestamp from Packer to Shipped A column
+                  var packerTimestamp = packerData[i][0]; // A column from packer
+                  if (packerTimestamp) {
+                    shippedSheet.getRange(s + 2, 1).setValue(packerTimestamp); // A column in Shipped
+                  }
+                  
+                  // Copy packer name to Shipped H column
+                  var packerName = getPackerName(packerSheetName);
+                  shippedSheet.getRange(s + 2, 8).setValue(packerName); // H column in Shipped
+                  
+                  // Clear red background from B column and set to green
+                  packerBackgrounds[i][1] = "#00FF00"; // B column green
+
+                  fixedCount++;
+                  break;
+                }
+              }
+
+              if (!trackingFound) {
+                stillRedCount++;
+              }
+
+              rowsToUpdate.push(i + 2); // Store actual row number
+            }
+          }
+        }
+      }
+
+      // Update the sheet with new data and backgrounds if any changes were made
+      if (rowsToUpdate.length > 0) {
+        packerRange.setValues(packerData);
+        packerRange.setBackgrounds(packerBackgrounds);
+      }
+    }
+
+    SpreadsheetApp.getUi().alert(
+      "Packer Tracking Integrity Check completed.\n" +
+      processedCount + " red highlighted B column cells processed.\n" +
+      fixedCount + " tracking numbers found and fixed.\n" +
+      stillRedCount + " tracking numbers still not found (remain red)."
+    );
+
+  } catch (err) {
+    logError("Recheck Packer Tracking Integrity", err);
+    SpreadsheetApp.getUi().alert("Error running Packer integrity check: " + err.toString());
   }
 }

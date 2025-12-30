@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/DataTable';
+import DailyChecklist from '@/components/DailyChecklist';
 
 export default function TechnicianPage() {
     const params = useParams();
@@ -82,6 +83,11 @@ export default function TechnicianPage() {
                     <div className="flex items-center gap-4">
                         {lastAction && <span className="text-green-600 font-bold">{lastAction}</span>}
                     </div>
+                </div>
+
+                {/* Daily Checklist */}
+                <div className="mb-4">
+                    <DailyChecklist userId={techId as string} role="technician" />
                 </div>
 
                 <DataTable

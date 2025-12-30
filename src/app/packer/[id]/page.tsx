@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/DataTable';
 import { usePrinter } from '@/hooks/usePrinter';
+import DailyChecklist from '@/components/DailyChecklist';
 
 export default function PackerPage() {
     const params = useParams();
@@ -74,6 +75,11 @@ export default function PackerPage() {
                             Today: {dailyCount}
                         </div>
                     </div>
+                </div>
+
+                {/* Daily Checklist */}
+                <div className="mb-4">
+                    <DailyChecklist userId={packerId as string} role="packer" />
                 </div>
 
                 <DataTable
