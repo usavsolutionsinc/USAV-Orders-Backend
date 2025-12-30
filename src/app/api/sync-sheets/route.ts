@@ -23,12 +23,13 @@ export async function POST(request: Request) {
         let success = false;
         
         // Prepare environment variables
-        const env = {
+        const env: Record<string, string | undefined> = {
             ...process.env,
             DATABASE_URL: process.env.DATABASE_URL,
             GOOGLE_CLIENT_EMAIL: process.env.GOOGLE_CLIENT_EMAIL,
             GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY,
             GOOGLE_SHEET_ID: process.env.GOOGLE_SHEET_ID,
+            APPS_SCRIPT_WEBAPP_URL: process.env.APPS_SCRIPT_WEBAPP_URL,
         };
         
         console.log('[SYNC] Environment check:', {
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
             has_client_email: !!env.GOOGLE_CLIENT_EMAIL,
             has_private_key: !!env.GOOGLE_PRIVATE_KEY,
             has_sheet_id: !!env.GOOGLE_SHEET_ID,
+            has_apps_script_url: !!env.APPS_SCRIPT_WEBAPP_URL,
         });
         
         try {
@@ -52,7 +54,6 @@ export async function POST(request: Request) {
         } catch (error: any) {
             console.log('[SYNC] Direct API failed, trying Apps Script method...', error.message);
             // Fallback to Apps Script method
-            env.APPS_SCRIPT_WEBAPP_URL = process.env.APPS_SCRIPT_WEBAPP_URL;
             const result = await execAsync(`python3 "${fallbackScriptPath}"`, {
                 env,
                 maxBuffer: 10 * 1024 * 1024,
