@@ -1,6 +1,7 @@
 /**
  * Google Sheets to Neon DB Sync
  * TypeScript implementation for Vercel serverless environment
+ * Uses position-based column mapping (A→A, B→B, etc.)
  */
 
 import { google } from 'googleapis';
@@ -66,10 +67,87 @@ async function getGoogleSheetsClient() {
     return google.sheets({ version: 'v4', auth });
 }
 
+async function getSheetNames(sheets: any, spreadsheetId: string): Promise<string[]> {
+    try {
+        const metadata = await sheets.spreadsheets.get({
+            spreadsheetId,
+        });
+        return (metadata.data.sheets || []).map((s: any) => s.properties?.title || '').filter((n: string) => n);
+    } catch (error) {
+        console.error('Error getting sheet names:', error);
+        return [];
+    }
+}
+
+async function getSheetDataByPosition(sheets: any, spreadsheetId: string, sheetName: string, maxCols: number = 26): Promise<SheetRow[]> {
+    try {
+        // Get column letters (A, B, C, ..., Z, AA, AB, ...)
+        const getColumnLetter = (col: number): string => {
+            let result = '';
+            while (col > 0) {
+                col--;
+                result = String.fromCharCode(65 + (col % 26)) + result;
+                col = Math.floor(col / 26);
+            }
+            return result;
+        };
+        
+        const lastCol = getColumnLetter(maxCols);
+        const range = `${sheetName}!A:${lastCol}`;
+        
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range,
+        });
+        
+        const rows = response.data.values;
+        if (!rows || rows.length < 2) return [];
+        
+        // First row is headers - we'll use column positions (col_1, col_2, etc.)
+        const data: SheetRow[] = [];
+        
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const rowData: SheetRow = {};
+            let hasData = false;
+            
+            // Map by position: A=col_1, B=col_2, etc.
+            for (let j = 0; j < maxCols; j++) {
+                const colName = `col_${j + 1}`;
+                const value = j < row.length ? (row[j] ? String(row[j]).trim() : '') : '';
+                if (value) hasData = true;
+                rowData[colName] = value || null;
+            }
+            
+            // Also keep original headers if available for backward compatibility
+            if (rows[0]) {
+                for (let j = 0; j < Math.min(rows[0].length, row.length); j++) {
+                    const header = String(rows[0][j] || '').trim();
+                    if (header) {
+                        rowData[header] = (row[j] ? String(row[j]).trim() : '') || null;
+                    }
+                }
+            }
+            
+            if (hasData) {
+                data.push(rowData);
+            }
+        }
+        
+        return data;
+    } catch (error: any) {
+        if (error.code === 404) {
+            console.log(`  Sheet "${sheetName}" not found, skipping...`);
+            return [];
+        }
+        console.error(`Error reading sheet ${sheetName}:`, error.message);
+        return [];
+    }
+}
+
 async function findSpreadsheetId(sheets: any): Promise<string | null> {
     try {
         console.log('Attempting to auto-detect spreadsheet...');
-        // Use Drive API to list accessible spreadsheets
         const drive = google.drive({ version: 'v3', auth: sheets.auth });
         const response = await drive.files.list({
             q: "mimeType='application/vnd.google-apps.spreadsheet'",
@@ -77,7 +155,6 @@ async function findSpreadsheetId(sheets: any): Promise<string | null> {
             pageSize: 50,
         });
         
-        // Look for spreadsheets that contain our expected sheet names
         const expectedSheets = ['orders', 'tech_1', 'Packer_1', 'receiving', 'shipped'];
         
         for (const file of response.data.files || []) {
@@ -96,7 +173,6 @@ async function findSpreadsheetId(sheets: any): Promise<string | null> {
                     return file.id!;
                 }
             } catch (e) {
-                // Skip if we can't access this spreadsheet
                 continue;
             }
         }
@@ -109,88 +185,83 @@ async function findSpreadsheetId(sheets: any): Promise<string | null> {
     }
 }
 
-async function getSheetData(sheets: any, spreadsheetId: string, range: string): Promise<SheetRow[]> {
+// Generic sync function that maps columns by position
+async function syncTableGeneric(conn: any, tableName: string, data: SheetRow[], columnMapping: string[]) {
+    const client = await conn.connect();
     try {
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range,
-        });
-        
-        const rows = response.data.values;
-        if (!rows || rows.length < 2) return [];
-        
-        const headers = rows[0].map((h: string) => String(h).trim());
-        const data: SheetRow[] = [];
-        
-        for (let i = 1; i < rows.length; i++) {
-            const row = rows[i];
-            const rowData: SheetRow = {};
-            let hasData = false;
-            
-            for (let j = 0; j < headers.length; j++) {
-                const value = row[j] ? String(row[j]).trim() : '';
-                if (value) hasData = true;
-                rowData[headers[j]] = value || null;
-            }
-            
-            if (hasData) {
-                data.push(rowData);
-            }
+        if (data.length === 0) {
+            console.log(`  No data to sync for ${tableName}`);
+            return;
         }
         
-        return data;
+        // Build dynamic INSERT statement based on column mapping
+        const columns = columnMapping.map((_, i) => `col_${i + 1}`).join(', ');
+        const placeholders = columnMapping.map((_, i) => `$${i + 1}`).join(', ');
+        
+        // Create table if it doesn't exist with dynamic columns
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS ${tableName} (
+                id SERIAL PRIMARY KEY,
+                ${columnMapping.map((col, i) => `col_${i + 1} TEXT`).join(',\n                ')},
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        
+        // Insert data
+        for (const row of data) {
+            const values = columnMapping.map((_, i) => {
+                const colName = `col_${i + 1}`;
+                return row[colName] || null;
+            });
+            
+            await client.query(`
+                INSERT INTO ${tableName} (${columns})
+                VALUES (${placeholders})
+                ON CONFLICT DO NOTHING
+            `, values);
+        }
+        
+        console.log(`✓ Synced ${data.length} rows to ${tableName}`);
     } catch (error) {
-        console.error(`Error fetching sheet ${range}:`, error);
-        return [];
+        console.error(`❌ Error syncing ${tableName}:`, error);
+        throw error;
+    } finally {
+        client.release();
     }
 }
 
+// Position-based sync functions - maps columns A, B, C... to col_1, col_2, col_3...
 export async function syncOrders(conn: any, data: SheetRow[]) {
     const client = await conn.connect();
     try {
         for (const row of data) {
-            const orderId = row['Order ID'] || row['order_id'] || row['Order ID'];
+            const orderId = row['col_3'] || null; // Column C = Order ID
             if (!orderId) continue;
             
             await client.query(`
                 INSERT INTO orders (
-                    id, order_id, size, platform, buyer_name, product_title, quantity,
-                    ship, sku, item_index, asin, shipping_trk_number, oos_needed,
-                    receiving_trk_number, stock_status_location, notes
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-                ON CONFLICT (id) DO UPDATE SET
-                    size = EXCLUDED.size,
-                    platform = EXCLUDED.platform,
-                    order_id = EXCLUDED.order_id,
-                    buyer_name = EXCLUDED.buyer_name,
-                    product_title = EXCLUDED.product_title,
-                    quantity = EXCLUDED.quantity,
-                    ship = EXCLUDED.ship,
-                    sku = EXCLUDED.sku,
-                    item_index = EXCLUDED.item_index,
-                    asin = EXCLUDED.asin,
-                    shipping_trk_number = EXCLUDED.shipping_trk_number,
-                    oos_needed = EXCLUDED.oos_needed,
-                    receiving_trk_number = EXCLUDED.receiving_trk_number,
-                    stock_status_location = EXCLUDED.stock_status_location,
-                    notes = EXCLUDED.notes
+                    col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8,
+                    col_9, col_10, col_11, col_12, col_13, col_14, col_15, col_16, order_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                ON CONFLICT DO NOTHING
             `, [
-                orderId,
-                orderId,
-                row['SIZE'] || row['Size'] || row['size'] || null,
-                row['Platform'] || row['platform'] || null,
-                row['Buyer Name'] || row['buyer_name'] || row['Buyer Name'] || null,
-                row['Product Title'] || row['product_title'] || row['Product Title'] || null,
-                parseIntSafe(row['#'] || row['quantity'] || row['Qty']),
-                row['Ship'] || row['ship'] || null,
-                row['SKU'] || row['sku'] || row['SKU'] || null,
-                row['Item #'] || row['item_index'] || row['Item #'] || null,
-                row['As'] || row['asin'] || row['As'] || null,
-                row['Shipping TRK #'] || row['shipping_trk_number'] || row['Shipping TRK #'] || null,
-                row['OOS - We Need'] || row['oos_needed'] || row['OOS - We Need'] || null,
-                row['Receiving TRK #'] || row['receiving_trk_number'] || row['Receiving TRK #'] || null,
-                row['Stock Status / Location'] || row['stock_status_location'] || row['Stock Status / Location'] || null,
-                row['Notes'] || row['notes'] || row['Notes'] || null,
+                row['col_1'] || null, // A
+                row['col_2'] || null, // B
+                row['col_3'] || null, // C
+                row['col_4'] || null, // D
+                row['col_5'] || null, // E
+                row['col_6'] || null, // F
+                row['col_7'] || null, // G
+                row['col_8'] || null, // H
+                row['col_9'] || null, // I
+                row['col_10'] || null, // J
+                row['col_11'] || null, // K
+                row['col_12'] || null, // L
+                row['col_13'] || null, // M
+                row['col_14'] || null, // N
+                row['col_15'] || null, // O
+                row['col_16'] || null, // P
+                orderId, // order_id for lookup
             ]);
         }
         console.log(`✓ Synced ${data.length} orders`);
@@ -209,19 +280,18 @@ export async function syncTechTable(conn: any, techNum: number, data: SheetRow[]
         for (const row of data) {
             await client.query(`
                 INSERT INTO ${tableName} (
-                    date_time, title_testing, shipping_trk_testing, serial_number_data,
-                    input, asin, sku, quantity, tech_id
+                    col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, tech_id
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 ON CONFLICT DO NOTHING
             `, [
-                parseTimestamp(row['Date / Time'] || row['date_time'] || row['Date / Time']),
-                row['Title - Testing'] || row['title_testing'] || row['Title - Testing'] || null,
-                row['Shipping TRK # / Testing'] || row['shipping_trk_testing'] || row['Shipping TRK # / Testing'] || null,
-                row['Serial Number Data'] || row['serial_number_data'] || row['Serial Number Data'] || null,
-                row['Input'] || row['input'] || row['Input'] || null,
-                row['As'] || row['asin'] || row['As'] || null,
-                row['SKU'] || row['sku'] || row['SKU'] || null,
-                parseIntSafe(row['#'] || row['quantity'] || row['Qty']),
+                row['col_1'] || null, // A
+                row['col_2'] || null, // B
+                row['col_3'] || null, // C
+                row['col_4'] || null, // D
+                row['col_5'] || null, // E
+                row['col_6'] || null, // F
+                row['col_7'] || null, // G
+                row['col_8'] || null, // H
                 String(techNum),
             ]);
         }
@@ -241,15 +311,15 @@ export async function syncPackerTable(conn: any, packerNum: number, data: SheetR
         for (const row of data) {
             await client.query(`
                 INSERT INTO ${tableName} (
-                    date_time, tracking_number_fnsku, order_id, product_title, quantity, packer_id
+                    col_1, col_2, col_3, col_4, col_5, packer_id
                 ) VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT DO NOTHING
             `, [
-                parseTimestamp(row['Date / Time'] || row['date_time'] || row['Date / Time']),
-                row['Tracking Number/FNSKU'] || row['tracking_number_fnsku'] || row['Tracking Number/FNSKU'] || null,
-                row['ID'] || row['order_id'] || row['ID'] || null,
-                row['Product Title'] || row['product_title'] || row['Product Title'] || null,
-                parseIntSafe(row['#'] || row['quantity'] || row['Qty']),
+                row['col_1'] || null, // A
+                row['col_2'] || null, // B
+                row['col_3'] || null, // C
+                row['col_4'] || null, // D
+                row['col_5'] || null, // E (if exists)
                 String(packerNum),
             ]);
         }
@@ -268,14 +338,14 @@ export async function syncReceiving(conn: any, data: SheetRow[]) {
         for (const row of data) {
             await client.query(`
                 INSERT INTO receiving (
-                    date_time, tracking_number, carrier, qty
+                    col_1, col_2, col_3, col_4
                 ) VALUES ($1, $2, $3, $4)
                 ON CONFLICT DO NOTHING
             `, [
-                parseTimestamp(row['Date / Time'] || row['date_time'] || row['Date / Time']),
-                row['Tracking Number'] || row['tracking_number'] || row['Tracking Number'] || null,
-                row['Carrier'] || row['carrier'] || row['Carrier'] || null,
-                parseIntSafe(row['Qty'] || row['quantity'] || row['Qty']),
+                row['col_1'] || null, // A
+                row['col_2'] || null, // B
+                row['col_3'] || null, // C
+                row['col_4'] || null, // D
             ]);
         }
         console.log(`✓ Synced ${data.length} receiving items`);
@@ -293,21 +363,20 @@ export async function syncShipped(conn: any, data: SheetRow[]) {
         for (const row of data) {
             await client.query(`
                 INSERT INTO shipped (
-                    date_time, order_id, product_title, sent, shipping_trk_number,
-                    serial_number, box, by_name, sku, status
+                    col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9, col_10
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 ON CONFLICT DO NOTHING
             `, [
-                parseTimestamp(row['Date / Time'] || row['date_time'] || row['Date / Time']) || new Date(),
-                row['Order ID'] || row['order_id'] || row['Order ID'] || null,
-                row['Product Title'] || row['product_title'] || row['Product Title'] || null,
-                row['Sent'] || row['sent'] || row['Sent'] || null,
-                row['Shipping TRK #'] || row['shipping_trk_number'] || row['Shipping TRK #'] || null,
-                row['Serial Number'] || row['serial_number'] || row['Serial Number'] || null,
-                row['Box'] || row['box'] || row['Box'] || null,
-                row['By'] || row['by_name'] || row['By'] || null,
-                row['SKU'] || row['sku'] || row['SKU'] || null,
-                row['Status'] || row['status'] || row['Status'] || null,
+                row['col_1'] || null, // A
+                row['col_2'] || null, // B
+                row['col_3'] || null, // C
+                row['col_4'] || null, // D
+                row['col_5'] || null, // E
+                row['col_6'] || null, // F
+                row['col_7'] || null, // G
+                row['col_8'] || null, // H
+                row['col_9'] || null, // I
+                row['col_10'] || null, // J
             ]);
         }
         console.log(`✓ Synced ${data.length} shipped items`);
@@ -323,24 +392,26 @@ export async function syncSkuStock(conn: any, data: SheetRow[]) {
     const client = await conn.connect();
     try {
         for (const row of data) {
-            const sku = row['SKU'] || row['sku'] || row['SKU'];
+            const sku = row['col_1'] || null; // A
             if (!sku) continue;
             
             await client.query(`
                 INSERT INTO sku_stock (
-                    sku, size, title, condition, quantity
-                ) VALUES ($1, $2, $3, $4, $5)
+                    col_1, col_2, col_3, col_4, col_5, sku
+                ) VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (sku) DO UPDATE SET
-                    size = EXCLUDED.size,
-                    title = EXCLUDED.title,
-                    condition = EXCLUDED.condition,
-                    quantity = EXCLUDED.quantity
+                    col_1 = EXCLUDED.col_1,
+                    col_2 = EXCLUDED.col_2,
+                    col_3 = EXCLUDED.col_3,
+                    col_4 = EXCLUDED.col_4,
+                    col_5 = EXCLUDED.col_5
             `, [
-                sku,
-                row['Size'] || row['size'] || row['Size'] || null,
-                row['Title'] || row['title'] || row['Title'] || null,
-                row['Condition'] || row['condition'] || row['Condition'] || null,
-                parseIntSafe(row['Quantity'] || row['quantity'] || row['Qty']) || 0,
+                row['col_1'] || null, // A
+                row['col_2'] || null, // B
+                row['col_3'] || null, // C
+                row['col_4'] || null, // D
+                row['col_5'] || null, // E
+                sku, // sku for lookup
             ]);
         }
         console.log(`✓ Synced ${data.length} SKU stock items`);
@@ -358,19 +429,18 @@ export async function syncSku(conn: any, data: SheetRow[]) {
         for (const row of data) {
             await client.query(`
                 INSERT INTO skus (
-                    store_date_time, static_sku, serial_numbers, shipping_trk_number,
-                    product_title, size, notes, location
+                    col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT DO NOTHING
             `, [
-                parseTimestamp(row['Store Date / Time'] || row['store_date_time'] || row['Store Date / Time']),
-                row['Static SKU'] || row['static_sku'] || row['Static SKU'] || null,
-                row['Serial Numbers'] || row['serial_numbers'] || row['Serial Numbers'] || null,
-                row['Shipping TRK #'] || row['shipping_trk_number'] || row['Shipping TRK #'] || null,
-                row['Product Title'] || row['product_title'] || row['Product Title'] || null,
-                row['Size'] || row['size'] || row['Size'] || null,
-                row['Notes'] || row['notes'] || row['Notes'] || null,
-                row['Location'] || row['location'] || row['Location'] || null,
+                row['col_1'] || null, // A
+                row['col_2'] || null, // B
+                row['col_3'] || null, // C
+                row['col_4'] || null, // D
+                row['col_5'] || null, // E
+                row['col_6'] || null, // F
+                row['col_7'] || null, // G
+                row['col_8'] || null, // H
             ]);
         }
         console.log(`✓ Synced ${data.length} SKUs`);
@@ -381,7 +451,6 @@ export async function syncSku(conn: any, data: SheetRow[]) {
         client.release();
     }
 }
-
 
 export async function syncAllSheets() {
     let spreadsheetId = process.env.GOOGLE_SHEET_ID;
@@ -406,54 +475,98 @@ export async function syncAllSheets() {
     const conn = pool;
     
     try {
+        // Get all available sheet names first
+        const availableSheets = await getSheetNames(sheets, spreadsheetId);
+        console.log(`Available sheets: ${availableSheets.join(', ')}\n`);
+        
         // Sync orders
-        const ordersData = await getSheetData(sheets, spreadsheetId, 'orders!A:P');
-        if (ordersData.length > 0) {
-            await syncOrders(conn, ordersData);
+        if (availableSheets.some(s => s.toLowerCase() === 'orders')) {
+            const ordersData = await getSheetDataByPosition(sheets, spreadsheetId, 'orders', 16);
+            if (ordersData.length > 0) {
+                await syncOrders(conn, ordersData);
+            }
+        } else {
+            console.log('  Sheet "orders" not found, skipping...');
         }
         
-        // Sync tech tables (1-3)
+        // Sync tech tables (1-3) - check what actually exists
         for (let techNum = 1; techNum <= 3; techNum++) {
-            const techData = await getSheetData(sheets, spreadsheetId, `tech_${techNum}!A:H`);
-            if (techData.length > 0) {
-                await syncTechTable(conn, techNum, techData);
+            const sheetName = `tech_${techNum}`;
+            if (availableSheets.some(s => s.toLowerCase() === sheetName.toLowerCase())) {
+                const techData = await getSheetDataByPosition(sheets, spreadsheetId, sheetName, 8);
+                if (techData.length > 0) {
+                    await syncTechTable(conn, techNum, techData);
+                }
+            } else {
+                console.log(`  Sheet "${sheetName}" not found, skipping...`);
             }
         }
         
-        // Sync packer tables (1-3)
+        // Sync packer tables (1-3) - check what actually exists
         for (let packerNum = 1; packerNum <= 3; packerNum++) {
-            const packerData = await getSheetData(sheets, spreadsheetId, `Packer_${packerNum}!A:D`);
-            if (packerData.length > 0) {
-                await syncPackerTable(conn, packerNum, packerData);
+            const sheetName = `Packer_${packerNum}`;
+            if (availableSheets.some(s => s.toLowerCase() === sheetName.toLowerCase())) {
+                const packerData = await getSheetDataByPosition(sheets, spreadsheetId, sheetName, 5);
+                if (packerData.length > 0) {
+                    await syncPackerTable(conn, packerNum, packerData);
+                }
+            } else {
+                console.log(`  Sheet "${sheetName}" not found, skipping...`);
             }
         }
         
         // Sync receiving
-        const receivingData = await getSheetData(sheets, spreadsheetId, 'receiving!A:D');
-        if (receivingData.length > 0) {
-            await syncReceiving(conn, receivingData);
+        if (availableSheets.some(s => s.toLowerCase() === 'receiving')) {
+            const receivingData = await getSheetDataByPosition(sheets, spreadsheetId, 'receiving', 4);
+            if (receivingData.length > 0) {
+                await syncReceiving(conn, receivingData);
+            }
+        } else {
+            console.log('  Sheet "receiving" not found, skipping...');
         }
         
         // Sync shipped
-        const shippedData = await getSheetData(sheets, spreadsheetId, 'shipped!A:J');
-        if (shippedData.length > 0) {
-            await syncShipped(conn, shippedData);
+        if (availableSheets.some(s => s.toLowerCase() === 'shipped')) {
+            const shippedData = await getSheetDataByPosition(sheets, spreadsheetId, 'shipped', 10);
+            if (shippedData.length > 0) {
+                await syncShipped(conn, shippedData);
+            }
+        } else {
+            console.log('  Sheet "shipped" not found, skipping...');
         }
         
-        // Sync sku-stock
-        const skuStockData = await getSheetData(sheets, spreadsheetId, 'Sku-Stock!A:E');
+        // Sync sku-stock (try different name variations)
+        const skuStockNames = ['Sku-Stock', 'sku-stock', 'Sku-Stock', 'SKU-Stock'];
+        let skuStockData: SheetRow[] = [];
+        for (const name of skuStockNames) {
+            if (availableSheets.some(s => s.toLowerCase() === name.toLowerCase())) {
+                skuStockData = await getSheetDataByPosition(sheets, spreadsheetId, name, 5);
+                break;
+            }
+        }
         if (skuStockData.length > 0) {
             await syncSkuStock(conn, skuStockData);
+        } else {
+            console.log('  Sheet "Sku-Stock" not found, skipping...');
         }
         
-        // Sync sku
-        const skuData = await getSheetData(sheets, spreadsheetId, 'sku!A:H');
+        // Sync sku (try different name variations)
+        const skuNames = ['sku', 'Sku', 'SKU'];
+        let skuData: SheetRow[] = [];
+        for (const name of skuNames) {
+            if (availableSheets.some(s => s.toLowerCase() === name.toLowerCase())) {
+                skuData = await getSheetDataByPosition(sheets, spreadsheetId, name, 8);
+                break;
+            }
+        }
         if (skuData.length > 0) {
             await syncSku(conn, skuData);
+        } else {
+            console.log('  Sheet "sku" not found, skipping...');
         }
         
-        console.log('\n✅ All sheets synced successfully!');
-        return { success: true, message: 'All sheets synced successfully' };
+        console.log('\n✅ All available sheets synced successfully!');
+        return { success: true, message: 'All available sheets synced successfully' };
     } catch (error: any) {
         console.error('\n❌ Sync failed:', error);
         throw error;
