@@ -57,10 +57,56 @@ async function getGoogleSheetsClient() {
     const auth = new google.auth.JWT({
         email: process.env.GOOGLE_CLIENT_EMAIL,
         key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+        scopes: [
+            'https://www.googleapis.com/auth/spreadsheets.readonly',
+            'https://www.googleapis.com/auth/drive.readonly',
+        ],
     });
     
     return google.sheets({ version: 'v4', auth });
+}
+
+async function findSpreadsheetId(sheets: any): Promise<string | null> {
+    try {
+        console.log('Attempting to auto-detect spreadsheet...');
+        // Use Drive API to list accessible spreadsheets
+        const drive = google.drive({ version: 'v3', auth: sheets.auth });
+        const response = await drive.files.list({
+            q: "mimeType='application/vnd.google-apps.spreadsheet'",
+            fields: 'files(id, name)',
+            pageSize: 50,
+        });
+        
+        // Look for spreadsheets that contain our expected sheet names
+        const expectedSheets = ['orders', 'tech_1', 'Packer_1', 'receiving', 'shipped'];
+        
+        for (const file of response.data.files || []) {
+            try {
+                const sheetMetadata = await sheets.spreadsheets.get({
+                    spreadsheetId: file.id!,
+                });
+                
+                const sheetNames = (sheetMetadata.data.sheets || []).map((s: any) => s.properties?.title || '').map((n: string) => n.toLowerCase());
+                const hasExpectedSheets = expectedSheets.some(expected => 
+                    sheetNames.includes(expected.toLowerCase())
+                );
+                
+                if (hasExpectedSheets) {
+                    console.log(`✓ Found matching spreadsheet: "${file.name}" (ID: ${file.id})`);
+                    return file.id!;
+                }
+            } catch (e) {
+                // Skip if we can't access this spreadsheet
+                continue;
+            }
+        }
+        
+        console.log('Could not auto-detect spreadsheet');
+        return null;
+    } catch (error) {
+        console.error('Error finding spreadsheet:', error);
+        return null;
+    }
 }
 
 async function getSheetData(sheets: any, spreadsheetId: string, range: string): Promise<SheetRow[]> {
@@ -336,13 +382,25 @@ export async function syncSku(conn: any, data: SheetRow[]) {
     }
 }
 
+
 export async function syncAllSheets() {
-    const spreadsheetId = process.env.GOOGLE_SHEET_ID;
-    if (!spreadsheetId) {
-        throw new Error('GOOGLE_SHEET_ID environment variable is not set');
-    }
+    let spreadsheetId = process.env.GOOGLE_SHEET_ID;
     
     console.log('Starting Google Sheets to Neon DB sync (TypeScript)...\n');
+    
+    // If GOOGLE_SHEET_ID is not set, try to find it automatically
+    if (!spreadsheetId) {
+        console.log('GOOGLE_SHEET_ID not set, attempting to find spreadsheet automatically...');
+        const sheets = await getGoogleSheetsClient();
+        const foundId = await findSpreadsheetId(sheets);
+        
+        if (foundId) {
+            spreadsheetId = foundId;
+            console.log(`Using automatically detected spreadsheet ID: ${spreadsheetId}`);
+        } else {
+            throw new Error('GOOGLE_SHEET_ID not set and could not be automatically detected. Please set GOOGLE_SHEET_ID in environment variables or ensure the service account has access to the spreadsheet.');
+        }
+    }
     
     const sheets = await getGoogleSheetsClient();
     const conn = pool;

@@ -10,22 +10,21 @@ export async function POST(request: Request) {
         
         console.log('[SYNC] Request body:', { sheet_name, action, debug });
         
-        // Check required environment variables
+        // Check required environment variables (GOOGLE_SHEET_ID is optional - will auto-detect if not set)
         const requiredEnvVars = {
             DATABASE_URL: process.env.DATABASE_URL,
             GOOGLE_CLIENT_EMAIL: process.env.GOOGLE_CLIENT_EMAIL,
             GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY,
-            GOOGLE_SHEET_ID: process.env.GOOGLE_SHEET_ID,
         };
         
         console.log('[SYNC] Environment check:', {
             has_db_url: !!requiredEnvVars.DATABASE_URL,
             has_client_email: !!requiredEnvVars.GOOGLE_CLIENT_EMAIL,
             has_private_key: !!requiredEnvVars.GOOGLE_PRIVATE_KEY,
-            has_sheet_id: !!requiredEnvVars.GOOGLE_SHEET_ID,
+            has_sheet_id: !!process.env.GOOGLE_SHEET_ID,
         });
         
-        // Validate required environment variables
+        // Validate required environment variables (GOOGLE_SHEET_ID is optional)
         const missing = Object.entries(requiredEnvVars)
             .filter(([_, value]) => !value)
             .map(([key]) => key);
@@ -35,6 +34,7 @@ export async function POST(request: Request) {
                 {
                     success: false,
                     error: `Missing required environment variables: ${missing.join(', ')}`,
+                    note: 'GOOGLE_SHEET_ID is optional - will auto-detect if service account has access',
                     debug: {
                         timestamp: new Date().toISOString(),
                         missing_vars: missing,
