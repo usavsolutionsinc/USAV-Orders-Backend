@@ -72,9 +72,15 @@ async function getSheetNames(sheets: any, spreadsheetId: string): Promise<string
         const metadata = await sheets.spreadsheets.get({
             spreadsheetId,
         });
-        return (metadata.data.sheets || []).map((s: any) => s.properties?.title || '').filter((n: string) => n);
-    } catch (error) {
-        console.error('Error getting sheet names:', error);
+        const sheetNames = (metadata.data.sheets || []).map((s: any) => s.properties?.title || '').filter((n: string) => n);
+        console.log(`Found ${sheetNames.length} sheets: ${sheetNames.join(', ')}`);
+        return sheetNames;
+    } catch (error: any) {
+        console.error(`Error getting sheet names for spreadsheet ${spreadsheetId}:`, error.message || error);
+        if (error.code === 404) {
+            console.error('  → Spreadsheet not found. Check GOOGLE_SHEET_ID and ensure service account has access.');
+        }
+        // Return empty array but log the error
         return [];
     }
 }
@@ -101,7 +107,10 @@ async function getSheetDataByPosition(sheets: any, spreadsheetId: string, sheetN
         });
         
         const rows = response.data.values;
-        if (!rows || rows.length < 2) return [];
+        if (!rows || rows.length < 2) {
+            console.log(`  Sheet "${sheetName}" has no data rows`);
+            return [];
+        }
         
         // First row is headers - we'll use column positions (col_1, col_2, etc.)
         const data: SheetRow[] = [];
@@ -137,12 +146,54 @@ async function getSheetDataByPosition(sheets: any, spreadsheetId: string, sheetN
         return data;
     } catch (error: any) {
         if (error.code === 404) {
-            console.log(`  Sheet "${sheetName}" not found, skipping...`);
+            console.log(`  Sheet "${sheetName}" not found (404), trying case-insensitive match...`);
             return [];
         }
-        console.error(`Error reading sheet ${sheetName}:`, error.message);
+        console.error(`Error reading sheet ${sheetName}:`, error.message || error);
         return [];
     }
+}
+
+// Helper to find sheet name with case-insensitive matching
+function findSheetName(availableSheets: string[], targetName: string): string | null {
+    // Exact match first
+    if (availableSheets.includes(targetName)) {
+        return targetName;
+    }
+    
+    // Case-insensitive match
+    const lowerTarget = targetName.toLowerCase();
+    for (const sheet of availableSheets) {
+        if (sheet.toLowerCase() === lowerTarget) {
+            console.log(`  Found case-insensitive match: "${sheet}" for "${targetName}"`);
+            return sheet;
+        }
+    }
+    
+    // Try variations (underscore vs hyphen, etc.)
+    const variations = [
+        targetName.replace(/_/g, '-'),
+        targetName.replace(/-/g, '_'),
+        targetName.replace(/\s+/g, '-'),
+        targetName.replace(/\s+/g, '_'),
+    ];
+    
+    for (const variation of variations) {
+        if (availableSheets.includes(variation)) {
+            console.log(`  Found variation match: "${variation}" for "${targetName}"`);
+            return variation;
+        }
+        // Case-insensitive variation match
+        const lowerVariation = variation.toLowerCase();
+        for (const sheet of availableSheets) {
+            if (sheet.toLowerCase() === lowerVariation) {
+                console.log(`  Found case-insensitive variation match: "${sheet}" for "${targetName}"`);
+                return sheet;
+            }
+        }
+    }
+    
+    return null;
 }
 
 async function findSpreadsheetId(sheets: any): Promise<string | null> {
@@ -476,92 +527,136 @@ export async function syncAllSheets() {
     
     try {
         // Get all available sheet names first
-        const availableSheets = await getSheetNames(sheets, spreadsheetId);
-        console.log(`Available sheets: ${availableSheets.join(', ')}\n`);
+        let availableSheets = await getSheetNames(sheets, spreadsheetId);
         
-        // Sync orders
-        if (availableSheets.some(s => s.toLowerCase() === 'orders')) {
-            const ordersData = await getSheetDataByPosition(sheets, spreadsheetId, 'orders', 16);
-            if (ordersData.length > 0) {
-                await syncOrders(conn, ordersData);
+        // If we couldn't get sheet names, try to fetch sheets directly anyway
+        // This handles cases where metadata access fails but data access works
+        if (availableSheets.length === 0) {
+            console.log('  Could not get sheet names from metadata, will try direct access...');
+            // Try to get sheet names by attempting to read each expected sheet
+            const expectedSheets = ['Orders', 'Tech_1', 'Tech_2', 'Tech_3', 'Receiving', 'Packer_1', 'Packer_2', 'Shipped', 'Sku-Stock', 'Sku'];
+            for (const sheetName of expectedSheets) {
+                try {
+                    const testData = await getSheetDataByPosition(sheets, spreadsheetId, sheetName, 1);
+                    if (testData.length >= 0) { // Even empty is valid
+                        availableSheets.push(sheetName);
+                    }
+                } catch (e) {
+                    // Sheet doesn't exist or can't be accessed
+                }
             }
-        } else {
+            if (availableSheets.length > 0) {
+                console.log(`  Found ${availableSheets.length} sheets via direct access: ${availableSheets.join(', ')}`);
+            }
+        }
+        
+        console.log(`Available sheets: ${availableSheets.length > 0 ? availableSheets.join(', ') : 'none found'}\n`);
+        
+        // Helper function to try syncing a sheet with case-insensitive matching
+        const trySyncSheet = async (
+            targetNames: string[],
+            syncFn: (conn: any, data: SheetRow[]) => Promise<void>,
+            maxCols: number
+        ) => {
+            for (const targetName of targetNames) {
+                // Try exact match first
+                let actualSheetName = findSheetName(availableSheets, targetName);
+                
+                // If not found in available sheets, try direct access (case-insensitive)
+                if (!actualSheetName) {
+                    // Try the target name directly
+                    try {
+                        const testData = await getSheetDataByPosition(sheets, spreadsheetId, targetName, maxCols);
+                        if (testData.length > 0) {
+                            actualSheetName = targetName;
+                        }
+                    } catch (e) {
+                        // Try case variations
+                        const variations = [
+                            targetName.charAt(0).toUpperCase() + targetName.slice(1).toLowerCase(),
+                            targetName.toUpperCase(),
+                            targetName.toLowerCase(),
+                        ];
+                        for (const variation of variations) {
+                            try {
+                                const testData = await getSheetDataByPosition(sheets, spreadsheetId, variation, maxCols);
+                                if (testData.length > 0) {
+                                    actualSheetName = variation;
+                                    break;
+                                }
+                            } catch (e2) {
+                                continue;
+                            }
+                        }
+                    }
+                }
+                
+                if (actualSheetName) {
+                    const data = await getSheetDataByPosition(sheets, spreadsheetId, actualSheetName, maxCols);
+                    if (data.length > 0) {
+                        await syncFn(conn, data);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+        
+        // Sync orders - try multiple name variations
+        const ordersSynced = await trySyncSheet(['Orders', 'orders', 'ORDERS'], syncOrders, 16);
+        if (!ordersSynced) {
             console.log('  Sheet "orders" not found, skipping...');
         }
         
-        // Sync tech tables (1-3) - check what actually exists
+        // Sync tech tables (1-3)
         for (let techNum = 1; techNum <= 3; techNum++) {
-            const sheetName = `tech_${techNum}`;
-            if (availableSheets.some(s => s.toLowerCase() === sheetName.toLowerCase())) {
-                const techData = await getSheetDataByPosition(sheets, spreadsheetId, sheetName, 8);
-                if (techData.length > 0) {
-                    await syncTechTable(conn, techNum, techData);
-                }
-            } else {
-                console.log(`  Sheet "${sheetName}" not found, skipping...`);
+            const techSynced = await trySyncSheet(
+                [`Tech_${techNum}`, `tech_${techNum}`, `TECH_${techNum}`],
+                (conn, data) => syncTechTable(conn, techNum, data),
+                8
+            );
+            if (!techSynced) {
+                console.log(`  Sheet "tech_${techNum}" not found, skipping...`);
             }
         }
         
-        // Sync packer tables (1-3) - check what actually exists
+        // Sync packer tables (1-3)
         for (let packerNum = 1; packerNum <= 3; packerNum++) {
-            const sheetName = `Packer_${packerNum}`;
-            if (availableSheets.some(s => s.toLowerCase() === sheetName.toLowerCase())) {
-                const packerData = await getSheetDataByPosition(sheets, spreadsheetId, sheetName, 5);
-                if (packerData.length > 0) {
-                    await syncPackerTable(conn, packerNum, packerData);
-                }
-            } else {
-                console.log(`  Sheet "${sheetName}" not found, skipping...`);
+            const packerSynced = await trySyncSheet(
+                [`Packer_${packerNum}`, `packer_${packerNum}`, `PACKER_${packerNum}`],
+                (conn, data) => syncPackerTable(conn, packerNum, data),
+                5
+            );
+            if (!packerSynced) {
+                console.log(`  Sheet "Packer_${packerNum}" not found, skipping...`);
             }
         }
         
         // Sync receiving
-        if (availableSheets.some(s => s.toLowerCase() === 'receiving')) {
-            const receivingData = await getSheetDataByPosition(sheets, spreadsheetId, 'receiving', 4);
-            if (receivingData.length > 0) {
-                await syncReceiving(conn, receivingData);
-            }
-        } else {
+        const receivingSynced = await trySyncSheet(['Receiving', 'receiving', 'RECEIVING'], syncReceiving, 4);
+        if (!receivingSynced) {
             console.log('  Sheet "receiving" not found, skipping...');
         }
         
         // Sync shipped
-        if (availableSheets.some(s => s.toLowerCase() === 'shipped')) {
-            const shippedData = await getSheetDataByPosition(sheets, spreadsheetId, 'shipped', 10);
-            if (shippedData.length > 0) {
-                await syncShipped(conn, shippedData);
-            }
-        } else {
+        const shippedSynced = await trySyncSheet(['Shipped', 'shipped', 'SHIPPED'], syncShipped, 10);
+        if (!shippedSynced) {
             console.log('  Sheet "shipped" not found, skipping...');
         }
         
         // Sync sku-stock (try different name variations)
-        const skuStockNames = ['Sku-Stock', 'sku-stock', 'Sku-Stock', 'SKU-Stock'];
-        let skuStockData: SheetRow[] = [];
-        for (const name of skuStockNames) {
-            if (availableSheets.some(s => s.toLowerCase() === name.toLowerCase())) {
-                skuStockData = await getSheetDataByPosition(sheets, spreadsheetId, name, 5);
-                break;
-            }
-        }
-        if (skuStockData.length > 0) {
-            await syncSkuStock(conn, skuStockData);
-        } else {
+        const skuStockSynced = await trySyncSheet(
+            ['Sku-Stock', 'sku-stock', 'SKU-Stock', 'Sku_Stock', 'sku_stock'],
+            syncSkuStock,
+            5
+        );
+        if (!skuStockSynced) {
             console.log('  Sheet "Sku-Stock" not found, skipping...');
         }
         
-        // Sync sku (try different name variations)
-        const skuNames = ['sku', 'Sku', 'SKU'];
-        let skuData: SheetRow[] = [];
-        for (const name of skuNames) {
-            if (availableSheets.some(s => s.toLowerCase() === name.toLowerCase())) {
-                skuData = await getSheetDataByPosition(sheets, spreadsheetId, name, 8);
-                break;
-            }
-        }
-        if (skuData.length > 0) {
-            await syncSku(conn, skuData);
-        } else {
+        // Sync sku
+        const skuSynced = await trySyncSheet(['Sku', 'sku', 'SKU'], syncSku, 8);
+        if (!skuSynced) {
             console.log('  Sheet "sku" not found, skipping...');
         }
         
