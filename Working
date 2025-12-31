@@ -164,26 +164,6 @@ function handleReceivingEdit(spreadsheet, sheet, range, row) {
     var timestamp = formatDate(new Date());
     sheet.getRange(row, 1).setValue(timestamp);
     updateDateCache("Receiving", 1, row, timestamp);
-
-    // Check for match in Orders column N (scan all rows, skip empty, never stop at first empty)
-    const outOfStockSheet = spreadsheet.getSheetByName("Orders");
-    if (!outOfStockSheet) return;
-    const lastRow = outOfStockSheet.getLastRow();
-    var foundMatch = false;
-    if (lastRow >= 2) {
-      const nData = outOfStockSheet.getRange("N2:N" + lastRow).getValues(); // Column N for receiving tracking
-      const trackingToFind = getLastEightDigits(input);
-      for (let i = 0; i < nData.length; i++) {
-        const nVal = String(nData[i][0]).trim();
-        if (!nVal) continue;
-        if (getLastEightDigits(nVal) === trackingToFind) {
-          sheet.getRange(row, 2).setBackground("#FF0000"); // Red if match found
-          foundMatch = true;
-          break;
-        }
-      }
-    }
-    // If no match found, do nothing (background is already white)
   } catch (err) {
     console.error("Receiving Edit Error:", err);
   }
@@ -243,9 +223,9 @@ function onEdit(e) {
 
     // FBA Plan logic removed
 
-    // --- Begin Packer_0 to Packer_10 logic ---
+    // --- Begin Packer_1 to Packer_10 logic ---
 
-    if (/^Packer_([0-9]|10)$/.test(sheetName) && column === 2 && row >= 2) {
+    if (/^Packer_([1-9]|10)$/.test(sheetName) && column === 2 && row >= 2) {
       var inputValue = String(range.getValue()).trim();
       if (inputValue === "") return;
 
@@ -490,20 +470,20 @@ function onEdit(e) {
         }
       }
     }
-    // --- End Packer_0 to Packer_10 logic ---
+    // --- End Packer_1 to Packer_10 logic ---
 
     // Tech_X Orders Handling - F column (status field from Orders J)
     if (
-      /^Tech_([0-9]|10)$/.test(sheetName) &&
+      /^Tech_([1-9]|10)$/.test(sheetName) &&
       column === 6 && row >= 2 && row <= 1000
     ) {
       const input = String(range.getValue()).trim();
       // No special highlighting for F column edits - only tracking numbers should highlight yellow
     }
 
-    // Tech_X Orders Handling (for Tech_0 to Tech_10)
+    // Tech_X Orders Handling (for Tech_1 to Tech_10)
     if (
-      /^Tech_([0-9]|10)$/.test(sheetName) &&
+      /^Tech_([1-9]|10)$/.test(sheetName) &&
       column === 5 && row >= 2 && row <= 1000
     ) {
       const input = String(range.getValue()).trim();
@@ -533,7 +513,7 @@ function onEdit(e) {
     }
 
     // --- New: Decrement Sku-Stock QTY from all Tech_X Orders sheets on E scan ---
-    if (/^Tech_([0-9]|10)$/.test(sheetName) && column === 5 && row >= 2 && row <= 1000) {
+    if (/^Tech_([1-9]|10)$/.test(sheetName) && column === 5 && row >= 2 && row <= 1000) {
       try {
         var packedSheet = spreadsheet.getSheetByName("Sku-Stock");
         if (packedSheet) {
@@ -560,7 +540,7 @@ function onEdit(e) {
     }
 
     // --- Begin Tech_X Orders highlight logic ---
-    if (/^Tech_([0-9]|10)$/.test(sheetName) && column === 3 && row >= 2) {
+    if (/^Tech_([1-9]|10)$/.test(sheetName) && column === 3 && row >= 2) {
       var techTracking = String(range.getValue()).trim();
       if (techTracking !== "") {
         var outOfStockSheet = spreadsheet.getSheetByName("Orders");
@@ -604,40 +584,6 @@ function setupScript() {
         .create();
     }
 
-    // Function to check tracking number in Orders
-    function checkTrackingInOutOfStock(receivingSheet, row, trackingNumber) {
-      try {
-        const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-        const outOfStockSheet = spreadsheet.getSheetByName("Orders");
-        if (!outOfStockSheet) return;
-
-        // Get all values from column K (11) in Orders, skipping empty rows
-        const lastRow = outOfStockSheet.getLastRow();
-        if (lastRow < 2) return;
-
-        const kColumnValues = outOfStockSheet.getRange(2, 11, lastRow - 1).getValues();
-        const trackingToFind = getLastEightDigits(trackingNumber);
-        let found = false;
-
-        // Search from bottom up for the most recent match
-        for (let i = kColumnValues.length - 1; i >= 0; i--) {
-          const currentTracking = String(kColumnValues[i][0]).trim();
-          if (currentTracking && getLastEightDigits(currentTracking) === trackingToFind) {
-            found = true;
-            break;
-          }
-        }
-
-        // Set background color based on match
-        if (found) {
-          receivingSheet.getRange(row, 2).setBackground("#FF0000");
-        } else {
-          receivingSheet.getRange(row, 2).setBackground("#FFFFFF");
-        }
-      } catch (err) {
-        console.error("Check Tracking Error:", err);
-      }
-    }
   } catch (err) {
     logError("Setup Script", err);
   }
@@ -735,14 +681,12 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
     // Determine tech name based on sheet name
     var sheetName = sheet.getName();
     var techName = "";
-    if (sheetName === "Tech_0") {
+    if (sheetName === "Tech_1") {
       techName = "Mike";
-    } else if (sheetName === "Tech_1") {
-      techName = "Thuc";
     } else if (sheetName === "Tech_2") {
-      techName = "Sang";
+      techName = "Thuc";
     } else if (sheetName === "Tech_3") {
-      techName = "Tech_3";
+      techName = "Sang";
     } else if (sheetName === "Tech_4") {
       techName = "Tech_4";
     } else if (sheetName === "Tech_5") {
@@ -759,7 +703,7 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
       techName = "Tech_10";
     }
 
-    // Map columns: Tech C→E (tracking), Tech D→F (serial numbers), Tech F→D (status), I=Tech name
+    // Map columns: Tech C→E (tracking), Tech D→F (serial numbers), Tech F→D (status), H=Tech name
     var shippedData = [
       "", // A empty (Date / Time)
       "", // B empty (Order ID)
@@ -768,8 +712,8 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
       trackingNumber, // E = Tech C (Shipping TRK #)
       "", // F empty (Serial Number - will be filled from Tech D if matching tracking exists)
       "", // G empty (Box)
-      "", // H empty (By)
-      techName // I = Tech name (SKU)
+      techName, // H = Tech name (By)
+      "" // I empty (SKU)
     ];
 
     // Check if this tracking number already exists in Shipped
@@ -786,10 +730,10 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
     }
 
     if (existingRow !== -1) {
-      // Update existing row - update D (Sent), F (Serial Number), and I (Tech name)
+      // Update existing row - update D (Sent), F (Serial Number), and H (Tech name)
       shippedSheet.getRange(existingRow, 4).setValue(techRowData[5]); // D = Tech F (Sent/Status)
       shippedSheet.getRange(existingRow, 6).setValue(techRowData[3]); // F = Tech D (Serial Number)
-      shippedSheet.getRange(existingRow, 9).setValue(techName); // I = Tech name
+      shippedSheet.getRange(existingRow, 8).setValue(techName); // H = Tech name (By)
     } else {
       // Create new row
       shippedSheet.getRange(nextShippedRow, 1, 1, 9).setValues([shippedData]);
@@ -802,7 +746,7 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
   }
 }
 
-// Tech_X Orders Handling (for Tech_0 to Tech_10)
+// Tech_X Orders Handling (for Tech_1 to Tech_10)
 // Column structure: A=Date/Time, B=Product Name, C=Tracking/FNSKU, D=Serial Numbers, E=Input, F=Checklist Status, G=SKU, H=Qty Count
 function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
   try {
@@ -1836,8 +1780,8 @@ function syncPackerTimestampsToShipped() {
     var updatedCount = 0;
     var processedCount = 0;
 
-    // Process all Packer_X sheets (Packer_0 to Packer_10)
-    for (var p = 0; p <= 10; p++) {
+    // Process all Packer_X sheets (Packer_1 to Packer_10)
+    for (var p = 1; p <= 10; p++) {
       var packerSheetName = "Packer_" + p;
       var packerSheet = spreadsheet.getSheetByName(packerSheetName);
 
@@ -1998,12 +1942,10 @@ function calculateLateOrders() {
 
 // Function to determine packer name based on sheet name
 function getPackerName(sheetName) {
-  if (sheetName === "Packer_0") {
+  if (sheetName === "Packer_1") {
     return "Tuan";
-  } else if (sheetName === "Packer_1") {
-    return "Thuy";
   } else if (sheetName === "Packer_2") {
-    return "Packer_2";
+    return "Thuy";
   } else if (sheetName === "Packer_3") {
     return "Packer_3";
   } else if (sheetName === "Packer_4") {
@@ -2047,8 +1989,8 @@ function recheckTechTrackingIntegrity() {
     var fixedCount = 0;
     var stillRedCount = 0;
 
-    // Process all Tech_X sheets (Tech_0 to Tech_10)
-    for (var t = 0; t <= 10; t++) {
+    // Process all Tech_X sheets (Tech_1 to Tech_10)
+    for (var t = 1; t <= 10 ; t++) {
       var techSheetName = "Tech_" + t;
       var techSheet = spreadsheet.getSheetByName(techSheetName);
 
@@ -2086,6 +2028,33 @@ function recheckTechTrackingIntegrity() {
                 var serialNumbers = String(techData[i][3]).trim(); // D column (index 3)
                 if (serialNumbers) {
                   shippedSheet.getRange(s + 2, 6).setValue(serialNumbers); // F column in Shipped (Serial Number)
+                }
+
+                // Set tech name in Shipped H column (By)
+                var techName = "";
+                if (techSheetName === "Tech_1") {
+                  techName = "Mike";
+                } else if (techSheetName === "Tech_2") {
+                  techName = "Thuc";
+                } else if (techSheetName === "Tech_3") {
+                  techName = "Sang";
+                } else if (techSheetName === "Tech_4") {
+                  techName = "Tech_4";
+                } else if (techSheetName === "Tech_5") {
+                  techName = "Tech_5";
+                } else if (techSheetName === "Tech_6") {
+                  techName = "Tech_6";
+                } else if (techSheetName === "Tech_7") {
+                  techName = "Tech_7";
+                } else if (techSheetName === "Tech_8") {
+                  techName = "Tech_8";
+                } else if (techSheetName === "Tech_9") {
+                  techName = "Tech_9";
+                } else if (techSheetName === "Tech_10") {
+                  techName = "Tech_10";
+                }
+                if (techName) {
+                  shippedSheet.getRange(s + 2, 8).setValue(techName); // H column in Shipped (By)
                 }
 
                 // Clear red background from A column
@@ -2161,8 +2130,8 @@ function recheckPackerTrackingIntegrity() {
       skuStockData = skuStockSheet.getDataRange().getValues();
     }
 
-    // Process all Packer_X sheets (Packer_0 to Packer_10)
-    for (var p = 0; p <= 10; p++) {
+    // Process all Packer_X sheets (Packer_1 to Packer_10)
+    for (var p = 1; p <= 10; p++) {
       var packerSheetName = "Packer_" + p;
       var packerSheet = spreadsheet.getSheetByName(packerSheetName);
 

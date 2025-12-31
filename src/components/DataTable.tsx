@@ -68,6 +68,25 @@ export function DataTable<T>({
         getColumnWidth
     } = useColumnManager(tableName, totalColumns);
 
+    // Helper functions - defined before useMemo to avoid initialization errors
+    const getCellValue = React.useCallback((item: T, col: Column<T>): string | React.ReactNode => {
+        if (typeof col.accessor === 'function') {
+            return col.accessor(item);
+        }
+        return String((item[col.accessor as keyof T] as any) || '');
+    }, []);
+
+    const getCellValueString = React.useCallback((item: T, col: Column<T>): string => {
+        if (typeof col.accessor === 'function') {
+            const result = col.accessor(item);
+            if (React.isValidElement(result)) {
+                return ''; // Don't try to edit JSX elements
+            }
+            return result ? String(result) : '';
+        }
+        return String((item[col.accessor as keyof T] as any) || '');
+    }, []);
+
     // Filter visible columns - preserve original index for colKey
     const visibleColumns = columns
         .map((col, idx) => ({ col, originalIdx: idx }))
@@ -163,7 +182,7 @@ export function DataTable<T>({
             }
         }
         return filtered;
-    }, [data, columnConfig, visibleColumns, dateFilter, dateFilterColumn]);
+    }, [data, columnConfig, visibleColumns, dateFilter, dateFilterColumn, getCellValueString]);
 
     // Notify parent of config changes
     React.useEffect(() => {
@@ -330,24 +349,6 @@ export function DataTable<T>({
             };
         }
     }, [resizingCol, resizeStartX, resizeStartWidth, updateColumnWidth, getColumnWidth]);
-
-    const getCellValue = (item: T, col: Column<T>): string | React.ReactNode => {
-        if (typeof col.accessor === 'function') {
-            return col.accessor(item);
-        }
-        return String((item[col.accessor as keyof T] as any) || '');
-    };
-
-    const getCellValueString = (item: T, col: Column<T>): string => {
-        if (typeof col.accessor === 'function') {
-            const result = col.accessor(item);
-            if (React.isValidElement(result)) {
-                return ''; // Don't try to edit JSX elements
-            }
-            return result ? String(result) : '';
-        }
-        return String((item[col.accessor as keyof T] as any) || '');
-    };
 
     // Check if next column is empty for overflow behavior
     const isNextColumnEmpty = (rowIndex: number, colIndex: number): boolean => {
