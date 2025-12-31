@@ -46,7 +46,7 @@ export async function POST(request: Request) {
         
         // Run the sync
         console.log('[SYNC] Starting sync...');
-        const result = await syncAllSheets();
+        const result = await syncAllSheets(debug === true || debug === 'true');
         
         console.log('[SYNC] Sync completed successfully');
         
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
             debug: {
                 timestamp: new Date().toISOString(),
                 method: 'typescript',
+                debug_mode: debug === true || debug === 'true',
             }
         });
 

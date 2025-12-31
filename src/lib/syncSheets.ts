@@ -64,28 +64,52 @@ async function getGoogleSheetsClient() {
         ],
     });
     
-    return google.sheets({ version: 'v4', auth });
+    return {
+        sheets: google.sheets({ version: 'v4', auth }),
+        auth: auth,
+    };
 }
 
-async function getSheetNames(sheets: any, spreadsheetId: string): Promise<string[]> {
+async function getSheetNames(sheetsClient: any, spreadsheetId: string, debug: boolean = false): Promise<string[]> {
     try {
-        const metadata = await sheets.spreadsheets.get({
+        if (debug) {
+            console.log(`[DEBUG] Fetching metadata for spreadsheet: ${spreadsheetId}`);
+        }
+        const metadata = await sheetsClient.spreadsheets.get({
             spreadsheetId,
         });
         const sheetNames = (metadata.data.sheets || []).map((s: any) => s.properties?.title || '').filter((n: string) => n);
         console.log(`Found ${sheetNames.length} sheets: ${sheetNames.join(', ')}`);
+        if (debug) {
+            console.log(`[DEBUG] Full metadata response:`, JSON.stringify({
+                spreadsheetId: metadata.data.spreadsheetId,
+                title: metadata.data.properties?.title,
+                sheets: metadata.data.sheets?.map((s: any) => ({
+                    title: s.properties?.title,
+                    sheetId: s.properties?.sheetId,
+                    index: s.properties?.index,
+                })) || [],
+            }, null, 2));
+        }
         return sheetNames;
     } catch (error: any) {
         console.error(`Error getting sheet names for spreadsheet ${spreadsheetId}:`, error.message || error);
         if (error.code === 404) {
             console.error('  → Spreadsheet not found. Check GOOGLE_SHEET_ID and ensure service account has access.');
         }
+        if (debug) {
+            console.error(`[DEBUG] Full error:`, JSON.stringify({
+                code: error.code,
+                message: error.message,
+                response: error.response?.data,
+            }, null, 2));
+        }
         // Return empty array but log the error
         return [];
     }
 }
 
-async function getSheetDataByPosition(sheets: any, spreadsheetId: string, sheetName: string, maxCols: number = 26): Promise<SheetRow[]> {
+async function getSheetDataByPosition(sheetsClient: any, spreadsheetId: string, sheetName: string, maxCols: number = 26, debug: boolean = false): Promise<SheetRow[]> {
     try {
         // Get column letters (A, B, C, ..., Z, AA, AB, ...)
         const getColumnLetter = (col: number): string => {
@@ -101,15 +125,38 @@ async function getSheetDataByPosition(sheets: any, spreadsheetId: string, sheetN
         const lastCol = getColumnLetter(maxCols);
         const range = `${sheetName}!A:${lastCol}`;
         
-        const response = await sheets.spreadsheets.values.get({
+        if (debug) {
+            console.log(`[DEBUG] Fetching range: ${range} from spreadsheet ${spreadsheetId}`);
+        }
+        
+        const response = await sheetsClient.spreadsheets.values.get({
             spreadsheetId,
             range,
         });
         
+        if (debug) {
+            console.log(`[DEBUG] Raw response for "${sheetName}":`, JSON.stringify({
+                range: response.data.range,
+                majorDimension: response.data.majorDimension,
+                valuesCount: response.data.values?.length || 0,
+                firstRow: response.data.values?.[0] || null,
+                secondRow: response.data.values?.[1] || null,
+            }, null, 2));
+        }
+        
         const rows = response.data.values;
         if (!rows || rows.length < 2) {
-            console.log(`  Sheet "${sheetName}" has no data rows`);
+            console.log(`  Sheet "${sheetName}" has no data rows (found ${rows?.length || 0} rows)`);
+            if (debug && rows) {
+                console.log(`[DEBUG] Available rows:`, rows);
+            }
             return [];
+        }
+        
+        if (debug) {
+            console.log(`[DEBUG] Processing ${rows.length} rows from "${sheetName}"`);
+            console.log(`[DEBUG] Headers (row 0):`, rows[0]);
+            console.log(`[DEBUG] First data row (row 1):`, rows[1]);
         }
         
         // First row is headers - we'll use column positions (col_1, col_2, etc.)
@@ -196,10 +243,10 @@ function findSheetName(availableSheets: string[], targetName: string): string | 
     return null;
 }
 
-async function findSpreadsheetId(sheets: any): Promise<string | null> {
+async function findSpreadsheetId(sheetsClient: any, auth: any): Promise<string | null> {
     try {
         console.log('Attempting to auto-detect spreadsheet...');
-        const drive = google.drive({ version: 'v3', auth: sheets.auth });
+        const drive = google.drive({ version: 'v3', auth });
         const response = await drive.files.list({
             q: "mimeType='application/vnd.google-apps.spreadsheet'",
             fields: 'files(id, name)',
@@ -210,7 +257,7 @@ async function findSpreadsheetId(sheets: any): Promise<string | null> {
         
         for (const file of response.data.files || []) {
             try {
-                const sheetMetadata = await sheets.spreadsheets.get({
+                const sheetMetadata = await sheetsClient.spreadsheets.get({
                     spreadsheetId: file.id!,
                 });
                 
@@ -503,16 +550,53 @@ export async function syncSku(conn: any, data: SheetRow[]) {
     }
 }
 
-export async function syncAllSheets() {
+export async function syncAllSheets(debug: boolean = false) {
     let spreadsheetId = process.env.GOOGLE_SHEET_ID;
     
     console.log('Starting Google Sheets to Neon DB sync (TypeScript)...\n');
+    if (debug) {
+        console.log('[DEBUG] Debug mode enabled - will show raw Google Sheets data\n');
+    }
+    
+    const { sheets: sheetsClient, auth } = await getGoogleSheetsClient();
+    
+    // Verify authentication works by listing accessible spreadsheets
+    try {
+        console.log('Verifying service account access...');
+        const drive = google.drive({ version: 'v3', auth });
+        const driveResponse = await drive.files.list({
+            q: "mimeType='application/vnd.google-apps.spreadsheet'",
+            fields: 'files(id, name)',
+            pageSize: 10,
+        });
+        
+        const accessibleSheets = (driveResponse.data.files || []).map((f: any) => ({
+            id: f.id,
+            name: f.name,
+        }));
+        
+        console.log(`Service account has access to ${accessibleSheets.length} spreadsheet(s):`);
+        accessibleSheets.forEach((s: any) => {
+            console.log(`  - "${s.name}" (ID: ${s.id})`);
+            if (s.id === spreadsheetId) {
+                console.log(`    ✓ This matches GOOGLE_SHEET_ID`);
+            }
+        });
+        
+        if (debug) {
+            console.log('[DEBUG] All accessible spreadsheets:', JSON.stringify(accessibleSheets, null, 2));
+        }
+    } catch (error: any) {
+        console.error('Warning: Could not list accessible spreadsheets:', error.message);
+        if (debug) {
+            console.error('[DEBUG] Drive API error:', error);
+        }
+    }
     
     // If GOOGLE_SHEET_ID is not set, try to find it automatically
     if (!spreadsheetId) {
         console.log('GOOGLE_SHEET_ID not set, attempting to find spreadsheet automatically...');
-        const sheets = await getGoogleSheetsClient();
-        const foundId = await findSpreadsheetId(sheets);
+        const foundId = await findSpreadsheetId(sheetsClient, auth);
         
         if (foundId) {
             spreadsheetId = foundId;
@@ -520,14 +604,39 @@ export async function syncAllSheets() {
         } else {
             throw new Error('GOOGLE_SHEET_ID not set and could not be automatically detected. Please set GOOGLE_SHEET_ID in environment variables or ensure the service account has access to the spreadsheet.');
         }
+    } else {
+        console.log(`Using GOOGLE_SHEET_ID from environment: ${spreadsheetId}`);
+        
+        // Verify the spreadsheet ID is accessible
+        try {
+            const testMetadata = await sheetsClient.spreadsheets.get({
+                spreadsheetId,
+            });
+            console.log(`✓ Spreadsheet accessible: "${testMetadata.data.properties?.title}"`);
+            if (debug) {
+                console.log('[DEBUG] Spreadsheet metadata:', JSON.stringify({
+                    id: testMetadata.data.spreadsheetId,
+                    title: testMetadata.data.properties?.title,
+                    locale: testMetadata.data.properties?.locale,
+                    timeZone: testMetadata.data.properties?.timeZone,
+                }, null, 2));
+            }
+        } catch (error: any) {
+            console.error(`❌ Cannot access spreadsheet with ID: ${spreadsheetId}`);
+            console.error(`   Error: ${error.message}`);
+            if (error.code === 404) {
+                console.error(`   → The spreadsheet ID is incorrect OR the service account doesn't have access.`);
+                console.error(`   → Make sure to share the spreadsheet with: ${process.env.GOOGLE_CLIENT_EMAIL}`);
+            }
+            throw new Error(`Cannot access spreadsheet: ${error.message}. Make sure GOOGLE_SHEET_ID is correct and the spreadsheet is shared with ${process.env.GOOGLE_CLIENT_EMAIL}`);
+        }
     }
     
-    const sheets = await getGoogleSheetsClient();
     const conn = pool;
     
     try {
         // Get all available sheet names first
-        let availableSheets = await getSheetNames(sheets, spreadsheetId);
+        let availableSheets = await getSheetNames(sheetsClient, spreadsheetId, debug);
         
         // If we couldn't get sheet names, try to fetch sheets directly anyway
         // This handles cases where metadata access fails but data access works
@@ -537,11 +646,17 @@ export async function syncAllSheets() {
             const expectedSheets = ['Orders', 'Tech_1', 'Tech_2', 'Tech_3', 'Receiving', 'Packer_1', 'Packer_2', 'Shipped', 'Sku-Stock', 'Sku'];
             for (const sheetName of expectedSheets) {
                 try {
-                    const testData = await getSheetDataByPosition(sheets, spreadsheetId, sheetName, 1);
+                    const testData = await getSheetDataByPosition(sheetsClient, spreadsheetId, sheetName, 1, debug);
                     if (testData.length >= 0) { // Even empty is valid
                         availableSheets.push(sheetName);
+                        if (debug) {
+                            console.log(`[DEBUG] Found sheet via direct access: "${sheetName}"`);
+                        }
                     }
-                } catch (e) {
+                } catch (e: any) {
+                    if (debug) {
+                        console.log(`[DEBUG] Direct access test failed for "${sheetName}":`, e.message);
+                    }
                     // Sheet doesn't exist or can't be accessed
                 }
             }
@@ -566,11 +681,14 @@ export async function syncAllSheets() {
                 if (!actualSheetName) {
                     // Try the target name directly
                     try {
-                        const testData = await getSheetDataByPosition(sheets, spreadsheetId, targetName, maxCols);
+                        const testData = await getSheetDataByPosition(sheetsClient, spreadsheetId, targetName, maxCols, debug);
                         if (testData.length > 0) {
                             actualSheetName = targetName;
                         }
-                    } catch (e) {
+                    } catch (e: any) {
+                        if (debug) {
+                            console.log(`[DEBUG] Direct access failed for "${targetName}":`, e.message);
+                        }
                         // Try case variations
                         const variations = [
                             targetName.charAt(0).toUpperCase() + targetName.slice(1).toLowerCase(),
@@ -579,12 +697,18 @@ export async function syncAllSheets() {
                         ];
                         for (const variation of variations) {
                             try {
-                                const testData = await getSheetDataByPosition(sheets, spreadsheetId, variation, maxCols);
+                                const testData = await getSheetDataByPosition(sheetsClient, spreadsheetId, variation, maxCols, debug);
                                 if (testData.length > 0) {
                                     actualSheetName = variation;
+                                    if (debug) {
+                                        console.log(`[DEBUG] Found sheet with variation: "${variation}"`);
+                                    }
                                     break;
                                 }
-                            } catch (e2) {
+                            } catch (e2: any) {
+                                if (debug) {
+                                    console.log(`[DEBUG] Variation "${variation}" failed:`, e2.message);
+                                }
                                 continue;
                             }
                         }
@@ -592,8 +716,12 @@ export async function syncAllSheets() {
                 }
                 
                 if (actualSheetName) {
-                    const data = await getSheetDataByPosition(sheets, spreadsheetId, actualSheetName, maxCols);
+                    const data = await getSheetDataByPosition(sheetsClient, spreadsheetId, actualSheetName, maxCols, debug);
                     if (data.length > 0) {
+                        if (debug) {
+                            console.log(`[DEBUG] Syncing ${data.length} rows from "${actualSheetName}"`);
+                            console.log(`[DEBUG] Sample row data:`, JSON.stringify(data[0], null, 2));
+                        }
                         await syncFn(conn, data);
                         return true;
                     }
