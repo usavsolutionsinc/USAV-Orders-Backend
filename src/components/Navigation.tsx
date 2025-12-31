@@ -21,10 +21,10 @@ export default function Navigation() {
     return (
         <nav className="bg-[#0a192f] text-white shadow-md z-50 relative">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex items-center justify-between h-12">
+                <div className="flex items-center h-12">
                     <div className="flex items-center">
                         <div className="flex-shrink-0 font-bold text-lg mr-10">
-                            USAV Enterprise
+                            USAV Backend
                         </div>
                         <div className="hidden md:block">
                             <div className="flex items-baseline space-x-4">
