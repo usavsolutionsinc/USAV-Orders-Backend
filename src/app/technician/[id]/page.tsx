@@ -11,12 +11,11 @@ export default function TechnicianPage() {
     const techId = params.id;
     const [scanInput, setScanInput] = useState('');
     const [lastAction, setLastAction] = useState<string | null>(null);
-    const [dailyCount, setDailyCount] = useState(0); // New state
+    const [dailyCount, setDailyCount] = useState(0);
 
-    // Fetch all orders for now, filtering logic can be added later or on backend
-    const { data: orders = [], isLoading, refetch } = useQuery({
-        queryKey: ['orders'],
-        queryFn: () => fetch('/api/orders').then(r => r.json())
+    const { data: techData = [], isLoading, refetch } = useQuery({
+        queryKey: ['tech', techId],
+        queryFn: () => fetch(`/api/tech/${techId}`).then(r => r.json())
     });
 
     const handleScan = async (e: React.FormEvent) => {
@@ -50,22 +49,13 @@ export default function TechnicianPage() {
         }
     };
 
-    const safeOrders = Array.isArray(orders) ? orders : [];
-
-    // Columns optimized for Technician view (Sheet style)
-    const columns = [
-        { header: 'Order ID', accessor: 'id' as const, className: 'font-bold' },
-        { header: 'Product', accessor: (order: any) => order.items?.map((it: any) => it.title).join(', ') || order.product_title, className: 'truncate max-w-[300px]' },
-        { header: 'SKU', accessor: (order: any) => order.items?.map((it: any) => it.sku).join(', ') || order.sku },
-        { header: 'Date / Time', accessor: (order: any) => new Date().toLocaleString() }, // Placeholder for scan time
-        { header: 'Title', accessor: 'product_title' as const },
-        { header: 'Shipping TRK #', accessor: 'tracking_number' as const, className: 'font-mono' },
-        { header: 'Serial Number Data', accessor: 'serial_numbers' as const },
-        { header: 'Input', accessor: 'last_input' as const }, // Placeholder for last input
-        { header: 'As', accessor: 'asin' as const },
-        { header: 'SKU', accessor: 'sku' as const },
-        { header: '#', accessor: 'qty' as const },
-    ];
+    // Generate columns dynamically from col_1 to col_8
+    const columns = Array.from({ length: 8 }, (_, i) => ({
+        header: `col_${i + 1}`,
+        accessor: `col_${i + 1}` as const,
+        colKey: `col_${i + 1}`,
+        className: i === 2 ? 'font-mono' : '' // col_3 is typically tracking number
+    }));
 
     if (isLoading) return <div className="p-4 text-sm">Loading technician data...</div>;
 
@@ -91,11 +81,13 @@ export default function TechnicianPage() {
                 </div>
 
                 <DataTable
-                    data={orders}
+                    data={techData}
                     columns={columns}
                     keyField="id"
                     emptyMessage="Scan a tracking number to load order."
                     variant="sheet"
+                    tableName={`tech_${techId}`}
+                    showColumnManager={true}
                 />
 
                 {/* Bottom Right Scan Form */}

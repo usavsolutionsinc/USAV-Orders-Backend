@@ -7,14 +7,13 @@ export async function GET() {
     try {
         const client = await pool.connect();
         try {
-            // Join with orders to get details
+            // Select all col_* columns except id and created_at, plus id for keyField
             const result = await client.query(`
-        SELECT s.*, o.buyer_name, o.product_title, o.sku 
-        FROM shipped s
-        JOIN orders o ON s.order_id = o.id
-        ORDER BY s.shipped_date DESC 
-        LIMIT 500
-      `);
+                SELECT id, col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9, col_10
+                FROM shipped 
+                ORDER BY created_at DESC 
+                LIMIT 500
+            `);
             return NextResponse.json(result.rows);
         } finally {
             client.release();

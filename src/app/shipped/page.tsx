@@ -12,19 +12,13 @@ export default function ShippedPage() {
 
     const safeShippedItems = Array.isArray(shippedItems) ? shippedItems : [];
 
-    const columns = [
-        { header: 'Date-Time', accessor: (row: any) => new Date(row.shipped_date || row.timestamp).toLocaleString() },
-        { header: 'Order ID', accessor: 'order_id' as const },
-        { header: 'Product Title', accessor: 'product_title' as const },
-        { header: 'As', accessor: 'asin' as const }, // Placeholder
-        { header: 'Sent', accessor: 'sent_status' as const }, // Placeholder
-        { header: 'Shipping TRK #', accessor: 'tracking_number' as const, className: 'font-mono' },
-        { header: 'Serial Number', accessor: 'serial_numbers' as const },
-        { header: 'Box', accessor: 'box_id' as const }, // Placeholder
-        { header: 'By', accessor: 'tech_name' as const },
-        { header: 'Size', accessor: 'size' as const }, // Placeholder
-        { header: 'SKU', accessor: 'sku' as const },
-    ];
+    // Generate columns dynamically from col_1 to col_10
+    const columns = Array.from({ length: 10 }, (_, i) => ({
+        header: `col_${i + 1}`,
+        accessor: `col_${i + 1}` as const,
+        colKey: `col_${i + 1}`,
+        className: i === 4 ? 'font-mono' : '' // col_5 is typically tracking number
+    }));
 
     if (isLoading) return <div className="p-4 text-sm">Loading shipped items...</div>;
 
@@ -37,6 +31,8 @@ export default function ShippedPage() {
                     keyField="id"
                     emptyMessage="No shipped items found."
                     variant="sheet"
+                    tableName="shipped"
+                    showColumnManager={true}
                 />
             </div>
         </div>

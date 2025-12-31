@@ -39,12 +39,13 @@ export default function ReceivingPage() {
         }
     };
 
-    const columns = [
-        { header: 'Date / Time', accessor: (row: any) => new Date(row.timestamp).toLocaleString() },
-        { header: 'Tracking Number', accessor: 'tracking_number' as const, className: 'font-mono' },
-        { header: 'Carrier', accessor: 'carrier' as const },
-        { header: 'Qty', accessor: 'quantity' as const }, // Placeholder, receiving might not have qty unless we add it
-    ];
+    // Generate columns dynamically from col_1 to col_4
+    const columns = Array.from({ length: 4 }, (_, i) => ({
+        header: `col_${i + 1}`,
+        accessor: `col_${i + 1}` as const,
+        colKey: `col_${i + 1}`,
+        className: i === 1 ? 'font-mono' : '' // col_2 is typically tracking number
+    }));
 
     if (isLoading) return <div className="p-4 text-sm">Loading receiving data...</div>;
 
@@ -66,6 +67,8 @@ export default function ReceivingPage() {
                     keyField="id"
                     emptyMessage="No receiving scans yet."
                     variant="sheet"
+                    tableName="receiving"
+                    showColumnManager={true}
                 />
 
                 {/* Bottom Right Scan Form */}

@@ -329,9 +329,32 @@ async function syncTableGeneric(conn: any, tableName: string, data: SheetRow[], 
 }
 
 // Position-based sync functions - maps columns A, B, C... to col_1, col_2, col_3...
+// Drops and recreates tables with position-based columns (except protected tables)
+const PROTECTED_TABLES = ['sku_management', 'available_sku_suffixes'];
+
+async function recreateTableWithPositionColumns(client: any, tableName: string, columnCount: number) {
+    // Drop table if it exists (unless protected)
+    if (!PROTECTED_TABLES.includes(tableName)) {
+        await client.query(`DROP TABLE IF EXISTS ${tableName} CASCADE`);
+    }
+    
+    // Create table with position-based columns
+    const columns = Array.from({ length: columnCount }, (_, i) => `col_${i + 1} TEXT`).join(', ');
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS ${tableName} (
+            id SERIAL PRIMARY KEY,
+            ${columns},
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+}
+
 export async function syncOrders(conn: any, data: SheetRow[]) {
     const client = await conn.connect();
     try {
+        // Recreate table with position-based columns
+        await recreateTableWithPositionColumns(client, 'orders', 16);
+        
         for (const row of data) {
             const orderId = row['col_3'] || null; // Column C = Order ID
             if (!orderId) continue;
@@ -339,8 +362,8 @@ export async function syncOrders(conn: any, data: SheetRow[]) {
             await client.query(`
                 INSERT INTO orders (
                     col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8,
-                    col_9, col_10, col_11, col_12, col_13, col_14, col_15, col_16, order_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+                    col_9, col_10, col_11, col_12, col_13, col_14, col_15, col_16
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                 ON CONFLICT DO NOTHING
             `, [
                 row['col_1'] || null, // A
@@ -359,7 +382,6 @@ export async function syncOrders(conn: any, data: SheetRow[]) {
                 row['col_14'] || null, // N
                 row['col_15'] || null, // O
                 row['col_16'] || null, // P
-                orderId, // order_id for lookup
             ]);
         }
         console.log(`✓ Synced ${data.length} orders`);
@@ -375,11 +397,14 @@ export async function syncTechTable(conn: any, techNum: number, data: SheetRow[]
     const client = await conn.connect();
     const tableName = `tech_${techNum}`;
     try {
+        // Recreate table with position-based columns
+        await recreateTableWithPositionColumns(client, tableName, 8);
+        
         for (const row of data) {
             await client.query(`
                 INSERT INTO ${tableName} (
-                    col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, tech_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT DO NOTHING
             `, [
                 row['col_1'] || null, // A
@@ -390,7 +415,6 @@ export async function syncTechTable(conn: any, techNum: number, data: SheetRow[]
                 row['col_6'] || null, // F
                 row['col_7'] || null, // G
                 row['col_8'] || null, // H
-                String(techNum),
             ]);
         }
         console.log(`✓ Synced ${data.length} rows to ${tableName}`);
@@ -406,11 +430,14 @@ export async function syncPackerTable(conn: any, packerNum: number, data: SheetR
     const client = await conn.connect();
     const tableName = `Packer_${packerNum}`;
     try {
+        // Recreate table with position-based columns (up to 5 columns)
+        await recreateTableWithPositionColumns(client, tableName, 5);
+        
         for (const row of data) {
             await client.query(`
                 INSERT INTO ${tableName} (
-                    col_1, col_2, col_3, col_4, col_5, packer_id
-                ) VALUES ($1, $2, $3, $4, $5, $6)
+                    col_1, col_2, col_3, col_4, col_5
+                ) VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT DO NOTHING
             `, [
                 row['col_1'] || null, // A
@@ -418,7 +445,6 @@ export async function syncPackerTable(conn: any, packerNum: number, data: SheetR
                 row['col_3'] || null, // C
                 row['col_4'] || null, // D
                 row['col_5'] || null, // E (if exists)
-                String(packerNum),
             ]);
         }
         console.log(`✓ Synced ${data.length} rows to ${tableName}`);
@@ -433,6 +459,9 @@ export async function syncPackerTable(conn: any, packerNum: number, data: SheetR
 export async function syncReceiving(conn: any, data: SheetRow[]) {
     const client = await conn.connect();
     try {
+        // Recreate table with position-based columns
+        await recreateTableWithPositionColumns(client, 'receiving', 4);
+        
         for (const row of data) {
             await client.query(`
                 INSERT INTO receiving (
@@ -458,6 +487,9 @@ export async function syncReceiving(conn: any, data: SheetRow[]) {
 export async function syncShipped(conn: any, data: SheetRow[]) {
     const client = await conn.connect();
     try {
+        // Recreate table with position-based columns
+        await recreateTableWithPositionColumns(client, 'shipped', 10);
+        
         for (const row of data) {
             await client.query(`
                 INSERT INTO shipped (
@@ -489,27 +521,24 @@ export async function syncShipped(conn: any, data: SheetRow[]) {
 export async function syncSkuStock(conn: any, data: SheetRow[]) {
     const client = await conn.connect();
     try {
+        // Recreate table with position-based columns
+        await recreateTableWithPositionColumns(client, 'sku_stock', 5);
+        
         for (const row of data) {
             const sku = row['col_1'] || null; // A
             if (!sku) continue;
             
             await client.query(`
                 INSERT INTO sku_stock (
-                    col_1, col_2, col_3, col_4, col_5, sku
-                ) VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (sku) DO UPDATE SET
-                    col_1 = EXCLUDED.col_1,
-                    col_2 = EXCLUDED.col_2,
-                    col_3 = EXCLUDED.col_3,
-                    col_4 = EXCLUDED.col_4,
-                    col_5 = EXCLUDED.col_5
+                    col_1, col_2, col_3, col_4, col_5
+                ) VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT DO NOTHING
             `, [
                 row['col_1'] || null, // A
                 row['col_2'] || null, // B
                 row['col_3'] || null, // C
                 row['col_4'] || null, // D
                 row['col_5'] || null, // E
-                sku, // sku for lookup
             ]);
         }
         console.log(`✓ Synced ${data.length} SKU stock items`);
@@ -524,6 +553,9 @@ export async function syncSkuStock(conn: any, data: SheetRow[]) {
 export async function syncSku(conn: any, data: SheetRow[]) {
     const client = await conn.connect();
     try {
+        // Recreate table with position-based columns
+        await recreateTableWithPositionColumns(client, 'skus', 8);
+        
         for (const row of data) {
             await client.query(`
                 INSERT INTO skus (

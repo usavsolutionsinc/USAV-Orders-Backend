@@ -9,12 +9,13 @@ export default function SkuStockPage() {
         queryFn: () => fetch('/api/sku-stock').then(r => r.json())
     });
 
-    const columns = [
-        { header: 'SKU', accessor: 'sku' as const, className: 'font-bold' },
-        { header: 'Quantity', accessor: 'quantity' as const },
-        { header: 'Title', accessor: 'title' as const },
-        { header: 'Serial Numbers', accessor: 'serial_numbers' as const },
-    ];
+    // Generate columns dynamically from col_1 to col_5
+    const columns = Array.from({ length: 5 }, (_, i) => ({
+        header: `col_${i + 1}`,
+        accessor: `col_${i + 1}` as const,
+        colKey: `col_${i + 1}`,
+        className: i === 0 ? 'font-bold' : '' // col_1 is typically SKU
+    }));
 
     return (
         <div className="min-h-screen bg-white text-black font-sans">
@@ -26,9 +27,11 @@ export default function SkuStockPage() {
                     <DataTable
                         data={stock}
                         columns={columns}
-                        keyField="sku"
+                        keyField="id"
                         emptyMessage="No stock data found."
                         variant="sheet"
+                        tableName="sku_stock"
+                        showColumnManager={true}
                     />
                 )}
             </div>

@@ -6,10 +6,20 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false },
 });
 
+import { NextResponse } from 'next/server';
+import pool from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     const client = await pool.connect();
     try {
-        const res = await client.query('SELECT * FROM skus ORDER BY sku ASC');
+        // Select all col_* columns except id and created_at, plus id for keyField
+        const res = await client.query(`
+            SELECT id, col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8
+            FROM skus 
+            ORDER BY col_2 ASC
+        `);
         return NextResponse.json(res.rows);
     } catch (error) {
         return NextResponse.json({ error: 'Failed to fetch skus' }, { status: 500 });

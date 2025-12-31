@@ -7,25 +7,15 @@ export async function GET() {
     try {
         const client = await pool.connect();
         try {
-            const result = await client.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 500');
-            // Transform data if necessary to match UI expectations
-            const orders = result.rows.map(row => ({
-                id: row.id,
-                buyerName: row.buyer_name,
-                items: [
-                    {
-                        title: row.product_title,
-                        qty: row.qty,
-                        sku: row.sku,
-                        skuDocuments: [] // Placeholder if not in DB yet
-                    }
-                ],
-                shipBy: row.ship_by,
-                shippingSpeed: row.shipping_speed,
-                trackingNumber: row.tracking_number,
-                status: row.status
-            }));
-            return NextResponse.json(orders);
+            // Select all columns except id and created_at, plus id for keyField
+            const result = await client.query(`
+                SELECT id, col_1, col_2, col_3, col_4, col_5, col_6, col_7, col_8, 
+                       col_9, col_10, col_11, col_12, col_13, col_14, col_15, col_16
+                FROM orders 
+                ORDER BY created_at DESC 
+                LIMIT 500
+            `);
+            return NextResponse.json(result.rows);
         } finally {
             client.release();
         }

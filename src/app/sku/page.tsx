@@ -9,11 +9,13 @@ export default function SkusPage() {
         queryFn: () => fetch('/api/skus').then(r => r.json())
     });
 
-    const columns = [
-        { header: 'SKU', accessor: 'sku' as const, className: 'font-bold' },
-        { header: 'Serial Numbers', accessor: 'serial_numbers' as const },
-        { header: 'Notes', accessor: 'notes' as const },
-    ];
+    // Generate columns dynamically from col_1 to col_8
+    const columns = Array.from({ length: 8 }, (_, i) => ({
+        header: `col_${i + 1}`,
+        accessor: `col_${i + 1}` as const,
+        colKey: `col_${i + 1}`,
+        className: i === 1 ? 'font-bold' : '' // col_2 is typically SKU
+    }));
 
     return (
         <div className="min-h-screen bg-white text-black font-sans">
@@ -25,9 +27,11 @@ export default function SkusPage() {
                     <DataTable
                         data={skus}
                         columns={columns}
-                        keyField="sku"
+                        keyField="id"
                         emptyMessage="No SKU data found."
                         variant="sheet"
+                        tableName="skus"
+                        showColumnManager={true}
                     />
                 )}
             </div>

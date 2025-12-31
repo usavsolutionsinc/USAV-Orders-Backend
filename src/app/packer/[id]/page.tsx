@@ -4,22 +4,18 @@ import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/DataTable';
-import { usePrinter } from '@/hooks/usePrinter';
 import DailyChecklist from '@/components/DailyChecklist';
 
 export default function PackerPage() {
     const params = useParams();
     const packerId = params.id;
     const [scanInput, setScanInput] = useState('');
-    const [dailyCount, setDailyCount] = useState(0); // New state
-    const { printOrder } = usePrinter();
+    const [dailyCount, setDailyCount] = useState(0);
 
-    const { data: orders = [], isLoading } = useQuery({
-        queryKey: ['orders'],
-        queryFn: () => fetch('/api/orders').then(r => r.json())
+    const { data: packerData = [], isLoading, refetch } = useQuery({
+        queryKey: ['packer', packerId],
+        queryFn: () => fetch(`/api/packer/${packerId}`).then(r => r.json())
     });
-
-    const safeOrders = Array.isArray(orders) ? orders : [];
 
     const handleScan = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -34,13 +30,11 @@ export default function PackerPage() {
             const data = await res.json();
 
             if (data.success) {
-                // Could show a toast or update a log list
                 console.log('Scan success:', data);
                 if (data.dailyCount !== undefined) {
                     setDailyCount(data.dailyCount);
                 }
-                // If it was a tracking scan, maybe print?
-                // if (data.type === 'TRACKING') ...
+                refetch(); // Refresh data
             } else {
                 alert(data.message);
             }
@@ -51,17 +45,13 @@ export default function PackerPage() {
         }
     };
 
-    const columns = [
-        { header: 'Date / Time', accessor: (row: any) => new Date().toLocaleString() }, // Placeholder
-        { header: 'Tracking Number/FNSKU', accessor: 'tracking_number' as const, className: 'font-mono' },
-        { header: 'ID', accessor: 'id' as const },
-        { header: 'Product Title', accessor: 'product_title' as const },
-        { header: '#', accessor: 'qty' as const },
-        {
-            header: 'Action',
-            accessor: (order: any) => <button onClick={() => printOrder(order)} className="text-blue-600 underline">Print</button>
-        }
-    ];
+    // Generate columns dynamically from col_1 to col_5
+    const columns = Array.from({ length: 5 }, (_, i) => ({
+        header: `col_${i + 1}`,
+        accessor: `col_${i + 1}` as const,
+        colKey: `col_${i + 1}`,
+        className: i === 1 ? 'font-mono' : '' // col_2 is typically tracking number
+    }));
 
     if (isLoading) return <div className="p-4 text-sm">Loading packer data...</div>;
 
@@ -83,11 +73,13 @@ export default function PackerPage() {
                 </div>
 
                 <DataTable
-                    data={safeOrders}
+                    data={packerData}
                     columns={columns}
                     keyField="id"
                     emptyMessage="No orders assigned."
                     variant="sheet"
+                    tableName={`packer_${packerId}`}
+                    showColumnManager={true}
                 />
 
                 {/* Bottom Right Scan Form */}
