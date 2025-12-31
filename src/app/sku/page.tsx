@@ -18,9 +18,9 @@ export default function SkusPage() {
     }));
 
     return (
-        <div className="min-h-screen bg-white text-black font-sans">
-            <div className="p-4">
-                <h1 className="text-2xl font-bold mb-4 text-[#0a192f]">SKU Serial Numbers</h1>
+        <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
+            <div className="p-2 flex-1 flex flex-col min-h-0">
+                <h1 className="text-xl font-bold mb-2 text-[#0a192f] flex-shrink-0">SKU Serial Numbers</h1>
                 {isLoading ? (
                     <div>Loading skus...</div>
                 ) : (

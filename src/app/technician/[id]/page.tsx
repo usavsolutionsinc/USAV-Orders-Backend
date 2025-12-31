@@ -60,9 +60,9 @@ export default function TechnicianPage() {
     if (isLoading) return <div className="p-4 text-sm">Loading technician data...</div>;
 
     return (
-        <div className="min-h-screen bg-white text-black font-sans pb-20">
-            <div className="p-2">
-                <div className="mb-4 flex items-center justify-between bg-gray-100 p-3 rounded border border-gray-300">
+        <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
+            <div className="p-2 flex-1 flex flex-col min-h-0">
+                <div className="mb-2 flex items-center justify-between bg-gray-100 p-3 rounded border border-gray-300 flex-shrink-0">
                     <div className="flex items-center gap-4">
                         <h1 className="text-xl font-bold text-[#0a192f]">Technician {techId} Dashboard</h1>
                         <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded font-bold">
@@ -76,7 +76,7 @@ export default function TechnicianPage() {
                 </div>
 
                 {/* Daily Checklist */}
-                <div className="mb-4">
+                <div className="mb-2 flex-shrink-0">
                     <DailyChecklist userId={techId as string} role="technician" />
                 </div>
 

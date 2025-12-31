@@ -8,6 +8,7 @@ export interface ColumnConfig {
     overflow?: 'hidden' | 'visible';
     bold?: boolean;
     locked?: boolean; // View only, copy/paste on click
+    textWrap?: boolean; // If true, wrap text and expand row height
 }
 
 export interface ColumnManagerState {
@@ -39,7 +40,8 @@ export function useColumnManager(tableName: string, totalColumns: number) {
                 sortDirection: null,
                 overflow: 'visible',
                 bold: false,
-                locked: false
+                locked: false,
+                textWrap: false
             };
         }
         return initial;
@@ -137,6 +139,16 @@ export function useColumnManager(tableName: string, totalColumns: number) {
         }));
     }, []);
 
+    const toggleTextWrap = useCallback((colKey: string) => {
+        setColumnConfig(prev => ({
+            ...prev,
+            [colKey]: {
+                ...prev[colKey],
+                textWrap: !prev[colKey]?.textWrap
+            }
+        }));
+    }, []);
+
     const getColumnHeader = useCallback((colKey: string): string => {
         return columnConfig[colKey]?.nickname || colKey;
     }, [columnConfig]);
@@ -159,7 +171,8 @@ export function useColumnManager(tableName: string, totalColumns: number) {
                 sortDirection: null,
                 overflow: 'visible',
                 bold: false,
-                locked: false
+                locked: false,
+                textWrap: false
             };
         }
         setColumnConfig(initial);
@@ -174,6 +187,7 @@ export function useColumnManager(tableName: string, totalColumns: number) {
         toggleOverflow,
         toggleBold,
         toggleLock,
+        toggleTextWrap,
         getColumnHeader,
         isColumnVisible,
         getColumnWidth,

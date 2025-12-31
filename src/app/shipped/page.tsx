@@ -23,8 +23,8 @@ export default function ShippedPage() {
     if (isLoading) return <div className="p-4 text-sm">Loading shipped items...</div>;
 
     return (
-        <div className="min-h-screen bg-white text-black font-sans">
-            <div className="p-2">
+        <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
+            <div className="p-2 flex-1 flex flex-col min-h-0">
                 <DataTable
                     data={safeShippedItems}
                     columns={columns}

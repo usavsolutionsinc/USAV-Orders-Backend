@@ -36,6 +36,7 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
     const isSheet = variant === 'sheet';
     const [showManager, setShowManager] = useState(false);
+    const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
     const [editingHeader, setEditingHeader] = useState<string | null>(null);
     const [editHeaderValue, setEditHeaderValue] = useState('');
     const [editingCell, setEditingCell] = useState<EditingCell>(null);
@@ -46,6 +47,7 @@ export function DataTable<T>({
     const [selectedCell, setSelectedCell] = useState<EditingCell>(null);
     const tableRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
     // Get total columns for column manager
     const totalColumns = columns.length;
@@ -58,6 +60,7 @@ export function DataTable<T>({
         toggleOverflow,
         toggleBold,
         toggleLock,
+        toggleTextWrap,
         getColumnHeader, 
         isColumnVisible,
         getColumnWidth
@@ -125,6 +128,27 @@ export function DataTable<T>({
         updateColumnNickname(colKey, editHeaderValue || colKey);
         setEditingHeader(null);
         setEditHeaderValue('');
+    };
+
+    // Auto-fit column width on double-click
+    const handleAutoFitWidth = (colKey: string) => {
+        const col = visibleColumns.find(c => c.colKey === colKey);
+        if (!col) return;
+
+        // Measure header width
+        const headerText = getColumnHeader(colKey);
+        const headerWidth = Math.max(headerText.length * 6 + 20, 20);
+
+        // Measure all cell widths in this column
+        let maxCellWidth = headerWidth;
+        sortedData.forEach((item, rowIdx) => {
+            const cellValue = getCellValue(item, col);
+            const cellWidth = Math.max(cellValue.length * 6 + 10, 20);
+            maxCellWidth = Math.max(maxCellWidth, cellWidth);
+        });
+
+        // Set width with some padding, but allow very narrow columns (min 20px)
+        updateColumnWidth(colKey, Math.max(20, Math.min(maxCellWidth + 10, 500)));
     };
 
     // Handle cell edit
@@ -218,6 +242,7 @@ export function DataTable<T>({
     // Column resize handlers
     const handleResizeStart = (e: React.MouseEvent, colKey: string) => {
         e.preventDefault();
+        e.stopPropagation();
         setResizingCol(colKey);
         setResizeStartX(e.clientX);
         setResizeStartWidth(getColumnWidth(colKey));
@@ -227,7 +252,7 @@ export function DataTable<T>({
         const handleResize = (e: MouseEvent) => {
             if (!resizingCol) return;
             const diff = e.clientX - resizeStartX;
-            const newWidth = Math.max(50, resizeStartWidth + diff);
+            const newWidth = Math.max(20, resizeStartWidth + diff);
             updateColumnWidth(resizingCol, newWidth);
         };
 
@@ -253,112 +278,159 @@ export function DataTable<T>({
         return String((item[col.accessor as keyof T] as any) || '');
     };
 
+    // Check if next column is empty for overflow behavior
+    const isNextColumnEmpty = (rowIndex: number, colIndex: number): boolean => {
+        if (colIndex >= visibleColumns.length - 1) return false;
+        const nextCol = visibleColumns[colIndex + 1];
+        if (!nextCol?.colKey) return false;
+        const item = sortedData[rowIndex];
+        const nextColObj = (nextCol as any).col || nextCol;
+        const nextValue = getCellValue(item, nextColObj);
+        return !nextValue || nextValue.trim() === '';
+    };
+
+    const selectedConfig = selectedColumn ? columnConfig[selectedColumn] : null;
+
     return (
-        <div className="relative">
+        <div className="relative flex flex-col h-full">
             {showColumnManager && (
-                <div className="mb-2 flex items-center justify-between">
+                <div className="mb-2 flex items-center gap-2 flex-shrink-0">
                     <button
                         onClick={() => setShowManager(!showManager)}
                         className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300"
                     >
                         {showManager ? 'Hide' : 'Show'} Column Settings
                     </button>
+                    {showManager && selectedColumn && (
+                        <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 rounded text-sm">
+                            <span>Editing: {getColumnHeader(selectedColumn)}</span>
+                            <button
+                                onClick={() => setSelectedColumn(null)}
+                                className="text-gray-600 hover:text-gray-800"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
             {showColumnManager && showManager && (
-                <div className="mb-4 p-4 bg-gray-50 border border-gray-300 rounded max-h-96 overflow-y-auto">
-                    <h3 className="font-bold mb-3 text-sm">Column Settings</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {columns.map((col, idx) => {
-                            const colKey = col.colKey || `col_${idx + 1}`;
-                            const config = columnConfig[colKey] || { visible: true, nickname: colKey, width: 120, overflow: 'visible', bold: false, locked: false };
-                            const isEditing = editingHeader === colKey;
-
-                            return (
-                                <div key={colKey} className="p-3 bg-white rounded border">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={config.visible !== false}
-                                            onChange={() => toggleColumnVisibility(colKey)}
-                                            className="cursor-pointer"
-                                        />
-                                        <div className="flex-1 min-w-0">
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editHeaderValue}
-                                                    onChange={(e) => setEditHeaderValue(e.target.value)}
-                                                    onBlur={() => handleSaveHeader(colKey)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            handleSaveHeader(colKey);
-                                                        } else if (e.key === 'Escape') {
-                                                            setEditingHeader(null);
-                                                            setEditHeaderValue('');
-                                                        }
-                                                    }}
-                                                    className="text-xs px-1 py-0.5 border rounded w-full"
-                                                    autoFocus
-                                                />
-                                            ) : (
-                                                <span
-                                                    className="text-xs cursor-pointer hover:bg-gray-100 px-1 py-0.5 rounded"
-                                                    onClick={() => handleEditHeader(colKey, config.nickname || colKey)}
-                                                    title="Click to edit"
-                                                >
-                                                    {config.nickname || colKey}
-                                                </span>
-                                            )}
-                                        </div>
+                <div className="mb-2 p-3 bg-gray-50 border border-gray-300 rounded flex-shrink-0">
+                    {!selectedColumn ? (
+                        <div>
+                            <h3 className="font-bold mb-2 text-sm">Select a Column to Edit:</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {columns.map((col, idx) => {
+                                    const colKey = col.colKey || `col_${idx + 1}`;
+                                    const config = columnConfig[colKey] || { visible: true, nickname: colKey };
+                                    return (
+                                        <button
+                                            key={colKey}
+                                            onClick={() => setSelectedColumn(colKey)}
+                                            className={`px-3 py-1 rounded text-xs ${config.visible !== false ? 'bg-blue-200 hover:bg-blue-300' : 'bg-gray-200 hover:bg-gray-300'}`}
+                                        >
+                                            {config.nickname || colKey} {config.visible === false ? '(hidden)' : ''}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-bold text-sm">Column Settings: {getColumnHeader(selectedColumn)}</h3>
+                                <button
+                                    onClick={() => setSelectedColumn(null)}
+                                    className="text-gray-600 hover:text-gray-800 text-sm"
+                                >
+                                    Back to Column List
+                                </button>
+                            </div>
+                            {selectedConfig && (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Visibility</label>
+                                        <button
+                                            onClick={() => toggleColumnVisibility(selectedColumn)}
+                                            className={`w-full px-2 py-1 rounded text-xs ${selectedConfig.visible !== false ? 'bg-green-200' : 'bg-red-200'}`}
+                                        >
+                                            {selectedConfig.visible !== false ? 'Visible' : 'Hidden'}
+                                        </button>
                                     </div>
-                                    <div className="flex flex-wrap gap-2 text-xs">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Sort</label>
                                         <button
-                                            onClick={() => setSortDirection(colKey, config.sortDirection === 'asc' ? 'desc' : config.sortDirection === 'desc' ? null : 'asc')}
-                                            className={`px-2 py-1 rounded ${config.sortDirection ? 'bg-blue-200' : 'bg-gray-100'} hover:bg-gray-200`}
-                                            title="Sort"
+                                            onClick={() => setSortDirection(selectedColumn, selectedConfig.sortDirection === 'asc' ? 'desc' : selectedConfig.sortDirection === 'desc' ? null : 'asc')}
+                                            className={`w-full px-2 py-1 rounded text-xs ${selectedConfig.sortDirection ? 'bg-blue-200' : 'bg-gray-100'}`}
                                         >
-                                            Sort {config.sortDirection === 'asc' ? '↑' : config.sortDirection === 'desc' ? '↓' : ''}
+                                            {selectedConfig.sortDirection === 'asc' ? '↑ Asc' : selectedConfig.sortDirection === 'desc' ? '↓ Desc' : 'None'}
                                         </button>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Overflow</label>
                                         <button
-                                            onClick={() => toggleOverflow(colKey)}
-                                            className={`px-2 py-1 rounded ${config.overflow === 'hidden' ? 'bg-blue-200' : 'bg-gray-100'} hover:bg-gray-200`}
-                                            title="Overflow"
+                                            onClick={() => toggleOverflow(selectedColumn)}
+                                            className={`w-full px-2 py-1 rounded text-xs ${selectedConfig.overflow === 'hidden' ? 'bg-blue-200' : 'bg-gray-100'}`}
                                         >
-                                            {config.overflow === 'hidden' ? 'Hidden' : 'Visible'}
+                                            {selectedConfig.overflow === 'hidden' ? 'Hidden' : 'Visible'}
                                         </button>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Text Wrap</label>
                                         <button
-                                            onClick={() => toggleBold(colKey)}
-                                            className={`px-2 py-1 rounded ${config.bold ? 'bg-blue-200' : 'bg-gray-100'} hover:bg-gray-200`}
-                                            title="Bold"
+                                            onClick={() => toggleTextWrap(selectedColumn)}
+                                            className={`w-full px-2 py-1 rounded text-xs ${selectedConfig.textWrap ? 'bg-blue-200' : 'bg-gray-100'}`}
+                                        >
+                                            {selectedConfig.textWrap ? 'Wrap' : 'No Wrap'}
+                                        </button>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Bold</label>
+                                        <button
+                                            onClick={() => toggleBold(selectedColumn)}
+                                            className={`w-full px-2 py-1 rounded text-xs ${selectedConfig.bold ? 'bg-blue-200' : 'bg-gray-100'}`}
                                         >
                                             <strong>B</strong>
                                         </button>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Lock</label>
                                         <button
-                                            onClick={() => toggleLock(colKey)}
-                                            className={`px-2 py-1 rounded ${config.locked ? 'bg-blue-200' : 'bg-gray-100'} hover:bg-gray-200`}
-                                            title="Lock (Copy on click)"
+                                            onClick={() => toggleLock(selectedColumn)}
+                                            className={`w-full px-2 py-1 rounded text-xs ${selectedConfig.locked ? 'bg-blue-200' : 'bg-gray-100'}`}
                                         >
-                                            🔒
+                                            🔒 {selectedConfig.locked ? 'Locked' : 'Unlocked'}
                                         </button>
-                                        <div className="text-xs text-gray-600">
-                                            W: {config.width || 120}px
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Width</label>
+                                        <div className="text-xs text-gray-600 px-2 py-1 bg-gray-100 rounded">
+                                            {selectedConfig.width || 120}px
                                         </div>
                                     </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Nickname</label>
+                                        <input
+                                            type="text"
+                                            value={selectedConfig.nickname || selectedColumn}
+                                            onChange={(e) => updateColumnNickname(selectedColumn, e.target.value)}
+                                            className="w-full px-2 py-1 rounded text-xs border"
+                                        />
+                                    </div>
                                 </div>
-                            );
-                        })}
-                    </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
             <div 
                 ref={tableRef}
-                className={`overflow-x-auto overflow-y-auto ${isSheet ? 'border border-gray-400' : 'border border-gray-300'}`}
-                style={{ maxHeight: 'calc(100vh - 200px)' }}
+                className={`flex-1 overflow-x-auto overflow-y-auto ${isSheet ? 'border border-gray-400' : 'border border-gray-300'}`}
+                style={{ height: '100%' }}
             >
-                <table className={`w-full text-left border-collapse ${isSheet ? 'text-[10px]' : 'text-xs'}`} style={{ tableLayout: 'fixed' }}>
+                <table className={`text-left border-collapse ${isSheet ? 'text-[10px]' : 'text-xs'}`} style={{ tableLayout: 'fixed', width: 'max-content' }}>
                     <thead className="bg-[#0a192f] text-white sticky top-0 z-10">
                         <tr>
                             {visibleColumns.map((col, idx) => {
@@ -370,9 +442,9 @@ export function DataTable<T>({
                                 const isEditing = editingHeader === colKey;
 
                                 return (
-                                    <th
-                                        key={idx}
-                                        style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                            <th
+                                key={idx}
+                                        style={{ width: `${width}px`, minWidth: `${width}px` }}
                                         className={`font-semibold ${col.headerClassName || ''} ${isSheet ? 'p-0.5 border border-gray-500' : 'p-2 border-r border-gray-600'} relative`}
                                     >
                                         {isEditing ? (
@@ -405,24 +477,29 @@ export function DataTable<T>({
                                             <div
                                                 className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-400"
                                                 onMouseDown={(e) => handleResizeStart(e, colKey)}
+                                                onDoubleClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleAutoFitWidth(colKey);
+                                                }}
+                                                title="Drag to resize, double-click to auto-fit"
                                             />
                                         )}
-                                    </th>
+                            </th>
                                 );
                             })}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
                         {sortedData.length === 0 ? (
-                            <tr>
+                        <tr>
                                 <td colSpan={visibleColumns.length} className="p-2 text-center text-gray-500">
-                                    {emptyMessage}
-                                </td>
-                            </tr>
-                        ) : (
+                                {emptyMessage}
+                            </td>
+                        </tr>
+                    ) : (
                             sortedData.map((item, rowIdx) => (
-                                <tr
-                                    key={String(item[keyField]) || rowIdx}
+                            <tr
+                                key={String(item[keyField]) || rowIdx}
                                     className={`transition-colors ${isSheet ? 'hover:bg-blue-100 even:bg-white odd:bg-gray-50' : 'hover:bg-blue-50 even:bg-gray-50'}`}
                                 >
                                     {visibleColumns.map((col, colIdx) => {
@@ -432,12 +509,19 @@ export function DataTable<T>({
                                         const config = columnConfig[colKey] || {};
                                         const isEditing = editingCell?.rowIndex === rowIdx && editingCell?.colKey === colKey;
                                         const isSelected = selectedCell?.rowIndex === rowIdx && selectedCell?.colKey === colKey;
-                                        const cellValue = getCellValue(item, col);
+                                        const colObj = (col as any).col || col;
+                                        const cellValue = getCellValue(item, colObj);
+                                        const nextColEmpty = isNextColumnEmpty(rowIdx, colIdx);
+                                        const shouldOverflow = config.overflow === 'visible' && nextColEmpty && !config.textWrap;
 
                                         return (
-                                            <td
-                                                key={colIdx}
-                                                style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                                    <td
+                                        key={colIdx}
+                                                style={{ 
+                                                    width: `${width}px`, 
+                                                    minWidth: `${width}px`,
+                                                    position: 'relative'
+                                                }}
                                                 className={`${col.className || ''} ${isSheet ? 'p-0.5 border border-gray-300' : 'p-2 border-r border-gray-200'} ${isSelected ? 'ring-2 ring-blue-500' : ''} ${config.locked ? 'bg-gray-100 cursor-copy' : 'cursor-cell'}`}
                                                 onClick={() => {
                                                     handleCellClick(rowIdx, colKey, cellValue, true);
@@ -464,20 +548,32 @@ export function DataTable<T>({
                                                     />
                                                 ) : (
                                                     <div
-                                                        className={`px-0.5 ${config.overflow === 'hidden' ? 'overflow-hidden text-ellipsis whitespace-nowrap' : 'whitespace-normal break-words'} ${config.bold ? 'font-bold' : ''}`}
-                                                        style={{ fontSize: '10px' }}
+                                                        ref={(el) => {
+                                                            if (el) cellRefs.current.set(`${rowIdx}-${colKey}`, el);
+                                                        }}
+                                                        className={`px-0.5 ${config.textWrap ? 'whitespace-normal break-words' : shouldOverflow ? 'whitespace-nowrap overflow-visible' : config.overflow === 'hidden' ? 'overflow-hidden text-ellipsis whitespace-nowrap' : 'whitespace-nowrap'} ${config.bold ? 'font-bold' : ''}`}
+                                                        style={{ 
+                                                            fontSize: '10px',
+                                                            ...(shouldOverflow && {
+                                                                position: 'absolute',
+                                                                left: '2px',
+                                                                right: 'auto',
+                                                                zIndex: 1,
+                                                                whiteSpace: 'nowrap'
+                                                            })
+                                                        }}
                                                     >
                                                         {cellValue}
                                                     </div>
                                                 )}
-                                            </td>
+                                    </td>
                                         );
                                     })}
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                            </tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
             </div>
         </div>
     );
