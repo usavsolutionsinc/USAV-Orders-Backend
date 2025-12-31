@@ -3,7 +3,7 @@ import { useColumnManager, ColumnManagerState } from '@/hooks/useColumnManager';
 
 interface Column<T> {
     header: string;
-    accessor: keyof T | ((item: T) => React.ReactNode);
+    accessor: keyof T | string | ((item: T) => React.ReactNode);
     className?: string;
     headerClassName?: string;
     colKey?: string; // e.g., "col_1", "col_2" - used for column management
@@ -189,7 +189,7 @@ export function DataTable<T>({
                                         >
                                             {typeof col.accessor === 'function'
                                                 ? col.accessor(item)
-                                                : (item[col.accessor] as React.ReactNode)}
+                                                : (item[col.accessor as keyof T] as React.ReactNode)}
                                         </td>
                                     ))}
                                 </tr>
