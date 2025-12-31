@@ -18,11 +18,19 @@ export default function SkuStockPage() {
     }));
 
     return (
-        <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
-            <div className="flex-1 flex flex-col min-h-0 p-2">
-                <h1 className="text-xl font-bold mb-2 text-[#0a192f] flex-shrink-0">SKU Stock</h1>
+        <div className="min-h-screen bg-white text-black font-sans flex flex-col">
+            {/* Checklist Section - Fixed at top after nav */}
+            <div className="flex-shrink-0 p-4 border-b border-gray-200">
+                <div className="bg-gray-100 p-4 rounded border border-gray-300">
+                    <h2 className="text-lg font-bold text-[#0a192f] mb-2">SKU Stock Checklist</h2>
+                    <p className="text-sm text-gray-600">Manage your SKU stock workflow</p>
+                </div>
+            </div>
+
+            {/* Sheet Section - Full height at bottom */}
+            <div className="flex-1 flex flex-col min-h-0">
                 {isLoading ? (
-                    <div>Loading stock...</div>
+                    <div className="p-4">Loading stock...</div>
                 ) : (
                     <DataTable
                         data={stock}

@@ -60,26 +60,28 @@ export default function TechnicianPage() {
     if (isLoading) return <div className="p-4 text-sm">Loading technician data...</div>;
 
     return (
-        <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
-            <div className="flex-1 flex flex-col min-h-0 p-2">
-                <div className="mb-2 flex items-center justify-between bg-gray-100 p-3 rounded border border-gray-300 flex-shrink-0">
-                    <div className="flex items-center gap-4">
-                        <h1 className="text-xl font-bold text-[#0a192f]">Technician {techId} Dashboard</h1>
-                        <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded font-bold">
-                            Today: {dailyCount}
+        <div className="min-h-screen bg-white text-black font-sans flex flex-col">
+            {/* Checklist Section - Fixed at top after nav */}
+            <div className="flex-shrink-0 p-4 border-b border-gray-200">
+                <div className="bg-gray-100 p-4 rounded border border-gray-300">
+                    <div className="flex items-center justify-between mb-2">
+                        <h2 className="text-lg font-bold text-[#0a192f]">Technician {techId} Dashboard</h2>
+                        <div className="flex items-center gap-4">
+                            <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded font-bold">
+                                Today: {dailyCount}
+                            </div>
+                            {lastAction && <span className="text-green-600 font-bold">{lastAction}</span>}
                         </div>
                     </div>
-
-                    <div className="flex items-center gap-4">
-                        {lastAction && <span className="text-green-600 font-bold">{lastAction}</span>}
+                    {/* Daily Checklist */}
+                    <div className="mt-3">
+                        <DailyChecklist userId={techId as string} role="technician" />
                     </div>
                 </div>
+            </div>
 
-                {/* Daily Checklist */}
-                <div className="mb-2 flex-shrink-0">
-                    <DailyChecklist userId={techId as string} role="technician" />
-                </div>
-
+            {/* Sheet Section - Full height at bottom */}
+            <div className="flex-1 flex flex-col min-h-0">
                 <DataTable
                     data={techData}
                     columns={columns}

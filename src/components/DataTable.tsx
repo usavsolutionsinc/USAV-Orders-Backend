@@ -46,7 +46,6 @@ export function DataTable<T>({
     const [resizeStartWidth, setResizeStartWidth] = useState(0);
     const [selectedCell, setSelectedCell] = useState<EditingCell>(null);
     const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'today+before' | 'today+after'>('all');
-    const [dateFilterColumn, setDateFilterColumn] = useState<string | null>(null);
     const tableRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -100,9 +99,9 @@ export function DataTable<T>({
     const sortedData = React.useMemo(() => {
         let filtered = [...data];
         
-        // Apply date filter
-        if (dateFilter !== 'all' && dateFilterColumn) {
-            const col = visibleColumns.find(c => c.colKey === dateFilterColumn);
+        // Apply date filter - always use col_1 for dates
+        if (dateFilter !== 'all') {
+            const col = visibleColumns.find(c => c.colKey === 'col_1');
             if (col) {
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
@@ -182,7 +181,7 @@ export function DataTable<T>({
             }
         }
         return filtered;
-    }, [data, columnConfig, visibleColumns, dateFilter, dateFilterColumn, getCellValueString]);
+    }, [data, columnConfig, visibleColumns, dateFilter, getCellValueString]);
 
     // Notify parent of config changes
     React.useEffect(() => {
@@ -488,9 +487,9 @@ export function DataTable<T>({
                 </div>
             )}
 
-            {/* Date Filter */}
+            {/* Date Filter - Always uses col_1 */}
             <div className="mb-2 flex items-center gap-2 flex-shrink-0">
-                <label className="text-xs font-semibold">Date Filter:</label>
+                <label className="text-xs font-semibold">Date Filter (col_1):</label>
                 <select
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value as any)}
@@ -500,21 +499,6 @@ export function DataTable<T>({
                     <option value="today">Today Only</option>
                     <option value="today+before">Today + Before</option>
                     <option value="today+after">Today + After</option>
-                </select>
-                <select
-                    value={dateFilterColumn || ''}
-                    onChange={(e) => setDateFilterColumn(e.target.value || null)}
-                    className="px-2 py-1 border rounded text-xs"
-                >
-                    <option value="">Select Column</option>
-                    {visibleColumns.filter(c => c.colKey).map((col, idx) => {
-                        const colKey = col.colKey!;
-                        return (
-                            <option key={idx} value={colKey}>
-                                {getColumnHeader(colKey)}
-                            </option>
-                        );
-                    })}
                 </select>
             </div>
 

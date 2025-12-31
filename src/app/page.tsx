@@ -14,13 +14,13 @@ export default function Home() {
     const { printOrder, isPrinting } = usePrinter();
     const safeOrders = Array.isArray(orders) ? orders : [];
 
-    // Generate columns dynamically from col_1 to col_16, plus print button
+    // Generate columns dynamically from col_1 to col_10, plus print button
     const columns = [
-        ...Array.from({ length: 16 }, (_, i) => ({
+        ...Array.from({ length: 10 }, (_, i) => ({
             header: `col_${i + 1}`,
             accessor: `col_${i + 1}` as const,
             colKey: `col_${i + 1}`,
-            className: i === 10 ? 'font-mono text-[10px]' : '' // col_11 is typically tracking number
+            className: '' // col_1 is date column
         })),
         {
             header: 'Print',
@@ -43,8 +43,8 @@ export default function Home() {
     return (
         <div className="min-h-screen bg-white text-black font-sans flex flex-col">
             {/* Checklist Section - Fixed at top after nav */}
-            <div className="flex-shrink-0 p-2 border-b border-gray-200">
-                <div className="bg-gray-100 p-3 rounded border border-gray-300">
+            <div className="flex-shrink-0 p-4 border-b border-gray-200">
+                <div className="bg-gray-100 p-4 rounded border border-gray-300">
                     <h2 className="text-lg font-bold text-[#0a192f] mb-2">Orders Checklist</h2>
                     <p className="text-sm text-gray-600">Manage your daily orders workflow</p>
                 </div>
