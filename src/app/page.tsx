@@ -42,7 +42,7 @@ export default function Home() {
 
     return (
         <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
-            <div className="p-2 flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 p-2">
                 <DataTable
                     data={safeOrders}
                     columns={columns}

@@ -4,9 +4,28 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/DataTable';
 
+interface PriorityItem {
+    trackingNumber: string;
+    orderNumber: string;
+    id: string;
+}
+
 export default function ReceivingPage() {
     const [scanInput, setScanInput] = useState('');
     const [lastScan, setLastScan] = useState<{ message: string; success: boolean; matchFound?: boolean } | null>(null);
+    const [priorityList, setPriorityList] = useState<PriorityItem[]>(() => {
+        if (typeof window === 'undefined') return [];
+        try {
+            const stored = localStorage.getItem('receiving_priority_list');
+            return stored ? JSON.parse(stored) : [];
+        } catch {
+            return [];
+        }
+    });
+    const [showPriority, setShowPriority] = useState(false);
+    const [showAddPriority, setShowAddPriority] = useState(false);
+    const [priorityTracking, setPriorityTracking] = useState('');
+    const [priorityOrder, setPriorityOrder] = useState('');
 
     const { data: receiving = [], isLoading, refetch } = useQuery({
         queryKey: ['receiving'],
@@ -39,6 +58,27 @@ export default function ReceivingPage() {
         }
     };
 
+    const handleAddToPriority = () => {
+        if (!priorityTracking.trim()) return;
+        const newItem: PriorityItem = {
+            trackingNumber: priorityTracking.trim(),
+            orderNumber: priorityOrder.trim(),
+            id: Date.now().toString()
+        };
+        const updated = [...priorityList, newItem];
+        setPriorityList(updated);
+        localStorage.setItem('receiving_priority_list', JSON.stringify(updated));
+        setPriorityTracking('');
+        setPriorityOrder('');
+        setShowAddPriority(false);
+    };
+
+    const handleRemovePriority = (id: string) => {
+        const updated = priorityList.filter(item => item.id !== id);
+        setPriorityList(updated);
+        localStorage.setItem('receiving_priority_list', JSON.stringify(updated));
+    };
+
     // Generate columns dynamically from col_1 to col_4
     const columns = Array.from({ length: 4 }, (_, i) => ({
         header: `col_${i + 1}`,
@@ -51,15 +91,85 @@ export default function ReceivingPage() {
 
     return (
         <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
-            <div className="p-2 flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 p-2">
                 <div className="mb-2 flex items-center justify-between bg-gray-100 p-3 rounded border border-gray-300 flex-shrink-0">
                     <h1 className="text-xl font-bold text-[#0a192f]">Receiving Dashboard</h1>
-                    {lastScan && (
-                        <div className={`px-4 py-2 rounded font-bold ${lastScan.matchFound ? 'bg-red-600 text-white animate-pulse' : 'bg-green-100 text-green-800'}`}>
-                            {lastScan.message}
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowPriority(!showPriority)}
+                            className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+                        >
+                            Priority List ({priorityList.length})
+                        </button>
+                        {lastScan && (
+                            <div className={`px-4 py-2 rounded font-bold ${lastScan.matchFound ? 'bg-red-600 text-white animate-pulse' : 'bg-green-100 text-green-800'}`}>
+                                {lastScan.message}
+                            </div>
+                        )}
+                    </div>
                 </div>
+
+                {showPriority && (
+                    <div className="mb-2 p-3 bg-yellow-50 border border-yellow-300 rounded flex-shrink-0">
+                        <div className="flex items-center justify-between mb-2">
+                            <h2 className="font-bold text-sm">Priority List</h2>
+                            <button
+                                onClick={() => setShowAddPriority(!showAddPriority)}
+                                className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                            >
+                                {showAddPriority ? 'Cancel' : '+ Add'}
+                            </button>
+                        </div>
+                        {showAddPriority && (
+                            <div className="mb-2 p-2 bg-white rounded border">
+                                <div className="flex gap-2 mb-2">
+                                    <input
+                                        type="text"
+                                        value={priorityTracking}
+                                        onChange={(e) => setPriorityTracking(e.target.value)}
+                                        placeholder="Tracking Number"
+                                        className="px-2 py-1 border rounded text-sm flex-1"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={priorityOrder}
+                                        onChange={(e) => setPriorityOrder(e.target.value)}
+                                        placeholder="Order Number"
+                                        className="px-2 py-1 border rounded text-sm flex-1"
+                                    />
+                                    <button
+                                        onClick={handleAddToPriority}
+                                        className="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                                    >
+                                        Add
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        <div className="max-h-32 overflow-y-auto">
+                            {priorityList.length === 0 ? (
+                                <p className="text-xs text-gray-500">No priority items</p>
+                            ) : (
+                                <div className="space-y-1">
+                                    {priorityList.map((item) => (
+                                        <div key={item.id} className="flex items-center justify-between p-2 bg-white rounded border text-xs">
+                                            <div>
+                                                <span className="font-semibold">Tracking: {item.trackingNumber}</span>
+                                                {item.orderNumber && <span className="ml-2">Order: {item.orderNumber}</span>}
+                                            </div>
+                                            <button
+                                                onClick={() => handleRemovePriority(item.id)}
+                                                className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <DataTable
                     data={receiving}

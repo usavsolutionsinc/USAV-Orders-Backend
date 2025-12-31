@@ -19,7 +19,7 @@ export default function SkusPage() {
 
     return (
         <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
-            <div className="p-2 flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 p-2">
                 <h1 className="text-xl font-bold mb-2 text-[#0a192f] flex-shrink-0">SKU Serial Numbers</h1>
                 {isLoading ? (
                     <div>Loading skus...</div>

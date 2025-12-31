@@ -45,6 +45,8 @@ export function DataTable<T>({
     const [resizeStartX, setResizeStartX] = useState(0);
     const [resizeStartWidth, setResizeStartWidth] = useState(0);
     const [selectedCell, setSelectedCell] = useState<EditingCell>(null);
+    const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'today+before' | 'today+after'>('all');
+    const [dateFilterColumn, setDateFilterColumn] = useState<string | null>(null);
     const tableRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -75,21 +77,73 @@ export function DataTable<T>({
         })
         .map(({ col, originalIdx }) => ({ ...col, _originalIdx: originalIdx }));
 
-    // Sort data based on column sort direction
+    // Filter and sort data
     const sortedData = React.useMemo(() => {
-        const sorted = [...data];
+        let filtered = [...data];
+        
+        // Apply date filter
+        if (dateFilter !== 'all' && dateFilterColumn) {
+            const col = visibleColumns.find(c => c.colKey === dateFilterColumn);
+            if (col) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                
+                filtered = filtered.filter(item => {
+                    const colObj = (col as any).col || col;
+                    const cellValue = getCellValueString(item, colObj);
+                    if (!cellValue || cellValue.trim() === '') return dateFilter === 'today+before';
+                    
+                    const cellDate = new Date(cellValue);
+                    if (isNaN(cellDate.getTime())) return dateFilter === 'today+before';
+                    
+                    cellDate.setHours(0, 0, 0, 0);
+                    
+                    switch (dateFilter) {
+                        case 'today':
+                            return cellDate.getTime() === today.getTime();
+                        case 'today+before':
+                            return cellDate.getTime() <= today.getTime();
+                        case 'today+after':
+                            return cellDate.getTime() >= today.getTime();
+                        default:
+                            return true;
+                    }
+                });
+            }
+        }
+        
+        // Sort data
         const sortCol = Object.entries(columnConfig).find(([_, config]) => config.sortDirection);
         if (sortCol) {
             const [colKey, config] = sortCol;
             const col = visibleColumns.find(c => c.colKey === colKey);
             if (col && config.sortDirection) {
-                sorted.sort((a, b) => {
-                    const aVal = typeof col.accessor === 'function' 
-                        ? String(col.accessor(a) || '')
-                        : String((a[col.accessor as keyof T] as any) || '');
-                    const bVal = typeof col.accessor === 'function'
-                        ? String(col.accessor(b) || '')
-                        : String((b[col.accessor as keyof T] as any) || '');
+                filtered.sort((a, b) => {
+                    const colObj = (col as any).col || col;
+                    const aVal = getCellValueString(a, colObj);
+                    const bVal = getCellValueString(b, colObj);
+                    
+                    const aEmpty = !aVal || aVal.trim() === '';
+                    const bEmpty = !bVal || bVal.trim() === '';
+                    
+                    // Empty values go to bottom
+                    if (aEmpty && !bEmpty) return 1;
+                    if (!aEmpty && bEmpty) return -1;
+                    if (aEmpty && bEmpty) return 0;
+                    
+                    // Try to parse as number (for qty, etc.)
+                    const aNum = parseFloat(aVal);
+                    const bNum = parseFloat(bVal);
+                    const aIsNum = !isNaN(aNum) && isFinite(aNum);
+                    const bIsNum = !isNaN(bNum) && isFinite(bNum);
+                    
+                    if (aIsNum && bIsNum) {
+                        return config.sortDirection === 'asc' 
+                            ? aNum - bNum
+                            : bNum - aNum;
+                    }
                     
                     // Try to parse as date
                     const aDate = new Date(aVal);
@@ -108,8 +162,8 @@ export function DataTable<T>({
                 });
             }
         }
-        return sorted;
-    }, [data, columnConfig, visibleColumns]);
+        return filtered;
+    }, [data, columnConfig, visibleColumns, dateFilter, dateFilterColumn]);
 
     // Notify parent of config changes
     React.useEffect(() => {
@@ -142,8 +196,8 @@ export function DataTable<T>({
         // Measure all cell widths in this column
         let maxCellWidth = headerWidth;
         sortedData.forEach((item, rowIdx) => {
-            const cellValue = getCellValue(item, col);
-            const cellWidth = Math.max(cellValue.length * 6 + 10, 20);
+            const cellValue = getCellValueString(item, col);
+            const cellWidth = Math.max((cellValue || '').length * 6 + 10, 20);
             maxCellWidth = Math.max(maxCellWidth, cellWidth);
         });
 
@@ -152,11 +206,16 @@ export function DataTable<T>({
     };
 
     // Handle cell edit
-    const handleCellClick = (rowIndex: number, colKey: string, currentValue: string, startEditing: boolean = true) => {
+    const handleCellClick = (rowIndex: number, colKey: string, currentValue: string | React.ReactNode, startEditing: boolean = true) => {
         const config = columnConfig[colKey];
         if (config?.locked) {
             // Copy to clipboard for locked cells
             navigator.clipboard.writeText(String(currentValue || ''));
+            setSelectedCell({ rowIndex, colKey });
+            return;
+        }
+        // Don't allow editing if the cell contains JSX (like buttons)
+        if (React.isValidElement(currentValue)) {
             setSelectedCell({ rowIndex, colKey });
             return;
         }
@@ -209,11 +268,13 @@ export function DataTable<T>({
                         const col = visibleColumns.find(c => c.colKey === selectedCell.colKey);
                         if (col?.colKey) {
                             const item = sortedData[selectedCell.rowIndex];
-                            const value = typeof col.accessor === 'function'
-                                ? String(col.accessor(item) || '')
-                                : String((item[col.accessor as keyof T] as any) || '');
-                            setEditingCell({ rowIndex: selectedCell.rowIndex, colKey: col.colKey });
-                            setEditCellValue(value);
+                            const colObj = (col as any).col || col;
+                            const value = getCellValueString(item, colObj);
+                            // Don't allow editing JSX elements
+                            if (!React.isValidElement(getCellValue(item, colObj))) {
+                                setEditingCell({ rowIndex: selectedCell.rowIndex, colKey: col.colKey });
+                                setEditCellValue(value);
+                            }
                         }
                     }
                     return;
@@ -270,9 +331,19 @@ export function DataTable<T>({
         }
     }, [resizingCol, resizeStartX, resizeStartWidth, updateColumnWidth, getColumnWidth]);
 
-    const getCellValue = (item: T, col: Column<T>): string => {
+    const getCellValue = (item: T, col: Column<T>): string | React.ReactNode => {
+        if (typeof col.accessor === 'function') {
+            return col.accessor(item);
+        }
+        return String((item[col.accessor as keyof T] as any) || '');
+    };
+
+    const getCellValueString = (item: T, col: Column<T>): string => {
         if (typeof col.accessor === 'function') {
             const result = col.accessor(item);
+            if (React.isValidElement(result)) {
+                return ''; // Don't try to edit JSX elements
+            }
             return result ? String(result) : '';
         }
         return String((item[col.accessor as keyof T] as any) || '');
@@ -285,7 +356,7 @@ export function DataTable<T>({
         if (!nextCol?.colKey) return false;
         const item = sortedData[rowIndex];
         const nextColObj = (nextCol as any).col || nextCol;
-        const nextValue = getCellValue(item, nextColObj);
+        const nextValue = getCellValueString(item, nextColObj);
         return !nextValue || nextValue.trim() === '';
     };
 
@@ -377,15 +448,6 @@ export function DataTable<T>({
                                         </button>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold mb-1">Text Wrap</label>
-                                        <button
-                                            onClick={() => toggleTextWrap(selectedColumn)}
-                                            className={`w-full px-2 py-1 rounded text-xs ${selectedConfig.textWrap ? 'bg-blue-200' : 'bg-gray-100'}`}
-                                        >
-                                            {selectedConfig.textWrap ? 'Wrap' : 'No Wrap'}
-                                        </button>
-                                    </div>
-                                    <div>
                                         <label className="block text-xs font-semibold mb-1">Bold</label>
                                         <button
                                             onClick={() => toggleBold(selectedColumn)}
@@ -425,10 +487,40 @@ export function DataTable<T>({
                 </div>
             )}
 
+            {/* Date Filter */}
+            <div className="mb-2 flex items-center gap-2 flex-shrink-0">
+                <label className="text-xs font-semibold">Date Filter:</label>
+                <select
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value as any)}
+                    className="px-2 py-1 border rounded text-xs"
+                >
+                    <option value="all">All</option>
+                    <option value="today">Today Only</option>
+                    <option value="today+before">Today + Before</option>
+                    <option value="today+after">Today + After</option>
+                </select>
+                <select
+                    value={dateFilterColumn || ''}
+                    onChange={(e) => setDateFilterColumn(e.target.value || null)}
+                    className="px-2 py-1 border rounded text-xs"
+                >
+                    <option value="">Select Column</option>
+                    {visibleColumns.filter(c => c.colKey).map((col, idx) => {
+                        const colKey = col.colKey!;
+                        return (
+                            <option key={idx} value={colKey}>
+                                {getColumnHeader(colKey)}
+                            </option>
+                        );
+                    })}
+                </select>
+            </div>
+
             <div 
                 ref={tableRef}
                 className={`flex-1 overflow-x-auto overflow-y-auto ${isSheet ? 'border border-gray-400' : 'border border-gray-300'}`}
-                style={{ height: '100%' }}
+                style={{ minHeight: 0 }}
             >
                 <table className={`text-left border-collapse ${isSheet ? 'text-[10px]' : 'text-xs'}`} style={{ tableLayout: 'fixed', width: 'max-content' }}>
                     <thead className="bg-[#0a192f] text-white sticky top-0 z-10">
@@ -511,8 +603,10 @@ export function DataTable<T>({
                                         const isSelected = selectedCell?.rowIndex === rowIdx && selectedCell?.colKey === colKey;
                                         const colObj = (col as any).col || col;
                                         const cellValue = getCellValue(item, colObj);
+                                        const cellValueString = getCellValueString(item, colObj);
                                         const nextColEmpty = isNextColumnEmpty(rowIdx, colIdx);
-                                        const shouldOverflow = config.overflow === 'visible' && nextColEmpty && !config.textWrap;
+                                        const shouldOverflow = config.overflow === 'visible' && nextColEmpty;
+                                        const isJSX = React.isValidElement(cellValue);
 
                                         return (
                                     <td
@@ -522,13 +616,15 @@ export function DataTable<T>({
                                                     minWidth: `${width}px`,
                                                     position: 'relative'
                                                 }}
-                                                className={`${col.className || ''} ${isSheet ? 'p-0.5 border border-gray-300' : 'p-2 border-r border-gray-200'} ${isSelected ? 'ring-2 ring-blue-500' : ''} ${config.locked ? 'bg-gray-100 cursor-copy' : 'cursor-cell'}`}
+                                                className={`${col.className || ''} ${isSheet ? 'p-0.5 border border-gray-300' : 'p-2 border-r border-gray-200'} ${isSelected ? 'ring-2 ring-blue-500' : ''} ${config.locked ? 'bg-gray-100 cursor-copy' : isJSX ? 'cursor-default' : 'cursor-cell'}`}
                                                 onClick={() => {
-                                                    handleCellClick(rowIdx, colKey, cellValue, true);
+                                                    if (!isJSX) {
+                                                        handleCellClick(rowIdx, colKey, cellValueString, true);
+                                                    }
                                                 }}
-                                                title={config.locked ? 'Click to copy' : 'Click to edit'}
+                                                title={config.locked ? 'Click to copy' : isJSX ? '' : 'Click to edit'}
                                             >
-                                                {isEditing ? (
+                                                {isEditing && !isJSX ? (
                                                     <input
                                                         ref={inputRef}
                                                         type="text"
@@ -551,19 +647,12 @@ export function DataTable<T>({
                                                         ref={(el) => {
                                                             if (el) cellRefs.current.set(`${rowIdx}-${colKey}`, el);
                                                         }}
-                                                        className={`px-0.5 ${config.textWrap ? 'whitespace-normal break-words' : shouldOverflow ? 'whitespace-nowrap overflow-visible' : config.overflow === 'hidden' ? 'overflow-hidden text-ellipsis whitespace-nowrap' : 'whitespace-nowrap'} ${config.bold ? 'font-bold' : ''}`}
+                                                        className={`px-0.5 whitespace-normal break-words ${config.bold ? 'font-bold' : ''}`}
                                                         style={{ 
-                                                            fontSize: '10px',
-                                                            ...(shouldOverflow && {
-                                                                position: 'absolute',
-                                                                left: '2px',
-                                                                right: 'auto',
-                                                                zIndex: 1,
-                                                                whiteSpace: 'nowrap'
-                                                            })
+                                                            fontSize: '10px'
                                                         }}
                                                     >
-                                                        {cellValue}
+                                                        {isJSX ? cellValue : cellValueString}
                                                     </div>
                                                 )}
                                     </td>

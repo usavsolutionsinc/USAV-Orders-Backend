@@ -61,7 +61,7 @@ export default function TechnicianPage() {
 
     return (
         <div className="h-screen bg-white text-black font-sans flex flex-col overflow-hidden">
-            <div className="p-2 flex-1 flex flex-col min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 p-2">
                 <div className="mb-2 flex items-center justify-between bg-gray-100 p-3 rounded border border-gray-300 flex-shrink-0">
                     <div className="flex items-center gap-4">
                         <h1 className="text-xl font-bold text-[#0a192f]">Technician {techId} Dashboard</h1>
