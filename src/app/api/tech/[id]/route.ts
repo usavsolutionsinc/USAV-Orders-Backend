@@ -5,10 +5,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const techId = params.id;
+        const { id: techId } = await params;
         const tableName = `tech_${techId}`;
         
         const client = await pool.connect();
