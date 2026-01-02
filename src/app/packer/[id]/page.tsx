@@ -1,11 +1,12 @@
 import PageLayout from '@/components/PageLayout';
 
-export default function Home() {
+export default function PackerPage({ params }: { params: { id: string } }) {
     return (
         <PageLayout
-            pageId="home"
+            role="packer"
+            userId={params.id}
             sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
-            showChecklist={false}
+            showChecklist={true}
         />
     );
 }

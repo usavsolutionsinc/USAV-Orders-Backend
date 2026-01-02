@@ -1,9 +1,9 @@
 import PageLayout from '@/components/PageLayout';
 
-export default function Home() {
+export default function SkuStockPage() {
     return (
         <PageLayout
-            pageId="home"
+            pageId="sku-stock"
             sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
             showChecklist={false}
         />
