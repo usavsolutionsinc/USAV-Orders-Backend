@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
                 i.task_date
             FROM task_templates t
             LEFT JOIN daily_task_instances i 
-                ON t.id = i.task_template_id 
+                ON t.id = i.template_id 
                 AND i.user_id = $1 
                 AND i.task_date = $2
             WHERE t.role = $3

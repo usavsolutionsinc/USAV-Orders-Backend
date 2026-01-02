@@ -1,10 +1,5 @@
-import PageLayout from '@/components/PageLayout';
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-    return (
-        <PageLayout
-            sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
-            showChecklist={false}
-        />
-    );
+    redirect('/dashboard');
 }

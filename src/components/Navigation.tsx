@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
+    { name: 'Dashboard', href: '/dashboard' },
     { name: 'Orders', href: '/orders' },
     { name: 'Tech_1', href: '/tech/1' },
     { name: 'Tech_2', href: '/tech/2' },
@@ -49,4 +50,3 @@ export default function Navigation() {
         </nav>
     );
 }
-

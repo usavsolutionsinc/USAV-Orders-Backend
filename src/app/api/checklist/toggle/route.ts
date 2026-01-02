@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
         // Check if instance exists for today
         const existing = await pool.query(`
             SELECT * FROM daily_task_instances 
-            WHERE task_template_id = $1 AND user_id = $2 AND task_date = $3
+            WHERE template_id = $1 AND user_id = $2 AND task_date = $3
         `, [templateId, userId, today]);
 
         let result;
@@ -24,13 +24,13 @@ export async function POST(request: NextRequest) {
             result = await pool.query(`
                 UPDATE daily_task_instances 
                 SET completed = $1, completed_at = $2
-                WHERE task_template_id = $3 AND user_id = $4 AND task_date = $5
+                WHERE template_id = $3 AND user_id = $4 AND task_date = $5
                 RETURNING *
             `, [completed, completedAt, templateId, userId, today]);
         } else {
             // Create new instance
             result = await pool.query(`
-                INSERT INTO daily_task_instances (user_id, role, task_date, completed, completed_at, task_template_id)
+                INSERT INTO daily_task_instances (user_id, role, task_date, completed, completed_at, template_id)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *
             `, [userId, role, today, completed, completedAt, templateId]);

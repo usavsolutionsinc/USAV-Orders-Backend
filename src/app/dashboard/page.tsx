@@ -1,11 +1,12 @@
 import PageLayout from '@/components/PageLayout';
 
-export default function OrdersPage() {
+export default function DashboardPage() {
     return (
         <PageLayout
             sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
-            gid="719315456"
             showChecklist={false}
+            showSidebar={true}
         />
     );
 }
+
