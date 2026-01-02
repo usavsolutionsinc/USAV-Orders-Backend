@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-import Providers from "../components/Providers";
-import Navigation from "../components/Navigation";
-
 export const metadata: Metadata = {
-    title: "USAV Backend",
-    description: "USAV Backend",
+    title: "USAV Orders - Google Sheet",
+    description: "USAV Orders Management via Google Sheets",
 };
 
 export default function RootLayout({
@@ -16,11 +13,8 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className="antialiased">
-                <Providers>
-                    <Navigation />
-                    {children}
-                </Providers>
+            <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+                {children}
             </body>
         </html>
     );
