@@ -14,6 +14,7 @@ const navItems = [
     { name: 'Shipped', href: '/shipped' },
     { name: 'Sku-Stock', href: '/sku-stock' },
     { name: 'Sku', href: '/sku' },
+    { name: 'Previous Quarters', href: '/previous-quarters' },
 ];
 
 export default function Navigation() {
@@ -35,7 +36,7 @@ export default function Navigation() {
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
                                     isActive
                                         ? 'bg-gray-700 text-white'
                                         : 'text-gray-300 hover:bg-gray-700 hover:text-white'

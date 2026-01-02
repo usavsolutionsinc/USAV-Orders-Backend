@@ -80,12 +80,11 @@ export default function Sidebar() {
 
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="fixed left-0 top-1/2 -translate-y-1/2 bg-gray-900 text-white p-2 rounded-r-md shadow-lg hover:bg-gray-700 transition-colors z-50"
-                style={{ marginLeft: isOpen ? '280px' : '0' }}
+                className="fixed left-0 bottom-4 bg-gray-900 text-white p-2 rounded-r-md shadow-lg hover:bg-gray-700 transition-colors z-50"
+                title={isOpen ? 'Hide KPI Dashboard' : 'Show KPI Dashboard'}
             >
                 {isOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
         </>
     );
 }
-

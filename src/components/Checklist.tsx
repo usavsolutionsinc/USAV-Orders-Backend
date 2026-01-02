@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2, Check, X } from './Icons';
+import { ChevronLeft, ChevronRight } from './Icons';
 
 interface TaskTemplate {
     id: number;
@@ -30,6 +31,7 @@ interface ChecklistProps {
 
 export default function Checklist({ role, userId }: ChecklistProps) {
     const queryClient = useQueryClient();
+    const [isOpen, setIsOpen] = useState(true);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editTitle, setEditTitle] = useState('');
     const [editDescription, setEditDescription] = useState('');
@@ -133,146 +135,162 @@ export default function Checklist({ role, userId }: ChecklistProps) {
     };
 
     if (isLoading) {
-        return <div className="p-4 text-gray-500">Loading checklist...</div>;
+        return (
+            <div className="bg-white border-b border-gray-200 shadow-sm p-4">
+                <div className="text-gray-500">Loading checklist...</div>
+            </div>
+        );
     }
 
     return (
-        <div className="bg-white border-b border-gray-200 shadow-sm">
-            <div className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-lg font-bold text-gray-900">
-                        Daily Checklist - {role === 'technician' ? 'Technician' : 'Packer'}
-                    </h2>
-                    <button
-                        onClick={() => setIsAdding(true)}
-                        className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Add Task
-                    </button>
-                </div>
-
-                <div className="space-y-2">
-                    {items.map((item) => {
-                        const isCompleted = item.instance?.completed || false;
-                        const completedAt = item.instance?.completed_at;
-
-                        return (
-                            <div
-                                key={item.id}
-                                className="flex items-start gap-3 p-3 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors"
-                                onDoubleClick={() => handleDoubleClick(item)}
+        <>
+            {isOpen && (
+                <div className="bg-white border-b border-gray-200 shadow-sm">
+                    <div className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-lg font-bold text-gray-900">
+                                Daily Checklist - {role === 'technician' ? 'Technician' : 'Packer'}
+                            </h2>
+                            <button
+                                onClick={() => setIsAdding(true)}
+                                className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
                             >
-                                {editingId === item.id ? (
-                                    <div className="flex-1 space-y-2">
-                                        <input
-                                            type="text"
-                                            value={editTitle}
-                                            onChange={(e) => setEditTitle(e.target.value)}
-                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                            placeholder="Title"
-                                            autoFocus
-                                        />
-                                        <input
-                                            type="text"
-                                            value={editDescription}
-                                            onChange={(e) => setEditDescription(e.target.value)}
-                                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                            placeholder="Description (optional)"
-                                        />
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={handleSaveEdit}
-                                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
-                                            >
-                                                <Check className="w-3 h-3" />
-                                                Save
-                                            </button>
-                                            <button
-                                                onClick={() => setEditingId(null)}
-                                                className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-xs"
-                                            >
-                                                <X className="w-3 h-3" />
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <input
-                                            type="checkbox"
-                                            checked={isCompleted}
-                                            onChange={() => toggleMutation.mutate({ templateId: item.id, completed: !isCompleted })}
-                                            className="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                                        />
-                                        <div className="flex-1">
-                                            <div className={`font-medium ${isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                                                {item.title}
-                                            </div>
-                                            {item.description && (
-                                                <div className={`text-sm mt-1 ${isCompleted ? 'line-through text-gray-400' : 'text-gray-600'}`}>
-                                                    {item.description}
-                                                </div>
-                                            )}
-                                            {isCompleted && completedAt && (
-                                                <div className="text-xs text-green-600 mt-1">
-                                                    ✓ Completed: {new Date(completedAt).toLocaleString()}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <button
-                                            onClick={() => deleteTemplateMutation.mutate(item.id)}
-                                            className="text-red-500 hover:text-red-700 p-1"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        );
-                    })}
-
-                    {isAdding && (
-                        <div className="p-3 bg-blue-50 rounded border border-blue-200 space-y-2">
-                            <input
-                                type="text"
-                                value={newTitle}
-                                onChange={(e) => setNewTitle(e.target.value)}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                placeholder="New task title"
-                                autoFocus
-                            />
-                            <input
-                                type="text"
-                                value={newDescription}
-                                onChange={(e) => setNewDescription(e.target.value)}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                placeholder="Description (optional)"
-                            />
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={handleAddNew}
-                                    className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
-                                >
-                                    <Check className="w-3 h-3" />
-                                    Add
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setIsAdding(false);
-                                        setNewTitle('');
-                                        setNewDescription('');
-                                    }}
-                                    className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-xs"
-                                >
-                                    <X className="w-3 h-3" />
-                                    Cancel
-                                </button>
-                            </div>
+                                <Plus className="w-4 h-4" />
+                                Add Task
+                            </button>
                         </div>
-                    )}
+
+                        <div className="space-y-2">
+                            {items.map((item) => {
+                                const isCompleted = item.instance?.completed || false;
+                                const completedAt = item.instance?.completed_at;
+
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className="flex items-start gap-3 p-3 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors"
+                                        onDoubleClick={() => handleDoubleClick(item)}
+                                    >
+                                        {editingId === item.id ? (
+                                            <div className="flex-1 space-y-2">
+                                                <input
+                                                    type="text"
+                                                    value={editTitle}
+                                                    onChange={(e) => setEditTitle(e.target.value)}
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                                    placeholder="Title"
+                                                    autoFocus
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editDescription}
+                                                    onChange={(e) => setEditDescription(e.target.value)}
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                                    placeholder="Description (optional)"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={handleSaveEdit}
+                                                        className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
+                                                    >
+                                                        <Check className="w-3 h-3" />
+                                                        Save
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setEditingId(null)}
+                                                        className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-xs"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isCompleted}
+                                                    onChange={() => toggleMutation.mutate({ templateId: item.id, completed: !isCompleted })}
+                                                    className="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                                />
+                                                <div className="flex-1">
+                                                    <div className={`font-medium ${isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                                        {item.title}
+                                                    </div>
+                                                    {item.description && (
+                                                        <div className={`text-sm mt-1 ${isCompleted ? 'line-through text-gray-400' : 'text-gray-600'}`}>
+                                                            {item.description}
+                                                        </div>
+                                                    )}
+                                                    {isCompleted && completedAt && (
+                                                        <div className="text-xs text-green-600 mt-1">
+                                                            ✓ Completed: {new Date(completedAt).toLocaleString()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    onClick={() => deleteTemplateMutation.mutate(item.id)}
+                                                    className="text-red-500 hover:text-red-700 p-1"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            {isAdding && (
+                                <div className="p-3 bg-blue-50 rounded border border-blue-200 space-y-2">
+                                    <input
+                                        type="text"
+                                        value={newTitle}
+                                        onChange={(e) => setNewTitle(e.target.value)}
+                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                        placeholder="New task title"
+                                        autoFocus
+                                    />
+                                    <input
+                                        type="text"
+                                        value={newDescription}
+                                        onChange={(e) => setNewDescription(e.target.value)}
+                                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                        placeholder="Description (optional)"
+                                    />
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleAddNew}
+                                            className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs"
+                                        >
+                                            <Check className="w-3 h-3" />
+                                            Add
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsAdding(false);
+                                                setNewTitle('');
+                                                setNewDescription('');
+                                            }}
+                                            className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 text-xs"
+                                        >
+                                            <X className="w-3 h-3" />
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
+            )}
+            
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="fixed left-16 bottom-4 bg-blue-600 text-white p-2 rounded-r-md shadow-lg hover:bg-blue-700 transition-colors z-50"
+                title={isOpen ? 'Hide Checklist' : 'Show Checklist'}
+            >
+                {isOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+        </>
     );
 }

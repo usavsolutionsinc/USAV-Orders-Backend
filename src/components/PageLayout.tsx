@@ -18,20 +18,22 @@ export default function PageLayout({
     sheetId, 
     gid,
     showChecklist = false,
-    showSidebar = true 
+    showSidebar = false 
 }: PageLayoutProps) {
-    const baseUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-    const params = new URLSearchParams();
+    // Build the URL with proper gid parameter
+    let iframeUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
     
+    const params: string[] = [];
     if (gid) {
-        params.append('gid', gid);
+        params.push(`gid=${gid}`);
     }
+    params.push('rm=minimal');
+    params.push('single=true');
+    params.push('widget=false');
     
-    params.append('rm', 'minimal');
-    params.append('single', 'true');
-    params.append('widget', 'false');
-    
-    const iframeUrl = `${baseUrl}?${params.toString()}`;
+    if (params.length > 0) {
+        iframeUrl += '#' + params.join('&');
+    }
 
     return (
         <div className="flex h-full w-full">
