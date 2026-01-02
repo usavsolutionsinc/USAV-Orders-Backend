@@ -14,38 +14,45 @@ const navItems = [
     { name: 'Shipped', href: '/shipped' },
     { name: 'Sku-Stock', href: '/sku-stock' },
     { name: 'Sku', href: '/sku' },
-    { name: 'Previous Quarters', href: '/previous-quarters' },
+    { name: 'Quarters', href: '/previous-quarters' },
 ];
 
 export default function Navigation() {
     const pathname = usePathname();
 
     return (
-        <nav className="bg-gray-900 text-white shadow-lg">
-            <div className="px-4">
-                <div className="flex items-center h-14 space-x-1">
-                    <Link 
-                        href="/" 
-                        className="text-xl font-bold mr-6 hover:text-gray-300 transition-colors"
-                    >
-                        USAV Orders
-                    </Link>
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.href;
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${
-                                    isActive
-                                        ? 'bg-gray-700 text-white'
-                                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                                }`}
-                            >
-                                {item.name}
-                            </Link>
-                        );
-                    })}
+        <nav className="bg-gray-950/90 backdrop-blur-md text-white sticky top-0 z-[100] border-b border-white/10">
+            <div className="px-6">
+                <div className="flex items-center h-16 justify-between">
+                    <div className="flex items-center space-x-8">
+                        <Link 
+                            href="/" 
+                            className="text-xl font-black tracking-tighter hover:text-blue-400 transition-all uppercase"
+                        >
+                            USAV <span className="text-blue-500">OS</span>
+                        </Link>
+                        <div className="hidden lg:flex items-center space-x-1">
+                            {navItems.map((item) => {
+                                const isActive = pathname === item.href;
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        className={`px-4 py-2 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-300 ${
+                                            isActive
+                                                ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]'
+                                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                        }`}
+                                    >
+                                        {item.name}
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
+                        v2.0.26 // SYSTEM STABLE
+                    </div>
                 </div>
             </div>
         </nav>

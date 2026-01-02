@@ -14,73 +14,95 @@ export default function QuarterSelector() {
     const [isOpen, setIsOpen] = useState(true);
     const [selectedQuarter, setSelectedQuarter] = useState(quarters[0]);
 
-    const iframeUrl = `https://docs.google.com/spreadsheets/d/${selectedQuarter.sheetId}/edit#rm=minimal&single=true&widget=false`;
+    // Construct modern iframe URL
+    const iframeUrl = `https://docs.google.com/spreadsheets/d/${selectedQuarter.sheetId}/edit?rm=minimal&single=true&widget=false`;
 
     return (
-        <div className="flex h-full w-full">
-            <AnimatePresence>
+        <div className="flex h-full w-full bg-gray-50 overflow-hidden">
+            <AnimatePresence mode="wait">
                 {isOpen && (
                     <motion.aside
                         initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 280, opacity: 1 }}
+                        animate={{ width: 320, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="bg-gray-50 border-r border-gray-200 overflow-hidden flex-shrink-0"
+                        transition={{ type: "spring", damping: 20, stiffness: 100 }}
+                        className="bg-white border-r border-gray-200 flex-shrink-0 z-40 shadow-2xl overflow-hidden"
                     >
-                        <div className="p-4 h-full overflow-y-auto">
-                            <h2 className="text-lg font-bold text-gray-900 mb-4">Previous Quarters</h2>
+                        <div className="p-8 h-full flex flex-col">
+                            <div className="mb-8">
+                                <h2 className="text-2xl font-black tracking-tighter text-gray-900 uppercase">
+                                    Quarters
+                                </h2>
+                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-[0.2em] mt-1">
+                                    Archive Access
+                                </p>
+                            </div>
+
+                            <div className="mb-8 p-4 bg-gray-900 rounded-2xl text-white shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Currently Viewing</p>
+                                <p className="text-xl font-black text-blue-400">{selectedQuarter.label}</p>
+                            </div>
                             
-                            <div className="space-y-2">
+                            <div className="space-y-3 flex-1">
                                 {quarters.map((quarter) => (
                                     <button
                                         key={quarter.sheetId}
                                         onClick={() => setSelectedQuarter(quarter)}
-                                        className={`w-full text-left px-4 py-3 rounded-lg font-medium transition-all ${
+                                        className={`w-full group relative overflow-hidden px-6 py-4 rounded-2xl text-left transition-all duration-300 ${
                                             selectedQuarter.sheetId === quarter.sheetId
-                                                ? 'bg-blue-600 text-white shadow-md'
-                                                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                                                ? 'bg-blue-600 text-white shadow-xl shadow-blue-200 ring-2 ring-blue-600 ring-offset-2'
+                                                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
                                         }`}
                                     >
-                                        {quarter.label}
+                                        <div className="relative z-10 flex items-center justify-between">
+                                            <span className={`font-black text-lg ${selectedQuarter.sheetId === quarter.sheetId ? 'text-white' : 'text-gray-900'}`}>
+                                                {quarter.label}
+                                            </span>
+                                            <ChevronRight className={`w-4 h-4 transition-transform ${selectedQuarter.sheetId === quarter.sheetId ? 'translate-x-0 opacity-100' : '-translate-x-2 opacity-0'}`} />
+                                        </div>
                                     </button>
                                 ))}
                             </div>
 
-                            <div className="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                <p className="text-xs text-blue-800 font-medium">
-                                    Currently viewing: <span className="font-bold">{selectedQuarter.label}</span>
-                                </p>
+                            <div className="pt-6 border-t border-gray-100 mt-auto">
+                                <div className="text-[9px] font-mono text-gray-400 uppercase tracking-widest">
+                                    SECURE CLOUD STORAGE // 2026
+                                </div>
                             </div>
                         </div>
                     </motion.aside>
                 )}
             </AnimatePresence>
 
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="fixed left-0 bottom-4 bg-gray-900 text-white p-2 rounded-r-md shadow-lg hover:bg-gray-700 transition-colors z-50"
-                title={isOpen ? 'Hide Quarter Selector' : 'Show Quarter Selector'}
-            >
-                {isOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
+            <div className="flex-1 flex flex-col relative bg-white">
+                {/* Fixed Toggle Switch */}
+                <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    className={`absolute left-0 bottom-8 z-50 p-3 bg-gray-950 text-white rounded-r-2xl shadow-xl hover:bg-blue-600 transition-all group`}
+                >
+                    {isOpen ? (
+                        <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+                    ) : (
+                        <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                    )}
+                </button>
 
-            <div className="flex-1 overflow-hidden w-full">
-                <iframe
-                    key={selectedQuarter.sheetId}
-                    src={iframeUrl}
-                    width="100%"
-                    height="100%"
-                    frameBorder="0"
-                    style={{
-                        border: 'none',
-                        display: 'block',
-                        background: 'white',
-                        width: '100%'
-                    }}
-                    allow="clipboard-read; clipboard-write"
-                />
+                <div className="flex-1 overflow-hidden w-full h-full relative">
+                    <iframe
+                        key={selectedQuarter.sheetId}
+                        src={iframeUrl}
+                        className="w-full h-full border-none opacity-0 animate-[fadeIn_0.5s_ease-out_forwards]"
+                        allow="clipboard-read; clipboard-write"
+                    />
+                </div>
             </div>
+
+            <style jsx global>{`
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: scale(0.99); }
+                    to { opacity: 1; transform: scale(1); }
+                }
+            `}</style>
         </div>
     );
 }
-

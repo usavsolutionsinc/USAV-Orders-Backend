@@ -13,66 +13,90 @@ export default function Sidebar() {
                 {isOpen && (
                     <motion.aside
                         initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 280, opacity: 1 }}
+                        animate={{ width: 340, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="bg-gray-50 border-r border-gray-200 overflow-hidden flex-shrink-0"
+                        transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                        className="bg-gray-950 text-white flex-shrink-0 z-40 overflow-hidden border-r border-white/5"
                     >
-                        <div className="p-4 h-full overflow-y-auto">
-                            <h2 className="text-lg font-bold text-gray-900 mb-4">KPI Dashboard</h2>
+                        <div className="p-8 h-full flex flex-col space-y-8 overflow-y-auto scrollbar-hide">
+                            <header>
+                                <h2 className="text-2xl font-black tracking-tighter uppercase leading-none">
+                                    Metrics
+                                </h2>
+                                <p className="text-[10px] font-bold text-blue-500 uppercase tracking-[0.3em] mt-1">
+                                    Live Performance Feed
+                                </p>
+                            </header>
                             
-                            {/* Mock KPI Cards */}
                             <div className="space-y-4">
-                                <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-sm font-semibold text-gray-700">Daily Orders</h3>
-                                        <BarChart3 className="w-4 h-4 text-blue-500" />
+                                {/* Modern KPI Cards */}
+                                <div className="bg-white/5 p-6 rounded-3xl border border-white/10 hover:bg-white/[0.08] transition-all group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="p-2 bg-blue-500/20 rounded-xl">
+                                            <BarChart3 className="w-5 h-5 text-blue-400" />
+                                        </div>
+                                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-400/10 px-2 py-1 rounded-md">
+                                            +12.4%
+                                        </span>
                                     </div>
-                                    <p className="text-2xl font-bold text-gray-900">127</p>
-                                    <p className="text-xs text-green-600 mt-1">↑ 12% from yesterday</p>
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Daily Throughput</p>
+                                    <p className="text-4xl font-black tracking-tighter">1,284</p>
                                 </div>
 
-                                <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-sm font-semibold text-gray-700">Processing Time</h3>
-                                        <TrendingUp className="w-4 h-4 text-green-500" />
+                                <div className="bg-white/5 p-6 rounded-3xl border border-white/10 hover:bg-white/[0.08] transition-all">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="p-2 bg-emerald-500/20 rounded-xl">
+                                            <TrendingUp className="w-5 h-5 text-emerald-400" />
+                                        </div>
+                                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-400/10 px-2 py-1 rounded-md">
+                                            Optimal
+                                        </span>
                                     </div>
-                                    <p className="text-2xl font-bold text-gray-900">4.2h</p>
-                                    <p className="text-xs text-green-600 mt-1">↓ 8% faster</p>
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Cycle Time</p>
+                                    <p className="text-4xl font-black tracking-tighter">4.2<span className="text-xl text-gray-500">m</span></p>
                                 </div>
 
-                                <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-sm font-semibold text-gray-700">Stock Items</h3>
-                                        <Package className="w-4 h-4 text-purple-500" />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-white/5 p-5 rounded-3xl border border-white/10">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Package className="w-4 h-4 text-purple-400" />
+                                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Stock</span>
+                                        </div>
+                                        <p className="text-2xl font-black tracking-tighter text-purple-400">8.2k</p>
                                     </div>
-                                    <p className="text-2xl font-bold text-gray-900">1,234</p>
-                                    <p className="text-xs text-gray-600 mt-1">In warehouse</p>
+                                    <div className="bg-white/5 p-5 rounded-3xl border border-white/10">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <AlertCircle className="w-4 h-4 text-orange-400" />
+                                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Alerts</span>
+                                        </div>
+                                        <p className="text-2xl font-black tracking-tighter text-orange-400">03</p>
+                                    </div>
                                 </div>
 
-                                <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h3 className="text-sm font-semibold text-gray-700">Low Stock Alerts</h3>
-                                        <AlertCircle className="w-4 h-4 text-orange-500" />
-                                    </div>
-                                    <p className="text-2xl font-bold text-gray-900">8</p>
-                                    <p className="text-xs text-orange-600 mt-1">Requires attention</p>
-                                </div>
-
-                                {/* Mock Chart */}
-                                <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
-                                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Weekly Trend</h3>
-                                    <div className="h-32 flex items-end justify-between gap-1">
-                                        {[45, 62, 38, 71, 55, 83, 67].map((height, i) => (
-                                            <div key={i} className="flex-1 bg-blue-500 rounded-t opacity-70 hover:opacity-100 transition-opacity" style={{ height: `${height}%` }} />
+                                {/* Modern Chart Block */}
+                                <div className="bg-blue-600 p-6 rounded-3xl shadow-[0_15px_30px_rgba(37,99,235,0.3)]">
+                                    <h3 className="text-xs font-black uppercase tracking-widest mb-4 opacity-80">Weekly Load</h3>
+                                    <div className="h-24 flex items-end justify-between gap-1.5">
+                                        {[30, 45, 62, 38, 71, 55, 83].map((height, i) => (
+                                            <motion.div 
+                                                key={i} 
+                                                initial={{ height: 0 }}
+                                                animate={{ height: `${height}%` }}
+                                                transition={{ delay: i * 0.1, duration: 0.8 }}
+                                                className="flex-1 bg-white/20 rounded-t-lg hover:bg-white/40 transition-all cursor-pointer relative group/bar"
+                                            >
+                                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-white text-blue-600 text-[8px] font-black px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity">
+                                                    {height}%
+                                                </div>
+                                            </motion.div>
                                         ))}
-                                    </div>
-                                    <div className="flex justify-between mt-2 text-xs text-gray-500">
-                                        <span>Mon</span>
-                                        <span>Sun</span>
                                     </div>
                                 </div>
                             </div>
+
+                            <footer className="mt-auto pt-6 border-t border-white/5 opacity-30">
+                                <p className="text-[8px] font-mono uppercase tracking-[0.4em]">USAV OS CORE v2 // ENCRYPTED ACCESS</p>
+                            </footer>
                         </div>
                     </motion.aside>
                 )}
@@ -80,10 +104,13 @@ export default function Sidebar() {
 
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="fixed left-0 bottom-4 bg-gray-900 text-white p-2 rounded-r-md shadow-lg hover:bg-gray-700 transition-colors z-50"
-                title={isOpen ? 'Hide KPI Dashboard' : 'Show KPI Dashboard'}
+                className={`fixed left-0 bottom-8 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group`}
             >
-                {isOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {isOpen ? (
+                    <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+                ) : (
+                    <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                )}
             </button>
         </>
     );
