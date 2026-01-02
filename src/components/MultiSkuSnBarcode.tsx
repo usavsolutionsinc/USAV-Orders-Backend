@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { ChevronRight, ChevronLeft, Check, X, Printer, Database, Search } from './Icons';
 
 declare global {
     interface Window {
@@ -8,18 +9,12 @@ declare global {
     }
 }
 
-interface Props {
-    apiBaseUrl?: string;
-    sheetTitleFallback?: string;
-    lineColor?: string;
-    backgroundColor?: string;
-}
-
 interface ApiResponse {
     success?: boolean;
     error?: string;
     title?: string;
     currentSku?: string;
+    nextSku?: string;
     stock?: string;
 }
 
@@ -32,21 +27,18 @@ interface PostDataPayload {
     location: string;
 }
 
-export default function MultiSkuSnBarcode({
-    apiBaseUrl = "https://stripe-checkout-server-three.vercel.app",
-    sheetTitleFallback = "",
-    lineColor = "#000000",
-    backgroundColor = "#FFFFFF",
-}: Props) {
+type Mode = 'print' | 'sn-to-sku';
+
+export default function MultiSkuSnBarcode() {
+    const [mode, setMode] = useState<Mode>('print');
     const [step, setStep] = useState<1 | 2 | 3>(1);
     const [sku, setSku] = useState<string>("");
     const [snInput, setSnInput] = useState<string>("");
     const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
     const [uniqueSku, setUniqueSku] = useState<string>("");
-    const [title, setTitle] = useState<string>(sheetTitleFallback);
+    const [title, setTitle] = useState<string>("");
     const [stock, setStock] = useState<string>("");
     const [isLibraryLoaded, setIsLibraryLoaded] = useState<boolean>(false);
-    const [loadingAttempts, setLoadingAttempts] = useState<number>(0);
     const [error, setError] = useState<string>("");
     const [isPosting, setIsPosting] = useState<boolean>(false);
     const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -69,824 +61,333 @@ export default function MultiSkuSnBarcode({
         return serialNumbers.map(sn => sn.slice(-6)).join(', ');
     }, []);
 
-    const makeApiCall = useCallback(async (endpoint: string, options?: RequestInit): Promise<ApiResponse> => {
-        if (!apiBaseUrl) {
-            throw new Error('API base URL not configured');
-        }
-
-        try {
-            const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}${endpoint}`, {
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                mode: 'cors',
-                credentials: 'omit',
-                ...options,
-            });
-
-            if (!response.ok) {
-                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-                try {
-                    const errorData = await response.json();
-                    if (errorData?.error) {
-                        errorMessage = errorData.error;
-                    }
-                } catch (e) {
-                    // Use default error message
-                }
-                throw new Error(errorMessage);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error(`API call failed for ${endpoint}:`, error);
-            throw error;
-        }
-    }, [apiBaseUrl]);
-
-    const getCurrentSkuFromDB = useCallback(async (baseSku: string): Promise<string> => {
-        if (!baseSku) return "";
-
-        try {
-            const normalizedSku = normalizeSku(baseSku);
-            const data = await makeApiCall(`/api/sku-manager?baseSku=${encodeURIComponent(normalizedSku)}&action=current`);
-            return data.currentSku || "";
-        } catch (error) {
-            console.error('Error getting current SKU:', error);
-            return "";
-        }
-    }, [normalizeSku, makeApiCall]);
-
-    const incrementSkuInDB = useCallback(async (baseSku: string): Promise<boolean> => {
-        if (!baseSku) return false;
-
-        try {
-            const normalizedSku = normalizeSku(baseSku);
-            await makeApiCall(`/api/sku-manager?baseSku=${encodeURIComponent(normalizedSku)}&action=increment`);
-            return true;
-        } catch (error) {
-            console.error('Error incrementing SKU:', error);
-            return false;
-        }
-    }, [normalizeSku, makeApiCall]);
-
     useEffect(() => {
-        const load = () => {
-            if (typeof window !== "undefined") {
-                if (window.JsBarcode) {
-                    setIsLibraryLoaded(true);
-                    return;
-                }
-                if (loadingAttempts < 50) {
-                    setLoadingAttempts((p) => p + 1);
-                    setTimeout(load, 100);
-                } else {
-                    const existing = document.querySelector('script[src*="jsbarcode"]');
-                    if (!existing) {
-                        const script = document.createElement("script");
-                        script.src = "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js";
-                        script.onload = () => setIsLibraryLoaded(true);
-                        document.head.appendChild(script);
-                    }
-                }
-            }
-        };
-        load();
-    }, [loadingAttempts]);
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js";
+        script.onload = () => setIsLibraryLoaded(true);
+        document.head.appendChild(script);
+    }, []);
 
     const renderBarcode = useCallback((canvas: HTMLCanvasElement | null, value: string) => {
         if (!canvas || !isLibraryLoaded || !window.JsBarcode || !value.trim()) return;
-
         try {
             window.JsBarcode(canvas, value, {
                 format: "CODE128",
-                lineColor,
-                background: backgroundColor,
+                lineColor: "#000000",
+                background: "#ffffff",
                 width: 2,
                 height: 50,
                 displayValue: false,
                 margin: 6,
             });
-        } catch (error) {
-            console.warn('Barcode rendering failed:', error);
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
+        } catch (e) {
+            console.warn('Barcode failed:', e);
         }
-    }, [isLibraryLoaded, lineColor, backgroundColor]);
-
-    const barcodeConfig = useMemo(() => ({
-        format: "CODE128",
-        lineColor,
-        background: backgroundColor,
-        width: 2,
-        height: 25,
-        displayValue: false,
-        margin: 0,
-    }), [lineColor, backgroundColor]);
+    }, [isLibraryLoaded]);
 
     useEffect(() => {
-        renderBarcode(barcodeCanvasRef.current, uniqueSku);
-    }, [uniqueSku, renderBarcode]);
-
-    const fetchTitleAndStock = useCallback(async (skuValue: string): Promise<{ title: string, stock: string }> => {
-        if (!skuValue) {
-            return { title: sheetTitleFallback || "", stock: "0" };
+        if (mode === 'print' && step === 3) {
+            renderBarcode(barcodeCanvasRef.current, uniqueSku);
         }
+    }, [uniqueSku, step, mode, renderBarcode]);
 
-        try {
-            const normalizedSku = normalizeSku(skuValue);
-            const data = await makeApiCall(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizedSku)}`);
-            return {
-                title: data.title || sheetTitleFallback || "",
-                stock: data.stock !== undefined && data.stock !== null ? String(data.stock) : "0"
-            };
-        } catch (error) {
-            console.error('Title/Stock fetch error:', error);
-            throw new Error("Failed to load product information");
-        }
-    }, [sheetTitleFallback, normalizeSku, makeApiCall]);
-
-    const fetchTitle = useCallback(async (skuValue: string): Promise<string> => {
-        const result = await fetchTitleAndStock(skuValue);
-        return result.title;
-    }, [fetchTitleAndStock]);
-
-    const handleSkuChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleSkuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSku(e.target.value);
         setError("");
-    }, []);
+    };
 
-    const handleNextStepSku = useCallback(async () => {
-        if (!sku.trim()) {
-            setError("Please enter a SKU first");
-            return;
-        }
-
-        setStep(2);
-        setError("");
+    const fetchProductInfo = async (skuValue: string) => {
         setIsLoadingTitle(true);
-
         try {
-            const result = await fetchTitleAndStock(sku);
-            setTitle(result.title);
-            setStock(result.stock);
-        } catch (error) {
-            console.error('Error fetching title/stock:', error);
-            setTitle(sheetTitleFallback);
-            setStock("0");
+            const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(skuValue))}`);
+            const data = await res.json();
+            setTitle(data.title || "Not found");
+            setStock(data.stock || "0");
+        } catch (e) {
+            setTitle("Error loading info");
         } finally {
             setIsLoadingTitle(false);
         }
+    };
 
-        setTimeout(() => {
-            snInputRef.current?.focus();
-        }, 100);
-    }, [sku, fetchTitleAndStock, sheetTitleFallback]);
-
-    const handleChangeSku = useCallback(() => {
-        setStep(1);
-        setSnInput("");
-        setSerialNumbers([]);
-        setUniqueSku("");
-        setTitle(sheetTitleFallback);
-        setStock("");
-        setError("");
-
-        setTimeout(() => {
-            skuInputRef.current?.focus();
-            skuInputRef.current?.select();
-        }, 100);
-    }, [sheetTitleFallback]);
-
-    const handleChangeSn = useCallback(() => {
+    const handleNextStepSku = async () => {
+        if (!sku.trim()) {
+            setError("SKU required");
+            return;
+        }
+        await fetchProductInfo(sku);
         setStep(2);
-        setUniqueSku("");
-        setIsGenerating(false);
-        setError("");
+        setTimeout(() => snInputRef.current?.focus(), 100);
+    };
 
-        setTimeout(() => {
-            snInputRef.current?.focus();
-        }, 100);
-    }, []);
-
-    const handleSnInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        if (step !== 2) return;
-
-        const value = e.target.value;
-        setSnInput(value);
-
-        const sns = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
-        setSerialNumbers(sns);
-        setError("");
-    }, [step]);
-
-    const handleSnKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            setSnInput((prev) => (prev.endsWith(', ') || prev === '' ? prev : prev + ', '));
-        }
-    }, []);
-
-    const handleSkuKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (step === 1 && sku.trim()) {
-                handleNextStepSku();
-            }
-        }
-    }, [sku, step, handleNextStepSku]);
-
-    const handleNextStepSn = useCallback(async () => {
-        if (!sku || serialNumbers.length === 0) {
-            setError("SKU and at least one serial number are required");
+    const handleNextStepSn = async () => {
+        if (serialNumbers.length === 0) {
+            setError("Serial numbers required");
             return;
         }
 
-        setIsGenerating(true);
-        setError("");
-
-        try {
-            const fetchedTitle = await fetchTitle(sku);
-            const currentSku = await getCurrentSkuFromDB(sku);
-
-            if (!currentSku) {
-                throw new Error("Failed to generate SKU - database connection issue");
+        if (mode === 'print') {
+            setIsGenerating(true);
+            try {
+                const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
+                const data = await res.json();
+                setUniqueSku(data.currentSku);
+                setStep(3);
+            } catch (e) {
+                setError("Failed to generate SKU");
+            } finally {
+                setIsGenerating(false);
             }
-
-            setTitle(fetchedTitle);
-            setUniqueSku(currentSku);
+        } else {
+            // SN to SKU mode - we use static SKU + SN
+            setUniqueSku(sku); // In this mode, we just use the base SKU
             setStep(3);
-            setError("");
-        } catch (error) {
-            console.error('Generate label error:', error);
-            setError(error instanceof Error ? error.message : "Failed to generate label");
-        } finally {
-            setIsGenerating(false);
         }
-    }, [sku, serialNumbers, fetchTitle, getCurrentSkuFromDB]);
+    };
 
-    const postToSheets = useCallback(async (): Promise<boolean> => {
-        if (!uniqueSku || serialNumbers.length === 0) return false;
-
-        const payload: PostDataPayload = {
-            sku: uniqueSku,
-            serialNumbers,
-            notes: notes.trim(),
-            productTitle: title,
-            size: selectedSize,
-            location: location.trim()
-        };
-
+    const postToSheets = async () => {
+        setIsPosting(true);
         try {
-            setIsPosting(true);
-            const response = await makeApiCall('/api/post-multi-sn', {
+            const res = await fetch('/api/post-multi-sn', {
                 method: 'POST',
-                body: JSON.stringify(payload),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sku: uniqueSku,
+                    serialNumbers,
+                    notes,
+                    productTitle: title,
+                    size: selectedSize,
+                    location
+                }),
             });
-
-            return response.success === true;
-        } catch (error) {
-            console.error('Post error:', error);
+            const data = await res.json();
+            if (data.success) {
+                if (mode === 'print') {
+                    // Only increment if we printed a unique label
+                    await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=increment`);
+                }
+                return true;
+            }
+            return false;
+        } catch (e) {
             return false;
         } finally {
             setIsPosting(false);
         }
-    }, [uniqueSku, serialNumbers, notes, title, selectedSize, location, makeApiCall]);
-
-    const createPrintHtml = useCallback(() => {
-        const serialDisplay = serialNumbers.length > 0
-            ? `<div class="serial-text">SN: ${getSerialLast6(serialNumbers)}</div>`
-            : '';
-
-        return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    <style>
-      @page { size: auto; margin: 0; }
-      html, body { padding: 0; margin: 0; }
-      .print-label { 
-        width: 100%; 
-        max-width: 480px; 
-        margin: 0 auto; 
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0;
-        padding: 10px 2px 0 2px;
-        background: #fff;
-        color: #000;
-      }
-      .barcode { max-width: 100%; margin: 0; }
-      .sku-text { 
-        text-align: center;
-        width: 100%;
-        font-family: monospace; 
-        font-size: 12px;
-        margin: 0 0 2px 0;
-      }
-      .title-text { 
-        text-align: center;
-        width: 100%;
-        font-family: Arial; 
-        font-size: 16px; 
-        margin: 0 0 1px 0;
-      }
-      .serial-text {
-        text-align: center;
-        width: 100%;
-        font-family: monospace; 
-        font-size: 12px; 
-        margin: 0;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="print-label">
-      <canvas id="barcode" class="barcode"></canvas>
-      <div class="sku-text">${uniqueSku || ''}</div>
-      <div class="title-text">${title || ''}</div>
-      ${serialDisplay}
-    </div>
-    <script>
-      window.onload = function() {
-        try {
-          if (window.JsBarcode && '${uniqueSku}') {
-            JsBarcode('#barcode', '${uniqueSku}', ${JSON.stringify(barcodeConfig)});
-          }
-        } catch (e) {
-          console.error('Barcode generation error:', e);
-        }
-        
-        setTimeout(function() {
-          window.focus();
-          window.print();
-          setTimeout(function(){ window.close(); }, 50);
-        }, 100);
-      };
-    <\/script>
-  </body>
-</html>`;
-    }, [uniqueSku, title, serialNumbers, getSerialLast6, barcodeConfig]);
-
-    const printLabelFn = useCallback(async () => {
-        if (!printRef.current) return;
-
-        const printWindow = window.open('', '', 'width=800,height=600,menubar=no,toolbar=no,location=no,status=no,scrollbars=no');
-
-        if (!printWindow) {
-            const originalContent = document.body.innerHTML;
-            const printContent = printRef.current.outerHTML;
-
-            document.body.innerHTML = printContent;
-            window.print();
-            document.body.innerHTML = originalContent;
-            return;
-        }
-
-        try {
-            printWindow.document.open();
-            printWindow.document.write(createPrintHtml());
-            printWindow.document.close();
-        } catch (error) {
-            console.error('Print window error:', error);
-            printWindow.close();
-        }
-    }, [createPrintHtml]);
-
-    const onPrint = useCallback(async () => {
-        if (step !== 3 || !uniqueSku || !sku || serialNumbers.length === 0) {
-            setError("Please complete all steps first");
-            return;
-        }
-
-        try {
-            const posted = await postToSheets();
-            if (!posted) {
-                setError("Failed to save to Google Sheets");
-                return;
-            }
-
-            const incremented = await incrementSkuInDB(sku);
-            if (!incremented) {
-                console.warn('Failed to increment SKU in database');
-            }
-
-            await printLabelFn();
-        } catch (error) {
-            setError(`Save failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    }, [step, uniqueSku, sku, serialNumbers, postToSheets, incrementSkuInDB, printLabelFn]);
-
-    const containerStyle: React.CSSProperties = {
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-        alignItems: "center",
-        justifyContent: "flex-start",
-        backgroundColor,
-        color: lineColor,
-        padding: 12,
-        boxSizing: "border-box",
-        overflowY: "auto",
     };
 
-    const inputStyle: React.CSSProperties = {
-        padding: "8px 12px",
-        border: `1px solid ${lineColor}`,
-        borderRadius: 4,
-        background: "#fff",
-        color: "#000",
-        fontFamily: "monospace",
-        fontSize: 14,
-    };
-
-    const buttonStyle: React.CSSProperties = {
-        padding: "6px 12px",
-        border: `1px solid ${lineColor}`,
-        borderRadius: 4,
-        background: "#f5f5f5",
-        color: "#000",
-        cursor: "pointer",
-        fontSize: 12,
+    const handleFinalAction = async () => {
+        const success = await postToSheets();
+        if (success) {
+            if (mode === 'print') {
+                // Print logic
+                const printWindow = window.open('', '', 'width=800,height=600');
+                if (printWindow) {
+                    const html = `
+                        <html>
+                            <head>
+                                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+                                <style>
+                                    body { display: flex; flex-direction: column; align-items: center; text-align: center; font-family: sans-serif; padding: 20px; }
+                                    .barcode { max-width: 100%; }
+                                    .sku { font-family: monospace; font-size: 14px; font-weight: bold; }
+                                    .title { font-size: 16px; margin: 5px 0; }
+                                    .sns { font-family: monospace; font-size: 12px; }
+                                </style>
+                            </head>
+                            <body>
+                                <canvas id="barcode"></canvas>
+                                <div class="sku">${uniqueSku}</div>
+                                <div class="title">${title}</div>
+                                <div class="sns">SN: ${getSerialLast6(serialNumbers)}</div>
+                                <script>
+                                    window.onload = function() {
+                                        JsBarcode('#barcode', '${uniqueSku}', { format: "CODE128", width: 2, height: 50, displayValue: false });
+                                        window.print();
+                                        setTimeout(() => window.close(), 500);
+                                    }
+                                </script>
+                            </body>
+                        </html>
+                    `;
+                    printWindow.document.write(html);
+                    printWindow.document.close();
+                }
+            }
+            // Reset after success
+            setStep(1);
+            setSku("");
+            setSnInput("");
+            setSerialNumbers([]);
+            setTitle("");
+            setUniqueSku("");
+            setNotes("");
+            setLocation("");
+            setSelectedSize("");
+        } else {
+            setError("Failed to save data");
+        }
     };
 
     return (
-        <div style={containerStyle}>
-            {step === 1 && (
-                <>
-                    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
-                        <div style={{ fontSize: 16, fontWeight: "bold", color: lineColor, marginBottom: 4 }}>
-                            Step 1: Enter SKU
-                        </div>
+        <div className="h-full flex flex-col bg-white">
+            <div className="p-4 border-b border-gray-100 flex gap-2">
+                <button 
+                    onClick={() => { setMode('print'); setStep(1); }}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${mode === 'print' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                >
+                    <Printer className="w-3 h-3 inline-block mr-2" />
+                    Print Label
+                </button>
+                <button 
+                    onClick={() => { setMode('sn-to-sku'); setStep(1); }}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${mode === 'sn-to-sku' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                >
+                    <Database className="w-3 h-3 inline-block mr-2" />
+                    SN to SKU
+                </button>
+            </div>
 
-                        <div style={{ display: "flex", gap: 8, width: "100%", alignItems: "stretch" }}>
-                            <input
-                                ref={skuInputRef}
-                                value={sku}
-                                onChange={handleSkuChange}
-                                onKeyDown={handleSkuKeyDown}
-                                placeholder="Enter SKU"
-                                autoFocus
-                                style={{ flex: 1, ...inputStyle, fontSize: 16, padding: "12px 16px" }}
-                            />
-                            <button
-                                onClick={handleNextStepSku}
-                                disabled={!sku.trim()}
-                                style={{
-                                    ...buttonStyle,
-                                    padding: "12px 24px",
-                                    fontSize: 14,
-                                    fontWeight: "bold",
-                                    background: sku.trim() ? "#4CAF50" : "#ccc",
-                                    color: sku.trim() ? "#fff" : "#666",
-                                    cursor: sku.trim() ? "pointer" : "not-allowed",
-                                    minWidth: "120px",
-                                }}
-                            >
-                                Next Step →
-                            </button>
-                        </div>
-
-                        {sku.trim() && (
-                            <div style={{ fontSize: 12, color: "#666", fontStyle: "italic" }}>
-                                Press Enter or click "Next Step" to continue
-                            </div>
-                        )}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Step 1: SKU */}
+                <div className={`space-y-4 transition-all duration-300 ${step > 1 ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-black">1</div>
+                        <h3 className="text-sm font-black uppercase tracking-widest">Identify SKU</h3>
                     </div>
-
-                    {error && (
-                        <div style={{
-                            color: "#d00",
-                            fontSize: 12,
-                            textAlign: "center",
-                            fontWeight: "bold",
-                            padding: "8px",
-                            background: "#ffebee",
-                            borderRadius: 4,
-                            width: "100%"
-                        }}>
-                            {error}
-                        </div>
-                    )}
-                </>
-            )}
-
-            {step >= 2 && (
-                <>
-                    <div style={{ width: "100%", marginBottom: 8, paddingBottom: 8, borderBottom: `2px solid ${lineColor}20` }}>
-                        <div style={{ fontSize: 16, fontWeight: "bold", color: lineColor }}>
-                            {step === 2 ? "Step 2: Enter Details" : "Step 3: Label Generated"}
-                        </div>
-                    </div>
-
-                    <div style={{
-                        display: "flex",
-                        gap: 8,
-                        width: "100%",
-                        alignItems: "center",
-                        padding: "12px",
-                        background: "#f8f9fa",
-                        borderRadius: 6,
-                        border: `1px solid ${lineColor}30`
-                    }}>
-                        <div style={{
-                            flex: 1,
-                            padding: "8px 12px",
-                            background: "#fff",
-                            borderRadius: 4,
-                            border: `1px solid ${lineColor}40`,
-                            fontWeight: "bold",
-                            fontSize: 14,
-                            color: lineColor,
-                        }}>
-                            {sku}
-                        </div>
-
-                        <button
-                            onClick={handleChangeSku}
-                            style={{ ...buttonStyle, background: "#e0e0e0", color: "#000", fontWeight: "bold", padding: "8px 16px" }}
+                    <div className="flex gap-2">
+                        <input
+                            ref={skuInputRef}
+                            value={sku}
+                            onChange={handleSkuChange}
+                            onKeyDown={(e) => e.key === 'Enter' && handleNextStepSku()}
+                            className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono"
+                            placeholder="Scan or enter SKU..."
+                        />
+                        <button 
+                            onClick={handleNextStepSku}
+                            className="p-3 bg-gray-900 text-white rounded-xl hover:bg-blue-600 transition-all"
                         >
-                            Change SKU
+                            <Search className="w-5 h-5" />
                         </button>
                     </div>
+                </div>
 
-                    <div style={{
-                        width: "100%",
-                        padding: "12px",
-                        background: "#fff",
-                        borderRadius: 6,
-                        border: `1px solid ${lineColor}30`,
-                        marginBottom: 8
-                    }}>
-                        <div style={{ fontSize: 13, fontWeight: "600", color: lineColor, marginBottom: 6 }}>
-                            Product Title:
+                {/* Step 2: SN & Details */}
+                <div className={`space-y-4 transition-all duration-300 ${step === 1 ? 'opacity-20 pointer-events-none grayscale' : step > 2 ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-black">2</div>
+                        <h3 className="text-sm font-black uppercase tracking-widest">Details & SN</h3>
+                    </div>
+                    
+                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-3">
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Product</p>
+                                <p className="text-xs font-bold text-gray-900 truncate">{isLoadingTitle ? 'Loading...' : title}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stock</p>
+                                <p className={`text-xs font-black ${parseInt(stock) > 0 ? 'text-blue-600' : 'text-red-500'}`}>{stock}</p>
+                            </div>
                         </div>
-                        {isLoadingTitle ? (
-                            <div style={{ fontSize: 14, color: "#666", fontStyle: "italic" }}>Loading...</div>
-                        ) : (
-                            <div style={{ fontSize: 14, color: "#333", lineHeight: "1.4", marginBottom: 8 }}>
-                                {title && title !== sheetTitleFallback ? title : "Not found in Google Sheets"}
-                            </div>
-                        )}
-
-                        {!isLoadingTitle && (
-                            <div style={{
-                                fontSize: 14,
-                                fontWeight: "bold",
-                                color: parseInt(stock || "0") > 0 ? lineColor : "#d32f2f",
-                                marginTop: 8,
-                                paddingTop: 8,
-                                borderTop: `1px solid ${lineColor}20`
-                            }}>
-                                {stock || "0"} - Current Stock
-                            </div>
-                        )}
                     </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, width: "100%" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <label style={{ fontSize: 14, fontWeight: "600", color: lineColor, marginLeft: 4 }}>
-                                Serial Numbers <span style={{ color: "#666", fontWeight: "normal" }}>(required)</span>
-                            </label>
-
-                            {step === 3 && (
+                    <div className="space-y-3">
+                        <input
+                            ref={snInputRef}
+                            value={snInput}
+                            onChange={(e) => {
+                                setSnInput(e.target.value);
+                                setSerialNumbers(e.target.value.split(',').map(s => s.trim()).filter(s => !!s));
+                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && handleNextStepSn()}
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono"
+                            placeholder="Comma-separated SNs..."
+                        />
+                        
+                        <div className="grid grid-cols-3 gap-2">
+                            {['Small', 'Medium', 'Big'].map(size => (
                                 <button
-                                    onClick={handleChangeSn}
-                                    style={{ ...buttonStyle, background: "#ff9800", color: "#fff", padding: "4px 8px", fontSize: 11 }}
+                                    key={size}
+                                    onClick={() => setSelectedSize(size)}
+                                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${selectedSize === size ? 'bg-gray-900 text-white border-gray-900 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200'}`}
                                 >
-                                    Change SN
+                                    {size}
                                 </button>
-                            )}
+                            ))}
                         </div>
 
-                        {step === 2 ? (
-                            <input
-                                ref={snInputRef}
-                                value={snInput}
-                                onChange={handleSnInputChange}
-                                onKeyDown={handleSnKeyDown}
-                                placeholder="Serial Numbers (SN123, SN456)"
-                                style={{ ...inputStyle, fontSize: 14, padding: "10px 14px" }}
-                            />
-                        ) : (
-                            <div style={{
-                                padding: "10px 14px",
-                                background: "#f0f0f0",
-                                border: `1px solid ${lineColor}20`,
-                                borderRadius: 4,
-                                color: "#333",
-                                fontSize: 14
-                            }}>
-                                {serialNumbers.join(', ')}
-                            </div>
-                        )}
+                        <input
+                            value={location}
+                            onChange={(e) => setLocation(e.target.value)}
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            placeholder="Location (optional)"
+                        />
 
-                        {step === 2 && (
-                            <div style={{ fontSize: 11, color: "#666", marginLeft: 4, fontStyle: "italic" }}>
-                                Press Enter after each serial number to add a comma
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{
-                        width: "100%",
-                        padding: "12px",
-                        background: "#f8f9fa",
-                        borderRadius: 6,
-                        border: `1px solid ${lineColor}20`,
-                        marginTop: 8
-                    }}>
-                        <div style={{ fontSize: 13, fontWeight: "600", color: "#666", marginBottom: 12 }}>
-                            Optional Fields
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8, width: "100%", alignItems: "center", marginBottom: 12 }}>
-                            <label style={{ minWidth: "60px", fontSize: 14, fontWeight: "500" }}>Size:</label>
-                            {["Small", "Medium", "Big"].map((size) => {
-                                let bgColor = "#f5f5f5";
-                                let textColor = "#000";
-
-                                if (selectedSize === size) {
-                                    if (size === "Small") bgColor = "#4CAF50";
-                                    else if (size === "Medium") bgColor = "#ff9800";
-                                    else if (size === "Big") bgColor = "#f44336";
-                                    textColor = "#fff";
-                                }
-
-                                return (
-                                    <button
-                                        key={size}
-                                        onClick={() => setSelectedSize(size)}
-                                        style={{
-                                            ...buttonStyle,
-                                            background: bgColor,
-                                            color: textColor,
-                                            flex: 1,
-                                            padding: "10px",
-                                            fontSize: 13,
-                                            fontWeight: selectedSize === size ? "bold" : "normal",
-                                        }}
-                                    >
-                                        {size}
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8, width: "100%", alignItems: "center" }}>
-                            <label style={{ minWidth: "60px", fontSize: 14, fontWeight: "500" }}>Location:</label>
-                            <input
-                                value={location}
-                                onChange={(e) => setLocation(e.target.value)}
-                                placeholder="Enter location"
-                                style={{ flex: 1, ...inputStyle, fontSize: 13 }}
-                            />
-                        </div>
-                    </div>
-
-                    <div style={{ width: "100%", marginTop: 8 }}>
                         <button
-                            onClick={() => setShowNotes(!showNotes)}
-                            style={{
-                                ...buttonStyle,
-                                background: showNotes ? "#e0e0e0" : "#f5f5f5",
-                                color: "#000",
-                                padding: "6px 12px",
-                                fontSize: 12,
-                                width: "100%"
-                            }}
+                            onClick={handleNextStepSn}
+                            className="w-full py-3 bg-gray-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-gray-200"
                         >
-                            {showNotes ? "Hide Notes" : "Add Notes"}
+                            Next Step
                         </button>
-                        {showNotes && (
-                            <textarea
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Enter notes..."
-                                style={{
-                                    width: "100%",
-                                    height: "60px",
-                                    resize: "vertical",
-                                    ...inputStyle,
-                                    marginTop: 8
-                                }}
-                            />
-                        )}
+                    </div>
+                </div>
+
+                {/* Step 3: Review & Action */}
+                <div className={`space-y-4 transition-all duration-300 ${step < 3 ? 'opacity-20 pointer-events-none grayscale' : ''}`}>
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-black">3</div>
+                        <h3 className="text-sm font-black uppercase tracking-widest">Review & {mode === 'print' ? 'Print' : 'Log'}</h3>
                     </div>
 
-                    {serialNumbers.length > 0 && step === 2 && (
-                        <div style={{
-                            width: "100%",
-                            padding: "8px",
-                            background: "#e8f5e9",
-                            borderRadius: 6,
-                            border: `1px solid #4CAF50`,
-                            fontSize: 12,
-                            color: "#2e7d32",
-                            marginTop: 8
-                        }}>
-                            {serialNumbers.length} Serial Number{serialNumbers.length > 1 ? 's' : ''} Entered
-                        </div>
-                    )}
-
-                    {error && (
-                        <div style={{ color: "#d00", fontSize: 12, textAlign: "center", fontWeight: "bold", marginTop: 8 }}>{error}</div>
-                    )}
-
-                    {step === 2 && (
-                        <div style={{ display: "flex", gap: 8, width: "100%", marginTop: 12 }}>
-                            <button
-                                onClick={handleNextStepSn}
-                                disabled={isGenerating || !sku || serialNumbers.length === 0}
-                                style={{
-                                    flex: 1,
-                                    ...buttonStyle,
-                                    background: (isGenerating || !sku || serialNumbers.length === 0) ? "#ccc" : "#4CAF50",
-                                    color: (isGenerating || !sku || serialNumbers.length === 0) ? "#666" : "#fff",
-                                    cursor: (isGenerating || !sku || serialNumbers.length === 0) ? "not-allowed" : "pointer",
-                                    fontWeight: "bold",
-                                    padding: "12px 24px",
-                                    fontSize: 14,
-                                    minWidth: "160px",
-                                }}
-                            >
-                                {isGenerating ? "Generating..." : "Next Step →"}
-                            </button>
-                        </div>
-                    )}
-
-                    {step === 3 && (
-                        <div style={{ width: "100%", marginTop: 12 }}>
-                            <button
-                                onClick={onPrint}
-                                disabled={isPosting || !!error || !uniqueSku}
-                                style={{
-                                    width: "100%",
-                                    ...buttonStyle,
-                                    background: (isPosting || error || !uniqueSku) ? "#ccc" : "#2196F3",
-                                    color: (isPosting || error || !uniqueSku) ? "#666" : "#fff",
-                                    cursor: (isPosting || error || !uniqueSku) ? "not-allowed" : "pointer",
-                                    fontWeight: "bold",
-                                    padding: "12px 24px",
-                                    fontSize: 14,
-                                }}
-                            >
-                                {isPosting ? "Saving..." : error ? "Cannot Print" : "Print Label"}
-                            </button>
-                        </div>
-                    )}
-
-                    {step === 3 && (
-                        <div
-                            ref={printRef}
-                            className="print-label"
-                            style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                gap: 0,
-                                padding: 8,
-                                background: "#fff",
-                                color: "#000",
-                                width: "100%",
-                                maxWidth: 480,
-                                boxShadow: "0 0 0 1px rgba(0,0,0,0.1)",
-                                marginTop: 16
-                            }}
-                        >
-                            {uniqueSku ? (
-                                <canvas ref={barcodeCanvasRef} style={{ maxWidth: "100%" }} />
-                            ) : (
-                                <div style={{ height: 50 }} />
-                            )}
-                            <div style={{ fontFamily: "monospace", marginTop: 0, marginBottom: 4 }}>{uniqueSku}</div>
-                            <div style={{ fontFamily: "Arial", fontSize: 14, textAlign: "center", marginTop: 0, marginBottom: 2 }}>
-                                {title}
-                            </div>
-                            {serialNumbers.length > 0 && (
-                                <div style={{
-                                    fontFamily: "monospace",
-                                    fontSize: 12,
-                                    textAlign: "center",
-                                    marginTop: 2,
-                                    marginBottom: 4,
-                                    color: "#333"
-                                }}>
-                                    SN: {getSerialLast6(serialNumbers)}
+                    <div className="bg-white border-2 border-dashed border-gray-200 rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
+                        {mode === 'print' ? (
+                            <>
+                                <canvas ref={barcodeCanvasRef} className="max-w-full" />
+                                <div className="space-y-1">
+                                    <p className="font-mono text-sm font-black">{uniqueSku}</p>
+                                    <p className="text-xs text-gray-500 line-clamp-2 px-4">{title}</p>
+                                    <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">SN: {getSerialLast6(serialNumbers)}</p>
                                 </div>
+                            </>
+                        ) : (
+                            <div className="py-4 space-y-3 w-full">
+                                <div className="p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100">
+                                    <p className="text-[10px] font-black uppercase tracking-widest mb-1">Logging Mode</p>
+                                    <p className="text-sm font-bold">Static SKU + {serialNumbers.length} SNs</p>
+                                </div>
+                                <div className="text-left space-y-2 px-2">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Selected SKU: <span className="text-gray-900">{sku}</span></p>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Serials: <span className="text-gray-900">{serialNumbers.join(', ')}</span></p>
+                                </div>
+                            </div>
+                        )}
+
+                        <button
+                            onClick={handleFinalAction}
+                            disabled={isPosting}
+                            className={`w-full py-4 ${mode === 'print' ? 'bg-blue-600 shadow-blue-200' : 'bg-emerald-600 shadow-emerald-200'} text-white rounded-2xl text-sm font-black uppercase tracking-[0.2em] transition-all hover:scale-[1.02] shadow-2xl flex items-center justify-center gap-3`}
+                        >
+                            {isPosting ? 'Processing...' : (
+                                <>
+                                    {mode === 'print' ? <Printer className="w-4 h-4" /> : <Database className="w-4 h-4" />}
+                                    {mode === 'print' ? 'Save & Print' : 'Log to Sheet'}
+                                </>
                             )}
-                        </div>
-                    )}
-                </>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {error && (
+                <div className="mx-6 mb-6 p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-red-100 flex items-center justify-between">
+                    <span>{error}</span>
+                    <button onClick={() => setError("")} className="p-1 hover:bg-red-100 rounded-full transition-colors">
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
             )}
         </div>
     );
 }
-
