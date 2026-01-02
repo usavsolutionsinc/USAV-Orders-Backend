@@ -25,11 +25,19 @@ export default function PageLayout({
     const [checklistOpen, setChecklistOpen] = useState(true);
 
     // Modern 2026 URL Construction
-    // Using widget=true and headers=false for a cleaner integrated look
-    const iframeUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/htmlembed?${gid ? `gid=${gid}&` : ''}widget=false&chrome=false&headers=false&range=A1:Z1000`;
+    // Using query parameters for gid is more reliable for switching tabs in /edit mode
+    const baseUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+    const queryParams = new URLSearchParams();
     
-    // For editable sheets, we use the /edit URL with query parameters
-    const editableUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?${gid ? `gid=${gid}&` : ''}rm=minimal&single=true&widget=false`;
+    if (gid) {
+        queryParams.append('gid', gid);
+    }
+    queryParams.append('rm', 'minimal');
+    queryParams.append('single', 'true');
+    queryParams.append('widget', 'false');
+    
+    // Construct full URL with both query param and hash for maximum compatibility
+    const iframeUrl = `${baseUrl}?${queryParams.toString()}${gid ? `#gid=${gid}` : ''}`;
 
     return (
         <div className="flex h-full w-full bg-gray-100 overflow-hidden">
@@ -71,7 +79,8 @@ export default function PageLayout({
                     </div>
 
                     <iframe
-                        src={editableUrl}
+                        key={`${sheetId}-${gid}`} // Key ensures iframe reloads when tab changes
+                        src={iframeUrl}
                         className="w-full h-full border-none opacity-0 animate-[fadeIn_0.5s_ease-out_forwards_0.5s]"
                         allow="clipboard-read; clipboard-write"
                         title="Google Sheet Viewer"

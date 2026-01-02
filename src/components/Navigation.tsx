@@ -6,11 +6,11 @@ import { usePathname } from 'next/navigation';
 const navItems = [
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Orders', href: '/orders' },
-    { name: 'Tech_1', href: '/tech/1' },
-    { name: 'Tech_2', href: '/tech/2' },
-    { name: 'Tech_3', href: '/tech/3' },
-    { name: 'Packer_1', href: '/packer/1' },
-    { name: 'Packer_2', href: '/packer/2' },
+    { name: 'Michael', href: '/tech/1' },
+    { name: 'Thuc', href: '/tech/2' },
+    { name: 'Sang', href: '/tech/3' },
+    { name: 'Tuan', href: '/packer/1' },
+    { name: 'Thuy', href: '/packer/2' },
     { name: 'Shipped', href: '/shipped' },
     { name: 'Sku-Stock', href: '/sku-stock' },
     { name: 'Sku', href: '/sku' },
@@ -31,14 +31,14 @@ export default function Navigation() {
                         >
                             USAV <span className="text-blue-500">OS</span>
                         </Link>
-                        <div className="hidden lg:flex items-center space-x-1">
+                        <div className="hidden lg:flex items-center space-x-1 overflow-x-auto scrollbar-hide">
                             {navItems.map((item) => {
                                 const isActive = pathname === item.href;
                                 return (
                                     <Link
                                         key={item.href}
                                         href={item.href}
-                                        className={`px-4 py-2 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-300 ${
+                                        className={`px-4 py-2 rounded-full text-xs font-bold tracking-wider uppercase transition-all duration-300 whitespace-nowrap ${
                                             isActive
                                                 ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]'
                                                 : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -50,7 +50,7 @@ export default function Navigation() {
                             })}
                         </div>
                     </div>
-                    <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
+                    <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest hidden sm:block">
                         v2.0.26 // SYSTEM STABLE
                     </div>
                 </div>
