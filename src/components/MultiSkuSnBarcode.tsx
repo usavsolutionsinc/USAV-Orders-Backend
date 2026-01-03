@@ -230,30 +230,30 @@ export default function MultiSkuSnBarcode() {
     };
 
     return (
-        <div className="h-full flex flex-col bg-white">
-            <div className="p-4 border-b border-gray-100 flex gap-2">
+        <div className="h-full flex flex-col bg-gray-950 text-white">
+            <div className="p-6 flex gap-2">
                 <button 
                     onClick={() => { setMode('print'); setStep(1); }}
-                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${mode === 'print' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                    className={`flex-1 py-3 px-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'print' ? 'bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.2)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
                 >
                     <Printer className="w-3 h-3 inline-block mr-2" />
                     Print Label
                 </button>
                 <button 
                     onClick={() => { setMode('sn-to-sku'); setStep(1); }}
-                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${mode === 'sn-to-sku' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                    className={`flex-1 py-3 px-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'sn-to-sku' ? 'bg-emerald-600 text-white shadow-[0_10px_20px_rgba(16,185,129,0.2)]' : 'bg-white/5 text-gray-500 hover:bg-white/10'}`}
                 >
                     <Database className="w-3 h-3 inline-block mr-2" />
                     SN to SKU
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
                 {/* Step 1: SKU */}
-                <div className={`space-y-4 transition-all duration-300 ${step > 1 ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-black">1</div>
-                        <h3 className="text-sm font-black uppercase tracking-widest">Identify SKU</h3>
+                <div className={`space-y-4 transition-all duration-300 ${step > 1 ? 'opacity-30 pointer-events-none' : ''}`}>
+                    <div className="flex items-center gap-4">
+                        <div className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center text-sm font-black border border-white/10">1</div>
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Identify SKU</h3>
                     </div>
                     <div className="flex gap-2">
                         <input
@@ -261,12 +261,12 @@ export default function MultiSkuSnBarcode() {
                             value={sku}
                             onChange={handleSkuChange}
                             onKeyDown={(e) => e.key === 'Enter' && handleNextStepSku()}
-                            className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono"
+                            className="flex-1 px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all font-mono placeholder:text-gray-700"
                             placeholder="Scan or enter SKU..."
                         />
                         <button 
                             onClick={handleNextStepSku}
-                            className="p-3 bg-gray-900 text-white rounded-xl hover:bg-blue-600 transition-all"
+                            className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20"
                         >
                             <Search className="w-5 h-5" />
                         </button>
@@ -274,26 +274,26 @@ export default function MultiSkuSnBarcode() {
                 </div>
 
                 {/* Step 2: SN & Details */}
-                <div className={`space-y-4 transition-all duration-300 ${step === 1 ? 'opacity-20 pointer-events-none grayscale' : step > 2 ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-black">2</div>
-                        <h3 className="text-sm font-black uppercase tracking-widest">Details & SN</h3>
+                <div className={`space-y-5 transition-all duration-300 ${step === 1 ? 'opacity-10 pointer-events-none grayscale' : step > 2 ? 'opacity-30 pointer-events-none' : ''}`}>
+                    <div className="flex items-center gap-4">
+                        <div className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center text-sm font-black border border-white/10">2</div>
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Details & SN</h3>
                     </div>
                     
-                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-3">
+                    <div className="bg-white/5 rounded-3xl p-6 border border-white/10 space-y-4">
                         <div className="flex justify-between items-start">
                             <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Product</p>
-                                <p className="text-xs font-bold text-gray-900 truncate">{isLoadingTitle ? 'Loading...' : title}</p>
+                                <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">Product</p>
+                                <p className="text-xs font-bold text-white truncate leading-relaxed">{isLoadingTitle ? 'Loading...' : title}</p>
                             </div>
-                            <div className="text-right">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Stock</p>
-                                <p className={`text-xs font-black ${parseInt(stock) > 0 ? 'text-blue-600' : 'text-red-500'}`}>{stock}</p>
+                            <div className="text-right ml-4">
+                                <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">Stock</p>
+                                <p className={`text-xs font-black px-2 py-0.5 rounded-md ${parseInt(stock) > 0 ? 'text-blue-400 bg-blue-400/10' : 'text-red-400 bg-red-400/10'}`}>{stock}</p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         <input
                             ref={snInputRef}
                             value={snInput}
@@ -302,7 +302,7 @@ export default function MultiSkuSnBarcode() {
                                 setSerialNumbers(e.target.value.split(',').map(s => s.trim()).filter(s => !!s));
                             }}
                             onKeyDown={(e) => e.key === 'Enter' && handleNextStepSn()}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono"
+                            className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all font-mono placeholder:text-gray-700"
                             placeholder="Comma-separated SNs..."
                         />
                         
@@ -311,7 +311,7 @@ export default function MultiSkuSnBarcode() {
                                 <button
                                     key={size}
                                     onClick={() => setSelectedSize(size)}
-                                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${selectedSize === size ? 'bg-gray-900 text-white border-gray-900 shadow-md' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200'}`}
+                                    className={`py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${selectedSize === size ? 'bg-white text-gray-950 border-white shadow-lg' : 'bg-white/5 text-gray-500 border-white/5 hover:border-white/10'}`}
                                 >
                                     {size}
                                 </button>
@@ -321,45 +321,56 @@ export default function MultiSkuSnBarcode() {
                         <input
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
-                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            className="w-full px-5 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-blue-500/50 outline-none transition-all placeholder:text-gray-700"
                             placeholder="Location (optional)"
                         />
 
                         <button
                             onClick={handleNextStepSn}
-                            className="w-full py-3 bg-gray-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-gray-200"
+                            className="w-full py-4 bg-white text-gray-950 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] hover:bg-blue-500 hover:text-white transition-all shadow-xl shadow-black/20"
                         >
-                            Next Step
+                            Continue to Final
                         </button>
                     </div>
                 </div>
 
                 {/* Step 3: Review & Action */}
-                <div className={`space-y-4 transition-all duration-300 ${step < 3 ? 'opacity-20 pointer-events-none grayscale' : ''}`}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-black">3</div>
-                        <h3 className="text-sm font-black uppercase tracking-widest">Review & {mode === 'print' ? 'Print' : 'Log'}</h3>
+                <div className={`space-y-6 transition-all duration-300 ${step < 3 ? 'opacity-10 pointer-events-none' : ''}`}>
+                    <div className="flex items-center gap-4">
+                        <div className="w-8 h-8 rounded-full bg-white/10 text-white flex items-center justify-center text-sm font-black border border-white/10">3</div>
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Review & {mode === 'print' ? 'Print' : 'Log'}</h3>
                     </div>
 
-                    <div className="bg-white border-2 border-dashed border-gray-200 rounded-3xl p-6 flex flex-col items-center gap-4 text-center">
+                    <div className="bg-white/[0.03] border-2 border-dashed border-white/10 rounded-[2.5rem] p-8 flex flex-col items-center gap-6 text-center">
                         {mode === 'print' ? (
                             <>
-                                <canvas ref={barcodeCanvasRef} className="max-w-full" />
-                                <div className="space-y-1">
-                                    <p className="font-mono text-sm font-black">{uniqueSku}</p>
-                                    <p className="text-xs text-gray-500 line-clamp-2 px-4">{title}</p>
-                                    <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">SN: {getSerialLast6(serialNumbers)}</p>
+                                <div className="bg-white p-4 rounded-2xl">
+                                    <canvas ref={barcodeCanvasRef} className="max-w-full" />
+                                </div>
+                                <div className="space-y-2">
+                                    <p className="font-mono text-lg font-black tracking-tighter text-white">{uniqueSku}</p>
+                                    <p className="text-[11px] text-gray-500 line-clamp-2 px-4 leading-relaxed font-medium">{title}</p>
+                                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full">
+                                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                                        <p className="text-[9px] text-blue-400 font-black uppercase tracking-widest">SN: {getSerialLast6(serialNumbers)}</p>
+                                    </div>
                                 </div>
                             </>
                         ) : (
-                            <div className="py-4 space-y-3 w-full">
-                                <div className="p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100">
-                                    <p className="text-[10px] font-black uppercase tracking-widest mb-1">Logging Mode</p>
-                                    <p className="text-sm font-bold">Static SKU + {serialNumbers.length} SNs</p>
+                            <div className="py-4 space-y-4 w-full">
+                                <div className="p-6 bg-emerald-500/10 text-emerald-400 rounded-[2rem] border border-emerald-500/20">
+                                    <p className="text-[10px] font-black uppercase tracking-widest mb-1.5 opacity-60">Logging Mode</p>
+                                    <p className="text-sm font-black">Static SKU + {serialNumbers.length} SNs</p>
                                 </div>
-                                <div className="text-left space-y-2 px-2">
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Selected SKU: <span className="text-gray-900">{sku}</span></p>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Serials: <span className="text-gray-900">{serialNumbers.join(', ')}</span></p>
+                                <div className="text-left space-y-3 px-4">
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Selected SKU</p>
+                                        <p className="text-xs font-bold text-white font-mono">{sku}</p>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Serials</p>
+                                        <p className="text-xs font-bold text-white font-mono break-all">{serialNumbers.join(', ')}</p>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -367,18 +378,33 @@ export default function MultiSkuSnBarcode() {
                         <button
                             onClick={handleFinalAction}
                             disabled={isPosting}
-                            className={`w-full py-4 ${mode === 'print' ? 'bg-blue-600 shadow-blue-200' : 'bg-emerald-600 shadow-emerald-200'} text-white rounded-2xl text-sm font-black uppercase tracking-[0.2em] transition-all hover:scale-[1.02] shadow-2xl flex items-center justify-center gap-3`}
+                            className={`w-full py-5 ${mode === 'print' ? 'bg-blue-600 shadow-[0_15px_30px_rgba(37,99,235,0.3)]' : 'bg-emerald-600 shadow-[0_15px_30px_rgba(16,185,129,0.3)]'} text-white rounded-3xl text-xs font-black uppercase tracking-[0.2em] transition-all hover:scale-[1.02] flex items-center justify-center gap-3 active:scale-95`}
                         >
                             {isPosting ? 'Processing...' : (
                                 <>
                                     {mode === 'print' ? <Printer className="w-4 h-4" /> : <Database className="w-4 h-4" />}
-                                    {mode === 'print' ? 'Save & Print' : 'Log to Sheet'}
+                                    {mode === 'print' ? 'Save & Print Label' : 'Log Data to Sheet'}
                                 </>
                             )}
                         </button>
                     </div>
                 </div>
             </div>
+
+            {error && (
+                <div className="mx-8 mb-8 p-4 bg-red-500/10 text-red-400 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-500/20 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+                        {error}
+                    </span>
+                    <button onClick={() => setError("")} className="p-1 hover:bg-white/10 rounded-full transition-colors">
+                        <X className="w-3 h-3" />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
 
             {error && (
                 <div className="mx-6 mb-6 p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-red-100 flex items-center justify-between">

@@ -74,7 +74,7 @@ export default function PageLayout({
                 {showChecklist && (
                     <button
                         onClick={() => setChecklistOpen(!checklistOpen)}
-                        className={`absolute left-0 bottom-8 z-50 p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group`}
+                        className={`fixed left-0 bottom-8 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group`}
                     >
                         {checklistOpen ? (
                             <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />

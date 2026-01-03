@@ -16,17 +16,24 @@ export default function BarcodeSidebar() {
                         initial={{ width: 0, opacity: 0 }}
                         animate={{ width: 400, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="bg-gray-50 border-r border-gray-200 overflow-hidden flex-shrink-0"
+                        transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                        className="bg-gray-950 text-white flex-shrink-0 z-40 overflow-hidden border-r border-white/5"
                     >
-                        <div className="h-full overflow-y-auto">
-                            <div className="p-4 border-b border-gray-300 bg-gray-900 text-white">
-                                <h2 className="text-lg font-bold">SKU Label Generator</h2>
-                                <p className="text-xs text-gray-300 mt-1">Scan, generate, and print SKU labels</p>
-                            </div>
-                            <div className="h-[calc(100%-72px)]">
+                        <div className="h-full flex flex-col overflow-hidden">
+                            <header className="p-8 border-b border-white/5 bg-white/5">
+                                <h2 className="text-2xl font-black tracking-tighter uppercase leading-none">
+                                    SKU Generator
+                                </h2>
+                                <p className="text-[10px] font-bold text-blue-500 uppercase tracking-[0.3em] mt-1">
+                                    Label Production Core
+                                </p>
+                            </header>
+                            <div className="flex-1 overflow-y-auto scrollbar-hide">
                                 <MultiSkuSnBarcode />
                             </div>
+                            <footer className="p-6 border-t border-white/5 opacity-30 mt-auto">
+                                <p className="text-[8px] font-mono uppercase tracking-[0.4em]">USAV OS GEN // CORE v2.0</p>
+                            </footer>
                         </div>
                     </motion.aside>
                 )}
@@ -34,10 +41,13 @@ export default function BarcodeSidebar() {
 
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="fixed left-0 bottom-4 bg-blue-600 text-white p-2 rounded-r-md shadow-lg hover:bg-blue-700 transition-colors z-50"
-                title={isOpen ? 'Hide Barcode Scanner' : 'Show Barcode Scanner'}
+                className={`fixed left-0 bottom-8 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group`}
             >
-                {isOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                {isOpen ? (
+                    <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+                ) : (
+                    <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                )}
             </button>
         </>
     );

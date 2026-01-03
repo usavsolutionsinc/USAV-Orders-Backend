@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface TrackingItem {
     id: string;
     trackingNumber: string;
+    orderNumber?: string;
+    productTitle?: string;
     timestamp: string;
 }
 
@@ -14,6 +16,8 @@ export default function ReceivingSidebar() {
     const [isOpen, setIsOpen] = useState(true);
     const [trackings, setTrackings] = useState<TrackingItem[]>([]);
     const [newTracking, setNewTracking] = useState('');
+    const [newOrderNumber, setNewOrderNumber] = useState('');
+    const [newProductTitle, setNewProductTitle] = useState('');
 
     // Load from localStorage on mount
     useEffect(() => {
@@ -38,10 +42,14 @@ export default function ReceivingSidebar() {
         const newItem: TrackingItem = {
             id: Date.now().toString(),
             trackingNumber: newTracking.trim().toUpperCase(),
+            orderNumber: newOrderNumber.trim(),
+            productTitle: newProductTitle.trim(),
             timestamp: new Date().toISOString(),
         };
         saveTrackings([newItem, ...trackings]);
         setNewTracking('');
+        setNewOrderNumber('');
+        setNewProductTitle('');
     };
 
     const removeTracking = (id: string) => {
@@ -77,24 +85,44 @@ export default function ReceivingSidebar() {
                             
                             <div className="space-y-6">
                                 <div className="space-y-3">
-                                    <div className="relative group">
-                                        <input
-                                            type="text"
-                                            placeholder="SCAN TRACKING..."
-                                            value={newTracking}
-                                            onChange={(e) => setNewTracking(e.target.value)}
-                                            onKeyPress={handleKeyPress}
-                                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-xs font-black tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-gray-600"
-                                        />
-                                        <button 
-                                            onClick={addTracking}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-blue-600 rounded-xl hover:bg-blue-500 transition-colors"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                        </button>
+                                    <div className="space-y-2">
+                                        <div className="relative group">
+                                            <input
+                                                type="text"
+                                                placeholder="SCAN TRACKING..."
+                                                value={newTracking}
+                                                onChange={(e) => setNewTracking(e.target.value)}
+                                                onKeyPress={handleKeyPress}
+                                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-xs font-black tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-gray-600"
+                                            />
+                                            <button 
+                                                onClick={addTracking}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-blue-600 rounded-xl hover:bg-blue-500 transition-colors"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="ORDER #"
+                                                value={newOrderNumber}
+                                                onChange={(e) => setNewOrderNumber(e.target.value)}
+                                                onKeyPress={handleKeyPress}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-[10px] font-black tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-gray-700"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="TITLE"
+                                                value={newProductTitle}
+                                                onChange={(e) => setNewProductTitle(e.target.value)}
+                                                onKeyPress={handleKeyPress}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-[10px] font-black tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-gray-700"
+                                            />
+                                        </div>
                                     </div>
                                     <p className="px-2 text-[8px] font-black text-gray-600 uppercase tracking-widest">
-                                        Scan or type tracking to prioritize
+                                        Scan tracking to prioritize unboxing
                                     </p>
                                 </div>
 
@@ -116,11 +144,23 @@ export default function ReceivingSidebar() {
                                                 className="bg-white/5 border border-white/10 p-5 rounded-3xl group relative hover:bg-white/[0.08] transition-all"
                                             >
                                                 <div className="flex flex-col gap-1">
-                                                    <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Priority Item</span>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Priority Item</span>
+                                                        {item.orderNumber && (
+                                                            <span className="text-[9px] font-black text-emerald-500 uppercase tracking-[0.1em] bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                                                #{item.orderNumber}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span className="text-sm font-black tracking-tight text-white truncate pr-8">
                                                         {item.trackingNumber}
                                                     </span>
-                                                    <span className="text-[8px] font-mono text-gray-600 uppercase">
+                                                    {item.productTitle && (
+                                                        <span className="text-[10px] font-bold text-gray-400 truncate">
+                                                            {item.productTitle}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[8px] font-mono text-gray-600 uppercase mt-1">
                                                         Added {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </span>
                                                 </div>
