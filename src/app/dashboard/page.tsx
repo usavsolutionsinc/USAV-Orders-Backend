@@ -6,6 +6,7 @@ export default function DashboardPage() {
             sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
             showChecklist={false}
             showSidebar={true}
+            editMode={true}
         />
     );
 }

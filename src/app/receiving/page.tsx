@@ -1,4 +1,5 @@
 import PageLayout from '@/components/PageLayout';
+import ReceivingSidebar from '@/components/ReceivingSidebar';
 
 export default function ReceivingPage() {
     return (
@@ -6,6 +7,7 @@ export default function ReceivingPage() {
             sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
             gid="1105987606"
             showChecklist={false}
+            customSidebar={<ReceivingSidebar />}
         />
     );
 }

@@ -6,13 +6,14 @@ const techGids: Record<string, string> = {
     '3': '1376429630',
 };
 
-export default function TechPage({ params }: { params: { id: string } }) {
+export default async function TechPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
     return (
         <PageLayout
             role="technician"
-            userId={params.id}
+            userId={id}
             sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
-            gid={techGids[params.id]}
+            gid={techGids[id]}
             showChecklist={true}
         />
     );
