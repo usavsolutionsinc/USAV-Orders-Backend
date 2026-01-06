@@ -472,19 +472,19 @@ function onEdit(e) {
     }
     // --- End Packer_1 to Packer_10 logic ---
 
-    // Tech_X Orders Handling - F column (status field from Orders J)
+    // Tech_X Orders Handling - E column (status field from Orders J)
     if (
       /^Tech_([1-9]|10)$/.test(sheetName) &&
-      column === 6 && row >= 2 && row <= 1000
+      column === 5 && row >= 2 && row <= 1000
     ) {
       const input = String(range.getValue()).trim();
-      // No special highlighting for F column edits - only tracking numbers should highlight yellow
+      // No special highlighting for E column edits - only tracking numbers should highlight yellow
     }
 
     // Tech_X Orders Handling (for Tech_1 to Tech_10)
     if (
       /^Tech_([1-9]|10)$/.test(sheetName) &&
-      column === 5 && row >= 2 && row <= 1000
+      column === 4 && row >= 2 && row <= 1000
     ) {
       const input = String(range.getValue()).trim();
       if (input) {
@@ -512,8 +512,8 @@ function onEdit(e) {
       }
     }
 
-    // --- New: Decrement Sku-Stock QTY from all Tech_X Orders sheets on E scan ---
-    if (/^Tech_([1-9]|10)$/.test(sheetName) && column === 5 && row >= 2 && row <= 1000) {
+    // --- New: Decrement Sku-Stock QTY from all Tech_X Orders sheets on D scan ---
+    if (/^Tech_([1-9]|10)$/.test(sheetName) && column === 4 && row >= 2 && row <= 1000) {
       try {
         var packedSheet = spreadsheet.getSheetByName("Sku-Stock");
         if (packedSheet) {
@@ -645,11 +645,11 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
       return false;
     }
 
-    // If Used, New, or Parts is inputted, update F column with that value
+    // If Used, New, or Parts is inputted, update E column with that value
     if (inputLower === 'used' || inputLower === 'new' || inputLower === 'parts') {
       // Capitalize first letter for display
       var statusValue = input.charAt(0).toUpperCase() + input.slice(1).toLowerCase();
-      sheet.getRange(row, 6).setValue(statusValue); // F column
+      sheet.getRange(row, 5).setValue(statusValue); // E column
     }
 
     // Check if A column has red background - if so, don't transfer
@@ -659,8 +659,8 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
       return true; // Still return true to indicate progression was handled (input should be cleared)
     }
 
-    // Change background to green for B-F
-    sheet.getRange(row, 2, 1, 5).setBackground("#00FF00"); // B-F green
+    // Change background to green for B-E
+    sheet.getRange(row, 2, 1, 4).setBackground("#00FF00"); // B-E green
 
     // Transfer to Shipped sheet
     var shippedSheet = spreadsheet.getSheetByName("Shipped");
@@ -671,7 +671,7 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
     }
 
     // Get data from current Tech row
-    var techRowData = sheet.getRange(row, 1, 1, 9).getValues()[0];
+    var techRowData = sheet.getRange(row, 1, 1, 6).getValues()[0];
     var trackingNumber = String(techRowData[2]).trim(); // C column (tracking)
 
     // Find next empty row in Shipped
@@ -703,12 +703,12 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
       techName = "Tech_10";
     }
 
-    // Map columns: Tech C→E (tracking), Tech D→F (serial numbers), Tech F→D (status), H=Tech name
+    // Map columns: Tech C→E (tracking), Tech D→F (serial numbers), Tech E→D (status), H=Tech name
     var shippedData = [
       "", // A empty (Date / Time)
       "", // B empty (Order ID)
       "", // C empty (Product Title)
-      techRowData[5], // D = Tech F (Sent/Status)
+      techRowData[4], // D = Tech E (Sent/Status)
       trackingNumber, // E = Tech C (Shipping TRK #)
       "", // F empty (Serial Number - will be filled from Tech D if matching tracking exists)
       "", // G empty (Box)
@@ -731,7 +731,7 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
 
     if (existingRow !== -1) {
       // Update existing row - update D (Sent), F (Serial Number), and H (Tech name)
-      shippedSheet.getRange(existingRow, 4).setValue(techRowData[5]); // D = Tech F (Sent/Status)
+      shippedSheet.getRange(existingRow, 4).setValue(techRowData[4]); // D = Tech E (Sent/Status)
       shippedSheet.getRange(existingRow, 6).setValue(techRowData[3]); // F = Tech D (Serial Number)
       shippedSheet.getRange(existingRow, 8).setValue(techName); // H = Tech name (By)
     } else {
@@ -747,7 +747,7 @@ function handleTechChecklistProgression(spreadsheet, sheet, input, row) {
 }
 
 // Tech_X Orders Handling (for Tech_1 to Tech_10)
-// Column structure: A=Date/Time, B=Product Name, C=Tracking/FNSKU, D=Serial Numbers, E=Input, F=Checklist Status, G=SKU, H=Qty Count
+// Column structure: A=Date/Time, B=Product Title, C=Tracking/FNSKU, D=Input/Serial Numbers, E=Condition, F=Daily Counter
 function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
   try {
     if (row > 1000) {
@@ -833,8 +833,7 @@ function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
           }
         }
 
-        // 3. Move the scanned SKU to G column in current row
-        sheet.getRange(targetRow, 7).setValue(input); // G column
+        // 3. SKU column removed - no longer needed
         range.setValue("");
         return;
       }
@@ -896,11 +895,11 @@ function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
               const productName = cData[i][0];
               sheet.getRange(targetRow, 2).setValue(productName); // B
 
-              // Copy status from Shipped D to Tech F
+              // Copy status from Shipped D to Tech E
               var shippedStatus = String(dData[i][0]).trim();
               if (shippedStatus) {
-                sheet.getRange(targetRow, 6).setValue(shippedStatus); // F column in Tech
-                sheet.getRange(targetRow, 2, 1, 5).setBackground("#FFFF00"); // B-F yellow
+                sheet.getRange(targetRow, 5).setValue(shippedStatus); // E column in Tech
+                sheet.getRange(targetRow, 2, 1, 4).setBackground("#FFFF00"); // B-E yellow
               }
 
               trackingFound = true;
@@ -913,11 +912,14 @@ function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
       // If tracking number not found in Shipped, highlight only A column red
       if (!trackingFound) {
         sheet.getRange(targetRow, 1).setBackground("#FF0000"); // Only A column red
+      } else {
+        // Clear any red background if tracking was found
+        sheet.getRange(targetRow, 1).setBackground(null);
       }
 
       // Store this row number in PropertiesService for serial numbers (sheet-specific)
       PropertiesService.getScriptProperties().setProperty('lastTrackingRow_' + sheet.getName(), targetRow.toString());
-      // Clear the original input from column E
+      // Clear the original input from column D
       range.setValue("");
       return;
     }
@@ -958,7 +960,7 @@ function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
           sheet.getRange(targetRow, 1).setValue(now);
           // Store this row number in PropertiesService for serial numbers (sheet-specific)
           PropertiesService.getScriptProperties().setProperty('lastTrackingRow_' + sheet.getName(), targetRow.toString());
-          // Clear the original input from column E immediately after processing
+          // Clear the original input from column D immediately after processing
           range.setValue("");
           return;
         } else {
@@ -1077,11 +1079,11 @@ function handleTechOrdersEdit(spreadsheet, sheet, range, row, column) {
       }
       if (serialFound) {
         // Clear the background highlighting when serial number is found
-        sheet.getRange(targetRow, 2, 1, 5).setBackground(null); // B-F columns
+        sheet.getRange(targetRow, 2, 1, 4).setBackground(null); // B-E columns
       }
     }
 
-    // Clear the original input from column E
+    // Clear the original input from column D
     range.setValue("");
     return;
   } catch (err) {
@@ -1337,7 +1339,7 @@ function activateNextAvailablePackerRow(sheet) {
   }
 }
 
-// === Tech daily counts - Total only in H column (count per day) ===
+// === Tech daily counts - Total only in F column (count per day) ===
 function updateTechDailyCounts(sheet) {
   try {
     var lastRow = sheet.getLastRow();
@@ -1354,7 +1356,7 @@ function updateTechDailyCounts(sheet) {
       dateMap[dKey] = (dateMap[dKey] || 0) + 1;
     }
 
-    // Prepare output array for H column
+    // Prepare output array for F column
     var output = [];
     for (var i = 0; i < aVals.length; i++) {
       var d = aVals[i][0];
@@ -1366,8 +1368,8 @@ function updateTechDailyCounts(sheet) {
       output.push([count]);
     }
 
-    // Update H column in one batch
-    sheet.getRange(2, 8, output.length, 1).setValues(output);
+    // Update F column in one batch
+    sheet.getRange(2, 6, output.length, 1).setValues(output);
   } catch (err) {
     logError('updateTechDailyCounts', err);
   }
@@ -2165,11 +2167,10 @@ function recheckTechTrackingIntegrity() {
                 // Clear red background from A column
                 techBackgrounds[i][0] = null;
 
-                // Highlight B-E columns green (indices 1-4)
+                // Highlight B-D columns green (indices 1-3)
                 techBackgrounds[i][1] = "#00FF00"; // B column
                 techBackgrounds[i][2] = "#00FF00"; // C column
                 techBackgrounds[i][3] = "#00FF00"; // D column
-                techBackgrounds[i][4] = "#00FF00"; // E column
 
                 fixedCount++;
                 break;

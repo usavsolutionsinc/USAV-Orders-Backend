@@ -9,7 +9,7 @@ export default function BarcodeSidebar() {
     const [isOpen, setIsOpen] = useState(true);
 
     return (
-        <>
+        <div className="flex h-full relative">
             <AnimatePresence>
                 {isOpen && (
                     <motion.aside
@@ -17,10 +17,10 @@ export default function BarcodeSidebar() {
                         animate={{ width: 400, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-gray-950 text-white flex-shrink-0 z-40 overflow-hidden border-r border-white/5"
+                        className="bg-gray-950 text-white flex-shrink-0 z-40 overflow-hidden border-l border-white/5 order-2"
                     >
                         <div className="h-full flex flex-col overflow-hidden">
-                            <header className="p-8 border-b border-white/5 bg-white/5">
+                            <header className="p-8 border-b border-white/5 bg-white/5 pr-16">
                                 <h2 className="text-2xl font-black tracking-tighter uppercase leading-none">
                                     SKU Generator
                                 </h2>
@@ -41,15 +41,15 @@ export default function BarcodeSidebar() {
 
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`fixed left-0 bottom-8 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group`}
+                className="fixed top-20 right-4 z-[70] p-3 bg-white text-gray-950 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group"
             >
                 {isOpen ? (
-                    <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
-                ) : (
                     <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                ) : (
+                    <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
                 )}
             </button>
-        </>
+        </div>
     );
 }
 

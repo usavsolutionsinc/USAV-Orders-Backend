@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { db } from '@/lib/drizzle/db';
+import { receiving } from '@/lib/drizzle/schema';
+import { desc } from 'drizzle-orm';
 
 // POST - Add entry to receiving table (for Google Sheets sync)
 export async function POST(request: NextRequest) {
@@ -14,14 +16,16 @@ export async function POST(request: NextRequest) {
         }
 
         // Insert into receiving table (col_2 = tracking number)
-        const result = await pool.query(
-            'INSERT INTO receiving (col_2, col_3, col_4, col_5) VALUES ($1, $2, $3, $4) RETURNING *',
-            [trackingNumber, carrier || null, date || new Date().toISOString(), notes || null]
-        );
+        const [result] = await db.insert(receiving).values({
+            col2: trackingNumber,
+            col3: carrier || null,
+            col4: date || new Date().toISOString(),
+            col5: notes || null
+        }).returning();
 
         return NextResponse.json({
             success: true,
-            entry: result.rows[0],
+            entry: result,
             message: 'Entry added to receiving table'
         }, { status: 201 });
     } catch (error) {
@@ -36,8 +40,12 @@ export async function POST(request: NextRequest) {
 // GET - Fetch all receiving entries
 export async function GET() {
     try {
-        const result = await pool.query('SELECT * FROM receiving ORDER BY col_1 DESC');
-        return NextResponse.json(result.rows);
+        const results = await db
+            .select()
+            .from(receiving)
+            .orderBy(desc(receiving.col1));
+            
+        return NextResponse.json(results);
     } catch (error) {
         console.error('Error fetching receiving entries:', error);
         return NextResponse.json({ 
@@ -46,4 +54,3 @@ export async function GET() {
         }, { status: 500 });
     }
 }
-

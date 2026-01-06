@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { db } from '@/lib/drizzle/db';
+import { taskTemplates, dailyTaskInstances, taskTags, tags } from '@/lib/drizzle/schema';
+import { eq, and, sql } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
     try {
@@ -13,8 +15,8 @@ export async function GET(request: NextRequest) {
 
         const today = new Date().toISOString().split('T')[0];
 
-        // Get templates and their instances for today with tags
-        const result = await pool.query(`
+        // Get templates and their instances for today with tags using Drizzle
+        const results = await db.execute(sql`
             SELECT 
                 t.id,
                 t.title,
@@ -39,25 +41,25 @@ export async function GET(request: NextRequest) {
             FROM task_templates t
             LEFT JOIN daily_task_instances i 
                 ON t.id = i.template_id 
-                AND i.staff_id = $1 
-                AND i.task_date = $2
+                AND i.staff_id = ${parseInt(staffId)}
+                AND i.task_date = ${today}
             LEFT JOIN task_tags tt ON t.id = tt.task_template_id
             LEFT JOIN tags tg ON tt.tag_id = tg.id
-            WHERE t.role = $3
+            WHERE t.role = ${role}
             GROUP BY t.id, t.title, t.description, t.role, t.order_number, t.tracking_number, 
                      t.created_at, i.status, i.started_at, i.completed_at, i.duration_minutes, 
                      i.notes, i.task_date
             ORDER BY t.id ASC
-        `, [staffId, today, role]);
+        `);
 
-        const items = result.rows.map(row => ({
+        const items = results.rows.map(row => ({
             id: row.id,
             title: row.title,
             description: row.description,
             role: row.role,
             order_number: row.order_number,
             tracking_number: row.tracking_number,
-            tags: row.tags,
+            tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
             created_at: row.created_at,
             instance: row.task_date ? {
                 template_id: row.id,
@@ -73,6 +75,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(items);
     } catch (error) {
         console.error('Error fetching checklist:', error);
-        return NextResponse.json({ error: 'Failed to fetch checklist' }, { status: 500 });
+        return NextResponse.json({ 
+            error: 'Failed to fetch checklist',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
     }
 }

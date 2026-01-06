@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { db } from '@/lib/drizzle/db';
+import { staff } from '@/lib/drizzle/schema';
+import { eq, and, asc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
     try {
@@ -7,33 +9,34 @@ export async function GET(request: NextRequest) {
         const role = searchParams.get('role');
         const activeOnly = searchParams.get('active') !== 'false';
 
-        let query = 'SELECT * FROM staff WHERE 1=1';
-        const params: any[] = [];
-        let paramCount = 1;
-
+        const conditions = [];
         if (role) {
-            query += ` AND role = $${paramCount}`;
-            params.push(role);
-            paramCount++;
+            conditions.push(eq(staff.role, role));
         }
-
         if (activeOnly) {
-            query += ` AND active = true`;
+            conditions.push(eq(staff.active, true));
         }
 
-        query += ' ORDER BY role, name';
+        const results = await db
+            .select()
+            .from(staff)
+            .where(conditions.length > 0 ? and(...conditions) : undefined)
+            .orderBy(asc(staff.role), asc(staff.name));
 
-        const result = await pool.query(query, params);
-        return NextResponse.json(result.rows);
+        return NextResponse.json(results);
     } catch (error) {
         console.error('Error fetching staff:', error);
-        return NextResponse.json({ error: 'Failed to fetch staff' }, { status: 500 });
+        return NextResponse.json({ 
+            error: 'Failed to fetch staff',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
     }
 }
 
 export async function POST(request: NextRequest) {
     try {
-        const { name, role, employee_id } = await request.json();
+        const body = await request.json();
+        const { name, role, employee_id } = body;
 
         if (!name || !role) {
             return NextResponse.json({ error: 'name and role are required' }, { status: 400 });
@@ -43,74 +46,60 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'role must be technician or packer' }, { status: 400 });
         }
 
-        const result = await pool.query(
-            'INSERT INTO staff (name, role, employee_id) VALUES ($1, $2, $3) RETURNING *',
-            [name, role, employee_id || null]
-        );
+        const [result] = await db.insert(staff).values({
+            name,
+            role,
+            employeeId: employee_id || null,
+            active: true,
+        }).returning();
 
-        return NextResponse.json(result.rows[0], { status: 201 });
+        return NextResponse.json(result, { status: 201 });
     } catch (error) {
         console.error('Error creating staff:', error);
-        return NextResponse.json({ error: 'Failed to create staff' }, { status: 500 });
+        return NextResponse.json({ 
+            error: 'Failed to create staff',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
     }
 }
 
 export async function PUT(request: NextRequest) {
     try {
-        const { id, name, role, employee_id, active } = await request.json();
+        const body = await request.json();
+        const { id, name, role, employee_id, active } = body;
 
         if (!id) {
             return NextResponse.json({ error: 'id is required' }, { status: 400 });
         }
 
-        const updates: string[] = [];
-        const params: any[] = [];
-        let paramCount = 1;
-
-        if (name !== undefined) {
-            updates.push(`name = $${paramCount}`);
-            params.push(name);
-            paramCount++;
-        }
-
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
         if (role !== undefined) {
             if (!['technician', 'packer'].includes(role)) {
                 return NextResponse.json({ error: 'role must be technician or packer' }, { status: 400 });
             }
-            updates.push(`role = $${paramCount}`);
-            params.push(role);
-            paramCount++;
+            updateData.role = role;
         }
+        if (employee_id !== undefined) updateData.employeeId = employee_id || null;
+        if (active !== undefined) updateData.active = active;
 
-        if (employee_id !== undefined) {
-            updates.push(`employee_id = $${paramCount}`);
-            params.push(employee_id || null);
-            paramCount++;
-        }
+        const [result] = await db
+            .update(staff)
+            .set(updateData)
+            .where(eq(staff.id, id))
+            .returning();
 
-        if (active !== undefined) {
-            updates.push(`active = $${paramCount}`);
-            params.push(active);
-            paramCount++;
-        }
-
-        if (updates.length === 0) {
-            return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-        }
-
-        params.push(id);
-        const query = `UPDATE staff SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`;
-
-        const result = await pool.query(query, params);
-
-        if (result.rows.length === 0) {
+        if (!result) {
             return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
         }
 
-        return NextResponse.json(result.rows[0]);
+        return NextResponse.json(result);
     } catch (error) {
         console.error('Error updating staff:', error);
-        return NextResponse.json({ error: 'Failed to update staff' }, { status: 500 });
+        return NextResponse.json({ 
+            error: 'Failed to update staff',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
     }
 }
 
@@ -124,19 +113,22 @@ export async function DELETE(request: NextRequest) {
         }
 
         // Soft delete - set active to false
-        const result = await pool.query(
-            'UPDATE staff SET active = false WHERE id = $1 RETURNING *',
-            [id]
-        );
+        const [result] = await db
+            .update(staff)
+            .set({ active: false })
+            .where(eq(staff.id, parseInt(id)))
+            .returning();
 
-        if (result.rows.length === 0) {
+        if (!result) {
             return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
         }
 
-        return NextResponse.json({ success: true, staff: result.rows[0] });
+        return NextResponse.json({ success: true, staff: result });
     } catch (error) {
         console.error('Error deleting staff:', error);
-        return NextResponse.json({ error: 'Failed to delete staff' }, { status: 500 });
+        return NextResponse.json({ 
+            error: 'Failed to delete staff',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
     }
 }
-

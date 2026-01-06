@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { db } from '@/lib/drizzle/db';
+import { receivingTasks } from '@/lib/drizzle/schema';
+import { eq, and, desc } from 'drizzle-orm';
 
 // GET - Fetch all receiving tasks
 export async function GET(request: NextRequest) {
@@ -8,24 +10,23 @@ export async function GET(request: NextRequest) {
         const status = searchParams.get('status');
         const urgent = searchParams.get('urgent');
 
-        let query = 'SELECT * FROM receiving_tasks WHERE 1=1';
-        const params: any[] = [];
-        let paramCount = 1;
+        let query = db.select().from(receivingTasks);
 
+        const conditions = [];
         if (status) {
-            query += ` AND status = $${paramCount}`;
-            params.push(status);
-            paramCount++;
+            conditions.push(eq(receivingTasks.status, status));
         }
-
         if (urgent === 'true') {
-            query += ` AND urgent = true`;
+            conditions.push(eq(receivingTasks.urgent, true));
         }
 
-        query += ' ORDER BY created_at DESC';
+        const results = await db
+            .select()
+            .from(receivingTasks)
+            .where(conditions.length > 0 ? and(...conditions) : undefined)
+            .orderBy(desc(receivingTasks.createdAt));
 
-        const result = await pool.query(query, params);
-        return NextResponse.json(result.rows);
+        return NextResponse.json(results);
     } catch (error) {
         console.error('Error fetching receiving tasks:', error);
         return NextResponse.json({ 
@@ -47,13 +48,16 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        const result = await pool.query(
-            `INSERT INTO receiving_tasks (tracking_number, order_number, urgent, notes, staff_id, status)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [trackingNumber, orderNumber || null, urgent || false, notes || null, staffId || null, 'pending']
-        );
+        const [result] = await db.insert(receivingTasks).values({
+            trackingNumber,
+            orderNumber: orderNumber || null,
+            urgent: urgent || false,
+            notes: notes || null,
+            staffId: staffId || null,
+            status: 'pending',
+        }).returning();
 
-        return NextResponse.json(result.rows[0], { status: 201 });
+        return NextResponse.json(result, { status: 201 });
     } catch (error) {
         console.error('Error creating receiving task:', error);
         return NextResponse.json({ 
@@ -73,61 +77,25 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'id is required' }, { status: 400 });
         }
 
-        const updates: string[] = [];
-        const params: any[] = [];
-        let paramCount = 1;
+        const updateData: any = {};
+        if (status !== undefined) updateData.status = status;
+        if (urgent !== undefined) updateData.urgent = urgent;
+        if (notes !== undefined) updateData.notes = notes;
+        if (receivedDate !== undefined) updateData.receivedDate = receivedDate ? new Date(receivedDate) : null;
+        if (processedDate !== undefined) updateData.processedDate = processedDate ? new Date(processedDate) : null;
+        if (staffId !== undefined) updateData.staffId = staffId;
 
-        if (status !== undefined) {
-            updates.push(`status = $${paramCount}`);
-            params.push(status);
-            paramCount++;
-        }
+        const [result] = await db
+            .update(receivingTasks)
+            .set(updateData)
+            .where(eq(receivingTasks.id, id))
+            .returning();
 
-        if (urgent !== undefined) {
-            updates.push(`urgent = $${paramCount}`);
-            params.push(urgent);
-            paramCount++;
-        }
-
-        if (notes !== undefined) {
-            updates.push(`notes = $${paramCount}`);
-            params.push(notes);
-            paramCount++;
-        }
-
-        if (receivedDate !== undefined) {
-            updates.push(`received_date = $${paramCount}`);
-            params.push(receivedDate);
-            paramCount++;
-        }
-
-        if (processedDate !== undefined) {
-            updates.push(`processed_date = $${paramCount}`);
-            params.push(processedDate);
-            paramCount++;
-        }
-
-        if (staffId !== undefined) {
-            updates.push(`staff_id = $${paramCount}`);
-            params.push(staffId);
-            paramCount++;
-        }
-
-        if (updates.length === 0) {
-            return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-        }
-
-        params.push(id);
-        const result = await pool.query(
-            `UPDATE receiving_tasks SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`,
-            params
-        );
-
-        if (result.rows.length === 0) {
+        if (!result) {
             return NextResponse.json({ error: 'Task not found' }, { status: 404 });
         }
 
-        return NextResponse.json(result.rows[0]);
+        return NextResponse.json(result);
     } catch (error) {
         console.error('Error updating receiving task:', error);
         return NextResponse.json({ 
@@ -147,7 +115,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'id is required' }, { status: 400 });
         }
 
-        await pool.query('DELETE FROM receiving_tasks WHERE id = $1', [id]);
+        await db.delete(receivingTasks).where(eq(receivingTasks.id, parseInt(id)));
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -158,4 +126,3 @@ export async function DELETE(request: NextRequest) {
         }, { status: 500 });
     }
 }
-

@@ -52,6 +52,28 @@ export async function POST() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        
+        // Add missing columns if table already exists
+        await client.query(`
+            DO $$ 
+            BEGIN
+                BEGIN
+                    ALTER TABLE task_templates ADD COLUMN order_number VARCHAR(100);
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+                BEGIN
+                    ALTER TABLE task_templates ADD COLUMN tracking_number VARCHAR(100);
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+                BEGIN
+                    ALTER TABLE task_templates ADD COLUMN created_by INTEGER REFERENCES staff(id) ON DELETE SET NULL;
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+            END $$;
+        `);
         tables.push('task_templates');
 
         // 4. Task tags relationship
@@ -81,6 +103,38 @@ export async function POST() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(template_id, staff_id, task_date)
             )
+        `);
+        
+        // Add missing columns if table already exists
+        await client.query(`
+            DO $$ 
+            BEGIN
+                BEGIN
+                    ALTER TABLE daily_task_instances ADD COLUMN staff_id INTEGER REFERENCES staff(id) ON DELETE CASCADE;
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+                BEGIN
+                    ALTER TABLE daily_task_instances ADD COLUMN status VARCHAR(20) DEFAULT 'pending';
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+                BEGIN
+                    ALTER TABLE daily_task_instances ADD COLUMN started_at TIMESTAMP;
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+                BEGIN
+                    ALTER TABLE daily_task_instances ADD COLUMN duration_minutes INTEGER;
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+                BEGIN
+                    ALTER TABLE daily_task_instances ADD COLUMN notes TEXT;
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+            END $$;
         `);
         tables.push('daily_task_instances');
 

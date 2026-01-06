@@ -24,49 +24,33 @@ export default function ReceivingPage() {
 
     return (
         <div className="flex h-full w-full bg-gray-950 overflow-hidden">
-            {/* Urgent Tracking Sidebar (Left) */}
+            {/* 1. Urgent Tracking Sidebar (Left - Always exists, handles its own toggle) */}
             <ReceivingSidebar />
             
-            {/* Entry Form (Top Left of main area) */}
-            <AnimatePresence mode="wait">
-                {entryFormOpen && (
-                    <motion.div 
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 380, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-gray-950 border-r border-white/5 flex flex-col z-40 overflow-hidden"
-                    >
-                        <div className="w-[380px] h-full overflow-y-auto scrollbar-hide">
-                            <ReceivingEntryForm />
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Task List (Below entry form, same column) */}
-            <AnimatePresence mode="wait">
-                {taskListOpen && (
-                    <motion.div 
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 400, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-gray-950 border-r border-white/5 flex flex-col z-40 overflow-hidden"
-                    >
-                        <div className="w-[400px] h-full">
-                            <ReceivingTaskList />
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Main Content Area - Google Sheet */}
-            <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
-                {/* Toggle Buttons */}
+            {/* 2. Entry Form (Left Sidebar - Next to Urgent Tracking) */}
+            <div className="relative flex-shrink-0 z-30 flex h-full">
+                <AnimatePresence mode="wait">
+                    {entryFormOpen && (
+                        <motion.div 
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: 380, opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                            className="bg-gray-950 border-r border-white/5 h-full overflow-hidden"
+                        >
+                            <div className="w-[380px] h-full overflow-y-auto scrollbar-hide">
+                                <ReceivingEntryForm />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+                
+                {/* Entry Form Toggle Button - Pinned to its right edge */}
                 <button
                     onClick={() => setEntryFormOpen(!entryFormOpen)}
-                    className={`fixed ${entryFormOpen ? 'left-[380px]' : 'left-0'} top-24 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-green-600 hover:text-white transition-all duration-300 group`}
+                    className={`absolute top-4 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-green-600 hover:text-white transition-all duration-300 group ${
+                        entryFormOpen ? 'left-full' : 'left-0'
+                    }`}
                     title="Toggle Entry Form"
                 >
                     {entryFormOpen ? (
@@ -75,20 +59,10 @@ export default function ReceivingPage() {
                         <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
                     )}
                 </button>
+            </div>
 
-                <button
-                    onClick={() => setTaskListOpen(!taskListOpen)}
-                    className={`fixed ${taskListOpen ? (entryFormOpen ? 'left-[780px]' : 'left-[400px]') : (entryFormOpen ? 'left-[380px]' : 'left-0')} top-48 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group`}
-                    title="Toggle Task List"
-                >
-                    {taskListOpen ? (
-                        <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
-                    ) : (
-                        <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-                    )}
-                </button>
-
-                {/* Google Sheet Iframe */}
+            {/* 3. Main Content Area - Google Sheet */}
+            <div className="flex-1 flex flex-col relative overflow-hidden bg-white z-10">
                 <div className="flex-1 w-full h-full relative group">
                     <iframe
                         key={`${sheetId}-${gid}`}
@@ -98,6 +72,38 @@ export default function ReceivingPage() {
                         title="Google Sheet Viewer"
                     />
                 </div>
+            </div>
+
+            {/* 4. Task List (Right Sidebar) */}
+            <div className="relative flex-shrink-0 z-30 flex h-full">
+                <AnimatePresence mode="wait">
+                    {taskListOpen && (
+                        <motion.div 
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: 400, opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                            className="bg-gray-950 border-l border-white/5 h-full overflow-hidden"
+                        >
+                            <div className="w-[400px] h-full">
+                                <ReceivingTaskList />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Task List Toggle Button - Top Right of screen (inside menu when expanded) */}
+                <button
+                    onClick={() => setTaskListOpen(!taskListOpen)}
+                    className="fixed top-4 right-4 z-[70] p-3 bg-white text-gray-950 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group"
+                    title="Toggle Task List"
+                >
+                    {taskListOpen ? (
+                        <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                    ) : (
+                        <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+                    )}
+                </button>
             </div>
 
             <style jsx global>{`

@@ -8,15 +8,15 @@ export default function Sidebar() {
     const [isOpen, setIsOpen] = useState(true);
 
     return (
-        <>
-            <AnimatePresence>
+        <div className="relative flex-shrink-0 z-40">
+            <AnimatePresence mode="wait">
                 {isOpen && (
                     <motion.aside
                         initial={{ width: 0, opacity: 0 }}
                         animate={{ width: 340, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-gray-950 text-white flex-shrink-0 z-40 overflow-hidden border-r border-white/5"
+                        className="bg-gray-950 text-white flex-shrink-0 h-full overflow-hidden border-r border-white/5"
                     >
                         <div className="p-8 h-full flex flex-col space-y-8 overflow-y-auto scrollbar-hide">
                             <header>
@@ -104,7 +104,9 @@ export default function Sidebar() {
 
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`fixed left-0 bottom-8 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group`}
+                className={`absolute top-4 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group ${
+                    isOpen ? 'left-full' : 'fixed left-0'
+                }`}
             >
                 {isOpen ? (
                     <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
@@ -112,6 +114,6 @@ export default function Sidebar() {
                     <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
                 )}
             </button>
-        </>
+        </div>
     );
 }
