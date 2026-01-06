@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const navItems = [
     { name: 'Dashboard', href: '/dashboard' },
+    { name: 'Admin', href: '/admin' },
     { name: 'Orders', href: '/orders' },
     { name: 'Michael', href: '/tech/1' },
     { name: 'Thuc', href: '/tech/2' },
@@ -52,7 +53,7 @@ export default function Navigation() {
                         </div>
                     </div>
                     <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest hidden sm:block">
-                        v2.0.26 // SYSTEM STABLE
+                        v2.0 // MULTI-USER
                     </div>
                 </div>
             </div>

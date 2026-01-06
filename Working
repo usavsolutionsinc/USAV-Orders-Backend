@@ -1132,6 +1132,7 @@ function onOpen() {
   ui.createMenu('Orders')
     .addItem('Delete Shipped Orders', 'transferExistingOrdersToRestock')
     .addItem('Calculate Late Orders', 'calculateLateOrders')
+    .addItem('Remove Duplicate Orders', 'removeDuplicateOrders')
     .addToUi();
 
   ui.createMenu('SKU Tools')
@@ -1447,14 +1448,14 @@ function packedSkuMatches() {
   }
 }
 
-// Function to transfer Orders rows with Q=1 and non-empty K to Shipped sheet
+// Function to transfer Orders rows with non-empty G (tracking) to Shipped sheet
 function checkTrackingInShipped() {
   try {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var ordersSheet = spreadsheet.getSheetByName("Orders");
     var shippedSheet = spreadsheet.getSheetByName("Shipped");
 
-    if (!ordersSheet) {
+    if (!ordersSheet) { 
       SpreadsheetApp.getUi().alert("Orders sheet not found.");
       return;
     }
@@ -1472,11 +1473,11 @@ function checkTrackingInShipped() {
       shippedSheet.getRange("A1:I1").setFontWeight("bold");
     }
 
-    // Get Orders data (A to K)
-    var ordersData = ordersSheet.getRange(2, 1, ordersLastRow - 1, 11).getValues();
+    // Get Orders data (A to G minimum needed)
+    var ordersData = ordersSheet.getRange(2, 1, ordersLastRow - 1, 7).getValues();
 
-    // Get K column backgrounds to check for white/clear backgrounds
-    var kBackgrounds = ordersSheet.getRange(2, 11, ordersLastRow - 1, 1).getBackgrounds();
+    // Get G column backgrounds to check for white/clear backgrounds
+    var gBackgrounds = ordersSheet.getRange(2, 7, ordersLastRow - 1, 1).getBackgrounds();
 
     // Get Shipped E column (Shipping TRK #) for existence check
     var shippedLastRow = shippedSheet.getLastRow();
@@ -1490,7 +1491,7 @@ function checkTrackingInShipped() {
     }
 
     var rowsToAdd = [];
-    var kRowsToGreen = []; // Track which K rows to mark green
+    var gRowsToGreen = []; // Track which G rows to mark green
 
     // Helper function to check if background is white/clear
     function isWhiteOrClearBackground(bg) {
@@ -1504,35 +1505,35 @@ function checkTrackingInShipped() {
 
     for (var i = 0; i < ordersData.length; i++) {
       var row = ordersData[i];
-      var kValue = String(row[10]).trim(); // K is index 10
-      var kBackground = kBackgrounds[i][0]; // Background color of K cell
+      var gValue = String(row[6]).trim(); // G is index 6
+      var gBackground = gBackgrounds[i][0]; // Background color of G cell
 
-      // Check if K has non-empty value and white/clear background
-      if (kValue !== "" && isWhiteOrClearBackground(kBackground)) {
-        if (!shippedTrackingSet.has(getLastEightDigits(kValue))) {
+      // Check if G has non-empty value and white/clear background
+      if (gValue !== "" && isWhiteOrClearBackground(gBackground)) {
+        if (!shippedTrackingSet.has(getLastEightDigits(gValue))) {
           // Tracking number not in Shipped - prepare row for transfer
           // Shipped sheet only handles A through I (9 columns)
           var newRow = new Array(9).fill("");
           newRow[0] = ""; // A = Date / Time (empty initially)
-          newRow[1] = row[2]; // B = Orders C (Order ID)
-          newRow[2] = row[4]; // C = Orders E (Product Title)
-          newRow[3] = row[9]; // D = Orders J (Sent)
-          newRow[4] = row[10]; // E = Orders K (Shipping TRK #)
+          newRow[1] = row[1]; // B = Orders B (Order ID)
+          newRow[2] = row[2]; // C = Orders C (Product Title)
+          newRow[3] = row[5]; // D = Orders F (Condition/Sent)
+          newRow[4] = row[6]; // E = Orders G (Shipping TRK #)
           // F, G, H, I remain empty (Serial Number, Box, By, SKU)
 
           rowsToAdd.push(newRow);
-          shippedTrackingSet.add(getLastEightDigits(kValue));
+          shippedTrackingSet.add(getLastEightDigits(gValue));
         }
 
-        // Always mark K column green for white/clear backgrounds (whether transferred or already exists)
-        kRowsToGreen.push(i + 2); // Store actual row number for K column
+        // Always mark G column green for white/clear backgrounds (whether transferred or already exists)
+        gRowsToGreen.push(i + 2); // Store actual row number for G column
       }
     }
 
-    // Mark K column green for all white/clear background rows (whether transferred or already existed)
+    // Mark G column green for all white/clear background rows (whether transferred or already existed)
     var rangesToGreen = [];
-    for (var j = 0; j < kRowsToGreen.length; j++) {
-      rangesToGreen.push("K" + kRowsToGreen[j]);
+    for (var j = 0; j < gRowsToGreen.length; j++) {
+      rangesToGreen.push("G" + gRowsToGreen[j]);
     }
     if (rangesToGreen.length > 0) {
       ordersSheet.getRangeList(rangesToGreen).setBackground("#00FF00");
@@ -1542,9 +1543,9 @@ function checkTrackingInShipped() {
       var startRow = shippedLastRow < 1 ? 2 : shippedLastRow + 1;
       shippedSheet.getRange(startRow, 1, rowsToAdd.length, 9).setValues(rowsToAdd);
 
-      SpreadsheetApp.getUi().alert("Transfer completed.\n" + rowsToAdd.length + " new rows transferred to Shipped.\n" + kRowsToGreen.length + " K column cells marked green (includes existing + transferred).");
-    } else if (kRowsToGreen.length > 0) {
-      SpreadsheetApp.getUi().alert("No new transfers needed.\n" + kRowsToGreen.length + " K column cells marked green (tracking numbers already exist in Shipped).");
+      SpreadsheetApp.getUi().alert("Transfer completed.\n" + rowsToAdd.length + " new rows transferred to Shipped.\n" + gRowsToGreen.length + " G column cells marked green (includes existing + transferred).");
+    } else if (gRowsToGreen.length > 0) {
+      SpreadsheetApp.getUi().alert("No new transfers needed.\n" + gRowsToGreen.length + " G column cells marked green (tracking numbers already exist in Shipped).");
     } else {
       SpreadsheetApp.getUi().alert("No rows to process.");
     }
@@ -1555,7 +1556,7 @@ function checkTrackingInShipped() {
   }
 }
 
-// Function to delete Orders rows where Shipped has non-empty A column (timestamp) matching tracking numbers
+// Function to delete Orders rows where Shipped has non-empty A column (timestamp) matching tracking numbers or order IDs
 function transferExistingOrdersToRestock() {
   try {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -1578,9 +1579,8 @@ function transferExistingOrdersToRestock() {
     // Get Shipped data: A (timestamp), B (Order ID), and E (Shipping TRK #)
     var shippedData = shippedSheet.getRange(2, 1, shippedLastRow - 1, 5).getValues();
 
-    // Build Set of tracking numbers from Shipped that have timestamp
+    // Build Set of tracking numbers and order IDs from Shipped that have timestamp
     var shippedTrackings = new Set();
-    // Build Set of order numbers from Shipped that have timestamp
     var shippedOrderNumbers = new Set();
     
     for (var i = 0; i < shippedData.length; i++) {
@@ -1588,7 +1588,7 @@ function transferExistingOrdersToRestock() {
       var bVal = String(shippedData[i][1]).trim(); // B column (index 1) - Order ID
       var eVal = String(shippedData[i][4]).trim(); // E column (index 4) - Shipping TRK #
       
-      // If timestamp exists, add both tracking and order number to sets
+      // If timestamp exists, add tracking number and order ID to sets
       if (aVal) {
         if (eVal) {
           shippedTrackings.add(getLastEightDigits(eVal));
@@ -1604,23 +1604,23 @@ function transferExistingOrdersToRestock() {
       return;
     }
 
-    // Get Orders data: C (Order ID) and K (Shipping TRK #)
-    var ordersCData = ordersSheet.getRange(2, 3, ordersLastRow - 1, 1).getValues(); // C column (Order ID)
-    var ordersKData = ordersSheet.getRange(2, 11, ordersLastRow - 1, 1).getValues(); // K column (Shipping TRK #)
+    // Get Orders data: B (Order ID) and G (Tracking)
+    var ordersBData = ordersSheet.getRange(2, 2, ordersLastRow - 1, 1).getValues(); // B column (Order ID)
+    var ordersGData = ordersSheet.getRange(2, 7, ordersLastRow - 1, 1).getValues(); // G column (Tracking)
     var rowsToDelete = new Set(); // Use Set to avoid duplicates
 
-    // First: Match tracking numbers (Orders K column vs Shipped E column)
-    for (var i = 0; i < ordersKData.length; i++) {
-      var kVal = String(ordersKData[i][0]).trim();
-      if (kVal && shippedTrackings.has(getLastEightDigits(kVal))) {
+    // First: Match tracking numbers (Orders G column vs Shipped E column)
+    for (var i = 0; i < ordersGData.length; i++) {
+      var gVal = String(ordersGData[i][0]).trim();
+      if (gVal && shippedTrackings.has(getLastEightDigits(gVal))) {
         rowsToDelete.add(i + 2); // Add row number (i + 2 because data starts at row 2)
       }
     }
 
-    // Second: Match order numbers (Orders C column vs Shipped B column)
-    for (var i = 0; i < ordersCData.length; i++) {
-      var cVal = String(ordersCData[i][0]).trim();
-      if (cVal && shippedOrderNumbers.has(cVal)) {
+    // Second: Match order numbers (Orders B column vs Shipped B column)
+    for (var i = 0; i < ordersBData.length; i++) {
+      var bVal = String(ordersBData[i][0]).trim();
+      if (bVal && shippedOrderNumbers.has(bVal)) {
         rowsToDelete.add(i + 2); // Add row number (i + 2 because data starts at row 2)
       }
     }
@@ -1639,16 +1639,16 @@ function transferExistingOrdersToRestock() {
     var orderMatches = 0;
     
     // Count matches before deleting
-    for (var i = 0; i < ordersKData.length; i++) {
-      var kVal = String(ordersKData[i][0]).trim();
-      if (kVal && shippedTrackings.has(getLastEightDigits(kVal))) {
+    for (var i = 0; i < ordersGData.length; i++) {
+      var gVal = String(ordersGData[i][0]).trim();
+      if (gVal && shippedTrackings.has(getLastEightDigits(gVal))) {
         trackingMatches++;
       }
     }
     
-    for (var i = 0; i < ordersCData.length; i++) {
-      var cVal = String(ordersCData[i][0]).trim();
-      if (cVal && shippedOrderNumbers.has(cVal)) {
+    for (var i = 0; i < ordersBData.length; i++) {
+      var bVal = String(ordersBData[i][0]).trim();
+      if (bVal && shippedOrderNumbers.has(bVal)) {
         orderMatches++;
       }
     }
@@ -1664,8 +1664,8 @@ function transferExistingOrdersToRestock() {
     }
 
     var message = "Deleted " + deletedCount + " rows from Orders sheet.\n\n" +
-      "Tracking number matches: " + trackingMatches + "\n" +
-      "Order number matches: " + orderMatches;
+      "Tracking number matches (G→E): " + trackingMatches + "\n" +
+      "Order number matches (B→B): " + orderMatches;
     SpreadsheetApp.getUi().alert(message);
 
   } catch (err) {
@@ -1747,6 +1747,81 @@ function removeDuplicateShipped() {
   } catch (err) {
     logError("Remove Duplicate Shipped", err);
     SpreadsheetApp.getUi().alert("Error removing duplicate shipped orders: " + err.toString());
+  }
+}
+
+// Function to remove duplicate orders based on tracking numbers in column G
+function removeDuplicateOrders() {
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var ordersSheet = spreadsheet.getSheetByName("Orders");
+
+    if (!ordersSheet) {
+      SpreadsheetApp.getUi().alert("Orders sheet not found.");
+      return;
+    }
+
+    var lastRow = ordersSheet.getLastRow();
+    if (lastRow < 2) {
+      SpreadsheetApp.getUi().alert("No data in Orders sheet.");
+      return;
+    }
+
+    // Get all tracking numbers from column G
+    var gData = ordersSheet.getRange(2, 7, lastRow - 1, 1).getValues(); // G column (7)
+    var trackingMap = {}; // Map to store tracking number -> array of row numbers
+    var rowsToDelete = []; // Array to store rows to delete
+
+    // Build map of tracking numbers and their row numbers
+    for (var i = 0; i < gData.length; i++) {
+      var tracking = String(gData[i][0]).trim();
+      if (tracking && tracking !== "") {
+        var actualRow = i + 2; // Actual row number in sheet
+        if (!trackingMap[tracking]) {
+          trackingMap[tracking] = [];
+        }
+        trackingMap[tracking].push(actualRow);
+      }
+    }
+
+    // Find duplicates and mark rows to delete (keep smallest row number)
+    for (var tracking in trackingMap) {
+      var rowNumbers = trackingMap[tracking];
+      if (rowNumbers.length > 1) {
+        // Sort row numbers to find the smallest (keep this one)
+        rowNumbers.sort(function (a, b) { return a - b; });
+
+        // Mark all rows except the first (smallest) for deletion
+        for (var j = 1; j < rowNumbers.length; j++) {
+          rowsToDelete.push(rowNumbers[j]);
+        }
+      }
+    }
+
+    if (rowsToDelete.length === 0) {
+      SpreadsheetApp.getUi().alert("No duplicate orders found.");
+      return;
+    }
+
+    // Sort rows to delete in descending order to avoid row shifting issues
+    rowsToDelete.sort(function (a, b) { return b - a; });
+
+    // Delete rows from bottom to top
+    var deletedCount = 0;
+    for (var k = 0; k < rowsToDelete.length; k++) {
+      try {
+        ordersSheet.deleteRow(rowsToDelete[k]);
+        deletedCount++;
+      } catch (deleteErr) {
+        logError("Delete Duplicate Order Row", "Failed to delete row " + rowsToDelete[k] + ": " + deleteErr.toString());
+      }
+    }
+
+    SpreadsheetApp.getUi().alert("Orders duplicate removal completed:\n" + deletedCount + " duplicate rows removed\n" + (rowsToDelete.length - deletedCount) + " rows failed to delete");
+
+  } catch (err) {
+    logError("Remove Duplicate Orders", err);
+    SpreadsheetApp.getUi().alert("Error removing duplicate orders: " + err.toString());
   }
 }
 
@@ -1842,7 +1917,7 @@ function syncPackerTimestampsToShipped() {
   }
 }
 
-// Function to calculate late orders based on G column date vs today's date
+// Function to calculate late orders based on A column date vs today's date
 function calculateLateOrders() {
   try {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -1859,33 +1934,63 @@ function calculateLateOrders() {
       return;
     }
 
-    // Sort by G column (7) ascending
-    ordersSheet.getRange(2, 1, lastRow - 1, ordersSheet.getLastColumn()).sort({ column: 7, ascending: true });
+    // Get all data from column A first to convert text dates to Date objects
+    var aData = ordersSheet.getRange(2, 1, lastRow - 1, 1).getValues(); // A column
+    var dateValues = [];
+    
+    // Convert text dates to Date objects and write them back to column A
+    for (var i = 0; i < aData.length; i++) {
+      var cellValue = aData[i][0];
+      if (cellValue) {
+        var dateObj;
+        if (cellValue instanceof Date) {
+          dateObj = cellValue;
+        } else {
+          // Parse text date (e.g., "12/30/2025" or "1/7/2026")
+          dateObj = new Date(String(cellValue));
+        }
+        
+        // Validate and write back as Date object
+        if (!isNaN(dateObj.getTime())) {
+          dateValues.push([dateObj]);
+        } else {
+          dateValues.push([cellValue]); // Keep original if parsing fails
+        }
+      } else {
+        dateValues.push([cellValue]);
+      }
+    }
+    
+    // Write Date objects back to column A to ensure proper sorting
+    ordersSheet.getRange(2, 1, dateValues.length, 1).setValues(dateValues);
+    
+    // Sort by A column (1) ascending - earliest dates first
+    ordersSheet.getRange(2, 1, lastRow - 1, ordersSheet.getLastColumn()).sort({ column: 1, ascending: true });
 
-    // Get all dates from G column (column 7)
-    var gData = ordersSheet.getRange(2, 7, lastRow - 1, 1).getValues(); // G column
+    // Re-read dates from A column after sorting
+    aData = ordersSheet.getRange(2, 1, lastRow - 1, 1).getValues(); // A column
     var today = new Date();
     today.setHours(0, 0, 0, 0); // Set to midnight for accurate day comparison
 
     var calculatedCount = 0;
 
-    // Prepare batch arrays
-    var lValues = [];
-    var lBackgrounds = [];
-    var lAlignments = [];
-    var lFontWeights = [];
+    // Prepare batch arrays for column H
+    var hValues = [];
+    var hBackgrounds = [];
+    var hAlignments = [];
+    var hFontWeights = [];
 
     // Calculate difference for each row
-    for (var i = 0; i < gData.length; i++) {
-      var gValue = gData[i][0];
+    for (var i = 0; i < aData.length; i++) {
+      var aValue = aData[i][0];
       var val = "";
       var bg = null; // Clears background
       var align = "left"; // Default alignment
       var weight = "normal"; // Default weight
 
-      if (gValue) {
+      if (aValue) {
         // Try to parse the date
-        var orderDate = new Date(gValue);
+        var orderDate = new Date(aValue);
 
         // Check if it's a valid date
         if (!isNaN(orderDate.getTime())) {
@@ -1919,20 +2024,20 @@ function calculateLateOrders() {
           }
         }
       }
-      lValues.push([val]);
-      lBackgrounds.push([bg]);
-      lAlignments.push([align]);
-      lFontWeights.push([weight]);
+      hValues.push([val]);
+      hBackgrounds.push([bg]);
+      hAlignments.push([align]);
+      hFontWeights.push([weight]);
     }
 
-    // Batch update column L
-    var range = ordersSheet.getRange(2, 12, lastRow - 1, 1);
-    range.setValues(lValues);
-    range.setBackgrounds(lBackgrounds);
-    range.setHorizontalAlignments(lAlignments);
-    range.setFontWeights(lFontWeights);
+    // Batch update column H
+    var range = ordersSheet.getRange(2, 8, lastRow - 1, 1);
+    range.setValues(hValues);
+    range.setBackgrounds(hBackgrounds);
+    range.setHorizontalAlignments(hAlignments);
+    range.setFontWeights(hFontWeights);
 
-    SpreadsheetApp.getUi().alert("Calculate Late Orders completed.\n" + calculatedCount + " late orders calculated and updated in column L.");
+    SpreadsheetApp.getUi().alert("Calculate Late Orders completed.\n" + calculatedCount + " late orders calculated and updated in column H.");
 
   } catch (err) {
     logError("Calculate Late Orders", err);

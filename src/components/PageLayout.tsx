@@ -62,7 +62,7 @@ export default function PageLayout({
                         className="bg-gray-950 border-r border-white/5 flex flex-col z-40 overflow-hidden"
                     >
                         <div className="w-[400px] h-full">
-                            <Checklist role={role} userId={userId} />
+                            <Checklist role={role} />
                         </div>
                     </motion.div>
                 )}
