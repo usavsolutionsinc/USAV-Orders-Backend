@@ -405,15 +405,3 @@ export default function MultiSkuSnBarcode() {
         </div>
     );
 }
-
-            {error && (
-                <div className="mx-6 mb-6 p-3 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-red-100 flex items-center justify-between">
-                    <span>{error}</span>
-                    <button onClick={() => setError("")} className="p-1 hover:bg-red-100 rounded-full transition-colors">
-                        <X className="w-3 h-3" />
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-}
