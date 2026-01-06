@@ -6,8 +6,8 @@ import { motion } from 'framer-motion';
 
 const navItems = [
     { name: 'Dashboard', href: '/dashboard' },
-    { name: 'Admin', href: '/admin' },
     { name: 'Orders', href: '/orders' },
+    { name: 'Repair', href: '/repair' },
     { name: 'Michael', href: '/tech/1' },
     { name: 'Thuc', href: '/tech/2' },
     { name: 'Sang', href: '/tech/3' },
@@ -18,6 +18,7 @@ const navItems = [
     { name: 'Sku-Stock', href: '/sku-stock' },
     { name: 'Sku', href: '/sku' },
     { name: 'Quarters', href: '/previous-quarters' },
+    { name: 'Admin', href: '/admin' },
 ];
 
 export default function Navigation() {
@@ -40,6 +41,10 @@ export default function Navigation() {
                         <div className="hidden lg:flex items-center space-x-1">
                             {navItems.map((item) => {
                                 const isActive = pathname === item.href;
+                                // We'll render Admin separately if we want it on the far right, 
+                                // but for now let's just use the items and filter/map them.
+                                if (item.name === 'Admin') return null;
+                                
                                 return (
                                     <Link
                                         key={item.href}
@@ -57,17 +62,17 @@ export default function Navigation() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <div className="hidden sm:flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                                Online
-                            </span>
-                        </div>
-                        
-                        <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-black text-[10px] text-white">
-                            US
-                        </div>
+                    <div className="flex items-center">
+                        <Link
+                            href="/admin"
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider uppercase transition-all duration-300 ${
+                                pathname === '/admin'
+                                    ? 'bg-blue-600 text-white shadow-lg'
+                                    : 'text-gray-500 hover:text-white hover:bg-white/5'
+                            }`}
+                        >
+                            Admin
+                        </Link>
                     </div>
                 </div>
             </div>

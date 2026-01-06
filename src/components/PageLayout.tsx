@@ -48,32 +48,34 @@ export default function PageLayout({
 
     return (
         <div className="flex h-full w-full bg-gray-950 overflow-hidden">
-            {/* Left Sidebar (KPI, Checklist, or Custom) */}
-            {showSidebar && <Sidebar />}
-            {customSidebar}
-            
-            <AnimatePresence mode="wait">
-                {showChecklist && role && checklistOpen && (
-                    <motion.div 
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 400, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-gray-950 border-r border-white/5 flex flex-col z-40 overflow-hidden relative group"
-                    >
-                        <button
-                            onClick={() => setChecklistOpen(false)}
-                            className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all"
-                            title="Collapse Menu"
+            {/* Left Sidebar(s) Container */}
+            <div className="flex-shrink-0 z-50 flex h-full">
+                {showSidebar && <Sidebar />}
+                {customSidebar}
+                
+                <AnimatePresence mode="wait">
+                    {showChecklist && role && checklistOpen && (
+                        <motion.div 
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: 340, opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={{ type: "spring", damping: 25, stiffness: 120 }}
+                            className="bg-gray-950 border-r border-white/5 flex flex-col z-40 overflow-hidden relative group"
                         >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <div className="w-[400px] h-full">
-                            <Checklist role={role} userId={userId} />
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                            <button
+                                onClick={() => setChecklistOpen(false)}
+                                className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                title="Collapse Menu"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <div className="w-[340px] h-full">
+                                <Checklist role={role} userId={userId} />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
