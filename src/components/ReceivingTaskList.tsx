@@ -223,8 +223,8 @@ export default function ReceivingTaskList() {
                 })}
             </div>
 
-            <footer className="p-4 border-t border-white/5 opacity-30">
-                <p className="text-[8px] font-mono uppercase tracking-[0.4em]">RECEIVING STATION // v2.0</p>
+            <footer className="p-4 border-t border-white/5 opacity-30 text-center">
+                <p className="text-[7px] font-mono uppercase tracking-[0.2em]">RECEIVING STATION</p>
             </footer>
         </div>
     );

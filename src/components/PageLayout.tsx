@@ -59,10 +59,17 @@ export default function PageLayout({
                         animate={{ width: 400, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-gray-950 border-r border-white/5 flex flex-col z-40 overflow-hidden"
+                        className="bg-gray-950 border-r border-white/5 flex flex-col z-40 overflow-hidden relative group"
                     >
+                        <button
+                            onClick={() => setChecklistOpen(false)}
+                            className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all"
+                            title="Collapse Menu"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
                         <div className="w-[400px] h-full">
-                            <Checklist role={role} />
+                            <Checklist role={role} userId={userId} />
                         </div>
                     </motion.div>
                 )}
@@ -71,18 +78,12 @@ export default function PageLayout({
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
                 {/* Fixed Overlay Toggles for UX */}
-                {showChecklist && (
+                {showChecklist && !checklistOpen && (
                     <button
-                        onClick={() => setChecklistOpen(!checklistOpen)}
-                        className={`fixed top-20 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] hover:bg-blue-600 hover:text-white transition-all duration-300 group ${
-                            checklistOpen ? 'left-[400px]' : 'left-0'
-                        }`}
+                        onClick={() => setChecklistOpen(true)}
+                        className="fixed top-20 left-0 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-xl hover:bg-blue-600 hover:text-white transition-all duration-300 group"
                     >
-                        {checklistOpen ? (
-                            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
-                        ) : (
-                            <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-                        )}
+                        <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
                     </button>
                 )}
 

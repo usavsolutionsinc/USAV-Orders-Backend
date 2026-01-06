@@ -39,6 +39,7 @@ interface ChecklistItem extends TaskTemplate {
 
 interface ChecklistProps {
     role: 'technician' | 'packer';
+    userId?: string;
 }
 
 const TAG_COLORS = {
@@ -51,7 +52,7 @@ const TAG_COLORS = {
     gray: { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30', dot: 'bg-gray-500' },
 };
 
-export default function Checklist({ role }: ChecklistProps) {
+export default function Checklist({ role, userId = '1' }: ChecklistProps) {
     const queryClient = useQueryClient();
     const [staffId, setStaffId] = useState<number | null>(null);
     const [staffName, setStaffName] = useState<string>('');
@@ -66,21 +67,26 @@ export default function Checklist({ role }: ChecklistProps) {
     const [newOrderNumber, setNewOrderNumber] = useState('');
     const [newTrackingNumber, setNewTrackingNumber] = useState('');
 
+    const storageKey = `${role}_${userId}_staff`;
+
     // Load staff from localStorage
     useEffect(() => {
-        const savedStaffId = localStorage.getItem(`${role}_staffId`);
-        const savedStaffName = localStorage.getItem(`${role}_staffName`);
-        if (savedStaffId && savedStaffName) {
-            setStaffId(parseInt(savedStaffId));
-            setStaffName(savedStaffName);
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            try {
+                const { id, name } = JSON.parse(saved);
+                setStaffId(id);
+                setStaffName(name);
+            } catch (e) {
+                console.error('Failed to parse staff');
+            }
         }
-    }, [role]);
+    }, [storageKey]);
 
     const handleStaffSelect = (id: number, name: string) => {
         setStaffId(id);
         setStaffName(name);
-        localStorage.setItem(`${role}_staffId`, id.toString());
-        localStorage.setItem(`${role}_staffName`, name);
+        localStorage.setItem(storageKey, JSON.stringify({ id, name }));
     };
 
     const { data: items = [], isLoading } = useQuery<ChecklistItem[]>({
@@ -473,8 +479,8 @@ export default function Checklist({ role }: ChecklistProps) {
                 )}
             </div>
 
-            <footer className="p-6 border-t border-white/5 opacity-30 mt-auto">
-                <p className="text-[8px] font-mono uppercase tracking-[0.4em]">USAV OS STATION // CORE v2.0</p>
+            <footer className="p-6 border-t border-white/5 opacity-30 mt-auto text-center">
+                <p className="text-[7px] font-mono uppercase tracking-[0.2em]">USAV STATION</p>
             </footer>
         </div>
     );
