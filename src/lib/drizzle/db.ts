@@ -3,13 +3,12 @@ import postgres from 'postgres';
 import * as schema from './schema';
 
 // Create postgres connection
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is not set');
-}
+const connectionString = process.env.DATABASE_URL || 'postgres://localhost:5432/postgres';
 
 // Disable prefetch as it is not supported for "Transaction" pool mode
-export const client = postgres(connectionString, { prepare: false });
-export const db = drizzle(client, { schema });
+export const client = postgres(connectionString, { 
+    prepare: false,
+    onnotice: () => {}, // Suppress notices
+});
 
+export const db = drizzle(client, { schema });

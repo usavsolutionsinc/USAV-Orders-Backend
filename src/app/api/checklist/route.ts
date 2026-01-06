@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
             ORDER BY t.id ASC
         `);
 
-        const items = results.rows.map(row => ({
+        const items = results.map((row: any) => ({
             id: row.id,
             title: row.title,
             description: row.description,
