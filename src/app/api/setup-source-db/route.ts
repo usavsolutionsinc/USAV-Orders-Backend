@@ -52,8 +52,8 @@ export async function POST() {
         // 11. sku_stock - 5 columns (using underscore instead of dash)
         await createTable('sku_stock', 5);
 
-        // 12. sku - 8 columns
-        await createTable('sku', 8);
+        // 12. sku - 7 columns
+        await createTable('sku', 7);
 
         // 13. rs - 10 columns
         await createTable('rs', 10);

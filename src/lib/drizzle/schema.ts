@@ -181,7 +181,6 @@ export const sku = pgTable('sku', {
   col5: text('col_5'),
   col6: text('col_6'),
   col7: text('col_7'),
-  col8: text('col_8'),
 });
 
 export const rs = pgTable('rs', {

@@ -21,7 +21,7 @@ async function findEmptyRow(sheets: any, spreadsheetId: string, range: string) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { sku, serialNumbers, notes, productTitle, size, location } = body;
+        const { sku, serialNumbers, notes, productTitle, location } = body;
 
         if (!sku || !serialNumbers || !Array.isArray(serialNumbers) || serialNumbers.length === 0) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -30,17 +30,17 @@ export async function POST(request: NextRequest) {
         const auth = getGoogleAuth();
         const sheets = google.sheets({ version: 'v4', auth });
         const spreadsheetId = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
-        const range = "'Sku'!A:H";
+        const range = "'Sku'!A:G";
 
         const rowIndex = await findEmptyRow(sheets, spreadsheetId, range);
         const now = new Date();
         const timestamp = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
 
-        const values = [[timestamp, sku, serialNumbers.join(', '), '', productTitle || '', size || '', notes || '', location || '']];
+        const values = [[timestamp, sku, serialNumbers.join(', '), '', productTitle || '', notes || '', location || '']];
 
         await sheets.spreadsheets.values.update({
             spreadsheetId,
-            range: `'Sku'!A${rowIndex}:H${rowIndex}`,
+            range: `'Sku'!A${rowIndex}:G${rowIndex}`,
             valueInputOption: 'RAW',
             requestBody: { values },
         });

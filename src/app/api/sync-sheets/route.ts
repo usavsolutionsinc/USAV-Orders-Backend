@@ -20,8 +20,8 @@ const SHEET_CONFIG = [
     { name: 'shipped', table: 'shipped', columns: 10 },
     { name: 'sku-stock', table: 'sku_stock', columns: 5 },
     { name: 'Sku-Stock', table: 'sku_stock', columns: 5 },
-    { name: 'sku', table: 'sku', columns: 8 },
-    { name: 'Sku', table: 'sku', columns: 8 },
+    { name: 'sku', table: 'sku', columns: 7 },
+    { name: 'Sku', table: 'sku', columns: 7 },
     { name: 'rs', table: 'rs', columns: 10 },
 ];
 

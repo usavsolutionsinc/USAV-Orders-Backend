@@ -23,7 +23,7 @@ interface PostDataPayload {
     serialNumbers: string[];
     notes: string;
     productTitle: string;
-    size: string;
+    notes: string;
     location: string;
 }
 
@@ -45,7 +45,6 @@ export default function MultiSkuSnBarcode() {
     const [isLoadingTitle, setIsLoadingTitle] = useState<boolean>(false);
     const [showNotes, setShowNotes] = useState<boolean>(false);
     const [notes, setNotes] = useState<string>("");
-    const [selectedSize, setSelectedSize] = useState<string>("");
     const [location, setLocation] = useState<string>("");
 
     const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,21 +126,39 @@ export default function MultiSkuSnBarcode() {
         }
 
         if (mode === 'print') {
-            setIsGenerating(true);
-            try {
-                const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
-                const data = await res.json();
-                setUniqueSku(data.currentSku);
-                setStep(3);
-            } catch (e) {
-                setError("Failed to generate SKU");
-            } finally {
-                setIsGenerating(false);
+            // Only generate a new SKU if we don't have one already
+            if (!uniqueSku) {
+                setIsGenerating(true);
+                try {
+                    const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
+                    const data = await res.json();
+                    setUniqueSku(data.currentSku);
+                } catch (e) {
+                    setError("Failed to generate SKU");
+                    return;
+                } finally {
+                    setIsGenerating(false);
+                }
             }
+            setStep(3);
         } else {
             // SN to SKU mode - we use static SKU + SN
-            setUniqueSku(sku); // In this mode, we just use the base SKU
+            setUniqueSku(sku); 
             setStep(3);
+        }
+    };
+
+    const handleChangeSku = async () => {
+        if (!sku.trim()) return;
+        setIsGenerating(true);
+        try {
+            const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=increment`);
+            const data = await res.json();
+            setUniqueSku(data.nextSku);
+        } catch (e) {
+            setError("Failed to increment SKU");
+        } finally {
+            setIsGenerating(false);
         }
     };
 
@@ -156,19 +173,11 @@ export default function MultiSkuSnBarcode() {
                     serialNumbers,
                     notes,
                     productTitle: title,
-                    size: selectedSize,
                     location
                 }),
             });
             const data = await res.json();
-            if (data.success) {
-                if (mode === 'print') {
-                    // Only increment if we printed a unique label
-                    await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=increment`);
-                }
-                return true;
-            }
-            return false;
+            return data.success;
         } catch (e) {
             return false;
         } finally {
@@ -215,15 +224,9 @@ export default function MultiSkuSnBarcode() {
                 }
             }
             // Reset after success
-            setStep(1);
-            setSku("");
             setSnInput("");
             setSerialNumbers([]);
-            setTitle("");
-            setUniqueSku("");
-            setNotes("");
-            setLocation("");
-            setSelectedSize("");
+            setStep(2); // Stay on details step but clear serials
         } else {
             setError("Failed to save data");
         }
@@ -284,7 +287,7 @@ export default function MultiSkuSnBarcode() {
                         <div className="flex justify-between items-start">
                             <div className="flex-1 min-w-0">
                                 <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">Product</p>
-                                <p className="text-xs font-bold text-white truncate leading-relaxed">{isLoadingTitle ? 'Loading...' : title}</p>
+                                <p className="text-sm font-bold text-white leading-relaxed break-words">{isLoadingTitle ? 'Loading...' : title}</p>
                             </div>
                             <div className="text-right ml-4">
                                 <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1.5">Stock</p>
@@ -305,18 +308,6 @@ export default function MultiSkuSnBarcode() {
                             className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all font-mono placeholder:text-gray-700"
                             placeholder="Comma-separated SNs..."
                         />
-                        
-                        <div className="grid grid-cols-3 gap-2">
-                            {['Small', 'Medium', 'Big'].map(size => (
-                                <button
-                                    key={size}
-                                    onClick={() => setSelectedSize(size)}
-                                    className={`py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${selectedSize === size ? 'bg-white text-gray-950 border-white shadow-lg' : 'bg-white/5 text-gray-500 border-white/5 hover:border-white/10'}`}
-                                >
-                                    {size}
-                                </button>
-                            ))}
-                        </div>
 
                         <input
                             value={location}
@@ -347,9 +338,20 @@ export default function MultiSkuSnBarcode() {
                                 <div className="bg-white p-4 rounded-2xl">
                                     <canvas ref={barcodeCanvasRef} className="max-w-full" />
                                 </div>
-                                <div className="space-y-2">
-                                    <p className="font-mono text-lg font-black tracking-tighter text-white">{uniqueSku}</p>
-                                    <p className="text-[11px] text-gray-500 line-clamp-2 px-4 leading-relaxed font-medium">{title}</p>
+                                <div className="space-y-3 w-full">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <p className="font-mono text-lg font-black tracking-tighter text-white">{uniqueSku}</p>
+                                        {mode === 'print' && (
+                                            <button
+                                                onClick={handleChangeSku}
+                                                disabled={isGenerating}
+                                                className="px-4 py-1.5 bg-white/10 hover:bg-white/20 text-[9px] font-black uppercase tracking-widest rounded-full border border-white/10 transition-all active:scale-95"
+                                            >
+                                                {isGenerating ? 'Generating...' : 'Change SKU'}
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 break-words px-4 leading-relaxed font-medium">{title}</p>
                                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full">
                                         <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                                         <p className="text-[9px] text-blue-400 font-black uppercase tracking-widest">SN: {getSerialLast6(serialNumbers)}</p>
