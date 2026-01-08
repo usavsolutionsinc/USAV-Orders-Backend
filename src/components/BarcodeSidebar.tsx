@@ -21,7 +21,7 @@ export default function BarcodeSidebar() {
                     >
                         <button
                             onClick={() => setIsOpen(false)}
-                            className="absolute top-4 left-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
                             title="Collapse Menu"
                         >
                             <ChevronRight className="w-4 h-4" />

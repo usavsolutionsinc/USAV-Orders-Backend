@@ -67,7 +67,16 @@ export default function ReceivingSidebar({ hideToggle = false }: ReceivingSideba
     };
 
     const content = (
-        <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
+        <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide relative group">
+            {!hideToggle && (
+                <button
+                    onClick={() => setIsOpen(false)}
+                    className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    title="Collapse Menu"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                </button>
+            )}
             <header className="flex justify-between items-start">
                 <div>
                     <h2 className="text-xl font-black tracking-tighter uppercase leading-none">
@@ -77,15 +86,6 @@ export default function ReceivingSidebar({ hideToggle = false }: ReceivingSideba
                         Incoming Trackings
                     </p>
                 </div>
-                {!hideToggle && (
-                    <button
-                        onClick={() => setIsOpen(false)}
-                        className="p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all"
-                        title="Collapse Menu"
-                    >
-                        <ChevronLeft className="w-4 h-4" />
-                    </button>
-                )}
             </header>
             
             <div className="space-y-6">
