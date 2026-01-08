@@ -23,7 +23,6 @@ interface PostDataPayload {
     serialNumbers: string[];
     notes: string;
     productTitle: string;
-    notes: string;
     location: string;
 }
 
