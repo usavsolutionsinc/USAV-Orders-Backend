@@ -66,8 +66,8 @@ export const receivingTasks = pgTable('receiving_tasks', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// Source of truth tables
-export const orders = pgTable('orders', {
+// Source of truth tables - generic columns for all
+const genericColumns = {
   col1: serial('col_1').primaryKey(),
   col2: text('col_2'),
   col3: text('col_3'),
@@ -78,140 +78,37 @@ export const orders = pgTable('orders', {
   col8: text('col_8'),
   col9: text('col_9'),
   col10: text('col_10'),
-});
+  col11: text('col_11'),
+  col12: text('col_12'),
+  col13: text('col_13'),
+  col14: text('col_14'),
+  col15: text('col_15'),
+};
 
-export const tech1 = pgTable('tech_1', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-  col6: text('col_6'),
-  col7: text('col_7'),
-});
-
-export const tech2 = pgTable('tech_2', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-  col6: text('col_6'),
-  col7: text('col_7'),
-});
-
-export const tech3 = pgTable('tech_3', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-  col6: text('col_6'),
-  col7: text('col_7'),
-});
-
-export const tech4 = pgTable('tech_4', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-  col6: text('col_6'),
-  col7: text('col_7'),
-});
-
-export const packer1 = pgTable('packer_1', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-});
-
-export const packer2 = pgTable('packer_2', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-});
-
-export const packer3 = pgTable('packer_3', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-});
-
-export const receiving = pgTable('receiving', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-});
-
-export const shipped = pgTable('shipped', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-  col6: text('col_6'),
-  col7: text('col_7'),
-  col8: text('col_8'),
-  col9: text('col_9'),
-  col10: text('col_10'),
-});
-
-export const skuStock = pgTable('sku_stock', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-});
-
-export const sku = pgTable('sku', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-  col6: text('col_6'),
-  col7: text('col_7'),
-});
-
-export const rs = pgTable('rs', {
-  col1: serial('col_1').primaryKey(),
-  col2: text('col_2'),
-  col3: text('col_3'),
-  col4: text('col_4'),
-  col5: text('col_5'),
-  col6: text('col_6'),
-  col7: text('col_7'),
-  col8: text('col_8'),
-  col9: text('col_9'),
-  col10: text('col_10'),
-});
+export const orders = pgTable('orders', { ...genericColumns });
+export const tech1 = pgTable('tech_1', { ...genericColumns });
+export const tech2 = pgTable('tech_2', { ...genericColumns });
+export const tech3 = pgTable('tech_3', { ...genericColumns });
+export const tech4 = pgTable('tech_4', { ...genericColumns });
+export const packer1 = pgTable('packer_1', { ...genericColumns });
+export const packer2 = pgTable('packer_2', { ...genericColumns });
+export const packer3 = pgTable('packer_3', { ...genericColumns });
+export const receiving = pgTable('receiving', { ...genericColumns });
+export const shipped = pgTable('shipped', { ...genericColumns });
+export const skuStock = pgTable('sku_stock', { ...genericColumns });
+export const sku = pgTable('sku', { ...genericColumns });
+export const rs = pgTable('rs', { ...genericColumns });
 
 // Type exports
 export type Staff = typeof staff.$inferSelect;
 export type NewStaff = typeof staff.$inferInsert;
-
 export type Tag = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
-
 export type TaskTemplate = typeof taskTemplates.$inferSelect;
 export type NewTaskTemplate = typeof taskTemplates.$inferInsert;
-
 export type DailyTaskInstance = typeof dailyTaskInstances.$inferSelect;
 export type NewDailyTaskInstance = typeof dailyTaskInstances.$inferInsert;
-
 export type ReceivingTask = typeof receivingTasks.$inferSelect;
 export type NewReceivingTask = typeof receivingTasks.$inferInsert;
-
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
-

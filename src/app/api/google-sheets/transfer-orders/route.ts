@@ -37,20 +37,20 @@ export async function POST(req: NextRequest) {
 
         const targetTabName = dateTabs[0].title;
 
-        // 2. Read the destination sheet for existing tracking numbers
-        const destTrackingResponse = await sheets.spreadsheets.values.get({
+        // 2. Read the Shipped sheet for existing tracking numbers to deduplicate
+        const shippedTrackingResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: DEST_SPREADSHEET_ID,
-            range: `${DEST_SHEET_NAME}!G2:G`, // Column G is tracking
+            range: `shipped!E2:E`, // Column E is tracking in Shipped sheet
         });
 
-        const existingTrackingNumbers = new Set(
-            (destTrackingResponse.data.values || [])
+        const existingTrackingInShipped = new Set(
+            (shippedTrackingResponse.data.values || [])
                 .flat()
                 .filter(t => t && t.trim() !== '')
                 .map(t => String(t).trim())
         );
 
-        // 3. Read the source tab
+        // 3. Read the source tab from Master Sheet
         const sourceDataResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: SOURCE_SPREADSHEET_ID,
             range: `${targetTabName}!A1:Z`,
@@ -85,13 +85,13 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // 4. Process rows (only with tracking and NOT already in destination)
+        // 4. Process rows (only with tracking and NOT already in Shipped)
         const processedRows = sourceRows.slice(1).filter(row => {
             const tracking = row[colIndices.tracking];
             if (!tracking || tracking.trim() === '') return false;
             
-            // Check if tracking is already in destination
-            return !existingTrackingNumbers.has(String(tracking).trim());
+            // Check if tracking is already in Shipped sheet E column
+            return !existingTrackingInShipped.has(String(tracking).trim());
         }).map(row => {
             const destRow = new Array(10).fill(''); // A to J
             destRow[0] = row[colIndices.shipByDate] || '';
@@ -107,14 +107,13 @@ export async function POST(req: NextRequest) {
         });
 
         if (processedRows.length === 0) {
-            return NextResponse.json({ success: true, message: 'No new rows with tracking found', rowCount: 0 });
+            return NextResponse.json({ success: true, message: 'No new rows (not in Shipped) found', rowCount: 0 });
         }
 
-        // 5. Append to destination sheet
-        // We append to the 'orders' sheet.
+        // 5. Append to destination Orders sheet
         await sheets.spreadsheets.values.append({
             spreadsheetId: DEST_SPREADSHEET_ID,
-            range: `${DEST_SHEET_NAME}!A:A`, // Append to bottom
+            range: `${DEST_SHEET_NAME}!A:A`, 
             valueInputOption: 'USER_ENTERED',
             requestBody: {
                 values: processedRows,

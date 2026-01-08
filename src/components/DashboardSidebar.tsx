@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight } from './Icons';
+import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, Settings, History } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function DashboardSidebar() {
     const [isOpen, setIsOpen] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [activeScript, setActiveScript] = useState<string | null>(null);
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
 
     const handleSync = async () => {
         setIsSyncing(true);
@@ -31,6 +33,72 @@ export default function DashboardSidebar() {
             setIsSyncing(false);
         }
     };
+
+    const runScript = async (scriptName: string) => {
+        setActiveScript(scriptName);
+        setStatus(null);
+        try {
+            const res = await fetch('/api/neon/execute-script', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scriptName }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setStatus({ type: 'success', message: data.message });
+            } else {
+                setStatus({ type: 'error', message: data.error || 'Script execution failed' });
+            }
+        } catch (error) {
+            setStatus({ type: 'error', message: 'Network error occurred' });
+        } finally {
+            setActiveScript(null);
+        }
+    };
+
+    const menuItems = [
+        {
+            id: 'shipping',
+            name: 'Shipping',
+            icon: <TrendingUp className="w-4 h-4" />,
+            scripts: [
+                { id: 'checkTrackingInShipped', name: 'Move Orders to Shipped' },
+                { id: 'removeDuplicateShipped', name: 'Remove Duplicate Shipped' }
+            ]
+        },
+        {
+            id: 'orders',
+            name: 'Orders',
+            icon: <Settings className="w-4 h-4" />,
+            scripts: [
+                { id: 'transferExistingOrdersToRestock', name: 'Delete Shipped Orders' },
+                { id: 'calculateLateOrders', name: 'Calculate Late Orders' },
+                { id: 'removeDuplicateOrders', name: 'Remove Duplicate Orders' }
+            ]
+        },
+        {
+            id: 'sku',
+            name: 'SKU Tools',
+            icon: <Package className="w-4 h-4" />,
+            scripts: [
+                { id: 'packedSkuMatches', name: 'Packed SKU Matches' },
+                { id: 'updateSkuStockFromShipped', name: 'Update Sku-Stock from Shipped' },
+                { id: 'syncStockFromZoho', name: 'Sync Stock from Zoho' },
+                { id: 'setupStockSyncTrigger', name: 'Setup Hourly Stock Sync' },
+                { id: 'removeStockSyncTrigger', name: 'Remove Stock Sync Trigger' }
+            ]
+        },
+        {
+            id: 'integrity',
+            name: 'Integrity',
+            icon: <History className="w-4 h-4" />,
+            scripts: [
+                { id: 'recheckTechTrackingIntegrity', name: 'Recheck Tech Tracking' },
+                { id: 'recheckPackerTrackingIntegrity', name: 'Recheck Packer Tracking' },
+                { id: 'syncPackerTimestampsToShipped', name: 'Sync Packer Timestamps' }
+            ]
+        }
+    ];
 
     return (
         <div className="relative flex-shrink-0 z-40 h-full">
@@ -88,21 +156,46 @@ export default function DashboardSidebar() {
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10 hover:bg-white/[0.08] transition-all">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
-                                            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Efficiency</span>
+                                <div className="space-y-2">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-2 mb-3">Automation Scripts</p>
+                                    {menuItems.map((menu) => (
+                                        <div key={menu.id} className="space-y-1">
+                                            <button
+                                                onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
+                                                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${expandedMenu === menu.id ? 'bg-white/10 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/[0.08] hover:text-white'}`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`p-2 rounded-xl ${expandedMenu === menu.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'}`}>
+                                                        {menu.icon}
+                                                    </div>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">{menu.name}</span>
+                                                </div>
+                                                {expandedMenu === menu.id ? <ChevronLeft className="w-3 h-3 -rotate-90 transition-transform" /> : <ChevronRight className="w-3 h-3 transition-transform" />}
+                                            </button>
+                                            <AnimatePresence>
+                                                {expandedMenu === menu.id && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        className="overflow-hidden space-y-1 px-2"
+                                                    >
+                                                        {menu.scripts.map((script) => (
+                                                            <button
+                                                                key={script.id}
+                                                                onClick={() => runScript(script.id)}
+                                                                disabled={!!activeScript}
+                                                                className={`w-full text-left p-3 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all ${activeScript === script.id ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-gray-500 hover:text-blue-400'} flex items-center justify-between group`}
+                                                            >
+                                                                <span>{script.name}</span>
+                                                                {activeScript === script.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                                                            </button>
+                                                        ))}
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
-                                        <p className="text-xl font-black tracking-tighter text-blue-400">94%</p>
-                                    </div>
-                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10 hover:bg-white/[0.08] transition-all">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Package className="w-3.5 h-3.5 text-purple-400" />
-                                            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Inventory</span>
-                                        </div>
-                                        <p className="text-xl font-black tracking-tighter text-purple-400">8.2k</p>
-                                    </div>
+                                    ))}
                                 </div>
                             </div>
 
