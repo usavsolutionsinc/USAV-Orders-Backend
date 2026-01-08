@@ -37,7 +37,20 @@ export async function POST(req: NextRequest) {
 
         const targetTabName = dateTabs[0].title;
 
-        // 2. Read the source tab
+        // 2. Read the destination sheet for existing tracking numbers
+        const destTrackingResponse = await sheets.spreadsheets.values.get({
+            spreadsheetId: DEST_SPREADSHEET_ID,
+            range: `${DEST_SHEET_NAME}!G2:G`, // Column G is tracking
+        });
+
+        const existingTrackingNumbers = new Set(
+            (destTrackingResponse.data.values || [])
+                .flat()
+                .filter(t => t && t.trim() !== '')
+                .map(t => String(t).trim())
+        );
+
+        // 3. Read the source tab
         const sourceDataResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: SOURCE_SPREADSHEET_ID,
             range: `${targetTabName}!A1:Z`,
@@ -72,10 +85,13 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // 3. Process rows (only with tracking)
+        // 4. Process rows (only with tracking and NOT already in destination)
         const processedRows = sourceRows.slice(1).filter(row => {
             const tracking = row[colIndices.tracking];
-            return tracking && tracking.trim() !== '';
+            if (!tracking || tracking.trim() === '') return false;
+            
+            // Check if tracking is already in destination
+            return !existingTrackingNumbers.has(String(tracking).trim());
         }).map(row => {
             const destRow = new Array(10).fill(''); // A to J
             destRow[0] = row[colIndices.shipByDate] || '';
@@ -91,10 +107,10 @@ export async function POST(req: NextRequest) {
         });
 
         if (processedRows.length === 0) {
-            return NextResponse.json({ success: true, message: 'No rows with tracking found', rowCount: 0 });
+            return NextResponse.json({ success: true, message: 'No new rows with tracking found', rowCount: 0 });
         }
 
-        // 4. Append to destination sheet
+        // 5. Append to destination sheet
         // We append to the 'orders' sheet.
         await sheets.spreadsheets.values.append({
             spreadsheetId: DEST_SPREADSHEET_ID,

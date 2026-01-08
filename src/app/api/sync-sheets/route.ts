@@ -8,21 +8,33 @@ export const maxDuration = 60; // Increase timeout for Vercel
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
 const SHEET_CONFIG = [
-    { name: 'orders', table: 'orders', columns: 10 },
-    { name: 'tech_1', table: 'tech_1', columns: 7 },
-    { name: 'tech_2', table: 'tech_2', columns: 7 },
-    { name: 'tech_3', table: 'tech_3', columns: 7 },
-    { name: 'tech_4', table: 'tech_4', columns: 7 },
-    { name: 'Packer_1', table: 'packer_1', columns: 5 },
-    { name: 'Packer_2', table: 'packer_2', columns: 5 },
-    { name: 'Packer_3', table: 'packer_3', columns: 5 },
-    { name: 'receiving', table: 'receiving', columns: 5 },
-    { name: 'shipped', table: 'shipped', columns: 10 },
-    { name: 'sku-stock', table: 'sku_stock', columns: 5 },
-    { name: 'Sku-Stock', table: 'sku_stock', columns: 5 },
-    { name: 'sku', table: 'sku', columns: 7 },
-    { name: 'Sku', table: 'sku', columns: 7 },
-    { name: 'rs', table: 'rs', columns: 10 },
+    { name: 'Orders', table: 'orders', columnsCount: 9 },
+    { name: 'orders', table: 'orders', columnsCount: 9 },
+    { name: 'Shipped', table: 'shipped', columnsCount: 9 },
+    { name: 'shipped', table: 'shipped', columnsCount: 9 },
+    { name: 'Tech_1', table: 'tech_1', columnsCount: 6 },
+    { name: 'tech_1', table: 'tech_1', columnsCount: 6 },
+    { name: 'Tech_2', table: 'tech_2', columnsCount: 6 },
+    { name: 'tech_2', table: 'tech_2', columnsCount: 6 },
+    { name: 'Tech_3', table: 'tech_3', columnsCount: 6 },
+    { name: 'tech_3', table: 'tech_3', columnsCount: 6 },
+    { name: 'Packer_1', table: 'packer_1', columnsCount: 4 },
+    { name: 'Packer_2', table: 'packer_2', columnsCount: 4 },
+    { name: 'Packer_3', table: 'packer_3', columnsCount: 4 },
+    { name: 'Receiving', table: 'receiving', columnsCount: 4 },
+    { name: 'receiving', table: 'receiving', columnsCount: 4 },
+    { name: 'Sku-Stock', table: 'sku_stock', columnsCount: 4 },
+    { name: 'sku-stock', table: 'sku_stock', columnsCount: 4 },
+    { name: 'Sku', table: 'sku', columnsCount: 6 },
+    { name: 'sku', table: 'sku', columnsCount: 6 },
+    { name: 'RS', table: 'rs', columnsCount: 9 },
+    { name: 'rs', table: 'rs', columnsCount: 9 },
+    // Specialized tables
+    { name: 'staff', table: 'staff', columnNames: ['name', 'role', 'employee_id', 'active'] },
+    { name: 'tags', table: 'tags', columnNames: ['name', 'color'] },
+    { name: 'task_templates', table: 'task_templates', columnNames: ['title', 'description', 'role', 'order_number', 'tracking_number', 'created_by'] },
+    { name: 'receiving_tasks', table: 'receiving_tasks', columnNames: ['tracking_number', 'order_number', 'status', 'urgent', 'received_date', 'processed_date', 'notes', 'staff_id'] },
+    { name: 'sku_management', table: 'sku_management', columnNames: ['base_sku', 'current_sku_counting'] },
 ];
 
 export async function POST(req: NextRequest) {
@@ -59,8 +71,8 @@ export async function POST(req: NextRequest) {
 
         const syncResults = await Promise.all(sheetsToSync.map(async (config) => {
             try {
-                // Determine number of data columns (table total columns - 1 for the SERIAL col_1)
-                const dataColumnsCount = config.columns - 1;
+                const columnNames = config.columnNames || Array.from({ length: config.columnsCount! }, (_, i) => `col_${i + 2}`);
+                const dataColumnsCount = columnNames.length;
                 
                 // Fetch data from Google Sheets - get all columns up to the limit
                 const lastColChar = String.fromCharCode(64 + dataColumnsCount);
@@ -75,16 +87,13 @@ export async function POST(req: NextRequest) {
                 try {
                     await client.query('BEGIN');
                     
-                    // Clear existing data
-                    await client.query(`TRUNCATE TABLE ${config.table} RESTART IDENTITY`);
+                    // Clear existing data - use TRUNCATE for speed and identity reset
+                    await client.query(`TRUNCATE TABLE ${config.table} RESTART IDENTITY CASCADE`);
                     
                     if (rows.length > 0) {
-                        // Filter out completely empty rows
                         const dataRows = rows.filter(row => row.some(cell => cell !== null && cell !== ''));
                         
                         if (dataRows.length > 0) {
-                            // Postgres has a parameter limit (65535). 
-                            // We'll chunk the inserts to stay safe.
                             const CHUNK_SIZE = Math.floor(10000 / dataColumnsCount); 
                             
                             for (let i = 0; i < dataRows.length; i += CHUNK_SIZE) {
@@ -95,14 +104,20 @@ export async function POST(req: NextRequest) {
                                 ).join(', ');
                                 
                                 const values = chunk.flatMap(row => {
-                                    const paddedRow = Array(dataColumnsCount).fill('');
+                                    const paddedRow = Array(dataColumnsCount).fill(null);
                                     row.forEach((val, index) => {
-                                        if (index < dataColumnsCount) paddedRow[index] = val !== undefined && val !== null ? String(val) : '';
+                                        if (index < dataColumnsCount) {
+                                            // Handle boolean/null/empty values
+                                            if (val === 'TRUE' || val === 'true') paddedRow[index] = true;
+                                            else if (val === 'FALSE' || val === 'false') paddedRow[index] = false;
+                                            else if (val === '' || val === undefined || val === null) paddedRow[index] = null;
+                                            else paddedRow[index] = String(val);
+                                        }
                                     });
                                     return paddedRow;
                                 });
 
-                                const columnsList = Array.from({ length: dataColumnsCount }, (_, index) => `col_${index + 2}`).join(', ');
+                                const columnsList = columnNames.join(', ');
                                 const query = `INSERT INTO ${config.table} (${columnsList}) VALUES ${placeholders}`;
                                 
                                 await client.query(query, values);
