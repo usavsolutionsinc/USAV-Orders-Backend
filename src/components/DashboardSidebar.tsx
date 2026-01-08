@@ -38,7 +38,7 @@ export default function DashboardSidebar() {
         setActiveScript(scriptName);
         setStatus(null);
         try {
-            const res = await fetch('/api/neon/execute-script', {
+            const res = await fetch('/api/google-sheets/execute-script', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ scriptName }),
@@ -59,42 +59,38 @@ export default function DashboardSidebar() {
     const menuItems = [
         {
             id: 'shipping',
-            name: 'Shipping',
+            name: 'Shipping Operations',
             icon: <TrendingUp className="w-4 h-4" />,
             scripts: [
-                { id: 'checkTrackingInShipped', name: 'Move Orders to Shipped' },
-                { id: 'removeDuplicateShipped', name: 'Remove Duplicate Shipped' }
+                { id: 'checkTrackingInShipped', name: 'Transfer Orders to Shipped' },
+                { id: 'removeDuplicateShipped', name: 'Clean Duplicate Shipped Rows' }
             ]
         },
         {
             id: 'orders',
-            name: 'Orders',
+            name: 'Order Management',
             icon: <Settings className="w-4 h-4" />,
             scripts: [
-                { id: 'transferExistingOrdersToRestock', name: 'Delete Shipped Orders' },
-                { id: 'calculateLateOrders', name: 'Calculate Late Orders' },
-                { id: 'removeDuplicateOrders', name: 'Remove Duplicate Orders' }
+                { id: 'transferExistingOrdersToRestock', name: 'Clear Processed Orders' },
+                { id: 'calculateLateOrders', name: 'Update Late Order Days' },
+                { id: 'removeDuplicateOrders', name: 'Clean Duplicate Order Rows' }
             ]
         },
         {
             id: 'sku',
-            name: 'SKU Tools',
+            name: 'Inventory Tools',
             icon: <Package className="w-4 h-4" />,
             scripts: [
-                { id: 'packedSkuMatches', name: 'Packed SKU Matches' },
-                { id: 'updateSkuStockFromShipped', name: 'Update Sku-Stock from Shipped' },
-                { id: 'syncStockFromZoho', name: 'Sync Stock from Zoho' },
-                { id: 'setupStockSyncTrigger', name: 'Setup Hourly Stock Sync' },
-                { id: 'removeStockSyncTrigger', name: 'Remove Stock Sync Trigger' }
+                { id: 'updateSkuStockFromShipped', name: 'Update Stock Status from Shipped' }
             ]
         },
         {
             id: 'integrity',
-            name: 'Integrity',
+            name: 'Data Integrity',
             icon: <History className="w-4 h-4" />,
             scripts: [
-                { id: 'recheckTechTrackingIntegrity', name: 'Recheck Tech Tracking' },
-                { id: 'recheckPackerTrackingIntegrity', name: 'Recheck Packer Tracking' },
+                { id: 'recheckTechTrackingIntegrity', name: 'Validate Tech Tracking' },
+                { id: 'recheckPackerTrackingIntegrity', name: 'Validate Packer Tracking' },
                 { id: 'syncPackerTimestampsToShipped', name: 'Sync Packer Timestamps' }
             ]
         }
@@ -157,20 +153,20 @@ export default function DashboardSidebar() {
                                 )}
 
                                 <div className="space-y-2">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-2 mb-3">Automation Scripts</p>
+                                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] ml-2 mb-4">Automation Scripts</p>
                                     {menuItems.map((menu) => (
                                         <div key={menu.id} className="space-y-1">
                                             <button
                                                 onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
-                                                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${expandedMenu === menu.id ? 'bg-white/10 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/[0.08] hover:text-white'}`}
+                                                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${expandedMenu === menu.id ? 'bg-white/10 text-white shadow-xl shadow-black/20' : 'bg-white/5 text-gray-400 hover:bg-white/[0.08] hover:text-white'}`}
                                             >
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`p-2 rounded-xl ${expandedMenu === menu.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'}`}>
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`p-2.5 rounded-xl transition-colors duration-300 ${expandedMenu === menu.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'}`}>
                                                         {menu.icon}
                                                     </div>
-                                                    <span className="text-[10px] font-black uppercase tracking-widest">{menu.name}</span>
+                                                    <span className="text-[11px] font-black uppercase tracking-wider">{menu.name}</span>
                                                 </div>
-                                                {expandedMenu === menu.id ? <ChevronLeft className="w-3 h-3 -rotate-90 transition-transform" /> : <ChevronRight className="w-3 h-3 transition-transform" />}
+                                                {expandedMenu === menu.id ? <ChevronLeft className="w-3.5 h-3.5 -rotate-90 transition-transform duration-300" /> : <ChevronRight className="w-3.5 h-3.5 transition-transform duration-300" />}
                                             </button>
                                             <AnimatePresence>
                                                 {expandedMenu === menu.id && (
@@ -178,17 +174,17 @@ export default function DashboardSidebar() {
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: 'auto', opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden space-y-1 px-2"
+                                                        className="overflow-hidden space-y-1.5 px-3 py-2"
                                                     >
                                                         {menu.scripts.map((script) => (
                                                             <button
                                                                 key={script.id}
                                                                 onClick={() => runScript(script.id)}
                                                                 disabled={!!activeScript}
-                                                                className={`w-full text-left p-3 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all ${activeScript === script.id ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-gray-500 hover:text-blue-400'} flex items-center justify-between group`}
+                                                                className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${activeScript === script.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'hover:bg-white/10 text-gray-400 hover:text-white group'} flex items-center justify-between group`}
                                                             >
-                                                                <span>{script.name}</span>
-                                                                {activeScript === script.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                                                                <span className="group-hover:translate-x-1 transition-transform duration-200">{script.name}</span>
+                                                                {activeScript === script.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                                             </button>
                                                         ))}
                                                     </motion.div>
