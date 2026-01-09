@@ -56,6 +56,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
                     isLoading={isLoadingHistory} 
                     title="Testing History"
                     techId={techId}
+                    stationType="testing"
                 />
             }
         >

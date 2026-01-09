@@ -54,6 +54,7 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
                     history={history} 
                     isLoading={isLoadingHistory} 
                     title="Packer History"
+                    stationType="packing"
                 />
             }
         >

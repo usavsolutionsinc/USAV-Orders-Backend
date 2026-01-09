@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
         }
 
         const logs = await db.execute(sql.raw(`
-            SELECT col_1 as id, col_2 as timestamp, col_3 as title, col_4 as tracking, col_5 as serial, col_6 as count
+            SELECT col_1 as id, col_2 as timestamp, col_3 as title, col_4 as tracking, col_5 as serial, col_6 as status, col_7 as count
             FROM ${tableName} 
             WHERE col_4 IS NOT NULL AND col_4 != ''
             ORDER BY col_1 DESC 

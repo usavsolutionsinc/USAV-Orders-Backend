@@ -86,14 +86,18 @@ export default function StationLayout({
 
                 {/* Mobile Tab Indicators / Minimal Nav */}
                 <div className="h-14 flex items-center justify-between px-10 bg-white border-t border-gray-50">
-                    <button 
-                        onClick={() => setActiveTab('NAV')}
-                        className={`p-2 rounded-xl transition-all ${activeTab === 'NAV' ? 'text-blue-600' : 'text-gray-300'}`}
-                    >
-                        <LayoutDashboard className="w-6 h-6" />
-                    </button>
-                    <div className="flex gap-1.5 h-1 items-center">
-                        <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'NAV' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
+                    {stationType !== 'packing' && (
+                        <button 
+                            onClick={() => setActiveTab('NAV')}
+                            className={`p-2 rounded-xl transition-all ${activeTab === 'NAV' ? 'text-blue-600' : 'text-gray-300'}`}
+                        >
+                            <LayoutDashboard className="w-6 h-6" />
+                        </button>
+                    )}
+                    <div className="flex gap-1.5 h-1 items-center flex-1 justify-center">
+                        {stationType !== 'packing' && (
+                            <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'NAV' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
+                        )}
                         <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'MAIN' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
                         <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'HISTORY' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
                     </div>
@@ -110,15 +114,15 @@ export default function StationLayout({
 
     // Desktop Layout
     return (
-        <div className="flex h-screen bg-white overflow-hidden">
-            <div className="flex-1 flex overflow-hidden">
+        <div className="flex h-full w-full bg-white overflow-hidden">
+            <div className="flex-1 flex overflow-hidden w-full">
                 {/* Main Content */}
-                <div className={`flex flex-col min-w-0 bg-gray-50/30 overflow-hidden ${stationType === 'testing' ? 'w-[400px] flex-shrink-0' : 'flex-1'}`}>
+                <div className={`flex flex-col min-w-0 bg-gray-50/30 overflow-hidden transition-all duration-300 ${stationType === 'testing' ? 'w-[400px] border-r border-gray-100 flex-shrink-0' : 'w-0 hidden'}`}>
                     {children}
                 </div>
 
-                {/* Right History Sidebar */}
-                <div className="flex-1 border-l border-gray-100 bg-white overflow-hidden">
+                {/* Right History Sidebar - Full Width */}
+                <div className="flex-1 flex flex-col min-w-0 bg-white overflow-hidden">
                     {historyContent}
                 </div>
             </div>
