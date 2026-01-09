@@ -47,7 +47,7 @@ export default function PageLayout({
     const iframeUrl = `${baseUrl}?${queryParams.toString()}${gid ? `#gid=${gid}` : ''}`;
 
     return (
-        <div className="flex h-full w-full bg-gray-950 overflow-hidden">
+        <div className="flex h-full w-full bg-white overflow-hidden">
             {/* Left Sidebar(s) Container */}
             <div className="flex-shrink-0 z-50 flex h-full">
                 {showSidebar && <Sidebar />}
@@ -60,11 +60,11 @@ export default function PageLayout({
                             animate={{ width: 340, opacity: 1 }}
                             exit={{ width: 0, opacity: 0 }}
                             transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                            className="bg-gray-950 border-r border-white/5 flex flex-col z-40 overflow-hidden relative group"
+                            className="bg-white border-r border-gray-100 flex flex-col z-40 overflow-hidden relative group"
                         >
                             <button
                                 onClick={() => setChecklistOpen(false)}
-                                className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                className="absolute top-4 right-4 z-50 p-2 bg-gray-50 hover:bg-gray-100 text-gray-400 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                                 title="Collapse Menu"
                             >
                                 <ChevronLeft className="w-4 h-4" />

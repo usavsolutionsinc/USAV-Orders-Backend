@@ -160,34 +160,34 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
         return `${hours}h ${mins}m`;
     };
 
-    if (isLoading) return <div className="p-4 animate-pulse space-y-4"><div className="h-10 bg-white/5 rounded-xl" /><div className="h-32 bg-white/5 rounded-xl" /></div>;
+    if (isLoading) return <div className="p-4 animate-pulse space-y-4"><div className="h-10 bg-gray-50 rounded-xl" /><div className="h-32 bg-gray-50 rounded-xl" /></div>;
 
     return (
-        <div className="h-full flex flex-col bg-gray-950 text-white">
+        <div className="h-full flex flex-col bg-white text-gray-900">
             {/* Header - Station Info */}
-            <div className="px-6 py-4 border-b border-white/5 bg-white/5">
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-black tracking-tighter uppercase">{staffName}</h2>
-                    <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[9px] font-black rounded uppercase">{role}</span>
+                    <h2 className="text-lg font-black tracking-tighter uppercase text-gray-900">{staffName}</h2>
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-black rounded uppercase border border-blue-100">{role}</span>
                 </div>
             </div>
 
             {/* NEW TASK FORM - NOW AT TOP */}
-            <div className="p-4 border-b border-white/5">
+            <div className="p-4 border-b border-gray-100">
                 {isAdding ? (
-                    <div className="space-y-3 bg-white/5 p-4 rounded-2xl border border-blue-500/30 animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-3 bg-gray-50 p-4 rounded-2xl border border-blue-200 animate-in fade-in slide-in-from-top-2 shadow-sm">
                         <input
                             type="text"
                             value={newTitle}
                             onChange={(e) => setNewTitle(e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-900 border border-white/10 rounded-xl text-xs font-bold focus:border-blue-500 outline-none"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold focus:border-blue-500 outline-none text-gray-900"
                             placeholder="Task title..."
                             autoFocus
                         />
                         <textarea
                             value={newDescription}
                             onChange={(e) => setNewDescription(e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-900 border border-white/10 rounded-xl text-[10px] min-h-[60px] outline-none"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-[10px] min-h-[60px] outline-none text-gray-600"
                             placeholder="Details..."
                         />
                         <div className="grid grid-cols-2 gap-2">
@@ -195,26 +195,26 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
                                 type="text"
                                 value={newOrderNumber}
                                 onChange={(e) => setNewOrderNumber(e.target.value)}
-                                className="px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-[9px] font-mono outline-none"
+                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[9px] font-mono outline-none text-gray-900"
                                 placeholder="Order #"
                             />
                             <input
                                 type="text"
                                 value={newTrackingNumber}
                                 onChange={(e) => setNewTrackingNumber(e.target.value)}
-                                className="px-3 py-1.5 bg-gray-900 border border-white/10 rounded-lg text-[9px] font-mono outline-none"
+                                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[9px] font-mono outline-none text-gray-900"
                                 placeholder="Tracking #"
                             />
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={handleAddNew} className="flex-1 py-2 bg-blue-600 rounded-xl text-[10px] font-black uppercase tracking-wider">Add</button>
-                            <button onClick={() => setIsAdding(false)} className="flex-1 py-2 bg-white/10 rounded-xl text-[10px] font-black uppercase">Cancel</button>
+                            <button onClick={handleAddNew} className="flex-1 py-2 bg-blue-600 rounded-xl text-[10px] font-black uppercase tracking-wider text-white shadow-lg shadow-blue-100">Add</button>
+                            <button onClick={() => setIsAdding(false)} className="flex-1 py-2 bg-gray-200 rounded-xl text-[10px] font-black uppercase text-gray-600">Cancel</button>
                         </div>
                     </div>
                 ) : (
                     <button
                         onClick={() => setIsAdding(true)}
-                        className="w-full py-2.5 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                        className="w-full py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all flex items-center justify-center gap-2"
                     >
                         <Plus className="w-3 h-3" /> New Task
                     </button>
@@ -232,9 +232,9 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
                         <div
                             key={item.id}
                             className={`group relative p-4 rounded-2xl border transition-all ${
-                                isCompleted ? 'bg-emerald-500/5 border-emerald-500/10 opacity-60' :
-                                isInProgress ? 'bg-blue-500/10 border-blue-500/20 ring-1 ring-blue-500/20' :
-                                'bg-white/5 border-white/5 hover:border-white/10'
+                                isCompleted ? 'bg-emerald-50 border-emerald-100 opacity-60' :
+                                isInProgress ? 'bg-blue-50 border-blue-100 ring-1 ring-blue-50' :
+                                'bg-white border-gray-100 hover:border-gray-200 shadow-sm'
                             }`}
                         >
                             <div className="flex gap-3">
@@ -246,7 +246,7 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
                                     className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
                                         isCompleted ? 'bg-emerald-500 border-emerald-500' :
                                         isInProgress ? 'bg-blue-500 border-blue-500' :
-                                        'border-white/20'
+                                        'border-gray-200 hover:border-blue-400'
                                     }`}
                                 >
                                     {isCompleted && <Check className="w-3 h-3 text-white" />}
@@ -254,29 +254,29 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
                                 </button>
 
                                 <div className="flex-1 min-w-0">
-                                    <div className={`text-[11px] font-black tracking-tight ${isCompleted ? 'line-through text-emerald-400/50' : 'text-white'}`}>
+                                    <div className={`text-[11px] font-black tracking-tight ${isCompleted ? 'line-through text-emerald-600/50' : 'text-gray-900'}`}>
                                         {item.title}
                                     </div>
                                     {item.description && (
-                                        <div className={`text-[9px] mt-1 leading-snug ${isCompleted ? 'line-through text-gray-600' : 'text-gray-400'}`}>
+                                        <div className={`text-[9px] mt-1 leading-snug ${isCompleted ? 'line-through text-gray-400' : 'text-gray-500'}`}>
                                             {item.description}
                                         </div>
                                     )}
                                     
                                     <div className="flex flex-wrap gap-1.5 mt-2">
-                                        {item.order_number && <div className="px-1.5 py-0.5 bg-white/5 rounded text-[8px] font-mono text-gray-500">O: {item.order_number}</div>}
-                                        {item.tracking_number && <div className="px-1.5 py-0.5 bg-white/5 rounded text-[8px] font-mono text-gray-500">T: {item.tracking_number}</div>}
+                                        {item.order_number && <div className="px-1.5 py-0.5 bg-gray-100 rounded text-[8px] font-mono text-gray-500 border border-gray-200">O: {item.order_number}</div>}
+                                        {item.tracking_number && <div className="px-1.5 py-0.5 bg-gray-100 rounded text-[8px] font-mono text-gray-500 border border-gray-200">T: {item.tracking_number}</div>}
                                     </div>
 
                                     {item.instance && (
                                         <div className="mt-2 flex items-center gap-2 text-[8px] font-bold uppercase tracking-widest">
-                                            {isInProgress && <span className="text-blue-400 animate-pulse">● Running</span>}
-                                            {isCompleted && <span className="text-emerald-500">✓ Done {item.instance.duration_minutes ? `(${formatDuration(item.instance.duration_minutes)})` : ''}</span>}
+                                            {isInProgress && <span className="text-blue-600 animate-pulse">● Running</span>}
+                                            {isCompleted && <span className="text-emerald-600">✓ Done {item.instance.duration_minutes ? `(${formatDuration(item.instance.duration_minutes)})` : ''}</span>}
                                         </div>
                                     )}
                                 </div>
 
-                                <button onClick={() => deleteTemplateMutation.mutate(item.id)} className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-red-400 transition-all">
+                                <button onClick={() => deleteTemplateMutation.mutate(item.id)} className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all">
                                     <Trash2 className="w-3 h-3" />
                                 </button>
                             </div>
@@ -285,8 +285,8 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
                 })}
             </div>
 
-            <footer className="p-4 border-t border-white/5 opacity-20 text-center">
-                <p className="text-[7px] font-mono tracking-[0.2em]">USAV STATION</p>
+            <footer className="p-4 border-t border-gray-100 opacity-20 text-center">
+                <p className="text-[7px] font-mono tracking-[0.2em] text-gray-900">USAV STATION</p>
             </footer>
         </div>
     );

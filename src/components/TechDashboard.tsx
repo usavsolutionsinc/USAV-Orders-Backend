@@ -4,17 +4,26 @@ import React, { useState, useEffect } from 'react';
 import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
 import StationHistory from './station/StationHistory';
-import StationPacking from './station/StationPacking';
+import StationTesting from './station/StationTesting';
 
-interface PackerDashboardProps {
-    packerId: string;
+interface TechDashboardProps {
+    techId: string;
+    sheetId: string;
+    gid?: string;
 }
 
-export default function PackerDashboard({ packerId }: PackerDashboardProps) {
+export default function TechDashboard({ techId, sheetId, gid }: TechDashboardProps) {
     const [history, setHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-    const [todayCount, setTodayCount] = useState(0);
-    const [goal] = useState(50);
+
+    // Color mapping based on technician ID
+    const getTechInfo = (id: string) => {
+        if (id === '1') return { name: 'Michael', color: 'green' as const };
+        if (id === '2') return { name: 'Thuc', color: 'blue' as const };
+        return { name: 'Sang', color: 'purple' as const };
+    };
+
+    const techInfo = getTechInfo(techId);
 
     useEffect(() => {
         fetchHistory();
@@ -23,19 +32,11 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
     const fetchHistory = async () => {
         setIsLoadingHistory(true);
         try {
-            const res = await fetch(`/api/packing-logs?packerId=${packerId}`);
+            const res = await fetch(`/api/tech-logs?techId=${techId}`);
             if (!res.ok) throw new Error('Failed to fetch');
             const data = await res.json();
             if (Array.isArray(data)) {
                 setHistory(data);
-                const today = new Date().toISOString().split('T')[0];
-                const count = data.filter((log: any) => {
-                    try {
-                        const dateStr = log.packedAt || log.timestamp;
-                        return new Date(dateStr).toISOString().split('T')[0] === today;
-                    } catch (e) { return false; }
-                }).length;
-                setTodayCount(count);
             }
         } catch (err) {
             console.error("Failed to fetch history:", err);
@@ -46,22 +47,26 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
 
     return (
         <StationLayout
-            stationType="packing"
-            stationId={packerId}
+            stationType="testing"
+            stationId={techId}
             navContent={<StationNav />}
             historyContent={
                 <StationHistory 
                     history={history} 
                     isLoading={isLoadingHistory} 
-                    title="Packer History"
+                    title="Testing History"
+                    techId={techId}
                 />
             }
         >
-            <StationPacking 
-                packerId={packerId}
-                todayCount={todayCount}
-                goal={goal}
-                onPacked={fetchHistory}
+            <StationTesting 
+                userId={techId}
+                userName={techInfo.name}
+                sheetId={sheetId}
+                gid={gid}
+                themeColor={techInfo.color}
+                todayCount={history.length > 0 ? (history[0].count || 0) : 0}
+                onComplete={fetchHistory}
             />
         </StationLayout>
     );

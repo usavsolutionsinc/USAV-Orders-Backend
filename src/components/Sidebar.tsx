@@ -16,11 +16,11 @@ export default function Sidebar() {
                         animate={{ width: 340, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-gray-950 text-white flex-shrink-0 h-full overflow-hidden border-r border-white/5 relative group"
+                        className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-100 relative group"
                     >
                         <button
                             onClick={() => setIsOpen(false)}
-                            className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            className="absolute top-4 right-4 z-50 p-2 bg-gray-50 hover:bg-gray-100 text-gray-400 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                             title="Collapse Menu"
                         >
                             <ChevronLeft className="w-4 h-4" />
@@ -28,55 +28,55 @@ export default function Sidebar() {
 
                         <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
                             <header>
-                                <h2 className="text-xl font-black tracking-tighter uppercase leading-none">
+                                <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                                     Metrics
                                 </h2>
-                                <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-1">
+                                <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
                                     Live Performance
                                 </p>
                             </header>
                             
                             <div className="space-y-4">
-                                <div className="bg-white/5 p-5 rounded-2xl border border-white/10 hover:bg-white/[0.08] transition-all">
+                                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-all">
                                     <div className="flex items-center justify-between mb-3">
-                                        <div className="p-2 bg-blue-500/20 rounded-xl">
-                                            <BarChart3 className="w-4 h-4 text-blue-400" />
+                                        <div className="p-2 bg-blue-500/10 rounded-xl">
+                                            <BarChart3 className="w-4 h-4 text-blue-600" />
                                         </div>
-                                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-400/10 px-2 py-1 rounded-md">
+                                        <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded-md">
                                             +12.4%
                                         </span>
                                     </div>
-                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Throughput</p>
-                                    <p className="text-3xl font-black tracking-tighter">1,284</p>
+                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Throughput</p>
+                                    <p className="text-3xl font-black tracking-tighter text-gray-900">1,284</p>
                                 </div>
 
-                                <div className="bg-white/5 p-5 rounded-2xl border border-white/10 hover:bg-white/[0.08] transition-all">
+                                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-all">
                                     <div className="flex items-center justify-between mb-3">
-                                        <div className="p-2 bg-emerald-500/20 rounded-xl">
-                                            <TrendingUp className="w-4 h-4 text-emerald-400" />
+                                        <div className="p-2 bg-emerald-500/10 rounded-xl">
+                                            <TrendingUp className="w-4 h-4 text-emerald-600" />
                                         </div>
-                                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-400/10 px-2 py-1 rounded-md">
+                                        <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded-md">
                                             Optimal
                                         </span>
                                     </div>
-                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Cycle Time</p>
-                                    <p className="text-3xl font-black tracking-tighter">4.2<span className="text-lg text-gray-500 ml-1">m</span></p>
+                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Cycle Time</p>
+                                    <p className="text-3xl font-black tracking-tighter text-gray-900">4.2<span className="text-lg text-gray-400 ml-1">m</span></p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <Package className="w-3.5 h-3.5 text-purple-400" />
-                                            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Stock</span>
+                                            <Package className="w-3.5 h-3.5 text-purple-600" />
+                                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Stock</span>
                                         </div>
-                                        <p className="text-xl font-black tracking-tighter text-purple-400">8.2k</p>
+                                        <p className="text-xl font-black tracking-tighter text-purple-600">8.2k</p>
                                     </div>
-                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <AlertCircle className="w-3.5 h-3.5 text-orange-400" />
-                                            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Alerts</span>
+                                            <AlertCircle className="w-3.5 h-3.5 text-orange-600" />
+                                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Alerts</span>
                                         </div>
-                                        <p className="text-xl font-black tracking-tighter text-orange-400">03</p>
+                                        <p className="text-xl font-black tracking-tighter text-orange-600">03</p>
                                     </div>
                                 </div>
 

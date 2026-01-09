@@ -24,8 +24,12 @@ const navItems = [
 export default function Navigation() {
     const pathname = usePathname();
 
+    // Hide navigation for station views on mobile
+    // On desktop, StationLayout will include this component
+    const isStation = pathname?.startsWith('/packer/') || pathname?.startsWith('/tech/');
+
     return (
-        <nav className="bg-gray-950 text-white sticky top-0 z-[100] border-b border-white/5">
+        <nav className={`bg-gray-950 text-white sticky top-0 z-[100] border-b border-white/5 ${isStation ? 'hidden lg:block' : ''}`}>
             <div className="px-4">
                 <div className="flex items-center h-14 justify-between">
                     <div className="flex items-center space-x-6">
