@@ -27,12 +27,21 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
             if (!res.ok) throw new Error('Failed to fetch');
             const data = await res.json();
             if (Array.isArray(data)) {
-                setHistory(data);
+                // Normalize data immediately
+                const normalizedData = data.map((log: any) => ({
+                    ...log,
+                    timestamp: log.packedAt || log.timestamp,
+                    title: log.product || log.title,
+                    tracking: log.trackingNumber || log.tracking,
+                    status: log.carrier || log.status,
+                    id: log.id || `log-${Math.random()}`
+                }));
+                
+                setHistory(normalizedData);
                 const today = new Date().toISOString().split('T')[0];
-                const count = data.filter((log: any) => {
+                const count = normalizedData.filter((log: any) => {
                     try {
-                        const dateStr = log.packedAt || log.timestamp;
-                        return new Date(dateStr).toISOString().split('T')[0] === today;
+                        return log.timestamp && log.timestamp.split('T')[0] === today;
                     } catch (e) { return false; }
                 }).length;
                 setTodayCount(count);

@@ -30,22 +30,23 @@ const CopyableText = ({ text, className }: { text: string; className?: string })
 
     const handleCopy = (e: React.MouseEvent) => {
         e.stopPropagation();
+        if (!text) return;
         navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Shorten tracking/serial for display
-    const displayText = text.length > 12 ? `${text.slice(0, 4)}...${text.slice(-4)}` : text;
+    // Shorten tracking/serial for display - show last digits if long
+    const displayText = text.length > 8 ? `...${text.slice(-6)}` : text;
 
     return (
         <button 
             onClick={handleCopy}
-            className={`${className} group relative flex items-center justify-center gap-2 hover:brightness-95 active:scale-95 transition-all`}
+            className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-full`}
             title={`Click to copy: ${text}`}
         >
-            <span className="truncate">{displayText}</span>
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-40 transition-opacity" />}
+            <span className="truncate flex-1 text-left">{displayText}</span>
+            {copied ? <Check className="w-2 h-2" /> : <Copy className="w-2 h-2 opacity-0 group-hover:opacity-40 transition-opacity" />}
         </button>
     );
 };
@@ -141,31 +142,45 @@ export default function StationHistory({
     // Group history by day
     const groupedHistory: { [key: string]: HistoryLog[] } = {};
     history.forEach(log => {
-        const date = log.timestamp.split('T')[0];
+        // Handle different property names from different APIs
+        const timestamp = log.timestamp || (log as any).packedAt;
+        if (!timestamp) return;
+        
+        const date = timestamp.split('T')[0];
         if (!groupedHistory[date]) groupedHistory[date] = [];
-        groupedHistory[date].push(log);
+        
+        // Normalize for display
+        const normalizedLog = {
+            ...log,
+            timestamp,
+            title: log.title || (log as any).product || 'Unknown Product',
+            tracking: log.tracking || (log as any).trackingNumber || '',
+            status: log.status || (log as any).carrier || ''
+        };
+        
+        groupedHistory[date].push(normalizedLog);
     });
 
     return (
         <div className="flex flex-col h-full w-full bg-white relative overflow-hidden">
             {/* Sticky Header */}
-            <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-8 py-4 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-6">
-                    <p className="text-sm font-black text-gray-900 tracking-tight min-w-[120px]">
-                        {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp) : 'Today')}
+            <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-2">
+                    <p className="text-[9px] font-black text-gray-900 tracking-tight">
+                        {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
                     </p>
-                    <div className="h-4 w-px bg-gray-200" />
-                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
-                        Daily Count: {currentCount || (history.length > 0 ? history[0].count : 0)}
+                    <div className="h-2 w-px bg-gray-200" />
+                    <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">
+                        Count: {currentCount || (history.length > 0 ? history[0].count : 0)}
                     </p>
                 </div>
                 
                 {techId && (
                     <button 
                         onClick={() => setIsChecklistOpen(!isChecklistOpen)}
-                        className={`p-2.5 rounded-xl transition-all ${isChecklistOpen ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                        className={`p-1 rounded-lg transition-all ${isChecklistOpen ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
                     >
-                        <List className="w-5 h-5" />
+                        <List className="w-3 h-3" />
                     </button>
                 )}
             </div>
@@ -186,38 +201,41 @@ export default function StationHistory({
                         {Object.entries(groupedHistory).map(([date, logs]) => (
                             <div key={date} className="flex flex-col">
                                 {/* Day Header Bar */}
-                                <div className="bg-gray-50/80 border-y border-gray-100 px-8 py-2.5 flex items-center justify-between sticky top-0 z-10">
-                                    <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                                    <p className="text-[10px] font-black text-gray-400 uppercase">Total: {logs[0]?.count || 0} Units</p>
+                                <div className="bg-gray-50/80 border-y border-gray-100 px-2 py-0.5 flex items-center justify-between sticky top-0 z-10 h-[18px]">
+                                    <p className="text-[6px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
+                                    <p className="text-[6px] font-black text-gray-400 uppercase">Total: {logs[0]?.count || logs.length} Units</p>
                                 </div>
-                                {logs.map((log, index) => (
-                                    <motion.div 
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        key={log.id} 
-                                        data-date={date}
-                                        data-count={log.count}
-                                        className={`grid grid-cols-[80px_3fr_120px_120px_120px] items-center gap-6 px-8 py-2 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
-                                    >
-                                        <div className="text-[10px] font-black text-gray-400 tabular-nums uppercase text-left">
-                                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
-                                        </div>
-                                        <div className="text-xs font-bold text-gray-900 truncate text-left">
-                                            {log.title || 'Unknown Product'}
-                                        </div>
-                                        <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
-                                            {log.status || '---'}
-                                        </div>
-                                        <CopyableText 
-                                            text={log.tracking || ''} 
-                                            className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/50 px-3 py-1.5 rounded-lg border border-blue-100/50" 
-                                        />
-                                        <CopyableText 
-                                            text={log.serial || ''} 
-                                            className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/50 px-3 py-1.5 rounded-lg border border-emerald-100/50" 
-                                        />
-                                    </motion.div>
-                                ))}
+                                {logs.map((log, index) => {
+                                    const ts = log.timestamp || (log as any).packedAt;
+                                    return (
+                                        <motion.div 
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            key={log.id} 
+                                            data-date={date}
+                                            data-count={log.count || logs.length - index}
+                                            className={`grid grid-cols-[45px_1fr_50px_70px_70px] items-center gap-1 px-1 py-0.5 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
+                                        >
+                                            <div className="text-[8px] font-black text-gray-400 tabular-nums uppercase text-left">
+                                                {ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\s?[APM]{2}$/, '') : '--:--'}
+                                            </div>
+                                            <div className="text-[9px] font-bold text-gray-900 truncate text-left">
+                                                {log.title || (log as any).product || 'Unknown Product'}
+                                            </div>
+                                            <div className="text-[7px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
+                                                {log.status || (log as any).carrier || '---'}
+                                            </div>
+                                            <CopyableText 
+                                                text={log.tracking || (log as any).trackingNumber || ''} 
+                                                className="text-[9px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30" 
+                                            />
+                                            <CopyableText 
+                                                text={log.serial || ''} 
+                                                className="text-[9px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30" 
+                                            />
+                                        </motion.div>
+                                    );
+                                })}
                             </div>
                         ))}
                         
