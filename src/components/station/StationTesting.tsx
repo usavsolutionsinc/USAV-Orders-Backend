@@ -185,7 +185,7 @@ export default function StationTesting({
                     {/* Progress Bar */}
                     <div className="space-y-3 px-2">
                         <div className="flex items-center justify-between">
-                            <p className={`text-[10px] font-black ${activeColor.text} tabular-nums`}>{todayCount} TESTED</p>
+                            <p className={`text-[10px] font-black ${activeColor.text} tabular-nums`}>{todayCount} SHIPPED</p>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Goal: {goal}</p>
                         </div>
                         <div className="h-2.5 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">

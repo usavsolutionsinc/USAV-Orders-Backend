@@ -8,6 +8,9 @@ export async function GET(req: NextRequest) {
 
     try {
         const tableName = `tech_${techId}`;
+        const limit = parseInt(searchParams.get('limit') || '50');
+        const offset = parseInt(searchParams.get('offset') || '0');
+
         const tableCheck = await db.execute(sql.raw(`
             SELECT EXISTS (
                 SELECT FROM information_schema.tables 
@@ -24,7 +27,7 @@ export async function GET(req: NextRequest) {
             FROM ${tableName} 
             WHERE col_4 IS NOT NULL AND col_4 != ''
             ORDER BY col_1 DESC 
-            LIMIT 100
+            LIMIT ${limit} OFFSET ${offset}
         `));
 
         return NextResponse.json(logs);

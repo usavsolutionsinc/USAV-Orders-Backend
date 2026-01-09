@@ -45,6 +45,14 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
         }
     };
 
+    const getTodayCount = () => {
+        if (history.length === 0) return 0;
+        const mostRecent = history[0];
+        const recordDate = new Date(mostRecent.timestamp).toDateString();
+        const todayDate = new Date().toDateString();
+        return recordDate === todayDate ? (mostRecent.count || 0) : 0;
+    };
+
     return (
         <StationLayout
             stationType="testing"
@@ -66,7 +74,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
                 sheetId={sheetId}
                 gid={gid}
                 themeColor={techInfo.color}
-                todayCount={history.length > 0 ? (history[0].count || 0) : 0}
+                todayCount={getTodayCount()}
                 onComplete={fetchHistory}
             />
         </StationLayout>
