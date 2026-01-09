@@ -1,0 +1,87 @@
+/**
+ * ============================================================================
+ * PORTED GOOGLE APPS SCRIPT LOGIC
+ * ============================================================================
+ * These functions have been ported from the original GAS code to the 
+ * Next.js backend. They interact directly with the Google Sheets API
+ * to maintain the sheet as the primary storage while allowing the Neon DB
+ * to stay synced for performant lookups.
+ * 
+ * Target API Route: /api/google-sheets/execute-script
+ * Spreadsheet ID: 1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE
+ * ============================================================================
+ */
+
+// --- SHIPPING TOOLS ---
+
+/**
+ * Ported from GAS: checkTrackingInShipped
+ * Moves rows from Orders to Shipped if tracking number is present but not in Shipped.
+ */
+async function checkTrackingInShipped(sheets, spreadsheetId) {
+    // 1. Fetch data from both sheets
+    // 2. Compare tracking numbers (last 8 digits)
+    // 3. Append new rows to Shipped
+    // 4. Highlight source rows in Orders
+}
+
+/**
+ * Ported from GAS: removeDuplicateShipped
+ * Removes rows with duplicate tracking numbers from Shipped sheet.
+ */
+async function removeDuplicateShipped(sheets, spreadsheetId) {
+    // 1. Fetch all tracking numbers from Shipped!E column
+    // 2. Identify duplicates keeping the first occurrence
+    // 3. Use batchUpdate to delete rows in reverse order
+}
+
+// --- ORDER TOOLS ---
+
+/**
+ * Ported from GAS: transferExistingOrdersToRestock
+ * Logic: Deletes orders from Orders sheet if they've been processed in Shipped (has timestamp).
+ */
+async function transferExistingOrdersToRestock(sheets, spreadsheetId) {
+    // 1. Fetch Shipped data (A, B, E columns)
+    // 2. Identify tracked orders with timestamps
+    // 3. Delete matching rows from Orders sheet
+}
+
+/**
+ * Ported from GAS: calculateLateOrders
+ * Calculates days since order date and updates Orders!H column.
+ */
+async function calculateLateOrders(sheets, spreadsheetId) {
+    // 1. Fetch Orders!A column (Dates)
+    // 2. Calculate diff in days from TODAY
+    // 3. Update Orders!H column with results (* for today, N for days late)
+}
+
+// --- SKU & STOCK TOOLS ---
+
+/**
+ * Ported from GAS: updateSkuStockFromShipped
+ * Updates Sku-Stock!F column to '1' if SKU exists in Shipped!I column.
+ */
+async function updateSkuStockFromShipped(sheets, spreadsheetId) {
+    // 1. Fetch Shipped SKUs
+    // 2. Update Sku-Stock table status flags
+}
+
+// --- INTEGRITY & SYNC ---
+
+/**
+ * Ported from GAS: syncPackerTimestampsToShipped
+ * Logic: Backfills timestamps in Shipped!A from Packer_X!A if tracking matches.
+ */
+async function syncPackerTimestampsToShipped(sheets, spreadsheetId) {
+    // 1. Scan all Packer_1 through Packer_10 sheets
+    // 2. Match tracking numbers with empty-timestamp Shipped rows
+    // 3. Write back the PST timestamp to Shipped!A
+}
+
+/*
+ * ============================================================================
+ * END OF PORTED LOGIC REFERENCE
+ * ============================================================================
+ */

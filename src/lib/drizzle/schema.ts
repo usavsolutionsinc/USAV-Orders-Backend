@@ -99,6 +99,18 @@ export const skuStock = pgTable('sku_stock', { ...genericColumns });
 export const sku = pgTable('sku', { ...genericColumns });
 export const rs = pgTable('rs', { ...genericColumns });
 
+// NEW: Packing logs for the packer dashboard
+export const packingLogs = pgTable('packing_logs', {
+  id: serial('id').primaryKey(),
+  trackingNumber: varchar('tracking_number', { length: 100 }).notNull(),
+  photos: text('photos'), // Store as JSON string or comma-separated URLs
+  packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
+  boxSize: varchar('box_size', { length: 50 }),
+  packedAt: timestamp('packed_at').defaultNow(),
+  notes: text('notes'),
+  status: varchar('status', { length: 20 }).default('completed'),
+});
+
 // Type exports
 export type Staff = typeof staff.$inferSelect;
 export type NewStaff = typeof staff.$inferInsert;
@@ -112,3 +124,5 @@ export type ReceivingTask = typeof receivingTasks.$inferSelect;
 export type NewReceivingTask = typeof receivingTasks.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
+export type PackingLog = typeof packingLogs.$inferSelect;
+export type NewPackingLog = typeof packingLogs.$inferInsert;
