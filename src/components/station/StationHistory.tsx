@@ -155,17 +155,38 @@ export default function StationHistory({
         const timestamp = log.timestamp || (log as any).packedAt;
         if (!timestamp) return;
         
-        const date = timestamp.split('T')[0];
+        let date = '';
+        try {
+            // Handle "M/D/YYYY H:MM:SS" or ISO format
+            if (timestamp.includes(' ')) {
+                date = timestamp.split(' ')[0]; // Gets "1/6/2026"
+                // Normalize 1/6/2026 to YYYY-MM-DD for grouping if needed, 
+                // but as long as it's consistent for the same day it's fine.
+                // However, let's normalize to ISO date for better sorting/display
+                const parts = date.split('/');
+                if (parts.length === 3) {
+                    const m = parts[0].padStart(2, '0');
+                    const d = parts[1].padStart(2, '0');
+                    const y = parts[2];
+                    date = `${y}-${m}-${d}`;
+                }
+            } else {
+                date = timestamp.split('T')[0];
+            }
+        } catch (e) {
+            date = timestamp.split('T')[0] || 'Unknown';
+        }
+        
         if (!groupedHistory[date]) groupedHistory[date] = [];
         
         // Normalize for display
-        const rawCount = log.count || (log as any).status; // Handle tech log column mismatch
+        const rawCount = log.count || (log as any).status; 
         const normalizedLog = {
             ...log,
             timestamp,
             title: log.title || (log as any).product || 'Unknown Product',
             tracking: log.tracking || (log as any).trackingNumber || '',
-            status: stationType === 'testing' ? '' : (log.status || (log as any).carrier || ''), // Hide status for testing if it contains count
+            status: stationType === 'testing' ? '' : (log.status || (log as any).carrier || ''), 
             count: typeof rawCount === 'number' ? rawCount : parseInt(rawCount) || 0
         };
         
@@ -177,11 +198,11 @@ export default function StationHistory({
             {/* Sticky Header */}
             <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-2">
-                    <p className="text-[10px] font-black text-gray-900 tracking-tight">
+                    <p className="text-[11px] font-black text-gray-900 tracking-tight">
                         {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
                     </p>
                     <div className="h-2 w-px bg-gray-200" />
-                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                    <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
                         Count: {currentCount || (history.length > 0 ? (history[0].count || history.length) : 0)}
                     </p>
                 </div>
@@ -211,38 +232,39 @@ export default function StationHistory({
                     <div className="flex flex-col">
                         {Object.entries(groupedHistory).map(([date, logs]) => (
                             <div key={date} className="flex flex-col">
-                                {/* Day Header Bar */}
-                                <div className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between sticky top-0 z-10">
-                                    <p className="text-[8px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                                    <p className="text-[8px] font-black text-gray-400 uppercase">Total: {logs[0]?.count || logs.length} Units</p>
+                                {/* Day Header Bar - NOT STICKY */}
+                                <div className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10">
+                                    <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
+                                    <p className="text-[11px] font-black text-gray-400 uppercase">Total: {logs[0]?.count || logs.length} Units</p>
                                 </div>
                                 {logs.map((log, index) => {
                                     const ts = log.timestamp || (log as any).packedAt;
+                                    const dailyTotal = logs[0].count || logs.length;
                                     return (
                                         <motion.div 
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             key={log.id} 
                                             data-date={date}
-                                            data-count={log.count || logs.length - index}
-                                            className={`grid grid-cols-[45px_1fr_50px_70px_70px] items-center gap-1 px-1 py-0.5 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
+                                            data-count={dailyTotal}
+                                            className={`grid grid-cols-[55px_1fr_60px_80px_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
-                                            <div className="text-[8px] font-black text-gray-400 tabular-nums uppercase text-left">
-                                                {ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\s?[APM]{2}$/, '') : '--:--'}
+                                            <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
+                                                {ts ? (ts.includes(' ') ? ts.split(' ')[1].slice(0, 5) : new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\s?[APM]{2}$/, '')) : '--:--'}
                                             </div>
-                                            <div className="text-[9px] font-bold text-gray-900 truncate text-left">
+                                            <div className="text-[11px] font-bold text-gray-900 truncate text-left">
                                                 {log.title || (log as any).product || 'Unknown Product'}
                                             </div>
-                                            <div className="text-[7px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
-                                                {log.status || (log as any).carrier || '---'}
+                                            <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
+                                                {log.status || (log as any).carrier || ''}
                                             </div>
                                             <CopyableText 
                                                 text={log.tracking || (log as any).trackingNumber || ''} 
-                                                className="text-[9px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30" 
+                                                className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30" 
                                             />
                                             <CopyableText 
                                                 text={log.serial || ''} 
-                                                className="text-[9px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30" 
+                                                className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30" 
                                             />
                                         </motion.div>
                                     );

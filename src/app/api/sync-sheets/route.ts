@@ -9,28 +9,16 @@ const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
 const SHEET_CONFIG = [
     { name: 'Orders', table: 'orders', columnsCount: 14 },
-    { name: 'orders', table: 'orders', columnsCount: 14 },
     { name: 'Shipped', table: 'shipped', columnsCount: 14 },
-    { name: 'shipped', table: 'shipped', columnsCount: 14 },
     { name: 'Tech_1', table: 'tech_1', columnsCount: 14 },
-    { name: 'tech_1', table: 'tech_1', columnsCount: 14 },
     { name: 'Tech_2', table: 'tech_2', columnsCount: 14 },
-    { name: 'tech_2', table: 'tech_2', columnsCount: 14 },
     { name: 'Tech_3', table: 'tech_3', columnsCount: 14 },
-    { name: 'tech_3', table: 'tech_3', columnsCount: 14 },
-    { name: 'Tech_4', table: 'tech_4', columnsCount: 14 },
-    { name: 'tech_4', table: 'tech_4', columnsCount: 14 },
+    { name: 'Receiving', table: 'receiving', columnsCount: 14 },
     { name: 'Packer_1', table: 'packer_1', columnsCount: 14 },
     { name: 'Packer_2', table: 'packer_2', columnsCount: 14 },
-    { name: 'Packer_3', table: 'packer_3', columnsCount: 14 },
-    { name: 'Receiving', table: 'receiving', columnsCount: 14 },
-    { name: 'receiving', table: 'receiving', columnsCount: 14 },
-    { name: 'Sku-Stock', table: 'sku_stock', columnsCount: 14 },
-    { name: 'sku-stock', table: 'sku_stock', columnsCount: 14 },
+    { name: 'Sku_Stock', table: 'sku_stock', columnsCount: 14 },
     { name: 'Sku', table: 'sku', columnsCount: 14 },
-    { name: 'sku', table: 'sku', columnsCount: 14 },
     { name: 'RS', table: 'rs', columnsCount: 14 },
-    { name: 'rs', table: 'rs', columnsCount: 14 },
     // Specialized tables
     { name: 'staff', table: 'staff', columnNames: ['name', 'role', 'employee_id', 'active'] },
     { name: 'tags', table: 'tags', columnNames: ['name', 'color'] },
@@ -53,23 +41,20 @@ export async function POST(req: NextRequest) {
         const auth = getGoogleAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
-        // Get all sheet names in the spreadsheet first to avoid 404s on specific sheets
+        // Get all sheet names in the spreadsheet first
         const spreadsheet = await sheets.spreadsheets.get({
             spreadsheetId: targetSpreadsheetId,
         });
-        const existingSheetNames = new Set(spreadsheet.data.sheets?.map(s => s.properties?.title) || []);
+        const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
 
-        // Group configs by table to avoid double-syncing if both 'sku-stock' and 'Sku-Stock' exist
-        const tableToSheetMap = new Map<string, string>();
-        for (const config of SHEET_CONFIG) {
-            if (existingSheetNames.has(config.name) && !tableToSheetMap.has(config.table)) {
-                tableToSheetMap.set(config.table, config.name);
+        // Build sheets to sync based on hardcoded config, matching case-insensitively
+        const sheetsToSync = SHEET_CONFIG.map(config => {
+            const actualSheetName = existingSheetNames.find(s => s.toLowerCase() === config.name.toLowerCase());
+            if (actualSheetName) {
+                return { ...config, name: actualSheetName };
             }
-        }
-
-        const sheetsToSync = SHEET_CONFIG.filter(config => 
-            existingSheetNames.has(config.name) && tableToSheetMap.get(config.table) === config.name
-        );
+            return null;
+        }).filter((s): s is any => s !== null);
 
         const syncResults = await Promise.all(sheetsToSync.map(async (config) => {
             try {
