@@ -25,19 +25,28 @@ interface StationHistoryProps {
     hasMore?: boolean;
 }
 
-const CopyableText = ({ text, className }: { text: string; className?: string }) => {
+const CopyableText = ({ text, className, disabled = false }: { text: string; className?: string; disabled?: boolean }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!text) return;
+        if (!text || disabled || text === '---') return;
         navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Shorten tracking/serial for display - show last digits if long
-    const displayText = text.length > 8 ? `...${text.slice(-6)}` : text;
+    // Show last 8 numbers, no dots
+    const displayText = text.length > 8 ? text.slice(-8) : text;
+    const isEmpty = !text || text === '---' || disabled;
+
+    if (isEmpty) {
+        return (
+            <div className={`${className} flex items-center justify-center w-full opacity-40`}>
+                <span className="text-left w-full">---</span>
+            </div>
+        );
+    }
 
     return (
         <button 
@@ -150,12 +159,14 @@ export default function StationHistory({
         if (!groupedHistory[date]) groupedHistory[date] = [];
         
         // Normalize for display
+        const rawCount = log.count || (log as any).status; // Handle tech log column mismatch
         const normalizedLog = {
             ...log,
             timestamp,
             title: log.title || (log as any).product || 'Unknown Product',
             tracking: log.tracking || (log as any).trackingNumber || '',
-            status: log.status || (log as any).carrier || ''
+            status: stationType === 'testing' ? '' : (log.status || (log as any).carrier || ''), // Hide status for testing if it contains count
+            count: typeof rawCount === 'number' ? rawCount : parseInt(rawCount) || 0
         };
         
         groupedHistory[date].push(normalizedLog);
@@ -166,12 +177,12 @@ export default function StationHistory({
             {/* Sticky Header */}
             <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-2">
-                    <p className="text-[9px] font-black text-gray-900 tracking-tight">
+                    <p className="text-[10px] font-black text-gray-900 tracking-tight">
                         {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
                     </p>
                     <div className="h-2 w-px bg-gray-200" />
-                    <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">
-                        Count: {currentCount || (history.length > 0 ? history[0].count : 0)}
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                        Count: {currentCount || (history.length > 0 ? (history[0].count || history.length) : 0)}
                     </p>
                 </div>
                 
@@ -201,9 +212,9 @@ export default function StationHistory({
                         {Object.entries(groupedHistory).map(([date, logs]) => (
                             <div key={date} className="flex flex-col">
                                 {/* Day Header Bar */}
-                                <div className="bg-gray-50/80 border-y border-gray-100 px-2 py-0.5 flex items-center justify-between sticky top-0 z-10 h-[18px]">
-                                    <p className="text-[6px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                                    <p className="text-[6px] font-black text-gray-400 uppercase">Total: {logs[0]?.count || logs.length} Units</p>
+                                <div className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between sticky top-0 z-10">
+                                    <p className="text-[8px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
+                                    <p className="text-[8px] font-black text-gray-400 uppercase">Total: {logs[0]?.count || logs.length} Units</p>
                                 </div>
                                 {logs.map((log, index) => {
                                     const ts = log.timestamp || (log as any).packedAt;
