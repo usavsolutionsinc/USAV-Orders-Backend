@@ -72,16 +72,21 @@ export async function POST(req: NextRequest) {
                 
                 const client = await pool.connect();
                 try {
+                    // Start a transaction for each sheet sync to ensure literal replacement
                     await client.query('BEGIN');
                     
-                    // Clear existing data - use TRUNCATE for speed and identity reset
-                    await client.query(`TRUNCATE TABLE ${config.table} RESTART IDENTITY CASCADE`);
+                    // CRITICAL: Literal replace means wipe EVERYTHING first
+                    // We use DELETE followed by RESTART IDENTITY for maximum compatibility
+                    await client.query(`DELETE FROM ${config.table}`);
+                    await client.query(`ALTER SEQUENCE IF EXISTS ${config.table}_col_1_seq RESTART WITH 1`);
                     
                     if (rows.length > 0) {
+                        // We still filter for truly empty rows to avoid bloat, 
+                        // but we process EVERYTHING else from the sheet
                         const dataRows = rows.filter(row => row.some(cell => cell !== null && cell !== ''));
                         
                         if (dataRows.length > 0) {
-                            const CHUNK_SIZE = Math.floor(10000 / dataColumnsCount); 
+                            const CHUNK_SIZE = 500; // Safer chunk size for complex queries
                             
                             for (let i = 0; i < dataRows.length; i += CHUNK_SIZE) {
                                 const chunk = dataRows.slice(i, i + CHUNK_SIZE);
@@ -94,10 +99,8 @@ export async function POST(req: NextRequest) {
                                     const paddedRow = Array(dataColumnsCount).fill(null);
                                     row.forEach((val, index) => {
                                         if (index < dataColumnsCount) {
-                                            // Handle boolean/null/empty values
-                                            if (val === 'TRUE' || val === 'true') paddedRow[index] = true;
-                                            else if (val === 'FALSE' || val === 'false') paddedRow[index] = false;
-                                            else if (val === '' || val === undefined || val === null) paddedRow[index] = null;
+                                            // Standardize the copy-paste: empty string becomes null
+                                            if (val === '' || val === undefined || val === null) paddedRow[index] = null;
                                             else paddedRow[index] = String(val);
                                         }
                                     });
@@ -113,7 +116,7 @@ export async function POST(req: NextRequest) {
                     }
                     
                     await client.query('COMMIT');
-                    return { sheet: config.name, table: config.table, status: 'success', rows: rows.length };
+                    return { sheet: config.name, table: config.table, status: 'replaced', rows: rows.length };
                 } catch (dbErr) {
                     await client.query('ROLLBACK');
                     throw dbErr;
