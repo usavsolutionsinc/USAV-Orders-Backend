@@ -32,6 +32,13 @@ export default function StationLayout({
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    // Force packing stations to stay on MAIN tab on mobile
+    useEffect(() => {
+        if (isMobile && stationType === 'packing' && activeTab !== 'MAIN') {
+            setActiveTab('MAIN');
+        }
+    }, [isMobile, stationType, activeTab]);
+
     const x = useMotionValue(0);
     const controls = useAnimation();
 
@@ -58,12 +65,24 @@ export default function StationLayout({
     };
 
     if (isMobile) {
+        // Simplified mobile layout for packing stations - just show the main content
+        if (stationType === 'packing') {
+            return (
+                <div className="fixed inset-0 bg-white overflow-hidden flex flex-col">
+                    <div className="flex-1 relative overflow-hidden">
+                        {children}
+                    </div>
+                </div>
+            );
+        }
+
+        // Full swipe navigation for other station types (testing)
         return (
             <div className="fixed inset-0 bg-white overflow-hidden flex flex-col">
                 {/* Mobile Swipe Area */}
                 <div className="flex-1 relative overflow-hidden">
                     <motion.div
-                        drag={stationType === 'packing' ? false : "x"}
+                        drag="x"
                         dragConstraints={{ left: 0, right: 0 }}
                         onDragEnd={handleDragEnd}
                         animate={{ x: getXOffset() }}
@@ -88,25 +107,23 @@ export default function StationLayout({
                 </div>
 
                 {/* Mobile Tab Indicators / Minimal Nav */}
-                {stationType !== 'packing' && (
-                    <div className="h-14 flex items-center justify-between px-10 bg-white border-t border-gray-50">
-                        <button 
-                            onClick={() => setActiveTab('NAV')}
-                            className={`p-2 rounded-xl transition-all ${activeTab === 'NAV' ? 'text-blue-600' : 'text-gray-300'}`}
-                        >
-                            <LayoutDashboard className="w-6 h-6" />
-                        </button>
-                        
-                        <div className="flex gap-1.5 h-1 items-center flex-1 justify-center">
-                            <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'NAV' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
-                            <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'MAIN' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
-                            {/* History Indicator Hidden on Mobile */}
-                        </div>
-
-                        {/* History Button Hidden on Mobile */}
-                        <div className="w-10" />
+                <div className="h-14 flex items-center justify-between px-10 bg-white border-t border-gray-50">
+                    <button 
+                        onClick={() => setActiveTab('NAV')}
+                        className={`p-2 rounded-xl transition-all ${activeTab === 'NAV' ? 'text-blue-600' : 'text-gray-300'}`}
+                    >
+                        <LayoutDashboard className="w-6 h-6" />
+                    </button>
+                    
+                    <div className="flex gap-1.5 h-1 items-center flex-1 justify-center">
+                        <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'NAV' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
+                        <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'MAIN' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
+                        {/* History Indicator Hidden on Mobile */}
                     </div>
-                )}
+
+                    {/* History Button Hidden on Mobile */}
+                    <div className="w-10" />
+                </div>
             </div>
         );
     }
@@ -115,7 +132,7 @@ export default function StationLayout({
     return (
         <div className="flex h-full w-full bg-white overflow-hidden">
             <div className="flex-1 flex overflow-hidden w-full">
-                {/* Main Content */}
+                {/* Main Content - takes full width for packing stations */}
                 <div className={`flex flex-col min-w-0 bg-gray-50/30 overflow-hidden transition-all duration-300 ${stationType === 'packing' ? 'flex-1' : 'w-[400px] border-r border-gray-100 flex-shrink-0'}`}>
                     {children}
                 </div>
