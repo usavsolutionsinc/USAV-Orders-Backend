@@ -54,10 +54,22 @@ export async function POST(req: NextRequest) {
         const sheetsToSync = existingSheetNames.map(sheetName => {
             const matchingTable = tablesInfo.find(t => t.table_name.toLowerCase() === sheetName.toLowerCase());
             if (matchingTable) {
+                // Handle both array and PostgreSQL array string formats
+                let columns: string[] = [];
+                if (Array.isArray(matchingTable.columns)) {
+                    columns = matchingTable.columns;
+                } else if (typeof matchingTable.columns === 'string') {
+                    // Remove braces and split by comma
+                    columns = matchingTable.columns.replace(/^{|}$/g, '').split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+                }
+
+                if (columns.length === 0) return null;
+
                 // Filter out primary keys and auto-generated columns
-                const columnNames = matchingTable.columns.filter((col: string) => 
+                const columnNames = columns.filter((col: string) => 
                     !['col_1', 'id', 'created_at', 'updated_at'].includes(col.toLowerCase())
                 );
+                
                 return {
                     name: sheetName,
                     table: matchingTable.table_name,
