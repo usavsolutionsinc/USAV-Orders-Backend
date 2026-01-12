@@ -159,37 +159,6 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
         setShowDetails(true);
     };
 
-    if (!isMobile) {
-        return (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-gray-50/30">
-                <div className="max-w-md space-y-6">
-                    <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mx-auto shadow-sm">
-                        <Package className="w-10 h-10 text-blue-500" />
-                    </div>
-                    <div className="space-y-2">
-                        <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Review Mode</h2>
-                        <p className="text-sm text-gray-500 leading-relaxed">
-                            Station packing is only available on mobile devices. Use your phone to scan shipping labels and pack orders.
-                        </p>
-                    </div>
-                    <div className="p-8 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between px-2">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Today's Progress</p>
-                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">{todayCount} / {goal}</p>
-                        </div>
-                        <div className="h-3 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
-                            <motion.div 
-                                initial={{ width: 0 }} 
-                                animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }} 
-                                className="h-full bg-blue-500 rounded-full" 
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
             <div className="flex-1 flex flex-col px-6 pt-6 overflow-y-auto no-scrollbar relative">
