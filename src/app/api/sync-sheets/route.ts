@@ -8,17 +8,17 @@ export const maxDuration = 60; // Increase timeout for Vercel
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
 const SHEET_CONFIG = [
-    { name: 'Orders', table: 'orders', columnsCount: 14 },
-    { name: 'Shipped', table: 'shipped', columnsCount: 14 },
-    { name: 'Tech_1', table: 'tech_1', columnsCount: 14 },
-    { name: 'Tech_2', table: 'tech_2', columnsCount: 14 },
-    { name: 'Tech_3', table: 'tech_3', columnsCount: 14 },
-    { name: 'Receiving', table: 'receiving', columnsCount: 14 },
-    { name: 'Packer_1', table: 'packer_1', columnsCount: 14 },
-    { name: 'Packer_2', table: 'packer_2', columnsCount: 14 },
-    { name: 'Sku_Stock', table: 'sku_stock', columnsCount: 14 },
-    { name: 'Sku', table: 'sku', columnsCount: 14 },
-    { name: 'RS', table: 'rs', columnsCount: 14 },
+    { name: 'Orders', table: 'orders', columnsCount: 13 },
+    { name: 'Shipped', table: 'shipped', columnsCount: 13 },
+    { name: 'Tech_1', table: 'tech_1', columnsCount: 13 },
+    { name: 'Tech_2', table: 'tech_2', columnsCount: 13 },
+    { name: 'Tech_3', table: 'tech_3', columnsCount: 13 },
+    { name: 'Receiving', table: 'receiving', columnsCount: 13 },
+    { name: 'Packer_1', table: 'packer_1', columnsCount: 13 },
+    { name: 'Packer_2', table: 'packer_2', columnsCount: 13 },
+    { name: 'Sku_Stock', table: 'sku_stock', columnsCount: 13 },
+    { name: 'Sku', table: 'sku', columnsCount: 13 },
+    { name: 'RS', table: 'rs', columnsCount: 13 },
     // Specialized tables
     { name: 'staff', table: 'staff', columnNames: ['name', 'role', 'employee_id', 'active'] },
     { name: 'tags', table: 'tags', columnNames: ['name', 'color'] },
