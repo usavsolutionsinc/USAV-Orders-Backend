@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
 
         const syncResults = await Promise.all(sheetsToSync.map(async (config) => {
             try {
-                const allExpectedColumns = config.columnNames || Array.from({ length: config.columnsCount! }, (_, i) => `col_${i + 2}`);
-                const dataColumnsCount = allExpectedColumns.length;
+                const columnNames = config.columnNames || Array.from({ length: config.columnsCount! }, (_, i) => `col_${i + 2}`);
+                const dataColumnsCount = columnNames.length;
                 
                 // Fetch data from Google Sheets - get all columns up to the limit
                 const lastColChar = String.fromCharCode(64 + dataColumnsCount);
@@ -72,22 +72,6 @@ export async function POST(req: NextRequest) {
                 
                 const client = await pool.connect();
                 try {
-                    // Fetch actual columns from database to skip missing ones
-                    const columnRes = await client.query(
-                        "SELECT column_name FROM information_schema.columns WHERE table_name = $1",
-                        [config.table]
-                    );
-                    const actualColumns = columnRes.rows.map(r => r.column_name);
-                    
-                    const validColumnIndices: number[] = [];
-                    const columnNames = allExpectedColumns.filter((col, index) => {
-                        if (actualColumns.includes(col)) {
-                            validColumnIndices.push(index);
-                            return true;
-                        }
-                        return false;
-                    });
-
                     // Start a transaction for each sheet sync to ensure literal replacement
                     await client.query('BEGIN');
                     
@@ -96,7 +80,7 @@ export async function POST(req: NextRequest) {
                     await client.query(`DELETE FROM ${config.table}`);
                     await client.query(`ALTER SEQUENCE IF EXISTS ${config.table}_col_1_seq RESTART WITH 1`);
                     
-                    if (rows.length > 0 && columnNames.length > 0) {
+                    if (rows.length > 0) {
                         // We still filter for truly empty rows to avoid bloat, 
                         // but we process EVERYTHING else from the sheet
                         const dataRows = rows.filter(row => row.some(cell => cell !== null && cell !== ''));
@@ -108,18 +92,19 @@ export async function POST(req: NextRequest) {
                                 const chunk = dataRows.slice(i, i + CHUNK_SIZE);
                                 
                                 const placeholders = chunk.map((_, rowIndex) => 
-                                    `(${Array.from({ length: columnNames.length }, (_, colIndex) => `$${rowIndex * columnNames.length + colIndex + 1}`).join(', ')})`
+                                    `(${Array.from({ length: dataColumnsCount }, (_, colIndex) => `$${rowIndex * dataColumnsCount + colIndex + 1}`).join(', ')})`
                                 ).join(', ');
                                 
                                 const values = chunk.flatMap(row => {
-                                    const filteredRow = [];
-                                    for (const index of validColumnIndices) {
-                                        const val = row[index];
-                                        // Standardize the copy-paste: empty string becomes null
-                                        if (val === '' || val === undefined || val === null) filteredRow.push(null);
-                                        else filteredRow.push(String(val));
-                                    }
-                                    return filteredRow;
+                                    const paddedRow = Array(dataColumnsCount).fill(null);
+                                    row.forEach((val, index) => {
+                                        if (index < dataColumnsCount) {
+                                            // Standardize the copy-paste: empty string becomes null
+                                            if (val === '' || val === undefined || val === null) paddedRow[index] = null;
+                                            else paddedRow[index] = String(val);
+                                        }
+                                    });
+                                    return paddedRow;
                                 });
 
                                 const columnsList = columnNames.join(', ');
