@@ -7,26 +7,6 @@ export const maxDuration = 60; // Increase timeout for Vercel
 
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
-const SHEET_CONFIG = [
-    { name: 'Orders', table: 'orders', columnsCount: 13 },
-    { name: 'Shipped', table: 'shipped', columnsCount: 13 },
-    { name: 'Tech_1', table: 'tech_1', columnsCount: 13 },
-    { name: 'Tech_2', table: 'tech_2', columnsCount: 13 },
-    { name: 'Tech_3', table: 'tech_3', columnsCount: 13 },
-    { name: 'Receiving', table: 'receiving', columnsCount: 13 },
-    { name: 'Packer_1', table: 'packer_1', columnsCount: 13 },
-    { name: 'Packer_2', table: 'packer_2', columnsCount: 13 },
-    { name: 'Sku_Stock', table: 'sku_stock', columnsCount: 13 },
-    { name: 'Sku', table: 'sku', columnsCount: 13 },
-    { name: 'RS', table: 'rs', columnsCount: 13 },
-    // Specialized tables
-    { name: 'staff', table: 'staff', columnNames: ['name', 'role', 'employee_id', 'active'] },
-    { name: 'tags', table: 'tags', columnNames: ['name', 'color'] },
-    { name: 'task_templates', table: 'task_templates', columnNames: ['title', 'description', 'role', 'order_number', 'tracking_number', 'created_by'] },
-    { name: 'receiving_tasks', table: 'receiving_tasks', columnNames: ['tracking_number', 'order_number', 'status', 'urgent', 'received_date', 'processed_date', 'notes', 'staff_id'] },
-    { name: 'sku_management', table: 'sku_management', columnNames: ['base_sku', 'current_sku_counting'] },
-];
-
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -41,28 +21,78 @@ export async function POST(req: NextRequest) {
         const auth = getGoogleAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
-        // Get all sheet names in the spreadsheet first
+        // 1. Get all sheet names from Google Sheets
         const spreadsheet = await sheets.spreadsheets.get({
             spreadsheetId: targetSpreadsheetId,
         });
         const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
 
-        // Build sheets to sync based on hardcoded config, matching case-insensitively
-        const sheetsToSync = SHEET_CONFIG.map(config => {
-            const actualSheetName = existingSheetNames.find(s => s.toLowerCase() === config.name.toLowerCase());
-            if (actualSheetName) {
-                return { ...config, name: actualSheetName };
+        // 2. Get all tables and their columns from Neon DB
+        const client = await pool.connect();
+        let tablesInfo: any[] = [];
+        try {
+            const tablesResult = await client.query(`
+                SELECT 
+                    t.table_name, 
+                    array_agg(c.column_name ORDER BY c.ordinal_position) as columns
+                FROM 
+                    information_schema.tables t
+                JOIN 
+                    information_schema.columns c ON t.table_name = c.table_name
+                WHERE 
+                    t.table_schema = 'public'
+                    AND t.table_type = 'BASE TABLE'
+                GROUP BY 
+                    t.table_name
+            `);
+            tablesInfo = tablesResult.rows;
+        } finally {
+            client.release();
+        }
+
+        // 3. Match sheets to tables dynamically
+        const sheetsToSync = existingSheetNames.map(sheetName => {
+            const matchingTable = tablesInfo.find(t => t.table_name.toLowerCase() === sheetName.toLowerCase());
+            if (matchingTable) {
+                // Filter out primary keys and auto-generated columns
+                const columnNames = matchingTable.columns.filter((col: string) => 
+                    !['col_1', 'id', 'created_at', 'updated_at'].includes(col.toLowerCase())
+                );
+                return {
+                    name: sheetName,
+                    table: matchingTable.table_name,
+                    columnNames: columnNames
+                };
             }
             return null;
         }).filter((s): s is any => s !== null);
 
+        if (sheetsToSync.length === 0) {
+            return NextResponse.json({ 
+                success: true, 
+                message: 'No matching sheets and tables found to sync.',
+                results: [] 
+            });
+        }
+
         const syncResults = await Promise.all(sheetsToSync.map(async (config) => {
             try {
-                const columnNames = config.columnNames || Array.from({ length: config.columnsCount! }, (_, i) => `col_${i + 2}`);
+                const columnNames = config.columnNames;
                 const dataColumnsCount = columnNames.length;
                 
                 // Fetch data from Google Sheets - get all columns up to the limit
-                const lastColChar = String.fromCharCode(64 + dataColumnsCount);
+                // Convert column count to A1 notation (e.g., 1 -> A, 2 -> B, ..., 26 -> Z, 27 -> AA)
+                const getColumnLetter = (n: number) => {
+                    let letter = '';
+                    while (n > 0) {
+                        let temp = (n - 1) % 26;
+                        letter = String.fromCharCode(65 + temp) + letter;
+                        n = (n - temp - 1) / 26;
+                    }
+                    return letter;
+                };
+                
+                const lastColChar = getColumnLetter(dataColumnsCount);
                 const response = await sheets.spreadsheets.values.get({
                     spreadsheetId: targetSpreadsheetId,
                     range: `${config.name}!A2:${lastColChar}`, // Skip header row
@@ -72,21 +102,27 @@ export async function POST(req: NextRequest) {
                 
                 const client = await pool.connect();
                 try {
-                    // Start a transaction for each sheet sync to ensure literal replacement
                     await client.query('BEGIN');
                     
-                    // CRITICAL: Literal replace means wipe EVERYTHING first
-                    // We use DELETE followed by RESTART IDENTITY for maximum compatibility
+                    // Wipe everything first
                     await client.query(`DELETE FROM ${config.table}`);
-                    await client.query(`ALTER SEQUENCE IF EXISTS ${config.table}_col_1_seq RESTART WITH 1`);
+                    
+                    // Restart identity if it's a generic table with col_1 or specialized with id
+                    const hasCol1 = columnNames.length > 0 && !columnNames.includes('col_1');
+                    const hasId = columnNames.length > 0 && !columnNames.includes('id');
+                    
+                    if (hasCol1) {
+                        await client.query(`ALTER SEQUENCE IF EXISTS ${config.table}_col_1_seq RESTART WITH 1`);
+                    }
+                    if (hasId) {
+                        await client.query(`ALTER SEQUENCE IF EXISTS ${config.table}_id_seq RESTART WITH 1`);
+                    }
                     
                     if (rows.length > 0) {
-                        // We still filter for truly empty rows to avoid bloat, 
-                        // but we process EVERYTHING else from the sheet
                         const dataRows = rows.filter(row => row.some(cell => cell !== null && cell !== ''));
                         
                         if (dataRows.length > 0) {
-                            const CHUNK_SIZE = 500; // Safer chunk size for complex queries
+                            const CHUNK_SIZE = 500;
                             
                             for (let i = 0; i < dataRows.length; i += CHUNK_SIZE) {
                                 const chunk = dataRows.slice(i, i + CHUNK_SIZE);
@@ -99,7 +135,6 @@ export async function POST(req: NextRequest) {
                                     const paddedRow = Array(dataColumnsCount).fill(null);
                                     row.forEach((val, index) => {
                                         if (index < dataColumnsCount) {
-                                            // Standardize the copy-paste: empty string becomes null
                                             if (val === '' || val === undefined || val === null) paddedRow[index] = null;
                                             else paddedRow[index] = String(val);
                                         }

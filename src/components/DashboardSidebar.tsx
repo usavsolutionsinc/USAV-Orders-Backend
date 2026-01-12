@@ -22,8 +22,8 @@ export default function DashboardSidebar() {
             });
             const data = await res.json();
             if (data.success) {
-                const totalSheets = data.results.filter((r: any) => r.status === 'success').length;
-                setStatus({ type: 'success', message: `Synced ${totalSheets} sheets to Neon DB` });
+                const totalSheets = data.results.filter((r: any) => r.status === 'replaced').length;
+                setStatus({ type: 'success', message: `Successfully transferred ${totalSheets} sheets to Neon DB` });
             } else {
                 setStatus({ type: 'error', message: data.error || 'Sync failed' });
             }
