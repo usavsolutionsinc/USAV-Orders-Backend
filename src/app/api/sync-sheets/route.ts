@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
                     columns = matchingTable.columns;
                 } else if (typeof matchingTable.columns === 'string') {
                     // Remove braces and split by comma
-                    columns = matchingTable.columns.replace(/^{|}$/g, '').split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+                    columns = matchingTable.columns.replace(/^{|}$/g, '').split(',').map((c: string) => c.trim().replace(/^"|"$/g, ''));
                 }
 
                 if (columns.length === 0) return null;
