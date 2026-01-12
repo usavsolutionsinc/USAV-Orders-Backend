@@ -108,8 +108,40 @@ export default function StationHistory({
 
     const formatDate = (dateStr: string) => {
         try {
+            if (!dateStr) return 'Unknown';
+            
+            // Handle YYYY-MM-DD (from groupedHistory)
+            if (dateStr.includes('-')) {
+                const parts = dateStr.split('-');
+                if (parts.length === 3) {
+                    const y = parseInt(parts[0]);
+                    const m = parseInt(parts[1]);
+                    const d = parseInt(parts[2]);
+                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    return `${months[m - 1]} ${d}, ${y}`;
+                }
+            }
+            
+            // Handle M/D/YYYY (from raw timestamp)
+            if (dateStr.includes('/')) {
+                const datePart = dateStr.split(' ')[0];
+                const parts = datePart.split('/');
+                if (parts.length === 3) {
+                    const m = parseInt(parts[0]);
+                    const d = parseInt(parts[1]);
+                    const y = parseInt(parts[2]);
+                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    return `${months[m - 1]} ${d}, ${y}`;
+                }
+            }
+
+            // Fallback to native if ISO
             const date = new Date(dateStr);
-            return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            if (!isNaN(date.getTime())) {
+                return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+            }
+            
+            return dateStr;
         } catch (e) { return dateStr; }
     };
 
@@ -250,7 +282,11 @@ export default function StationHistory({
                                             className={`grid grid-cols-[55px_1fr_60px_80px_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
-                                                {ts ? (ts.includes(' ') ? ts.split(' ')[1].slice(0, 5) : new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\s?[APM]{2}$/, '')) : '--:--'}
+                                                {ts ? (
+                                                    ts.includes(' ') 
+                                                        ? ts.split(' ')[1].split(':').slice(0, 2).join(':') 
+                                                        : new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+                                                ) : '--:--'}
                                             </div>
                                             <div className="text-[11px] font-bold text-gray-900 truncate text-left">
                                                 {log.title || (log as any).product || 'Unknown Product'}

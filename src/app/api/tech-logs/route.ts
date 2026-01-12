@@ -40,14 +40,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { techId, timestamp, title, tracking, serial, count } = body;
+        const { techId, userName, timestamp, title, tracking, serial, count } = body;
 
         const tableName = `tech_${techId}`;
+        const last8 = tracking ? tracking.slice(-8).toLowerCase() : '';
         
+        // 1. Update/Insert into the technician's specific table
         await db.execute(sql.raw(`
             INSERT INTO ${tableName} (col_2, col_3, col_4, col_5, col_6)
             VALUES ('${timestamp}', '${title}', '${tracking}', '${serial}', '${count}')
         `));
+
+        // 2. Update the shipped table if tracking is provided
+        if (last8) {
+            // Update col_6 (Serial) and col_8 (By/Technician Name)
+            // matching by the last 8 digits of the tracking number in col_5
+            await db.execute(sql.raw(`
+                UPDATE shipped
+                SET col_6 = '${serial}', col_8 = '${userName}'
+                WHERE RIGHT(col_5, 8) = '${last8}'
+            `));
+        }
 
         return NextResponse.json({ success: true });
     } catch (error: any) {

@@ -101,22 +101,54 @@ export default function StationTesting({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inputValue) return;
+        const input = inputValue.trim();
+        if (!input) return;
         
-        setIsLoading(true);
-        const type = detectType(inputValue);
+        const type = detectType(input);
         
-        // Mock processing logic
-        setTimeout(() => {
-            if (type === 'TRACKING') {
-                setProcessedOrder(mockProduct);
-            } else if (type === 'COMMAND' && inputValue.toUpperCase() === 'TEST') {
-                setProcessedOrder({ ...mockProduct, title: 'TEST UNIT', sku: 'TEST-SKU' });
+        if (type === 'TRACKING') {
+            setIsLoading(true);
+            try {
+                const res = await fetch(`/api/tech-logs/search?tracking=${input}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.found) {
+                        setProcessedOrder({
+                            title: data.productName,
+                            sku: data.sku || 'N/A',
+                            condition: data.condition || 'N/A',
+                            notes: data.notes || 'N/A',
+                            customer: data.customer || 'N/A',
+                            orderId: data.orderId || 'N/A',
+                            tracking: input
+                        });
+                    } else {
+                        setProcessedOrder({
+                            title: 'Unknown Product',
+                            sku: 'N/A',
+                            orderId: 'N/A',
+                            tracking: input,
+                            notes: 'Tracking not found in Shipped table.'
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Search failed:", err);
+            } finally {
+                setIsLoading(false);
             }
-            setInputValue('');
-            setIsLoading(false);
-            inputRef.current?.focus();
-        }, 600);
+        } else if (type === 'SERIAL' && processedOrder) {
+            // If we have an active order and input is a serial, just keep it in input or move to a serial state
+            // For now, let's just let it stay in inputValue and the user can click Complete or press Enter again
+            // Let's call handleComplete if we have a serial and an active order
+            setInputValue(input.toUpperCase());
+            return; 
+        } else if (type === 'COMMAND' && input.toUpperCase() === 'TEST') {
+            setProcessedOrder({ ...mockProduct, title: 'TEST UNIT', sku: 'TEST-SKU', tracking: 'TEST-TRK' });
+        }
+        
+        setInputValue('');
+        inputRef.current?.focus();
     };
 
     const handleComplete = async () => {
@@ -124,25 +156,36 @@ export default function StationTesting({
 
         setIsLoading(true);
         try {
-            await fetch('/api/tech-logs', {
+            // Get local timestamp in M/D/YYYY HH:mm:ss format to match DB expectation
+            const now = new Date();
+            const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+            const res = await fetch('/api/tech-logs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     techId: userId,
-                    timestamp: new Date().toISOString(),
+                    userName, // Pass technician name for Shipped table update
+                    timestamp,
                     title: processedOrder.title,
-                    tracking: processedOrder.orderId, // Using orderId as mock tracking
-                    serial: 'SN-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
+                    tracking: processedOrder.tracking || processedOrder.orderId,
+                    serial: inputValue.trim().toUpperCase() || ('SN-' + Math.random().toString(36).substr(2, 9).toUpperCase()),
                     count: todayCount + 1
                 })
             });
             
-            if (onComplete) onComplete();
-            setProcessedOrder(null);
-            setInputValue('');
-            inputRef.current?.focus();
+            if (res.ok) {
+                if (onComplete) onComplete();
+                setProcessedOrder(null);
+                setInputValue('');
+                inputRef.current?.focus();
+            } else {
+                const err = await res.json();
+                alert(`Error: ${err.error || 'Failed to complete task'}`);
+            }
         } catch (e) {
             console.error(e);
+            alert('Network error occurred');
         } finally {
             setIsLoading(false);
         }
