@@ -40,7 +40,8 @@ export default function StationLayout({
         if (info.offset.x < -threshold) {
             // Swipe Left -> Move to next tab
             if (activeTab === 'NAV') setActiveTab('MAIN');
-            else if (activeTab === 'MAIN') setActiveTab('HISTORY');
+            // History disabled on mobile as per request
+            // else if (activeTab === 'MAIN') setActiveTab('HISTORY');
         } else if (info.offset.x > threshold) {
             // Swipe Right -> Move to previous tab
             if (activeTab === 'HISTORY') setActiveTab('MAIN');
@@ -77,36 +78,38 @@ export default function StationLayout({
                         <div className="w-full h-full overflow-hidden border-x border-gray-100">
                             {children}
                         </div>
-                        {/* History Pane */}
+                        {/* History Pane (Hidden/Disabled on Mobile) */}
                         <div className="w-full h-full overflow-hidden">
-                            {historyContent}
+                            <div className="flex items-center justify-center h-full text-gray-400">
+                                <p className="text-xs uppercase tracking-widest font-black">History Disabled on Mobile</p>
+                            </div>
                         </div>
                     </motion.div>
                 </div>
 
                 {/* Mobile Tab Indicators / Minimal Nav */}
                 <div className="h-14 flex items-center justify-between px-10 bg-white border-t border-gray-50">
-                    {stationType !== 'packing' && (
+                    {stationType !== 'packing' ? (
                         <button 
                             onClick={() => setActiveTab('NAV')}
                             className={`p-2 rounded-xl transition-all ${activeTab === 'NAV' ? 'text-blue-600' : 'text-gray-300'}`}
                         >
                             <LayoutDashboard className="w-6 h-6" />
                         </button>
+                    ) : (
+                        <div className="w-10" />
                     )}
+                    
                     <div className="flex gap-1.5 h-1 items-center flex-1 justify-center">
                         {stationType !== 'packing' && (
                             <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'NAV' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
                         )}
                         <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'MAIN' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
-                        <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'HISTORY' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
+                        {/* History Indicator Hidden on Mobile */}
                     </div>
-                    <button 
-                        onClick={() => setActiveTab('HISTORY')}
-                        className={`p-2 rounded-xl transition-all ${activeTab === 'HISTORY' ? 'text-blue-600' : 'text-gray-300'}`}
-                    >
-                        <History className="w-6 h-6" />
-                    </button>
+
+                    {/* History Button Hidden on Mobile */}
+                    <div className="w-10" />
                 </div>
             </div>
         );

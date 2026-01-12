@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
+import { db } from '@/lib/drizzle/db';
+import { orders as ordersTable, shipped as shippedTable } from '@/lib/drizzle/schema';
+
+const ORDERS_GID = 719315456;
+const SHIPPED_GID = 316829503;
 
 export async function POST(request: NextRequest) {
     try {
@@ -14,12 +19,14 @@ export async function POST(request: NextRequest) {
         const auth = getGoogleAuth();
         const sheets = google.sheets({ version: 'v4', auth });
         const spreadsheetId = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
-        const sheetName = 'Orders';
 
-        // Prepare the values in the requested order:
-        // A - Ship by date, B - Order Number, C - Item title, D - Quantity, 
-        // E - USAV SKU, F - Condition, G - Tracking, J - Note
-        // Note: H and I are empty
+        // Find destination sheet names by GID
+        const destSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+        const destSheets = destSpreadsheet.data.sheets || [];
+        const ordersSheetName = destSheets.find(s => s.properties?.sheetId === ORDERS_GID)?.properties?.title || 'Orders';
+        const shippedSheetName = destSheets.find(s => s.properties?.sheetId === SHIPPED_GID)?.properties?.title || 'Shipped';
+
+        // Prepare the values for Google Sheets
         const rowsToAppend = data.map((item: any) => [
             item.shipByDate,   // A
             item.orderNumber,  // B
@@ -29,22 +36,71 @@ export async function POST(request: NextRequest) {
             item.condition,    // F
             item.tracking,     // G
             '',                // H (Empty)
-            '',                // I (Empty)
+            '',                // I (Empty) - Column 9
             item.note          // J
         ]);
 
-        await sheets.spreadsheets.values.append({
+        const shippedRowsToAppend = data.map((item: any) => [
+            '',                // 1 - Date / Time (empty initially)
+            item.orderNumber,  // 2 - Order ID
+            item.itemTitle,    // 3 - Product Title
+            item.condition,    // 4 - Sent (product condition)
+            item.tracking,     // 5 - Shipping TRK #
+            '',                // 6 - Serial Number
+            '',                // 7 - Box
+            '',                // 8 - By
+            '',                // 9 - SKU
+            ''                 // 10 - Status
+        ]);
+
+        // Prepare data for Neon DB
+        const ordersToInsert = data.map((item: any) => ({
+            col2: item.shipByDate || '',
+            col3: item.orderNumber || '',
+            col4: item.itemTitle || '',
+            col5: item.quantity || '',
+            col6: item.usavSku || '',
+            col7: item.condition || '',
+            col8: item.tracking || '',
+            col9: '', 
+            col10: '',
+            col11: item.note || '',
+        }));
+
+        const shippedToInsert = data.map((item: any) => ({
+            col2: '', // Date / Time (empty)
+            col3: item.orderNumber || '',
+            col4: item.itemTitle || '',
+            col5: item.condition || '',
+            col6: item.tracking || '',
+        }));
+
+        const appendOrders = sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: `${sheetName}!A:J`,
-            valueInputOption: 'RAW',
+            range: `${ordersSheetName}!A:J`,
+            valueInputOption: 'USER_ENTERED',
             requestBody: {
                 values: rowsToAppend,
             },
         });
 
+        const appendShipped = sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: `${shippedSheetName}!A:J`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: {
+                values: shippedRowsToAppend,
+            },
+        });
+
+        const dbInsertOrders = db.insert(ordersTable).values(ordersToInsert);
+        const dbInsertShipped = db.insert(shippedTable).values(shippedToInsert);
+
+        await Promise.all([appendOrders, appendShipped, dbInsertOrders, dbInsertShipped]);
+
         return NextResponse.json({ 
             success: true, 
-            message: `Successfully imported ${data.length} orders.` 
+            message: `Successfully imported ${data.length} orders to Sheets and DB.` 
         });
     } catch (error: any) {
         console.error('Import error:', error);

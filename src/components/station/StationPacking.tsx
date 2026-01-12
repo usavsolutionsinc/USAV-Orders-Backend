@@ -193,7 +193,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
     return (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
             <div className="flex-1 flex flex-col px-6 pt-6 overflow-y-auto no-scrollbar relative">
-                <div className="flex-1 flex flex-col space-y-8 pb-60">
+                <div className={`flex-1 flex flex-col space-y-8 ${(scannedTracking || showDetails) && cameraMode === 'off' ? 'pb-60' : 'pb-10'}`}>
                     {(scannedTracking || showDetails) && cameraMode === 'off' ? (
                         <div className="space-y-8">
                             <div className="text-center space-y-2">
@@ -245,7 +245,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                             </div>
                         </div>
                     ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-12 py-12">
+                        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-12 py-12 min-h-[70vh]">
                             <div className="w-32 h-32 bg-gray-50 rounded-full flex items-center justify-center mx-auto relative border border-gray-100">
                                 <div className="absolute inset-0 rounded-full border border-blue-100 animate-ping" />
                                 <Package className="w-12 h-12 text-gray-300" />

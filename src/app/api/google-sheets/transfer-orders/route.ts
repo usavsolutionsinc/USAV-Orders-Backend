@@ -1,27 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
+import { db } from '@/lib/drizzle/db';
+import { orders as ordersTable, shipped as shippedTable } from '@/lib/drizzle/schema';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
 const DEST_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
-const DEST_SHEET_NAME = 'orders';
+
+const ORDERS_GID = 719315456;
+const SHIPPED_GID = 316829503;
+
+function getLastEightDigits(str: any) {
+    if (!str) return '';
+    return String(str).trim().slice(-8).toLowerCase();
+}
 
 export async function POST(req: NextRequest) {
     try {
         const auth = getGoogleAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
-        // 1. Find the most relevant sheet tab
-        const sourceSpreadsheet = await sheets.spreadsheets.get({
-            spreadsheetId: SOURCE_SPREADSHEET_ID,
-        });
+        // 1. Find the most relevant sheet tabs
+        const [sourceSpreadsheet, destSpreadsheet] = await Promise.all([
+            sheets.spreadsheets.get({ spreadsheetId: SOURCE_SPREADSHEET_ID }),
+            sheets.spreadsheets.get({ spreadsheetId: DEST_SPREADSHEET_ID })
+        ]);
 
-        const sheetTabs = sourceSpreadsheet.data.sheets || [];
-        const dateTabs = sheetTabs
+        const sourceTabs = sourceSpreadsheet.data.sheets || [];
+        const dateTabs = sourceTabs
             .map(s => s.properties?.title || '')
             .filter(title => title.startsWith('Sheet_'))
             .map(title => {
-                // Format: Sheet_MM_DD_YYYY
                 const parts = title.split('_');
                 if (parts.length < 4) return { title, date: new Date(0) };
                 const mm = parseInt(parts[1]);
@@ -37,17 +46,22 @@ export async function POST(req: NextRequest) {
 
         const targetTabName = dateTabs[0].title;
 
+        // Find destination sheet names by GID
+        const destSheets = destSpreadsheet.data.sheets || [];
+        const ordersSheetName = destSheets.find(s => s.properties?.sheetId === ORDERS_GID)?.properties?.title || 'orders';
+        const shippedSheetName = destSheets.find(s => s.properties?.sheetId === SHIPPED_GID)?.properties?.title || 'shipped';
+
         // 2. Read the Shipped sheet for existing tracking numbers to deduplicate
         const shippedTrackingResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: DEST_SPREADSHEET_ID,
-            range: `shipped!E2:E`, // Column E is tracking in Shipped sheet
+            range: `${shippedSheetName}!E2:E`, // Column E is tracking in Shipped sheet
         });
 
         const existingTrackingInShipped = new Set(
             (shippedTrackingResponse.data.values || [])
                 .flat()
                 .filter(t => t && t.trim() !== '')
-                .map(t => String(t).trim())
+                .map(t => getLastEightDigits(t))
         );
 
         // 3. Read the source tab from Master Sheet
@@ -86,13 +100,18 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. Process rows (only with tracking and NOT already in Shipped)
-        const processedRows = sourceRows.slice(1).filter(row => {
+        const filteredSourceRows = sourceRows.slice(1).filter(row => {
             const tracking = row[colIndices.tracking];
             if (!tracking || tracking.trim() === '') return false;
-            
-            // Check if tracking is already in Shipped sheet E column
-            return !existingTrackingInShipped.has(String(tracking).trim());
-        }).map(row => {
+            return !existingTrackingInShipped.has(getLastEightDigits(tracking));
+        });
+
+        if (filteredSourceRows.length === 0) {
+            return NextResponse.json({ success: true, message: 'No new rows (not in Shipped) found', rowCount: 0 });
+        }
+
+        // Prepare data for Google Sheets
+        const processedOrdersRows = filteredSourceRows.map(row => {
             const destRow = new Array(10).fill(''); // A to J
             destRow[0] = row[colIndices.shipByDate] || '';
             destRow[1] = row[colIndices.orderNumber] || '';
@@ -106,23 +125,62 @@ export async function POST(req: NextRequest) {
             return destRow;
         });
 
-        if (processedRows.length === 0) {
-            return NextResponse.json({ success: true, message: 'No new rows (not in Shipped) found', rowCount: 0 });
-        }
-
-        // 5. Append to destination Orders sheet
-        await sheets.spreadsheets.values.append({
-            spreadsheetId: DEST_SPREADSHEET_ID,
-            range: `${DEST_SHEET_NAME}!A:A`, 
-            valueInputOption: 'USER_ENTERED',
-            requestBody: {
-                values: processedRows,
-            },
+        const processedShippedRows = filteredSourceRows.map(row => {
+            const destRow = new Array(10).fill(''); // A to J
+            destRow[0] = ''; // Column 1 empty as requested
+            destRow[1] = row[colIndices.orderNumber] || '';
+            destRow[2] = row[colIndices.itemTitle] || '';
+            destRow[3] = row[colIndices.condition] || '';
+            destRow[4] = row[colIndices.tracking] || '';
+            // F-J remain empty
+            return destRow;
         });
+
+        // Prepare data for Neon DB
+        const ordersToInsert = filteredSourceRows.map(row => ({
+            col2: row[colIndices.shipByDate] || '',
+            col3: row[colIndices.orderNumber] || '',
+            col4: row[colIndices.itemTitle] || '',
+            col5: row[colIndices.quantity] || '',
+            col6: row[colIndices.usavSku] || '',
+            col7: row[colIndices.condition] || '',
+            col8: row[colIndices.tracking] || '',
+            col9: '', // OOS
+            col10: '', // Blank
+            col11: row[colIndices.note] || '',
+        }));
+
+        const shippedToInsert = filteredSourceRows.map(row => ({
+            col2: '', // Date / Time (empty)
+            col3: row[colIndices.orderNumber] || '',
+            col4: row[colIndices.itemTitle] || '',
+            col5: row[colIndices.condition] || '',
+            col6: row[colIndices.tracking] || '',
+        }));
+
+        // 5. Concurrent upload to Sheets and DB
+        const appendOrders = sheets.spreadsheets.values.append({
+            spreadsheetId: DEST_SPREADSHEET_ID,
+            range: `${ordersSheetName}!A:A`, 
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: processedOrdersRows },
+        });
+
+        const appendShipped = sheets.spreadsheets.values.append({
+            spreadsheetId: DEST_SPREADSHEET_ID,
+            range: `${shippedSheetName}!A:A`, 
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: processedShippedRows },
+        });
+
+        const dbInsertOrders = db.insert(ordersTable).values(ordersToInsert);
+        const dbInsertShipped = db.insert(shippedTable).values(shippedToInsert);
+
+        await Promise.all([appendOrders, appendShipped, dbInsertOrders, dbInsertShipped]);
 
         return NextResponse.json({ 
             success: true, 
-            rowCount: processedRows.length, 
+            rowCount: processedOrdersRows.length, 
             tabName: targetTabName 
         });
 
