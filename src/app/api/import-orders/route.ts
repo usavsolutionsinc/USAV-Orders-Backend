@@ -54,25 +54,27 @@ export async function POST(request: NextRequest) {
         ]);
 
         // Prepare data for Neon DB - matching Google Sheets column order
+        // Note: Use camelCase property names (col2, col3) for Drizzle ORM
+        // Database columns are col_1, col_2, etc. but Drizzle uses col1, col2, etc.
         const ordersToInsert = data.map((item: any) => ({
-            col_2: item.shipByDate || '',      // Column A
-            col_3: item.orderNumber || '',     // Column B
-            col_4: item.itemTitle || '',       // Column C
-            col_5: item.quantity || '',        // Column D
-            col_6: item.usavSku || '',         // Column E
-            col_7: item.condition || '',       // Column F
-            col_8: item.tracking || '',        // Column G
-            col_9: '',                         // Column H (Empty)
-            col_10: '',                        // Column I (Empty)
-            col_11: item.note || '',           // Column J
+            col2: item.shipByDate || '',      // Column A (DB: col_2)
+            col3: item.orderNumber || '',     // Column B (DB: col_3)
+            col4: item.itemTitle || '',       // Column C (DB: col_4)
+            col5: item.quantity || '',        // Column D (DB: col_5)
+            col6: item.usavSku || '',         // Column E (DB: col_6)
+            col7: item.condition || '',       // Column F (DB: col_7)
+            col8: item.tracking || '',        // Column G (DB: col_8)
+            col9: '',                         // Column H (DB: col_9) (Empty)
+            col10: '',                        // Column I (DB: col_10) (Empty)
+            col11: item.note || '',           // Column J (DB: col_11)
         }));
 
         const shippedToInsert = data.map((item: any) => ({
-            col_2: '',                         // Column A - Date/Time (empty initially)
-            col_3: item.orderNumber || '',     // Column B - Order ID
-            col_4: item.itemTitle || '',       // Column C - Product Title
-            col_5: item.condition || '',       // Column D - Condition
-            col_6: item.tracking || '',        // Column E - Tracking Number
+            col2: '',                         // Column A (DB: col_2) - Date/Time (empty initially)
+            col3: item.orderNumber || '',     // Column B (DB: col_3) - Order ID
+            col4: item.itemTitle || '',       // Column C (DB: col_4) - Product Title
+            col5: item.condition || '',       // Column D (DB: col_5) - Condition
+            col6: item.tracking || '',        // Column E (DB: col_6) - Tracking Number
         }));
 
         const appendOrders = sheets.spreadsheets.values.append({

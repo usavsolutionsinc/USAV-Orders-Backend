@@ -6,22 +6,23 @@ import { eq, and, sql } from 'drizzle-orm';
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
-        const role = searchParams.get('role');
+        const stationId = searchParams.get('stationId');
         const staffId = searchParams.get('staffId');
 
-        if (!role || !staffId) {
-            return NextResponse.json({ error: 'role and staffId are required' }, { status: 400 });
+        if (!stationId || !staffId) {
+            return NextResponse.json({ error: 'stationId and staffId are required' }, { status: 400 });
         }
 
         const today = new Date().toISOString().split('T')[0];
 
-        // Get templates and their instances for today with tags using Drizzle
+        // Get templates and their instances for today with tags - filtered by station_id
         const results = await db.execute(sql`
             SELECT 
                 t.id,
                 t.title,
                 t.description,
                 t.role,
+                t.station_id,
                 t.order_number,
                 t.tracking_number,
                 t.created_at,
@@ -45,8 +46,8 @@ export async function GET(request: NextRequest) {
                 AND i.task_date = ${today}
             LEFT JOIN task_tags tt ON t.id = tt.task_template_id
             LEFT JOIN tags tg ON tt.tag_id = tg.id
-            WHERE t.role = ${role}
-            GROUP BY t.id, t.title, t.description, t.role, t.order_number, t.tracking_number, 
+            WHERE t.station_id = ${stationId}
+            GROUP BY t.id, t.title, t.description, t.role, t.station_id, t.order_number, t.tracking_number, 
                      t.created_at, i.status, i.started_at, i.completed_at, i.duration_minutes, 
                      i.notes, i.task_date
             ORDER BY t.id ASC
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
             title: row.title,
             description: row.description,
             role: row.role,
+            station_id: row.station_id,
             order_number: row.order_number,
             tracking_number: row.tracking_number,
             tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,

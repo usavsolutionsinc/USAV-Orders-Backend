@@ -16,6 +16,7 @@ interface TaskTemplate {
     title: string;
     description: string | null;
     role: string;
+    station_id?: string;
     order_number: string | null;
     tracking_number: string | null;
     tags: Tag[];
@@ -57,6 +58,9 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
     // Hardcoded staff ID logic - using userId as a proxy for station-specific staff
     const staffId = parseInt(userId);
     const staffName = `${role === 'technician' ? 'Tech' : 'Packer'} Station ${userId}`;
+    
+    // Create station_id from role and userId (e.g., "Tech_1", "Packer_2")
+    const stationId = `${role === 'technician' ? 'Tech' : 'Packer'}_${userId}`;
 
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editTitle, setEditTitle] = useState('');
@@ -71,9 +75,9 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
     const [newTrackingNumber, setNewTrackingNumber] = useState('');
 
     const { data: items = [], isLoading } = useQuery<ChecklistItem[]>({
-        queryKey: ['checklist', role, staffId],
+        queryKey: ['checklist', stationId, staffId],
         queryFn: async () => {
-            const res = await fetch(`/api/checklist?role=${role}&staffId=${staffId}`);
+            const res = await fetch(`/api/checklist?stationId=${stationId}&staffId=${staffId}`);
             if (!res.ok) throw new Error('Failed to fetch checklist');
             return res.json();
         },
@@ -90,7 +94,7 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
             return res.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['checklist', role, staffId] });
+            queryClient.invalidateQueries({ queryKey: ['checklist', stationId, staffId] });
         },
     });
 
@@ -105,7 +109,7 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
             return res.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['checklist', role, staffId] });
+            queryClient.invalidateQueries({ queryKey: ['checklist', stationId, staffId] });
             setEditingId(null);
         },
     });
@@ -115,13 +119,13 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
             const res = await fetch('/api/checklist/template', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role, ...data }),
+                body: JSON.stringify({ role, station_id: stationId, ...data }),
             });
             if (!res.ok) throw new Error('Failed to create template');
             return res.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['checklist', role, staffId] });
+            queryClient.invalidateQueries({ queryKey: ['checklist', stationId, staffId] });
             setIsAdding(false);
             setNewTitle('');
             setNewDescription('');
@@ -132,13 +136,13 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
 
     const deleteTemplateMutation = useMutation({
         mutationFn: async (id: number) => {
-            const res = await fetch(`/api/checklist/template?id=${id}`, {
+            const res = await fetch(`/api/checklist/template?id=${id}&stationId=${stationId}`, {
                 method: 'DELETE',
             });
             if (!res.ok) throw new Error('Failed to delete template');
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['checklist', role, staffId] });
+            queryClient.invalidateQueries({ queryKey: ['checklist', stationId, staffId] });
         },
     });
 

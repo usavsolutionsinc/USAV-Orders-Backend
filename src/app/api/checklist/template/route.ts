@@ -3,10 +3,10 @@ import pool from '@/lib/db';
 
 export async function POST(request: NextRequest) {
     try {
-        const { role, title, description, order_number, tracking_number, created_by, tag_ids } = await request.json();
+        const { role, station_id, title, description, order_number, tracking_number, created_by, tag_ids } = await request.json();
 
-        if (!role || !title) {
-            return NextResponse.json({ error: 'role and title are required' }, { status: 400 });
+        if (!station_id || !title) {
+            return NextResponse.json({ error: 'station_id and title are required' }, { status: 400 });
         }
 
         // Start transaction
@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
         try {
             await client.query('BEGIN');
 
-            // Insert template
+            // Insert template with station_id
             const result = await client.query(
-                `INSERT INTO task_templates (title, description, role, order_number, tracking_number, created_by) 
-                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-                [title, description || null, role, order_number || null, tracking_number || null, created_by || null]
+                `INSERT INTO task_templates (title, description, role, station_id, order_number, tracking_number, created_by) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+                [title, description || null, role || null, station_id, order_number || null, tracking_number || null, created_by || null]
             );
 
             const templateId = result.rows[0].id;
@@ -49,17 +49,18 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
     try {
-        const { id, title, description, order_number, tracking_number } = await request.json();
+        const { id, title, description, order_number, tracking_number, station_id } = await request.json();
 
         if (!id || !title) {
             return NextResponse.json({ error: 'id and title are required' }, { status: 400 });
         }
 
+        // Update with station_id if provided (for future station changes)
         const result = await pool.query(
             `UPDATE task_templates 
-             SET title = $1, description = $2, order_number = $3, tracking_number = $4 
-             WHERE id = $5 RETURNING *`,
-            [title, description || null, order_number || null, tracking_number || null, id]
+             SET title = $1, description = $2, order_number = $3, tracking_number = $4, station_id = COALESCE($5, station_id)
+             WHERE id = $6 RETURNING *`,
+            [title, description || null, order_number || null, tracking_number || null, station_id || null, id]
         );
 
         if (result.rows.length === 0) {
@@ -77,13 +78,19 @@ export async function DELETE(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
+        const stationId = searchParams.get('stationId'); // Optional: for additional security
 
         if (!id) {
             return NextResponse.json({ error: 'id is required' }, { status: 400 });
         }
 
         // Delete the template (this will cascade to task_tags and daily_task_instances)
-        await pool.query('DELETE FROM task_templates WHERE id = $1', [id]);
+        // If stationId is provided, ensure we only delete templates for that station
+        if (stationId) {
+            await pool.query('DELETE FROM task_templates WHERE id = $1 AND station_id = $2', [id, stationId]);
+        } else {
+            await pool.query('DELETE FROM task_templates WHERE id = $1', [id]);
+        }
 
         return NextResponse.json({ success: true });
     } catch (error) {

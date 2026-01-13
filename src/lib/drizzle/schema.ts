@@ -24,6 +24,7 @@ export const taskTemplates = pgTable('task_templates', {
   title: text('title').notNull(),
   description: text('description'),
   role: varchar('role', { length: 50 }).notNull(),
+  stationId: text('station_id'), // e.g., "Tech_1", "Tech_2", "Packer_1"
   orderNumber: varchar('order_number', { length: 100 }),
   trackingNumber: varchar('tracking_number', { length: 100 }),
   createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
