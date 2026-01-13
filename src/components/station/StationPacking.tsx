@@ -161,6 +161,48 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
 
     return (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
+            {/* Persistent Goal/Progress Header */}
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100 bg-white sticky top-0 z-50">
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center border border-blue-100">
+                                <Package className="w-5 h-5 text-blue-500" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-black text-gray-900 tracking-tight">{todayCount} Packed</p>
+                                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Today</p>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Goal</p>
+                            <p className="text-2xl font-black text-gray-900 tracking-tighter">{goal}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                        <div className="h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100">
+                            <motion.div 
+                                initial={{ width: 0 }} 
+                                animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }} 
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                                className={`h-full rounded-full shadow-sm ${
+                                    todayCount >= goal ? 'bg-emerald-500' : 'bg-blue-500'
+                                }`}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between px-1">
+                            <p className="text-[9px] font-bold text-gray-400 tabular-nums">
+                                {Math.round((todayCount / goal) * 100)}% Complete
+                            </p>
+                            <p className="text-[9px] font-bold text-gray-400 tabular-nums">
+                                {Math.max(0, goal - todayCount)} Remaining
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div className="flex-1 flex flex-col px-6 pt-6 overflow-y-auto no-scrollbar relative">
                 <div className={`flex-1 flex flex-col space-y-8 ${(scannedTracking || showDetails) && cameraMode === 'off' ? 'pb-60' : 'pb-10'}`}>
                     {(scannedTracking || showDetails) && cameraMode === 'off' ? (
@@ -235,21 +277,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                             </div>
 
                             <div className="w-full max-w-xs space-y-8">
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between px-2">
-                                        <p className="text-[10px] font-black text-gray-400 whitespace-nowrap tabular-nums">{todayCount} PKG</p>
-                                        <p className="text-[10px] font-black text-gray-400 whitespace-nowrap uppercase tracking-widest">Goal: {goal}</p>
-                                    </div>
-                                    <div className="h-3 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
-                                        <motion.div 
-                                            initial={{ width: 0 }} 
-                                            animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }} 
-                                            className="h-full bg-blue-500 rounded-full shadow-lg shadow-blue-100" 
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="flex justify-center items-center gap-4 pt-8">
+                                <div className="flex justify-center items-center gap-4">
                                     <button onClick={startScanning} className="h-16 px-8 bg-white border border-gray-100 rounded-2xl flex items-center gap-3 transition-all active:scale-95 group shadow-xl shadow-gray-200">
                                         <CameraIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-500" />
                                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-gray-900">Camera</span>
