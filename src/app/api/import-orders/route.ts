@@ -53,26 +53,26 @@ export async function POST(request: NextRequest) {
             ''                 // 10 - Status
         ]);
 
-        // Prepare data for Neon DB
+        // Prepare data for Neon DB - matching Google Sheets column order
         const ordersToInsert = data.map((item: any) => ({
-            col2: item.shipByDate || '',
-            col3: item.orderNumber || '',
-            col4: item.itemTitle || '',
-            col5: item.quantity || '',
-            col6: item.usavSku || '',
-            col7: item.condition || '',
-            col8: item.tracking || '',
-            col9: '', 
-            col10: '',
-            col11: item.note || '',
+            col_2: item.shipByDate || '',      // Column A
+            col_3: item.orderNumber || '',     // Column B
+            col_4: item.itemTitle || '',       // Column C
+            col_5: item.quantity || '',        // Column D
+            col_6: item.usavSku || '',         // Column E
+            col_7: item.condition || '',       // Column F
+            col_8: item.tracking || '',        // Column G
+            col_9: '',                         // Column H (Empty)
+            col_10: '',                        // Column I (Empty)
+            col_11: item.note || '',           // Column J
         }));
 
         const shippedToInsert = data.map((item: any) => ({
-            col2: '', // Date / Time (empty)
-            col3: item.orderNumber || '',
-            col4: item.itemTitle || '',
-            col5: item.condition || '',
-            col6: item.tracking || '',
+            col_2: '',                         // Column A - Date/Time (empty initially)
+            col_3: item.orderNumber || '',     // Column B - Order ID
+            col_4: item.itemTitle || '',       // Column C - Product Title
+            col_5: item.condition || '',       // Column D - Condition
+            col_6: item.tracking || '',        // Column E - Tracking Number
         }));
 
         const appendOrders = sheets.spreadsheets.values.append({
