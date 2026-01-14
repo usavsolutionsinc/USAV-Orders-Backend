@@ -130,8 +130,8 @@ export async function POST() {
                 AND dti.staff_id IS NULL
             `);
 
-            // Drop user_id column (commented out for safety - uncomment after verification)
-            // await client.query(`ALTER TABLE daily_task_instances DROP COLUMN user_id`);
+            // Make user_id nullable for backwards compatibility
+            await client.query(`ALTER TABLE daily_task_instances ALTER COLUMN user_id DROP NOT NULL`);
         }
 
         // Add new columns to daily_task_instances

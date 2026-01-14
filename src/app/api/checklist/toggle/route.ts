@@ -109,12 +109,55 @@ export async function POST(request: NextRequest) {
             const startedAt = status === 'in_progress' ? now : null;
             const completedAt = status === 'completed' ? now : null;
 
+            // Check which columns actually exist in the table
+            const tableInfo = await pool.query(`
+                SELECT column_name, is_nullable 
+                FROM information_schema.columns 
+                WHERE table_name = 'daily_task_instances'
+            `);
+            
+            const columns = tableInfo.rows.map(r => r.column_name);
+            const notNullColumns = tableInfo.rows.filter(r => r.is_nullable === 'NO').map(r => r.column_name);
+
+            const insertMap: Record<string, any> = {
+                template_id: templateId,
+                staff_id: staffId,
+                task_date: today,
+                status: status,
+                started_at: startedAt,
+                completed_at: completedAt,
+                notes: notes || null,
+                role: role
+            };
+
+            // Handle legacy/extra columns
+            if (columns.includes('user_id')) {
+                insertMap['user_id'] = staffId.toString();
+            }
+            if (columns.includes('station_id')) {
+                const numericStationId = stationId ? (stationId.includes('_') ? stationId.split('_')[1] : stationId) : null;
+                insertMap['station_id'] = numericStationId;
+            }
+            if (columns.includes('is_completed')) {
+                insertMap['is_completed'] = status === 'completed';
+            }
+
+            // Ensure all NOT NULL columns have a value
+            for (const col of notNullColumns) {
+                if (!(col in insertMap) && col !== 'id' && col !== 'created_at') {
+                    insertMap[col] = ''; // Fallback for unexpected NOT NULL columns
+                }
+            }
+
+            const colNames = Object.keys(insertMap);
+            const placeholders = colNames.map((_, i) => `$${i + 1}`).join(', ');
+            const values = Object.values(insertMap);
+
             result = await pool.query(`
-                INSERT INTO daily_task_instances 
-                (staff_id, task_date, status, started_at, completed_at, notes, template_id)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                INSERT INTO daily_task_instances (${colNames.join(', ')})
+                VALUES (${placeholders})
                 RETURNING *
-            `, [staffId, today, status, startedAt, completedAt, notes || null, templateId]);
+            `, values);
 
             // Archive to completed_tasks table if creating as completed
             if (status === 'completed') {

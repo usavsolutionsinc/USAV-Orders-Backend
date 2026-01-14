@@ -33,6 +33,8 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [orderDetails, setOrderDetails] = useState<any>(null);
+    const [galleryOpen, setGalleryOpen] = useState(false);
+    const [tempPhotos, setTempPhotos] = useState<string[]>([]);
     
     const mockDetails = {
         productTitle: 'Sony Alpha a7 IV Mirrorless Camera',
@@ -177,7 +179,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
     };
 
     return (
-        <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
+        <div className="flex-1 flex flex-col relative bg-white min-h-0">
             {/* Minimal Progress Header */}
             <div className="px-4 py-3 border-b border-gray-100 bg-white sticky top-0 z-50">
                 <div className="flex items-center justify-between mb-2">
@@ -203,21 +205,15 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
             <div className="flex-1 flex flex-col overflow-y-auto scrollbar-hide relative">
                 <div className="flex-1 flex flex-col px-4 py-4 space-y-4">
                     {(scannedTracking || showDetails) && cameraMode === 'off' ? (
-                        <div className="space-y-4">
-                            {/* Product Info (Left) and Order ID (Right) */}
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Product</p>
-                                    <h1 className="text-base font-black leading-tight text-gray-900 tracking-tight">
-                                        {orderDetails?.productTitle || mockDetails.productTitle}
-                                    </h1>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Order ID</p>
-                                    <p className="text-sm font-black text-blue-600 tracking-tight">
-                                        {orderDetails?.orderId || mockDetails.orderId}
-                                    </p>
-                                </div>
+                        <div className="space-y-4 pb-20">
+                            {/* Order ID and Product Title */}
+                            <div className="flex flex-col gap-1">
+                                <h1 className="text-lg font-black text-blue-600 tracking-tight">
+                                    {orderDetails?.orderId || mockDetails.orderId}
+                                </h1>
+                                <p className="text-sm font-black leading-tight text-gray-900 tracking-tight">
+                                    {orderDetails?.productTitle || mockDetails.productTitle}
+                                </p>
                             </div>
 
                             {/* Box Size - Left Aligned */}
@@ -242,35 +238,32 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                             </div>
 
                             {photos.length > 0 && (
-                                <div className="space-y-2">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Photos ({photos.length})</p>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {photos.map((photo, i) => (
-                                            <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                                                <img src={photo} alt="" className="w-full h-full object-cover" />
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        setPhotos(prev => prev.filter((_, idx) => idx !== i));
-                                                    }} 
-                                                    className="absolute top-1 right-1 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-red-600 active:scale-90 transition-all z-10"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        ))}
+                                <button 
+                                    onClick={() => { setTempPhotos([...photos]); setGalleryOpen(true); }}
+                                    className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group active:scale-[0.98] transition-all"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-gray-200 bg-white">
+                                            <img src={photos[photos.length - 1]} alt="" className="w-full h-full object-cover" />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">View Photos</p>
+                                            <p className="text-sm font-black text-gray-900">{photos.length} captured</p>
+                                        </div>
                                     </div>
-                                </div>
+                                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-sm group-hover:border-blue-200 group-hover:text-blue-500 transition-all">
+                                        <CameraIcon className="w-5 h-5" />
+                                    </div>
+                                </button>
                             )}
 
-                            <div className="flex justify-center items-center gap-3 pt-6 pb-8">
+                            <div className="flex justify-center items-center gap-3 pt-4">
                                 <button 
                                     onClick={() => { setCameraMode('photo'); startCameraForPhoto(); }} 
                                     className="flex-1 h-14 bg-white border-2 border-gray-200 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
                                 >
                                     <CameraIcon className="w-4 h-4 text-gray-500" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">More Photos</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">Add Photo</span>
                                 </button>
                                 <button 
                                     onClick={() => { setScannedTracking(''); setPhotos([]); setShowDetails(false); startScanning(); }} 
@@ -363,6 +356,90 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                                     <Check className="w-8 h-8" />
                                 </button>
                             </div>
+                        </div>
+                    </motion.div>
+                )}
+
+                {galleryOpen && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 100 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        exit={{ opacity: 0, y: 100 }} 
+                        className="fixed inset-0 bg-black z-[200] flex flex-col"
+                    >
+                        <div className="flex-1 relative overflow-hidden flex items-center justify-center">
+                            {tempPhotos.length === 0 ? (
+                                <div className="text-center text-white/40">
+                                    <CameraIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                                    <p className="text-xs font-black uppercase tracking-widest">No Photos</p>
+                                </div>
+                            ) : (
+                                <div className="relative w-full h-[70vh]">
+                                    <AnimatePresence mode="popLayout">
+                                        {tempPhotos.map((photo, index) => (
+                                            index === tempPhotos.length - 1 && (
+                                                <motion.div
+                                                    key={photo}
+                                                    initial={{ scale: 0.9, opacity: 0 }}
+                                                    animate={{ scale: 1, opacity: 1 }}
+                                                    exit={{ x: -500, opacity: 0, rotate: -20 }}
+                                                    drag="x"
+                                                    dragConstraints={{ left: 0, right: 0 }}
+                                                    onDragEnd={(e, info) => {
+                                                        if (info.offset.x < -100) {
+                                                            setTempPhotos(prev => prev.slice(0, -1));
+                                                        }
+                                                    }}
+                                                    className="absolute inset-0 p-6 touch-none"
+                                                >
+                                                    <div className="w-full h-full bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative">
+                                                        <img src={photo} alt="" className="w-full h-full object-cover" />
+                                                        <div className="absolute top-6 left-6 right-6 flex justify-between items-center">
+                                                            <div className="px-3 py-1 bg-black/50 backdrop-blur-md rounded-full border border-white/10">
+                                                                <p className="text-[10px] font-black text-white/80 uppercase tracking-widest">
+                                                                    {index + 1} of {tempPhotos.length}
+                                                                </p>
+                                                            </div>
+                                                            <div className="bg-red-500 px-3 py-1 rounded-full animate-pulse">
+                                                                <p className="text-[8px] font-black text-white uppercase tracking-tighter">Swipe Left to Delete</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            )
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Gallery Controls */}
+                        <div className="px-8 pb-12 flex justify-between items-center">
+                            <button 
+                                onClick={() => setGalleryOpen(false)}
+                                className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/10 active:scale-90 transition-all"
+                            >
+                                <X className="w-8 h-8" />
+                            </button>
+                            
+                            <div className="flex flex-col items-center">
+                                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">Gallery</p>
+                                <div className="flex gap-1">
+                                    {Array.from({ length: photos.length }).map((_, i) => (
+                                        <div key={i} className={`w-1.5 h-1.5 rounded-full ${i === tempPhotos.length - 1 ? 'bg-blue-500' : 'bg-white/20'}`} />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={() => {
+                                    setPhotos(tempPhotos);
+                                    setGalleryOpen(false);
+                                }}
+                                className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-600/30 active:scale-90 transition-all"
+                            >
+                                <Check className="w-8 h-8" />
+                            </button>
                         </div>
                     </motion.div>
                 )}
