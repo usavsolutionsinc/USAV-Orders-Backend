@@ -32,8 +32,11 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
+    const [orderDetails, setOrderDetails] = useState<any>(null);
+    
     const mockDetails = {
         productTitle: 'Sony Alpha a7 IV Mirrorless Camera',
+        orderId: 'ORD-7721',
         boxSize: '12x12x12',
         instructions: 'Fragile. Wrap in double bubble wrap. Use heavy duty tape.',
         shippingMethod: 'UPS Ground',
@@ -88,9 +91,23 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                         },
                         aspectRatio: 1.0
                     },
-                    (decodedText) => {
+                    async (decodedText) => {
                         setScannedTracking(decodedText);
                         stopScanning();
+                        
+                        // Fetch order details from shipped table
+                        try {
+                            const res = await fetch(`/api/packing-logs/details?tracking=${encodeURIComponent(decodedText)}`);
+                            if (res.ok) {
+                                const data = await res.json();
+                                if (data.found) {
+                                    setOrderDetails(data);
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Failed to fetch order details:', e);
+                        }
+                        
                         setCameraMode('photo');
                         startCameraForPhoto();
                     },
@@ -161,91 +178,85 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
 
     return (
         <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
-            {/* Persistent Goal/Progress Header */}
-            <div className="px-6 pt-6 pb-4 border-b border-gray-100 bg-white sticky top-0 z-50">
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center border border-blue-100">
-                                <Package className="w-5 h-5 text-blue-500" />
-                            </div>
-                            <div>
-                                <p className="text-xs font-black text-gray-900 tracking-tight">{todayCount} Packed</p>
-                                <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Today</p>
-                            </div>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-xs font-black text-gray-400 uppercase tracking-wider">Goal</p>
-                            <p className="text-2xl font-black text-gray-900 tracking-tighter">{goal}</p>
-                        </div>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                        <div className="h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100">
-                            <motion.div 
-                                initial={{ width: 0 }} 
-                                animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }} 
-                                transition={{ duration: 0.5, ease: "easeOut" }}
-                                className={`h-full rounded-full shadow-sm ${
-                                    todayCount >= goal ? 'bg-emerald-500' : 'bg-blue-500'
-                                }`}
-                            />
-                        </div>
-                        <div className="flex items-center justify-between px-1">
-                            <p className="text-[9px] font-bold text-gray-400 tabular-nums">
-                                {Math.round((todayCount / goal) * 100)}% Complete
-                            </p>
-                            <p className="text-[9px] font-bold text-gray-400 tabular-nums">
-                                {Math.max(0, goal - todayCount)} Remaining
-                            </p>
-                        </div>
-                    </div>
+            {/* Minimal Progress Header */}
+            <div className="px-4 py-3 border-b border-gray-100 bg-white sticky top-0 z-50">
+                <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                        {Math.round((todayCount / goal) * 100)}%
+                    </p>
+                    <p className="text-[10px] font-black text-gray-400 tabular-nums">
+                        {Math.max(0, goal - todayCount)} remaining
+                    </p>
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <motion.div 
+                        initial={{ width: 0 }} 
+                        animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }} 
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                        className={`h-full rounded-full ${
+                            todayCount >= goal ? 'bg-emerald-500' : 'bg-blue-500'
+                        }`}
+                    />
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col px-6 pt-6 overflow-y-auto no-scrollbar relative">
-                <div className={`flex-1 flex flex-col space-y-8 ${(scannedTracking || showDetails) && cameraMode === 'off' ? 'pb-60' : 'pb-10'}`}>
+            <div className="flex-1 flex flex-col overflow-y-auto scrollbar-hide relative">
+                <div className="flex-1 flex flex-col px-4 py-4 space-y-4">
                     {(scannedTracking || showDetails) && cameraMode === 'off' ? (
-                        <div className="space-y-3">
-                            <div className="text-center space-y-2">
-                                <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Product Info</p>
-                                <h1 className="text-2xl font-black leading-tight text-gray-900 tracking-tighter">{mockDetails.productTitle}</h1>
-                            </div>
-                            
-                            <div className="bg-gray-50 rounded-[2rem] p-5 border border-gray-100 shadow-sm">
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Address</p>
-                                    <p className="text-sm font-medium text-gray-600 leading-relaxed">{mockDetails.destination}</p>
+                        <div className="space-y-4">
+                            {/* Product Info (Left) and Order ID (Right) */}
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Product</p>
+                                    <h1 className="text-base font-black leading-tight text-gray-900 tracking-tight">
+                                        {orderDetails?.productTitle || mockDetails.productTitle}
+                                    </h1>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Order ID</p>
+                                    <p className="text-sm font-black text-blue-600 tracking-tight">
+                                        {orderDetails?.orderId || mockDetails.orderId}
+                                    </p>
                                 </div>
                             </div>
 
-                            <div className="flex justify-center">
-                                <div className="bg-gray-50 rounded-2xl px-6 py-3 border border-gray-200">
-                                    <p className="text-2xl font-black text-gray-900 tracking-tighter">{mockDetails.boxSize}</p>
+                            {/* Box Size - Left Aligned */}
+                            <div className="flex justify-start">
+                                <div className="bg-gray-50 rounded-xl px-5 py-2 border border-gray-200">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Box</p>
+                                    <p className="text-lg font-black text-gray-900 tracking-tight">{mockDetails.boxSize}</p>
                                 </div>
                             </div>
 
-                            <div className="bg-blue-50 rounded-[2rem] p-5 border border-blue-100">
-                                <div className="flex items-center gap-2 text-blue-500 mb-2"><Check className="w-4 h-4" /><p className="text-[10px] font-black uppercase tracking-widest">How To Pack</p></div>
-                                <p className="text-sm font-medium leading-relaxed text-blue-900">{mockDetails.instructions}</p>
+                            <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Address</p>
+                                <p className="text-xs font-medium text-gray-600 leading-relaxed">{mockDetails.destination}</p>
+                            </div>
+
+                            <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
+                                <div className="flex items-center gap-2 text-blue-500 mb-2">
+                                    <Check className="w-3 h-3" />
+                                    <p className="text-[9px] font-black uppercase tracking-widest">Instructions</p>
+                                </div>
+                                <p className="text-xs font-medium leading-relaxed text-blue-900">{mockDetails.instructions}</p>
                             </div>
 
                             {photos.length > 0 && (
-                                <div className="space-y-3">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Photos ({photos.length})</p>
-                                    <div className="flex gap-4 overflow-x-auto pb-4 px-2 no-scrollbar">
+                                <div className="space-y-2">
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Photos ({photos.length})</p>
+                                    <div className="grid grid-cols-3 gap-2">
                                         {photos.map((photo, i) => (
-                                            <div key={i} className="relative flex-shrink-0 shadow-sm rounded-2xl overflow-hidden border border-gray-200">
-                                                <img src={photo} alt="" className="w-24 h-24 object-cover" />
+                                            <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                                                <img src={photo} alt="" className="w-full h-full object-cover" />
                                                 <button 
-                                                    onClick={() => {
-                                                        if (window.confirm('Are you sure you want to remove this photo?')) {
-                                                            setPhotos(prev => prev.filter((_, idx) => idx !== i));
-                                                        }
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        setPhotos(prev => prev.filter((_, idx) => idx !== i));
                                                     }} 
-                                                    className="absolute top-1 right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg"
+                                                    className="absolute top-1 right-1 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg hover:bg-red-600 active:scale-90 transition-all z-10"
                                                 >
-                                                    <X className="w-3 h-3" />
+                                                    <X className="w-4 h-4" />
                                                 </button>
                                             </div>
                                         ))}
@@ -253,14 +264,20 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                                 </div>
                             )}
 
-                            <div className="flex justify-center items-center gap-4 pt-4 pb-10">
-                                <button onClick={() => { setCameraMode('photo'); startCameraForPhoto(); }} className="h-16 px-8 bg-white border border-gray-100 rounded-2xl flex items-center gap-3 transition-all active:scale-95 group shadow-xl shadow-gray-200">
-                                    <CameraIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-500" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-gray-900">More</span>
+                            <div className="flex justify-center items-center gap-3 pt-6 pb-8">
+                                <button 
+                                    onClick={() => { setCameraMode('photo'); startCameraForPhoto(); }} 
+                                    className="flex-1 h-14 bg-white border-2 border-gray-200 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+                                >
+                                    <CameraIcon className="w-4 h-4 text-gray-500" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">More Photos</span>
                                 </button>
-                                <button onClick={() => { setScannedTracking(''); setPhotos([]); setShowDetails(false); startScanning(); }} className="h-16 px-8 bg-blue-600 rounded-2xl flex items-center gap-3 transition-all active:scale-95 shadow-xl shadow-blue-200 text-white font-black uppercase tracking-widest text-xs">
-                                    <Search className="w-5 h-5" />
-                                    New Scan
+                                <button 
+                                    onClick={() => { setScannedTracking(''); setPhotos([]); setShowDetails(false); startScanning(); }} 
+                                    className="flex-1 h-14 bg-blue-600 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-200 text-white"
+                                >
+                                    <Search className="w-4 h-4" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">New Scan</span>
                                 </button>
                             </div>
                         </div>
@@ -307,16 +324,45 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                     <motion.div key="camera" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black z-[100] flex flex-col">
                         <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
                         <canvas ref={canvasRef} className="hidden" />
-                        <div className="absolute top-10 left-0 right-0 p-8 flex justify-between items-center z-[110]">
-                            <div className="px-4 py-2 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /><p className="text-[10px] font-black uppercase tracking-widest text-white/80">{scannedTracking}</p></div>
-                            <div className="px-4 py-2 bg-blue-600 rounded-full text-[10px] font-black text-white shadow-lg">{photos.length} PHOTOS</div>
-                        </div>
-                        <div className="absolute bottom-12 left-0 right-0 px-10 flex justify-center items-end gap-6 z-[110]">
-                            <div className="flex flex-col items-center gap-6">
-                                <div className="px-5 py-2 bg-blue-600 rounded-2xl border border-white/20 shadow-2xl text-white"><p className="text-xs font-black uppercase tracking-widest">{mockDetails.boxSize}</p></div>
-                                <button onClick={takePhoto} className="w-24 h-24 bg-white rounded-full flex items-center justify-center active:scale-90 transition-all shadow-[0_0_50px_rgba(255,255,255,0.3)] border-8 border-white/20"><div className="w-16 h-16 rounded-full border-4 border-gray-900 bg-white" /></button>
+                        
+                        {/* Top Bar */}
+                        <div className="absolute top-8 left-0 right-0 px-6 flex justify-between items-center z-[110]">
+                            <div className="px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
+                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                                <p className="text-[9px] font-black uppercase tracking-widest text-white/80">{scannedTracking}</p>
                             </div>
-                            <button onClick={finishPacking} className="w-24 h-24 bg-emerald-600 rounded-full flex items-center justify-center active:scale-90 transition-all shadow-xl shadow-emerald-600/30 text-white mb-0"><Check className="w-12 h-12" /></button>
+                            <div className="px-3 py-1.5 bg-blue-600 rounded-full text-[9px] font-black text-white shadow-lg">
+                                {photos.length} PHOTOS
+                            </div>
+                        </div>
+
+                        {/* Bottom Controls */}
+                        <div className="absolute bottom-0 left-0 right-0 pb-safe z-[110]">
+                            <div className="px-6 pb-8 flex justify-between items-end">
+                                {/* Left: Box Size */}
+                                <div className="flex flex-col items-start gap-3">
+                                    <div className="px-4 py-2 bg-blue-600/90 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl">
+                                        <p className="text-[9px] font-black text-white/60 uppercase tracking-widest mb-0.5">Box</p>
+                                        <p className="text-sm font-black text-white tracking-tight">{mockDetails.boxSize}</p>
+                                    </div>
+                                </div>
+                                
+                                {/* Center: Photo Button */}
+                                <button 
+                                    onClick={takePhoto} 
+                                    className="w-20 h-20 bg-white rounded-full flex items-center justify-center active:scale-90 transition-all shadow-[0_0_50px_rgba(255,255,255,0.3)] border-4 border-white/20"
+                                >
+                                    <div className="w-14 h-14 rounded-full border-4 border-gray-900 bg-white" />
+                                </button>
+                                
+                                {/* Right: Finish Button */}
+                                <button 
+                                    onClick={finishPacking} 
+                                    className="w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center active:scale-90 transition-all shadow-xl shadow-emerald-600/30 text-white"
+                                >
+                                    <Check className="w-8 h-8" />
+                                </button>
+                            </div>
                         </div>
                     </motion.div>
                 )}

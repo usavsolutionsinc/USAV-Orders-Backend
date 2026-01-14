@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
-import { packingLogs } from '@/lib/drizzle/schema';
+import { packingLogs, shipped as shippedTable } from '@/lib/drizzle/schema';
 import { desc, eq, sql } from 'drizzle-orm';
+import pool from '@/lib/db';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -64,14 +65,24 @@ export async function POST(req: NextRequest) {
 
         const tableName = `packer_${packerId}`;
         
-        // Insert into the specific packer table as requested
-        // col_2: timestamp, col_3: tracking, col_4: carrier, col_5: product
+        // Get packer name
+        const packerName = `Packer ${packerId}`;
+        
+        // Insert into the specific packer table
         await db.execute(sql.raw(`
             INSERT INTO ${tableName} (col_2, col_3, col_4, col_5)
             VALUES ('${timestamp}', '${trackingNumber}', '${carrier}', '${product}')
         `));
 
-        // Also record in the unified logs for photo support
+        // Update shipped table with packer info (matching Working GAS logic)
+        // Update col_7 (Box), col_8 (By/Packer name) based on tracking number in col_5
+        await pool.query(`
+            UPDATE shipped 
+            SET col_7 = $1, col_8 = $2
+            WHERE col_6 = $3
+        `, [boxSize || '', packerName, trackingNumber]);
+
+        // Record in unified logs for photo support
         const newLog = await db.insert(packingLogs).values({
             trackingNumber,
             photos: JSON.stringify(photos),
