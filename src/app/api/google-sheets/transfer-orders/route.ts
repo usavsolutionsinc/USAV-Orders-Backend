@@ -15,10 +15,19 @@ function getLastEightDigits(str: any) {
     return String(str).trim().slice(-8).toLowerCase();
 }
 
+function hasNumbers(str: any) {
+    if (!str) return false;
+    return /\d/.test(String(str));
+}
+
 export async function POST(req: NextRequest) {
     try {
         const auth = getGoogleAuth();
         const sheets = google.sheets({ version: 'v4', auth });
+
+        // Parse request body for manual sheet name
+        const body = await req.json().catch(() => ({}));
+        const manualSheetName = body.manualSheetName;
 
         // 1. Find the most relevant sheet tabs
         const [sourceSpreadsheet, destSpreadsheet] = await Promise.all([
@@ -26,25 +35,43 @@ export async function POST(req: NextRequest) {
             sheets.spreadsheets.get({ spreadsheetId: DEST_SPREADSHEET_ID })
         ]);
 
-        const sourceTabs = sourceSpreadsheet.data.sheets || [];
-        const dateTabs = sourceTabs
-            .map(s => s.properties?.title || '')
-            .filter(title => title.startsWith('Sheet_'))
-            .map(title => {
-                const parts = title.split('_');
-                if (parts.length < 4) return { title, date: new Date(0) };
-                const mm = parseInt(parts[1]);
-                const dd = parseInt(parts[2]);
-                const yyyy = parseInt(parts[3]);
-                return { title, date: new Date(yyyy, mm - 1, dd) };
-            })
-            .sort((a, b) => b.date.getTime() - a.date.getTime());
+        let targetTabName: string;
 
-        if (dateTabs.length === 0) {
-            return NextResponse.json({ success: false, error: 'No valid sheet tabs found in source' }, { status: 404 });
+        if (manualSheetName && manualSheetName.trim() !== '') {
+            // Use manual sheet name if provided
+            const sourceTabs = sourceSpreadsheet.data.sheets || [];
+            const manualTab = sourceTabs.find(s => s.properties?.title === manualSheetName.trim());
+            
+            if (!manualTab) {
+                return NextResponse.json({ 
+                    success: false, 
+                    error: `Sheet tab "${manualSheetName}" not found in source spreadsheet` 
+                }, { status: 404 });
+            }
+            
+            targetTabName = manualSheetName.trim();
+        } else {
+            // Auto-detect latest sheet tab
+            const sourceTabs = sourceSpreadsheet.data.sheets || [];
+            const dateTabs = sourceTabs
+                .map(s => s.properties?.title || '')
+                .filter(title => title.startsWith('Sheet_'))
+                .map(title => {
+                    const parts = title.split('_');
+                    if (parts.length < 4) return { title, date: new Date(0) };
+                    const mm = parseInt(parts[1]);
+                    const dd = parseInt(parts[2]);
+                    const yyyy = parseInt(parts[3]);
+                    return { title, date: new Date(yyyy, mm - 1, dd) };
+                })
+                .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+            if (dateTabs.length === 0) {
+                return NextResponse.json({ success: false, error: 'No valid sheet tabs found in source' }, { status: 404 });
+            }
+
+            targetTabName = dateTabs[0].title;
         }
-
-        const targetTabName = dateTabs[0].title;
 
         // Find destination sheet names by GID
         const destSheets = destSpreadsheet.data.sheets || [];
@@ -99,10 +126,12 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // 4. Process rows (only with tracking and NOT already in Shipped)
+        // 4. Process rows (only with tracking that contains numbers and NOT already in Shipped)
         const filteredSourceRows = sourceRows.slice(1).filter(row => {
             const tracking = row[colIndices.tracking];
             if (!tracking || tracking.trim() === '') return false;
+            // Only include tracking numbers that contain at least one digit (ignore pure letter entries)
+            if (!hasNumbers(tracking)) return false;
             return !existingTrackingInShipped.has(getLastEightDigits(tracking));
         });
 

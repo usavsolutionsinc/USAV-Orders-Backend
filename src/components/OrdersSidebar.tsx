@@ -8,6 +8,7 @@ export default function OrdersSidebar() {
     const [isOpen, setIsOpen] = useState(true);
     const [isTransferring, setIsTransferring] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [manualSheetName, setManualSheetName] = useState('');
 
     const handleTransfer = async () => {
         setIsTransferring(true);
@@ -15,6 +16,12 @@ export default function OrdersSidebar() {
         try {
             const res = await fetch('/api/google-sheets/transfer-orders', {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    manualSheetName: manualSheetName.trim() || undefined
+                }),
             });
             const data = await res.json();
             if (data.success) {
@@ -51,6 +58,26 @@ export default function OrdersSidebar() {
                             </header>
                             
                             <div className="space-y-4">
+                                {/* Manual Sheet Entry Field */}
+                                <div className="space-y-2">
+                                    <label className="block">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1 block">
+                                            Manual Sheet Name (Optional)
+                                        </span>
+                                        <input
+                                            type="text"
+                                            value={manualSheetName}
+                                            onChange={(e) => setManualSheetName(e.target.value)}
+                                            placeholder="e.g., Sheet_01_14_2026"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[11px] font-mono text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                            disabled={isTransferring}
+                                        />
+                                    </label>
+                                    <p className="text-[8px] text-gray-500 font-medium italic leading-relaxed">
+                                        Enter sheet tab name to override auto-detection (e.g., Sheet_01_14_2026)
+                                    </p>
+                                </div>
+
                                 <button
                                     onClick={handleTransfer}
                                     disabled={isTransferring}

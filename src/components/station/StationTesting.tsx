@@ -199,47 +199,45 @@ export default function StationTesting({
                     <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
                 </div>
 
-                {/* Single Entry Form */}
-                <div className="space-y-6">
-                    <form onSubmit={handleSubmit} className="relative group">
-                        <div className={`absolute left-5 top-1/2 -translate-y-1/2 ${activeColor.text}`}>
-                            <Barcode className="w-5 h-5" />
-                        </div>
-                        <input 
-                            ref={inputRef}
-                            type="text"
-                            value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
-                            placeholder="Scan Tracking, SKU, or SN..."
-                            className={`w-full pl-14 pr-14 py-5 bg-gray-50 border border-gray-100 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
-                            autoFocus
+                {/* Progress Bar - Moved above scan input */}
+                <div className="space-y-3 px-2">
+                    <div className="flex items-center justify-between">
+                        <p className={`text-[10px] font-black ${activeColor.text} tabular-nums`}>{todayCount} SHIPPED</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Goal: {goal}</p>
+                    </div>
+                    <div className="h-2.5 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
+                        <motion.div 
+                            initial={{ width: 0 }} 
+                            animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }} 
+                            className={`h-full ${activeColor.bg} rounded-full shadow-sm`} 
                         />
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                            {isLoading ? (
-                                <Loader2 className={`w-5 h-5 animate-spin ${activeColor.text}`} />
-                            ) : (
-                                <div className="px-2 py-1 bg-white rounded-md border border-gray-100 shadow-sm">
-                                    <span className="text-[9px] font-black text-gray-400">ENTER</span>
-                                </div>
-                            )}
-                        </div>
-                    </form>
-
-                    {/* Progress Bar */}
-                    <div className="space-y-3 px-2">
-                        <div className="flex items-center justify-between">
-                            <p className={`text-[10px] font-black ${activeColor.text} tabular-nums`}>{todayCount} SHIPPED</p>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Goal: {goal}</p>
-                        </div>
-                        <div className="h-2.5 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
-                            <motion.div 
-                                initial={{ width: 0 }} 
-                                animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }} 
-                                className={`h-full ${activeColor.bg} rounded-full shadow-sm`} 
-                            />
-                        </div>
                     </div>
                 </div>
+
+                {/* Single Entry Form */}
+                <form onSubmit={handleSubmit} className="relative group">
+                    <div className={`absolute left-5 top-1/2 -translate-y-1/2 ${activeColor.text}`}>
+                        <Barcode className="w-5 h-5" />
+                    </div>
+                    <input 
+                        ref={inputRef}
+                        type="text"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        placeholder="Scan Tracking, SKU, or SN..."
+                        className={`w-full pl-14 pr-14 py-5 bg-gray-50 border border-gray-100 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
+                        autoFocus
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                        {isLoading ? (
+                            <Loader2 className={`w-5 h-5 animate-spin ${activeColor.text}`} />
+                        ) : (
+                            <div className="px-2 py-1 bg-white rounded-md border border-gray-100 shadow-sm">
+                                <span className="text-[9px] font-black text-gray-400">ENTER</span>
+                            </div>
+                        )}
+                    </div>
+                </form>
             </div>
 
             {/* Content Area - Vertical Stack */}
