@@ -243,6 +243,41 @@ export async function POST() {
             CREATE INDEX IF NOT EXISTS idx_sku_management_base_sku ON sku_management(base_sku)
         `);
 
+        // Completed Tasks Archive Table
+        console.log('Creating completed_tasks table...');
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS completed_tasks (
+                id SERIAL PRIMARY KEY,
+                template_id INTEGER NOT NULL,
+                staff_id INTEGER REFERENCES staff(id) ON DELETE CASCADE,
+                task_title TEXT NOT NULL,
+                task_description TEXT,
+                role VARCHAR(50) NOT NULL,
+                station_id VARCHAR(50),
+                order_number VARCHAR(100),
+                tracking_number VARCHAR(100),
+                completed_at TIMESTAMP NOT NULL,
+                completed_by VARCHAR(100),
+                duration_minutes INTEGER,
+                notes TEXT,
+                original_created_at TIMESTAMP,
+                restored_at TIMESTAMP
+            )
+        `);
+        
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_completed_tasks_staff ON completed_tasks(staff_id)
+        `);
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_completed_tasks_station ON completed_tasks(station_id)
+        `);
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_completed_tasks_completed_at ON completed_tasks(completed_at)
+        `);
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_completed_tasks_template ON completed_tasks(template_id)
+        `);
+
         await client.query('COMMIT');
 
         return NextResponse.json({ 

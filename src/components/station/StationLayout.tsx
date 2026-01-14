@@ -65,64 +65,11 @@ export default function StationLayout({
     };
 
     if (isMobile) {
-        // Simplified mobile layout for packing stations - just show the main content
-        if (stationType === 'packing') {
-            return (
-                <div className="fixed inset-0 bg-white overflow-hidden flex flex-col">
-                    <div className="flex-1 relative overflow-hidden">
-                        {children}
-                    </div>
-                </div>
-            );
-        }
-
-        // Full swipe navigation for other station types (testing)
+        // Simplified mobile layout - just show main content for all station types
         return (
             <div className="fixed inset-0 bg-white overflow-hidden flex flex-col">
-                {/* Mobile Swipe Area */}
                 <div className="flex-1 relative overflow-hidden">
-                    <motion.div
-                        drag="x"
-                        dragConstraints={{ left: 0, right: 0 }}
-                        onDragEnd={handleDragEnd}
-                        animate={{ x: getXOffset() }}
-                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                        className="flex h-full w-[300%]"
-                    >
-                        {/* Nav Pane */}
-                        <div className="w-full h-full overflow-hidden">
-                            {navContent}
-                        </div>
-                        {/* Main Pane */}
-                        <div className="w-full h-full overflow-hidden border-x border-gray-100">
-                            {children}
-                        </div>
-                        {/* History Pane (Hidden/Disabled on Mobile) */}
-                        <div className="w-full h-full overflow-hidden">
-                            <div className="flex items-center justify-center h-full text-gray-400">
-                                <p className="text-xs uppercase tracking-widest font-black">History Disabled on Mobile</p>
-                            </div>
-                        </div>
-                    </motion.div>
-                </div>
-
-                {/* Mobile Tab Indicators / Minimal Nav */}
-                <div className="h-14 flex items-center justify-between px-10 bg-white border-t border-gray-50">
-                    <button 
-                        onClick={() => setActiveTab('NAV')}
-                        className={`p-2 rounded-xl transition-all ${activeTab === 'NAV' ? 'text-blue-600' : 'text-gray-300'}`}
-                    >
-                        <LayoutDashboard className="w-6 h-6" />
-                    </button>
-                    
-                    <div className="flex gap-1.5 h-1 items-center flex-1 justify-center">
-                        <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'NAV' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
-                        <div className={`h-full rounded-full transition-all duration-300 ${activeTab === 'MAIN' ? 'w-6 bg-blue-600' : 'w-2 bg-gray-100'}`} />
-                        {/* History Indicator Hidden on Mobile */}
-                    </div>
-
-                    {/* History Button Hidden on Mobile */}
-                    <div className="w-10" />
+                    {children}
                 </div>
             </div>
         );
@@ -132,8 +79,8 @@ export default function StationLayout({
     return (
         <div className="flex h-full w-full bg-white overflow-hidden">
             <div className="flex-1 flex overflow-hidden w-full">
-                {/* Main Content - takes full width for packing stations */}
-                <div className={`flex flex-col min-w-0 bg-gray-50/30 overflow-hidden transition-all duration-300 ${stationType === 'packing' ? 'flex-1' : 'w-[400px] border-r border-gray-100 flex-shrink-0'}`}>
+                {/* Main Content - takes full width for packing stations, minimum 350px for testing */}
+                <div className={`flex flex-col bg-gray-50/30 overflow-hidden transition-all duration-300 ${stationType === 'packing' ? 'flex-1 min-w-0' : 'w-[400px] min-w-[350px] border-r border-gray-100 flex-shrink-0'}`}>
                     {children}
                 </div>
 

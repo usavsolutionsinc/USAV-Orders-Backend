@@ -96,3 +96,28 @@ CREATE TABLE IF NOT EXISTS sku_management (
 -- Index for fast SKU lookups
 CREATE INDEX IF NOT EXISTS idx_sku_management_base_sku ON sku_management(base_sku);
 
+-- Completed Tasks Archive Table
+CREATE TABLE IF NOT EXISTS completed_tasks (
+    id SERIAL PRIMARY KEY,
+    template_id INTEGER NOT NULL,
+    staff_id INTEGER REFERENCES staff(id) ON DELETE CASCADE,
+    task_title TEXT NOT NULL,
+    task_description TEXT,
+    role VARCHAR(50) NOT NULL,
+    station_id VARCHAR(50),
+    order_number VARCHAR(100),
+    tracking_number VARCHAR(100),
+    completed_at TIMESTAMP NOT NULL,
+    completed_by VARCHAR(100), -- Staff name at time of completion
+    duration_minutes INTEGER,
+    notes TEXT,
+    original_created_at TIMESTAMP, -- When the template was originally created
+    restored_at TIMESTAMP -- If task was restored from completed
+);
+
+-- Indexes for completed tasks
+CREATE INDEX IF NOT EXISTS idx_completed_tasks_staff ON completed_tasks(staff_id);
+CREATE INDEX IF NOT EXISTS idx_completed_tasks_station ON completed_tasks(station_id);
+CREATE INDEX IF NOT EXISTS idx_completed_tasks_completed_at ON completed_tasks(completed_at);
+CREATE INDEX IF NOT EXISTS idx_completed_tasks_template ON completed_tasks(template_id);
+

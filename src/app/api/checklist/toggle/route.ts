@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 
 export async function POST(request: NextRequest) {
     try {
-        const { templateId, staffId, role, status, notes } = await request.json();
+        const { templateId, staffId, role, status, notes, stationId, staffName } = await request.json();
 
         if (!templateId || !staffId || !role || !status) {
             return NextResponse.json({ 
@@ -80,6 +80,30 @@ export async function POST(request: NextRequest) {
                 WHERE template_id = $${paramCount} AND staff_id = $${paramCount + 1} AND task_date = $${paramCount + 2}
                 RETURNING *
             `, params);
+
+            // Archive to completed_tasks table if completing
+            if (status === 'completed') {
+                const templateData = await pool.query(`
+                    SELECT title, description, order_number, tracking_number, created_at 
+                    FROM task_templates 
+                    WHERE id = $1
+                `, [templateId]);
+                
+                if (templateData.rows.length > 0) {
+                    const template = templateData.rows[0];
+                    await pool.query(`
+                        INSERT INTO completed_tasks 
+                        (template_id, staff_id, task_title, task_description, role, station_id, 
+                         order_number, tracking_number, completed_at, completed_by, duration_minutes, 
+                         notes, original_created_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                    `, [
+                        templateId, staffId, template.title, template.description, role, 
+                        stationId, template.order_number, template.tracking_number, now, 
+                        staffName, durationMinutes, notes, template.created_at
+                    ]);
+                }
+            }
         } else {
             // Create new instance
             const startedAt = status === 'in_progress' ? now : null;
@@ -91,6 +115,30 @@ export async function POST(request: NextRequest) {
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING *
             `, [staffId, today, status, startedAt, completedAt, notes || null, templateId]);
+
+            // Archive to completed_tasks table if creating as completed
+            if (status === 'completed') {
+                const templateData = await pool.query(`
+                    SELECT title, description, order_number, tracking_number, created_at 
+                    FROM task_templates 
+                    WHERE id = $1
+                `, [templateId]);
+                
+                if (templateData.rows.length > 0) {
+                    const template = templateData.rows[0];
+                    await pool.query(`
+                        INSERT INTO completed_tasks 
+                        (template_id, staff_id, task_title, task_description, role, station_id, 
+                         order_number, tracking_number, completed_at, completed_by, duration_minutes, 
+                         notes, original_created_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                    `, [
+                        templateId, staffId, template.title, template.description, role, 
+                        stationId, template.order_number, template.tracking_number, now, 
+                        staffName, null, notes, template.created_at
+                    ]);
+                }
+            }
         }
 
         return NextResponse.json(result.rows[0]);

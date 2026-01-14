@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Package, Loader2, List, ChevronRight, Copy, Check } from '../Icons';
+import { Package, Loader2, List, ChevronRight, Copy, Check, History } from '../Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import Checklist from '../Checklist';
 
@@ -67,7 +67,7 @@ export default function StationHistory({
     stationType 
 }: StationHistoryProps) {
     const [history, setHistory] = useState<HistoryLog[]>(initialHistory);
-    const [isChecklistOpen, setIsChecklistOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<'history' | 'checklist'>('history');
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [offset, setOffset] = useState(0);
@@ -229,28 +229,35 @@ export default function StationHistory({
         <div className="flex flex-col h-full w-full bg-white relative overflow-hidden">
             {/* Sticky Header */}
             <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-2">
-                    <p className="text-[11px] font-black text-gray-900 tracking-tight">
-                        {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
-                    </p>
-                    <div className="h-2 w-px bg-gray-200" />
-                    <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
-                        Count: {currentCount || (history.length > 0 ? (history[0].count || history.length) : 0)}
-                    </p>
-                </div>
+                {viewMode === 'history' ? (
+                    <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-black text-gray-900 tracking-tight">
+                            {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
+                        </p>
+                        <div className="h-2 w-px bg-gray-200" />
+                        <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
+                            Count: {currentCount || (history.length > 0 ? (history[0].count || history.length) : 0)}
+                        </p>
+                    </div>
+                ) : (
+                    <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Tasks</p>
+                )}
                 
                 {techId && (
                     <button 
-                        onClick={() => setIsChecklistOpen(!isChecklistOpen)}
-                        className={`p-1 rounded-lg transition-all ${isChecklistOpen ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                        onClick={() => setViewMode(viewMode === 'history' ? 'checklist' : 'history')}
+                        className={`p-1.5 rounded-lg transition-all ${viewMode === 'checklist' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                        title={viewMode === 'history' ? 'Show Tasks' : 'Show History'}
                     >
-                        <List className="w-3 h-3" />
+                        {viewMode === 'history' ? <List className="w-4 h-4" /> : <History className="w-4 h-4" />}
                     </button>
                 )}
             </div>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar w-full">
-                {isInitialLoading ? (
+                {viewMode === 'checklist' && techId ? (
+                    <Checklist role="technician" userId={techId} />
+                ) : isInitialLoading ? (
                     <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-400">
                         <Loader2 className="w-8 h-8 animate-spin" />
                         <p className="text-[10px] font-black uppercase tracking-widest">Loading Records...</p>
@@ -316,37 +323,6 @@ export default function StationHistory({
                     </div>
                 )}
             </div>
-
-            <AnimatePresence>
-                {isChecklistOpen && techId && (
-                    <>
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setIsChecklistOpen(false)}
-                            className="absolute inset-0 bg-black/10 backdrop-blur-[2px] z-30"
-                        />
-                        <motion.div 
-                            initial={{ x: '100%' }}
-                            animate={{ x: 0 }}
-                            exit={{ x: '100%' }}
-                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                            className="absolute top-0 right-0 h-full bg-white w-[400px] shadow-[-20px_0_50px_rgba(0,0,0,0.1)] z-40 flex flex-col border-l border-gray-100"
-                        >
-                            <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
-                                <p className="text-sm font-black uppercase tracking-widest text-gray-900">Task Checklist</p>
-                                <button onClick={() => setIsChecklistOpen(false)} className="p-2 bg-white text-gray-400 rounded-xl hover:bg-gray-100 transition-colors shadow-sm">
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto no-scrollbar">
-                                <Checklist role="technician" userId={techId} />
-                            </div>
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
         </div>
     );
 }
