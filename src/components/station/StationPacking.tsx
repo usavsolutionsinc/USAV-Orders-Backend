@@ -85,14 +85,19 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                 const html5QrCode = new Html5Qrcode("reader");
                 scannerRef.current = html5QrCode;
                 await html5QrCode.start(
-                    { facingMode: "environment" },
                     { 
-                        fps: 20,
+                        facingMode: "environment",
+                        width: { min: 1280, ideal: 1920 },
+                        height: { min: 720, ideal: 1080 }
+                    },
+                    { 
+                        fps: 30,
                         qrbox: (viewfinderWidth, viewfinderHeight) => {
                             const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
                             return { width: minEdge * 0.8, height: minEdge * 0.4 };
                         },
-                        aspectRatio: 1.0
+                        aspectRatio: 1.0,
+                        disableFlip: true
                     },
                     async (decodedText) => {
                         // Resilient scanning: Only allow alphanumeric uppercase, no symbols
@@ -144,7 +149,13 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
 
     const startCameraForPhoto = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'environment',
+                    width: { min: 1280, ideal: 1920, max: 3840 },
+                    height: { min: 720, ideal: 1080, max: 2160 }
+                } 
+            });
             if (videoRef.current) videoRef.current.srcObject = stream;
         } catch (err) { console.error(err); }
     };
