@@ -8,7 +8,8 @@ import {
   Check, 
   X, 
   Package, 
-  Loader2
+  Loader2,
+  ChevronLeft
 } from '../Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -94,12 +95,21 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                         aspectRatio: 1.0
                     },
                     async (decodedText) => {
-                        setScannedTracking(decodedText);
+                        // Resilient scanning: Only allow alphanumeric uppercase, no symbols
+                        const cleanedText = decodedText.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                        
+                        // If it's empty after cleaning or looks suspicious, don't proceed
+                        if (!cleanedText || cleanedText.length < 10) {
+                            console.log('Invalid scan detected, skipping:', decodedText);
+                            return; // Don't stop scanning, let it try again
+                        }
+
+                        setScannedTracking(cleanedText);
                         stopScanning();
                         
                         // Fetch order details from shipped table
                         try {
-                            const res = await fetch(`/api/packing-logs/details?tracking=${encodeURIComponent(decodedText)}`);
+                            const res = await fetch(`/api/packing-logs/details?tracking=${encodeURIComponent(cleanedText)}`);
                             if (res.ok) {
                                 const data = await res.json();
                                 if (data.found) {
@@ -161,15 +171,16 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                 await fetch('/api/packing-logs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        trackingNumber: scannedTracking,
-                        photos: photos,
-                        packerId: packerId,
-                        boxSize: mockDetails.boxSize,
-                        carrier: getCarrier(scannedTracking),
-                        timestamp: now.toISOString(),
-                        product: mockDetails.productTitle
-                    })
+                        body: JSON.stringify({
+                            trackingNumber: scannedTracking,
+                            photos: photos,
+                            packerId: packerId,
+                            orderId: orderDetails?.orderId || mockDetails.orderId,
+                            boxSize: mockDetails.boxSize,
+                            carrier: getCarrier(scannedTracking),
+                            timestamp: now.toISOString(),
+                            product: orderDetails?.productTitle || mockDetails.productTitle
+                        })
                 });
                 onPacked();
             } catch (err) {}
@@ -206,21 +217,19 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                 <div className="flex-1 flex flex-col px-4 py-4 space-y-4">
                     {(scannedTracking || showDetails) && cameraMode === 'off' ? (
                         <div className="space-y-4 pb-20">
-                            {/* Order ID and Product Title */}
-                            <div className="flex flex-col gap-1">
-                                <h1 className="text-lg font-black text-blue-600 tracking-tight">
-                                    {orderDetails?.orderId || mockDetails.orderId}
-                                </h1>
-                                <p className="text-sm font-black leading-tight text-gray-900 tracking-tight">
-                                    {orderDetails?.productTitle || mockDetails.productTitle}
-                                </p>
-                            </div>
-
-                            {/* Box Size - Left Aligned */}
-                            <div className="flex justify-start">
-                                <div className="bg-gray-50 rounded-xl px-5 py-2 border border-gray-200">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Box</p>
-                                    <p className="text-lg font-black text-gray-900 tracking-tight">{mockDetails.boxSize}</p>
+                            {/* Order ID and Box Size */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex flex-col gap-1">
+                                    <h1 className="text-lg font-black text-blue-600 tracking-tight">
+                                        {orderDetails?.orderId || mockDetails.orderId}
+                                    </h1>
+                                    <p className="text-sm font-black leading-tight text-gray-900 tracking-tight">
+                                        {orderDetails?.productTitle || mockDetails.productTitle}
+                                    </p>
+                                </div>
+                                <div className="bg-gray-50 rounded-xl px-4 py-2 border border-gray-200 text-right">
+                                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Box</p>
+                                    <p className="text-sm font-black text-gray-900 tracking-tight">{mockDetails.boxSize}</p>
                                 </div>
                             </div>
 
@@ -367,78 +376,47 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                         exit={{ opacity: 0, y: 100 }} 
                         className="fixed inset-0 bg-black z-[200] flex flex-col"
                     >
-                        <div className="flex-1 relative overflow-hidden flex items-center justify-center">
-                            {tempPhotos.length === 0 ? (
-                                <div className="text-center text-white/40">
+                        <div className="flex-1 relative overflow-hidden flex items-center">
+                            {photos.length === 0 ? (
+                                <div className="w-full text-center text-white/40">
                                     <CameraIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
                                     <p className="text-xs font-black uppercase tracking-widest">No Photos</p>
                                 </div>
                             ) : (
-                                <div className="relative w-full h-[70vh]">
-                                    <AnimatePresence mode="popLayout">
-                                        {tempPhotos.map((photo, index) => (
-                                            index === tempPhotos.length - 1 && (
-                                                <motion.div
-                                                    key={photo}
-                                                    initial={{ scale: 0.9, opacity: 0 }}
-                                                    animate={{ scale: 1, opacity: 1 }}
-                                                    exit={{ x: -500, opacity: 0, rotate: -20 }}
-                                                    drag="x"
-                                                    dragConstraints={{ left: 0, right: 0 }}
-                                                    onDragEnd={(e, info) => {
-                                                        if (info.offset.x < -100) {
-                                                            setTempPhotos(prev => prev.slice(0, -1));
-                                                        }
-                                                    }}
-                                                    className="absolute inset-0 p-6 touch-none"
-                                                >
-                                                    <div className="w-full h-full bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative">
-                                                        <img src={photo} alt="" className="w-full h-full object-cover" />
-                                                        <div className="absolute top-6 left-6 right-6 flex justify-between items-center">
-                                                            <div className="px-3 py-1 bg-black/50 backdrop-blur-md rounded-full border border-white/10">
-                                                                <p className="text-[10px] font-black text-white/80 uppercase tracking-widest">
-                                                                    {index + 1} of {tempPhotos.length}
-                                                                </p>
-                                                            </div>
-                                                            <div className="bg-red-500 px-3 py-1 rounded-full animate-pulse">
-                                                                <p className="text-[8px] font-black text-white uppercase tracking-tighter">Swipe Left to Delete</p>
-                                                            </div>
-                                                        </div>
+                                <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide w-full h-[70vh] px-6 gap-6">
+                                    {photos.map((photo, index) => (
+                                        <div
+                                            key={index}
+                                            className="min-w-full h-full snap-center relative"
+                                        >
+                                            <div className="w-full h-full bg-gray-900 rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative">
+                                                <img src={photo} alt="" className="w-full h-full object-cover" />
+                                                <div className="absolute top-6 left-6 flex items-center gap-3">
+                                                    <div className="px-3 py-1 bg-black/50 backdrop-blur-md rounded-full border border-white/10">
+                                                        <p className="text-[10px] font-black text-white/80 uppercase tracking-widest">
+                                                            {index + 1} of {photos.length}
+                                                        </p>
                                                     </div>
-                                                </motion.div>
-                                            )
-                                        ))}
-                                    </AnimatePresence>
+                                                    <div className="px-3 py-1 bg-blue-600/50 backdrop-blur-md rounded-full border border-blue-500/30">
+                                                        <p className="text-[10px] font-black text-white uppercase tracking-widest">
+                                                            {orderDetails?.orderId || mockDetails.orderId}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
 
                         {/* Gallery Controls */}
-                        <div className="px-8 pb-12 flex justify-between items-center">
+                        <div className="px-8 pb-12 flex justify-center items-center">
                             <button 
                                 onClick={() => setGalleryOpen(false)}
-                                className="w-16 h-16 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/10 active:scale-90 transition-all"
+                                className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/10 active:scale-90 transition-all"
                             >
-                                <X className="w-8 h-8" />
-                            </button>
-                            
-                            <div className="flex flex-col items-center">
-                                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">Gallery</p>
-                                <div className="flex gap-1">
-                                    {Array.from({ length: photos.length }).map((_, i) => (
-                                        <div key={i} className={`w-1.5 h-1.5 rounded-full ${i === tempPhotos.length - 1 ? 'bg-blue-500' : 'bg-white/20'}`} />
-                                    ))}
-                                </div>
-                            </div>
-
-                            <button 
-                                onClick={() => {
-                                    setPhotos(tempPhotos);
-                                    setGalleryOpen(false);
-                                }}
-                                className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-xl shadow-blue-600/30 active:scale-90 transition-all"
-                            >
-                                <Check className="w-8 h-8" />
+                                <ChevronLeft className="w-10 h-10" />
                             </button>
                         </div>
                     </motion.div>

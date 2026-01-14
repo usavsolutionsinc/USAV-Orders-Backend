@@ -104,6 +104,7 @@ export const rs = pgTable('rs', { ...genericColumns });
 export const packingLogs = pgTable('packing_logs', {
   id: serial('id').primaryKey(),
   trackingNumber: varchar('tracking_number', { length: 100 }).notNull(),
+  orderId: varchar('order_id', { length: 100 }),
   photos: text('photos'), // Store as JSON string or comma-separated URLs
   packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
   boxSize: varchar('box_size', { length: 50 }),

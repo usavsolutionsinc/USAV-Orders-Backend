@@ -93,7 +93,9 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
         queryFn: async () => {
             const res = await fetch(`/api/checklist?stationId=${stationId}&staffId=${staffId}`);
             if (!res.ok) throw new Error('Failed to fetch checklist');
-            return res.json();
+            const data = await res.json();
+            // Filter out completed items so they don't show in the pending list
+            return data.filter((item: ChecklistItem) => item.instance?.status !== 'completed');
         },
     });
 
@@ -208,16 +210,6 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
 
     return (
         <div className="h-full flex flex-col bg-white text-gray-900">
-            {/* Header - Station Info */}
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-black tracking-tighter uppercase text-gray-900">Task Checklist</h2>
-                    {role === 'packer' && (
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-black rounded uppercase border border-blue-100">{role}</span>
-                    )}
-                </div>
-            </div>
-
             {/* NEW TASK FORM - NOW AT TOP */}
             <div className="p-4 border-b border-gray-100">
                 {isAdding ? (

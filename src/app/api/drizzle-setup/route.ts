@@ -240,6 +240,35 @@ export async function POST() {
         `);
         tables.push('rs');
 
+        // 20. Packing logs table
+        console.log('Creating packing_logs table...');
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS packing_logs (
+                id SERIAL PRIMARY KEY,
+                tracking_number VARCHAR(100) NOT NULL,
+                order_id VARCHAR(100),
+                photos TEXT,
+                packer_id INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+                box_size VARCHAR(50),
+                packed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notes TEXT,
+                status VARCHAR(20) DEFAULT 'completed'
+            )
+        `);
+        
+        // Add order_id if it doesn't exist
+        await client.query(`
+            DO $$ 
+            BEGIN
+                BEGIN
+                    ALTER TABLE packing_logs ADD COLUMN order_id VARCHAR(100);
+                EXCEPTION
+                    WHEN duplicate_column THEN NULL;
+                END;
+            END $$;
+        `);
+        tables.push('packing_logs');
+
         // Create indexes
         console.log('Creating indexes...');
         const indexes = [
@@ -252,6 +281,8 @@ export async function POST() {
             'CREATE INDEX IF NOT EXISTS idx_receiving_tasks_tracking ON receiving_tasks(tracking_number)',
             'CREATE INDEX IF NOT EXISTS idx_receiving_tasks_status ON receiving_tasks(status)',
             'CREATE INDEX IF NOT EXISTS idx_receiving_tasks_urgent ON receiving_tasks(urgent)',
+            'CREATE INDEX IF NOT EXISTS idx_packing_logs_tracking ON packing_logs(tracking_number)',
+            'CREATE INDEX IF NOT EXISTS idx_packing_logs_order_id ON packing_logs(order_id)',
         ];
 
         for (const indexQuery of indexes) {
@@ -336,7 +367,8 @@ export async function GET() {
         const expectedTables = [
             'staff', 'tags', 'task_templates', 'task_tags', 'daily_task_instances', 
             'receiving_tasks', 'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
-            'packer_1', 'packer_2', 'packer_3', 'receiving', 'shipped', 'sku_stock', 'sku', 'rs'
+            'packer_1', 'packer_2', 'packer_3', 'receiving', 'shipped', 'sku_stock', 
+            'sku', 'rs', 'packing_logs'
         ];
 
         const existingTables = result.rows.map(r => r.table_name);

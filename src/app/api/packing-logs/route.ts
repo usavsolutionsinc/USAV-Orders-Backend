@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { trackingNumber, photos, packerId, boxSize, carrier, timestamp, product } = body;
+        const { trackingNumber, orderId, photos, packerId, boxSize, carrier, timestamp, product } = body;
 
         const tableName = `packer_${packerId}`;
         
@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
         // Record in unified logs for photo support
         const newLog = await db.insert(packingLogs).values({
             trackingNumber,
+            orderId: orderId || null,
             photos: JSON.stringify(photos),
             packerId: packerId ? parseInt(packerId) : null,
             boxSize,
