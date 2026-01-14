@@ -66,28 +66,31 @@ export async function GET(request: NextRequest) {
         const skuRecord = result.rows[0];
 
         if (action === 'current') {
+            // Return the current SKU from DB (the one that will be used next)
             if (skuRecord) {
-                const nextCounting = incrementSkuCounting(skuRecord.current_sku_counting);
-                return NextResponse.json({ currentSku: `${baseSku}:${nextCounting}` });
+                return NextResponse.json({ currentSku: `${baseSku}:${skuRecord.current_sku_counting}` });
             } else {
+                // First time using this SKU - return A00 (will be created on first increment)
                 return NextResponse.json({ currentSku: `${baseSku}:A00` });
             }
         }
 
         if (action === 'increment') {
+            // Increment and save to DB for next time
             if (skuRecord) {
                 const nextCounting = incrementSkuCounting(skuRecord.current_sku_counting);
                 await pool.query(
                     'UPDATE sku_management SET current_sku_counting = $1, updated_at = CURRENT_TIMESTAMP WHERE base_sku = $2',
                     [nextCounting, baseSku]
                 );
-                return NextResponse.json({ nextSku: `${baseSku}:${nextCounting}` });
+                return NextResponse.json({ nextSku: `${baseSku}:${nextCounting}`, currentSku: `${baseSku}:${nextCounting}` });
             } else {
+                // First time - set to A01 (since A00 was just used)
                 await pool.query(
                     'INSERT INTO sku_management (base_sku, current_sku_counting) VALUES ($1, $2)',
                     [baseSku, 'A01']
                 );
-                return NextResponse.json({ nextSku: `${baseSku}:A00` });
+                return NextResponse.json({ nextSku: `${baseSku}:A01`, currentSku: `${baseSku}:A01` });
             }
         }
 

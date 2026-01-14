@@ -84,3 +84,15 @@ ON CONFLICT (employee_id) DO NOTHING;
 -- Update daily_task_instances to use staff_id instead of user_id (if user_id column exists)
 -- This will be handled by the migration script
 
+-- SKU Management Table (for tracking multi-SKU serial numbers)
+CREATE TABLE IF NOT EXISTS sku_management (
+    id SERIAL PRIMARY KEY,
+    base_sku VARCHAR(100) NOT NULL UNIQUE,
+    current_sku_counting VARCHAR(10) NOT NULL, -- e.g., 'A00', 'A01', 'B99', etc.
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for fast SKU lookups
+CREATE INDEX IF NOT EXISTS idx_sku_management_base_sku ON sku_management(base_sku);
+

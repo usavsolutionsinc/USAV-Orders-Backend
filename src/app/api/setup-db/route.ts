@@ -227,6 +227,22 @@ export async function POST() {
             }
         }
 
+        // SKU Management Table
+        console.log('Creating sku_management table...');
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS sku_management (
+                id SERIAL PRIMARY KEY,
+                base_sku VARCHAR(100) NOT NULL UNIQUE,
+                current_sku_counting VARCHAR(10) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_sku_management_base_sku ON sku_management(base_sku)
+        `);
+
         await client.query('COMMIT');
 
         return NextResponse.json({ 

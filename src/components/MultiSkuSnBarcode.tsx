@@ -163,18 +163,17 @@ export default function MultiSkuSnBarcode() {
         }
     };
 
-    const handleChangeSku = async () => {
-        if (!sku.trim()) return;
-        setIsGenerating(true);
-        try {
-            const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=increment`);
-            const data = await res.json();
-            setUniqueSku(data.nextSku);
-        } catch (e) {
-            setError("Failed to increment SKU");
-        } finally {
-            setIsGenerating(false);
-        }
+    const handleChangeSku = () => {
+        // Reset to step 1 to allow re-entering SKU
+        setSku("");
+        setUniqueSku("");
+        setTitle("");
+        setStock("");
+        setSnInput("");
+        setSerialNumbers([]);
+        setStep(1);
+        setError("");
+        setTimeout(() => skuInputRef.current?.focus(), 100);
     };
 
     const postToSheets = async () => {
@@ -203,7 +202,14 @@ export default function MultiSkuSnBarcode() {
     const handleFinalAction = async () => {
         const success = await postToSheets();
         if (success) {
+            // Increment SKU in database for next scan (only in print mode)
             if (mode === 'print') {
+                try {
+                    await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=increment`);
+                } catch (e) {
+                    console.error("Failed to increment SKU in DB:", e);
+                }
+                
                 // Print logic
                 const printWindow = window.open('', '', 'width=800,height=600');
                 if (printWindow) {
@@ -238,9 +244,22 @@ export default function MultiSkuSnBarcode() {
                     printWindow.document.close();
                 }
             }
-            // Reset after success
+            
+            // Reset after success and fetch next SKU for display
             setSnInput("");
             setSerialNumbers([]);
+            
+            if (mode === 'print') {
+                // Fetch the new current SKU for display
+                try {
+                    const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
+                    const data = await res.json();
+                    setUniqueSku(data.currentSku);
+                } catch (e) {
+                    console.error("Failed to fetch next SKU:", e);
+                }
+            }
+            
             setStep(2); // Stay on details step but clear serials
         } else {
             setError("Failed to save data");
@@ -313,10 +332,9 @@ export default function MultiSkuSnBarcode() {
                         <div className="flex justify-end">
                             <button
                                 onClick={handleChangeSku}
-                                disabled={isGenerating}
-                                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-blue-600/20"
+                                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/20"
                             >
-                                {isGenerating ? '...' : 'Change SKU'}
+                                Change SKU
                             </button>
                         </div>
                     )}
