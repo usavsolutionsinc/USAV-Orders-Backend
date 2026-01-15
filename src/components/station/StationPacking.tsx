@@ -28,6 +28,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
     const [photos, setPhotos] = useState<string[]>([]);
     const [showDetails, setShowDetails] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
     
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -111,7 +112,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                             return; // Don't stop scanning, let it try again
                         }
 
-                        await stopScanning();
+                        setIsSearching(true);
                         setScannedTracking(cleanedText);
                         
                         // Fetch order details from shipped table
@@ -120,21 +121,26 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                             if (res.ok) {
                                 const data = await res.json();
                                 if (data.found) {
+                                    await stopScanning();
                                     setOrderDetails(data);
+                                    setIsSearching(false);
                                     setCameraMode('photo');
                                     startCameraForPhoto();
                                 } else {
                                     console.log('Tracking not found in shipped sheet:', cleanedText);
-                                    // Resume scanning since we stopped it
-                                    startScanning();
+                                    setIsSearching(false);
+                                    setScannedTracking('');
+                                    // Keep scanning, don't stop
                                 }
                             } else {
-                                // Error fetching details, resume scanning
-                                startScanning();
+                                // Error fetching details, keep scanning
+                                setIsSearching(false);
+                                setScannedTracking('');
                             }
                         } catch (e) {
                             console.error('Failed to fetch order details:', e);
-                            startScanning();
+                            setIsSearching(false);
+                            setScannedTracking('');
                         }
                     },
                     (errorMessage) => {}
@@ -358,8 +364,12 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                         <div id="reader" className="absolute inset-0" />
                         <div className="absolute inset-0 border-4 border-blue-500/30 m-20 rounded-3xl animate-pulse pointer-events-none" />
                         <div className="absolute top-10 left-0 right-0 p-8 flex justify-between items-center z-[110]">
-                            <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10"><p className="text-xs font-black uppercase tracking-widest text-white/80">Scanning...</p></div>
-                            <button onClick={async () => { await stopScanning(); setCameraMode('off'); }} className="p-4 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 active:scale-90"><X className="w-6 h-6" /></button>
+                            <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
+                                <p className="text-xs font-black uppercase tracking-widest text-white/80">
+                                    {isSearching ? 'Searching...' : 'Scanning...'}
+                                </p>
+                            </div>
+                            <button onClick={async () => { await stopScanning(); setIsSearching(false); setScannedTracking(''); setCameraMode('off'); }} className="p-4 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 active:scale-90"><X className="w-6 h-6" /></button>
                         </div>
                     </motion.div>
                 )}
@@ -372,7 +382,9 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                         <div className="absolute top-8 left-0 right-0 px-6 flex justify-between items-center z-[110]">
                             <div className="px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
                                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                                <p className="text-[9px] font-black uppercase tracking-widest text-white/80">{scannedTracking}</p>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-white/80">
+                                    {scannedTracking.slice(-8)}
+                                </p>
                             </div>
                             <div className="px-3 py-1.5 bg-blue-600 rounded-full text-[9px] font-black text-white shadow-lg">
                                 {photos.length} PHOTOS
@@ -394,15 +406,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
 
                         {/* Bottom Controls */}
                         <div className="absolute bottom-0 left-0 right-0 pb-safe z-[110]">
-                            <div className="px-6 pb-8 flex justify-between items-end">
-                                {/* Left: Box Size */}
-                                <div className="flex flex-col items-start gap-3">
-                                    <div className="px-4 py-2 bg-blue-600/90 backdrop-blur-md rounded-xl border border-white/20 shadow-2xl">
-                                        <p className="text-[9px] font-black text-white/60 uppercase tracking-widest mb-0.5">Box</p>
-                                        <p className="text-sm font-black text-white tracking-tight">{mockDetails.boxSize}</p>
-                                    </div>
-                                </div>
-                                
+                            <div className="px-6 pb-8 flex justify-center items-center gap-8">
                                 {/* Center: Photo Button */}
                                 <button 
                                     onClick={takePhoto} 
