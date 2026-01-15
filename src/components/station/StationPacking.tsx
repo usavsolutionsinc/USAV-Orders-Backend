@@ -379,15 +379,17 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                         <canvas ref={canvasRef} className="hidden" />
                         
                         {/* Top Bar */}
-                        <div className="absolute top-8 left-0 right-0 px-6 flex justify-between items-center z-[110]">
-                            <div className="px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                                <p className="text-[9px] font-black uppercase tracking-widest text-white/80">
-                                    {scannedTracking.slice(-8)}
-                                </p>
-                            </div>
-                            <div className="px-3 py-1.5 bg-blue-600 rounded-full text-[9px] font-black text-white shadow-lg">
-                                {photos.length} PHOTOS
+                        <div className="absolute top-8 left-0 right-0 px-6 flex justify-between items-start z-[110]">
+                            <div className="flex flex-col gap-2">
+                                <div className="px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-white/80">
+                                        {scannedTracking.slice(-8)}
+                                    </p>
+                                </div>
+                                <div className="px-3 py-1.5 bg-blue-600 rounded-full text-[9px] font-black text-white shadow-lg">
+                                    {photos.length} PHOTOS
+                                </div>
                             </div>
                             <button 
                                 onClick={() => {
@@ -406,7 +408,10 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
 
                         {/* Bottom Controls */}
                         <div className="absolute bottom-0 left-0 right-0 pb-safe z-[110]">
-                            <div className="px-6 pb-8 flex justify-center items-center gap-8">
+                            <div className="px-6 pb-8 flex justify-between items-center">
+                                {/* Left: Empty spacer for balance */}
+                                <div className="w-16" />
+                                
                                 {/* Center: Photo Button */}
                                 <button 
                                     onClick={takePhoto} 
