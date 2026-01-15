@@ -23,7 +23,7 @@ export default function ReceivingPage() {
     const iframeUrl = `${baseUrl}?${queryParams.toString()}#gid=${gid}`;
 
     return (
-        <div className="flex h-full w-full bg-gray-950 overflow-hidden">
+        <div className="flex h-full w-full bg-white overflow-hidden">
             {/* LEFT SIDE: New Shipment Entry Form */}
             <div className="relative flex-shrink-0 z-30 flex h-full">
                 <AnimatePresence mode="wait">
@@ -33,11 +33,11 @@ export default function ReceivingPage() {
                             animate={{ width: 380, opacity: 1 }}
                             exit={{ width: 0, opacity: 0 }}
                             transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                            className="bg-gray-950 border-r border-white/5 h-full overflow-hidden relative group"
+                            className="bg-white border-r border-gray-200 h-full overflow-hidden relative group"
                         >
                             <button
                                 onClick={() => setEntryFormOpen(false)}
-                                className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                className="absolute top-4 right-4 z-50 p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                                 title="Collapse Form"
                             >
                                 <ChevronLeft className="w-4 h-4" />
@@ -52,7 +52,7 @@ export default function ReceivingPage() {
                 {!entryFormOpen && (
                     <button
                         onClick={() => setEntryFormOpen(true)}
-                        className="fixed top-20 left-0 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-xl hover:bg-green-600 hover:text-white transition-all duration-300 group"
+                        className="fixed top-20 left-0 z-[60] p-3 bg-white text-gray-900 rounded-r-2xl shadow-xl hover:bg-green-600 hover:text-white transition-all duration-300 group border border-l-0 border-gray-200"
                     >
                         <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
                     </button>
@@ -77,7 +77,7 @@ export default function ReceivingPage() {
                 {!rightPanelOpen && (
                     <button
                         onClick={() => setRightPanelOpen(true)}
-                        className="fixed top-20 right-0 z-[60] p-3 bg-white text-gray-950 rounded-l-2xl shadow-xl hover:bg-blue-600 hover:text-white transition-all duration-300 group"
+                        className="fixed top-20 right-0 z-[60] p-3 bg-white text-gray-900 rounded-l-2xl shadow-xl hover:bg-blue-600 hover:text-white transition-all duration-300 group border border-r-0 border-gray-200"
                     >
                         <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
                     </button>
@@ -90,11 +90,11 @@ export default function ReceivingPage() {
                             animate={{ width: 400, opacity: 1 }}
                             exit={{ width: 0, opacity: 0 }}
                             transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                            className="bg-gray-950 border-l border-white/5 h-full overflow-hidden relative group flex flex-col"
+                            className="bg-white border-l border-gray-200 h-full overflow-hidden relative group flex flex-col"
                         >
                             <button
                                 onClick={() => setRightPanelOpen(false)}
-                                className="absolute top-4 left-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                className="absolute top-4 left-4 z-50 p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                                 title="Collapse Tools"
                             >
                                 <ChevronRight className="w-4 h-4" />
@@ -102,7 +102,7 @@ export default function ReceivingPage() {
                             
                             <div className="flex-1 overflow-y-auto scrollbar-hide">
                                 {/* Using ReceivingSidebar component content here or composing it */}
-                                <div className="border-b border-white/5">
+                                <div className="border-b border-gray-100">
                                     <ReceivingSidebar hideToggle />
                                 </div>
                                 <div className="flex-1 min-h-[400px]">

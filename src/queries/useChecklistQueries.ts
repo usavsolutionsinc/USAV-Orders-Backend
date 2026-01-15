@@ -95,6 +95,42 @@ export function useChecklistQueries({
             if (!res.ok) throw new Error('Failed to update task');
             return res.json();
         },
+        onMutate: async ({ templateId, status }) => {
+            // Cancel outgoing refetches
+            await queryClient.cancelQueries({ queryKey: ['checklist', stationId, staffId] });
+            
+            // Snapshot previous value
+            const previousTasks = queryClient.getQueryData(['checklist', stationId, staffId]);
+            
+            // Optimistically update
+            queryClient.setQueryData<ChecklistItem[]>(['checklist', stationId, staffId], (old = []) => {
+                return old.map(item => 
+                    item.id === templateId
+                        ? {
+                            ...item,
+                            instance: {
+                                ...item.instance,
+                                template_id: templateId,
+                                status: status as 'pending' | 'in_progress' | 'completed',
+                                task_date: new Date().toISOString().split('T')[0],
+                                started_at: item.instance?.started_at || null,
+                                completed_at: status === 'completed' ? new Date().toISOString() : null,
+                                duration_minutes: item.instance?.duration_minutes || null,
+                                notes: item.instance?.notes || null,
+                            }
+                        }
+                        : item
+                );
+            });
+            
+            return { previousTasks };
+        },
+        onError: (err, variables, context) => {
+            // Rollback on error
+            if (context?.previousTasks) {
+                queryClient.setQueryData(['checklist', stationId, staffId], context.previousTasks);
+            }
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['checklist', stationId, staffId] });
             queryClient.invalidateQueries({ queryKey: ['completed-tasks', stationId, staffId] });
@@ -140,7 +176,7 @@ export function useChecklistQueries({
             const res = await fetch('/api/checklist/template', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role, station_id: stationId, ...data }),
+                body: JSON.stringify({ ...data, role, station_id: stationId }),
             });
             if (!res.ok) throw new Error('Failed to create template');
             return res.json();

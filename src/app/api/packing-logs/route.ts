@@ -69,9 +69,10 @@ export async function POST(req: NextRequest) {
         const packerName = `Packer ${packerId}`;
         
         // Insert into the specific packer table
+        // col_2: timestamp, col_3: tracking, col_4: carrier, col_5: product, col_6: orderId
         await db.execute(sql.raw(`
-            INSERT INTO ${tableName} (col_2, col_3, col_4, col_5)
-            VALUES ('${timestamp}', '${trackingNumber}', '${carrier}', '${product}')
+            INSERT INTO ${tableName} (col_2, col_3, col_4, col_5, col_6)
+            VALUES ('${timestamp}', '${trackingNumber}', '${carrier}', '${product}', '${orderId || ''}')
         `));
 
         // Update shipped table with packer info (matching Working GAS logic)

@@ -80,10 +80,10 @@ export default function ReceivingEntryForm() {
     };
 
     return (
-        <div className="relative bg-gray-950 text-white p-6 border-r border-white/5">
+        <div className="relative bg-white text-gray-900 p-6 border-r border-gray-200">
             {/* Urgent Alert Banner */}
             {showUrgentAlert && (
-                <div className="absolute top-0 left-0 right-0 bg-red-500 text-white p-3 z-50 animate-pulse">
+                <div className="absolute top-0 left-0 right-0 bg-red-600 text-white p-3 z-50 animate-pulse">
                     <div className="flex items-center justify-center gap-2">
                         <AlertTriangle className="w-5 h-5" />
                         <span className="text-sm font-black uppercase tracking-wider">
@@ -96,11 +96,11 @@ export default function ReceivingEntryForm() {
 
             <div className={`space-y-4 ${showUrgentAlert ? 'mt-16' : ''}`}>
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center text-white">
                         <Package className="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black tracking-tighter uppercase">
+                        <h3 className="text-lg font-black tracking-tighter uppercase text-gray-900">
                             New Shipment
                         </h3>
                         <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
@@ -120,16 +120,16 @@ export default function ReceivingEntryForm() {
                             value={trackingNumber}
                             onChange={(e) => setTrackingNumber(e.target.value)}
                             placeholder="Enter tracking number..."
-                            className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-sm font-bold outline-none transition-all ${
+                            className={`w-full px-4 py-3 bg-gray-50 border rounded-xl text-sm font-bold outline-none transition-all ${
                                 showUrgentAlert 
-                                    ? 'border-red-500 ring-2 ring-red-500/50 bg-red-500/10' 
-                                    : 'border-white/20 focus:ring-2 focus:ring-blue-500'
+                                    ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50 text-red-900' 
+                                    : 'border-gray-200 text-gray-900 focus:ring-2 focus:ring-blue-500'
                             }`}
                             autoFocus
                             required
                         />
                         {showUrgentAlert && (
-                            <div className="mt-2 flex items-center gap-2 text-red-400 text-xs font-bold">
+                            <div className="mt-2 flex items-center gap-2 text-red-600 text-xs font-bold">
                                 <AlertTriangle className="w-4 h-4" />
                                 This matches your urgent tracking number!
                             </div>
@@ -144,7 +144,7 @@ export default function ReceivingEntryForm() {
                         <select
                             value={carrier}
                             onChange={(e) => setCarrier(e.target.value)}
-                            className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                         >
                             <option value="">Auto-detect</option>
                             <option value="UPS">UPS</option>
@@ -166,7 +166,7 @@ export default function ReceivingEntryForm() {
                             value={orderNumber}
                             onChange={(e) => setOrderNumber(e.target.value)}
                             placeholder="Optional..."
-                            className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                         />
                     </div>
 
@@ -179,7 +179,7 @@ export default function ReceivingEntryForm() {
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="Add any notes..."
-                            className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-xs min-h-[60px] outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs min-h-[60px] outline-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-900"
                         />
                     </div>
 
@@ -189,30 +189,30 @@ export default function ReceivingEntryForm() {
                         disabled={createTaskMutation.isPending || !trackingNumber.trim()}
                         className={`w-full py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg ${
                             showUrgentAlert
-                                ? 'bg-red-600 hover:bg-red-500 shadow-red-500/20'
-                                : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20 text-white'
+                                : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20 text-white'
+                        } disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed`}
                     >
                         {createTaskMutation.isPending ? 'Adding...' : showUrgentAlert ? '⚠️ Add Urgent Shipment' : 'Add to Receiving'}
                     </button>
                 </form>
 
                 {/* Urgent Tracking Number Settings */}
-                <div className="pt-4 border-t border-white/5">
-                    <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                <div className="pt-4 border-t border-gray-100">
+                    <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">
                         Urgent Tracking Alert
                     </div>
                     {urgentTracking ? (
-                        <div className="flex items-center justify-between gap-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <div className="flex items-center justify-between gap-2 p-2 bg-red-50 border border-red-100 rounded-lg">
                             <div className="flex-1">
-                                <div className="text-xs font-mono text-red-400">{urgentTracking}</div>
+                                <div className="text-xs font-mono text-red-600">{urgentTracking}</div>
                             </div>
                             <button
                                 onClick={() => {
                                     localStorage.removeItem('urgentTrackingNumber');
                                     setUrgentTracking(null);
                                 }}
-                                className="p-1 text-red-400 hover:text-red-300 transition-all"
+                                className="p-1 text-red-600 hover:text-red-700 transition-all"
                                 title="Remove urgent tracking"
                             >
                                 <X className="w-4 h-4" />
@@ -227,12 +227,12 @@ export default function ReceivingEntryForm() {
                                     setUrgentTracking(tracking);
                                 }
                             }}
-                            className="w-full py-2 px-3 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+                            className="w-full py-2 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all"
                         >
                             + Set Urgent Tracking
                         </button>
                     )}
-                    <p className="text-[8px] text-gray-600 mt-2">
+                    <p className="text-[8px] text-gray-400 mt-2">
                         Set a tracking number to get alerted when it arrives
                     </p>
                 </div>

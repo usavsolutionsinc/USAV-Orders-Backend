@@ -173,7 +173,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
         }
     };
 
-    const takePhoto = () => {
+    const takePhoto = async () => {
         if (videoRef.current && canvasRef.current) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
@@ -181,7 +181,35 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
             ctx?.drawImage(video, 0, 0);
-            setPhotos(prev => [...prev, canvas.toDataURL('image/jpeg')]);
+            
+            const photoData = canvas.toDataURL('image/jpeg');
+            
+            // Save photo to file system
+            try {
+                const response = await fetch('/api/packing-logs/save-photo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        photo: photoData,
+                        orderId: orderDetails?.orderId || mockDetails.orderId,
+                        packerId: packerId,
+                        photoIndex: photos.length
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Store the file path instead of base64
+                    setPhotos(prev => [...prev, result.path]);
+                } else {
+                    // Fallback to base64 if save fails
+                    setPhotos(prev => [...prev, photoData]);
+                }
+            } catch (err) {
+                console.error('Error saving photo:', err);
+                // Fallback to base64
+                setPhotos(prev => [...prev, photoData]);
+            }
         }
     };
 
@@ -193,22 +221,33 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
         if (scannedTracking) {
             try {
                 const now = new Date();
+                // Format date as MM/DD/YYYY HH:mm:ss
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const year = now.getFullYear();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const formattedDate = `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+                
                 await fetch('/api/packing-logs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         trackingNumber: scannedTracking,
-                        photos: photos,
+                        photos: photos, // Now contains file paths instead of base64
                         packerId: packerId,
                         orderId: orderDetails?.orderId || mockDetails.orderId,
                         boxSize: mockDetails.boxSize,
                         carrier: getCarrier(scannedTracking),
-                        timestamp: now.toISOString(),
+                        timestamp: formattedDate,
                         product: orderDetails?.productTitle || mockDetails.productTitle
                     })
                 });
                 onPacked();
-            } catch (err) {}
+            } catch (err) {
+                console.error('Error finishing packing:', err);
+            }
         }
         setCameraMode('off');
         setShowDetails(true);

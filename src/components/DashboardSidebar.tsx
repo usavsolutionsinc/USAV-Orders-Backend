@@ -105,11 +105,11 @@ export default function DashboardSidebar() {
                         animate={{ width: 340, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-gray-950 text-white flex-shrink-0 h-full overflow-hidden border-r border-white/5 relative group"
+                        className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group"
                     >
                         <button
                             onClick={() => setIsOpen(false)}
-                            className="absolute top-4 right-4 z-50 p-2 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                            className="absolute top-4 right-4 z-50 p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                             title="Collapse Menu"
                         >
                             <ChevronLeft className="w-4 h-4" />
@@ -117,10 +117,10 @@ export default function DashboardSidebar() {
 
                         <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
                             <header>
-                                <h2 className="text-xl font-black tracking-tighter uppercase leading-none">
+                                <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                                     Management
                                 </h2>
-                                <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-1">
+                                <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
                                     Database & Metrics
                                 </p>
                             </header>
@@ -129,7 +129,7 @@ export default function DashboardSidebar() {
                                 <button
                                     onClick={handleSync}
                                     disabled={isSyncing}
-                                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:opacity-50 text-white rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group active:scale-95 shadow-lg shadow-emerald-600/20"
+                                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group active:scale-95 shadow-lg shadow-emerald-600/10"
                                 >
                                     {isSyncing ? (
                                         <Loader2 className="w-6 h-6 animate-spin" />
@@ -143,7 +143,7 @@ export default function DashboardSidebar() {
                                 </button>
 
                                 {status && (
-                                    <div className={`p-4 rounded-2xl border ${status.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'} flex items-start gap-3`}>
+                                    <div className={`p-4 rounded-2xl border ${status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'} flex items-start gap-3`}>
                                         {status.type === 'success' ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <X className="w-4 h-4 mt-0.5 shrink-0" />}
                                         <div className="space-y-1">
                                             <p className="text-[10px] font-black uppercase tracking-widest">{status.type === 'success' ? 'Success' : 'Error'}</p>
@@ -158,10 +158,10 @@ export default function DashboardSidebar() {
                                         <div key={menu.id} className="space-y-1">
                                             <button
                                                 onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
-                                                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${expandedMenu === menu.id ? 'bg-white/10 text-white shadow-xl shadow-black/20' : 'bg-white/5 text-gray-400 hover:bg-white/[0.08] hover:text-white'}`}
+                                                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${expandedMenu === menu.id ? 'bg-blue-50 text-blue-600 shadow-sm border border-blue-100' : 'bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100 hover:text-gray-900'}`}
                                             >
                                                 <div className="flex items-center gap-4">
-                                                    <div className={`p-2.5 rounded-xl transition-colors duration-300 ${expandedMenu === menu.id ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-500'}`}>
+                                                    <div className={`p-2.5 rounded-xl transition-colors duration-300 ${expandedMenu === menu.id ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
                                                         {menu.icon}
                                                     </div>
                                                     <span className="text-[11px] font-black uppercase tracking-wider">{menu.name}</span>
@@ -181,7 +181,7 @@ export default function DashboardSidebar() {
                                                                 key={script.id}
                                                                 onClick={() => runScript(script.id)}
                                                                 disabled={!!activeScript}
-                                                                className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${activeScript === script.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'hover:bg-white/10 text-gray-400 hover:text-white group'} flex items-center justify-between group`}
+                                                                className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${activeScript === script.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-900 group'} flex items-center justify-between group`}
                                                             >
                                                                 <span className="group-hover:translate-x-1 transition-transform duration-200">{script.name}</span>
                                                                 {activeScript === script.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -195,8 +195,8 @@ export default function DashboardSidebar() {
                                 </div>
                             </div>
 
-                            <footer className="mt-auto pt-4 border-t border-white/5 opacity-30 text-center">
-                                <p className="text-[7px] font-mono uppercase tracking-[0.2em]">USAV INFRASTRUCTURE</p>
+                            <footer className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
+                                <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
                             </footer>
                         </div>
                     </motion.aside>
@@ -206,7 +206,7 @@ export default function DashboardSidebar() {
             {!isOpen && (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="fixed top-20 left-0 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-xl hover:bg-blue-600 hover:text-white transition-all duration-300 group"
+                    className="fixed top-20 left-0 z-[60] p-3 bg-white text-gray-900 rounded-r-2xl shadow-xl hover:bg-blue-600 hover:text-white transition-all duration-300 group border border-l-0 border-gray-200"
                 >
                     <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
                 </button>

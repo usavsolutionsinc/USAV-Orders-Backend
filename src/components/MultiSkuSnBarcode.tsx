@@ -244,7 +244,7 @@ export default function MultiSkuSnBarcode() {
     };
 
     return (
-        <div className="h-full flex flex-col bg-gray-950 text-white">
+        <div className="h-full flex flex-col bg-white text-gray-900">
             {/* Mode Selector - Using Refactored Component */}
             <ModeSelector mode={mode} onModeChange={handleModeChange} />
 

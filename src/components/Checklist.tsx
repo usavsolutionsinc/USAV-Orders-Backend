@@ -76,12 +76,12 @@ export default function Checklist({ role, userId = '1' }: ChecklistProps) {
     // Handle save (create or update)
     const handleSave = (data: TaskFormData) => {
         if (data.id) {
-            // Update existing task
-            updateTemplate(data);
+            // Update existing task - TypeScript assertion since we checked id exists
+            updateTemplate({ ...data, id: data.id } as Parameters<typeof updateTemplate>[0]);
             setEditingTask(null);
         } else {
-            // Create new task
-            createTemplate(data);
+            // Create new task - add required role field
+            createTemplate({ ...data, role } as Parameters<typeof createTemplate>[0]);
             setIsAdding(false);
         }
     };

@@ -29,7 +29,7 @@ export default function Navigation() {
     const isStation = pathname?.startsWith('/packer/') || pathname?.startsWith('/tech/');
 
     return (
-        <nav className={`bg-gray-950 text-white sticky top-0 z-[100] border-b border-white/5 ${isStation ? 'hidden lg:block' : ''}`}>
+        <nav className={`bg-white text-gray-900 sticky top-0 z-[100] border-b border-gray-200 ${isStation ? 'hidden lg:block' : ''}`}>
             <div className="px-4">
                 <div className="flex items-center h-14 justify-between">
                     <div className="flex items-center space-x-6">
@@ -37,7 +37,7 @@ export default function Navigation() {
                             href="/" 
                             className="flex items-center group"
                         >
-                            <span className="text-xl font-black tracking-tighter hover:text-blue-400 transition-all uppercase">
+                            <span className="text-xl font-black tracking-tighter hover:text-blue-600 transition-all uppercase text-gray-900">
                                 USAV
                             </span>
                         </Link>
@@ -56,7 +56,7 @@ export default function Navigation() {
                                         className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider uppercase transition-all duration-300 whitespace-nowrap ${
                                             isActive
                                                 ? 'bg-blue-600 text-white shadow-lg'
-                                                : 'text-gray-500 hover:text-white hover:bg-white/5'
+                                                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                                         }`}
                                     >
                                         {item.name}
@@ -72,7 +72,7 @@ export default function Navigation() {
                             className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider uppercase transition-all duration-300 ${
                                 pathname === '/admin'
                                     ? 'bg-blue-600 text-white shadow-lg'
-                                    : 'text-gray-500 hover:text-white hover:bg-white/5'
+                                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                             }`}
                         >
                             Admin
