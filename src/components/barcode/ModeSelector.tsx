@@ -1,0 +1,43 @@
+'use client';
+
+import React from 'react';
+import { Printer, Database } from '../Icons';
+
+export type BarcodeMode = 'print' | 'sn-to-sku';
+
+interface ModeSelectorProps {
+    mode: BarcodeMode;
+    onModeChange: (mode: BarcodeMode) => void;
+}
+
+/**
+ * Mode selector for switching between print label and SN-to-SKU modes
+ */
+export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {
+    return (
+        <div className="p-6 flex gap-2">
+            <button 
+                onClick={() => onModeChange('print')}
+                className={`flex-1 py-3 px-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    mode === 'print' 
+                        ? 'bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.2)]' 
+                        : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                }`}
+            >
+                <Printer className="w-3 h-3 inline-block mr-2" />
+                Print Label
+            </button>
+            <button 
+                onClick={() => onModeChange('sn-to-sku')}
+                className={`flex-1 py-3 px-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    mode === 'sn-to-sku' 
+                        ? 'bg-emerald-600 text-white shadow-[0_10px_20px_rgba(16,185,129,0.2)]' 
+                        : 'bg-white/5 text-gray-500 hover:bg-white/10'
+                }`}
+            >
+                <Database className="w-3 h-3 inline-block mr-2" />
+                SN to SKU
+            </button>
+        </div>
+    );
+}
