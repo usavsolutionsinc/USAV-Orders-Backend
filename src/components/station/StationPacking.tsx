@@ -37,6 +37,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
     const [orderDetails, setOrderDetails] = useState<any>(null);
     const [galleryOpen, setGalleryOpen] = useState(false);
     const [tempPhotos, setTempPhotos] = useState<string[]>([]);
+    const [showShutter, setShowShutter] = useState(false);
     
     const mockDetails = {
         productTitle: 'Sony Alpha a7 IV Mirrorless Camera',
@@ -190,6 +191,10 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
 
     const takePhoto = () => {
         if (videoRef.current && canvasRef.current) {
+            // Trigger shutter effect
+            setShowShutter(true);
+            setTimeout(() => setShowShutter(false), 200);
+            
             const video = videoRef.current;
             const canvas = canvasRef.current;
             canvas.width = video.videoWidth;
@@ -377,6 +382,19 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                     <motion.div key="camera" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black z-[100] flex flex-col">
                         <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
                         <canvas ref={canvasRef} className="hidden" />
+                        
+                        {/* Shutter Effect */}
+                        <AnimatePresence>
+                            {showShutter && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.1 }}
+                                    className="absolute inset-0 bg-white z-[105] pointer-events-none"
+                                />
+                            )}
+                        </AnimatePresence>
                         
                         {/* Top Bar */}
                         <div className="absolute top-8 left-0 right-0 px-6 flex justify-between items-start z-[110]">

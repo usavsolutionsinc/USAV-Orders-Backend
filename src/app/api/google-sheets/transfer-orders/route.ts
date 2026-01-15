@@ -136,7 +136,12 @@ export async function POST(req: NextRequest) {
         });
 
         if (filteredSourceRows.length === 0) {
-            return NextResponse.json({ success: true, message: 'No new rows (not in Shipped) found', rowCount: 0 });
+            return NextResponse.json({ 
+                success: true, 
+                message: 'No new rows (not in Shipped) found', 
+                rowCount: 0, 
+                tabName: targetTabName 
+            });
         }
 
         // Prepare data for Google Sheets

@@ -25,7 +25,10 @@ export default function OrdersSidebar() {
             });
             const data = await res.json();
             if (data.success) {
-                setStatus({ type: 'success', message: `Transferred ${data.rowCount} orders from ${data.tabName}` });
+                const message = data.rowCount > 0 
+                    ? `Successfully transferred ${data.rowCount} order${data.rowCount === 1 ? '' : 's'}` 
+                    : 'Orders are already transferred';
+                setStatus({ type: 'success', message });
             } else {
                 setStatus({ type: 'error', message: data.error || 'Transfer failed' });
             }
