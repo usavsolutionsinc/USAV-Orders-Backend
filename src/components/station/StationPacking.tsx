@@ -119,14 +119,16 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                                 const data = await res.json();
                                 if (data.found) {
                                     setOrderDetails(data);
+                                    setCameraMode('photo');
+                                    startCameraForPhoto();
+                                } else {
+                                    console.log('Tracking not found in shipped sheet:', cleanedText);
+                                    // Don't stop scanning, let it try again
                                 }
                             }
                         } catch (e) {
                             console.error('Failed to fetch order details:', e);
                         }
-                        
-                        setCameraMode('photo');
-                        startCameraForPhoto();
                     },
                     (errorMessage) => {}
                 );
@@ -228,25 +230,32 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                 <div className="flex-1 flex flex-col px-4 py-4 space-y-4">
                     {(scannedTracking || showDetails) && cameraMode === 'off' ? (
                         <div className="space-y-4 pb-20">
-                            {/* Order ID and Box Size */}
-                            <div className="flex items-center justify-between">
-                                <div className="flex flex-col gap-1">
-                                    <h1 className="text-lg font-black text-blue-600 tracking-tight">
-                                        {orderDetails?.orderId || mockDetails.orderId}
-                                    </h1>
-                                    <p className="text-sm font-black leading-tight text-gray-900 tracking-tight">
-                                        {orderDetails?.productTitle || mockDetails.productTitle}
-                                    </p>
-                                </div>
-                                <div className="bg-gray-50 rounded-xl px-4 py-2 border border-gray-200 text-right">
-                                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Box</p>
-                                    <p className="text-sm font-black text-gray-900 tracking-tight">{mockDetails.boxSize}</p>
-                                </div>
+                            {/* Order ID and Box Size (Same Row) */}
+                            <div className="flex items-baseline justify-between gap-4">
+                                <h1 className="text-2xl font-black text-blue-600 tracking-tight">
+                                    {orderDetails?.orderId || mockDetails.orderId}
+                                </h1>
+                                <p className="text-xl font-black text-gray-900 tracking-tight">
+                                    {mockDetails.boxSize}
+                                </p>
                             </div>
 
-                            <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Address</p>
-                                <p className="text-xs font-medium text-gray-600 leading-relaxed">{mockDetails.destination}</p>
+                            <p className="text-sm font-black leading-tight text-gray-900 tracking-tight -mt-2">
+                                {orderDetails?.productTitle || mockDetails.productTitle}
+                            </p>
+
+                            {/* Frequently Missed Items Warning */}
+                            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200">
+                                <div className="flex items-center gap-2 text-amber-600 mb-2">
+                                    <X className="w-4 h-4" />
+                                    <p className="text-[10px] font-black uppercase tracking-widest">Frequently Missed Items</p>
+                                </div>
+                                <ul className="text-xs font-bold text-amber-900 space-y-1 ml-6 list-disc">
+                                    <li>Power cables & adapters</li>
+                                    <li>Remote controls</li>
+                                    <li>Instruction manuals</li>
+                                    <li>Small mounting screws</li>
+                                </ul>
                             </div>
 
                             <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
