@@ -85,11 +85,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                 const html5QrCode = new Html5Qrcode("reader");
                 scannerRef.current = html5QrCode;
                 await html5QrCode.start(
-                    { 
-                        facingMode: "environment",
-                        width: { min: 1280, ideal: 1920 },
-                        height: { min: 720, ideal: 1080 }
-                    },
+                    { facingMode: "environment" },
                     { 
                         fps: 30,
                         qrbox: (viewfinderWidth, viewfinderHeight) => {
@@ -97,7 +93,13 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                             return { width: minEdge * 0.8, height: minEdge * 0.4 };
                         },
                         aspectRatio: 1.0,
-                        disableFlip: true
+                        disableFlip: true,
+                        // High resolution preference without strict constraints
+                        videoConstraints: {
+                            facingMode: "environment",
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        }
                     },
                     async (decodedText) => {
                         // Resilient scanning: Only allow alphanumeric uppercase, no symbols
@@ -109,8 +111,8 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                             return; // Don't stop scanning, let it try again
                         }
 
+                        await stopScanning();
                         setScannedTracking(cleanedText);
-                        stopScanning();
                         
                         // Fetch order details from shipped table
                         try {
@@ -123,11 +125,16 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                                     startCameraForPhoto();
                                 } else {
                                     console.log('Tracking not found in shipped sheet:', cleanedText);
-                                    // Don't stop scanning, let it try again
+                                    // Resume scanning since we stopped it
+                                    startScanning();
                                 }
+                            } else {
+                                // Error fetching details, resume scanning
+                                startScanning();
                             }
                         } catch (e) {
                             console.error('Failed to fetch order details:', e);
+                            startScanning();
                         }
                     },
                     (errorMessage) => {}
@@ -151,15 +158,28 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
 
     const startCameraForPhoto = async () => {
         try {
+            // First clear any existing stream
+            if (videoRef.current?.srcObject) {
+                (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+                videoRef.current.srcObject = null;
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { 
                     facingMode: 'environment',
-                    width: { min: 1280, ideal: 1920, max: 3840 },
-                    height: { min: 720, ideal: 1080, max: 2160 }
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
                 } 
             });
             if (videoRef.current) videoRef.current.srcObject = stream;
-        } catch (err) { console.error(err); }
+        } catch (err) { 
+            console.error("Failed to start photo camera:", err);
+            // Fallback to basic constraints
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                if (videoRef.current) videoRef.current.srcObject = stream;
+            } catch (e) { console.error("Final fallback failed:", e); }
+        }
     };
 
     const takePhoto = () => {
@@ -177,6 +197,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
     const finishPacking = async () => {
         if (videoRef.current?.srcObject) {
             (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+            videoRef.current.srcObject = null;
         }
         if (scannedTracking) {
             try {
@@ -338,7 +359,7 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                         <div className="absolute inset-0 border-4 border-blue-500/30 m-20 rounded-3xl animate-pulse pointer-events-none" />
                         <div className="absolute top-10 left-0 right-0 p-8 flex justify-between items-center z-[110]">
                             <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10"><p className="text-xs font-black uppercase tracking-widest text-white/80">Scanning...</p></div>
-                            <button onClick={() => { stopScanning(); setCameraMode('off'); }} className="p-4 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 active:scale-90"><X className="w-6 h-6" /></button>
+                            <button onClick={async () => { await stopScanning(); setCameraMode('off'); }} className="p-4 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 active:scale-90"><X className="w-6 h-6" /></button>
                         </div>
                     </motion.div>
                 )}
@@ -356,6 +377,19 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
                             <div className="px-3 py-1.5 bg-blue-600 rounded-full text-[9px] font-black text-white shadow-lg">
                                 {photos.length} PHOTOS
                             </div>
+                            <button 
+                                onClick={() => {
+                                    if (videoRef.current?.srcObject) {
+                                        (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+                                        videoRef.current.srcObject = null;
+                                    }
+                                    setCameraMode('off');
+                                    setShowDetails(true);
+                                }} 
+                                className="p-3 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 active:scale-90"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
                         </div>
 
                         {/* Bottom Controls */}
