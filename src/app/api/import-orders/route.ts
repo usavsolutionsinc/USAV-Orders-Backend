@@ -75,6 +75,10 @@ export async function POST(request: NextRequest) {
             col4: item.itemTitle || '',       // Column C (DB: col_4) - Product Title
             col5: item.condition || '',       // Column D (DB: col_5) - Condition
             col6: item.tracking || '',        // Column E (DB: col_6) - Tracking Number
+            col7: '',                         // Column F (DB: col_7) - Serial Number (empty)
+            col8: '',                         // Column G (DB: col_8) - Box (empty)
+            col9: '',                         // Column H (DB: col_9) - By (empty)
+            col10: item.usavSku || '',        // Column I (DB: col_10) - SKU from Orders E
         }));
 
         const appendOrders = sheets.spreadsheets.values.append({
@@ -99,6 +103,19 @@ export async function POST(request: NextRequest) {
         const dbInsertShipped = db.insert(shippedTable).values(shippedToInsert);
 
         await Promise.all([appendOrders, appendShipped, dbInsertOrders, dbInsertShipped]);
+
+        // Automatically run calculateLateOrders after import
+        try {
+            const baseUrl = request.url.split('/api/')[0];
+            await fetch(`${baseUrl}/api/google-sheets/execute-script`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scriptName: 'calculateLateOrders' })
+            });
+        } catch (err) {
+            console.error('Failed to auto-execute calculateLateOrders:', err);
+            // Don't fail the import if this fails
+        }
 
         return NextResponse.json({ 
             success: true, 

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { google } from 'googleapis';
-import { getGoogleAuth } from '@/lib/google-auth';
-import { searchItemBySku, getStockInfo } from '@/lib/zoho';
-
-const SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
+import { db } from '@/lib/drizzle/db';
+import { orders, shipped, skuStock, tech1, tech2, tech3, tech4, packer1, packer2, packer3 } from '@/lib/drizzle/schema';
+import { eq, sql, inArray, and, isNotNull } from 'drizzle-orm';
 
 function getLastEightDigits(str: any) {
     return String(str || '').trim().slice(-8).toLowerCase();
@@ -19,28 +17,26 @@ function normalizeSku(sku: any) {
 export async function POST(req: NextRequest) {
     try {
         const { scriptName } = await req.json();
-        const auth = getGoogleAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
 
         switch (scriptName) {
             case 'checkTrackingInShipped':
-                return await executeCheckTrackingInShipped(sheets);
+                return await executeCheckTrackingInShipped();
             case 'removeDuplicateShipped':
-                return await executeRemoveDuplicateShipped(sheets);
+                return await executeRemoveDuplicateShipped();
             case 'transferExistingOrdersToRestock':
-                return await executeTransferExistingOrdersToRestock(sheets);
+                return await executeTransferExistingOrdersToRestock();
             case 'calculateLateOrders':
-                return await executeCalculateLateOrders(sheets);
+                return await executeCalculateLateOrders();
             case 'removeDuplicateOrders':
-                return await executeRemoveDuplicateOrders(sheets);
+                return await executeRemoveDuplicateOrders();
             case 'updateSkuStockFromShipped':
-                return await executeUpdateSkuStockFromShipped(sheets);
+                return await executeUpdateSkuStockFromShipped();
             case 'syncPackerTimestampsToShipped':
-                return await executeSyncPackerTimestampsToShipped(sheets);
+                return await executeSyncPackerTimestampsToShipped();
             case 'recheckTechTrackingIntegrity':
-                return await executeRecheckTechTrackingIntegrity(sheets);
+                return await executeRecheckTechTrackingIntegrity();
             case 'recheckPackerTrackingIntegrity':
-                return await executeRecheckPackerTrackingIntegrity(sheets);
+                return await executeRecheckPackerTrackingIntegrity();
             default:
                 return NextResponse.json({ success: false, error: 'Unknown script name' }, { status: 400 });
         }
@@ -50,277 +46,255 @@ export async function POST(req: NextRequest) {
     }
 }
 
-async function executeCheckTrackingInShipped(sheets: any) {
-    const ordersResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Orders!A2:G',
-    });
-    const ordersRows = ordersResponse.data.values || [];
+async function executeCheckTrackingInShipped() {
+    // Read from orders table where col_8 (tracking) has a value
+    const ordersData = await db.select().from(orders).where(isNotNull(orders.col8));
 
-    const shippedResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Shipped!E2:E',
-    });
-    const shippedTracking = new Set((shippedResponse.data.values || []).flat().map((t: any) => getLastEightDigits(t)));
+    // Read existing shipped tracking numbers from col_6
+    const shippedData = await db.select({ tracking: shipped.col6 }).from(shipped);
+    const shippedTrackingSet = new Set(
+        shippedData
+            .map(s => getLastEightDigits(s.tracking || ''))
+            .filter(t => t)
+    );
 
-    const rowsToAdd = [];
-    const gRowsToGreen: number[] = [];
+    // Find orders not in shipped
+    const newShipped = [];
+    const processedOrders = [];
 
-    for (let i = 0; i < ordersRows.length; i++) {
-        const row = ordersRows[i];
-        const tracking = String(row[6] || '').trim();
+    for (const order of ordersData) {
+        const tracking = String(order.col8 || '').trim();
         if (tracking) {
-            if (!shippedTracking.has(getLastEightDigits(tracking))) {
-            const newRow = new Array(9).fill("");
-            newRow[1] = row[1]; // Order ID
-            newRow[2] = row[2]; // Product Title
-            newRow[3] = row[5]; // Condition/Sent
-            newRow[4] = row[6]; // Shipping TRK #
-            rowsToAdd.push(newRow);
-                shippedTracking.add(getLastEightDigits(tracking));
+            const trackingKey = getLastEightDigits(tracking);
+            if (!shippedTrackingSet.has(trackingKey)) {
+                newShipped.push({
+                    col2: '',                    // Date/Time (empty initially)
+                    col3: order.col3 || '',      // Order ID
+                    col4: order.col4 || '',      // Product Title
+                    col5: order.col7 || '',      // Condition
+                    col6: tracking,              // Tracking Number
+                    col7: '',                    // Serial Number (empty)
+                    col8: '',                    // Box (empty)
+                    col9: '',                    // By (empty)
+                    col10: order.col6 || '',     // SKU
+                });
+                shippedTrackingSet.add(trackingKey);
             }
-            gRowsToGreen.push(i + 2);
+            processedOrders.push(order.col1);
         }
     }
 
-    if (rowsToAdd.length > 0) {
-        await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: 'Shipped!A:A',
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: rowsToAdd },
-        });
+    // Insert into shipped table
+    if (newShipped.length > 0) {
+        await db.insert(shipped).values(newShipped);
     }
 
-    // Update backgrounds in Orders G column
-    if (gRowsToGreen.length > 0) {
-        const requests = gRowsToGreen.map(row => ({
-            repeatCell: {
-                range: {
-                    sheetId: 0, // Assuming Orders is sheetId 0 or find it
-                    startRowIndex: row - 1,
-                    endRowIndex: row,
-                    startColumnIndex: 6,
-                    endColumnIndex: 7
-                },
-                cell: {
-                    userEnteredFormat: {
-                        backgroundColor: { red: 0, green: 1, blue: 0 }
-                    }
-                },
-                fields: 'userEnteredFormat.backgroundColor'
-            }
-        }));
-        
-        // This requires getting sheetId first, skipping for now to keep it simple unless requested.
-        // For simplicity, we'll just return the counts.
+    // Mark orders as processed (col_9 = 'green' or processed status)
+    if (processedOrders.length > 0) {
+        await db.update(orders)
+            .set({ col9: 'processed' })
+            .where(inArray(orders.col1, processedOrders));
     }
 
     return NextResponse.json({ 
         success: true, 
-        message: `Processed ${ordersRows.length} rows. Transferred ${rowsToAdd.length} new rows to Shipped. ${gRowsToGreen.length} rows marked for green highlighting.` 
+        message: `Processed ${ordersData.length} orders. Transferred ${newShipped.length} new rows to Shipped. ${processedOrders.length} orders marked as processed.` 
     });
 }
 
-async function executeRemoveDuplicateShipped(sheets: any) {
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Shipped!E2:E',
-    });
-    const rows = response.data.values || [];
+async function executeRemoveDuplicateShipped() {
+    // Get all shipped records
+    const shippedData = await db.select().from(shipped).orderBy(shipped.col1);
+    
     const trackingMap = new Map();
-    const rowsToDelete: number[] = [];
+    const idsToDelete: number[] = [];
 
-    for (let i = 0; i < rows.length; i++) {
-        const tracking = String(rows[i][0] || '').trim();
+    for (const row of shippedData) {
+        const tracking = String(row.col6 || '').trim();
         if (tracking) {
             if (trackingMap.has(tracking)) {
-                rowsToDelete.push(i + 2);
+                // Duplicate found, mark for deletion
+                idsToDelete.push(row.col1);
             } else {
-                trackingMap.set(tracking, i + 2);
+                // First occurrence, keep it
+                trackingMap.set(tracking, row.col1);
             }
         }
     }
 
-    if (rowsToDelete.length > 0) {
-        rowsToDelete.sort((a, b) => b - a);
-        // Full implementation would use batchUpdate to delete rows
+    // Delete duplicate rows
+    if (idsToDelete.length > 0) {
+        await db.delete(shipped).where(inArray(shipped.col1, idsToDelete));
     }
 
-    return NextResponse.json({ success: true, message: `Found and processed ${rows.length} rows. Identified ${rowsToDelete.length} duplicates for removal.` });
+    return NextResponse.json({ 
+        success: true, 
+        message: `Processed ${shippedData.length} rows. Removed ${idsToDelete.length} duplicate tracking numbers.` 
+    });
 }
 
-async function executeTransferExistingOrdersToRestock(sheets: any) {
-    const shippedResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Shipped!A2:E',
-    });
-    const shippedRows = shippedResponse.data.values || [];
-    const shippedTrackings = new Set();
-    const shippedOrders = new Set();
+async function executeTransferExistingOrdersToRestock() {
+    // Get all shipped records with date/time (col_2 is not empty)
+    const shippedData = await db.select().from(shipped).where(isNotNull(shipped.col2));
+    
+    const shippedTrackings = new Set<string>();
+    const shippedOrderIds = new Set<string>();
 
-    for (const row of shippedRows) {
-        if (row[0]) {
-            if (row[4]) shippedTrackings.add(getLastEightDigits(row[4]));
-            if (row[1]) shippedOrders.add(String(row[1]).trim());
-        }
+    for (const row of shippedData) {
+        if (row.col6) shippedTrackings.add(getLastEightDigits(row.col6));
+        if (row.col3) shippedOrderIds.add(String(row.col3).trim());
     }
 
-    const ordersResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Orders!B2:G',
-    });
-    const ordersRows = ordersResponse.data.values || [];
-    let deleteCount = 0;
-    const rowsToDelete: number[] = [];
+    // Get all orders
+    const ordersData = await db.select().from(orders);
+    const idsToDelete: number[] = [];
 
-    for (let i = 0; i < ordersRows.length; i++) {
-        const orderId = String(ordersRows[i][0] || '').trim();
-        const tracking = String(ordersRows[i][5] || '').trim();
+    for (const order of ordersData) {
+        const orderId = String(order.col3 || '').trim();
+        const tracking = String(order.col8 || '').trim();
+        
         if ((tracking && shippedTrackings.has(getLastEightDigits(tracking))) || 
-            (orderId && shippedOrders.has(orderId))) {
-            rowsToDelete.push(i + 2);
-            deleteCount++;
+            (orderId && shippedOrderIds.has(orderId))) {
+            idsToDelete.push(order.col1);
         }
     }
 
-    return NextResponse.json({ success: true, message: `Processed ${ordersRows.length} orders. Identified ${deleteCount} shipped orders to delete from Orders sheet.` });
+    // Delete shipped orders from orders table
+    if (idsToDelete.length > 0) {
+        await db.delete(orders).where(inArray(orders.col1, idsToDelete));
+    }
+
+    return NextResponse.json({ 
+        success: true, 
+        message: `Processed ${ordersData.length} orders. Deleted ${idsToDelete.length} shipped orders from Orders table.` 
+    });
 }
 
-async function executeCalculateLateOrders(sheets: any) {
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Orders!A2:A',
-    });
-    const rows = response.data.values || [];
+async function executeCalculateLateOrders() {
+    // Get all orders
+    const ordersData = await db.select().from(orders);
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    const hValues = [];
+    
     let calculatedCount = 0;
 
-    for (let i = 0; i < rows.length; i++) {
-        const aValue = rows[i][0];
-        let val = "";
-        if (aValue) {
-            const orderDate = new Date(aValue);
+    for (const order of ordersData) {
+        const shipByDate = order.col2; // Ship by date in col_2
+        let lateValue = "";
+        
+        if (shipByDate) {
+            const orderDate = new Date(shipByDate);
             if (!isNaN(orderDate.getTime())) {
                 orderDate.setHours(0, 0, 0, 0);
                 const daysDiff = Math.floor((today.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24));
-                if (daysDiff === 0) val = "*";
-                else if (daysDiff >= 1) val = String(daysDiff);
+                if (daysDiff === 0) lateValue = "*";
+                else if (daysDiff >= 1) lateValue = String(daysDiff);
                 calculatedCount++;
             }
         }
-        hValues.push([val]);
+        
+        // Update col_9 with late status (column H in sheet)
+        await db.update(orders)
+            .set({ col9: lateValue })
+            .where(eq(orders.col1, order.col1));
     }
 
-    if (hValues.length > 0) {
-        await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `Orders!H2:H${hValues.length + 1}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: hValues },
-        });
-    }
-
-    return NextResponse.json({ success: true, message: `Processed ${rows.length} rows. Calculated late status for ${calculatedCount} orders in column H.` });
+    return NextResponse.json({ 
+        success: true, 
+        message: `Processed ${ordersData.length} orders. Calculated late status for ${calculatedCount} orders.` 
+    });
 }
 
-async function executeRemoveDuplicateOrders(sheets: any) {
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Orders!G2:G',
-    });
-    const rows = response.data.values || [];
+async function executeRemoveDuplicateOrders() {
+    // Get all orders
+    const ordersData = await db.select().from(orders).orderBy(orders.col1);
+    
     const trackingMap = new Map();
-    const rowsToDelete: number[] = [];
+    const idsToDelete: number[] = [];
 
-    for (let i = 0; i < rows.length; i++) {
-        const tracking = String(rows[i][0] || '').trim();
+    for (const order of ordersData) {
+        const tracking = String(order.col8 || '').trim(); // col_8 is tracking (column G)
         if (tracking) {
             if (trackingMap.has(tracking)) {
-                rowsToDelete.push(i + 2);
+                // Duplicate found
+                idsToDelete.push(order.col1);
             } else {
-                trackingMap.set(tracking, true);
+                // First occurrence
+                trackingMap.set(tracking, order.col1);
             }
         }
     }
 
-    return NextResponse.json({ success: true, message: `Processed ${rows.length} rows. Found ${rowsToDelete.length} duplicate orders in column G.` });
+    // Delete duplicate orders
+    if (idsToDelete.length > 0) {
+        await db.delete(orders).where(inArray(orders.col1, idsToDelete));
+    }
+
+    return NextResponse.json({ 
+        success: true, 
+        message: `Processed ${ordersData.length} orders. Removed ${idsToDelete.length} duplicate tracking numbers.` 
+    });
 }
 
-async function executeUpdateSkuStockFromShipped(sheets: any) {
-    const shippedResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Shipped!I2:I',
-    });
-    const shippedSkus = new Set((shippedResponse.data.values || []).flat().map((s: any) => normalizeSku(s)));
+async function executeUpdateSkuStockFromShipped() {
+    // Get all SKUs from shipped (col_10)
+    const shippedData = await db.select({ sku: shipped.col10 }).from(shipped);
+    const shippedSkus = new Set(
+        shippedData
+            .map(s => normalizeSku(s.sku))
+            .filter(s => s)
+    );
 
-    const skuStockResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Sku-Stock!B2:B',
-    });
-    const skuStockRows = skuStockResponse.data.values || [];
-    const updates = [];
+    // Get all SKU stock records
+    const skuStockData = await db.select().from(skuStock);
     let updatedCount = 0;
 
-    for (let i = 0; i < skuStockRows.length; i++) {
-        const sku = normalizeSku(skuStockRows[i][0]);
+    for (const stock of skuStockData) {
+        const sku = normalizeSku(stock.col2); // col_2 is SKU column (B)
         if (sku && shippedSkus.has(sku)) {
-            updates.push({
-                range: `Sku-Stock!F${i + 2}`,
-                values: [[1]]
-            });
+            // Update col_6 (column F) to mark as shipped
+            await db.update(skuStock)
+                .set({ col6: '1' })
+                .where(eq(skuStock.col1, stock.col1));
             updatedCount++;
         }
     }
 
-    if (updates.length > 0) {
-        await sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId: SPREADSHEET_ID,
-            requestBody: {
-                valueInputOption: 'USER_ENTERED',
-                data: updates
-            }
-        });
-    }
-
-    return NextResponse.json({ success: true, message: `Processed ${skuStockRows.length} SKUs. Matched and updated ${updatedCount} rows in Sku-Stock column F.` });
+    return NextResponse.json({ 
+        success: true, 
+        message: `Processed ${skuStockData.length} SKUs. Matched and updated ${updatedCount} rows in Sku-Stock.` 
+    });
 }
 
-async function executeSyncPackerTimestampsToShipped(sheets: any) {
-    const shippedResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Shipped!A2:E',
-    });
-    const shippedRows = shippedResponse.data.values || [];
+async function executeSyncPackerTimestampsToShipped() {
+    // Get shipped records without timestamps (col_2 is empty)
+    const shippedData = await db.select().from(shipped);
+    
     let processedCount = 0;
     let updatedCount = 0;
 
-    const packerSheets = ['Packer_1', 'Packer_2', 'Packer_3'];
-    for (const pSheetName of packerSheets) {
-        const pResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${pSheetName}!A2:B`,
-        });
-        const pRows = pResponse.data.values || [];
+    const packerTables = [packer1, packer2, packer3];
+    
+    for (const packerTable of packerTables) {
+        // Get packer data
+        const packerData = await db.select().from(packerTable);
         
-        for (let s = 0; s < shippedRows.length; s++) {
-            const sA = shippedRows[s][0];
-            const sB = shippedRows[s][1];
-            const sE = shippedRows[s][4];
-            
-            if (!sA && sB && sE) {
+        for (const shipRow of shippedData) {
+            // If shipped has no timestamp but has order ID and tracking
+            if (!shipRow.col2 && shipRow.col3 && shipRow.col6) {
                 processedCount++;
-                for (const pRow of pRows) {
-                    if (pRow[1] && getLastEightDigits(pRow[1]) === getLastEightDigits(sE) && pRow[0]) {
-                        await sheets.spreadsheets.values.update({
-                            spreadsheetId: SPREADSHEET_ID,
-                            range: `Shipped!A${s + 2}`,
-                            valueInputOption: 'USER_ENTERED',
-                            requestBody: { values: [[pRow[0]]] },
-                        });
+                
+                // Find matching packer row by tracking number
+                for (const packRow of packerData) {
+                    if (packRow.col3 && // packer has tracking in col_3
+                        getLastEightDigits(packRow.col3) === getLastEightDigits(shipRow.col6) &&
+                        packRow.col2) { // packer has timestamp
+                        
+                        // Update shipped timestamp
+                        await db.update(shipped)
+                            .set({ col2: packRow.col2 })
+                            .where(eq(shipped.col1, shipRow.col1));
                         updatedCount++;
                         break;
                     }
@@ -329,38 +303,39 @@ async function executeSyncPackerTimestampsToShipped(sheets: any) {
         }
     }
 
-    return NextResponse.json({ success: true, message: `Processed ${processedCount} Shipped rows. Successfully synced ${updatedCount} timestamps from Packer sheets.` });
+    return NextResponse.json({ 
+        success: true, 
+        message: `Processed ${processedCount} Shipped rows. Successfully synced ${updatedCount} timestamps from Packer tables.` 
+    });
 }
 
-async function executeRecheckTechTrackingIntegrity(sheets: any) {
-    const shippedResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Shipped!C2:E',
-    });
-    const shippedRows = shippedResponse.data.values || [];
+async function executeRecheckTechTrackingIntegrity() {
+    // Get shipped data with product titles and tracking
+    const shippedData = await db.select().from(shipped);
+    
     let processedCount = 0;
     let fixedCount = 0;
 
-    const techSheets = ['Tech_1', 'Tech_2', 'Tech_3'];
-    for (const tSheetName of techSheets) {
-        const tResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${tSheetName}!A2:C`,
-        });
-        const tRows = tResponse.data.values || [];
+    const techTables = [tech1, tech2, tech3, tech4];
+    
+    for (const techTable of techTables) {
+        // Get tech data
+        const techData = await db.select().from(techTable);
         
-        for (let i = 0; i < tRows.length; i++) {
-            const tracking = tRows[i][2];
-            if (tracking) {
+        for (const techRow of techData) {
+            const techTracking = techRow.col3; // Tech tracking in col_3 (column C)
+            if (techTracking) {
                 processedCount++;
-                for (const sRow of shippedRows) {
-                    if (getLastEightDigits(sRow[2]) === getLastEightDigits(tracking)) {
-                        await sheets.spreadsheets.values.update({
-                            spreadsheetId: SPREADSHEET_ID,
-                            range: `${tSheetName}!B${i + 2}`,
-                            valueInputOption: 'USER_ENTERED',
-                            requestBody: { values: [[sRow[0]]] },
-                        });
+                
+                // Find matching shipped row by tracking
+                for (const shipRow of shippedData) {
+                    if (shipRow.col6 && // shipped tracking in col_6
+                        getLastEightDigits(shipRow.col6) === getLastEightDigits(techTracking)) {
+                        
+                        // Update tech product title from shipped (col_4 -> col_2)
+                        await db.update(techTable)
+                            .set({ col2: shipRow.col4 }) // Update product title
+                            .where(eq(techTable.col1, techRow.col1));
                         fixedCount++;
                         break;
                     }
@@ -369,38 +344,39 @@ async function executeRecheckTechTrackingIntegrity(sheets: any) {
         }
     }
 
-    return NextResponse.json({ success: true, message: `Processed ${processedCount} Tech tracking rows. Found and fixed ${fixedCount} entries from Shipped data.` });
+    return NextResponse.json({ 
+        success: true, 
+        message: `Processed ${processedCount} Tech tracking rows. Found and synced ${fixedCount} product titles from Shipped data.` 
+    });
 }
 
-async function executeRecheckPackerTrackingIntegrity(sheets: any) {
-    const shippedResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Shipped!C2:E',
-    });
-    const shippedRows = shippedResponse.data.values || [];
+async function executeRecheckPackerTrackingIntegrity() {
+    // Get shipped data with product titles and tracking
+    const shippedData = await db.select().from(shipped);
+    
     let processedCount = 0;
     let fixedCount = 0;
 
-    const packerSheets = ['Packer_1', 'Packer_2', 'Packer_3'];
-    for (const pSheetName of packerSheets) {
-        const pResponse = await sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${pSheetName}!B2:B`,
-        });
-        const pRows = pResponse.data.values || [];
+    const packerTables = [packer1, packer2, packer3];
+    
+    for (const packerTable of packerTables) {
+        // Get packer data
+        const packerData = await db.select().from(packerTable);
         
-        for (let i = 0; i < pRows.length; i++) {
-            const tracking = pRows[i][0];
-            if (tracking) {
+        for (const packRow of packerData) {
+            const packTracking = packRow.col3; // Packer tracking in col_3 (column B in UI)
+            if (packTracking) {
                 processedCount++;
-                for (const sRow of shippedRows) {
-                    if (getLastEightDigits(sRow[2]) === getLastEightDigits(tracking)) {
-                        await sheets.spreadsheets.values.update({
-                            spreadsheetId: SPREADSHEET_ID,
-                            range: `${pSheetName}!D${i + 2}`,
-                            valueInputOption: 'USER_ENTERED',
-                            requestBody: { values: [[sRow[0]]] },
-                        });
+                
+                // Find matching shipped row by tracking
+                for (const shipRow of shippedData) {
+                    if (shipRow.col6 && // shipped tracking in col_6
+                        getLastEightDigits(shipRow.col6) === getLastEightDigits(packTracking)) {
+                        
+                        // Update packer carrier/product from shipped (col_4 -> col_5)
+                        await db.update(packerTable)
+                            .set({ col5: shipRow.col4 }) // Update product title in col_5
+                            .where(eq(packerTable.col1, packRow.col1));
                         fixedCount++;
                         break;
                     }
@@ -409,5 +385,8 @@ async function executeRecheckPackerTrackingIntegrity(sheets: any) {
         }
     }
 
-    return NextResponse.json({ success: true, message: `Processed ${processedCount} Packer tracking rows. Found and fixed ${fixedCount} entries from Shipped data.` });
+    return NextResponse.json({ 
+        success: true, 
+        message: `Processed ${processedCount} Packer tracking rows. Found and synced ${fixedCount} product titles from Shipped data.` 
+    });
 }

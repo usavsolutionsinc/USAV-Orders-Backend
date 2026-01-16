@@ -1,57 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
-import { packingLogs, shipped as shippedTable } from '@/lib/drizzle/schema';
-import { desc, eq, sql } from 'drizzle-orm';
+import { packingLogs, shipped as shippedTable, packer1, packer2, packer3 } from '@/lib/drizzle/schema';
+import { desc, eq, isNotNull, sql } from 'drizzle-orm';
 import pool from '@/lib/db';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const packerId = searchParams.get('packerId') || '1';
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        const tableName = `packer_${packerId}`;
-        const tableCheck = await db.execute(sql.raw(`
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_name = '${tableName}'
-            );
-        `));
+        // Select the appropriate packer table based on packerId
+        let packerTable;
+        if (packerId === '1') packerTable = packer1;
+        else if (packerId === '2') packerTable = packer2;
+        else if (packerId === '3') packerTable = packer3;
+        else packerTable = packer1; // Default to packer1
 
-        let legacyLogs: any[] = [];
-        if (tableCheck[0] && tableCheck[0].exists) {
-            const legacyData = await db.execute(sql.raw(`
-                SELECT col_1 as id, col_2 as "packedAt", col_3 as "trackingNumber", col_4 as carrier, col_5 as product 
-                FROM ${tableName} 
-                WHERE col_3 IS NOT NULL AND col_3 != ''
-                ORDER BY col_1 DESC 
-                LIMIT 50
-            `));
-            
-            legacyLogs = legacyData.map((row: any) => ({
-                id: `legacy-${row.id}`,
-                trackingNumber: row.trackingNumber,
-                packedAt: row.packedAt,
-                carrier: row.carrier,
-                product: row.product,
-                photos: '[]',
-                status: 'completed'
-            }));
-        }
+        // Query the packer table
+        const logs = await db
+            .select()
+            .from(packerTable)
+            .where(isNotNull(packerTable.col3)) // Only get rows with tracking numbers
+            .orderBy(desc(packerTable.col1))
+            .limit(limit)
+            .offset(offset);
 
-        // Also fetch from the unified packing_logs if any
-        let newLogs: any[] = [];
-        try {
-            newLogs = await db.select().from(packingLogs)
-                .where(eq(packingLogs.packerId, parseInt(packerId)))
-                .orderBy(desc(packingLogs.packedAt))
-                .limit(50);
-        } catch (e) {}
+        // Map to format expected by StationHistory
+        const formattedLogs = logs.map(log => ({
+            id: `packer${packerId}-${log.col1}`,
+            timestamp: log.col2 || '',        // Date/Time (col_2)
+            tracking: log.col3 || '',         // Tracking Number (col_3)
+            status: log.col4 || '',           // Shipping Carrier (col_4)
+            title: log.col5 || '',            // Product Title (col_5)
+            count: 0,                         // Will be calculated on client side
+            packedAt: log.col2,               // For compatibility
+            trackingNumber: log.col3,         // For compatibility
+            carrier: log.col4,                // For compatibility
+            product: log.col5,                // For compatibility
+        }));
 
-        const combined = [...newLogs, ...legacyLogs].sort((a, b) => 
-            new Date(b.packedAt || b.timestamp).getTime() - new Date(a.packedAt || a.timestamp).getTime()
-        ).slice(0, 50);
-
-        return NextResponse.json(combined);
+        return NextResponse.json(formattedLogs);
     } catch (error: any) {
         console.error('Error fetching packing logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });

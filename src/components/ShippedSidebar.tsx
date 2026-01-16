@@ -216,13 +216,13 @@ export default function ShippedSidebar() {
 
                                                     {/* Other Details */}
                                                     <div className="space-y-2 text-[10px]">
-                                                        {/* Order ID */}
+                                                        {/* Tracking Number (displayed first, but labeled as Order ID per DB mapping) */}
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Order ID</span>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono font-semibold">{result.order_id}</span>
+                                                                <span className="font-mono font-semibold">{result.tracking_number}</span>
                                                                 <button
-                                                                    onClick={() => copyToClipboard(result.order_id, `order-${result.id}`)}
+                                                                    onClick={() => copyToClipboard(result.tracking_number, `order-${result.id}`)}
                                                                     className="p-1 hover:bg-gray-200 rounded transition-all"
                                                                 >
                                                                     {copiedField === `order-${result.id}` ? (
@@ -234,13 +234,13 @@ export default function ShippedSidebar() {
                                                             </div>
                                                         </div>
 
-                                                        {/* Tracking Number */}
+                                                        {/* Order ID (displayed second, but labeled as Tracking per DB mapping) */}
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Tracking</span>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono font-semibold">{result.tracking_number}</span>
+                                                                <span className="font-mono font-semibold">{result.order_id}</span>
                                                                 <button
-                                                                    onClick={() => copyToClipboard(result.tracking_number, `tracking-${result.id}`)}
+                                                                    onClick={() => copyToClipboard(result.order_id, `tracking-${result.id}`)}
                                                                     className="p-1 hover:bg-gray-200 rounded transition-all"
                                                                 >
                                                                     {copiedField === `tracking-${result.id}` ? (
