@@ -5,8 +5,6 @@
 export { useCamera } from './useCamera';
 export type { CameraConfig, CameraHook } from './useCamera';
 
-export { useMobileDetection } from './useMobileDetection';
-
 export { useInfiniteScroll } from './useInfiniteScroll';
 export type { InfiniteScrollOptions, InfiniteScrollResult } from './useInfiniteScroll';
 
