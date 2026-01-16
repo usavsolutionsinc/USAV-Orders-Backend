@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
-import StationHistory from './station/StationHistory';
+import PackerLogs from './station/PackerLogs';
 import { Package, TrendingUp, Clock, AlertCircle } from './Icons';
 
 interface PackerDashboardProps {
@@ -52,18 +52,58 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
         }).length;
     };
 
+    const getAverageTime = () => {
+        if (history.length === 0) return '0m';
+        
+        const today = new Date().toDateString();
+        const todayLogs = history.filter(h => {
+            const date = new Date(h.timestamp || h.packedAt || '');
+            return date.toDateString() === today;
+        }).sort((a, b) => {
+            const dateA = new Date(a.timestamp || a.packedAt);
+            const dateB = new Date(b.timestamp || b.packedAt);
+            return dateA.getTime() - dateB.getTime();
+        });
+
+        if (todayLogs.length < 2) return '0m';
+
+        const timeDiffs: number[] = [];
+        for (let i = 1; i < todayLogs.length; i++) {
+            const prevTime = new Date(todayLogs[i - 1].timestamp || todayLogs[i - 1].packedAt).getTime();
+            const currTime = new Date(todayLogs[i].timestamp || todayLogs[i].packedAt).getTime();
+            const diffMinutes = (currTime - prevTime) / (1000 * 60);
+            
+            // Filter out gaps > 60 minutes (likely breaks)
+            if (diffMinutes > 0 && diffMinutes <= 60) {
+                timeDiffs.push(diffMinutes);
+            }
+        }
+
+        if (timeDiffs.length === 0) return '0m';
+
+        const avgMinutes = timeDiffs.reduce((sum, val) => sum + val, 0) / timeDiffs.length;
+        return `${avgMinutes.toFixed(1)}m`;
+    };
+
+    const getWeekCount = () => {
+        if (history.length === 0) return 0;
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        return history.filter(h => {
+            const date = new Date(h.timestamp || h.packedAt || '');
+            return date >= weekAgo;
+        }).length;
+    };
+
     return (
         <StationLayout
             stationType="testing"
             stationId={packerId}
             navContent={<StationNav />}
             historyContent={
-                <StationHistory 
+                <PackerLogs 
                     history={history} 
-                    isLoading={isLoadingHistory} 
-                    title="Packing History"
-                    techId={packerId}
-                    stationType="packing"
+                    isLoading={isLoadingHistory}
+                    packerId={packerId}
                 />
             }
         >
@@ -71,7 +111,7 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
                 {/* Header */}
                 <div className="p-8 border-b border-gray-100">
                     <h2 className="text-2xl font-black text-gray-900 tracking-tighter">
-                        Welcome, {packerInfo.name}
+                        {packerInfo.name}&apos;s Packing Report
                     </h2>
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
                         Packer Station {packerId}
@@ -98,7 +138,7 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
                             </div>
                             <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Avg Time</p>
                         </div>
-                        <p className="text-3xl font-black text-blue-900 tracking-tighter">4.5m</p>
+                        <p className="text-3xl font-black text-blue-900 tracking-tighter">{getAverageTime()}</p>
                         <p className="text-[10px] font-bold text-blue-600/60 uppercase mt-1">Per package</p>
                     </div>
 
@@ -109,13 +149,7 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
                             </div>
                             <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest">This Week</p>
                         </div>
-                        <p className="text-3xl font-black text-purple-900 tracking-tighter">
-                            {history.filter(h => {
-                                const date = new Date(h.timestamp || h.packedAt || '');
-                                const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-                                return date >= weekAgo;
-                            }).length}
-                        </p>
+                        <p className="text-3xl font-black text-purple-900 tracking-tighter">{getWeekCount()}</p>
                         <p className="text-[10px] font-bold text-purple-600/60 uppercase mt-1">Total packed</p>
                     </div>
 

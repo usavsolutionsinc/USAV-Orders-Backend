@@ -284,25 +284,32 @@ export default function ShippedSidebar() {
                                             Recent Searches
                                         </p>
                                         <div className="space-y-2">
-                                            {searchHistory.slice(0, 5).map((item, index) => (
-                                                <button
-                                                    key={index}
-                                                    onClick={() => {
-                                                        setSearchQuery(item.query);
-                                                        handleSearch(item.query);
-                                                    }}
-                                                    className="w-full text-left p-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group"
-                                                >
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600">
-                                                            {item.query}
-                                                        </span>
-                                                        <span className="text-[8px] text-gray-400 font-medium">
-                                                            {item.resultCount} result{item.resultCount !== 1 ? 's' : ''}
-                                                        </span>
-                                                    </div>
-                                                </button>
-                                            ))}
+                                            {searchHistory.slice(0, 5).map((item, index) => {
+                                                // Show last 6 digits for numeric tracking numbers
+                                                const displayQuery = item.query.match(/^\d+$/) && item.query.length > 6 
+                                                    ? '...' + item.query.slice(-6) 
+                                                    : item.query;
+                                                
+                                                return (
+                                                    <button
+                                                        key={index}
+                                                        onClick={() => {
+                                                            setSearchQuery(item.query);
+                                                            handleSearch(item.query);
+                                                        }}
+                                                        className="w-full text-left p-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group"
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600">
+                                                                {displayQuery}
+                                                            </span>
+                                                            <span className="text-[8px] text-gray-400 font-medium">
+                                                                {item.resultCount} result{item.resultCount !== 1 ? 's' : ''}
+                                                            </span>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}

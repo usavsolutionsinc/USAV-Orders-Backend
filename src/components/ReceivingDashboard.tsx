@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
-import StationHistory from './station/StationHistory';
+import ReceivingLogs from './station/ReceivingLogs';
 import { Package, TrendingUp, Clock, AlertCircle } from './Icons';
 
 export default function ReceivingDashboard() {
@@ -36,11 +36,9 @@ export default function ReceivingDashboard() {
             stationId="receiving"
             navContent={<StationNav />}
             historyContent={
-                <StationHistory 
+                <ReceivingLogs 
                     history={history} 
-                    isLoading={isLoadingHistory} 
-                    title="Receiving History"
-                    stationType="packing"
+                    isLoading={isLoadingHistory}
                 />
             }
         >
@@ -121,7 +119,6 @@ export default function ReceivingDashboard() {
                         <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm mb-4">
                             <Package className="w-8 h-8 text-gray-300" />
                         </div>
-                        <h3 className="text-lg font-black text-gray-900 tracking-tighter mb-2">Receiving Station</h3>
                         <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
                             Scan incoming packages and track shipments. History and carrier information synced in real-time from NEON DB.
                         </p>

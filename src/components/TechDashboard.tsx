@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
-import StationHistory from './station/StationHistory';
+import TechLogs from './station/TechLogs';
 import StationTesting from './station/StationTesting';
 
 interface TechDashboardProps {
@@ -59,12 +59,10 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
             stationId={techId}
             navContent={<StationNav />}
             historyContent={
-                <StationHistory 
+                <TechLogs 
                     history={history} 
-                    isLoading={isLoadingHistory} 
-                    title="Testing History"
+                    isLoading={isLoadingHistory}
                     techId={techId}
-                    stationType="testing"
                 />
             }
         >
