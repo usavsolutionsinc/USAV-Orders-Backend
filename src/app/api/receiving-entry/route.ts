@@ -49,10 +49,14 @@ export async function POST(request: NextRequest) {
 // GET - Fetch all receiving entries
 export async function GET() {
     try {
-        const results = await db
-            .select()
-            .from(receiving)
-            .orderBy(desc(receiving.col1));
+        const tableName = 'receiving';
+        
+        const results = await db.execute(sql.raw(`
+            SELECT col_1 as id, col_2 as timestamp, col_3 as tracking, col_4 as carrier, col_5 as count
+            FROM ${tableName}
+            ORDER BY col_1 DESC
+            LIMIT 100
+        `));
             
         return NextResponse.json(results);
     } catch (error) {
