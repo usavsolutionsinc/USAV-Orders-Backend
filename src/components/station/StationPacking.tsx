@@ -13,7 +13,6 @@ import { PhotoCapture } from './packing/PhotoCapture';
 import { PhotoGallery } from './packing/PhotoGallery';
 
 // Import hooks and utilities
-import { useMobileDetection } from '@/hooks/useMobileDetection';
 import { getCarrier } from '@/utils/tracking';
 
 interface StationPackingProps {
@@ -37,9 +36,6 @@ export default function StationPacking({ packerId, onPacked, todayCount, goal }:
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    // Use the mobile detection hook
-    const isMobile = useMobileDetection();
     
     const mockDetails = {
         productTitle: 'Sony Alpha a7 IV Mirrorless Camera',

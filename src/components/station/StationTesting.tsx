@@ -40,7 +40,6 @@ export default function StationTesting({
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [processedOrder, setProcessedOrder] = useState<any>(null);
-    const [isMobile, setIsMobile] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Color definitions
@@ -72,15 +71,6 @@ export default function StationTesting({
     };
 
     const activeColor = colors[themeColor];
-
-    useEffect(() => {
-        const checkMobile = () => {
-            setIsMobile(window.innerWidth < 1024);
-        };
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
 
     const mockProduct = {
         title: 'Sony Alpha a7 IV Mirrorless Camera',

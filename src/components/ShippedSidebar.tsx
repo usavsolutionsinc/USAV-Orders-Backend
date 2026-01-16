@@ -7,10 +7,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface SearchResult {
     id: number;
     shipped_date: string | null;
-    tracking_number: string;
+    order_id: string;
     customer: string;
     product: string;
-    order_id: string;
+    tracking_number: string;
     serial_number: string;
     notes: string;
     is_shipped: boolean;
@@ -92,7 +92,7 @@ export default function ShippedSidebar() {
 
     // Copy entire row
     const copyRow = (result: SearchResult) => {
-        const rowText = `Tracking: ${result.tracking_number}\nOrder ID: ${result.order_id}\nSerial: ${result.serial_number || 'None'}\nCondition: ${result.product}\nProduct: ${result.customer}\nShipped: ${result.is_shipped ? result.shipped_date : 'Not Shipped'}`;
+        const rowText = `Order ID: ${result.order_id}\nTracking: ${result.tracking_number}\nSerial: ${result.serial_number || 'N/A'}\nCondition: ${result.product}\nProduct: ${result.customer}\nShipped: ${result.is_shipped ? result.shipped_date : 'Not Shipped'}`;
         copyToClipboard(rowText, `row-${result.id}`);
     };
 
@@ -198,11 +198,11 @@ export default function ShippedSidebar() {
                                                                     Serial Number
                                                                 </p>
                                                                 <p className="text-sm font-black font-mono">
-                                                                    {result.serial_number || 'None'}
+                                                                    {result.serial_number || 'N/A'}
                                                                 </p>
                                                             </div>
                                                             <button
-                                                                onClick={() => copyToClipboard(result.serial_number || 'None', `serial-${result.id}`)}
+                                                                onClick={() => copyToClipboard(result.serial_number || 'N/A', `serial-${result.id}`)}
                                                                 className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
                                                             >
                                                                 {copiedField === `serial-${result.id}` ? (
@@ -216,24 +216,6 @@ export default function ShippedSidebar() {
 
                                                     {/* Other Details */}
                                                     <div className="space-y-2 text-[10px]">
-                                                        {/* Tracking Number */}
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Tracking</span>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-mono font-semibold">{result.tracking_number}</span>
-                                                                <button
-                                                                    onClick={() => copyToClipboard(result.tracking_number, `tracking-${result.id}`)}
-                                                                    className="p-1 hover:bg-gray-200 rounded transition-all"
-                                                                >
-                                                                    {copiedField === `tracking-${result.id}` ? (
-                                                                        <Check className="w-3 h-3 text-emerald-600" />
-                                                                    ) : (
-                                                                        <Copy className="w-3 h-3 text-gray-400" />
-                                                                    )}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-
                                                         {/* Order ID */}
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Order ID</span>
@@ -244,6 +226,24 @@ export default function ShippedSidebar() {
                                                                     className="p-1 hover:bg-gray-200 rounded transition-all"
                                                                 >
                                                                     {copiedField === `order-${result.id}` ? (
+                                                                        <Check className="w-3 h-3 text-emerald-600" />
+                                                                    ) : (
+                                                                        <Copy className="w-3 h-3 text-gray-400" />
+                                                                    )}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Tracking Number */}
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Tracking</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono font-semibold">{result.tracking_number}</span>
+                                                                <button
+                                                                    onClick={() => copyToClipboard(result.tracking_number, `tracking-${result.id}`)}
+                                                                    className="p-1 hover:bg-gray-200 rounded transition-all"
+                                                                >
+                                                                    {copiedField === `tracking-${result.id}` ? (
                                                                         <Check className="w-3 h-3 text-emerald-600" />
                                                                     ) : (
                                                                         <Copy className="w-3 h-3 text-gray-400" />

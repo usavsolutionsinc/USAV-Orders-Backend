@@ -187,11 +187,11 @@ export default function MultiSkuSnBarcode() {
                             <head>
                                 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
                                 <style>
-                                    body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
-                                    canvas { margin: 20px 0; }
-                                    .sku { font-size: 24px; font-weight: bold; margin: 10px 0; }
-                                    .title { font-size: 14px; color: #666; margin: 10px 0; }
-                                    .sn { font-size: 12px; color: #999; margin: 10px 0; }
+                                    body { font-family: Arial, sans-serif; padding: 0; margin: 0; text-align: center; }
+                                    canvas { margin: 2px 0; }
+                                    .sku { font-size: 22px; font-weight: bold; margin: 2px 0; }
+                                    .title { font-size: 11px; color: #666; margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; padding: 0 4px; }
+                                    .sn { font-size: 10px; color: #999; margin: 2px 0; }
                                 </style>
                             </head>
                             <body>

@@ -106,42 +106,52 @@ export default function StationHistory({
         }
     }, [offset, hasMore, isLoadingMore, techId]);
 
+    const getOrdinal = (n: number) => {
+        const s = ["th", "st", "nd", "rd"];
+        const v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    };
+
     const formatDate = (dateStr: string) => {
         try {
             if (!dateStr) return 'Unknown';
             
-            // Handle YYYY-MM-DD (from groupedHistory)
+            let date: Date;
             if (dateStr.includes('-')) {
                 const parts = dateStr.split('-');
                 if (parts.length === 3) {
                     const y = parseInt(parts[0]);
                     const m = parseInt(parts[1]);
                     const d = parseInt(parts[2]);
-                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                    return `${months[m - 1]} ${d}, ${y}`;
+                    date = new Date(y, m - 1, d);
+                } else {
+                    date = new Date(dateStr);
                 }
-            }
-            
-            // Handle M/D/YYYY (from raw timestamp)
-            if (dateStr.includes('/')) {
+            } else if (dateStr.includes('/')) {
                 const datePart = dateStr.split(' ')[0];
                 const parts = datePart.split('/');
                 if (parts.length === 3) {
                     const m = parseInt(parts[0]);
                     const d = parseInt(parts[1]);
                     const y = parseInt(parts[2]);
-                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                    return `${months[m - 1]} ${d}, ${y}`;
+                    date = new Date(y, m - 1, d);
+                } else {
+                    date = new Date(dateStr);
                 }
+            } else {
+                date = new Date(dateStr);
             }
 
-            // Fallback to native if ISO
-            const date = new Date(dateStr);
-            if (!isNaN(date.getTime())) {
-                return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            }
+            if (isNaN(date.getTime())) return dateStr;
+
+            const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+            const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
             
-            return dateStr;
+            const dayName = days[date.getDay()];
+            const monthName = months[date.getMonth()];
+            const dayNum = date.getDate();
+            
+            return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
         } catch (e) { return dateStr; }
     };
 
@@ -154,21 +164,25 @@ export default function StationHistory({
             loadMore();
         }
 
-        // Sticky header check
-        const items = scrollRef.current.querySelectorAll('[data-date]');
-        let visibleDate = '';
-        let visibleCount = 0;
+        // Sticky header check - Use headers for more accurate tracking
+        const headers = scrollRef.current.querySelectorAll('[data-day-header]');
+        let activeDate = '';
+        let activeCount = 0;
 
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i] as HTMLElement;
-            if (item.offsetTop - scrollRef.current.offsetTop <= scrollTop + 100) {
-                visibleDate = item.getAttribute('data-date') || '';
-                visibleCount = parseInt(item.getAttribute('data-count') || '0');
+        for (let i = 0; i < headers.length; i++) {
+            const header = headers[i] as HTMLElement;
+            // If the header is at or above the top of the scroll container
+            if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
+                activeDate = header.getAttribute('data-date') || '';
+                activeCount = parseInt(header.getAttribute('data-count') || '0');
+            } else {
+                // Since headers are ordered, we can stop once we find one below the scroll point
+                break;
             }
         }
 
-        if (visibleDate) setStickyDate(formatDate(visibleDate));
-        if (visibleCount) setCurrentCount(visibleCount);
+        if (activeDate) setStickyDate(formatDate(activeDate));
+        if (activeCount) setCurrentCount(activeCount);
     }, [loadMore]);
 
     useEffect(() => {
@@ -269,10 +283,17 @@ export default function StationHistory({
                     </div>
                 ) : (
                     <div className="flex flex-col">
-                        {Object.entries(groupedHistory).map(([date, logs]) => (
+                        {Object.entries(groupedHistory)
+                            .sort((a, b) => b[0].localeCompare(a[0])) // Ensure descending order
+                            .map(([date, logs]) => (
                             <div key={date} className="flex flex-col">
                                 {/* Day Header Bar - NOT STICKY */}
-                                <div className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10">
+                                <div 
+                                    data-day-header
+                                    data-date={date}
+                                    data-count={logs[0]?.count || logs.length}
+                                    className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
+                                >
                                     <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
                                     <p className="text-[11px] font-black text-gray-400 uppercase">Total: {logs[0]?.count || logs.length} Units</p>
                                 </div>
@@ -284,8 +305,6 @@ export default function StationHistory({
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             key={log.id} 
-                                            data-date={date}
-                                            data-count={dailyTotal}
                                             className={`grid grid-cols-[55px_1fr_60px_80px_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
