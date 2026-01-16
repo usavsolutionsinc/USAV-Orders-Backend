@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
-import { packingLogs, shipped as shippedTable, packer1, packer2, packer3 } from '@/lib/drizzle/schema';
-import { desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { packingLogs, shipped as shippedTable } from '@/lib/drizzle/schema';
+import { sql } from 'drizzle-orm';
 import pool from '@/lib/db';
 
 export async function GET(req: NextRequest) {
@@ -11,34 +11,41 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        // Select the appropriate packer table based on packerId
-        let packerTable;
-        if (packerId === '1') packerTable = packer1;
-        else if (packerId === '2') packerTable = packer2;
-        else if (packerId === '3') packerTable = packer3;
-        else packerTable = packer1; // Default to packer1
+        const tableName = `packer_${packerId}`;
 
-        // Query the packer table
-        const logs = await db
-            .select()
-            .from(packerTable)
-            .where(isNotNull(packerTable.col3)) // Only get rows with tracking numbers
-            .orderBy(desc(packerTable.col1))
-            .limit(limit)
-            .offset(offset);
+        // Check if table exists
+        const tableCheck = await db.execute(sql.raw(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = '${tableName}'
+            );
+        `));
 
-        // Map to format expected by StationHistory
-        const formattedLogs = logs.map(log => ({
-            id: `packer${packerId}-${log.col1}`,
-            timestamp: log.col2 || '',        // Date/Time (col_2)
-            tracking: log.col3 || '',         // Tracking Number (col_3)
-            status: log.col4 || '',           // Shipping Carrier (col_4)
-            title: log.col5 || '',            // Product Title (col_5)
-            count: 0,                         // Will be calculated on client side
-            packedAt: log.col2,               // For compatibility
-            trackingNumber: log.col3,         // For compatibility
-            carrier: log.col4,                // For compatibility
-            product: log.col5,                // For compatibility
+        if (!tableCheck[0] || !tableCheck[0].exists) {
+            return NextResponse.json([]);
+        }
+
+        // Query the packer table using raw SQL (same pattern as tech-logs)
+        const logs = await db.execute(sql.raw(`
+            SELECT col_1 as id, col_2 as timestamp, col_3 as tracking, col_4 as status, col_5 as title, col_6 as count
+            FROM ${tableName} 
+            WHERE col_3 IS NOT NULL AND col_3 != ''
+            ORDER BY col_1 DESC 
+            LIMIT ${limit} OFFSET ${offset}
+        `));
+
+        // Map to format expected by StationHistory (include all fields for compatibility)
+        const formattedLogs = logs.map((log: any) => ({
+            id: `packer${packerId}-${log.id}`,
+            timestamp: log.timestamp || '',
+            tracking: log.tracking || '',
+            trackingNumber: log.tracking || '',  // For compatibility
+            status: log.status || '',
+            carrier: log.status || '',            // For compatibility
+            title: log.title || '',
+            product: log.title || '',             // For compatibility
+            count: log.count || 0,
+            packedAt: log.timestamp,              // For compatibility
         }));
 
         return NextResponse.json(formattedLogs);
