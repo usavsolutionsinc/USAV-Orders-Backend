@@ -30,7 +30,8 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
     const fetchHistory = async () => {
         setIsLoadingHistory(true);
         try {
-            const res = await fetch(`/api/packing-logs?packerId=${packerId}`);
+            // Fetch more data (500 records) to ensure accurate week counts
+            const res = await fetch(`/api/packing-logs?packerId=${packerId}&limit=500`);
             if (!res.ok) throw new Error('Failed to fetch');
             const data = await res.json();
             if (Array.isArray(data)) {

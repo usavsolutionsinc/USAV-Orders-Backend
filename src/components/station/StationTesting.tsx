@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import CurrentOrder from '../CurrentOrder';
 import { 
   Search, 
   Check, 
@@ -231,7 +232,15 @@ export default function StationTesting({
             </div>
 
             {/* Content Area - Vertical Stack */}
-            <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-8">
+            <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-8 space-y-4">
+                {/* Current Order Display */}
+                {processedOrder && (
+                    <CurrentOrder 
+                        orderId={processedOrder.orderId || 'N/A'}
+                        productTitle={processedOrder.title}
+                    />
+                )}
+
                 <AnimatePresence mode="wait">
                     {processedOrder ? (
                         <motion.div 

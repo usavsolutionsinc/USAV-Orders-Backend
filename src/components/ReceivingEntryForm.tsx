@@ -46,14 +46,17 @@ export default function ReceivingEntryForm() {
             if (!taskRes.ok) throw new Error('Failed to create task');
             const task = await taskRes.json();
 
-            // 2. Add to receiving table (for Google Sheets sync)
+            // 2. Add to receiving logs table
+            const now = new Date();
+            const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+            
             const entryRes = await fetch('/api/receiving-entry', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     trackingNumber,
                     carrier: carrier || 'Unknown',
-                    date: new Date().toISOString(),
+                    timestamp,
                     notes: orderNumber ? `Order: ${orderNumber}${notes ? ' - ' + notes : ''}` : notes,
                 }),
             });

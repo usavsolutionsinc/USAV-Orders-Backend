@@ -5,6 +5,7 @@ import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
 import TechLogs from './station/TechLogs';
 import StationTesting from './station/StationTesting';
+import TechSearchPanel from './TechSearchPanel';
 
 interface TechDashboardProps {
     techId: string;
@@ -54,27 +55,27 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
     };
 
     return (
-        <StationLayout
-            stationType="testing"
-            stationId={techId}
-            navContent={<StationNav />}
-            historyContent={
+        <div className="flex h-full w-full">
+            <StationNav />
+            <TechSearchPanel />
+            <div className="w-[400px] min-w-[350px] border-r border-gray-100 flex-shrink-0 bg-gray-50/30 overflow-hidden">
+                <StationTesting 
+                    userId={techId}
+                    userName={techInfo.name}
+                    sheetId={sheetId}
+                    gid={gid}
+                    themeColor={techInfo.color}
+                    todayCount={getTodayCount()}
+                    onComplete={fetchHistory}
+                />
+            </div>
+            <div className="flex-1 overflow-hidden">
                 <TechLogs 
                     history={history} 
                     isLoading={isLoadingHistory}
                     techId={techId}
                 />
-            }
-        >
-            <StationTesting 
-                userId={techId}
-                userName={techInfo.name}
-                sheetId={sheetId}
-                gid={gid}
-                themeColor={techInfo.color}
-                todayCount={getTodayCount()}
-                onComplete={fetchHistory}
-            />
-        </StationLayout>
+            </div>
+        </div>
     );
 }
