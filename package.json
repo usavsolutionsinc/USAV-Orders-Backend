@@ -14,6 +14,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
     "@tanstack/react-query": "^5.0.0",
+    "@types/nodemailer": "^7.0.5",
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
@@ -21,6 +22,7 @@
     "googleapis": "^169.0.0",
     "html5-qrcode": "^2.3.8",
     "next": "^16.0.7",
+    "nodemailer": "^7.0.12",
     "pg": "^8.16.3",
     "postgres": "^3.4.7",
     "react": "^19.2.1",

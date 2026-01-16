@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import Image from 'next/image';
 
 interface ReceiptData {
     rsNumber: string;
@@ -13,6 +12,7 @@ interface ReceiptData {
     };
     product: string;
     serialNumber: string;
+    price: string;
     repairReasons: string[];
     additionalNotes?: string;
     status: string;
@@ -106,114 +106,114 @@ export function RepairReceipt({ data, onClose, autoPrint = true }: RepairReceipt
 }
 
 function ReceiptContent({ data }: { data: ReceiptData }) {
+    const repairReasonsString = data.repairReasons.join(', ') + (data.additionalNotes ? ` - ${data.additionalNotes}` : '');
+    
     return (
         <div className="max-w-[8.5in] mx-auto bg-white text-black" style={{ fontFamily: 'Arial, sans-serif' }}>
             {/* Header */}
-            <div className="border-b-2 border-gray-900 pb-4 mb-6">
-                <div className="flex items-start justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">USAV Solutions</h1>
-                        <div className="mt-2 text-sm text-gray-600">
-                            <p>16161 Gothard St. Suite A</p>
-                            <p>Huntington Beach, CA 92647, United States</p>
-                            <p>Tel: (714) 596-6888</p>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <h2 className="text-xl font-bold text-gray-900">Bose Wave Repair Service</h2>
-                        <div className="mt-2 text-sm">
-                            <p className="font-bold">RS Number: {data.rsNumber}</p>
-                            <p>Date: {data.dropOffDate}</p>
-                        </div>
-                    </div>
+            <div className="flex justify-end mb-6">
+                <div className="text-right text-xs">
+                    <p className="font-bold">USAV Solutions</p>
+                    <p>16161 Gothard St. Suite A</p>
+                    <p>Huntington Beach, CA 92647, United States</p>
+                    <p>Tel: (714) 596-6888</p>
                 </div>
             </div>
 
-            {/* Customer Information */}
-            <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-3 border-b border-gray-300 pb-1">
-                    Customer Information
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <p className="font-bold text-gray-600">Name:</p>
-                        <p className="text-gray-900">{data.customer.name}</p>
-                    </div>
-                    <div>
-                        <p className="font-bold text-gray-600">Phone # Called for Pick up:</p>
-                        <p className="text-gray-900">{data.customer.phone}</p>
-                    </div>
-                    {data.customer.email && (
-                        <div className="col-span-2">
-                            <p className="font-bold text-gray-600">Email:</p>
-                            <p className="text-gray-900">{data.customer.email}</p>
-                        </div>
-                    )}
+            <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-4">Repair Service</h1>
+                <p className="font-bold text-lg mb-4">RS #: {data.rsNumber}</p>
+
+                <table className="w-full border-collapse border-2 border-black mb-6">
+                    <tbody>
+                        <tr>
+                            <td className="border-2 border-black p-2 w-1/4 font-medium">Product:</td>
+                            <td className="border-2 border-black p-2">{data.product}</td>
+                        </tr>
+                        <tr>
+                            <td className="border-2 border-black p-2 font-medium">Issue:</td>
+                            <td className="border-2 border-black p-2">{repairReasonsString}</td>
+                        </tr>
+                        <tr>
+                            <td className="border-2 border-black p-2 font-medium">Serial #</td>
+                            <td className="border-2 border-black p-2 font-mono">{data.serialNumber}</td>
+                        </tr>
+                        <tr>
+                            <td className="border-2 border-black p-2 font-medium">Name:</td>
+                            <td className="border-2 border-black p-2">{data.customer.name}</td>
+                        </tr>
+                        <tr>
+                            <td className="border-2 border-black p-2 font-medium">Contact:</td>
+                            <td className="border-2 border-black p-2">{data.customer.phone} {data.customer.email ? `(${data.customer.email})` : ''}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div className="mb-6">
+                    <p className="text-lg font-bold">${data.price} - Price Paid at Pick-up</p>
                 </div>
-            </div>
 
-            {/* Product Information */}
-            <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-3 border-b border-gray-300 pb-1">
-                    Product Information
-                </h3>
-                <div className="text-sm space-y-2">
-                    <div>
-                        <p className="font-bold text-gray-600">Bose Model:</p>
-                        <p className="text-gray-900">{data.product}</p>
+                <div className="mb-6 text-sm space-y-4">
+                    <p>
+                        Your Bose product has been received into our repair center. Under normal circumstances it will be repaired within the next 3-10 working days and returned to you at the address above.
+                    </p>
+                    <p className="font-bold">
+                        There is a 30 day Warranty on all our repair services.
+                    </p>
+                </div>
+
+                {/* Drop Off Section */}
+                <div className="mt-8 mb-12">
+                    <div className="flex items-center gap-4 text-sm">
+                        <span className="font-bold text-lg">Drop Off X</span>
+                        <div className="flex-1 border-b-2 border-black h-8"></div>
+                        <span className="font-bold">Date:</span>
+                        <div className="w-16 border-b-2 border-black h-8"></div>
+                        <span className="font-bold">/</span>
+                        <div className="w-16 border-b-2 border-black h-8"></div>
+                        <span className="font-bold">/</span>
+                        <div className="w-24 border-b-2 border-black h-8"></div>
                     </div>
-                    <div>
-                        <p className="font-bold text-gray-600">Last 4 Serial #:</p>
-                        <p className="text-gray-900 font-mono">{data.serialNumber}</p>
+                    <p className="text-[10px] mt-1 italic text-gray-600">
+                        By signing above you agree to the listed price and any unexpected delays in the repair process.
+                    </p>
+                </div>
+
+                {/* Internal Use Table */}
+                <div className="mb-12">
+                    <table className="w-full border-collapse border-2 border-black">
+                        <tbody>
+                            <tr>
+                                <td className="border-2 border-black p-2 w-[12%] font-medium text-xs">Repaired:</td>
+                                <td className="border-2 border-black p-2 w-[13%]"></td>
+                                <td className="border-2 border-black p-2 w-[8%] font-medium text-xs">Part:</td>
+                                <td className="border-2 border-black p-2 w-[37%]"></td>
+                                <td className="border-2 border-black p-2 w-[8%] font-medium text-xs">Who:</td>
+                                <td className="border-2 border-black p-2 w-[10%]"></td>
+                                <td className="border-2 border-black p-2 w-[8%] font-medium text-xs">Date:</td>
+                                <td className="border-2 border-black p-2 w-[12%]"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Pick Up Section */}
+                <div className="mt-8 mb-8">
+                    <div className="flex items-center gap-4 text-sm">
+                        <span className="font-bold text-lg">Pick Up X</span>
+                        <div className="flex-1 border-b-2 border-black h-8"></div>
+                        <span className="font-bold">Date:</span>
+                        <div className="w-16 border-b-2 border-black h-8"></div>
+                        <span className="font-bold">/</span>
+                        <div className="w-16 border-b-2 border-black h-8"></div>
+                        <span className="font-bold">/</span>
+                        <div className="w-24 border-b-2 border-black h-8"></div>
                     </div>
                 </div>
-            </div>
 
-            {/* Reason for Repair */}
-            <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-3 border-b border-gray-300 pb-1">
-                    Reason for Repair
-                </h3>
-                <ul className="list-disc list-inside text-sm space-y-1 text-gray-900">
-                    {data.repairReasons.map((reason, index) => (
-                        <li key={index}>{reason}</li>
-                    ))}
-                </ul>
-                {data.additionalNotes && (
-                    <div className="mt-3">
-                        <p className="font-bold text-gray-600 text-sm">Additional Notes:</p>
-                        <p className="text-sm text-gray-900 mt-1">{data.additionalNotes}</p>
-                    </div>
-                )}
-            </div>
-
-            {/* Warranty Message */}
-            <div className="mb-6 p-4 bg-gray-100 border border-gray-300 rounded">
-                <p className="text-sm text-gray-900 mb-2">
-                    Your Bose product has been received into our repair center. Under normal circumstances it will be repaired within the next 3-10 working days and returned to you at the address above.
-                </p>
-                <p className="text-sm font-bold text-gray-900">
-                    There is a 30 day Warranty on all our repair services.
-                </p>
-            </div>
-
-            {/* Signature Line */}
-            <div className="mt-8 pt-6 border-t border-gray-300">
-                <div className="flex items-center gap-4 text-sm">
-                    <span className="font-bold text-gray-900">Drop Off X</span>
-                    <div className="flex-1 border-b border-gray-900"></div>
-                    <span className="font-bold text-gray-900">Date:</span>
-                    <div className="w-12 border-b border-gray-900"></div>
-                    <span className="font-bold text-gray-900">/</span>
-                    <div className="w-12 border-b border-gray-900"></div>
-                    <span className="font-bold text-gray-900">/</span>
-                    <div className="w-16 border-b border-gray-900"></div>
+                <div className="text-center font-bold text-lg mt-12">
+                    <p>Enjoy your repaired unit!</p>
                 </div>
-            </div>
-
-            {/* Footer */}
-            <div className="mt-8 text-center text-xs text-gray-500">
-                <p>Thank you for choosing USAV Solutions for your Bose repair needs.</p>
             </div>
         </div>
     );

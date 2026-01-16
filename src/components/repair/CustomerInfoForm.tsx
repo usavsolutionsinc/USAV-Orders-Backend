@@ -9,15 +9,19 @@ interface CustomerInfoFormProps {
         email: string;
     };
     serialNumber: string;
+    price: string;
     onCustomerChange: (field: string, value: string) => void;
     onSerialNumberChange: (value: string) => void;
+    onPriceChange: (value: string) => void;
 }
 
 export function CustomerInfoForm({ 
     customer, 
     serialNumber, 
+    price,
     onCustomerChange, 
-    onSerialNumberChange 
+    onSerialNumberChange,
+    onPriceChange
 }: CustomerInfoFormProps) {
     return (
         <div className="space-y-4">
@@ -82,6 +86,24 @@ export function CustomerInfoForm({
                     maxLength={4}
                     className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-900 font-mono placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+            </div>
+
+            {/* Price */}
+            <div>
+                <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">
+                    Price - Price Paid at Pick-up <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                    <input
+                        type="text"
+                        value={price}
+                        onChange={(e) => onPriceChange(e.target.value)}
+                        placeholder="130"
+                        className="w-full pl-7 pr-3 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                    />
+                </div>
             </div>
 
             {/* Warranty Message */}

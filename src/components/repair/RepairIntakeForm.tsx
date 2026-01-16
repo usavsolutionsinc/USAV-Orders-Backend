@@ -24,6 +24,7 @@ export interface RepairFormData {
         email: string;
     };
     serialNumber: string;
+    price: string;
 }
 
 type FormStep = 'product' | 'reason' | 'customer';
@@ -37,7 +38,8 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
         repairReasons: [],
         additionalNotes: '',
         customer: { name: '', phone: '', email: '' },
-        serialNumber: ''
+        serialNumber: '',
+        price: '130'
     });
 
     const canProceedFromProduct = formData.product.type && formData.product.model;
@@ -144,8 +146,10 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
                     <CustomerInfoForm
                         customer={formData.customer}
                         serialNumber={formData.serialNumber}
+                        price={formData.price}
                         onCustomerChange={updateCustomer}
                         onSerialNumberChange={(value) => setFormData(prev => ({ ...prev, serialNumber: value }))}
+                        onPriceChange={(value) => setFormData(prev => ({ ...prev, price: value }))}
                     />
                 )}
             </div>

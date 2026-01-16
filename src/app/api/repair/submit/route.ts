@@ -5,7 +5,7 @@ import { createZendeskTicket } from '@/lib/zendesk';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { customer, product, repairReasons, additionalNotes, serialNumber } = body;
+        const { customer, product, repairReasons, additionalNotes, serialNumber, price } = body;
 
         // Validate required fields
         if (!customer?.name || !customer?.phone || !product?.type || !product?.model || !repairReasons?.length) {
@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
                 product: productString,
                 repairReasons,
                 additionalNotes,
-                serialNumber
+                serialNumber,
+                price
             });
         } catch (error) {
             console.error('Failed to create Zendesk ticket:', error);
@@ -54,18 +55,19 @@ export async function POST(req: NextRequest) {
 
         // Step 2: Insert into RS table in NEON DB
         const insertResult = await pool.query(`
-            INSERT INTO rs (col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO rs (col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9, col_10)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING col_1 as id, col_3 as rs_number
         `, [
             formattedDateTime, // col_2: date/time
             zendeskTicketNumber || '', // col_3: RS # (will use DB ID if empty)
             contactInfo, // col_4: contact
             productString, // col_5: product(s)
-            repairReasonsString, // col_6: reason for repair
-            serialNumber || '', // col_7: serial #
-            '', // col_8: parts needed (empty initially)
-            'Pending' // col_9: status
+            price || '130', // col_6: price
+            repairReasonsString, // col_7: reason for repair
+            serialNumber || '', // col_8: serial #
+            '', // col_9: parts needed (empty initially)
+            'Pending' // col_10: status
         ]);
 
         const insertedRow = insertResult.rows[0];
@@ -91,11 +93,11 @@ export async function POST(req: NextRequest) {
                     sheetId: '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE',
                     tabName: 'RS',
                     values: [[
-                        '', // col_1 (auto-filled by sheets)
                         formattedDateTime, // Date/Time
                         finalRSNumber, // RS #
                         contactInfo, // Contact
                         productString, // Product(s) Title
+                        price || '130', // Price
                         repairReasonsString, // Reason for repair
                         serialNumber || '', // Serial #
                         '', // OOS what we need (parts)
@@ -123,6 +125,7 @@ export async function POST(req: NextRequest) {
                 },
                 product: productString,
                 serialNumber: serialNumber || 'Not provided',
+                price: price || '130',
                 repairReasons: repairReasons,
                 additionalNotes: additionalNotes || '',
                 status: 'Pending'

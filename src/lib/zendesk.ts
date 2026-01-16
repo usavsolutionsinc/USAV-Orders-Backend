@@ -1,5 +1,7 @@
+import nodemailer from 'nodemailer';
+
 /**
- * Zendesk integration utility for creating repair service tickets
+ * Zendesk integration utility for creating repair service tickets via email
  */
 
 interface RepairTicketData {
@@ -10,6 +12,7 @@ interface RepairTicketData {
     repairReasons: string[];
     additionalNotes?: string;
     serialNumber?: string;
+    price?: string;
 }
 
 /**
@@ -28,6 +31,7 @@ export function formatZendeskEmail(data: RepairTicketData): string {
 
     const reasonsList = data.repairReasons.map(r => `- ${r}`).join('\n');
     const additionalSection = data.additionalNotes ? `\nAdditional Notes:\n${data.additionalNotes}\n` : '';
+    const priceSection = data.price ? `\nPrice: $${data.price}\n` : '';
 
     return `New Repair Service Request
 
@@ -39,58 +43,75 @@ Email: ${data.customerEmail || 'Not provided'}
 PRODUCT INFORMATION:
 Product: ${data.product}
 Serial #: ${data.serialNumber || 'Not provided'}
+${priceSection}
 
 REASON FOR REPAIR:
 ${reasonsList}
 ${additionalSection}
 ---
+Tags: Repair Service
 Auto-generated from USAV Repair Intake System
 Drop Off Date: ${dateStr}`;
 }
 
 /**
  * Send email to Zendesk to create a support ticket
- * Email to: support@usav.zendesk.com
  */
 export async function createZendeskTicket(data: RepairTicketData): Promise<string | null> {
     try {
-        const emailBody = formatZendeskEmail(data);
-        
-        // Send email using your email service
-        // This is a placeholder - you'll need to implement actual email sending
-        // You can use services like SendGrid, Nodemailer, or your existing email API
-        
-        const response = await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                to: 'support@usav.zendesk.com',
-                subject: `New Repair Service - ${data.product}`,
-                text: emailBody,
-                from: 'repairs@usav.com' // Your sender email
-            })
-        });
+        const smtpHost = process.env.SMTP_HOST;
+        const smtpPort = Number(process.env.SMTP_PORT || 587);
+        const smtpUser = process.env.SMTP_USER;
+        const smtpPass = process.env.SMTP_PASS;
+        const fromEmail = process.env.SUPPORT_SENDER;
+        const toZendeskEmail = process.env.ZENDESK_INBOUND;
 
-        if (response.ok) {
-            const result = await response.json();
-            // Try to parse Zendesk ticket number from response
-            // Zendesk typically returns ticket info in the auto-reply
-            return result.ticketNumber || null;
+        if (!smtpHost || !smtpUser || !smtpPass || !fromEmail || !toZendeskEmail) {
+            console.error('Missing required SMTP or email parameters for Zendesk integration.');
+            return null;
         }
 
-        return null;
+        const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+                user: smtpUser,
+                pass: smtpPass,
+            },
+        });
+
+        const emailBody = formatZendeskEmail(data);
+        const subject = `New Repair Service - ${data.product} [Repair Service]`;
+
+        const mailOptions = {
+            from: `"${data.customerName || fromEmail}" <${fromEmail}>`,
+            to: toZendeskEmail,
+            subject: subject,
+            text: emailBody,
+            headers: {
+                'X-Original-Sender': data.customerEmail || fromEmail,
+                'Reply-To': data.customerEmail || fromEmail
+            }
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Zendesk ticket email sent:', info.messageId);
+        
+        // Return null as we don't have a ticket number yet (it's created asynchronously by Zendesk)
+        // The calling code will handle generating an RS number if this returns null
+        return null; 
     } catch (error) {
-        console.error('Error creating Zendesk ticket:', error);
+        console.error('Error creating Zendesk ticket via email:', error);
         return null;
     }
 }
 
 /**
  * Parse ticket number from Zendesk response/email
+ * (Keeping this for backward compatibility if needed, though email submission is async)
  */
 export function parseTicketNumber(response: any): string | null {
-    // Zendesk ticket numbers are usually in format: #12345
-    // This regex looks for that pattern
     const ticketMatch = response?.body?.match(/#(\d+)/);
     return ticketMatch ? ticketMatch[1] : null;
 }
