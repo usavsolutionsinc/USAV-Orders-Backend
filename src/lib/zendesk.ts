@@ -59,25 +59,20 @@ Drop Off Date: ${dateStr}`;
  */
 export async function createZendeskTicket(data: RepairTicketData): Promise<string | null> {
     try {
-        const smtpHost = process.env.SMTP_HOST;
-        const smtpPort = Number(process.env.SMTP_PORT || 587);
-        const smtpUser = process.env.SMTP_USER;
-        const smtpPass = process.env.SMTP_PASS;
-        const fromEmail = process.env.SUPPORT_SENDER;
+        const gmailUser = process.env.GMAIL_USER;
+        const gmailPass = process.env.GMAIL_PASS;
         const toZendeskEmail = process.env.ZENDESK_INBOUND;
 
-        if (!smtpHost || !smtpUser || !smtpPass || !fromEmail || !toZendeskEmail) {
-            console.error('Missing required SMTP or email parameters for Zendesk integration.');
+        if (!gmailUser || !gmailPass || !toZendeskEmail) {
+            console.error('Missing required Gmail or Zendesk parameters for integration.');
             return null;
         }
 
         const transporter = nodemailer.createTransport({
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpPort === 465,
+            service: 'gmail',
             auth: {
-                user: smtpUser,
-                pass: smtpPass,
+                user: gmailUser,
+                pass: gmailPass,
             },
         });
 
@@ -85,24 +80,22 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
         const subject = `New Repair Service - ${data.product} [Repair Service]`;
 
         const mailOptions = {
-            from: `"${data.customerName || fromEmail}" <${fromEmail}>`,
+            from: `"Front Desk Bot" <${gmailUser}>`,
             to: toZendeskEmail,
             subject: subject,
             text: emailBody,
+            replyTo: data.customerEmail || gmailUser,
             headers: {
-                'X-Original-Sender': data.customerEmail || fromEmail,
-                'Reply-To': data.customerEmail || fromEmail
+                'X-Original-Sender': data.customerEmail || gmailUser
             }
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log('Zendesk ticket email sent:', info.messageId);
+        console.log('Zendesk ticket email sent via Gmail:', info.messageId);
         
-        // Return null as we don't have a ticket number yet (it's created asynchronously by Zendesk)
-        // The calling code will handle generating an RS number if this returns null
         return null; 
     } catch (error) {
-        console.error('Error creating Zendesk ticket via email:', error);
+        console.error('Error creating Zendesk ticket via Gmail:', error);
         return null;
     }
 }
