@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CurrentOrder from '../CurrentOrder';
+import ActiveProductInfo from '../ActiveProductInfo';
 import { 
   Search, 
   Check, 
@@ -89,10 +90,21 @@ export default function StationTesting({
     };
 
     const detectType = (val: string) => {
-        const input = val.trim().toUpperCase();
+        const input = val.trim();
+        
+        // Priority 1: SKU with colon (from Working GAS logic)
+        if (input.includes(':')) return 'SKU';
+        
+        // Priority 2: Tracking number regex (from Working GAS line 844)
         if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420)/i)) return 'TRACKING';
-        if (input.includes(':') || input.match(/^(\d+)(?:[xX](\d+))?$/i) || input.match(/^(\d+)-([A-Z])$/i)) return 'SKU';
-        if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input)) return 'COMMAND';
+        
+        // Priority 3: FBA FNSKU (skip per user request)
+        // if (/^X0/i.test(input)) return 'FNSKU';
+        
+        // Commands
+        if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input.toUpperCase())) return 'COMMAND';
+        
+        // Priority 4: Everything else is a serial number
         return 'SERIAL';
     };
 
@@ -269,7 +281,15 @@ export default function StationTesting({
 
             {/* Content Area - Vertical Stack */}
             <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-8 space-y-4">
-                {/* Current Order Display */}
+                {/* Active Product Info - Shows immediately under scan field */}
+                {processedOrder && (
+                    <ActiveProductInfo 
+                        orderId={processedOrder.orderId || 'N/A'}
+                        productTitle={processedOrder.title}
+                    />
+                )}
+                
+                {/* Current Order Display - Original detailed view */}
                 {processedOrder && (
                     <CurrentOrder 
                         orderId={processedOrder.orderId || 'N/A'}
@@ -375,7 +395,13 @@ export default function StationTesting({
                             
                             {searchResults.length > 0 ? (
                                 <div className="p-2 space-y-2">
-                                    {searchResults.map((result) => (
+                                    {searchResults.map((result) => {
+                                        // Show last 6 digits for tracking number
+                                        const trackingDisplay = result.order_id && result.order_id.length > 6 
+                                            ? result.order_id.slice(-6) 
+                                            : result.order_id;
+                                        
+                                        return (
                                         <div
                                             key={result.id}
                                             className="bg-gray-50 border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-all"
@@ -412,11 +438,12 @@ export default function StationTesting({
                                                 </div>
                                                 <div className="flex justify-between pt-1 border-t border-gray-200">
                                                     <span className="text-gray-500 font-bold">Tracking</span>
-                                                    <span className="font-mono font-semibold">{result.order_id}</span>
+                                                    <span className="font-mono font-semibold">{trackingDisplay}</span>
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <div className="p-8 text-center">

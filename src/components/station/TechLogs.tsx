@@ -21,7 +21,7 @@ interface TechLogsProps {
     techId?: string;
 }
 
-const CopyableText = ({ text, className, disabled = false }: { text: string; className?: string; disabled?: boolean }) => {
+const CopyableText = ({ text, className, disabled = false, isSerial = false }: { text: string; className?: string; disabled?: boolean; isSerial?: boolean }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = (e: React.MouseEvent) => {
@@ -32,7 +32,10 @@ const CopyableText = ({ text, className, disabled = false }: { text: string; cla
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const displayText = text.length > 8 ? text.slice(-8) : text;
+    // Show last 10 digits for serial numbers, last 8 for tracking
+    const displayText = isSerial 
+        ? (text.length > 10 ? text.slice(-10) : text)
+        : (text.length > 8 ? text.slice(-8) : text);
     const isEmpty = !text || text === '---' || disabled;
 
     if (isEmpty) {
@@ -303,11 +306,13 @@ export default function TechLogs({
                                             </div>
                                             <CopyableText 
                                                 text={log.tracking || ''} 
-                                                className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30" 
+                                                className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30"
+                                                isSerial={false}
                                             />
                                             <CopyableText 
                                                 text={log.serial || ''} 
-                                                className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30" 
+                                                className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30"
+                                                isSerial={true}
                                             />
                                         </motion.div>
                                     );

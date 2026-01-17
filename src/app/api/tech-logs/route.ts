@@ -53,12 +53,12 @@ export async function POST(req: NextRequest) {
 
         // 2. Update the shipped table if tracking is provided
         if (last8) {
-            // Update col_6 (Serial) and col_8 (By/Technician Name)
-            // matching by the last 8 digits of the tracking number in col_5
+            // Update col_7 (Serial) and col_9 (By/Technician Name)
+            // matching by the last 8 digits of the tracking number in col_6
             await db.execute(sql.raw(`
                 UPDATE shipped
-                SET col_6 = '${serial}', col_8 = '${userName}'
-                WHERE RIGHT(col_5, 8) = '${last8}'
+                SET col_7 = '${serial}', col_9 = '${userName}'
+                WHERE RIGHT(col_6, 8) = '${last8}'
             `));
         }
 
