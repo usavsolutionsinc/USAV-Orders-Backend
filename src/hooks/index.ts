@@ -13,3 +13,6 @@ export type { ThemeColor, ThemeColors } from './useStationTheme';
 
 export { useStationHistory } from './useStationHistory';
 export type { HistoryLog, StationHistoryResult, StationHistoryOptions } from './useStationHistory';
+
+export { useRepairs, useRepair, useUpdateRepairStatus, useUpdateRepairNotes, useUpdateRepairField } from './useRepairQueries';
+export { useShipped, useShippedRecord, useUpdateShippedStatus, useUpdateShippedField } from './useShippedQueries';

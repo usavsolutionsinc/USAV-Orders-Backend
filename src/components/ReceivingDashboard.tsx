@@ -89,7 +89,6 @@ export default function ReceivingDashboard() {
 
     return (
         <div className="flex h-full w-full">
-            <StationNav />
             <ReceivingPanel onEntryAdded={handleEntryAdded} />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <ReceivingLogs 

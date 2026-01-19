@@ -1,14 +1,25 @@
 'use client';
 
-import PageLayout from '@/components/PageLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Plus, Search, Loader2, X, Package } from '@/components/Icons';
-import { useState } from 'react';
-import { RepairIntakeForm, RepairReceipt, RepairFormData } from '@/components/repair';
+import { useState, Suspense, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { RepairIntakeForm, RepairReceipt, RepairFormData, RepairTable } from '@/components/repair';
 
 function RepairSidebar() {
     const [isOpen, setIsOpen] = useState(true);
     const [showIntakeForm, setShowIntakeForm] = useState(false);
+    const searchParams = useSearchParams();
+    const isNew = searchParams.get('new') === 'true';
+
+    useEffect(() => {
+        if (isNew) {
+            setShowIntakeForm(true);
+            // Clear the param after opening
+            window.history.replaceState({}, '', '/repair');
+        }
+    }, [isNew]);
+
     const [receiptData, setReceiptData] = useState<any>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
@@ -17,6 +28,7 @@ function RepairSidebar() {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
 
     const handleNewRepair = () => {
         setShowIntakeForm(true);
@@ -59,10 +71,12 @@ function RepairSidebar() {
         if (!searchQuery.trim()) {
             setSearchResults([]);
             setShowSearchResults(false);
+            setHasSearched(false);
             return;
         }
 
         setIsSearching(true);
+        setHasSearched(true);
         try {
             const res = await fetch(`/api/repair/search?q=${encodeURIComponent(searchQuery)}`);
             const data = await res.json();
@@ -70,10 +84,14 @@ function RepairSidebar() {
             if (data.results) {
                 setSearchResults(data.results);
                 setShowSearchResults(true);
+            } else {
+                setSearchResults([]);
+                setShowSearchResults(true);
             }
         } catch (error) {
             console.error('Search error:', error);
             setSearchResults([]);
+            setShowSearchResults(true);
         } finally {
             setIsSearching(false);
         }
@@ -111,7 +129,7 @@ function RepairSidebar() {
                                 onSubmit={handleSubmitForm}
                             />
                         ) : (
-                            <div className="p-6 space-y-6 h-full flex flex-col">
+                        <div className="p-6 pt-16 space-y-6 h-full flex flex-col">
                                 {/* Header */}
                                 <header>
                                     <h2 className="text-xl font-black tracking-tighter text-gray-900 uppercase">Repair Service</h2>
@@ -220,10 +238,13 @@ function RepairSidebar() {
                                                             </div>
                                                         ))}
                                                     </div>
-                                                ) : (
-                                                    <div className="p-8 text-center">
-                                                        <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                                                        <p className="text-xs font-bold text-gray-400">No Results Found</p>
+                                                ) : hasSearched && (
+                                                    <div className="p-8 text-center bg-red-50/50">
+                                                        <Search className="w-8 h-8 text-red-300 mx-auto mb-2" />
+                                                        <h3 className="text-xs font-black text-red-900 uppercase tracking-tight mb-1">Repair not found</h3>
+                                                        <p className="text-[10px] text-red-600 font-bold uppercase tracking-widest leading-relaxed">
+                                                            No matches for "{searchQuery}"
+                                                        </p>
                                                     </div>
                                                 )}
                                             </motion.div>
@@ -258,11 +279,20 @@ function RepairSidebar() {
 
 export default function RepairPage() {
     return (
-        <PageLayout
-            sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
-            gid="408116623"
-            showChecklist={false}
-            customSidebar={<RepairSidebar />}
-        />
+        <div className="flex h-full w-full">
+            <Suspense fallback={null}>
+                {/* Keep existing RepairSidebar for search and new repair intake */}
+                <RepairSidebar />
+            </Suspense>
+            
+            {/* New RepairTable component reading from Neon DB */}
+            <Suspense fallback={
+                <div className="flex-1 flex items-center justify-center bg-gray-50">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                </div>
+            }>
+                <RepairTable />
+            </Suspense>
+        </div>
     );
 }

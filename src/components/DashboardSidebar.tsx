@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function DashboardSidebar() {
     const [isOpen, setIsOpen] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isTransferring, setIsTransferring] = useState(false);
+    const [manualSheetName, setManualSheetName] = useState('');
     const [activeScript, setActiveScript] = useState<string | null>(null);
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
@@ -31,6 +33,33 @@ export default function DashboardSidebar() {
             setStatus({ type: 'error', message: 'Network error occurred' });
         } finally {
             setIsSyncing(false);
+        }
+    };
+
+    const handleTransfer = async () => {
+        setIsTransferring(true);
+        setStatus(null);
+        try {
+            const res = await fetch('/api/google-sheets/transfer-orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    manualSheetName: manualSheetName.trim() || undefined
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                const message = data.rowCount > 0 
+                    ? `Successfully transferred ${data.rowCount} order${data.rowCount === 1 ? '' : 's'}` 
+                    : 'Orders are already transferred';
+                setStatus({ type: 'success', message });
+            } else {
+                setStatus({ type: 'error', message: data.error || 'Transfer failed' });
+            }
+        } catch (error) {
+            setStatus({ type: 'error', message: 'Network error occurred' });
+        } finally {
+            setIsTransferring(false);
         }
     };
 
@@ -115,7 +144,7 @@ export default function DashboardSidebar() {
                             <ChevronLeft className="w-4 h-4" />
                         </button>
 
-                        <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
+                        <div className="p-6 pt-16 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
                             <header>
                                 <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                                     Management
@@ -126,6 +155,41 @@ export default function DashboardSidebar() {
                             </header>
                             
                             <div className="space-y-4">
+                                {/* Div Order Management Tools */}
+                                <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Settings className="w-4 h-4 text-blue-600" />
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-900">Div Order Management</h3>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black text-gray-500 uppercase px-1 tracking-widest">Manual Sheet Name</label>
+                                            <input
+                                                type="text"
+                                                value={manualSheetName}
+                                                onChange={(e) => setManualSheetName(e.target.value)}
+                                                placeholder="e.g., Sheet_01_14_2026"
+                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
+                                                disabled={isTransferring}
+                                            />
+                                        </div>
+
+                                        <button
+                                            onClick={handleTransfer}
+                                            disabled={isTransferring}
+                                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                        >
+                                            {isTransferring ? (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                                <Database className="w-3.5 h-3.5" />
+                                            )}
+                                            Import Latest Orders
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <button
                                     onClick={handleSync}
                                     disabled={isSyncing}

@@ -27,6 +27,7 @@ export default function ShippedSidebar() {
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
     const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -56,10 +57,12 @@ export default function ShippedSidebar() {
     const handleSearch = async (query: string) => {
         if (!query.trim()) {
             setResults([]);
+            setHasSearched(false);
             return;
         }
 
         setIsSearching(true);
+        setHasSearched(true);
         try {
             const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(query)}`);
             const data = await res.json();
@@ -67,6 +70,8 @@ export default function ShippedSidebar() {
             if (data.results) {
                 setResults(data.results);
                 saveSearchHistory(query, data.count);
+            } else {
+                setResults([]);
             }
         } catch (error) {
             console.error('Search error:', error);
@@ -115,7 +120,7 @@ export default function ShippedSidebar() {
                             <ChevronLeft className="w-4 h-4" />
                         </button>
 
-                        <div className="p-6 h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide">
+                        <div className="p-6 pt-16 h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide">
                             <header>
                                 <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                                     Shipped Orders
@@ -155,7 +160,7 @@ export default function ShippedSidebar() {
                                 </button>
 
                                 {/* Search Results */}
-                                {results.length > 0 && (
+                                {results.length > 0 ? (
                                     <div className="space-y-3">
                                         <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
                                             {results.length} Result{results.length !== 1 ? 's' : ''}
@@ -274,6 +279,25 @@ export default function ShippedSidebar() {
                                                 </div>
                                             ))}
                                         </div>
+                                    </div>
+                                ) : hasSearched && !isSearching && (
+                                    <div className="bg-red-50 border border-red-100 rounded-xl p-6 text-center animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                            <Search className="w-6 h-6 text-red-600" />
+                                        </div>
+                                        <h3 className="text-sm font-black text-red-900 uppercase tracking-tight mb-1">Order not found</h3>
+                                        <p className="text-[10px] text-red-600 font-bold uppercase tracking-widest leading-relaxed">
+                                            We couldn't find any records matching "{searchQuery}"
+                                        </p>
+                                        <button 
+                                            onClick={() => {
+                                                setSearchQuery('');
+                                                setHasSearched(false);
+                                            }}
+                                            className="mt-4 text-[10px] font-black text-red-700 uppercase tracking-widest hover:underline"
+                                        >
+                                            Clear search
+                                        </button>
                                     </div>
                                 )}
 
