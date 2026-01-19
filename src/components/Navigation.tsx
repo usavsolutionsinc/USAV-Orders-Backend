@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 
 const navItems = [
     { name: 'Dashboard', href: '/dashboard' },
-    { name: 'Orders', href: '/orders' },
     { name: 'Shipped', href: '/shipped' },
     { name: 'Repair', href: '/repair' },
     { name: 'Michael', href: '/tech/1' },

@@ -13,28 +13,28 @@ export async function GET(req: NextRequest) {
         // Support both full query and last 8 digits
         const last8 = query.slice(-8);
 
-        // Search across col_3 (tracking), col_6 (order ID), col_7 (serial number)
-        // col_2 filled = shipped status
+        // Search across shipping_tracking_number, order_id, serial_number
+        // date_time filled = shipped status
         const result = await pool.query(`
             SELECT 
-                col_1 as id,
-                col_2 as shipped_date,
-                col_3 as tracking_number,
-                col_4 as customer,
-                col_5 as product,
-                col_6 as order_id,
-                col_7 as serial_number,
-                col_8 as notes,
+                id,
+                date_time as shipped_date,
+                shipping_tracking_number as tracking_number,
+                product_title as customer,
+                product_title as product,
+                order_id,
+                serial_number,
+                '' as notes,
                 CASE 
-                    WHEN col_2 IS NOT NULL AND col_2 != '' THEN true
+                    WHEN date_time IS NOT NULL AND date_time != '' THEN true
                     ELSE false
                 END as is_shipped
             FROM shipped
             WHERE 
-                (RIGHT(col_3::text, 8) = $1 OR col_3::text ILIKE $2)
-                OR (RIGHT(col_6::text, 8) = $1 OR col_6::text ILIKE $2)
-                OR (RIGHT(col_7::text, 8) = $1 OR col_7::text ILIKE $2)
-            ORDER BY col_1 DESC
+                (RIGHT(shipping_tracking_number::text, 8) = $1 OR shipping_tracking_number::text ILIKE $2)
+                OR (RIGHT(order_id::text, 8) = $1 OR order_id::text ILIKE $2)
+                OR (RIGHT(serial_number::text, 8) = $1 OR serial_number::text ILIKE $2)
+            ORDER BY id DESC
             LIMIT 20
         `, [last8, `%${query}%`]);
 
