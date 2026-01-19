@@ -154,7 +154,8 @@ export async function POST(req: NextRequest) {
                                     return paddedRow;
                                 });
 
-                                const columnsList = columnNames.join(', ');
+                                // Quote column names to handle spaces and special characters
+                                const columnsList = columnNames.map(col => `"${col}"`).join(', ');
                                 const query = `INSERT INTO ${config.table} (${columnsList}) VALUES ${placeholders}`;
                                 
                                 await client.query(query, values);

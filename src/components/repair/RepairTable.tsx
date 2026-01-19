@@ -208,9 +208,9 @@ export function RepairTable() {
                     }) : '---'}
                   </td>
                   
-                  {/* RS # - Copyable */}
+                  {/* Ticket # - Copyable */}
                   <td className="px-4 py-3 text-sm font-mono">
-                    <CopyableText text={repair.rs_number || '---'} />
+                    <CopyableText text={repair.ticket_number || '---'} />
                   </td>
                   
                   {/* Contact - Copyable */}
@@ -220,8 +220,8 @@ export function RepairTable() {
                   
                   {/* Product(s) */}
                   <td className="px-4 py-3 text-sm text-gray-900">
-                    <div className="max-w-[200px] truncate" title={repair.product}>
-                      {repair.product || '---'}
+                    <div className="max-w-[200px] truncate" title={repair.product_title}>
+                      {repair.product_title || '---'}
                     </div>
                   </td>
                   
@@ -244,8 +244,8 @@ export function RepairTable() {
                   
                   {/* Parts */}
                   <td className="px-4 py-3 text-sm text-gray-700">
-                    <div className="max-w-[150px] truncate" title={repair.parts}>
-                      {repair.parts || '---'}
+                    <div className="max-w-[150px] truncate" title={repair.parts_needed}>
+                      {repair.parts_needed || '---'}
                     </div>
                   </td>
                   

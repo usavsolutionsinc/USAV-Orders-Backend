@@ -120,7 +120,7 @@ export default function ShippedSidebar() {
                             <ChevronLeft className="w-4 h-4" />
                         </button>
 
-                        <div className="p-6 pt-16 h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide">
+                        <div className="p-6 h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide">
                             <header>
                                 <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                                     Shipped Orders

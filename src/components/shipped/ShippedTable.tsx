@@ -232,7 +232,7 @@ export function ShippedTable() {
                   
                   {/* Shipping TRK # - Copyable */}
                   <td className="px-4 py-3 text-sm font-mono">
-                    <CopyableText text={record.shipping_trk_number || '---'} />
+                    <CopyableText text={record.shipping_tracking_number || '---'} />
                   </td>
                   
                   {/* Serial # - Copyable */}
@@ -240,14 +240,14 @@ export function ShippedTable() {
                     <CopyableText text={record.serial_number || '---'} />
                   </td>
                   
-                  {/* Boxed */}
+                  {/* Boxed By */}
                   <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                    {record.boxed || '---'}
+                    {record.boxed_by || '---'}
                   </td>
                   
-                  {/* By */}
+                  {/* Tested By */}
                   <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                    {record.by || '---'}
+                    {record.tested_by || '---'}
                   </td>
                   
                   {/* SKU */}

@@ -144,7 +144,7 @@ export default function DashboardSidebar() {
                             <ChevronLeft className="w-4 h-4" />
                         </button>
 
-                        <div className="p-6 pt-16 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
+                        <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
                             <header>
                                 <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                                     Management
@@ -155,11 +155,11 @@ export default function DashboardSidebar() {
                             </header>
                             
                             <div className="space-y-4">
-                                {/* Div Order Management Tools */}
+                                {/* Order Management Tools */}
                                 <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                                     <div className="flex items-center gap-2 mb-2">
                                         <Settings className="w-4 h-4 text-blue-600" />
-                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-900">Div Order Management</h3>
+                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-900">Order Management</h3>
                                     </div>
 
                                     <div className="space-y-3">

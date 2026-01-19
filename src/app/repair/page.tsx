@@ -196,7 +196,7 @@ function RepairSidebar() {
                                                             >
                                                                 <div className="flex items-center justify-between mb-2">
                                                                     <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-blue-100 text-blue-700">
-                                                                        {result.rs_number}
+                                                                        {result.ticket_number}
                                                                     </span>
                                                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
                                                                         result.status === 'Completed' 
@@ -216,7 +216,7 @@ function RepairSidebar() {
                                                                     </div>
                                                                     <div className="flex justify-between">
                                                                         <span className="text-gray-500 font-bold">Product</span>
-                                                                        <span className="font-semibold text-right">{result.product}</span>
+                                                                        <span className="font-semibold text-right">{result.product_title}</span>
                                                                     </div>
                                                                     {result.serial_number && (
                                                                         <div className="flex justify-between pt-1 border-t border-gray-200">

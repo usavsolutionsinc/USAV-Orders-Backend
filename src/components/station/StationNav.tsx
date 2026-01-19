@@ -131,7 +131,7 @@ export default function StationNav({ isOpen = true, onClose }: StationNavProps) 
                             </button>
                         )}
 
-                        <div className="flex flex-col h-full px-4 py-6 pt-16 overflow-y-auto">
+                        <div className="flex flex-col h-full px-4 py-6 overflow-y-auto">
                             {/* Logo Area */}
                             <div className="mb-8 px-2 flex items-center gap-3">
                                 <div>
@@ -199,14 +199,6 @@ export default function StationNav({ isOpen = true, onClose }: StationNavProps) 
                                     {bottomNavItems.map(renderNavItem)}
                                 </div>
                             </nav>
-
-                            {/* Version Footer */}
-                            <div className="mt-auto pt-6 px-2">
-                                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Version</p>
-                                    <p className="text-xs font-bold text-gray-900">v2.6 Stable Build</p>
-                                </div>
-                            </div>
                         </div>
                     </motion.div>
                 </>

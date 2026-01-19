@@ -53,33 +53,33 @@ export async function POST(req: NextRequest) {
             // Continue even if Zendesk fails - will use DB ID
         }
 
-        // Step 2: Insert into RS table in NEON DB
+        // Step 2: Insert into repair_service table in NEON DB
         const insertResult = await pool.query(`
-            INSERT INTO rs (col_2, col_3, col_4, col_5, col_6, col_7, col_8, col_9, col_10)
+            INSERT INTO repair_service (date_time, ticket_number, contact, product_title, price, issue, serial_number, parts_needed, status)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING col_1 as id, col_3 as rs_number
+            RETURNING id, ticket_number
         `, [
-            formattedDateTime, // col_2: date/time
-            zendeskTicketNumber || '', // col_3: RS # (will use DB ID if empty)
-            contactInfo, // col_4: contact
-            productString, // col_5: product(s)
-            price || '130', // col_6: price
-            repairReasonsString, // col_7: reason for repair
-            serialNumber || '', // col_8: serial #
-            '', // col_9: parts needed (empty initially)
-            'Pending' // col_10: status
+            formattedDateTime,
+            zendeskTicketNumber || '',
+            contactInfo,
+            productString,
+            price || '130',
+            repairReasonsString,
+            serialNumber || '',
+            '', // parts needed (empty initially)
+            'Pending'
         ]);
 
         const insertedRow = insertResult.rows[0];
         const dbId = insertedRow.id;
         
-        // If no Zendesk ticket, update col_3 with DB ID
+        // If no Zendesk ticket, update ticket_number with DB ID
         let finalRSNumber = zendeskTicketNumber;
         if (!zendeskTicketNumber) {
             await pool.query(`
-                UPDATE rs 
-                SET col_3 = $1 
-                WHERE col_1 = $2
+                UPDATE repair_service 
+                SET ticket_number = $1 
+                WHERE id = $2
             `, [`RS-${String(dbId).padStart(4, '0')}`, dbId]);
             finalRSNumber = `RS-${String(dbId).padStart(4, '0')}`;
         }

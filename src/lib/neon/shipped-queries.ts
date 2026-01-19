@@ -1,18 +1,24 @@
 import pool from '../db';
 
-// Neon DB Shipped Table Schema (based on user's screenshot):
-// col_1: id (SERIAL PRIMARY KEY) - auto-increment
-// col_2: Date / Time (TEXT)
-// col_3: Order ID (TEXT)
-// col_4: Product Title (TEXT)
-// col_5: Sent (TEXT)
-// col_6: Shipping TRK # (TEXT)
-// col_7: Serial # (TEXT)
-// col_8: Boxed (TEXT)
-// col_9: By (TEXT)
-// col_10: SKU (TEXT)
-// col_11: Status (TEXT)
-// col_12: status_history (TEXT) - JSON string
+// Neon DB Shipped Table Schema:
+// id (SERIAL PRIMARY KEY) - auto-increment
+// date_time (TEXT)
+// order_id (TEXT)
+// product_title (TEXT)
+// sent (TEXT)
+// shipping_tracking_number (TEXT)
+// serial_number (TEXT)
+// boxed_by (TEXT)
+// tested_by (TEXT)
+// sku (TEXT)
+// status (TEXT)
+// status_history (JSON) - tracks status changes with timestamps
+
+export interface StatusHistoryEntry {
+  status: string;
+  timestamp: string;
+  previous_status?: string;
+}
 
 export interface ShippedRecord {
   id: number;
@@ -20,19 +26,13 @@ export interface ShippedRecord {
   order_id: string;
   product_title: string;
   sent: string;
-  shipping_trk_number: string;
+  shipping_tracking_number: string;
   serial_number: string;
-  boxed: string;
-  by: string;
+  boxed_by: string;
+  tested_by: string;
   sku: string;
   status: string;
   status_history?: StatusHistoryEntry[];
-}
-
-export interface StatusHistoryEntry {
-  status: string;
-  timestamp: string;
-  previous_status?: string;
 }
 
 /**
@@ -42,20 +42,20 @@ export async function getAllShipped(limit = 100, offset = 0): Promise<ShippedRec
   try {
     const result = await pool.query(
       `SELECT 
-        col_1 as id,
-        col_2 as date_time,
-        col_3 as order_id,
-        col_4 as product_title,
-        col_5 as sent,
-        col_6 as shipping_trk_number,
-        col_7 as serial_number,
-        col_8 as boxed,
-        col_9 as by,
-        col_10 as sku,
-        col_11 as status,
-        col_12 as status_history
+        id,
+        date_time,
+        order_id,
+        product_title,
+        sent,
+        shipping_tracking_number,
+        serial_number,
+        boxed_by,
+        tested_by,
+        sku,
+        status,
+        status_history
       FROM shipped
-      ORDER BY col_1 DESC
+      ORDER BY id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
@@ -77,20 +77,20 @@ export async function getShippedById(id: number): Promise<ShippedRecord | null> 
   try {
     const result = await pool.query(
       `SELECT 
-        col_1 as id,
-        col_2 as date_time,
-        col_3 as order_id,
-        col_4 as product_title,
-        col_5 as sent,
-        col_6 as shipping_trk_number,
-        col_7 as serial_number,
-        col_8 as boxed,
-        col_9 as by,
-        col_10 as sku,
-        col_11 as status,
-        col_12 as status_history
+        id,
+        date_time,
+        order_id,
+        product_title,
+        sent,
+        shipping_tracking_number,
+        serial_number,
+        boxed_by,
+        tested_by,
+        sku,
+        status,
+        status_history
       FROM shipped
-      WHERE col_1 = $1`,
+      WHERE id = $1`,
       [id]
     );
 
@@ -122,25 +122,27 @@ export async function updateShippedStatus(id: number, newStatus: string): Promis
 
     // Append to status history
     const history = currentRecord.status_history || [];
+    const now = new Date().toISOString();
+    
     history.push({
       status: newStatus,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       previous_status: currentRecord.status,
     });
 
-    const historyString = JSON.stringify(history);
+    const historyJson = JSON.stringify(history);
 
     // Update status and history
     // For "Shipped" or "Picked Up", also update the date_time
     if (newStatus === 'Shipped' || newStatus === 'Picked Up') {
       await pool.query(
-        'UPDATE shipped SET col_11 = $1, col_12 = $2, col_2 = $3 WHERE col_1 = $4',
-        [newStatus, historyString, new Date().toISOString(), id]
+        'UPDATE shipped SET status = $1, status_history = $2, date_time = $3 WHERE id = $4',
+        [newStatus, historyJson, now, id]
       );
     } else {
       await pool.query(
-        'UPDATE shipped SET col_11 = $1, col_12 = $2 WHERE col_1 = $3',
-        [newStatus, historyString, id]
+        'UPDATE shipped SET status = $1, status_history = $2 WHERE id = $3',
+        [newStatus, historyJson, id]
       );
     }
   } catch (error) {
@@ -154,26 +156,25 @@ export async function updateShippedStatus(id: number, newStatus: string): Promis
  */
 export async function updateShippedField(id: number, field: string, value: any): Promise<void> {
   try {
-    const fieldMap: Record<string, string> = {
-      date_time: 'col_2',
-      order_id: 'col_3',
-      product_title: 'col_4',
-      sent: 'col_5',
-      shipping_trk_number: 'col_6',
-      serial_number: 'col_7',
-      boxed: 'col_8',
-      by: 'col_9',
-      sku: 'col_10',
-      status: 'col_11',
-    };
+    const validFields = [
+      'date_time',
+      'order_id',
+      'product_title',
+      'sent',
+      'shipping_tracking_number',
+      'serial_number',
+      'boxed_by',
+      'tested_by',
+      'sku',
+      'status',
+    ];
 
-    const dbColumn = fieldMap[field];
-    if (!dbColumn) {
+    if (!validFields.includes(field)) {
       throw new Error(`Invalid field: ${field}`);
     }
 
     await pool.query(
-      `UPDATE shipped SET ${dbColumn} = $1 WHERE col_1 = $2`,
+      `UPDATE shipped SET ${field} = $1 WHERE id = $2`,
       [value, id]
     );
   } catch (error) {
@@ -190,25 +191,25 @@ export async function searchShipped(query: string): Promise<ShippedRecord[]> {
     const searchTerm = `%${query}%`;
     const result = await pool.query(
       `SELECT 
-        col_1 as id,
-        col_2 as date_time,
-        col_3 as order_id,
-        col_4 as product_title,
-        col_5 as sent,
-        col_6 as shipping_trk_number,
-        col_7 as serial_number,
-        col_8 as boxed,
-        col_9 as by,
-        col_10 as sku,
-        col_11 as status,
-        col_12 as status_history
+        id,
+        date_time,
+        order_id,
+        product_title,
+        sent,
+        shipping_tracking_number,
+        serial_number,
+        boxed_by,
+        tested_by,
+        sku,
+        status,
+        status_history
       FROM shipped
       WHERE 
-        col_3 ILIKE $1 OR
-        col_6 ILIKE $1 OR
-        col_7 ILIKE $1 OR
-        col_4 ILIKE $1
-      ORDER BY col_1 DESC
+        order_id ILIKE $1 OR
+        shipping_tracking_number ILIKE $1 OR
+        serial_number ILIKE $1 OR
+        product_title ILIKE $1
+      ORDER BY id DESC
       LIMIT 20`,
       [searchTerm]
     );
@@ -226,11 +227,22 @@ export async function searchShipped(query: string): Promise<ShippedRecord[]> {
 /**
  * Parse status history JSON string
  */
-function parseStatusHistory(historyString: string | null): StatusHistoryEntry[] {
-  if (!historyString || historyString === '') return [];
-  try {
-    return JSON.parse(historyString);
-  } catch {
-    return [];
+function parseStatusHistory(historyString: any): StatusHistoryEntry[] {
+  if (!historyString) return [];
+  
+  // If it's already an object/array, return it
+  if (typeof historyString === 'object') {
+    return Array.isArray(historyString) ? historyString : [];
   }
+  
+  // If it's a string, try to parse it
+  if (typeof historyString === 'string') {
+    try {
+      return JSON.parse(historyString);
+    } catch {
+      return [];
+    }
+  }
+  
+  return [];
 }

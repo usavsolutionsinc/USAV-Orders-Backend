@@ -55,7 +55,7 @@ export function ShippedDetailsPanel({
           <div className="space-y-3">
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Tracking Number</span>
-              <p className="font-mono text-sm text-gray-900 font-semibold">{shipped.shipping_trk_number || 'Not available'}</p>
+              <p className="font-mono text-sm text-gray-900 font-semibold">{shipped.shipping_tracking_number || 'Not available'}</p>
             </div>
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Order ID</span>
@@ -96,12 +96,12 @@ export function ShippedDetailsPanel({
           </h3>
           <div className="space-y-3">
             <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Boxed</span>
-              <p className="font-semibold text-sm text-gray-900">{shipped.boxed || 'Not specified'}</p>
+              <span className="text-xs text-gray-500 font-semibold block mb-1">Boxed By</span>
+              <p className="font-semibold text-sm text-gray-900">{shipped.boxed_by || 'Not specified'}</p>
             </div>
             <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Packed By</span>
-              <p className="font-semibold text-sm text-gray-900">{shipped.by || 'Unknown'}</p>
+              <span className="text-xs text-gray-500 font-semibold block mb-1">Tested By</span>
+              <p className="font-semibold text-sm text-gray-900">{shipped.tested_by || 'Unknown'}</p>
             </div>
           </div>
         </section>

@@ -1,39 +1,53 @@
 import pool from '../db';
 
-// Neon DB RS Table Schema (based on user's screenshot):
-// col_1: id (SERIAL PRIMARY KEY) - auto-increment
-// col_2: Date / Time (TEXT)
-// col_3: RS # (TEXT)
-// col_4: Contact (TEXT)
-// col_5: Product(s) (TEXT)
-// col_6: Price (TEXT)
-// col_7: Issue (TEXT)
-// col_8: Serial # (TEXT)
-// col_9: Parts (TEXT)
-// col_10: Status (TEXT)
-// col_11: Notes (TEXT) - for additional notes
-// col_12: status_history (TEXT) - JSON string for status history
-
-export interface RSRecord {
-  id: number;
-  date_time: string;
-  rs_number: string;
-  contact: string;
-  product: string;
-  price: string;
-  issue: string;
-  serial_number: string;
-  parts: string;
-  status: string;
-  notes?: string;
-  status_history?: StatusHistoryEntry[];
-}
+// Neon DB Repair Service Table Schema:
+// id (SERIAL PRIMARY KEY) - auto-increment
+// date_time (TEXT)
+// ticket_number (TEXT) - formerly "RS #"
+// contact (TEXT)
+// product_title (TEXT) - formerly "Product(s)"
+// price (TEXT)
+// issue (TEXT)
+// serial_number (TEXT) - formerly "Serial #"
+// parts_needed (TEXT) - formerly "Parts"
+// status (TEXT)
+// notes (TEXT)
+// status_history (JSON) - tracks status changes with timestamps
 
 export interface StatusHistoryEntry {
   status: string;
   timestamp: string;
   previous_status?: string;
 }
+
+export interface RSRecord {
+  id: number;
+  date_time: string;
+  ticket_number: string;
+  contact: string;
+  product_title: string;
+  price: string;
+  issue: string;
+  serial_number: string;
+  parts_needed: string;
+  status: string;
+  notes?: string;
+  status_history?: StatusHistoryEntry[];
+}
+
+// Valid status options for repair service
+export const REPAIR_STATUS_OPTIONS = [
+  "Awaiting Parts",
+  "Pending Repair",
+  "Awaiting Pickup",
+  "Repaired, Contact Customer",
+  "Awaiting Payment",
+  "Awaiting Additional Parts Payment",
+  "Shipped",
+  "Picked Up"
+] as const;
+
+export type RepairStatus = typeof REPAIR_STATUS_OPTIONS[number];
 
 /**
  * Get all repairs with optional limit and offset for pagination
@@ -42,20 +56,20 @@ export async function getAllRepairs(limit = 100, offset = 0): Promise<RSRecord[]
   try {
     const result = await pool.query(
       `SELECT 
-        col_1 as id,
-        col_2 as date_time,
-        col_3 as rs_number,
-        col_4 as contact,
-        col_5 as product,
-        col_6 as price,
-        col_7 as issue,
-        col_8 as serial_number,
-        col_9 as parts,
-        col_10 as status,
-        col_11 as notes,
-        col_12 as status_history
-      FROM rs
-      ORDER BY col_1 DESC
+        id,
+        date_time,
+        ticket_number,
+        contact,
+        product_title,
+        price,
+        issue,
+        serial_number,
+        parts_needed,
+        status,
+        notes,
+        status_history
+      FROM repair_service
+      ORDER BY id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
@@ -77,20 +91,20 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
   try {
     const result = await pool.query(
       `SELECT 
-        col_1 as id,
-        col_2 as date_time,
-        col_3 as rs_number,
-        col_4 as contact,
-        col_5 as product,
-        col_6 as price,
-        col_7 as issue,
-        col_8 as serial_number,
-        col_9 as parts,
-        col_10 as status,
-        col_11 as notes,
-        col_12 as status_history
-      FROM rs
-      WHERE col_1 = $1`,
+        id,
+        date_time,
+        ticket_number,
+        contact,
+        product_title,
+        price,
+        issue,
+        serial_number,
+        parts_needed,
+        status,
+        notes,
+        status_history
+      FROM repair_service
+      WHERE id = $1`,
       [id]
     );
 
@@ -122,25 +136,27 @@ export async function updateRepairStatus(id: number, newStatus: string): Promise
 
     // Append to status history
     const history = currentRepair.status_history || [];
+    const now = new Date().toISOString();
+    
     history.push({
       status: newStatus,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
       previous_status: currentRepair.status,
     });
 
-    const historyString = JSON.stringify(history);
+    const historyJson = JSON.stringify(history);
 
     // Update status and history
     // For "Shipped" or "Picked Up", also update the date_time
     if (newStatus === 'Shipped' || newStatus === 'Picked Up') {
       await pool.query(
-        'UPDATE rs SET col_10 = $1, col_12 = $2, col_2 = $3 WHERE col_1 = $4',
-        [newStatus, historyString, new Date().toISOString(), id]
+        'UPDATE repair_service SET status = $1, status_history = $2, date_time = $3 WHERE id = $4',
+        [newStatus, historyJson, now, id]
       );
     } else {
       await pool.query(
-        'UPDATE rs SET col_10 = $1, col_12 = $2 WHERE col_1 = $3',
-        [newStatus, historyString, id]
+        'UPDATE repair_service SET status = $1, status_history = $2 WHERE id = $3',
+        [newStatus, historyJson, id]
       );
     }
   } catch (error) {
@@ -155,7 +171,7 @@ export async function updateRepairStatus(id: number, newStatus: string): Promise
 export async function updateRepairNotes(id: number, notes: string): Promise<void> {
   try {
     await pool.query(
-      'UPDATE rs SET col_11 = $1 WHERE col_1 = $2',
+      'UPDATE repair_service SET notes = $1 WHERE id = $2',
       [notes, id]
     );
   } catch (error) {
@@ -169,26 +185,25 @@ export async function updateRepairNotes(id: number, notes: string): Promise<void
  */
 export async function updateRepairField(id: number, field: string, value: any): Promise<void> {
   try {
-    const fieldMap: Record<string, string> = {
-      date_time: 'col_2',
-      rs_number: 'col_3',
-      contact: 'col_4',
-      product: 'col_5',
-      price: 'col_6',
-      issue: 'col_7',
-      serial_number: 'col_8',
-      parts: 'col_9',
-      status: 'col_10',
-      notes: 'col_11',
-    };
+    const validFields = [
+      'date_time',
+      'ticket_number',
+      'contact',
+      'product_title',
+      'price',
+      'issue',
+      'serial_number',
+      'parts_needed',
+      'status',
+      'notes',
+    ];
 
-    const dbColumn = fieldMap[field];
-    if (!dbColumn) {
+    if (!validFields.includes(field)) {
       throw new Error(`Invalid field: ${field}`);
     }
 
     await pool.query(
-      `UPDATE rs SET ${dbColumn} = $1 WHERE col_1 = $2`,
+      `UPDATE repair_service SET ${field} = $1 WHERE id = $2`,
       [value, id]
     );
   } catch (error) {
@@ -205,25 +220,25 @@ export async function searchRepairs(query: string): Promise<RSRecord[]> {
     const searchTerm = `%${query}%`;
     const result = await pool.query(
       `SELECT 
-        col_1 as id,
-        col_2 as date_time,
-        col_3 as rs_number,
-        col_4 as contact,
-        col_5 as product,
-        col_6 as price,
-        col_7 as issue,
-        col_8 as serial_number,
-        col_9 as parts,
-        col_10 as status,
-        col_11 as notes,
-        col_12 as status_history
-      FROM rs
+        id,
+        date_time,
+        ticket_number,
+        contact,
+        product_title,
+        price,
+        issue,
+        serial_number,
+        parts_needed,
+        status,
+        notes,
+        status_history
+      FROM repair_service
       WHERE 
-        col_3 ILIKE $1 OR
-        col_4 ILIKE $1 OR
-        col_5 ILIKE $1 OR
-        col_8 ILIKE $1
-      ORDER BY col_1 DESC
+        ticket_number ILIKE $1 OR
+        contact ILIKE $1 OR
+        product_title ILIKE $1 OR
+        serial_number ILIKE $1
+      ORDER BY id DESC
       LIMIT 20`,
       [searchTerm]
     );
@@ -241,11 +256,22 @@ export async function searchRepairs(query: string): Promise<RSRecord[]> {
 /**
  * Parse status history JSON string
  */
-function parseStatusHistory(historyString: string | null): StatusHistoryEntry[] {
-  if (!historyString || historyString === '') return [];
-  try {
-    return JSON.parse(historyString);
-  } catch {
-    return [];
+function parseStatusHistory(historyString: any): StatusHistoryEntry[] {
+  if (!historyString) return [];
+  
+  // If it's already an object/array, return it
+  if (typeof historyString === 'object') {
+    return Array.isArray(historyString) ? historyString : [];
   }
+  
+  // If it's a string, try to parse it
+  if (typeof historyString === 'string') {
+    try {
+      return JSON.parse(historyString);
+    } catch {
+      return [];
+    }
+  }
+  
+  return [];
 }

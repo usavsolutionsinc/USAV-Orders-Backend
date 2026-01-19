@@ -12,30 +12,26 @@ export async function GET(req: NextRequest) {
 
         const searchTerm = `%${query.trim()}%`;
 
-        // Search through RS table columns:
-        // col_3: RS Number (e.g., RS-0001 or Zendesk ticket)
-        // col_4: Contact Info (name, phone, email)
-        // col_5: Product
-        // col_8: Serial Number
+        // Search through repair_service table
         const result = await pool.query(`
             SELECT 
-                col_1 as id,
-                col_2 as date_time,
-                col_3 as rs_number,
-                col_4 as contact,
-                col_5 as product,
-                col_6 as price,
-                col_7 as repair_reasons,
-                col_8 as serial_number,
-                col_9 as parts_needed,
-                col_10 as status
-            FROM rs
+                id,
+                date_time,
+                ticket_number,
+                contact,
+                product_title,
+                price,
+                issue as repair_reasons,
+                serial_number,
+                parts_needed,
+                status
+            FROM repair_service
             WHERE 
-                col_3 ILIKE $1 OR
-                col_4 ILIKE $1 OR
-                col_5 ILIKE $1 OR
-                col_8 ILIKE $1
-            ORDER BY col_1 DESC
+                ticket_number ILIKE $1 OR
+                contact ILIKE $1 OR
+                product_title ILIKE $1 OR
+                serial_number ILIKE $1
+            ORDER BY id DESC
             LIMIT 20
         `, [searchTerm]);
 

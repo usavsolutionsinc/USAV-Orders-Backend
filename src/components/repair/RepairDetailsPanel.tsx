@@ -60,7 +60,7 @@ export function RepairDetailsPanel({
                 <Clock className="w-5 h-5 text-orange-600" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-gray-900 tracking-tight leading-none">{repair.rs_number}</h2>
+              <h2 className="text-xl font-black text-gray-900 tracking-tight leading-none">{repair.ticket_number}</h2>
               <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-1">Repair In-Progress</p>
             </div>
         </div>
@@ -87,7 +87,7 @@ export function RepairDetailsPanel({
             </div>
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Product(s)</span>
-              <p className="font-semibold text-sm text-gray-900">{repair.product || 'Not provided'}</p>
+              <p className="font-semibold text-sm text-gray-900">{repair.product_title || 'Not provided'}</p>
             </div>
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Price</span>
@@ -112,7 +112,7 @@ export function RepairDetailsPanel({
             </div>
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Parts Needed</span>
-              <p className="text-sm text-gray-700 leading-relaxed">{repair.parts || 'No parts specified'}</p>
+              <p className="text-sm text-gray-700 leading-relaxed">{repair.parts_needed || 'No parts specified'}</p>
             </div>
           </div>
         </section>
