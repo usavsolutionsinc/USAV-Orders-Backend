@@ -1,23 +1,49 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Search, X } from '../Icons';
-import { CopyableText } from '../ui/CopyableText';
+import { Loader2, Search, X, Copy, Check, AlertTriangle } from '../Icons';
 import { ShippedRecord } from '@/lib/neon/shipped-queries';
 import { ShippedDetailsPanel } from './ShippedDetailsPanel';
 
-const STATUS_OPTIONS = [
-  'Awaiting Parts',
-  'Pending Repair',
-  'Awaiting Pickup',
-  'Repaired, Contact Customer',
-  'Awaiting Payment',
-  'Awaiting Additional Parts Payment',
-  'Shipped',
-  'Picked Up'
-];
+// Copyable text component like tech pages
+const CopyableText = ({ text, className, disabled = false, isSerial = false }: { text: string; className?: string; disabled?: boolean; isSerial?: boolean }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!text || disabled || text === '---') return;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Show last 10 digits for serial numbers, last 8 for tracking
+  const displayText = isSerial 
+    ? (text.length > 10 ? text.slice(-10) : text)
+    : (text.length > 8 ? text.slice(-8) : text);
+  const isEmpty = !text || text === '---' || disabled;
+
+  if (isEmpty) {
+    return (
+      <div className={`${className} flex items-center justify-center w-full opacity-40`}>
+        <span className="text-left w-full">---</span>
+      </div>
+    );
+  }
+
+  return (
+    <button 
+      onClick={handleCopy}
+      className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-full`}
+      title={`Click to copy: ${text}`}
+    >
+      <span className="truncate flex-1 text-left">{displayText}</span>
+      {copied ? <Check className="w-2 h-2" /> : <Copy className="w-2 h-2 opacity-0 group-hover:opacity-40 transition-opacity" />}
+    </button>
+  );
+};
 
 export function ShippedTable() {
   const searchParams = useSearchParams();
@@ -25,77 +51,143 @@ export function ShippedTable() {
   const [shipped, setShipped] = useState<ShippedRecord[]>([]);
   const [selectedShipped, setSelectedShipped] = useState<ShippedRecord | null>(null);
   const [loading, setLoading] = useState(true);
-  const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [stickyDate, setStickyDate] = useState<string>('');
+  const [currentCount, setCurrentCount] = useState<number>(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const limit = 50;
 
   useEffect(() => {
-    fetchShipped();
+    fetchShipped(true);
   }, [search]);
 
-  const fetchShipped = async () => {
+  const fetchShipped = async (reset = false) => {
     try {
-      setLoading(true);
+      if (reset) {
+        setLoading(true);
+        setOffset(0);
+        setHasMore(true);
+      }
+      
       const url = search 
         ? `/api/shipped/search?q=${encodeURIComponent(search)}`
-        : '/api/shipped';
+        : `/api/shipped?limit=${limit}&offset=${reset ? 0 : offset}`;
       const res = await fetch(url);
       const data = await res.json();
       
       if (search) {
         setShipped(data.results || []);
+        setHasMore(false);
       } else {
-        setShipped(data.shipped || []);
+        const newRecords = data.shipped || [];
+        if (reset) {
+          setShipped(newRecords);
+        } else {
+          setShipped(prev => [...prev, ...newRecords]);
+        }
+        if (newRecords.length < limit) {
+          setHasMore(false);
+        }
       }
     } catch (error) {
       console.error('Error fetching shipped records:', error);
     } finally {
       setLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !hasMore || search) return;
+    
+    setIsLoadingMore(true);
+    const nextOffset = offset + limit;
+    setOffset(nextOffset);
+    
+    try {
+      const res = await fetch(`/api/shipped?limit=${limit}&offset=${nextOffset}`);
+      const data = await res.json();
+      const newRecords = data.shipped || [];
+      
+      if (newRecords.length < limit) setHasMore(false);
+      if (newRecords.length > 0) {
+        setShipped(prev => [...prev, ...newRecords]);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error("Failed to load more:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [offset, hasMore, isLoadingMore, search]);
+
+  const getOrdinal = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+
+  const formatDate = (dateStr: string) => {
+    try {
+      if (!dateStr) return 'Unknown';
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+
+      const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+      const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+      
+      const dayName = days[date.getDay()];
+      const monthName = months[date.getMonth()];
+      const dayNum = date.getDate();
+      
+      return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
+    } catch (e) { 
+      return dateStr; 
     }
   };
 
   const formatHeaderDate = () => {
     const now = new Date();
-    const dayName = now.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-    const monthName = now.toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
-    const day = now.getDate();
-    
-    // Ordinal suffix
-    let suffix = 'th';
-    if (day % 10 === 1 && day !== 11) suffix = 'st';
-    else if (day % 10 === 2 && day !== 12) suffix = 'nd';
-    else if (day % 10 === 3 && day !== 13) suffix = 'rd';
-    
-    return `${dayName}, ${monthName} ${day}${suffix}`;
+    return formatDate(now.toISOString());
   };
 
-  const handleStatusChange = async (id: number, newStatus: string) => {
-    // Optimistic update
-    setShipped(prev => prev.map(s => 
-      s.id === id ? { ...s, status: newStatus } : s
-    ));
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
     
-    setUpdatingStatus(id);
-    
-    try {
-      const res = await fetch('/api/shipped', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: newStatus }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to update status');
-      }
-
-      // Refresh to get updated status history
-      await fetchShipped();
-    } catch (error) {
-      console.error('Error updating status:', error);
-      // Rollback on error
-      fetchShipped();
-    } finally {
-      setUpdatingStatus(null);
+    if (scrollHeight - scrollTop <= clientHeight + 100) {
+      loadMore();
     }
-  };
+
+    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
+    let activeDate = '';
+    let activeCount = 0;
+
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i] as HTMLElement;
+      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
+        activeDate = header.getAttribute('data-date') || '';
+        activeCount = parseInt(header.getAttribute('data-count') || '0');
+      } else {
+        break;
+      }
+    }
+
+    if (activeDate) setStickyDate(formatDate(activeDate));
+    if (activeCount) setCurrentCount(activeCount);
+  }, [loadMore]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      handleScroll();
+    }
+    return () => container?.removeEventListener('scroll', handleScroll);
+  }, [handleScroll, shipped]);
 
   const handleRowClick = (record: ShippedRecord) => {
     setSelectedShipped(record);
@@ -106,8 +198,25 @@ export function ShippedTable() {
   };
 
   const handleUpdate = () => {
-    fetchShipped();
+    fetchShipped(true);
   };
+
+  // Group records by date
+  const groupedShipped: { [key: string]: ShippedRecord[] } = {};
+  shipped.forEach(record => {
+    if (!record.date_time) return;
+    
+    let date = '';
+    try {
+      const dateObj = new Date(record.date_time);
+      date = dateObj.toISOString().split('T')[0];
+    } catch (e) {
+      date = 'Unknown';
+    }
+    
+    if (!groupedShipped[date]) groupedShipped[date] = [];
+    groupedShipped[date].push(record);
+  });
 
   if (loading) {
     return (
@@ -121,188 +230,141 @@ export function ShippedTable() {
   }
 
   return (
-    <div className="flex h-full w-full bg-gray-50">
+    <div className="flex h-full w-full bg-white relative">
       {/* Main table container */}
-      <div className={`flex-1 overflow-auto transition-all duration-300 ${
-        selectedShipped ? 'mr-[400px]' : ''
-      }`}>
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Sticky header */}
-        <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-6 py-3 shadow-sm">
-          <div className="flex items-center gap-4">
-            <h1 className="text-sm font-black text-gray-900 tracking-widest uppercase">
-              {formatHeaderDate()}
-            </h1>
-            <div className="h-4 w-px bg-gray-200" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Count:</span>
-              <span className="text-sm font-black text-blue-600">{shipped.length}</span>
-            </div>
-            {search && (
-              <>
-                <div className="h-4 w-px bg-gray-200" />
-                <div className="flex items-center gap-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
-                  <Search className="w-3 h-3" />
-                  <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
-                  <button 
-                    onClick={() => window.history.pushState({}, '', '/shipped')}
-                    className="hover:text-blue-900 transition-colors"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-              </>
-            )}
+        <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-black text-gray-900 tracking-tight">
+              {stickyDate || formatHeaderDate()}
+            </p>
+            <div className="h-2 w-px bg-gray-200" />
+            <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
+              Count: {currentCount || shipped.length}
+            </p>
           </div>
+          {search && (
+            <div className="flex items-center gap-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
+              <Search className="w-3 h-3" />
+              <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
+              <button 
+                onClick={() => window.history.pushState({}, '', '/shipped')}
+                className="hover:text-blue-900 transition-colors"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          )}
         </div>
         
-        {/* Table */}
-        <div className="bg-white">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200 sticky top-[73px] z-[5] hidden">
-              <tr>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
-                  Date/Time
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 sr-only">
-                  Order ID
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
-                  Product Title
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
-                  Sent
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 sr-only">
-                  Shipping TRK #
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 sr-only">
-                  Serial #
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
-                  Boxed
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
-                  By
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
-                  SKU
-                </th>
-                <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {shipped.map(record => (
-                <motion.tr 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  key={record.id}
-                  onClick={() => handleRowClick(record)}
-                  className={`group hover:bg-blue-50/80 cursor-pointer transition-all duration-200 ${
-                    selectedShipped?.id === record.id ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : ''
-                  }`}
-                >
-                  {/* Date/Time */}
-                  <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                    {record.date_time ? new Date(record.date_time).toLocaleString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    }) : '---'}
-                  </td>
-                  
-                  {/* Order ID - Copyable */}
-                  <td className="px-4 py-3 text-sm font-mono">
-                    <CopyableText text={record.order_id || '---'} />
-                  </td>
-                  
-                  {/* Product Title */}
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    <div className="max-w-[250px] truncate" title={record.product_title}>
-                      {record.product_title || '---'}
-                    </div>
-                  </td>
-                  
-                  {/* Sent */}
-                  <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                    {record.sent || '---'}
-                  </td>
-                  
-                  {/* Shipping TRK # - Copyable */}
-                  <td className="px-4 py-3 text-sm font-mono">
-                    <CopyableText text={record.shipping_tracking_number || '---'} />
-                  </td>
-                  
-                  {/* Serial # - Copyable */}
-                  <td className="px-4 py-3 text-sm font-mono">
-                    <CopyableText text={record.serial_number || '---'} />
-                  </td>
-                  
-                  {/* Boxed By */}
-                  <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                    {record.boxed_by || '---'}
-                  </td>
-                  
-                  {/* Tested By */}
-                  <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                    {record.tested_by || '---'}
-                  </td>
-                  
-                  {/* SKU */}
-                  <td className="px-4 py-3 text-sm font-mono text-gray-900 whitespace-nowrap">
-                    {record.sku || '---'}
-                  </td>
-                  
-                  {/* Status Dropdown */}
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <select
-                      value={record.status || ''}
-                      onChange={(e) => handleStatusChange(record.id, e.target.value)}
-                      disabled={updatingStatus === record.id}
-                      className="text-xs font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <option value="">Select status...</option>
-                      {STATUS_OPTIONS.map(status => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
-                  </td>
-                </motion.tr>
-              ))}
-              
-              {shipped.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-4 py-24 text-center">
-                    {search ? (
-                      <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Search className="w-8 h-8 text-red-400" />
-                        </div>
-                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">Order not found</h3>
-                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                          We couldn't find any records matching "{search}"
-                        </p>
-                        <button 
-                          onClick={() => window.history.pushState({}, '', '/shipped')}
-                          className="mt-6 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
-                        >
-                          Show All Orders
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 font-medium italic">No shipped records found</p>
-                    )}
-                  </td>
-                </tr>
+        {/* Logs List */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar w-full">
+          {shipped.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-40 text-center">
+              {search ? (
+                <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
+                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Search className="w-8 h-8 text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">Order not found</h3>
+                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                    We couldn't find any records matching "{search}"
+                  </p>
+                  <button 
+                    onClick={() => window.history.pushState({}, '', '/shipped')}
+                    className="mt-6 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
+                  >
+                    Show All Orders
+                  </button>
+                </div>
+              ) : (
+                <p className="text-gray-500 font-medium italic opacity-20">No shipped records found</p>
               )}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {Object.entries(groupedShipped)
+                .sort((a, b) => b[0].localeCompare(a[0]))
+                .map(([date, records]) => (
+                  <div key={date} className="flex flex-col">
+                    <div 
+                      data-day-header
+                      data-date={date}
+                      data-count={records.length}
+                      className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
+                    >
+                      <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
+                      <p className="text-[11px] font-black text-gray-400 uppercase">Total: {records.length} Units</p>
+                    </div>
+                    {records.map((record, index) => {
+                      const hasAlert = record.date_time === '1' || record.date_time === 1;
+                      const ts = record.date_time;
+                      return (
+                        <motion.div 
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          key={record.id}
+                          onClick={() => handleRowClick(record)}
+                          className={`grid grid-cols-[55px_80px_80px_1fr_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/80 ${
+                            selectedShipped?.id === record.id ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
+                          }`}
+                        >
+                          {/* Time on left */}
+                          <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left flex items-center gap-1">
+                            {hasAlert && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse" />}
+                            {ts && ts !== '1' ? (
+                              (() => {
+                                try {
+                                  const dateObj = new Date(ts);
+                                  return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                                } catch {
+                                  return '--:--';
+                                }
+                              })()
+                            ) : '--:--'}
+                          </div>
+                          
+                          {/* Tracking Number - Blue background */}
+                          <CopyableText 
+                            text={record.shipping_tracking_number || ''} 
+                            className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30"
+                            isSerial={false}
+                          />
+                          
+                          {/* Serial Number - Green background */}
+                          <CopyableText 
+                            text={record.serial_number || ''} 
+                            className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30"
+                            isSerial={true}
+                          />
+                          
+                          {/* Product Title */}
+                          <div className="text-[11px] font-bold text-gray-900 truncate text-left">
+                            {record.product_title || 'Unknown Product'}
+                          </div>
+                          
+                          {/* Condition (formerly "Sent") */}
+                          <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
+                            {record.sent || ''}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                ))}
+              
+              {isLoadingMore && (
+                <div className="py-8 flex justify-center">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       
-      {/* Details Panel */}
+      {/* Details Panel - Overlay */}
       <AnimatePresence>
         {selectedShipped && (
           <ShippedDetailsPanel 

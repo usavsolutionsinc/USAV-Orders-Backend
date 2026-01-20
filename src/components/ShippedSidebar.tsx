@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, ChevronLeft, ChevronRight, Copy, Check } from './Icons';
+import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SearchResult {
@@ -14,6 +14,7 @@ interface SearchResult {
     serial_number: string;
     notes: string;
     is_shipped: boolean;
+    date_time?: string | number;
 }
 
 interface SearchHistory {
@@ -167,11 +168,25 @@ export default function ShippedSidebar() {
                                         </p>
                                         
                                         <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
-                                            {results.map((result) => (
+                                            {results.map((result) => {
+                                                const hasAlert = result.date_time === '1' || result.date_time === 1;
+                                                return (
                                                 <div
                                                     key={result.id}
-                                                    className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3 hover:border-blue-300 transition-all relative group"
+                                                    className={`bg-gray-50 border rounded-xl p-4 space-y-3 transition-all relative group ${
+                                                        hasAlert ? 'border-red-500 bg-red-50 ring-2 ring-red-500/20' : 'border-gray-200 hover:border-blue-300'
+                                                    }`}
                                                 >
+                                                    {/* Alert Banner if date_time is 1 */}
+                                                    {hasAlert && (
+                                                        <div className="bg-red-600 text-white p-2 rounded-lg animate-pulse mb-2">
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <AlertTriangle className="w-4 h-4" />
+                                                                <span className="text-xs font-black uppercase">URGENT ALERT!</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
                                                     {/* Status Badge */}
                                                     <div className="flex items-center justify-between">
                                                         <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
@@ -277,7 +292,8 @@ export default function ShippedSidebar() {
                                                         )}
                                                     </div>
                                                 </div>
-                                            ))}
+                                            );
+                                            })}
                                         </div>
                                     </div>
                                 ) : hasSearched && !isSearching && (

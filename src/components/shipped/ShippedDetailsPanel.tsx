@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Check, Clock, Package } from '../Icons';
+import { X, Check, Clock, Package, Copy } from '../Icons';
 import { ShippedRecord } from '@/lib/neon/shipped-queries';
 import { formatStatusTimestamp } from '@/lib/neon/status-history';
 
@@ -11,6 +11,42 @@ interface ShippedDetailsPanelProps {
   onClose: () => void;
   onUpdate: () => void;
 }
+
+// Copyable field component
+const CopyableField = ({ label, value }: { label: string; value: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    if (!value || value === 'Not available' || value === 'N/A') return;
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const isEmpty = !value || value === 'Not available' || value === 'N/A';
+
+  return (
+    <div>
+      <span className="text-xs text-gray-500 font-semibold block mb-1">{label}</span>
+      <div className="flex items-center justify-between gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+        <p className="font-mono text-sm text-gray-900 font-semibold flex-1">{value}</p>
+        {!isEmpty && (
+          <button
+            onClick={handleCopy}
+            className="p-1.5 hover:bg-gray-200 rounded transition-all"
+            title="Copy to clipboard"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-gray-400" />
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export function ShippedDetailsPanel({ 
   shipped, 
@@ -53,16 +89,16 @@ export function ShippedDetailsPanel({
             Shipping Information
           </h3>
           <div className="space-y-3">
+            <CopyableField 
+              label="Tracking Number" 
+              value={shipped.shipping_tracking_number || 'Not available'} 
+            />
+            <CopyableField 
+              label="Order ID" 
+              value={shipped.order_id || 'Not available'} 
+            />
             <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Tracking Number</span>
-              <p className="font-mono text-sm text-gray-900 font-semibold">{shipped.shipping_tracking_number || 'Not available'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Order ID</span>
-              <p className="font-mono text-sm text-gray-900 font-semibold">{shipped.order_id || 'Not available'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Sent Date</span>
+              <span className="text-xs text-gray-500 font-semibold block mb-1">Condition</span>
               <p className="font-semibold text-sm text-gray-900">{shipped.sent || 'Not set'}</p>
             </div>
           </div>
@@ -78,10 +114,10 @@ export function ShippedDetailsPanel({
               <span className="text-xs text-gray-500 font-semibold block mb-1">Product Title</span>
               <p className="font-semibold text-sm text-gray-900 leading-relaxed">{shipped.product_title || 'Not provided'}</p>
             </div>
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Serial Number</span>
-              <p className="font-mono text-sm text-gray-900 font-semibold">{shipped.serial_number || 'N/A'}</p>
-            </div>
+            <CopyableField 
+              label="Serial Number" 
+              value={shipped.serial_number || 'N/A'} 
+            />
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">SKU</span>
               <p className="font-mono text-sm text-gray-900 font-semibold">{shipped.sku || 'Not assigned'}</p>
