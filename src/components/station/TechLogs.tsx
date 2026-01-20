@@ -32,9 +32,9 @@ const CopyableText = ({ text, className, disabled = false, isSerial = false }: {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Show last 10 digits for serial numbers, last 8 for tracking
+    // Show last 6 digits for serial numbers, last 8 for tracking
     const displayText = isSerial 
-        ? (text.length > 10 ? text.slice(-10) : text)
+        ? (text.length > 6 ? text.slice(-6) : text)
         : (text.length > 8 ? text.slice(-8) : text);
     const isEmpty = !text || text === '---' || disabled;
 

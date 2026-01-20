@@ -97,7 +97,17 @@ export const packer3 = pgTable('packer_3', { ...genericColumns });
 export const receiving = pgTable('receiving', { ...genericColumns });
 export const shipped = pgTable('shipped', { ...genericColumns });
 export const skuStock = pgTable('sku_stock', { ...genericColumns });
-export const sku = pgTable('sku', { ...genericColumns });
+export const sku = pgTable('sku', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  staticSku: text('static_sku'),
+  serialNumber: text('serial_number'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  productTitle: text('product_title'),
+  notes: text('notes'),
+  location: text('location'),
+});
+
 export const rs = pgTable('rs', { ...genericColumns });
 
 // NEW: Packing logs for the packer dashboard

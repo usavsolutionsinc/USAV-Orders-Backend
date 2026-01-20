@@ -4,11 +4,12 @@ import React from 'react';
 
 interface SerialNumberInputProps {
     sku: string;
-    mode: 'print' | 'sn-to-sku';
+    mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
     title: string;
     stock: string;
     snInput: string;
     location: string;
+    currentLocation?: string;
     snInputRef: React.RefObject<HTMLInputElement>;
     isLoadingTitle: boolean;
     isActive: boolean;
@@ -16,6 +17,8 @@ interface SerialNumberInputProps {
     onSnInputChange: (value: string) => void;
     onLocationChange: (value: string) => void;
     onNext: () => void;
+    onFinalAction?: () => void;
+    isPosting?: boolean;
     onChangeSku?: () => void;
 }
 
@@ -29,6 +32,7 @@ export function SerialNumberInput({
     stock, 
     snInput, 
     location,
+    currentLocation,
     snInputRef,
     isLoadingTitle,
     isActive, 
@@ -36,11 +40,12 @@ export function SerialNumberInput({
     onSnInputChange, 
     onLocationChange, 
     onNext,
+    onFinalAction,
+    isPosting,
     onChangeSku 
 }: SerialNumberInputProps) {
-    const handleSnChange = (value: string) => {
-        onSnInputChange(value);
-    };
+    const isLocationMode = mode === 'change-location';
+    const isReprintMode = mode === 'reprint';
 
     return (
         <div className={`space-y-5 transition-all duration-300 ${
@@ -50,7 +55,9 @@ export function SerialNumberInput({
                 <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-900 flex items-center justify-center text-sm font-black border border-gray-200">
                     2
                 </div>
-                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">Details & SN</h3>
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">
+                    {isLocationMode ? 'Update Location' : 'Details & SN'}
+                </h3>
             </div>
             
             {showChangeSku && onChangeSku && (
@@ -72,39 +79,68 @@ export function SerialNumberInput({
                             {isLoadingTitle ? 'Loading...' : title}
                         </p>
                     </div>
-                    <div className="text-right ml-4">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Stock</p>
-                        <p className={`text-xs font-black px-2 py-0.5 rounded-md ${
-                            parseInt(stock) > 0 ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50'
-                        }`}>
-                            {stock}
-                        </p>
-                    </div>
+                    {!isLocationMode && (
+                        <div className="text-right ml-4">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Stock</p>
+                            <p className={`text-xs font-black px-2 py-0.5 rounded-md ${
+                                parseInt(stock) > 0 ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50'
+                            }`}>
+                                {stock}
+                            </p>
+                        </div>
+                    )}
                 </div>
+
+                {isLocationMode && (
+                    <div className="pt-4 border-t border-gray-200">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Current Location</p>
+                        <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-2 rounded-xl border border-orange-100">
+                            <span className="text-xs font-black font-mono">{currentLocation || 'No location set'}</span>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="space-y-4">
-                <input
-                    ref={snInputRef}
-                    value={snInput}
-                    onChange={(e) => handleSnChange(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && onNext()}
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono placeholder:text-gray-400 text-gray-900"
-                    placeholder="Comma-separated SNs..."
-                />
+                {!isLocationMode && (
+                    <input
+                        ref={snInputRef}
+                        value={snInput}
+                        onChange={(e) => onSnInputChange(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && onNext()}
+                        className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono placeholder:text-gray-400 text-gray-900"
+                        placeholder="Comma-separated SNs..."
+                    />
+                )}
 
-                <input
-                    value={location}
-                    onChange={(e) => onLocationChange(e.target.value)}
-                    className="w-full px-5 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-400 text-gray-900"
-                    placeholder="Location (optional)"
-                />
+                <div className={isLocationMode ? "pt-8" : ""}>
+                    {isLocationMode && (
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">New Location Entry</p>
+                    )}
+                    <input
+                        value={location}
+                        onChange={(e) => onLocationChange(e.target.value)}
+                        onKeyDown={(e) => isLocationMode && e.key === 'Enter' && onFinalAction?.()}
+                        className={`w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl ${isLocationMode ? 'text-sm font-mono' : 'text-[10px] font-black uppercase tracking-widest'} focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-400 text-gray-900`}
+                        placeholder={isLocationMode ? "Enter new location..." : "Location (optional)"}
+                    />
+                </div>
 
                 <button
-                    onClick={onNext}
-                    className="w-full py-4 bg-gray-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-gray-200"
+                    onClick={isLocationMode ? onFinalAction : onNext}
+                    disabled={isPosting}
+                    className={`w-full py-4 ${isLocationMode ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-900 hover:bg-blue-600'} text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-gray-200 disabled:opacity-50`}
                 >
-                    Continue to Final
+                    {isPosting ? (
+                        <div className="flex items-center justify-center gap-2">
+                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Updating...
+                        </div>
+                    ) : isLocationMode ? (
+                        'Update Location'
+                    ) : (
+                        'Continue to Final'
+                    )}
                 </button>
             </div>
         </div>

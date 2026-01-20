@@ -3,16 +3,13 @@
 import "./globals.css";
 import Providers from "../components/Providers";
 import StationNav from "../components/station/StationNav";
-import Header from "../components/Header";
 import { HeaderProvider } from "../contexts/HeaderContext";
-import { useState } from "react";
 
 export default function RootLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     return (
         <html lang="en">
@@ -20,22 +17,21 @@ export default function RootLayout({
                 <title>USAV Orders Backend</title>
                 <meta name="description" content="USAV Orders Management System" />
             </head>
-            <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+            <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100vh' }}>
                 <Providers>
                     <HeaderProvider>
-                        {/* Header Bar */}
-                        <Header 
-                            onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
-                            sidebarOpen={sidebarOpen}
-                        />
+                        <div className="flex h-full w-full overflow-hidden">
+                            {/* Global Sidebar - Now permanent on the left */}
+                            <StationNav />
 
-                        {/* Global Sidebar */}
-                        <StationNav isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-                        {/* Main Content */}
-                        <main style={{ flex: 1, overflow: 'hidden', display: 'flex', marginTop: '56px' }}>
-                            {children}
-                        </main>
+                            {/* Main Content Area */}
+                            <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+                                {/* Optional Header overlay or replacement if needed for panelContent */}
+                                <main className="flex-1 overflow-hidden flex min-w-0">
+                                    {children}
+                                </main>
+                            </div>
+                        </div>
                     </HeaderProvider>
                 </Providers>
             </body>

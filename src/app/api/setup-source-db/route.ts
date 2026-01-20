@@ -52,8 +52,21 @@ export async function POST() {
         // 11. sku_stock - 5 columns (using underscore instead of dash)
         await createTable('sku_stock', 5);
 
-        // 12. sku - 7 columns
-        await createTable('sku', 7);
+        // 12. sku - 8 columns with specific names
+        console.log('Creating table: sku (8 columns)...');
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS sku (
+                id SERIAL PRIMARY KEY,
+                date_time TEXT,
+                static_sku TEXT,
+                serial_number TEXT,
+                shipping_tracking_number TEXT,
+                product_title TEXT,
+                notes TEXT,
+                location TEXT
+            )
+        `);
+        console.log('✓ Created table: sku');
 
         // 13. rs - 10 columns
         await createTable('rs', 10);
@@ -67,8 +80,9 @@ export async function POST() {
         ];
 
         for (const table of tables) {
+            const pkColumn = table === 'sku' ? 'id' : 'col_1';
             await client.query(`
-                CREATE INDEX IF NOT EXISTS idx_${table}_col_1 ON ${table}(col_1)
+                CREATE INDEX IF NOT EXISTS idx_${table}_${pkColumn} ON ${table}(${pkColumn})
             `);
         }
 

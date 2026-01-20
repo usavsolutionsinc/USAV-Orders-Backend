@@ -6,7 +6,7 @@ import { Search } from '../Icons';
 interface SkuInputProps {
     sku: string;
     uniqueSku: string;
-    mode: 'print' | 'sn-to-sku';
+    mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
     skuInputRef: React.RefObject<HTMLInputElement>;
     isActive: boolean;
     onChange: (value: string) => void;

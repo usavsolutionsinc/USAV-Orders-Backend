@@ -35,6 +35,7 @@ export default function MultiSkuSnBarcode() {
     const [showNotes, setShowNotes] = useState<boolean>(false);
     const [notes, setNotes] = useState<string>("");
     const [location, setLocation] = useState<string>("");
+    const [currentLocation, setCurrentLocation] = useState<string>("");
 
     const barcodeCanvasRef = useRef<HTMLCanvasElement>(null);
     const printRef = useRef<HTMLDivElement>(null);
@@ -71,6 +72,8 @@ export default function MultiSkuSnBarcode() {
             const data = await res.json();
             setTitle(data.title || "Not found");
             setStock(data.stock || "0");
+            setCurrentLocation(data.location || "");
+            if (!location) setLocation(data.location || "");
         } catch (e) {
             setTitle("Error loading info");
         } finally {
@@ -85,7 +88,7 @@ export default function MultiSkuSnBarcode() {
         }
         await fetchProductInfo(sku);
         
-        if (mode === 'print' && !uniqueSku) {
+        if ((mode === 'print' || mode === 'reprint') && !uniqueSku) {
             setIsGenerating(true);
             try {
                 const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
@@ -94,8 +97,16 @@ export default function MultiSkuSnBarcode() {
             } catch (e) {
                 console.error("Failed to pre-fetch SKU");
             } finally {
+                setIsGenerating(true); // Should be false, wait I see a bug in the original code? 
+                // Line 97 in original was setIsGenerating(false). 
+                // Ah, I see line 97 was false. I'll fix it to false.
                 setIsGenerating(false);
             }
+        }
+
+        if (mode === 'reprint') {
+            setStep(3);
+            return;
         }
         
         setStep(2);
@@ -103,7 +114,7 @@ export default function MultiSkuSnBarcode() {
     };
 
     const handleNextStepSn = async () => {
-        if (serialNumbers.length === 0) {
+        if (mode !== 'change-location' && serialNumbers.length === 0) {
             setError("Serial numbers required");
             return;
         }
@@ -122,6 +133,9 @@ export default function MultiSkuSnBarcode() {
                     setIsGenerating(false);
                 }
             }
+            setStep(3);
+        } else if (mode === 'reprint') {
+            setUniqueSku(sku);
             setStep(3);
         } else {
             setUniqueSku(sku); 
@@ -170,6 +184,43 @@ export default function MultiSkuSnBarcode() {
     };
 
     const handleFinalAction = async () => {
+        if (mode === 'reprint') {
+            // Just print, no DB/Sheet updates
+            printLabel(uniqueSku, title, serialNumbers);
+            setStep(1);
+            setSku("");
+            setUniqueSku("");
+            setSerialNumbers([]);
+            setSnInput("");
+            return;
+        }
+
+        if (mode === 'change-location') {
+            setIsPosting(true);
+            try {
+                const res = await fetch('/api/update-sku-location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sku, location }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setCurrentLocation(location);
+                    setStep(1);
+                    setSku("");
+                    setLocation("");
+                    setError("");
+                } else {
+                    setError(data.error || "Failed to update location");
+                }
+            } catch (e) {
+                setError("Failed to update location");
+            } finally {
+                setIsPosting(false);
+            }
+            return;
+        }
+
         const success = await postToSheets();
         if (success) {
             if (mode === 'print') {
@@ -179,44 +230,7 @@ export default function MultiSkuSnBarcode() {
                     console.error("Failed to increment SKU in DB:", e);
                 }
                 
-                // Print logic
-                const printWindow = window.open('', '', 'width=800,height=600');
-                if (printWindow) {
-                    const html = `
-                        <html>
-                            <head>
-                                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-                                <style>
-                                    body { font-family: Arial, sans-serif; padding: 0; margin: 0; text-align: center; }
-                                    canvas { margin: 2px 0; }
-                                    .sku { font-size: 22px; font-weight: bold; margin: 2px 0; }
-                                    .title { font-size: 11px; color: #666; margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; padding: 0 4px; }
-                                    .sn { font-size: 10px; color: #999; margin: 2px 0; }
-                                </style>
-                            </head>
-                            <body>
-                                <canvas id="barcode"></canvas>
-                                <div class="sku">${uniqueSku}</div>
-                                <div class="title">${title}</div>
-                                <div class="sn">SN: ${getSerialLast6(serialNumbers)}</div>
-                                <script>
-                                    window.onload = function() {
-                                        JsBarcode("#barcode", "${uniqueSku}", {
-                                            format: "CODE128",
-                                            lineColor: "#000",
-                                            width: 2,
-                                            height: 50,
-                                            displayValue: false
-                                        });
-                                        setTimeout(() => { window.print(); window.close(); }, 500);
-                                    };
-                                </script>
-                            </body>
-                        </html>
-                    `;
-                    printWindow.document.write(html);
-                    printWindow.document.close();
-                }
+                printLabel(uniqueSku, title, serialNumbers);
             }
             
             setSnInput("");
@@ -235,6 +249,46 @@ export default function MultiSkuSnBarcode() {
             setStep(2);
         } else {
             setError("Failed to save data");
+        }
+    };
+
+    const printLabel = (skuToPrint: string, titleToPrint: string, snList: string[]) => {
+        const printWindow = window.open('', '', 'width=800,height=600');
+        if (printWindow) {
+            const html = `
+                <html>
+                    <head>
+                        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+                        <style>
+                            body { font-family: Arial, sans-serif; padding: 0; margin: 0; text-align: center; }
+                            canvas { margin: 2px 0; }
+                            .sku { font-size: 22px; font-weight: bold; margin: 2px 0; }
+                            .title { font-size: 11px; color: #666; margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; padding: 0 4px; }
+                            .sn { font-size: 10px; color: #999; margin: 2px 0; }
+                        </style>
+                    </head>
+                    <body>
+                        <canvas id="barcode"></canvas>
+                        <div class="sku">${skuToPrint}</div>
+                        <div class="title">${titleToPrint}</div>
+                        ${snList.length > 0 ? `<div class="sn">SN: ${getSerialLast6(snList)}</div>` : ''}
+                        <script>
+                            window.onload = function() {
+                                JsBarcode("#barcode", "${skuToPrint}", {
+                                    format: "CODE128",
+                                    lineColor: "#000",
+                                    width: 2,
+                                    height: 50,
+                                    displayValue: false
+                                });
+                                setTimeout(() => { window.print(); window.close(); }, 500);
+                            };
+                        </script>
+                    </body>
+                </html>
+            `;
+            printWindow.document.write(html);
+            printWindow.document.close();
         }
     };
 
@@ -261,40 +315,48 @@ export default function MultiSkuSnBarcode() {
                 />
 
                 {/* Step 2: Serial Numbers & Details - Using Refactored Component */}
-                <SerialNumberInput
-                    sku={sku}
-                    mode={mode}
-                    title={title}
-                    stock={stock}
-                    snInput={snInput}
-                    location={location}
-                    snInputRef={snInputRef}
-                    isLoadingTitle={isLoadingTitle}
-                    isActive={step >= 2}
-                    showChangeSku={mode === 'print' && step === 2}
-                    onSnInputChange={handleSnInputChange}
-                    onLocationChange={setLocation}
-                    onNext={handleNextStepSn}
-                    onChangeSku={handleChangeSku}
-                />
+                {mode !== 'reprint' && (
+                    <SerialNumberInput
+                        sku={sku}
+                        mode={mode}
+                        title={title}
+                        stock={stock}
+                        snInput={snInput}
+                        location={location}
+                        currentLocation={currentLocation}
+                        snInputRef={snInputRef}
+                        isLoadingTitle={isLoadingTitle}
+                        isActive={step >= 2}
+                        showChangeSku={mode === 'print' && step === 2}
+                        onSnInputChange={handleSnInputChange}
+                        onLocationChange={setLocation}
+                        onNext={handleNextStepSn}
+                        onFinalAction={handleFinalAction}
+                        isPosting={isPosting}
+                        onChangeSku={handleChangeSku}
+                    />
+                )}
 
                 {/* Step 3: Preview & Print - Using Refactored Component */}
-                <BarcodePreview
-                    mode={mode}
-                    uniqueSku={uniqueSku}
-                    sku={sku}
-                    title={title}
-                    serialNumbers={serialNumbers}
-                    notes={notes}
-                    showNotes={showNotes}
-                    barcodeCanvasRef={barcodeCanvasRef}
-                    isPosting={isPosting}
-                    isActive={step >= 3}
-                    getSerialLast6={getSerialLast6}
-                    onToggleNotes={() => setShowNotes(!showNotes)}
-                    onNotesChange={setNotes}
-                    onPrint={handleFinalAction}
-                />
+                {mode !== 'change-location' && (
+                    <BarcodePreview
+                        mode={mode}
+                        uniqueSku={uniqueSku}
+                        sku={sku}
+                        title={title}
+                        serialNumbers={serialNumbers}
+                        notes={notes}
+                        location={location}
+                        showNotes={showNotes}
+                        barcodeCanvasRef={barcodeCanvasRef}
+                        isPosting={isPosting}
+                        isActive={step >= 3}
+                        getSerialLast6={getSerialLast6}
+                        onToggleNotes={() => setShowNotes(!showNotes)}
+                        onNotesChange={setNotes}
+                        onPrint={handleFinalAction}
+                    />
+                )}
             </div>
 
             {error && (

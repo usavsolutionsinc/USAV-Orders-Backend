@@ -127,14 +127,14 @@ CREATE TABLE IF NOT EXISTS sku_stock (
 
 -- 12. SKU TABLE (8 columns)
 CREATE TABLE IF NOT EXISTS sku (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT,
-    col_6 TEXT,
-    col_7 TEXT,
-    col_8 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    static_sku TEXT,
+    serial_number TEXT,
+    shipping_tracking_number TEXT,
+    product_title TEXT,
+    notes TEXT,
+    location TEXT
 );
 
 -- 13. RS TABLE (10 columns)

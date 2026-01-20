@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
+import pool from '@/lib/db';
 
 async function findEmptyRow(sheets: any, spreadsheetId: string, range: string) {
     const { data } = await sheets.spreadsheets.values.get({
@@ -44,6 +45,19 @@ export async function POST(request: NextRequest) {
             valueInputOption: 'RAW',
             requestBody: { values },
         });
+
+        // Also insert into PostgreSQL database
+        try {
+            await pool.query(
+                `INSERT INTO sku (date_time, static_sku, serial_number, product_title, notes, location)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [timestamp, sku, serialNumbers.join(', '), productTitle || '', notes || '', location || '']
+            );
+            console.log('✓ Inserted into sku database table');
+        } catch (dbError) {
+            console.error('Database insertion error:', dbError);
+            // We don't fail the whole request if DB insert fails but Sheets succeeded
+        }
 
         return NextResponse.json({ success: true, row: rowIndex });
     } catch (error: any) {

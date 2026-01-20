@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
@@ -17,15 +17,16 @@ import {
   Search,
   Plus,
   X,
-  Tool
+  Tool,
+  Menu,
+  ChevronLeft,
+  ChevronRight
 } from '../Icons';
 
 interface StationNavProps {
-  isOpen?: boolean;
-  onClose?: () => void;
+  // No longer needs isOpen/onClose as it's permanent
 }
 
-// Reordered navigation items (removed Orders)
 const mainNavItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Receiving', href: '/receiving', icon: ClipboardList },
@@ -51,10 +52,25 @@ const bottomNavItems = [
     { name: 'Admin', href: '/admin', icon: ShieldCheck },
 ];
 
-export default function StationNav({ isOpen = true, onClose }: StationNavProps) {
+export default function StationNav() {
     const pathname = usePathname();
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
+    // Persist collapsed state
+    useEffect(() => {
+        const saved = localStorage.getItem('sidebar-collapsed');
+        if (saved !== null) {
+            setIsCollapsed(saved === 'true');
+        }
+    }, []);
+
+    const toggleCollapsed = () => {
+        const newState = !isCollapsed;
+        setIsCollapsed(newState);
+        localStorage.setItem('sidebar-collapsed', String(newState));
+    };
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -64,13 +80,7 @@ export default function StationNav({ isOpen = true, onClose }: StationNavProps) 
         }
     };
 
-    const handleNavClick = () => {
-        if (onClose) {
-            onClose();
-        }
-    };
-
-    const renderNavItem = (item: typeof mainNavItems[0]) => {
+    const renderNavItem = (item: typeof mainNavItems[0], isQuickAccess = false) => {
         const isActive = pathname === item.href;
         const Icon = item.icon;
         
@@ -78,133 +88,163 @@ export default function StationNav({ isOpen = true, onClose }: StationNavProps) 
             <Link
                 key={item.href}
                 href={item.href}
-                onClick={handleNavClick}
-                className={`group flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 relative ${
+                title={isCollapsed ? item.name : undefined}
+                className={`group flex items-center transition-all duration-300 relative ${
+                    isCollapsed ? 'justify-center p-3' : 'gap-4 px-4 py-3 rounded-2xl'
+                } ${
                     isActive
-                        ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/25 scale-[1.02]'
+                        ? isCollapsed 
+                            ? 'text-blue-600'
+                            : 'bg-blue-600 text-white shadow-xl shadow-blue-600/25 scale-[1.02]'
                         : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                 }`}
             >
                 <div className={`transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
-                    <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                    <Icon className={`w-5 h-5 ${isActive ? (isCollapsed ? 'text-blue-600' : 'text-white') : 'text-gray-400 group-hover:text-blue-500'}`} />
                 </div>
-                <span className="text-sm font-black tracking-tight uppercase whitespace-nowrap">{item.name}</span>
-                {isActive && (
+                {!isCollapsed && (
+                    <span className="text-sm font-black tracking-tight uppercase whitespace-nowrap">{item.name}</span>
+                )}
+                {isActive && !isCollapsed && (
                     <motion.div 
                         layoutId="activeIndicator"
                         className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" 
                     />
+                )}
+                {isActive && isCollapsed && (
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-l-full shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
                 )}
             </Link>
         );
     };
 
     return (
-        <AnimatePresence>
-            {isOpen && (
-                <>
-                    {/* Backdrop */}
-                    {onClose && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={onClose}
-                            className="fixed inset-0 bg-black/20 z-[140] backdrop-blur-sm"
-                        />
-                    )}
+        <motion.aside
+            animate={{ width: isCollapsed ? 80 : 280 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 150 }}
+            className="h-screen bg-white border-r border-gray-200 flex flex-col relative z-50 flex-shrink-0"
+        >
+            {/* Top Bar Area inside Sidebar */}
+            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} p-4 mb-4`}>
+                {!isCollapsed && (
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-black text-gray-900 leading-tight tracking-tighter uppercase">USAV</h1>
+                    </div>
+                )}
+                <button
+                    onClick={toggleCollapsed}
+                    className={`p-2.5 rounded-xl transition-all duration-300 border ${
+                        isCollapsed 
+                            ? 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                    aria-label="Toggle menu"
+                >
+                    {isCollapsed ? <Menu className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+                </button>
+            </div>
 
-                    {/* Sidebar */}
-                    <motion.div
-                        initial={{ x: '-100%' }}
-                        animate={{ x: 0 }}
-                        exit={{ x: '-100%' }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-                        className="fixed top-0 left-0 h-screen w-[280px] bg-white z-[150] shadow-2xl flex flex-col overflow-hidden"
-                    >
-                        {/* Close button */}
-                        {onClose && (
-                            <button
-                                onClick={onClose}
-                                className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-lg transition-all z-10"
-                                aria-label="Close menu"
-                            >
-                                <X className="w-5 h-5 text-gray-600" />
-                            </button>
-                        )}
-
-                        <div className="flex flex-col h-full px-4 py-6 overflow-y-auto">
-                            {/* Logo Area */}
-                            <div className="mb-8 px-2 flex items-center gap-3">
-                                <div>
-                                    <h1 className="text-2xl font-black text-gray-900 leading-tight tracking-tighter uppercase">USAV</h1>
-                                </div>
+            <div className="flex-1 flex flex-col px-3 overflow-y-auto no-scrollbar pb-6">
+                {/* Quick Search Area */}
+                {!isCollapsed && (
+                    <div className="mb-6 space-y-3 px-1">
+                        <form onSubmit={handleSearch} className="relative">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                <Search className="w-4 h-4 text-gray-400" />
                             </div>
+                            <input
+                                type="text"
+                                placeholder="Quick search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400"
+                            />
+                        </form>
 
-                            {/* Search Bar and Repair Button */}
-                            <div className="mb-6 space-y-3">
-                                <form onSubmit={handleSearch} className="relative">
-                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                        <Search className="w-4 h-4 text-gray-400" />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Quick search..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400"
-                                    />
-                                </form>
+                        <Link
+                            href="/repair?new=true"
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-orange-500/20"
+                        >
+                            <Plus className="w-4 h-4" />
+                            <span className="text-sm font-black uppercase tracking-wider">Repair</span>
+                        </Link>
+                    </div>
+                )}
 
-                                <Link
-                                    href="/repair?new=true"
-                                    onClick={handleNavClick}
-                                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-orange-500/20"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    <span className="text-sm font-black uppercase tracking-wider">Repair Service</span>
-                                </Link>
-                            </div>
+                {isCollapsed && (
+                    <div className="mb-6 flex flex-col items-center gap-4">
+                        <Link
+                            href="/repair?new=true"
+                            title="New Repair"
+                            className="p-3 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-lg shadow-orange-500/20 active:scale-90 transition-all"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </Link>
+                    </div>
+                )}
 
-                            {/* Navigation Header */}
-                            <div className="mb-4 px-2">
-                                <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 mb-1">Navigation</h2>
-                                <p className="text-xl font-black text-gray-900 tracking-tighter">Menu</p>
-                            </div>
-                            
-                            {/* Main Navigation */}
-                            <nav className="space-y-1 flex-1">
-                                {mainNavItems.map(renderNavItem)}
-
-                                {/* Packers Section */}
-                                <div className="pt-4">
-                                    <h3 className="px-2 mb-2 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">
-                                        Packers
-                                    </h3>
-                                    <div className="space-y-1">
-                                        {packerItems.map(renderNavItem)}
-                                    </div>
-                                </div>
-
-                                {/* Techs Section */}
-                                <div className="pt-4">
-                                    <h3 className="px-2 mb-2 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">
-                                        Techs
-                                    </h3>
-                                    <div className="space-y-1">
-                                        {techItems.map(renderNavItem)}
-                                    </div>
-                                </div>
-
-                                {/* Bottom Navigation */}
-                                <div className="pt-4">
-                                    {bottomNavItems.map(renderNavItem)}
-                                </div>
-                            </nav>
+                {/* Main Navigation */}
+                <nav className="space-y-1 flex-1">
+                    {!isCollapsed && (
+                        <div className="mb-2 px-2">
+                            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">Navigation</h2>
                         </div>
-                    </motion.div>
-                </>
+                    )}
+                    
+                    {mainNavItems.map(item => renderNavItem(item))}
+
+                    {/* Packers Section */}
+                    <div className="pt-4">
+                        {!isCollapsed ? (
+                            <h3 className="px-2 mb-2 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">
+                                Packers
+                            </h3>
+                        ) : (
+                            <div className="border-t border-gray-100 my-4" />
+                        )}
+                        <div className="space-y-1">
+                            {packerItems.map(item => renderNavItem(item))}
+                        </div>
+                    </div>
+
+                    {/* Techs Section */}
+                    <div className="pt-4">
+                        {!isCollapsed ? (
+                            <h3 className="px-2 mb-2 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">
+                                Techs
+                            </h3>
+                        ) : (
+                            <div className="border-t border-gray-100 my-4" />
+                        )}
+                        <div className="space-y-1">
+                            {techItems.map(item => renderNavItem(item))}
+                        </div>
+                    </div>
+
+                    {/* Bottom Navigation */}
+                    <div className="pt-4">
+                        {!isCollapsed && (
+                            <div className="border-t border-gray-100 my-4" />
+                        )}
+                        {bottomNavItems.map(item => renderNavItem(item))}
+                    </div>
+                </nav>
+            </div>
+
+            {/* Footer / User Profile Area */}
+            {!isCollapsed && (
+                <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-lg">
+                            U
+                        </div>
+                        <div>
+                            <p className="text-xs font-black text-gray-900 uppercase tracking-tight leading-none">USAV ADMIN</p>
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Management</p>
+                        </div>
+                    </div>
+                </div>
             )}
-        </AnimatePresence>
+        </motion.aside>
     );
 }
