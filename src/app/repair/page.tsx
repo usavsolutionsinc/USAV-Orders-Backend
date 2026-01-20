@@ -129,7 +129,7 @@ function RepairSidebar() {
                                 onSubmit={handleSubmitForm}
                             />
                         ) : (
-                        <div className="p-6 pt-16 space-y-6 h-full flex flex-col">
+                        <div className="p-6 space-y-6 h-full flex flex-col">
                                 {/* Header */}
                                 <header>
                                     <h2 className="text-xl font-black tracking-tighter text-gray-900 uppercase">Repair Service</h2>

@@ -184,7 +184,8 @@ export function ShippedTable() {
     const container = scrollRef.current;
     if (container) {
       container.addEventListener('scroll', handleScroll);
-      handleScroll();
+      // Initial call to set the sticky date and count
+      setTimeout(() => handleScroll(), 100);
     }
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, shipped]);
@@ -204,7 +205,7 @@ export function ShippedTable() {
   // Group records by date
   const groupedShipped: { [key: string]: ShippedRecord[] } = {};
   shipped.forEach(record => {
-    if (!record.date_time) return;
+    if (!record.date_time || record.date_time === '1') return;
     
     let date = '';
     try {
@@ -217,6 +218,12 @@ export function ShippedTable() {
     if (!groupedShipped[date]) groupedShipped[date] = [];
     groupedShipped[date].push(record);
   });
+
+  // Get today's count for initial display
+  const getTodayCount = () => {
+    const today = new Date().toISOString().split('T')[0];
+    return groupedShipped[today]?.length || 0;
+  };
 
   if (loading) {
     return (
@@ -241,7 +248,7 @@ export function ShippedTable() {
             </p>
             <div className="h-2 w-px bg-gray-200" />
             <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
-              Count: {currentCount || shipped.length}
+              Count: {currentCount || getTodayCount()}
             </p>
           </div>
           {search && (
