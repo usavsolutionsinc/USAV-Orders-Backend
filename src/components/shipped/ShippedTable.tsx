@@ -298,7 +298,7 @@ export function ShippedTable() {
                       <p className="text-[11px] font-black text-gray-400 uppercase">Total: {records.length} Units</p>
                     </div>
                     {records.map((record, index) => {
-                      const hasAlert = record.date_time === '1' || record.date_time === 1;
+                      const hasAlert = record.date_time === '1';
                       const ts = record.date_time;
                       return (
                         <motion.div 
@@ -344,9 +344,9 @@ export function ShippedTable() {
                             {record.product_title || 'Unknown Product'}
                           </div>
                           
-                          {/* Condition (formerly "Sent") */}
+                          {/* Condition */}
                           <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
-                            {record.sent || ''}
+                            {record.condition || ''}
                           </div>
                         </motion.div>
                       );

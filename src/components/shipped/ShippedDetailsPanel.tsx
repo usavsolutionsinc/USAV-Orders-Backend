@@ -99,7 +99,7 @@ export function ShippedDetailsPanel({
             />
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Condition</span>
-              <p className="font-semibold text-sm text-gray-900">{shipped.sent || 'Not set'}</p>
+              <p className="font-semibold text-sm text-gray-900">{shipped.condition || 'Not set'}</p>
             </div>
           </div>
         </section>

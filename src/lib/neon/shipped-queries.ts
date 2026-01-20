@@ -5,7 +5,7 @@ import pool from '../db';
 // date_time (TEXT)
 // order_id (TEXT)
 // product_title (TEXT)
-// sent (TEXT)
+// condition (TEXT)
 // shipping_tracking_number (TEXT)
 // serial_number (TEXT)
 // boxed_by (TEXT)
@@ -25,7 +25,7 @@ export interface ShippedRecord {
   date_time: string;
   order_id: string;
   product_title: string;
-  sent: string;
+  condition: string;
   shipping_tracking_number: string;
   serial_number: string;
   boxed_by: string;
@@ -46,7 +46,7 @@ export async function getAllShipped(limit = 100, offset = 0): Promise<ShippedRec
         date_time,
         order_id,
         product_title,
-        sent,
+        condition,
         shipping_tracking_number,
         serial_number,
         boxed_by,
@@ -81,7 +81,7 @@ export async function getShippedById(id: number): Promise<ShippedRecord | null> 
         date_time,
         order_id,
         product_title,
-        sent,
+        condition,
         shipping_tracking_number,
         serial_number,
         boxed_by,
@@ -160,7 +160,7 @@ export async function updateShippedField(id: number, field: string, value: any):
       'date_time',
       'order_id',
       'product_title',
-      'sent',
+      'condition',
       'shipping_tracking_number',
       'serial_number',
       'boxed_by',
@@ -195,7 +195,7 @@ export async function searchShipped(query: string): Promise<ShippedRecord[]> {
         date_time,
         order_id,
         product_title,
-        sent,
+        condition,
         shipping_tracking_number,
         serial_number,
         boxed_by,

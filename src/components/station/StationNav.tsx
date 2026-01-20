@@ -16,7 +16,8 @@ import {
   ShieldCheck,
   Search,
   Plus,
-  X
+  X,
+  Tool
 } from '../Icons';
 
 interface StationNavProps {
@@ -29,6 +30,7 @@ const mainNavItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Receiving', href: '/receiving', icon: ClipboardList },
     { name: 'Shipped', href: '/shipped', icon: PackageCheck },
+    { name: 'Repair', href: '/repair', icon: Tool },
     { name: 'Sku Stock', href: '/sku-stock', icon: Box },
 ];
 

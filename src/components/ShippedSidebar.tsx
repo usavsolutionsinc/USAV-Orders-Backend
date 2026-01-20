@@ -14,7 +14,7 @@ interface SearchResult {
     serial_number: string;
     notes: string;
     is_shipped: boolean;
-    date_time?: string | number;
+    date_time?: string;
 }
 
 interface SearchHistory {
@@ -169,7 +169,7 @@ export default function ShippedSidebar() {
                                         
                                         <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
                                             {results.map((result) => {
-                                                const hasAlert = result.date_time === '1' || result.date_time === 1;
+                                                const hasAlert = result.date_time === '1';
                                                 return (
                                                 <div
                                                     key={result.id}
