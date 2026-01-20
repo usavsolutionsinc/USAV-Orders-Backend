@@ -51,78 +51,31 @@ export function ShippedTable() {
   const [shipped, setShipped] = useState<ShippedRecord[]>([]);
   const [selectedShipped, setSelectedShipped] = useState<ShippedRecord | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [offset, setOffset] = useState(0);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const limit = 50;
 
   useEffect(() => {
-    fetchShipped(true);
+    fetchShipped();
   }, [search]);
 
-  const fetchShipped = async (reset = false) => {
+  const fetchShipped = async () => {
+    setLoading(true);
     try {
-      if (reset) {
-        setLoading(true);
-        setOffset(0);
-        setHasMore(true);
-      }
-      
       const url = search 
         ? `/api/shipped/search?q=${encodeURIComponent(search)}`
-        : `/api/shipped?limit=${limit}&offset=${reset ? 0 : offset}`;
+        : `/api/shipped?limit=1000`;
       const res = await fetch(url);
       const data = await res.json();
       
-      if (search) {
-        setShipped(data.results || []);
-        setHasMore(false);
-      } else {
-        const newRecords = data.shipped || [];
-        if (reset) {
-          setShipped(newRecords);
-        } else {
-          setShipped(prev => [...prev, ...newRecords]);
-        }
-        if (newRecords.length < limit) {
-          setHasMore(false);
-        }
-      }
+      const records = data.results || data.shipped || [];
+      setShipped(records);
     } catch (error) {
       console.error('Error fetching shipped records:', error);
     } finally {
       setLoading(false);
-      setIsLoadingMore(false);
     }
   };
-
-  const loadMore = useCallback(async () => {
-    if (isLoadingMore || !hasMore || search) return;
-    
-    setIsLoadingMore(true);
-    const nextOffset = offset + limit;
-    setOffset(nextOffset);
-    
-    try {
-      const res = await fetch(`/api/shipped?limit=${limit}&offset=${nextOffset}`);
-      const data = await res.json();
-      const newRecords = data.shipped || [];
-      
-      if (newRecords.length < limit) setHasMore(false);
-      if (newRecords.length > 0) {
-        setShipped(prev => [...prev, ...newRecords]);
-      } else {
-        setHasMore(false);
-      }
-    } catch (err) {
-      console.error("Failed to load more:", err);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [offset, hasMore, isLoadingMore, search]);
 
   const getOrdinal = (n: number) => {
     const s = ["th", "st", "nd", "rd"];
@@ -156,11 +109,7 @@ export function ShippedTable() {
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    
-    if (scrollHeight - scrollTop <= clientHeight + 100) {
-      loadMore();
-    }
+    const { scrollTop } = scrollRef.current;
 
     const headers = scrollRef.current.querySelectorAll('[data-day-header]');
     let activeDate = '';
@@ -178,7 +127,7 @@ export function ShippedTable() {
 
     if (activeDate) setStickyDate(formatDate(activeDate));
     if (activeCount) setCurrentCount(activeCount);
-  }, [loadMore]);
+  }, []);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -360,12 +309,6 @@ export function ShippedTable() {
                     })}
                   </div>
                 ))}
-              
-              {isLoadingMore && (
-                <div className="py-8 flex justify-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
-                </div>
-              )}
             </div>
           )}
         </div>
