@@ -148,7 +148,7 @@ export function ShippedTable() {
   };
 
   const handleUpdate = () => {
-    fetchShipped(true);
+    fetchShipped();
   };
 
   // Group records by date
