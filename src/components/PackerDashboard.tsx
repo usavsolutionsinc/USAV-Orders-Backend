@@ -165,24 +165,8 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
                         <p className="text-[10px] font-bold text-orange-600/60 uppercase mt-1">All clear</p>
                     </div>
                 </div>
-
-                {/* Info Box */}
-                <div className="px-8 flex-1">
-                    <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100 h-full flex flex-col items-center justify-center text-center">
-                        <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm mb-4">
-                            <Package className="w-8 h-8 text-gray-300" />
-                        </div>
-                        <h3 className="text-lg font-black text-gray-900 tracking-tighter mb-2">Packer Station</h3>
-                        <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
-                            View your packing history and stats. All data synced from NEON DB in real-time. Use your mobile device to scan and pack orders.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="p-8 mt-auto border-t border-gray-50 text-center">
-                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV PACKER STATION v1.0</p>
-                </div>
             </div>
+            
         </StationLayout>
     );
 }

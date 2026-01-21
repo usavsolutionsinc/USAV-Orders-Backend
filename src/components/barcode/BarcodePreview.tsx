@@ -68,8 +68,8 @@ export function BarcodePreview({
                             <p className="text-[11px] text-gray-500 break-words px-4 leading-relaxed font-medium">{title}</p>
                             {mode !== 'reprint' && (
                                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-full">
-                                    <div className={`w-1.5 h-1.5 ${mode === 'reprint' ? 'bg-purple-500' : 'bg-blue-500'} rounded-full animate-pulse`} />
-                                    <p className={`text-[9px] ${mode === 'reprint' ? 'text-purple-600' : 'text-blue-600'} font-black uppercase tracking-widest`}>
+                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                                    <p className="text-[9px] text-blue-600 font-black uppercase tracking-widest">
                                         SN: {getSerialLast6(serialNumbers)}
                                     </p>
                                 </div>
