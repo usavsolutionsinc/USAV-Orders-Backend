@@ -90,7 +90,7 @@ export default function StationNav() {
                 href={item.href}
                 title={isCollapsed ? item.name : undefined}
                 className={`group flex items-center transition-all duration-300 relative ${
-                    isCollapsed ? 'pl-2.5 pr-0 py-3' : 'gap-4 px-4 py-3 rounded-2xl'
+                    isCollapsed ? 'p-2.5 rounded-xl' : 'gap-4 px-4 rounded-2xl'
                 } ${
                     isActive
                         ? isCollapsed 
@@ -120,12 +120,12 @@ export default function StationNav() {
 
     return (
         <motion.aside
-            animate={{ width: isCollapsed ? 80 : 280 }}
+            animate={{ width: isCollapsed ? 64 : 280 }}
             transition={{ type: 'spring', damping: 25, stiffness: 150 }}
             className="h-screen bg-white border-r border-gray-200 flex flex-col relative z-50 flex-shrink-0"
         >
             {/* Top Bar Area inside Sidebar */}
-            <div className={`flex items-center mb-4 ${isCollapsed ? 'pl-4 pr-4 py-4' : 'justify-between p-4'}`}>
+            <div className={`flex items-center mb-4 ${isCollapsed ? 'p-4' : 'justify-between p-4'}`}>
                 {!isCollapsed && (
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-black text-gray-900 leading-tight tracking-tighter uppercase">USAV</h1>
@@ -135,7 +135,7 @@ export default function StationNav() {
                     onClick={toggleCollapsed}
                     className={`transition-all duration-300 border ${
                         isCollapsed 
-                            ? 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50 p-2.5 rounded-l-xl'
+                            ? 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50 p-2.5 rounded-xl'
                             : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 p-2.5 rounded-xl'
                     }`}
                     aria-label="Toggle menu"
@@ -162,6 +162,14 @@ export default function StationNav() {
                         </form>
 
                         <Link
+                            href="/shipped?new=true"
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-green-500/20"
+                        >
+                            <Plus className="w-4 h-4" />
+                            <span className="text-sm font-black uppercase tracking-wider">Shipped</span>
+                        </Link>
+
+                        <Link
                             href="/repair?new=true"
                             className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-orange-500/20"
                         >
@@ -172,7 +180,14 @@ export default function StationNav() {
                 )}
 
                 {isCollapsed && (
-                    <div className="mb-6">
+                    <div className="mb-6 space-y-3">
+                        <Link
+                            href="/shipped?new=true"
+                            title="New Shipped"
+                            className="flex items-center p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-l-2xl shadow-lg shadow-green-500/20 active:scale-95 transition-all"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </Link>
                         <Link
                             href="/repair?new=true"
                             title="New Repair"

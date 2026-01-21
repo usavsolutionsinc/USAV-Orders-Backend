@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle } from './Icons';
+import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 
 interface SearchResult {
     id: number;
@@ -23,7 +24,13 @@ interface SearchHistory {
     resultCount: number;
 }
 
-export default function ShippedSidebar() {
+interface ShippedSidebarProps {
+    showIntakeForm?: boolean;
+    onCloseForm?: () => void;
+    onFormSubmit?: (data: ShippedFormData) => void;
+}
+
+export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit }: ShippedSidebarProps) {
     const [isOpen, setIsOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
@@ -113,14 +120,22 @@ export default function ShippedSidebar() {
                         transition={{ type: "spring", damping: 25, stiffness: 120 }}
                         className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group"
                     >
-                        <button
-                            onClick={() => setIsOpen(false)}
-                            className="absolute top-4 right-4 z-50 p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                            title="Collapse Menu"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
+                        {!showIntakeForm && (
+                            <button
+                                onClick={() => setIsOpen(false)}
+                                className="absolute top-4 right-4 z-50 p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                title="Collapse Menu"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+                        )}
 
+                        {showIntakeForm ? (
+                            <ShippedIntakeForm 
+                                onClose={onCloseForm || (() => {})}
+                                onSubmit={onFormSubmit || (() => {})}
+                            />
+                        ) : (
                         <div className="p-6 h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide">
                             <header>
                                 <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
@@ -359,6 +374,7 @@ export default function ShippedSidebar() {
                                 <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV SHIPPED</p>
                             </footer>
                         </div>
+                        )}
                     </motion.aside>
                 )}
             </AnimatePresence>
