@@ -18,13 +18,16 @@ export async function GET(req: NextRequest) {
         const result = await pool.query(`
             SELECT 
                 id,
-                date_time as shipped_date,
-                shipping_tracking_number as tracking_number,
-                product_title as customer,
-                product_title as product,
+                date_time,
                 order_id,
+                product_title,
+                condition,
+                shipping_tracking_number,
                 serial_number,
-                '' as notes,
+                boxed_by,
+                tested_by,
+                sku,
+                status,
                 CASE 
                     WHEN date_time IS NOT NULL AND date_time != '' THEN true
                     ELSE false

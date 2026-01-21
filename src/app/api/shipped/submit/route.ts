@@ -40,15 +40,10 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString();
 
     // Insert into shipped table
-    // col_2 = date_time
-    // col_3 = order_id
-    // col_4 = product_title (with reason appended)
-    // col_6 = shipping_tracking_number
-    // col_9 = sku
     const result = await pool.query(
-      `INSERT INTO shipped (col_2, col_3, col_4, col_6, col_9)
+      `INSERT INTO shipped (date_time, order_id, product_title, shipping_tracking_number, sku)
        VALUES ($1, $2, $3, $4, $5)
-       RETURNING col_1 as id`,
+       RETURNING id`,
       [now, order_id, finalProductTitle, shipping_tracking_number, sku]
     );
 

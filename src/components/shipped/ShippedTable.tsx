@@ -19,10 +19,10 @@ const CopyableText = ({ text, className, disabled = false, isSerial = false }: {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Show last 6 digits for serial numbers, last 8 for tracking
+  // Show last 6 digits for serial numbers, last 10 for tracking
   const displayText = isSerial 
-    ? (text.length > 6 ? text.slice(-6) : text)
-    : (text.length > 8 ? text.slice(-8) : text);
+    ? (text.length > 6 ? '...' + text.slice(-6) : text)
+    : (text.length > 10 ? '...' + text.slice(-10) : text);
   const isEmpty = !text || text === '---' || disabled;
 
   if (isEmpty) {
@@ -262,12 +262,12 @@ export function ShippedTable() {
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[55px_80px_80px_1fr_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/80 ${
+                          className={`grid grid-cols-[90px_90px_1fr_120px_100px_90px_90px_90px_90px_90px] items-center gap-1 px-0.5 py-0.5 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/80 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
                           }`}
                         >
-                          {/* Time on left */}
-                          <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left flex items-center gap-1">
+                          {/* 1. Date/Time */}
+                          <div className="text-[10px] font-black text-gray-400 tabular-nums uppercase text-left flex items-center gap-1">
                             {hasAlert && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse" />}
                             {ts && ts !== '1' ? (
                               (() => {
@@ -281,28 +281,57 @@ export function ShippedTable() {
                             ) : '--:--'}
                           </div>
                           
-                          {/* Tracking Number - Blue background */}
+                          {/* 2. Order ID */}
                           <CopyableText 
-                            text={record.shipping_tracking_number || ''} 
-                            className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30"
+                            text={record.order_id || ''} 
+                            className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50/30 px-0.5 py-0.5 rounded border border-gray-100/30"
                             isSerial={false}
                           />
                           
-                          {/* Serial Number - Green background */}
-                          <CopyableText 
-                            text={record.serial_number || ''} 
-                            className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30"
-                            isSerial={true}
-                          />
-                          
-                          {/* Product Title */}
-                          <div className="text-[11px] font-bold text-gray-900 truncate text-left">
+                          {/* 3. Product Title */}
+                          <div className="text-[10px] font-bold text-gray-900 truncate text-left px-0.5">
                             {record.product_title || 'Unknown Product'}
                           </div>
                           
-                          {/* Condition */}
-                          <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
-                            {record.condition || ''}
+                          {/* 4. Condition */}
+                          <div className="text-[10px] font-semibold text-gray-600 text-left truncate px-0.5">
+                            {record.condition || '---'}
+                          </div>
+                          
+                          {/* 5. Tracking Number - Blue background */}
+                          <CopyableText 
+                            text={record.shipping_tracking_number || ''} 
+                            className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50/30 px-0.5 py-0.5 rounded border border-blue-100/30"
+                            isSerial={false}
+                          />
+                          
+                          {/* 6. Serial Number - Green background */}
+                          <CopyableText 
+                            text={record.serial_number || ''} 
+                            className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-0.5 py-0.5 rounded border border-emerald-100/30"
+                            isSerial={true}
+                          />
+                          
+                          {/* 7. Boxed By */}
+                          <div className="text-[10px] font-semibold text-gray-600 text-left truncate px-0.5">
+                            {record.boxed_by || '---'}
+                          </div>
+                          
+                          {/* 8. Tested By */}
+                          <div className="text-[10px] font-semibold text-gray-600 text-left truncate px-0.5">
+                            {record.tested_by || '---'}
+                          </div>
+                          
+                          {/* 9. SKU */}
+                          <CopyableText 
+                            text={record.sku || ''} 
+                            className="text-[10px] font-mono font-semibold text-gray-700 px-0.5 py-0.5"
+                            isSerial={false}
+                          />
+                          
+                          {/* 10. Status */}
+                          <div className="text-[10px] font-bold text-gray-700 text-left truncate px-0.5">
+                            {record.status || '---'}
                           </div>
                         </motion.div>
                       );

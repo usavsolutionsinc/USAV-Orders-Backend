@@ -7,15 +7,17 @@ import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 
 interface SearchResult {
     id: number;
-    shipped_date: string | null;
+    date_time: string;
     order_id: string;
-    customer: string;
-    product: string;
-    tracking_number: string;
+    product_title: string;
+    condition: string;
+    shipping_tracking_number: string;
     serial_number: string;
-    notes: string;
+    boxed_by: string;
+    tested_by: string;
+    sku: string;
+    status: string;
     is_shipped: boolean;
-    date_time?: string;
 }
 
 interface SearchHistory {
@@ -105,7 +107,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
 
     // Copy entire row
     const copyRow = (result: SearchResult) => {
-        const rowText = `Order ID: ${result.order_id}\nTracking: ${result.tracking_number}\nSerial: ${result.serial_number || 'N/A'}\nCondition: ${result.product}\nProduct: ${result.customer}\nShipped: ${result.is_shipped ? result.shipped_date : 'Not Shipped'}`;
+        const rowText = `Order ID: ${result.order_id}\nTracking: ${result.shipping_tracking_number}\nSerial: ${result.serial_number || 'N/A'}\nCondition: ${result.condition}\nProduct: ${result.product_title}\nShipped: ${result.is_shipped ? result.date_time : 'Not Shipped'}`;
         copyToClipboard(rowText, `row-${result.id}`);
     };
 
@@ -233,7 +235,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                                                     Serial Number
                                                                 </p>
                                                                 <p className="text-sm font-black font-mono">
-                                                                    {result.serial_number || 'N/A'}
+                                                                    {result.serial_number ? (result.serial_number.length > 6 ? '...' + result.serial_number.slice(-6) : result.serial_number) : 'N/A'}
                                                                 </p>
                                                             </div>
                                                             <button
@@ -251,13 +253,13 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
 
                                                     {/* Other Details */}
                                                     <div className="space-y-2 text-[10px]">
-                                                        {/* Tracking Number (displayed first, but labeled as Order ID per DB mapping) */}
+                                                        {/* Order ID */}
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Order ID</span>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono font-semibold">{result.tracking_number}</span>
+                                                                <span className="font-mono font-semibold">{result.order_id}</span>
                                                                 <button
-                                                                    onClick={() => copyToClipboard(result.tracking_number, `order-${result.id}`)}
+                                                                    onClick={() => copyToClipboard(result.order_id, `order-${result.id}`)}
                                                                     className="p-1 hover:bg-gray-200 rounded transition-all"
                                                                 >
                                                                     {copiedField === `order-${result.id}` ? (
@@ -269,13 +271,13 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                                             </div>
                                                         </div>
 
-                                                        {/* Order ID (displayed second, but labeled as Tracking per DB mapping) */}
+                                                        {/* Tracking Number */}
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Tracking</span>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono font-semibold">{result.order_id}</span>
+                                                                <span className="font-mono font-semibold">{result.shipping_tracking_number ? (result.shipping_tracking_number.length > 10 ? '...' + result.shipping_tracking_number.slice(-10) : result.shipping_tracking_number) : 'N/A'}</span>
                                                                 <button
-                                                                    onClick={() => copyToClipboard(result.order_id, `tracking-${result.id}`)}
+                                                                    onClick={() => copyToClipboard(result.shipping_tracking_number, `tracking-${result.id}`)}
                                                                     className="p-1 hover:bg-gray-200 rounded transition-all"
                                                                 >
                                                                     {copiedField === `tracking-${result.id}` ? (
@@ -290,19 +292,19 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                                         {/* Product */}
                                                         <div className="pt-2 border-t border-gray-200">
                                                             <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Product:</p>
-                                                            <p className="font-semibold leading-tight">{result.customer}</p>
+                                                            <p className="font-semibold leading-tight">{result.product_title}</p>
                                                         </div>
 
                                                         {/* Condition */}
                                                         <div className="pt-2 border-t border-gray-200">
                                                             <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Condition</p>
-                                                            <p className="font-semibold leading-tight">{result.product}</p>
+                                                            <p className="font-semibold leading-tight">{result.condition}</p>
                                                         </div>
 
                                                         {/* Shipped Date */}
-                                                        {result.is_shipped && result.shipped_date && (
+                                                        {result.is_shipped && result.date_time && (
                                                             <div className="text-[9px] text-gray-500 font-medium">
-                                                                Shipped: {result.shipped_date}
+                                                                Shipped: {result.date_time}
                                                             </div>
                                                         )}
                                                     </div>
@@ -340,9 +342,9 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                         </p>
                                         <div className="space-y-2">
                                             {searchHistory.slice(0, 5).map((item, index) => {
-                                                // Show last 6 digits for numeric tracking numbers
-                                                const displayQuery = item.query.match(/^\d+$/) && item.query.length > 6 
-                                                    ? '...' + item.query.slice(-6) 
+                                                // Show last 8 digits for numeric tracking numbers
+                                                const displayQuery = item.query.match(/^\d+$/) && item.query.length > 8 
+                                                    ? '...' + item.query.slice(-8) 
                                                     : item.query;
                                                 
                                                 return (
