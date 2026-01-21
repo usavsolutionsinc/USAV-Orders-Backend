@@ -235,7 +235,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                                                     Serial Number
                                                                 </p>
                                                                 <p className="text-sm font-black font-mono">
-                                                                    {result.serial_number ? (result.serial_number.length > 6 ? '...' + result.serial_number.slice(-6) : result.serial_number) : 'N/A'}
+                                                                    {result.serial_number ? (result.serial_number.length > 6 ? result.serial_number.slice(-6) : result.serial_number) : 'N/A'}
                                                                 </p>
                                                             </div>
                                                             <button
@@ -257,7 +257,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Order ID</span>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono font-semibold">{result.order_id}</span>
+                                                                <span className="font-mono font-semibold">{result.order_id ? (result.order_id.length > 10 ? result.order_id.slice(-10) : result.order_id) : 'N/A'}</span>
                                                                 <button
                                                                     onClick={() => copyToClipboard(result.order_id, `order-${result.id}`)}
                                                                     className="p-1 hover:bg-gray-200 rounded transition-all"
@@ -275,7 +275,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Tracking</span>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono font-semibold">{result.shipping_tracking_number ? (result.shipping_tracking_number.length > 10 ? '...' + result.shipping_tracking_number.slice(-10) : result.shipping_tracking_number) : 'N/A'}</span>
+                                                                <span className="font-mono font-semibold">{result.shipping_tracking_number ? (result.shipping_tracking_number.length > 10 ? result.shipping_tracking_number.slice(-10) : result.shipping_tracking_number) : 'N/A'}</span>
                                                                 <button
                                                                     onClick={() => copyToClipboard(result.shipping_tracking_number, `tracking-${result.id}`)}
                                                                     className="p-1 hover:bg-gray-200 rounded transition-all"
@@ -344,7 +344,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                             {searchHistory.slice(0, 5).map((item, index) => {
                                                 // Show last 8 digits for numeric tracking numbers
                                                 const displayQuery = item.query.match(/^\d+$/) && item.query.length > 8 
-                                                    ? '...' + item.query.slice(-8) 
+                                                    ? item.query.slice(-8) 
                                                     : item.query;
                                                 
                                                 return (

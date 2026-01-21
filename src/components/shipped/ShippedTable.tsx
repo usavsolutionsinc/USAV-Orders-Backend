@@ -8,7 +8,7 @@ import { ShippedRecord } from '@/lib/neon/shipped-queries';
 import { ShippedDetailsPanel } from './ShippedDetailsPanel';
 
 // Copyable text component like tech pages
-const CopyableText = ({ text, className, disabled = false, isSerial = false }: { text: string; className?: string; disabled?: boolean; isSerial?: boolean }) => {
+const CopyableText = ({ text, className, disabled = false, isSerial = false, isOrderId = false }: { text: string; className?: string; disabled?: boolean; isSerial?: boolean; isOrderId?: boolean }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -19,10 +19,11 @@ const CopyableText = ({ text, className, disabled = false, isSerial = false }: {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Show last 6 digits for serial numbers, last 10 for tracking
+  // Show last 6 digits for serial numbers, last 10 for tracking and order_id
   const displayText = isSerial 
-    ? (text.length > 6 ? '...' + text.slice(-6) : text)
-    : (text.length > 10 ? '...' + text.slice(-10) : text);
+    ? (text.length > 6 ? text.slice(-6) : text)
+    : (isOrderId || text.length > 10) ? (text.length > 10 ? text.slice(-10) : text)
+    : text;
   const isEmpty = !text || text === '---' || disabled;
 
   if (isEmpty) {
@@ -262,7 +263,7 @@ export function ShippedTable() {
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[90px_90px_1fr_120px_100px_90px_90px_90px_90px_90px] items-center gap-1 px-0.5 py-0.5 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/80 ${
+                          className={`grid grid-cols-[fit-content(90px)_fit-content(100px)_1fr_fit-content(120px)_fit-content(110px)_fit-content(90px)_fit-content(90px)_fit-content(90px)_90px_90px] items-center gap-1 px-0.5 py-0.5 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/80 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
                           }`}
                         >
@@ -286,6 +287,7 @@ export function ShippedTable() {
                             text={record.order_id || ''} 
                             className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50/30 px-0.5 py-0.5 rounded border border-gray-100/30"
                             isSerial={false}
+                            isOrderId={true}
                           />
                           
                           {/* 3. Product Title */}
