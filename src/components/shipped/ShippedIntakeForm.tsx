@@ -173,13 +173,14 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
                     <input
                         type="text"
                         value={formData.product_title}
-                        onChange={(e) => !isProductTitleLocked && setFormData(prev => ({ ...prev, product_title: e.target.value }))}
+                        onChange={(e) => setFormData(prev => ({ ...prev, product_title: e.target.value }))}
                         placeholder={isProductTitleLocked ? "Auto-filled from order lookup" : "Enter product title..."}
+                        readOnly={isProductTitleLocked}
                         disabled={isProductTitleLocked}
-                        className={`w-full px-4 py-3 border rounded-xl text-sm font-semibold focus:outline-none transition-all ${
+                        className={`w-full px-4 py-3 border rounded-xl text-sm font-semibold transition-all ${
                             isProductTitleLocked
-                                ? 'bg-green-50 border-green-300 text-green-900 cursor-not-allowed'
-                                : 'bg-gray-50 border-gray-200 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+                                ? 'bg-green-50 border-green-300 text-green-900 cursor-not-allowed focus:outline-none'
+                                : 'bg-gray-50 border-gray-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'
                         }`}
                     />
                     {isProductTitleLocked && (
