@@ -90,7 +90,7 @@ export default function StationNav() {
                 href={item.href}
                 title={isCollapsed ? item.name : undefined}
                 className={`group flex items-center transition-all duration-300 relative ${
-                    isCollapsed ? 'justify-center p-3' : 'gap-4 px-4 py-3 rounded-2xl'
+                    isCollapsed ? 'pl-2.5 pr-0 py-3' : 'gap-4 px-4 py-3 rounded-2xl'
                 } ${
                     isActive
                         ? isCollapsed 
@@ -125,7 +125,7 @@ export default function StationNav() {
             className="h-screen bg-white border-r border-gray-200 flex flex-col relative z-50 flex-shrink-0"
         >
             {/* Top Bar Area inside Sidebar */}
-            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} p-4 mb-4`}>
+            <div className={`flex items-center mb-4 ${isCollapsed ? 'pl-4 pr-4 py-4' : 'justify-between p-4'}`}>
                 {!isCollapsed && (
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-black text-gray-900 leading-tight tracking-tighter uppercase">USAV</h1>
@@ -133,10 +133,10 @@ export default function StationNav() {
                 )}
                 <button
                     onClick={toggleCollapsed}
-                    className={`p-2.5 rounded-xl transition-all duration-300 border ${
+                    className={`transition-all duration-300 border ${
                         isCollapsed 
-                            ? 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50'
-                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                            ? 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50 p-2.5 rounded-l-xl'
+                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:text-gray-900 p-2.5 rounded-xl'
                     }`}
                     aria-label="Toggle menu"
                 >
@@ -144,7 +144,7 @@ export default function StationNav() {
                 </button>
             </div>
 
-            <div className="flex-1 flex flex-col px-3 overflow-y-auto no-scrollbar pb-6">
+            <div className={`flex-1 flex flex-col overflow-y-auto scrollbar-hide pb-6 ${isCollapsed ? 'pl-3 pr-0' : 'px-3'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {/* Quick Search Area */}
                 {!isCollapsed && (
                     <div className="mb-6 space-y-3 px-1">
@@ -172,11 +172,11 @@ export default function StationNav() {
                 )}
 
                 {isCollapsed && (
-                    <div className="mb-6 flex flex-col items-center gap-4">
+                    <div className="mb-6">
                         <Link
                             href="/repair?new=true"
                             title="New Repair"
-                            className="p-3 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-2xl shadow-lg shadow-orange-500/20 active:scale-90 transition-all"
+                            className="flex items-center p-2.5 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-l-2xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
                         >
                             <Plus className="w-5 h-5" />
                         </Link>
@@ -231,20 +231,6 @@ export default function StationNav() {
                 </nav>
             </div>
 
-            {/* Footer / User Profile Area */}
-            {!isCollapsed && (
-                <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-lg">
-                            U
-                        </div>
-                        <div>
-                            <p className="text-xs font-black text-gray-900 uppercase tracking-tight leading-none">USAV ADMIN</p>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Management</p>
-                        </div>
-                    </div>
-                </div>
-            )}
         </motion.aside>
     );
 }
