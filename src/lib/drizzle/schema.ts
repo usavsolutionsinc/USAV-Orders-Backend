@@ -86,7 +86,23 @@ const genericColumns = {
   col15: text('col_15'),
 };
 
-export const orders = pgTable('orders', { ...genericColumns });
+// Orders table - Updated schema
+export const orders = pgTable('orders', {
+  id: serial('id').primaryKey(),
+  shipByDate: text('ship_by_date'),
+  orderId: text('order_id'),
+  productTitle: text('product_title'),
+  quantity: text('quantity'),
+  sku: text('sku'),
+  condition: text('condition'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  daysLate: text('days_late'),
+  outOfStock: text('out_of_stock'),
+  notes: text('notes'),
+  assignedTo: text('assigned_to'), // Tech_1, Tech_2, Tech_3, or NULL
+  status: text('status').default('unassigned'), // unassigned, assigned, in_progress, completed, missing_parts
+  urgent: boolean('urgent').default(false),
+});
 export const tech1 = pgTable('tech_1', { ...genericColumns });
 export const tech2 = pgTable('tech_2', { ...genericColumns });
 export const tech3 = pgTable('tech_3', { ...genericColumns });
@@ -95,7 +111,21 @@ export const packer1 = pgTable('packer_1', { ...genericColumns });
 export const packer2 = pgTable('packer_2', { ...genericColumns });
 export const packer3 = pgTable('packer_3', { ...genericColumns });
 export const receiving = pgTable('receiving', { ...genericColumns });
-export const shipped = pgTable('shipped', { ...genericColumns });
+// Shipped table - Updated schema
+export const shipped = pgTable('shipped', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'), // TEXT timestamp when shipped
+  orderId: text('order_id'),
+  productTitle: text('product_title'),
+  condition: text('condition'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  serialNumber: text('serial_number'),
+  boxedBy: text('boxed_by'),
+  testedBy: text('tested_by'),
+  sku: text('sku'),
+  status: text('status').default('pending'),
+  statusHistory: text('status_history').default('[]'), // JSON array as text
+});
 export const skuStock = pgTable('sku_stock', { ...genericColumns });
 export const sku = pgTable('sku', {
   id: serial('id').primaryKey(),
@@ -108,7 +138,20 @@ export const sku = pgTable('sku', {
   location: text('location'),
 });
 
-export const rs = pgTable('rs', { ...genericColumns });
+// Repair Service table - Updated schema with JSON date_time
+export const repairService = pgTable('repair_service', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'), // JSON: {start: timestamp, repaired: timestamp, done: timestamp}
+  ticketNumber: text('ticket_number'),
+  productTitle: text('product_title'),
+  issue: text('issue'),
+  serialNumber: text('serial_number'),
+  name: text('name'),
+  contact: text('contact'),
+  price: text('price'),
+  status: text('status').default('pending'),
+  repairReasons: text('repair_reasons'),
+});
 
 // NEW: Packing logs for the packer dashboard
 export const packingLogs = pgTable('packing_logs', {
@@ -136,5 +179,9 @@ export type ReceivingTask = typeof receivingTasks.$inferSelect;
 export type NewReceivingTask = typeof receivingTasks.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
+export type Shipped = typeof shipped.$inferSelect;
+export type NewShipped = typeof shipped.$inferInsert;
+export type RepairService = typeof repairService.$inferSelect;
+export type NewRepairService = typeof repairService.$inferInsert;
 export type PackingLog = typeof packingLogs.$inferSelect;
 export type NewPackingLog = typeof packingLogs.$inferInsert;

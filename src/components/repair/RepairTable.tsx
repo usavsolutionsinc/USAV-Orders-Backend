@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Search, X } from '../Icons';
+import { Loader2, Search, X, Printer } from '../Icons';
 import { CopyableText } from '../ui/CopyableText';
-import { RSRecord } from '@/lib/neon/rs-queries';
+import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
 
 const STATUS_OPTIONS = [
@@ -35,8 +35,8 @@ export function RepairTable() {
     try {
       setLoading(true);
       const url = search 
-        ? `/api/rs?q=${encodeURIComponent(search)}` // Assuming search is handled in /api/rs too
-        : '/api/rs';
+        ? `/api/repair-service?q=${encodeURIComponent(search)}`
+        : '/api/repair-service';
       const res = await fetch(url);
       const data = await res.json();
       setRepairs(data.repairs || []);
@@ -71,7 +71,7 @@ export function RepairTable() {
     setUpdatingStatus(id);
     
     try {
-      const res = await fetch('/api/rs', {
+      const res = await fetch('/api/repair-service', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: newStatus }),
@@ -185,6 +185,9 @@ export function RepairTable() {
                 <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
                   Notes
                 </th>
+                <th className="px-4 py-3 text-center text-[10px] font-black uppercase tracking-wider text-gray-600 whitespace-nowrap">
+                  Print
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -270,12 +273,23 @@ export function RepairTable() {
                       {repair.notes || '---'}
                     </div>
                   </td>
+                  
+                  {/* Print Button */}
+                  <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank')}
+                      className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-all group/print"
+                      title="Print Repair Form"
+                    >
+                      <Printer className="w-4 h-4 group-hover/print:scale-110 transition-transform" />
+                    </button>
+                  </td>
                 </motion.tr>
               ))}
               
               {repairs.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-24 text-center">
+                  <td colSpan={11} className="px-4 py-24 text-center">
                     {search ? (
                       <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
                         <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">

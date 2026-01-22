@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllRepairs, updateRepairStatus, updateRepairNotes, updateRepairField, searchRepairs } from '@/lib/neon/rs-queries';
+import { getAllRepairs, updateRepairStatus, updateRepairNotes, updateRepairField, searchRepairs } from '@/lib/neon/repair-service-queries';
 
 /**
  * GET /api/rs - Fetch all repairs (paginated) or search

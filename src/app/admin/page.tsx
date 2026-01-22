@@ -31,9 +31,20 @@ const TAG_COLOR_CLASSES = {
     gray: 'bg-gray-500',
 };
 
+interface Order {
+    id: number;
+    ship_by_date: string;
+    order_id: string;
+    product_title: string;
+    sku: string;
+    assigned_to: string | null;
+    status: string;
+    urgent: boolean;
+}
+
 export default function AdminPage() {
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState<'staff' | 'tags'>('staff');
+    const [activeTab, setActiveTab] = useState<'staff' | 'tags' | 'orders'>('staff');
     
     // Staff state
     const [isAddingStaff, setIsAddingStaff] = useState(false);
@@ -153,6 +164,14 @@ export default function AdminPage() {
                             }`}
                         >
                             Tags
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('orders')}
+                            className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all ${
+                                activeTab === 'orders' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            Orders
                         </button>
                     </div>
                 </header>
@@ -326,8 +345,155 @@ export default function AdminPage() {
                                 ))}
                             </div>
                         </div>
+                    ) : (
+                        <OrdersManagement />
                     )}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+// Orders Management Component
+function OrdersManagement() {
+    const queryClient = useQueryClient();
+    const [statusFilter, setStatusFilter] = useState<string>('all');
+
+    // Fetch orders
+    const { data: ordersData } = useQuery<{ orders: Order[] }>({
+        queryKey: ['orders', statusFilter],
+        queryFn: async () => {
+            const url = statusFilter === 'all' 
+                ? '/api/orders'
+                : `/api/orders?status=${statusFilter}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Failed to fetch orders');
+            return res.json();
+        },
+    });
+
+    const orders = ordersData?.orders || [];
+
+    // Assign order mutation
+    const assignOrderMutation = useMutation({
+        mutationFn: async ({ orderId, assignedTo, urgent, shipByDate }: { orderId: number; assignedTo?: string; urgent?: boolean; shipByDate?: string }) => {
+            const res = await fetch('/api/orders/assign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId, assignedTo, urgent, shipByDate }),
+            });
+            if (!res.ok) throw new Error('Failed to assign order');
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+        },
+    });
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Order Assignment</h2>
+                
+                {/* Status Filter */}
+                <div className="flex gap-2">
+                    {['all', 'unassigned', 'assigned', 'in_progress', 'missing_parts'].map((status) => (
+                        <button
+                            key={status}
+                            onClick={() => setStatusFilter(status)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                statusFilter === status
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                        >
+                            {status.replace('_', ' ')}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="grid gap-3">
+                {orders.length === 0 ? (
+                    <div className="p-8 text-center bg-white rounded-3xl border border-gray-200">
+                        <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
+                            No orders found
+                        </p>
+                    </div>
+                ) : (
+                    orders.map((order) => (
+                        <div key={order.id} className="p-5 rounded-3xl bg-white border border-gray-200 transition-all hover:shadow-sm">
+                            <div className="flex items-start justify-between mb-3">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="text-base font-black text-gray-900">
+                                            {order.product_title}
+                                        </h3>
+                                        {order.urgent && (
+                                            <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[8px] font-black uppercase rounded">
+                                                Urgent
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                                        <span>Order: {order.order_id}</span>
+                                        <span>•</span>
+                                        <span>SKU: {order.sku}</span>
+                                        {order.ship_by_date && (
+                                            <>
+                                                <span>•</span>
+                                                <span>Ship By: {order.ship_by_date}</span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-col gap-2">
+                                    <span className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase tracking-widest ${
+                                        order.status === 'unassigned' ? 'bg-gray-100 text-gray-600' :
+                                        order.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
+                                        order.status === 'in_progress' ? 'bg-emerald-100 text-emerald-700' :
+                                        'bg-amber-100 text-amber-700'
+                                    }`}>
+                                        {order.status.replace('_', ' ')}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                {/* Assign to Technician */}
+                                <select
+                                    value={order.assigned_to || ''}
+                                    onChange={(e) => assignOrderMutation.mutate({ 
+                                        orderId: order.id, 
+                                        assignedTo: e.target.value || null 
+                                    })}
+                                    className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                >
+                                    <option value="">Unassigned</option>
+                                    <option value="Tech_1">Tech 1 (Michael)</option>
+                                    <option value="Tech_2">Tech 2 (Thuc)</option>
+                                    <option value="Tech_3">Tech 3 (Sang)</option>
+                                </select>
+
+                                {/* Toggle Urgent */}
+                                <button
+                                    onClick={() => assignOrderMutation.mutate({ 
+                                        orderId: order.id, 
+                                        urgent: !order.urgent 
+                                    })}
+                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        order.urgent
+                                            ? 'bg-red-600 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {order.urgent ? '! Urgent' : 'Mark Urgent'}
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     );

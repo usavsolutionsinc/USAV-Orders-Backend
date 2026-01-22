@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CurrentOrder from '../CurrentOrder';
 import ActiveProductInfo from '../ActiveProductInfo';
+import UpNextOrder from '../UpNextOrder';
 import { 
   Search, 
   Check, 
@@ -277,6 +278,13 @@ export default function StationTesting({
                         )}
                     </div>
                 </form>
+
+                {/* Up Next Component */}
+                <UpNextOrder 
+                    techId={userId}
+                    onStart={(orderId) => console.log('Started order:', orderId)}
+                    onMissingParts={(orderId) => console.log('Missing parts:', orderId)}
+                />
             </div>
 
             {/* Content Area - Vertical Stack */}

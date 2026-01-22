@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Check, Clock } from '../Icons';
-import { RSRecord } from '@/lib/neon/rs-queries';
+import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { formatStatusTimestamp } from '@/lib/neon/status-history';
 
 interface RepairDetailsPanelProps {

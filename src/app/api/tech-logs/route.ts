@@ -52,13 +52,43 @@ export async function POST(req: NextRequest) {
         `));
 
         // 2. Update the shipped table if tracking is provided
-        if (last8) {
-            // Update col_7 (Serial) and col_9 (By/Technician Name)
-            // matching by the last 8 digits of the tracking number in col_6
+        if (last8 && serial) {
+            // Get current status_history from shipped table
+            const currentRecord = await db.execute(sql.raw(`
+                SELECT status_history, status
+                FROM shipped
+                WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
+                LIMIT 1
+            `));
+
+            let statusHistory = [];
+            if (currentRecord && currentRecord.length > 0) {
+                const existing = currentRecord[0].status_history;
+                try {
+                    statusHistory = existing ? JSON.parse(existing) : [];
+                } catch {
+                    statusHistory = [];
+                }
+            }
+
+            // Add new history entry
+            const now = new Date().toISOString();
+            statusHistory.push({
+                status: 'tested',
+                timestamp: now,
+                user: userName,
+                previous_status: currentRecord && currentRecord.length > 0 ? currentRecord[0].status : 'pending'
+            });
+
+            // Update serial_number, tested_by, status, and status_history
+            // matching by the last 8 digits of shipping_tracking_number
             await db.execute(sql.raw(`
                 UPDATE shipped
-                SET col_7 = '${serial}', col_9 = '${userName}'
-                WHERE RIGHT(col_6, 8) = '${last8}'
+                SET serial_number = '${serial}',
+                    tested_by = '${userName}',
+                    status = 'tested',
+                    status_history = '${JSON.stringify(statusHistory).replace(/'/g, "''")}'
+                WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
             `));
         }
 

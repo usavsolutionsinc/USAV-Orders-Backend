@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRepairById } from '@/lib/neon/rs-queries';
+import { getRepairById } from '@/lib/neon/repair-service-queries';
 
 /**
  * GET /api/rs/[id] - Fetch single repair by ID

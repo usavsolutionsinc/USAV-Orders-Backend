@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
-import { RSRecord } from '@/lib/neon/rs-queries';
+import { RSRecord } from '@/lib/neon/repair-service-queries';
 
 /**
  * Fetch all repairs
@@ -9,7 +9,7 @@ export function useRepairs(page = 1, limit = 50) {
   return useQuery({
     queryKey: ['repairs', page, limit],
     queryFn: async () => {
-      const res = await fetch(`/api/rs?page=${page}&limit=${limit}`);
+      const res = await fetch(`/api/repair-service?page=${page}&limit=${limit}`);
       if (!res.ok) throw new Error('Failed to fetch repairs');
       return res.json();
     },
@@ -25,7 +25,7 @@ export function useRepair(id: number) {
   return useQuery({
     queryKey: ['repair', id],
     queryFn: async () => {
-      const res = await fetch(`/api/rs/${id}`);
+      const res = await fetch(`/api/repair-service/${id}`);
       if (!res.ok) throw new Error('Failed to fetch repair');
       return res.json();
     },
@@ -41,7 +41,7 @@ export function useUpdateRepairStatus() {
   
   return useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const res = await fetch('/api/rs', {
+      const res = await fetch('/api/repair-service', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status }),
@@ -92,7 +92,7 @@ export function useUpdateRepairNotes() {
   
   return useMutation({
     mutationFn: async ({ id, notes }: { id: number; notes: string }) => {
-      const res = await fetch('/api/rs', {
+      const res = await fetch('/api/repair-service', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, notes }),
@@ -119,7 +119,7 @@ export function useUpdateRepairField() {
   
   return useMutation({
     mutationFn: async ({ id, field, value }: { id: number; field: string; value: any }) => {
-      const res = await fetch('/api/rs', {
+      const res = await fetch('/api/repair-service', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, field, value }),

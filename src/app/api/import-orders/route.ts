@@ -53,32 +53,35 @@ export async function POST(request: NextRequest) {
             ''                 // 10 - Status
         ]);
 
-        // Prepare data for Neon DB - matching Google Sheets column order
-        // Note: Use camelCase property names (col2, col3) for Drizzle ORM
-        // Database columns are col_1, col_2, etc. but Drizzle uses col1, col2, etc.
+        // Prepare data for Neon DB - using new schema
         const ordersToInsert = data.map((item: any) => ({
-            col2: item.shipByDate || '',      // Column A (DB: col_2)
-            col3: item.orderNumber || '',     // Column B (DB: col_3)
-            col4: item.itemTitle || '',       // Column C (DB: col_4)
-            col5: item.quantity || '',        // Column D (DB: col_5)
-            col6: item.usavSku || '',         // Column E (DB: col_6)
-            col7: item.condition || '',       // Column F (DB: col_7)
-            col8: item.tracking || '',        // Column G (DB: col_8)
-            col9: '',                         // Column H (DB: col_9) (Empty)
-            col10: '',                        // Column I (DB: col_10) (Empty)
-            col11: item.note || '',           // Column J (DB: col_11)
+            shipByDate: item.shipByDate || '',
+            orderId: item.orderNumber || '',
+            productTitle: item.itemTitle || '',
+            quantity: item.quantity || '',
+            sku: item.usavSku || '',
+            condition: item.condition || '',
+            shippingTrackingNumber: item.tracking || '',
+            daysLate: '',
+            outOfStock: '',
+            notes: item.note || '',
+            assignedTo: null,
+            status: 'unassigned',
+            urgent: false,
         }));
 
         const shippedToInsert = data.map((item: any) => ({
-            col2: '',                         // Column A (DB: col_2) - Date/Time (empty initially)
-            col3: item.orderNumber || '',     // Column B (DB: col_3) - Order ID
-            col4: item.itemTitle || '',       // Column C (DB: col_4) - Product Title
-            col5: item.condition || '',       // Column D (DB: col_5) - Condition
-            col6: item.tracking || '',        // Column E (DB: col_6) - Tracking Number
-            col7: '',                         // Column F (DB: col_7) - Serial Number (empty)
-            col8: '',                         // Column G (DB: col_8) - Box (empty)
-            col9: '',                         // Column H (DB: col_9) - By (empty)
-            col10: item.usavSku || '',        // Column I (DB: col_10) - SKU from Orders E
+            dateTime: '',                                    // Will be set when packer confirms shipment
+            orderId: item.orderNumber || '',
+            productTitle: item.itemTitle || '',
+            condition: item.condition || '',
+            shippingTrackingNumber: item.tracking || '',
+            serialNumber: '',                                // Will be filled by tech scan
+            boxedBy: '',                                     // Will be filled by packer
+            testedBy: '',                                    // Will be filled by tech scan
+            sku: item.usavSku || '',
+            status: 'pending',
+            statusHistory: '[]',
         }));
 
         const appendOrders = sheets.spreadsheets.values.append({
