@@ -107,7 +107,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
 
     // Copy entire row
     const copyRow = (result: SearchResult) => {
-        const rowText = `Order ID: ${result.order_id}\nTracking: ${result.shipping_tracking_number}\nSerial: ${result.serial_number || 'N/A'}\nCondition: ${result.condition}\nProduct: ${result.product_title}\nShipped: ${result.is_shipped ? result.date_time : 'Not Shipped'}`;
+        const rowText = `Serial: ${result.serial_number || 'N/A'}\nOrder ID: ${result.order_id}\nTracking: ${result.shipping_tracking_number}\nProduct: ${result.product_title}\nCondition: ${result.condition}\nTested By: ${result.tested_by || 'N/A'}\nBoxed By: ${result.boxed_by || 'N/A'}\nShipped: ${result.is_shipped ? result.date_time : 'Not Shipped'}`;
         copyToClipboard(rowText, `row-${result.id}`);
     };
 
@@ -299,6 +299,18 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                                         <div className="pt-2 border-t border-gray-200">
                                                             <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Condition</p>
                                                             <p className="font-semibold leading-tight">{result.condition}</p>
+                                                        </div>
+
+                                                        {/* Tested By */}
+                                                        <div className="pt-2 border-t border-gray-200">
+                                                            <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Tested By</p>
+                                                            <p className="font-semibold leading-tight">{result.tested_by || 'N/A'}</p>
+                                                        </div>
+
+                                                        {/* Boxed By */}
+                                                        <div className="pt-2 border-t border-gray-200">
+                                                            <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Boxed By</p>
+                                                            <p className="font-semibold leading-tight">{result.boxed_by || 'N/A'}</p>
                                                         </div>
 
                                                         {/* Shipped Date */}
