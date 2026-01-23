@@ -47,11 +47,11 @@ export async function POST(req: NextRequest) {
 }
 
 async function executeCheckTrackingInShipped() {
-    // Read from orders table where col_8 (tracking) has a value
-    const ordersData = await db.select().from(orders).where(isNotNull(orders.col8));
+    // Read from orders table where shipping_tracking_number has a value
+    const ordersData = await db.select().from(orders).where(isNotNull(orders.shippingTrackingNumber));
 
-    // Read existing shipped tracking numbers from col_6
-    const shippedData = await db.select({ tracking: shipped.col6 }).from(shipped);
+    // Read existing shipped tracking numbers
+    const shippedData = await db.select({ tracking: shipped.shippingTrackingNumber }).from(shipped);
     const shippedTrackingSet = new Set(
         shippedData
             .map(s => getLastEightDigits(s.tracking || ''))
@@ -63,24 +63,24 @@ async function executeCheckTrackingInShipped() {
     const processedOrders = [];
 
     for (const order of ordersData) {
-        const tracking = String(order.col8 || '').trim();
+        const tracking = String(order.shippingTrackingNumber || '').trim();
         if (tracking) {
             const trackingKey = getLastEightDigits(tracking);
             if (!shippedTrackingSet.has(trackingKey)) {
                 newShipped.push({
-                    col2: '',                    // Date/Time (empty initially)
-                    col3: order.col3 || '',      // Order ID
-                    col4: order.col4 || '',      // Product Title
-                    col5: order.col7 || '',      // Condition
-                    col6: tracking,              // Tracking Number
-                    col7: '',                    // Serial Number (empty)
-                    col8: '',                    // Box (empty)
-                    col9: '',                    // By (empty)
-                    col10: order.col6 || '',     // SKU
+                    dateTime: '',                           // Date/Time (empty initially)
+                    orderId: order.orderId || '',           // Order ID
+                    productTitle: order.productTitle || '', // Product Title
+                    condition: order.condition || '',       // Condition
+                    shippingTrackingNumber: tracking,       // Tracking Number
+                    serialNumber: '',                       // Serial Number (empty)
+                    boxedBy: '',                            // Box (empty)
+                    testedBy: '',                           // By (empty)
+                    sku: order.sku || '',                   // SKU
                 });
                 shippedTrackingSet.add(trackingKey);
             }
-            processedOrders.push(order.col1);
+            processedOrders.push(order.id);
         }
     }
 
@@ -89,11 +89,11 @@ async function executeCheckTrackingInShipped() {
         await db.insert(shipped).values(newShipped);
     }
 
-    // Mark orders as processed (col_9 = 'green' or processed status)
+    // Mark orders as processed
     if (processedOrders.length > 0) {
         await db.update(orders)
-            .set({ col9: 'processed' })
-            .where(inArray(orders.col1, processedOrders));
+            .set({ daysLate: 'processed' })
+            .where(inArray(orders.id, processedOrders));
     }
 
     return NextResponse.json({ 
@@ -104,27 +104,27 @@ async function executeCheckTrackingInShipped() {
 
 async function executeRemoveDuplicateShipped() {
     // Get all shipped records
-    const shippedData = await db.select().from(shipped).orderBy(shipped.col1);
+    const shippedData = await db.select().from(shipped).orderBy(shipped.id);
     
     const trackingMap = new Map();
     const idsToDelete: number[] = [];
 
     for (const row of shippedData) {
-        const tracking = String(row.col6 || '').trim();
+        const tracking = String(row.shippingTrackingNumber || '').trim();
         if (tracking) {
             if (trackingMap.has(tracking)) {
                 // Duplicate found, mark for deletion
-                idsToDelete.push(row.col1);
+                idsToDelete.push(row.id);
             } else {
                 // First occurrence, keep it
-                trackingMap.set(tracking, row.col1);
+                trackingMap.set(tracking, row.id);
             }
         }
     }
 
     // Delete duplicate rows
     if (idsToDelete.length > 0) {
-        await db.delete(shipped).where(inArray(shipped.col1, idsToDelete));
+        await db.delete(shipped).where(inArray(shipped.id, idsToDelete));
     }
 
     return NextResponse.json({ 
@@ -134,15 +134,15 @@ async function executeRemoveDuplicateShipped() {
 }
 
 async function executeTransferExistingOrdersToRestock() {
-    // Get all shipped records with date/time (col_2 is not empty)
-    const shippedData = await db.select().from(shipped).where(isNotNull(shipped.col2));
+    // Get all shipped records with date/time
+    const shippedData = await db.select().from(shipped).where(isNotNull(shipped.dateTime));
     
     const shippedTrackings = new Set<string>();
     const shippedOrderIds = new Set<string>();
 
     for (const row of shippedData) {
-        if (row.col6) shippedTrackings.add(getLastEightDigits(row.col6));
-        if (row.col3) shippedOrderIds.add(String(row.col3).trim());
+        if (row.shippingTrackingNumber) shippedTrackings.add(getLastEightDigits(row.shippingTrackingNumber));
+        if (row.orderId) shippedOrderIds.add(String(row.orderId).trim());
     }
 
     // Get all orders
@@ -150,18 +150,18 @@ async function executeTransferExistingOrdersToRestock() {
     const idsToDelete: number[] = [];
 
     for (const order of ordersData) {
-        const orderId = String(order.col3 || '').trim();
-        const tracking = String(order.col8 || '').trim();
+        const orderId = String(order.orderId || '').trim();
+        const tracking = String(order.shippingTrackingNumber || '').trim();
         
         if ((tracking && shippedTrackings.has(getLastEightDigits(tracking))) || 
             (orderId && shippedOrderIds.has(orderId))) {
-            idsToDelete.push(order.col1);
+            idsToDelete.push(order.id);
         }
     }
 
     // Delete shipped orders from orders table
     if (idsToDelete.length > 0) {
-        await db.delete(orders).where(inArray(orders.col1, idsToDelete));
+        await db.delete(orders).where(inArray(orders.id, idsToDelete));
     }
 
     return NextResponse.json({ 
@@ -180,7 +180,7 @@ async function executeCalculateLateOrders() {
     let calculatedCount = 0;
 
     for (const order of ordersData) {
-        const shipByDate = order.col2; // Ship by date in col_2
+        const shipByDate = order.shipByDate;
         let lateValue = "";
         
         if (shipByDate) {
@@ -194,10 +194,10 @@ async function executeCalculateLateOrders() {
             }
         }
         
-        // Update col_9 with late status (column H in sheet)
+        // Update daysLate with late status
         await db.update(orders)
-            .set({ col9: lateValue })
-            .where(eq(orders.col1, order.col1));
+            .set({ daysLate: lateValue })
+            .where(eq(orders.id, order.id));
     }
 
     return NextResponse.json({ 
@@ -208,27 +208,27 @@ async function executeCalculateLateOrders() {
 
 async function executeRemoveDuplicateOrders() {
     // Get all orders
-    const ordersData = await db.select().from(orders).orderBy(orders.col1);
+    const ordersData = await db.select().from(orders).orderBy(orders.id);
     
     const trackingMap = new Map();
     const idsToDelete: number[] = [];
 
     for (const order of ordersData) {
-        const tracking = String(order.col8 || '').trim(); // col_8 is tracking (column G)
+        const tracking = String(order.shippingTrackingNumber || '').trim();
         if (tracking) {
             if (trackingMap.has(tracking)) {
                 // Duplicate found
-                idsToDelete.push(order.col1);
+                idsToDelete.push(order.id);
             } else {
                 // First occurrence
-                trackingMap.set(tracking, order.col1);
+                trackingMap.set(tracking, order.id);
             }
         }
     }
 
     // Delete duplicate orders
     if (idsToDelete.length > 0) {
-        await db.delete(orders).where(inArray(orders.col1, idsToDelete));
+        await db.delete(orders).where(inArray(orders.id, idsToDelete));
     }
 
     return NextResponse.json({ 
@@ -238,8 +238,8 @@ async function executeRemoveDuplicateOrders() {
 }
 
 async function executeUpdateSkuStockFromShipped() {
-    // Get all SKUs from shipped (col_10)
-    const shippedData = await db.select({ sku: shipped.col10 }).from(shipped);
+    // Get all SKUs from shipped
+    const shippedData = await db.select({ sku: shipped.sku }).from(shipped);
     const shippedSkus = new Set(
         shippedData
             .map(s => normalizeSku(s.sku))
@@ -268,7 +268,7 @@ async function executeUpdateSkuStockFromShipped() {
 }
 
 async function executeSyncPackerTimestampsToShipped() {
-    // Get shipped records without timestamps (col_2 is empty)
+    // Get shipped records without timestamps
     const shippedData = await db.select().from(shipped);
     
     let processedCount = 0;
@@ -282,19 +282,19 @@ async function executeSyncPackerTimestampsToShipped() {
         
         for (const shipRow of shippedData) {
             // If shipped has no timestamp but has order ID and tracking
-            if (!shipRow.col2 && shipRow.col3 && shipRow.col6) {
+            if (!shipRow.dateTime && shipRow.orderId && shipRow.shippingTrackingNumber) {
                 processedCount++;
                 
                 // Find matching packer row by tracking number
                 for (const packRow of packerData) {
                     if (packRow.col3 && // packer has tracking in col_3
-                        getLastEightDigits(packRow.col3) === getLastEightDigits(shipRow.col6) &&
+                        getLastEightDigits(packRow.col3) === getLastEightDigits(shipRow.shippingTrackingNumber) &&
                         packRow.col2) { // packer has timestamp
                         
                         // Update shipped timestamp
                         await db.update(shipped)
-                            .set({ col2: packRow.col2 })
-                            .where(eq(shipped.col1, shipRow.col1));
+                            .set({ dateTime: packRow.col2 })
+                            .where(eq(shipped.id, shipRow.id));
                         updatedCount++;
                         break;
                     }
@@ -329,12 +329,12 @@ async function executeRecheckTechTrackingIntegrity() {
                 
                 // Find matching shipped row by tracking
                 for (const shipRow of shippedData) {
-                    if (shipRow.col6 && // shipped tracking in col_6
-                        getLastEightDigits(shipRow.col6) === getLastEightDigits(techTracking)) {
+                    if (shipRow.shippingTrackingNumber &&
+                        getLastEightDigits(shipRow.shippingTrackingNumber) === getLastEightDigits(techTracking)) {
                         
-                        // Update tech product title from shipped (col_4 -> col_2)
+                        // Update tech product title from shipped (productTitle -> col_2)
                         await db.update(techTable)
-                            .set({ col2: shipRow.col4 }) // Update product title
+                            .set({ col2: shipRow.productTitle }) // Update product title
                             .where(eq(techTable.col1, techRow.col1));
                         fixedCount++;
                         break;
@@ -370,12 +370,12 @@ async function executeRecheckPackerTrackingIntegrity() {
                 
                 // Find matching shipped row by tracking
                 for (const shipRow of shippedData) {
-                    if (shipRow.col6 && // shipped tracking in col_6
-                        getLastEightDigits(shipRow.col6) === getLastEightDigits(packTracking)) {
+                    if (shipRow.shippingTrackingNumber &&
+                        getLastEightDigits(shipRow.shippingTrackingNumber) === getLastEightDigits(packTracking)) {
                         
-                        // Update packer carrier/product from shipped (col_4 -> col_5)
+                        // Update packer carrier/product from shipped (productTitle -> col_5)
                         await db.update(packerTable)
-                            .set({ col5: shipRow.col4 }) // Update product title in col_5
+                            .set({ col5: shipRow.productTitle }) // Update product title in col_5
                             .where(eq(packerTable.col1, packRow.col1));
                         fixedCount++;
                         break;

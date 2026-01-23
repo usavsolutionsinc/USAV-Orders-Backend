@@ -24,6 +24,7 @@ export interface RSRecord {
   id: number;
   date_time: string;
   ticket_number: string;
+  name: string;
   contact: string;
   product_title: string;
   price: string;

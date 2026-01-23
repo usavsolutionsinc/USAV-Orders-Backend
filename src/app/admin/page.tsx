@@ -274,7 +274,7 @@ export default function AdminPage() {
                                 ))}
                             </div>
                         </div>
-                    ) : (
+                    ) : activeTab === 'tags' ? (
                         <div className="space-y-4">
                             <div className="flex justify-between items-center">
                                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Task Metadata Tags</h2>
@@ -466,7 +466,7 @@ function OrdersManagement() {
                                     value={order.assigned_to || ''}
                                     onChange={(e) => assignOrderMutation.mutate({ 
                                         orderId: order.id, 
-                                        assignedTo: e.target.value || null 
+                                        assignedTo: e.target.value || undefined 
                                     })}
                                     className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 >

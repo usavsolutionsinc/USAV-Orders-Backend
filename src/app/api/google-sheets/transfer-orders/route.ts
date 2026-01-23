@@ -172,24 +172,24 @@ export async function POST(req: NextRequest) {
 
         // Prepare data for Neon DB
         const ordersToInsert = filteredSourceRows.map(row => ({
-            col2: row[colIndices.shipByDate] || '',
-            col3: row[colIndices.orderNumber] || '',
-            col4: row[colIndices.itemTitle] || '',
-            col5: row[colIndices.quantity] || '',
-            col6: row[colIndices.usavSku] || '',
-            col7: row[colIndices.condition] || '',
-            col8: row[colIndices.tracking] || '',
-            col9: '', // OOS
-            col10: '', // Blank
-            col11: row[colIndices.note] || '',
+            shipByDate: row[colIndices.shipByDate] || '',
+            orderId: row[colIndices.orderNumber] || '',
+            productTitle: row[colIndices.itemTitle] || '',
+            quantity: row[colIndices.quantity] || '',
+            sku: row[colIndices.usavSku] || '',
+            condition: row[colIndices.condition] || '',
+            shippingTrackingNumber: row[colIndices.tracking] || '',
+            outOfStock: '', // OOS
+            notes: row[colIndices.note] || '',
         }));
 
         const shippedToInsert = filteredSourceRows.map(row => ({
-            col2: '', // Date / Time (empty)
-            col3: row[colIndices.orderNumber] || '',
-            col4: row[colIndices.itemTitle] || '',
-            col5: row[colIndices.condition] || '',
-            col6: row[colIndices.tracking] || '',
+            dateTime: '', // Date / Time (empty)
+            orderId: row[colIndices.orderNumber] || '',
+            productTitle: row[colIndices.itemTitle] || '',
+            condition: row[colIndices.condition] || '',
+            shippingTrackingNumber: row[colIndices.tracking] || '',
+            sku: row[colIndices.usavSku] || '',
         }));
 
         // 5. Concurrent upload to Sheets and DB

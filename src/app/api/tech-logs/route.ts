@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
             let statusHistory = [];
             if (currentRecord && currentRecord.length > 0) {
-                const existing = currentRecord[0].status_history;
+                const existing = currentRecord[0].status_history as string | null | undefined;
                 try {
                     statusHistory = existing ? JSON.parse(existing) : [];
                 } catch {
