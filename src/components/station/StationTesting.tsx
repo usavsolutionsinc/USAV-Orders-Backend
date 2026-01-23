@@ -340,86 +340,98 @@ export default function StationTesting({
                     capturedSerialNumber={serialNumber}
                     onLoaded={setCurrentWorkOrder}
                 />
+            </div>
 
-                {/* Content Area - Vertical Stack */}
-                <div className="flex-1 overflow-y-auto no-scrollbar pt-4 space-y-4">
-                    {/* Active Product Info - Shows immediately under scan field */}
-                    {processedOrder && (
-                        <ActiveProductInfo 
-                            orderId={processedOrder.orderId || 'N/A'}
-                            productTitle={processedOrder.title}
-                        />
-                    )}
-                    
-                    {/* Current Order Display - Original detailed view */}
-                    {processedOrder && (
-                        <CurrentOrder 
-                            orderId={processedOrder.orderId || 'N/A'}
-                            productTitle={processedOrder.title}
-                        />
-                    )}
+            {/* Content Area - Vertical Stack */}
+            <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-8 space-y-4">
+                {/* Active Product Info - Shows immediately under scan field */}
+                {processedOrder && (
+                    <ActiveProductInfo 
+                        orderId={processedOrder.orderId || 'N/A'}
+                        productTitle={processedOrder.title}
+                    />
+                )}
+                
+                {/* Current Order Display - Original detailed view */}
+                {processedOrder && (
+                    <CurrentOrder 
+                        orderId={processedOrder.orderId || 'N/A'}
+                        productTitle={processedOrder.title}
+                    />
+                )}
 
-                    <AnimatePresence mode="wait">
-                        {processedOrder ? (
-                            <motion.div 
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: 10 }}
-                                className="space-y-4"
-                            >
-                                <div className={`${activeColor.light} rounded-[2rem] p-6 border ${activeColor.border} space-y-6`}>
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className={`w-1.5 h-1.5 rounded-full ${activeColor.bg} animate-pulse`} />
-                                            <p className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>Active Order</p>
-                                        </div>
-                                        <h3 className="text-lg font-black text-gray-900 leading-tight tracking-tighter">{processedOrder.title}</h3>
+                <AnimatePresence mode="wait">
+                    {processedOrder ? (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                            className="space-y-4"
+                        >
+                            <div className={`${activeColor.light} rounded-[2rem] p-6 border ${activeColor.border} space-y-6`}>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className={`w-1.5 h-1.5 rounded-full ${activeColor.bg} animate-pulse`} />
+                                        <p className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>Active Order</p>
                                     </div>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
-                                            <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.sku}</p>
-                                        </div>
-                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order</p>
-                                            <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.orderId}</p>
-                                        </div>
-                                    </div>
-
-                                    {serialNumber && (
-                                        <div className="p-4 bg-emerald-600 text-white rounded-2xl shadow-lg">
-                                            <p className="text-[9px] font-black uppercase opacity-80 mb-1">Captured Serial</p>
-                                            <p className="text-sm font-mono font-black">{serialNumber}</p>
-                                        </div>
-                                    )}
-
-                                    <div className="space-y-3">
-                                        <div className="flex items-center gap-2">
-                                            <ClipboardList className={`w-4 h-4 ${activeColor.text}`} />
-                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
-                                        </div>
-                                        <p className="text-xs font-medium text-gray-700 bg-white/50 p-4 rounded-2xl border border-white/50 leading-relaxed">{processedOrder.notes}</p>
-                                    </div>
-
-                                    <button 
-                                        onClick={handleComplete}
-                                        className={`w-full py-4 ${activeColor.bg} ${activeColor.hover} text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] transition-all active:scale-[0.98] shadow-xl ${activeColor.shadow} flex items-center justify-center gap-3`}
-                                    >
-                                        <Check className="w-4 h-4" />
-                                        Complete Task
-                                    </button>
+                                    <h3 className="text-lg font-black text-gray-900 leading-tight tracking-tighter">{processedOrder.title}</h3>
                                 </div>
-                            </motion.div>
-                        ) : null}
-                    </AnimatePresence>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
+                                        <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.sku}</p>
+                                    </div>
+                                    <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order</p>
+                                        <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.orderId}</p>
+                                    </div>
+                                </div>
+
+                                {serialNumber && (
+                                    <div className="p-4 bg-emerald-600 text-white rounded-2xl shadow-lg">
+                                        <p className="text-[9px] font-black uppercase opacity-80 mb-1">Captured Serial</p>
+                                        <p className="text-sm font-mono font-black">{serialNumber}</p>
+                                    </div>
+                                )}
+
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <ClipboardList className={`w-4 h-4 ${activeColor.text}`} />
+                                        <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
+                                    </div>
+                                    <p className="text-xs font-medium text-gray-700 bg-white/50 p-4 rounded-2xl border border-white/50 leading-relaxed">{processedOrder.notes}</p>
+                                </div>
+
+                                <button 
+                                    onClick={handleComplete}
+                                    className={`w-full py-4 ${activeColor.bg} ${activeColor.hover} text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] transition-all active:scale-[0.98] shadow-xl ${activeColor.shadow} flex items-center justify-center gap-3`}
+                                >
+                                    <Check className="w-4 h-4" />
+                                    Complete Task
+                                </button>
+                            </div>
+                        </motion.div>
+                    ) : null}
+                </AnimatePresence>
 
                     {/* Up Next Order - ALWAYS show right below CurrentWorkOrder */}
                     <div className="mt-8 pt-6 border-t border-gray-100">
                         <UpNextOrder 
                             techId={userId}
-                            onStart={(tracking) => handleSubmit(undefined, tracking)}
-                            onMissingParts={(orderId) => console.log('Missing parts:', orderId)}
+                            onStart={(tracking) => {
+                                // Clear current work order before starting a new one
+                                setScannedTrackingNumber(null);
+                                setCurrentWorkOrder(null);
+                                setProcessedOrder(null);
+                                setSerialNumber('');
+                                // Small delay to allow state to clear
+                                setTimeout(() => handleSubmit(undefined, tracking), 50);
+                            }}
+                            onMissingParts={(orderId, reason) => {
+                                console.log('Missing parts:', orderId, reason);
+                                if (onComplete) onComplete();
+                            }}
                             onAllCompleted={() => {
                                 confetti({
                                     particleCount: 150,
@@ -430,8 +442,6 @@ export default function StationTesting({
                             }}
                         />
                     </div>
-                </div>
-            </div>
 
                 {/* Footer Logistics */}
                 <div className="mt-8 pt-6 border-t border-gray-50 text-center">

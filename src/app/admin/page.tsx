@@ -40,6 +40,7 @@ interface Order {
     assigned_to: string | null;
     status: string;
     urgent: boolean;
+    out_of_stock: string | null;
 }
 
 export default function AdminPage() {
@@ -376,11 +377,11 @@ function OrdersManagement() {
 
     // Assign order mutation
     const assignOrderMutation = useMutation({
-        mutationFn: async ({ orderId, assignedTo, urgent, shipByDate }: { orderId: number; assignedTo?: string; urgent?: boolean; shipByDate?: string }) => {
+        mutationFn: async ({ orderId, assignedTo, urgent, shipByDate, outOfStock }: { orderId: number; assignedTo?: string; urgent?: boolean; shipByDate?: string; outOfStock?: string }) => {
             const res = await fetch('/api/orders/assign', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderId, assignedTo, urgent, shipByDate }),
+                body: JSON.stringify({ orderId, assignedTo, urgent, shipByDate, outOfStock }),
             });
             if (!res.ok) throw new Error('Failed to assign order');
             return res.json();
@@ -455,26 +456,74 @@ function OrdersManagement() {
                                         order.status === 'in_progress' ? 'bg-emerald-100 text-emerald-700' :
                                         'bg-amber-100 text-amber-700'
                                     }`}>
-                                        {(order.status ?? '').replace('_', ' ')}
+                                        {order.status === 'missing_parts' && order.out_of_stock ? order.out_of_stock : (order.status ?? '').replace('_', ' ')}
                                     </span>
                                 </div>
                             </div>
 
+                            {order.status === 'missing_parts' && (
+                                <div className="absolute top-4 right-4">
+                                    <button
+                                        onClick={() => {
+                                            const currentVal = order.out_of_stock || '';
+                                            const newVal = currentVal.startsWith('ordered:') 
+                                                ? currentVal.replace('ordered:', '').trim()
+                                                : `ordered: ${currentVal}`;
+                                            assignOrderMutation.mutate({ 
+                                                orderId: order.id, 
+                                                outOfStock: newVal
+                                            });
+                                        }}
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                            order.out_of_stock?.startsWith('ordered:')
+                                                ? 'bg-emerald-500 text-white shadow-lg'
+                                                : 'bg-gray-100 text-gray-400 border border-gray-200 hover:border-emerald-300 hover:text-emerald-500'
+                                        }`}
+                                        title={order.out_of_stock?.startsWith('ordered:') ? 'Part Ordered' : 'Mark as Ordered'}
+                                    >
+                                        <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="flex items-center gap-3">
-                                {/* Assign to Technician */}
-                                <select
-                                    value={order.assigned_to || ''}
-                                    onChange={(e) => assignOrderMutation.mutate({ 
-                                        orderId: order.id, 
-                                        assignedTo: e.target.value || undefined 
-                                    })}
-                                    className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                >
-                                    <option value="">Unassigned</option>
-                                    <option value="Tech_1">Tech 1 (Michael)</option>
-                                    <option value="Tech_2">Tech 2 (Thuc)</option>
-                                    <option value="Tech_3">Tech 3 (Sang)</option>
-                                </select>
+                                {/* Assign to Technician - Quick Buttons */}
+                                <div className="flex-1 flex gap-2">
+                                    {[
+                                        { id: 'Tech_1', label: 'Michael' },
+                                        { id: 'Tech_2', label: 'Thuc' },
+                                        { id: 'Tech_3', label: 'Sang' }
+                                    ].map((tech) => (
+                                        <button
+                                            key={tech.id}
+                                            onClick={() => assignOrderMutation.mutate({ 
+                                                orderId: order.id, 
+                                                assignedTo: order.assigned_to === tech.id ? '' : tech.id 
+                                            })}
+                                            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                                                order.assigned_to === tech.id
+                                                    ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+                                            }`}
+                                        >
+                                            {tech.label}
+                                        </button>
+                                    ))}
+                                    <button
+                                        onClick={() => assignOrderMutation.mutate({ 
+                                            orderId: order.id, 
+                                            assignedTo: '' 
+                                        })}
+                                        className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                                            !order.assigned_to
+                                                ? 'bg-gray-200 border-gray-300 text-gray-700'
+                                                : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'
+                                        }`}
+                                        title="Unassign"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
 
                                 {/* Toggle Urgent */}
                                 <button

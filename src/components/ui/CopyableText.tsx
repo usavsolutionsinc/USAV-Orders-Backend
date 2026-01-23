@@ -7,13 +7,14 @@ interface CopyableTextProps {
     text: string;
     className?: string;
     disabled?: boolean;
+    variant?: 'serial' | 'order' | 'tracking' | 'default';
 }
 
 /**
  * A text component that can be copied to clipboard on click
- * Shows last 8 characters for long values
+ * Supports different display lengths for various IDs
  */
-export function CopyableText({ text, className = '', disabled = false }: CopyableTextProps) {
+export function CopyableText({ text, className = '', disabled = false, variant = 'default' }: CopyableTextProps) {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = (e: React.MouseEvent) => {
@@ -25,14 +26,28 @@ export function CopyableText({ text, className = '', disabled = false }: Copyabl
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Show last 8 characters, no dots
-    const displayText = text.length > 8 ? text.slice(-8) : text;
+    // Calculate display text based on variant
+    const getDisplayText = () => {
+        if (!text) return '---';
+        
+        switch (variant) {
+            case 'serial':
+                return text.length > 6 ? text.slice(-6) : text;
+            case 'order':
+            case 'tracking':
+                return text.length > 10 ? text.slice(-10) : text;
+            default:
+                return text.length > 8 ? text.slice(-8) : text;
+        }
+    };
+
+    const displayText = getDisplayText();
     const isEmpty = !text || text === '---' || disabled;
 
     if (isEmpty) {
         return (
-            <div className={`${className} flex items-center justify-center w-full opacity-40`}>
-                <span className="text-left w-full">---</span>
+            <div className={`${className} flex items-center justify-start w-full opacity-40`}>
+                <span className="text-left">---</span>
             </div>
         );
     }

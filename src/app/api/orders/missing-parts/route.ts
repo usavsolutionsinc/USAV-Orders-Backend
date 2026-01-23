@@ -7,7 +7,7 @@ import pool from '@/lib/db';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId } = body;
+    const { orderId, reason } = body;
 
     if (!orderId) {
       return NextResponse.json(
@@ -16,10 +16,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update order status to missing_parts and clear assignment
+    // Update order status to missing_parts, clear assignment, and set reason
     await pool.query(
-      'UPDATE orders SET status = $1, assigned_to = NULL WHERE id = $2',
-      ['missing_parts', orderId]
+      'UPDATE orders SET status = $1, assigned_to = NULL, out_of_stock = $2 WHERE id = $3',
+      ['missing_parts', reason || null, orderId]
     );
 
     return NextResponse.json({ success: true });

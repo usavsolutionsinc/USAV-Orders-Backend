@@ -7,7 +7,7 @@ import pool from '@/lib/db';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, assignedTo, urgent, shipByDate } = body;
+    const { orderId, assignedTo, urgent, shipByDate, outOfStock } = body;
 
     if (!orderId) {
       return NextResponse.json(
@@ -23,12 +23,16 @@ export async function POST(req: NextRequest) {
 
     if (assignedTo !== undefined) {
       updates.push(`assigned_to = $${paramCount++}`);
-      values.push(assignedTo);
+      values.push(assignedTo || null);
       
       // If assigning to a tech, change status to 'assigned'
       if (assignedTo) {
         updates.push(`status = $${paramCount++}`);
         values.push('assigned');
+      } else {
+        // If unassigning, change status back to 'unassigned'
+        updates.push(`status = $${paramCount++}`);
+        values.push('unassigned');
       }
     }
 
@@ -40,6 +44,11 @@ export async function POST(req: NextRequest) {
     if (shipByDate !== undefined) {
       updates.push(`ship_by_date = $${paramCount++}`);
       values.push(shipByDate);
+    }
+
+    if (outOfStock !== undefined) {
+      updates.push(`out_of_stock = $${paramCount++}`);
+      values.push(outOfStock);
     }
 
     if (updates.length === 0) {

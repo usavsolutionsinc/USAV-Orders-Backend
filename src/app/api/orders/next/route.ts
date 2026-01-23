@@ -41,7 +41,8 @@ export async function GET(req: NextRequest) {
         sku,
         urgent,
         status,
-        condition
+        condition,
+        shipping_tracking_number
       FROM orders
       WHERE 
         -- Status is not completed or missing_parts

@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Package, Loader2, List, Copy, Check, History } from '../Icons';
 import { motion } from 'framer-motion';
 import Checklist from '../Checklist';
+import { CopyableText } from '../ui/CopyableText';
 
 interface TechLog {
     id: string;
@@ -20,43 +21,6 @@ interface TechLogsProps {
     isLoading: boolean;
     techId?: string;
 }
-
-const CopyableText = ({ text, className, disabled = false, isSerial = false }: { text: string; className?: string; disabled?: boolean; isSerial?: boolean }) => {
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!text || disabled || text === '---') return;
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    // Show last 6 digits for serial numbers, last 8 for tracking
-    const displayText = isSerial 
-        ? (text.length > 6 ? text.slice(-6) : text)
-        : (text.length > 8 ? text.slice(-8) : text);
-    const isEmpty = !text || text === '---' || disabled;
-
-    if (isEmpty) {
-        return (
-            <div className={`${className} flex items-center justify-center w-full opacity-40`}>
-                <span className="text-left w-full">---</span>
-            </div>
-        );
-    }
-
-    return (
-        <button 
-            onClick={handleCopy}
-            className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-full`}
-            title={`Click to copy: ${text}`}
-        >
-            <span className="truncate flex-1 text-left">{displayText}</span>
-            {copied ? <Check className="w-2 h-2" /> : <Copy className="w-2 h-2 opacity-0 group-hover:opacity-40 transition-opacity" />}
-        </button>
-    );
-};
 
 export default function TechLogs({ 
     history: initialHistory, 
@@ -307,12 +271,12 @@ export default function TechLogs({
                                             <CopyableText 
                                                 text={log.tracking || ''} 
                                                 className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30"
-                                                isSerial={false}
+                                                variant="tracking"
                                             />
                                             <CopyableText 
                                                 text={log.serial || ''} 
                                                 className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30"
-                                                isSerial={true}
+                                                variant="serial"
                                             />
                                         </motion.div>
                                     );

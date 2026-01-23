@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Play, Package, Calendar, X } from './Icons';
+import { AlertCircle, Play, Package, Calendar, X, Check } from './Icons';
 
 interface Order {
   id: number;
@@ -12,12 +12,13 @@ interface Order {
   sku: string;
   urgent: boolean;
   status: string;
+  shipping_tracking_number: string;
 }
 
 interface UpNextOrderProps {
   techId: string;
   onStart: (tracking: string) => void;
-  onMissingParts: (orderId: number) => void;
+  onMissingParts: (orderId: number, reason: string) => void;
   onAllCompleted?: () => void;
 }
 
@@ -25,6 +26,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const [nextOrder, setNextOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [allCompletedToday, setAllCompletedToday] = useState(false);
+  const [showMissingPartsInput, setShowMissingPartsInput] = useState(false);
+  const [missingPartsReason, setMissingPartsReason] = useState('');
 
   useEffect(() => {
     fetchNextOrder();
@@ -60,7 +63,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         body: JSON.stringify({ orderId: nextOrder.id, techId }),
       });
       if (res.ok) {
-        onStart(nextOrder.order_id);
+        // Pass the shipping tracking number to StationTesting to start the work order
+        onStart(nextOrder.shipping_tracking_number || nextOrder.order_id);
         fetchNextOrder(); // Fetch next order
       }
     } catch (error) {
@@ -68,7 +72,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     }
   };
 
-  const handleSkip = async () => {
+  const handleSkip = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!nextOrder) return;
     try {
       const res = await fetch('/api/orders/skip', {
@@ -85,15 +90,20 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   };
 
   const handleMissingParts = async () => {
-    if (!nextOrder) return;
+    if (!nextOrder || !missingPartsReason.trim()) return;
     try {
       const res = await fetch('/api/orders/missing-parts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: nextOrder.id }),
+        body: JSON.stringify({ 
+          orderId: nextOrder.id,
+          reason: missingPartsReason.trim()
+        }),
       });
       if (res.ok) {
-        onMissingParts(nextOrder.id);
+        onMissingParts(nextOrder.id, missingPartsReason.trim());
+        setShowMissingPartsInput(false);
+        setMissingPartsReason('');
         fetchNextOrder(); // Fetch next order
       }
     } catch (error) {
@@ -166,7 +176,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         {/* Header */}
         <div className="flex items-center justify-between mb-3 ml-2">
           <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">
-            Up Next (Unassigned)
+            Up Next {nextOrder.status === 'assigned' ? '' : '(Unassigned)'}
           </h3>
           {nextOrder.urgent && (
             <div className="flex items-center gap-1 px-2 py-0.5 bg-red-600 text-white rounded-lg animate-pulse">
@@ -177,20 +187,59 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </div>
 
         {/* Action Buttons Row */}
-        <div className="flex items-center gap-2 mb-3">
-          <button
-            onClick={handleMissingParts}
-            className="flex-1 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-          >
-            Missing Parts
-          </button>
-          <button
-            onClick={handleStart}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/30"
-          >
-            <Play className="w-3 h-3" />
-            Start
-          </button>
+        <div className="flex flex-col gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowMissingPartsInput(!showMissingPartsInput)}
+              className="flex-1 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+            >
+              Missing Parts
+            </button>
+            <button
+              onClick={handleStart}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/30"
+            >
+              <Play className="w-3 h-3" />
+              Start
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {showMissingPartsInput && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-col gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={missingPartsReason}
+                    onChange={(e) => setMissingPartsReason(e.target.value)}
+                    placeholder="What parts are missing?"
+                    className="w-full px-3 py-2 bg-white border border-amber-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-gray-400"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowMissingPartsInput(false)}
+                      className="flex-1 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-[9px] font-black uppercase tracking-widest"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleMissingParts}
+                      disabled={!missingPartsReason.trim()}
+                      className="flex-1 py-1.5 bg-amber-500 text-white rounded-lg text-[9px] font-black uppercase tracking-widest disabled:opacity-50"
+                    >
+                      Submit
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Info Row */}

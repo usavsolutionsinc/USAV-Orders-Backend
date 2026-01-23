@@ -6,45 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Loader2, Search, X, Copy, Check, AlertTriangle } from '../Icons';
 import { ShippedRecord } from '@/lib/neon/shipped-queries';
 import { ShippedDetailsPanel } from './ShippedDetailsPanel';
-
-// Copyable text component like tech pages
-const CopyableText = ({ text, className, disabled = false, isSerial = false, isOrderId = false }: { text: string; className?: string; disabled?: boolean; isSerial?: boolean; isOrderId?: boolean }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!text || disabled || text === '---') return;
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Show last 6 digits for serial numbers, last 10 for tracking and order_id
-  const displayText = isSerial 
-    ? (text.length > 6 ? text.slice(-6) : text)
-    : (isOrderId || text.length > 10) ? (text.length > 10 ? text.slice(-10) : text)
-    : text;
-  const isEmpty = !text || text === '---' || disabled;
-
-  if (isEmpty) {
-    return (
-      <div className={`${className} flex items-center justify-center w-full opacity-40`}>
-        <span className="text-left w-full">---</span>
-      </div>
-    );
-  }
-
-  return (
-    <button 
-      onClick={handleCopy}
-      className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-full`}
-      title={`Click to copy: ${text}`}
-    >
-      <span className="truncate flex-1 text-left">{displayText}</span>
-      {copied ? <Check className="w-2 h-2" /> : <Copy className="w-2 h-2 opacity-0 group-hover:opacity-40 transition-opacity" />}
-    </button>
-  );
-};
+import { CopyableText } from '../ui/CopyableText';
 
 export function ShippedTable() {
   const searchParams = useSearchParams();
@@ -286,8 +248,7 @@ export function ShippedTable() {
                           <CopyableText 
                             text={record.order_id || ''} 
                             className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50/30 px-0.5 py-0.5 rounded border border-gray-100/30"
-                            isSerial={false}
-                            isOrderId={true}
+                            variant="order"
                           />
                           
                           {/* 3. Product Title */}
@@ -320,14 +281,14 @@ export function ShippedTable() {
                           <CopyableText 
                             text={record.shipping_tracking_number || ''} 
                             className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50/30 px-0.5 py-0.5 rounded border border-blue-100/30"
-                            isSerial={false}
+                            variant="tracking"
                           />
                           
                           {/* 6. Serial Number - Green background */}
                           <CopyableText 
                             text={record.serial_number || ''} 
                             className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-0.5 py-0.5 rounded border border-emerald-100/30"
-                            isSerial={true}
+                            variant="serial"
                           />
                           
                           {/* 7. Boxed By */}
@@ -344,7 +305,7 @@ export function ShippedTable() {
                           <CopyableText 
                             text={record.sku || ''} 
                             className="text-[10px] font-mono font-semibold text-gray-700 px-0.5 py-0.5"
-                            isSerial={false}
+                            variant="default"
                           />
                           
                           {/* 10. Status */}

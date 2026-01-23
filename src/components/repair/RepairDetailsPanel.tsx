@@ -25,7 +25,7 @@ export function RepairDetailsPanel({
     
     setIsSaving(true);
     try {
-      const res = await fetch('/api/rs', {
+      const res = await fetch('/api/repair-service', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: repair.id, notes }),
