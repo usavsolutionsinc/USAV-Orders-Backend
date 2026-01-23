@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Play, Package, Calendar } from './Icons';
+import { AlertCircle, Play, Package, Calendar, X } from './Icons';
 
 interface Order {
   id: number;
@@ -16,13 +16,15 @@ interface Order {
 
 interface UpNextOrderProps {
   techId: string;
-  onStart: (orderId: number) => void;
+  onStart: (tracking: string) => void;
   onMissingParts: (orderId: number) => void;
+  onAllCompleted?: () => void;
 }
 
-export default function UpNextOrder({ techId, onStart, onMissingParts }: UpNextOrderProps) {
+export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
   const [nextOrder, setNextOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [allCompletedToday, setAllCompletedToday] = useState(false);
 
   useEffect(() => {
     fetchNextOrder();
@@ -37,6 +39,10 @@ export default function UpNextOrder({ techId, onStart, onMissingParts }: UpNextO
       if (res.ok) {
         const data = await res.json();
         setNextOrder(data.order || null);
+        setAllCompletedToday(data.all_completed || false);
+        if (data.all_completed && onAllCompleted) {
+          onAllCompleted();
+        }
       }
     } catch (error) {
       console.error('Error fetching next order:', error);
@@ -51,14 +57,30 @@ export default function UpNextOrder({ techId, onStart, onMissingParts }: UpNextO
       const res = await fetch('/api/orders/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: nextOrder.id }),
+        body: JSON.stringify({ orderId: nextOrder.id, techId }),
       });
       if (res.ok) {
-        onStart(nextOrder.id);
+        onStart(nextOrder.order_id);
         fetchNextOrder(); // Fetch next order
       }
     } catch (error) {
       console.error('Error starting order:', error);
+    }
+  };
+
+  const handleSkip = async () => {
+    if (!nextOrder) return;
+    try {
+      const res = await fetch('/api/orders/skip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: nextOrder.id, techId }),
+      });
+      if (res.ok) {
+        fetchNextOrder();
+      }
+    } catch (error) {
+      console.error('Error skipping order:', error);
     }
   };
 
@@ -88,12 +110,32 @@ export default function UpNextOrder({ techId, onStart, onMissingParts }: UpNextO
     );
   }
 
+  if (allCompletedToday) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-emerald-50 rounded-2xl p-8 border-2 border-emerald-200 text-center space-y-4"
+      >
+        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2">
+          <Check className="w-8 h-8 text-emerald-600" />
+        </div>
+        <h3 className="text-sm font-black text-emerald-900 uppercase tracking-widest leading-tight">
+          All orders have been completed today!
+        </h3>
+        <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest">
+          Great job!
+        </p>
+      </motion.div>
+    );
+  }
+
   if (!nextOrder) {
     return (
       <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center">
         <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-          No orders assigned
+          No orders unassigned
         </p>
       </div>
     );
@@ -106,16 +148,25 @@ export default function UpNextOrder({ techId, onStart, onMissingParts }: UpNextO
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 10 }}
-        className={`rounded-2xl p-4 border-2 transition-all ${
+        className={`rounded-2xl p-4 border-2 transition-all relative ${
           nextOrder.urgent
             ? 'bg-red-50 border-red-300 ring-2 ring-red-500/20'
             : 'bg-blue-50 border-blue-200'
         }`}
       >
+        {/* Skip Button - Top Left */}
+        <button
+          onClick={handleSkip}
+          className="absolute -top-2 -left-2 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 shadow-sm transition-all z-10"
+          title="Skip this order"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+
         {/* Header */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 ml-2">
           <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">
-            Up Next
+            Up Next (Unassigned)
           </h3>
           {nextOrder.urgent && (
             <div className="flex items-center gap-1 px-2 py-0.5 bg-red-600 text-white rounded-lg animate-pulse">

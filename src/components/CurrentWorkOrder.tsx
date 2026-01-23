@@ -6,10 +6,11 @@ import { Package, Loader2, AlertCircle, Check } from './Icons';
 
 interface CurrentWorkOrderProps {
   trackingNumber: string | null;
-  onLoaded: (order: { id: string; productTitle: string; orderId: string; sku?: string; condition?: string } | null) => void;
+  capturedSerialNumber?: string | null;
+  onLoaded: (order: { id: string; productTitle: string; orderId: string; sku?: string; condition?: string; serialNumber?: string } | null) => void;
 }
 
-export default function CurrentWorkOrder({ trackingNumber, onLoaded }: CurrentWorkOrderProps) {
+export default function CurrentWorkOrder({ trackingNumber, capturedSerialNumber, onLoaded }: CurrentWorkOrderProps) {
   const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +50,8 @@ export default function CurrentWorkOrder({ trackingNumber, onLoaded }: CurrentWo
           productTitle: foundOrder.product_title || foundOrder.customer || 'Unknown Product',
           orderId: foundOrder.order_id || 'N/A',
           sku: foundOrder.sku || 'N/A',
-          condition: foundOrder.condition || 'N/A'
+          condition: foundOrder.condition || 'N/A',
+          serialNumber: foundOrder.serial_number || null
         };
         
         setOrder(orderData);
@@ -144,6 +146,13 @@ export default function CurrentWorkOrder({ trackingNumber, onLoaded }: CurrentWo
               <div className="p-3 bg-white/60 backdrop-blur-sm rounded-xl border border-emerald-100/50">
                 <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Condition</p>
                 <p className="text-xs font-semibold text-gray-900">{order.condition}</p>
+              </div>
+            )}
+
+            {(capturedSerialNumber || order.serialNumber) && (
+              <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-600/20 col-span-2">
+                <p className="text-[9px] font-black uppercase opacity-80 mb-1">Captured Serial Number</p>
+                <p className="text-sm font-mono font-black">{capturedSerialNumber || order.serialNumber}</p>
               </div>
             )}
           </div>

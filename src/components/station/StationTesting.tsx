@@ -6,6 +6,7 @@ import CurrentOrder from '../CurrentOrder';
 import ActiveProductInfo from '../ActiveProductInfo';
 import UpNextOrder from '../UpNextOrder';
 import CurrentWorkOrder from '../CurrentWorkOrder';
+import confetti from 'canvas-confetti';
 import { 
   Search, 
   Check, 
@@ -48,7 +49,7 @@ export default function StationTesting({
     
     // Current work order state
     const [scannedTrackingNumber, setScannedTrackingNumber] = useState<string | null>(null);
-    const [currentWorkOrder, setCurrentWorkOrder] = useState<{ id: string; productTitle: string; orderId: string; sku?: string; condition?: string } | null>(null);
+    const [currentWorkOrder, setCurrentWorkOrder] = useState<{ id: string; productTitle: string; orderId: string; sku?: string; condition?: string; serialNumber?: string } | null>(null);
     const [serialNumber, setSerialNumber] = useState('');
     
     // Search functionality
@@ -115,9 +116,9 @@ export default function StationTesting({
         return 'SERIAL';
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const input = inputValue.trim();
+    const handleSubmit = async (e?: React.FormEvent, manualValue?: string) => {
+        if (e) e.preventDefault();
+        const input = (manualValue || inputValue).trim();
         if (!input) return;
         
         const type = detectType(input);
@@ -157,12 +158,52 @@ export default function StationTesting({
             } finally {
                 setIsLoading(false);
             }
-        } else if (type === 'SERIAL' && processedOrder) {
-            // If we have an active order and input is a serial, just keep it in input or move to a serial state
-            // For now, let's just let it stay in inputValue and the user can click Complete or press Enter again
-            // Let's call handleComplete if we have a serial and an active order
-            setInputValue(input.toUpperCase());
-            return; 
+        } else if (type === 'SERIAL' && (currentWorkOrder || processedOrder)) {
+            // Priority 4: Everything else is a serial number
+            // If we have an active order, this scan should complete the task
+            const finalSerial = input.toUpperCase();
+            setSerialNumber(finalSerial);
+            
+            // Auto-complete logic
+            setIsLoading(true);
+            try {
+                const now = new Date();
+                const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+                const targetOrder = currentWorkOrder || processedOrder;
+                const tracking = scannedTrackingNumber || targetOrder.tracking || targetOrder.orderId;
+
+                const res = await fetch('/api/tech-logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        techId: userId,
+                        userName,
+                        timestamp,
+                        title: targetOrder.productTitle || targetOrder.title,
+                        tracking,
+                        serial: finalSerial,
+                        count: todayCount + 1
+                    })
+                });
+
+                if (res.ok) {
+                    setSerialNumber('');
+                    setScannedTrackingNumber(null);
+                    setCurrentWorkOrder(null);
+                    setProcessedOrder(null);
+                    if (onComplete) onComplete();
+                    inputRef.current?.focus();
+                } else {
+                    const err = await res.json();
+                    alert(`Error: ${err.error || 'Failed to complete task'}`);
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Network error occurred');
+            } finally {
+                setIsLoading(false);
+            }
         } else if (type === 'COMMAND' && input.toUpperCase() === 'TEST') {
             setProcessedOrder({ ...mockProduct, title: 'TEST UNIT', sku: 'TEST-SKU', tracking: 'TEST-TRK' });
         }
@@ -242,51 +283,7 @@ export default function StationTesting({
     };
 
     const handleSaveSerialNumber = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!currentWorkOrder || !serialNumber.trim() || !scannedTrackingNumber) return;
-
-        setIsLoading(true);
-        try {
-            // Get local timestamp in M/D/YYYY HH:mm:ss format to match DB expectation
-            const now = new Date();
-            const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-
-            const res = await fetch('/api/tech-logs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    techId: userId,
-                    userName,
-                    timestamp,
-                    title: currentWorkOrder.productTitle,
-                    tracking: scannedTrackingNumber,
-                    serial: serialNumber.trim().toUpperCase(),
-                    count: todayCount + 1
-                })
-            });
-
-            if (res.ok) {
-                // Success: clear all work order related state
-                setSerialNumber('');
-                setScannedTrackingNumber(null);
-                setCurrentWorkOrder(null);
-                setProcessedOrder(null);
-                
-                // Refresh history
-                if (onComplete) onComplete();
-                
-                // Refocus input
-                inputRef.current?.focus();
-            } else {
-                const err = await res.json();
-                alert(`Error: ${err.error || 'Failed to save serial number'}`);
-            }
-        } catch (error) {
-            console.error('Error saving serial number:', error);
-            alert('Network error occurred');
-        } finally {
-            setIsLoading(false);
-        }
+        // ... kept for potential internal use but UI div removed
     };
 
     return (
@@ -340,138 +337,101 @@ export default function StationTesting({
                 {/* Current Work Order - Shows when tracking is scanned */}
                 <CurrentWorkOrder 
                     trackingNumber={scannedTrackingNumber}
+                    capturedSerialNumber={serialNumber}
                     onLoaded={setCurrentWorkOrder}
                 />
 
-                {/* Serial Number Input - Shows when current work order exists */}
-                {currentWorkOrder && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className={`p-5 ${activeColor.light} rounded-2xl border ${activeColor.border} space-y-4`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <Barcode className={`w-4 h-4 ${activeColor.text}`} />
-                            <h3 className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>
-                                Enter Serial Number
-                            </h3>
-                        </div>
-                        
-                        <form onSubmit={handleSaveSerialNumber} className="space-y-3">
-                            <input
-                                type="text"
-                                value={serialNumber}
-                                onChange={(e) => setSerialNumber(e.target.value.toUpperCase())}
-                                placeholder="Scan or type serial number..."
-                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-mono font-bold text-gray-900 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all uppercase"
-                                disabled={isLoading}
-                            />
-                            
-                            <button
-                                type="submit"
-                                disabled={!serialNumber.trim() || isLoading}
-                                className={`w-full py-3 ${activeColor.bg} ${activeColor.hover} disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2`}
+                {/* Content Area - Vertical Stack */}
+                <div className="flex-1 overflow-y-auto no-scrollbar pt-4 space-y-4">
+                    {/* Active Product Info - Shows immediately under scan field */}
+                    {processedOrder && (
+                        <ActiveProductInfo 
+                            orderId={processedOrder.orderId || 'N/A'}
+                            productTitle={processedOrder.title}
+                        />
+                    )}
+                    
+                    {/* Current Order Display - Original detailed view */}
+                    {processedOrder && (
+                        <CurrentOrder 
+                            orderId={processedOrder.orderId || 'N/A'}
+                            productTitle={processedOrder.title}
+                        />
+                    )}
+
+                    <AnimatePresence mode="wait">
+                        {processedOrder ? (
+                            <motion.div 
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 10 }}
+                                className="space-y-4"
                             >
-                                {isLoading ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <>
+                                <div className={`${activeColor.light} rounded-[2rem] p-6 border ${activeColor.border} space-y-6`}>
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${activeColor.bg} animate-pulse`} />
+                                            <p className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>Active Order</p>
+                                        </div>
+                                        <h3 className="text-lg font-black text-gray-900 leading-tight tracking-tighter">{processedOrder.title}</h3>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
+                                            <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.sku}</p>
+                                        </div>
+                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order</p>
+                                            <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.orderId}</p>
+                                        </div>
+                                    </div>
+
+                                    {serialNumber && (
+                                        <div className="p-4 bg-emerald-600 text-white rounded-2xl shadow-lg">
+                                            <p className="text-[9px] font-black uppercase opacity-80 mb-1">Captured Serial</p>
+                                            <p className="text-sm font-mono font-black">{serialNumber}</p>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <ClipboardList className={`w-4 h-4 ${activeColor.text}`} />
+                                            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
+                                        </div>
+                                        <p className="text-xs font-medium text-gray-700 bg-white/50 p-4 rounded-2xl border border-white/50 leading-relaxed">{processedOrder.notes}</p>
+                                    </div>
+
+                                    <button 
+                                        onClick={handleComplete}
+                                        className={`w-full py-4 ${activeColor.bg} ${activeColor.hover} text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] transition-all active:scale-[0.98] shadow-xl ${activeColor.shadow} flex items-center justify-center gap-3`}
+                                    >
                                         <Check className="w-4 h-4" />
-                                        Save Serial Number
-                                    </>
-                                )}
-                            </button>
-                        </form>
-
-                        <div className="pt-3 border-t border-gray-200/50">
-                            <p className="text-[9px] font-bold text-gray-500 text-center">
-                                Working on: {currentWorkOrder.productTitle}
-                            </p>
-                        </div>
-                    </motion.div>
-                )}
-            </div>
-
-            {/* Content Area - Vertical Stack */}
-            <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-8 space-y-4">
-                {/* Active Product Info - Shows immediately under scan field */}
-                {processedOrder && (
-                    <ActiveProductInfo 
-                        orderId={processedOrder.orderId || 'N/A'}
-                        productTitle={processedOrder.title}
-                    />
-                )}
-                
-                {/* Current Order Display - Original detailed view */}
-                {processedOrder && (
-                    <CurrentOrder 
-                        orderId={processedOrder.orderId || 'N/A'}
-                        productTitle={processedOrder.title}
-                    />
-                )}
-
-                <AnimatePresence mode="wait">
-                    {processedOrder ? (
-                        <motion.div 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 10 }}
-                            className="space-y-4"
-                        >
-                            <div className={`${activeColor.light} rounded-[2rem] p-6 border ${activeColor.border} space-y-6`}>
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className={`w-1.5 h-1.5 rounded-full ${activeColor.bg} animate-pulse`} />
-                                        <p className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>Active Order</p>
-                                    </div>
-                                    <h3 className="text-lg font-black text-gray-900 leading-tight tracking-tighter">{processedOrder.title}</h3>
+                                        Complete Task
+                                    </button>
                                 </div>
+                            </motion.div>
+                        ) : null}
+                    </AnimatePresence>
 
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
-                                        <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.sku}</p>
-                                    </div>
-                                    <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order</p>
-                                        <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.orderId}</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <div className="flex items-center gap-2">
-                                        <ClipboardList className={`w-4 h-4 ${activeColor.text}`} />
-                                        <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
-                                    </div>
-                                    <p className="text-xs font-medium text-gray-700 bg-white/50 p-4 rounded-2xl border border-white/50 leading-relaxed">{processedOrder.notes}</p>
-                                </div>
-
-                                <button 
-                                    onClick={handleComplete}
-                                    className={`w-full py-4 ${activeColor.bg} ${activeColor.hover} text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] transition-all active:scale-[0.98] shadow-xl ${activeColor.shadow} flex items-center justify-center gap-3`}
-                                >
-                                    <Check className="w-4 h-4" />
-                                    Complete Task
-                                </button>
-                            </div>
-                        </motion.div>
-                    ) : null}
-                </AnimatePresence>
-
-                {/* Up Next Order - Shows at bottom when NO current work order */}
-                {!currentWorkOrder && (
+                    {/* Up Next Order - ALWAYS show right below CurrentWorkOrder */}
                     <div className="mt-8 pt-6 border-t border-gray-100">
                         <UpNextOrder 
                             techId={userId}
-                            onStart={(orderId) => console.log('Started order:', orderId)}
+                            onStart={(tracking) => handleSubmit(undefined, tracking)}
                             onMissingParts={(orderId) => console.log('Missing parts:', orderId)}
+                            onAllCompleted={() => {
+                                confetti({
+                                    particleCount: 150,
+                                    spread: 70,
+                                    origin: { y: 0.6 },
+                                    colors: ['#10b981', '#3b82f6', '#8b5cf6']
+                                });
+                            }}
                         />
                     </div>
-                )}
+                </div>
+            </div>
 
                 {/* Footer Logistics */}
                 <div className="mt-8 pt-6 border-t border-gray-50 text-center">

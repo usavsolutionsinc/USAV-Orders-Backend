@@ -216,7 +216,7 @@ export function ShippedTable() {
         </div>
         
         {/* Logs List */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar w-full">
+        <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {shipped.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               {search ? (
@@ -240,7 +240,7 @@ export function ShippedTable() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-max">
               {Object.entries(groupedShipped)
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, records]) => (

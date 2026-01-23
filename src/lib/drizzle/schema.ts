@@ -102,6 +102,7 @@ export const orders = pgTable('orders', {
   assignedTo: text('assigned_to'), // Tech_1, Tech_2, Tech_3, or NULL
   status: text('status').default('unassigned'), // unassigned, assigned, in_progress, completed, missing_parts
   urgent: boolean('urgent').default(false),
+  skippedBy: text('skipped_by').default('[]'), // JSON array of tech IDs who skipped
 });
 export const tech1 = pgTable('tech_1', { ...genericColumns });
 export const tech2 = pgTable('tech_2', { ...genericColumns });

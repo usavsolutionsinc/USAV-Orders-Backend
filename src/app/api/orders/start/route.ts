@@ -2,24 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
- * POST /api/orders/start - Mark order as in-progress
+ * POST /api/orders/start - Start an order (assign if unassigned)
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { orderId } = body;
+    const { orderId, techId } = await req.json();
 
-    if (!orderId) {
+    if (!orderId || !techId) {
       return NextResponse.json(
-        { error: 'orderId is required' },
+        { error: 'orderId and techId are required' },
         { status: 400 }
       );
     }
 
-    // Update order status to in_progress
+    const assignedTo = `Tech_${techId}`;
+
+    // Update status to in_progress and assign to tech if not already assigned
     await pool.query(
-      'UPDATE orders SET status = $1 WHERE id = $2',
-      ['in_progress', orderId]
+      `UPDATE orders 
+       SET status = 'in_progress',
+           assigned_to = COALESCE(assigned_to, $2)
+       WHERE id = $1`,
+      [orderId, assignedTo]
     );
 
     return NextResponse.json({ success: true });
