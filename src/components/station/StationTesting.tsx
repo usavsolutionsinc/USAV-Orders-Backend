@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import CurrentOrder from '../CurrentOrder';
 import ActiveProductInfo from '../ActiveProductInfo';
 import UpNextOrder from '../UpNextOrder';
+import CurrentWorkOrder from '../CurrentWorkOrder';
 import { 
   Search, 
   Check, 
@@ -44,6 +45,11 @@ export default function StationTesting({
     const [isLoading, setIsLoading] = useState(false);
     const [processedOrder, setProcessedOrder] = useState<any>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    
+    // Current work order state
+    const [scannedTrackingNumber, setScannedTrackingNumber] = useState<string | null>(null);
+    const [currentWorkOrder, setCurrentWorkOrder] = useState<{ id: string; productTitle: string; orderId: string; sku?: string; condition?: string } | null>(null);
+    const [serialNumber, setSerialNumber] = useState('');
     
     // Search functionality
     const [searchQuery, setSearchQuery] = useState('');
@@ -117,6 +123,10 @@ export default function StationTesting({
         const type = detectType(input);
         
         if (type === 'TRACKING') {
+            // Set the scanned tracking number to trigger CurrentWorkOrder lookup
+            setScannedTrackingNumber(input);
+            setCurrentWorkOrder(null); // Reset current work order
+            
             setIsLoading(true);
             try {
                 const res = await fetch(`/api/tech-logs/search?tracking=${input}`);
@@ -231,6 +241,54 @@ export default function StationTesting({
         }
     };
 
+    const handleSaveSerialNumber = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!currentWorkOrder || !serialNumber.trim() || !scannedTrackingNumber) return;
+
+        setIsLoading(true);
+        try {
+            // Get local timestamp in M/D/YYYY HH:mm:ss format to match DB expectation
+            const now = new Date();
+            const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+            const res = await fetch('/api/tech-logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    techId: userId,
+                    userName,
+                    timestamp,
+                    title: currentWorkOrder.productTitle,
+                    tracking: scannedTrackingNumber,
+                    serial: serialNumber.trim().toUpperCase(),
+                    count: todayCount + 1
+                })
+            });
+
+            if (res.ok) {
+                // Success: clear all work order related state
+                setSerialNumber('');
+                setScannedTrackingNumber(null);
+                setCurrentWorkOrder(null);
+                setProcessedOrder(null);
+                
+                // Refresh history
+                if (onComplete) onComplete();
+                
+                // Refocus input
+                inputRef.current?.focus();
+            } else {
+                const err = await res.json();
+                alert(`Error: ${err.error || 'Failed to save serial number'}`);
+            }
+        } catch (error) {
+            console.error('Error saving serial number:', error);
+            alert('Network error occurred');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-white overflow-hidden border-r border-gray-100">
             {/* Header section */}
@@ -279,12 +337,63 @@ export default function StationTesting({
                     </div>
                 </form>
 
-                {/* Up Next Component */}
-                <UpNextOrder 
-                    techId={userId}
-                    onStart={(orderId) => console.log('Started order:', orderId)}
-                    onMissingParts={(orderId) => console.log('Missing parts:', orderId)}
+                {/* Current Work Order - Shows when tracking is scanned */}
+                <CurrentWorkOrder 
+                    trackingNumber={scannedTrackingNumber}
+                    onLoaded={setCurrentWorkOrder}
                 />
+
+                {/* Serial Number Input - Shows when current work order exists */}
+                {currentWorkOrder && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className={`p-5 ${activeColor.light} rounded-2xl border ${activeColor.border} space-y-4`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <Barcode className={`w-4 h-4 ${activeColor.text}`} />
+                            <h3 className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>
+                                Enter Serial Number
+                            </h3>
+                        </div>
+                        
+                        <form onSubmit={handleSaveSerialNumber} className="space-y-3">
+                            <input
+                                type="text"
+                                value={serialNumber}
+                                onChange={(e) => setSerialNumber(e.target.value.toUpperCase())}
+                                placeholder="Scan or type serial number..."
+                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-mono font-bold text-gray-900 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all uppercase"
+                                disabled={isLoading}
+                            />
+                            
+                            <button
+                                type="submit"
+                                disabled={!serialNumber.trim() || isLoading}
+                                className={`w-full py-3 ${activeColor.bg} ${activeColor.hover} disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2`}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Check className="w-4 h-4" />
+                                        Save Serial Number
+                                    </>
+                                )}
+                            </button>
+                        </form>
+
+                        <div className="pt-3 border-t border-gray-200/50">
+                            <p className="text-[9px] font-bold text-gray-500 text-center">
+                                Working on: {currentWorkOrder.productTitle}
+                            </p>
+                        </div>
+                    </motion.div>
+                )}
             </div>
 
             {/* Content Area - Vertical Stack */}
@@ -352,6 +461,17 @@ export default function StationTesting({
                         </motion.div>
                     ) : null}
                 </AnimatePresence>
+
+                {/* Up Next Order - Shows at bottom when NO current work order */}
+                {!currentWorkOrder && (
+                    <div className="mt-8 pt-6 border-t border-gray-100">
+                        <UpNextOrder 
+                            techId={userId}
+                            onStart={(orderId) => console.log('Started order:', orderId)}
+                            onMissingParts={(orderId) => console.log('Missing parts:', orderId)}
+                        />
+                    </div>
+                )}
 
                 {/* Footer Logistics */}
                 <div className="mt-8 pt-6 border-t border-gray-50 text-center">

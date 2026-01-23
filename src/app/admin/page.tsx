@@ -407,7 +407,7 @@ function OrdersManagement() {
                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                         >
-                            {status.replace('_', ' ')}
+                            {(status ?? '').replace('_', ' ')}
                         </button>
                     ))}
                 </div>
@@ -455,7 +455,7 @@ function OrdersManagement() {
                                         order.status === 'in_progress' ? 'bg-emerald-100 text-emerald-700' :
                                         'bg-amber-100 text-amber-700'
                                     }`}>
-                                        {order.status.replace('_', ' ')}
+                                        {(order.status ?? '').replace('_', ' ')}
                                     </span>
                                 </div>
                             </div>
