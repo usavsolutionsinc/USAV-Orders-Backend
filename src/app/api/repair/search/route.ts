@@ -18,16 +18,18 @@ export async function GET(req: NextRequest) {
                 id,
                 date_time,
                 ticket_number,
+                name,
                 contact,
                 product_title,
                 price,
                 issue as repair_reasons,
                 serial_number,
-                parts_needed,
+                process,
                 status
             FROM repair_service
             WHERE 
                 ticket_number ILIKE $1 OR
+                name ILIKE $1 OR
                 contact ILIKE $1 OR
                 product_title ILIKE $1 OR
                 serial_number ILIKE $1

@@ -9,7 +9,7 @@ import pool from '../db';
 // price (TEXT)
 // issue (TEXT)
 // serial_number (TEXT) - formerly "Serial #"
-// parts_needed (TEXT) - formerly "Parts"
+// process (TEXT - JSON) - parts repaired, person who did it, and date
 // status (TEXT)
 // notes (TEXT)
 // status_history (JSON) - tracks status changes with timestamps
@@ -18,6 +18,12 @@ export interface StatusHistoryEntry {
   status: string;
   timestamp: string;
   previous_status?: string;
+}
+
+export interface ProcessEntry {
+  parts: string;
+  person: string;
+  date: string;
 }
 
 export interface RSRecord {
@@ -30,7 +36,7 @@ export interface RSRecord {
   price: string;
   issue: string;
   serial_number: string;
-  parts_needed: string;
+  process: ProcessEntry[];
   status: string;
   notes?: string;
   status_history?: StatusHistoryEntry[];
@@ -51,6 +57,22 @@ export const REPAIR_STATUS_OPTIONS = [
 export type RepairStatus = typeof REPAIR_STATUS_OPTIONS[number];
 
 /**
+ * Helper to parse process JSON
+ */
+function parseProcess(processData: any): ProcessEntry[] {
+  if (!processData) return [];
+  if (typeof processData === 'string') {
+    try {
+      return JSON.parse(processData);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(processData)) return processData;
+  return [];
+}
+
+/**
  * Get all repairs with optional limit and offset for pagination
  */
 export async function getAllRepairs(limit = 100, offset = 0): Promise<RSRecord[]> {
@@ -60,12 +82,13 @@ export async function getAllRepairs(limit = 100, offset = 0): Promise<RSRecord[]
         id,
         date_time,
         ticket_number,
+        name,
         contact,
         product_title,
         price,
         issue,
         serial_number,
-        parts_needed,
+        process,
         status,
         notes,
         status_history
@@ -77,6 +100,7 @@ export async function getAllRepairs(limit = 100, offset = 0): Promise<RSRecord[]
 
     return result.rows.map(row => ({
       ...row,
+      process: parseProcess(row.process),
       status_history: parseStatusHistory(row.status_history),
     }));
   } catch (error) {
@@ -95,12 +119,13 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
         id,
         date_time,
         ticket_number,
+        name,
         contact,
         product_title,
         price,
         issue,
         serial_number,
-        parts_needed,
+        process,
         status,
         notes,
         status_history
@@ -116,6 +141,7 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
     const row = result.rows[0];
     return {
       ...row,
+      process: parseProcess(row.process),
       status_history: parseStatusHistory(row.status_history),
     };
   } catch (error) {
@@ -189,12 +215,13 @@ export async function updateRepairField(id: number, field: string, value: any): 
     const validFields = [
       'date_time',
       'ticket_number',
+      'name',
       'contact',
       'product_title',
       'price',
       'issue',
       'serial_number',
-      'parts_needed',
+      'process',
       'status',
       'notes',
     ];
@@ -224,18 +251,20 @@ export async function searchRepairs(query: string): Promise<RSRecord[]> {
         id,
         date_time,
         ticket_number,
+        name,
         contact,
         product_title,
         price,
         issue,
         serial_number,
-        parts_needed,
+        process,
         status,
         notes,
         status_history
       FROM repair_service
       WHERE 
         ticket_number ILIKE $1 OR
+        name ILIKE $1 OR
         contact ILIKE $1 OR
         product_title ILIKE $1 OR
         serial_number ILIKE $1
@@ -246,6 +275,7 @@ export async function searchRepairs(query: string): Promise<RSRecord[]> {
 
     return result.rows.map(row => ({
       ...row,
+      process: parseProcess(row.process),
       status_history: parseStatusHistory(row.status_history),
     }));
   } catch (error) {

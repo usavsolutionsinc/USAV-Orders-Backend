@@ -55,18 +55,19 @@ export async function POST(req: NextRequest) {
 
         // Step 2: Insert into repair_service table in NEON DB
         const insertResult = await pool.query(`
-            INSERT INTO repair_service (date_time, ticket_number, contact, product_title, price, issue, serial_number, parts_needed, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO repair_service (date_time, ticket_number, name, contact, product_title, price, issue, serial_number, process, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id, ticket_number
         `, [
             formattedDateTime,
             zendeskTicketNumber || '',
+            customer.name,
             contactInfo,
             productString,
             price || '130',
             repairReasonsString,
             serialNumber || '',
-            '', // parts needed (empty initially)
+            '[]', // process (empty JSON array initially)
             'Pending'
         ]);
 

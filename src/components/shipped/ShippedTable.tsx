@@ -263,7 +263,7 @@ export function ShippedTable() {
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[fit-content(90px)_fit-content(100px)_1fr_fit-content(120px)_fit-content(110px)_fit-content(90px)_fit-content(90px)_fit-content(90px)_90px_90px] items-center gap-1 px-0.5 py-0.5 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/80 ${
+                          className={`grid grid-cols-[(80px)_fit-content(100px)_1fr_fit-content(120px)_fit-content(110px)_fit-content(90px)_fit-content(90px)_fit-content(90px)_90px_90px] items-center gap-1 px-0.5 py-0.5 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/80 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
                           }`}
                         >
@@ -292,7 +292,23 @@ export function ShippedTable() {
                           
                           {/* 3. Product Title */}
                           <div className="text-[10px] font-bold text-gray-900 truncate text-left px-0.5">
-                            {record.product_title || 'Unknown Product'}
+                            {(() => {
+                              const title = record.product_title || 'Unknown Product';
+                              // Split by first space to separate reason from product title
+                              const firstSpaceIndex = title.indexOf(' ');
+                              if (firstSpaceIndex > 0) {
+                                const reason = title.substring(0, firstSpaceIndex);
+                                const productTitle = title.substring(firstSpaceIndex + 1);
+                                return (
+                                  <>
+                                    <span className="font-black">{reason}</span>
+                                    {' '}
+                                    <span>{productTitle}</span>
+                                  </>
+                                );
+                              }
+                              return title;
+                            })()}
                           </div>
                           
                           {/* 4. Condition */}

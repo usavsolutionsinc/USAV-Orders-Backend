@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Combine product_title with reason
-    const finalProductTitle = `${product_title} - ${reason}`;
+    // Combine reason with product_title (reason first)
+    const finalProductTitle = `${reason} ${product_title}`;
 
     // Get current timestamp
     const now = new Date().toISOString();

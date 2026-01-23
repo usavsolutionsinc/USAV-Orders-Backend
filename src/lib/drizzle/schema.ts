@@ -151,6 +151,7 @@ export const repairService = pgTable('repair_service', {
   price: text('price'),
   status: text('status').default('pending'),
   repairReasons: text('repair_reasons'),
+  process: text('process'), // JSON: [{parts: string, person: string, date: timestamp}]
 });
 
 // NEW: Packing logs for the packer dashboard

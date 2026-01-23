@@ -111,8 +111,20 @@ export function RepairDetailsPanel({
               <p className="text-sm text-gray-700 leading-relaxed">{repair.issue || 'No issue described'}</p>
             </div>
             <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Parts Needed</span>
-              <p className="text-sm text-gray-700 leading-relaxed">{repair.parts_needed || 'No parts specified'}</p>
+              <span className="text-xs text-gray-500 font-semibold block mb-1">Process History</span>
+              {repair.process && repair.process.length > 0 ? (
+                <div className="space-y-2">
+                  {repair.process.map((entry, idx) => (
+                    <div key={idx} className="bg-gray-50 p-2 rounded text-xs">
+                      <div className="font-semibold text-gray-900">Parts: {entry.parts}</div>
+                      <div className="text-gray-600">By: {entry.person}</div>
+                      <div className="text-gray-500">{new Date(entry.date).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-700 leading-relaxed">No process history</p>
+              )}
             </div>
           </div>
         </section>

@@ -245,10 +245,12 @@ export function RepairTable() {
                     {repair.serial_number || '---'}
                   </td>
                   
-                  {/* Parts */}
+                  {/* Process */}
                   <td className="px-4 py-3 text-sm text-gray-700">
-                    <div className="max-w-[150px] truncate" title={repair.parts_needed}>
-                      {repair.parts_needed || '---'}
+                    <div className="max-w-[150px] truncate">
+                      {repair.process && repair.process.length > 0 
+                        ? `${repair.process.length} ${repair.process.length === 1 ? 'entry' : 'entries'}`
+                        : '---'}
                     </div>
                   </td>
                   
