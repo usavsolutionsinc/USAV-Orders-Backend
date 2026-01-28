@@ -123,6 +123,7 @@ export default function StationNav() {
             animate={{ width: isCollapsed ? 64 : 280 }}
             transition={{ type: 'spring', damping: 25, stiffness: 150 }}
             className="h-screen bg-white border-r border-gray-200 flex flex-col relative z-50 flex-shrink-0"
+            style={{ height: '100vh', minHeight: '100vh', maxHeight: '100vh' }}
         >
             {/* Top Bar Area inside Sidebar */}
             <div className={`flex items-center mb-4 ${isCollapsed ? 'p-4' : 'justify-between p-4'}`}>
@@ -163,7 +164,7 @@ export default function StationNav() {
 
                         <Link
                             href="/shipped?new=true"
-                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-green-500/20"
+                            className="flex items-center justify-start gap-2 px-6 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-green-500/20"
                         >
                             <Plus className="w-4 h-4" />
                             <span className="text-sm font-black uppercase tracking-wider">Shipped</span>
@@ -171,7 +172,7 @@ export default function StationNav() {
 
                         <Link
                             href="/repair?new=true"
-                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-orange-500/20"
+                            className="flex items-center justify-start gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-orange-500/20"
                         >
                             <Plus className="w-4 h-4" />
                             <span className="text-sm font-black uppercase tracking-wider">Repair</span>

@@ -105,13 +105,30 @@ const CopyableField = ({ label, value, externalUrl, externalLabel }: { label: st
 };
 
 export function ShippedDetailsPanel({ 
-  shipped, 
+  shipped: initialShipped, 
   onClose, 
   onUpdate 
 }: ShippedDetailsPanelProps) {
+  const [shipped, setShipped] = useState<ShippedRecord>(initialShipped);
   const [durationData, setDurationData] = useState<DurationData>({});
   const [isLoadingDurations, setIsLoadingDurations] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
+
+  // Update content when props change
+  useEffect(() => {
+    setShipped(initialShipped);
+  }, [initialShipped]);
+
+  // Listen for custom event to reuse instance (single instance behavior)
+  useEffect(() => {
+    const handleOpenDetails = (e: any) => {
+        if (e.detail && e.detail.id !== shipped.id) {
+            setShipped(e.detail);
+        }
+    };
+    window.addEventListener('open-shipped-details', handleOpenDetails);
+    return () => window.removeEventListener('open-shipped-details', handleOpenDetails);
+  }, [shipped.id]);
 
   useEffect(() => {
     fetchDurations();
@@ -176,15 +193,35 @@ Shipped: ${shipped.date_time ? formatDateTime(shipped.date_time) : 'Not Shipped'
       {/* Header */}
       <div className="sticky top-0 bg-white/90 backdrop-blur-xl border-b border-gray-100 p-8 flex items-center justify-between z-10">
         <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
-                <Package className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black text-gray-900 tracking-tighter leading-none">{shipped.order_id}</h2>
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Verified Shipment</p>
-              </div>
+            <div className="flex flex-col gap-2">
+                <button
+                    onClick={handleCopyAll}
+                    className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-all active:scale-95 group"
+                >
+                    {copiedAll ? (
+                        <>
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span className="text-[8px] font-black text-emerald-600 uppercase">Copied All</span>
+                        </>
+                    ) : (
+                        <>
+                            <Copy className="w-3 h-3 text-gray-400 group-hover:text-blue-600" />
+                            <span className="text-[8px] font-black text-gray-500 uppercase group-hover:text-blue-600">Copy All</span>
+                        </>
+                    )}
+                </button>
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+                        <Package className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-gray-900 tracking-tighter leading-none">{shipped.order_id}</h2>
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Verified Shipment</p>
+                      </div>
+                    </div>
+                </div>
             </div>
         </div>
         <button 

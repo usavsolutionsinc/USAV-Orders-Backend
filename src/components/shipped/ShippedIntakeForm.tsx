@@ -12,6 +12,7 @@ export interface ShippedFormData {
     order_id: string;
     product_title: string;
     reason: string;
+    condition: string;
     shipping_tracking_number: string;
     sku: string;
 }
@@ -26,6 +27,7 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
         order_id: '',
         product_title: '',
         reason: '',
+        condition: 'Used',
         shipping_tracking_number: '',
         sku: '',
     });
@@ -81,6 +83,7 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
         formData.order_id.trim() &&
         formData.product_title.trim() &&
         formData.reason.trim() &&
+        formData.condition.trim() &&
         formData.shipping_tracking_number.trim() &&
         formData.sku.trim();
 
@@ -190,6 +193,22 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
                     )}
                 </div>
 
+                {/* Condition */}
+                <div className="space-y-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-gray-700">
+                        Condition <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                        value={formData.condition}
+                        onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                    >
+                        <option value="Used">Used</option>
+                        <option value="New">New</option>
+                        <option value="Parts">Parts</option>
+                    </select>
+                </div>
+
                 {/* Reason */}
                 <div className="space-y-2">
                     <label className="block text-[10px] font-black uppercase tracking-widest text-gray-700">
@@ -203,7 +222,7 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                     />
                     <p className="text-[9px] text-gray-500 font-medium">
-                        Will be appended as: <span className="font-bold">{formData.product_title || '[Product Title]'} - {formData.reason || '[Reason]'}</span>
+                        Will be saved as: <span className="font-bold">{formData.reason || '[Reason]'} - {formData.product_title || '[Product Title]'}</span>
                     </p>
                 </div>
 

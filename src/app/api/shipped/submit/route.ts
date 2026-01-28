@@ -5,6 +5,7 @@ export interface ShippedFormData {
   order_id: string;
   product_title: string;
   reason: string;
+  condition: string;
   shipping_tracking_number: string;
   sku: string;
 }
@@ -21,30 +22,32 @@ export async function POST(req: NextRequest) {
       order_id,
       product_title,
       reason,
+      condition,
       shipping_tracking_number,
       sku,
     } = body;
 
     // Validate required fields
-    if (!order_id || !product_title || !reason || !shipping_tracking_number || !sku) {
+    if (!order_id || !product_title || !reason || !condition || !shipping_tracking_number || !sku) {
       return NextResponse.json(
         { error: 'All fields are required', success: false },
         { status: 400 }
       );
     }
 
-    // Combine reason with product_title (reason first)
-    const finalProductTitle = `${reason} ${product_title}`;
+    // Combine reason with product_title ([Reason] - [Product Title])
+    const finalProductTitle = `${reason} - ${product_title}`;
 
-    // Get current timestamp
-    const now = new Date().toISOString();
+    // Get current timestamp in MM/DD/YYYY HH:mm:ss format (24-hour)
+    const now = new Date();
+    const formattedDate = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
     // Insert into shipped table
     const result = await pool.query(
-      `INSERT INTO shipped (date_time, order_id, product_title, shipping_tracking_number, sku)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO shipped (date_time, order_id, product_title, condition, shipping_tracking_number, sku)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [now, order_id, finalProductTitle, shipping_tracking_number, sku]
+      [formattedDate, order_id, finalProductTitle, condition, shipping_tracking_number, sku]
     );
 
     const insertedId = result.rows[0]?.id;
@@ -56,9 +59,10 @@ export async function POST(req: NextRequest) {
       data: {
         order_id,
         product_title: finalProductTitle,
+        condition,
         shipping_tracking_number,
         sku,
-        date_time: now,
+        date_time: formattedDate,
       }
     });
   } catch (error: any) {

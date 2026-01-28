@@ -42,6 +42,24 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
     const [selectedShipped, setSelectedShipped] = useState<SearchResult | null>(null);
 
+    // Listen for custom event to open details (single instance coordination)
+    useEffect(() => {
+        const handleOpenDetails = (e: CustomEvent<SearchResult>) => {
+            if (e.detail) {
+                setSelectedShipped(e.detail);
+            }
+        };
+        window.addEventListener('open-shipped-details' as any, handleOpenDetails as any);
+        return () => window.removeEventListener('open-shipped-details' as any, handleOpenDetails as any);
+    }, []);
+
+    const openDetails = (result: SearchResult) => {
+        // Use custom event to coordinate single instance behavior
+        const event = new CustomEvent('open-shipped-details', { detail: result });
+        window.dispatchEvent(event);
+        setSelectedShipped(result);
+    };
+
     // Load search history from localStorage
     useEffect(() => {
         const saved = localStorage.getItem('shipped_search_history');
@@ -81,9 +99,9 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
             if (data.results) {
                 setResults(data.results);
                 saveSearchHistory(query, data.count);
-                // If only one result, open it directly
+                // If only one result, open it directly using the shared event system
                 if (data.results.length === 1) {
-                    setSelectedShipped(data.results[0]);
+                    openDetails(data.results[0]);
                 }
             } else {
                 setResults([]);
@@ -172,7 +190,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                     {results.map((result) => (
                                         <button
                                             key={result.id}
-                                            onClick={() => setSelectedShipped(result)}
+                                            onClick={() => openDetails(result)}
                                             className="w-full text-left p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
                                         >
                                             <div className="flex flex-col gap-1">
@@ -258,10 +276,11 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                 )}
             </aside>
 
-            {/* Details Panel Overlay */}
-            <AnimatePresence>
+            {/* Details Panel Overlay - Reused Instance coordinated by shared state/events */}
+            <AnimatePresence mode="wait">
                 {selectedShipped && (
                     <ShippedDetailsPanel 
+                        key="single-shipped-details-instance"
                         shipped={selectedShipped as unknown as ShippedRecord}
                         onClose={() => setSelectedShipped(null)}
                         onUpdate={() => handleSearch(searchQuery)}
