@@ -5,7 +5,6 @@ import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircl
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function DashboardSidebar() {
-    const [isOpen, setIsOpen] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
     const [manualSheetName, setManualSheetName] = useState('');
@@ -127,154 +126,129 @@ export default function DashboardSidebar() {
 
     return (
         <div className="relative flex-shrink-0 z-40 h-full">
-            <AnimatePresence mode="wait">
-                {isOpen && (
-                    <motion.aside
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 340, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                        className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group"
-                    >
-                        <button
-                            onClick={() => setIsOpen(false)}
-                            className="absolute top-4 right-4 z-50 p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                            title="Collapse Menu"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
+            <aside
+                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[340px]"
+            >
+                <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
+                    <header>
+                        <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
+                            Management
+                        </h2>
+                        <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
+                            Database & Metrics
+                        </p>
+                    </header>
+                    
+                    <div className="space-y-4">
+                        {/* Order Management Tools */}
+                        <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Settings className="w-4 h-4 text-blue-600" />
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-900">Order Management</h3>
+                            </div>
 
-                        <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
-                            <header>
-                                <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-                                    Management
-                                </h2>
-                                <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
-                                    Database & Metrics
-                                </p>
-                            </header>
-                            
-                            <div className="space-y-4">
-                                {/* Order Management Tools */}
-                                <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Settings className="w-4 h-4 text-blue-600" />
-                                        <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-900">Order Management</h3>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[9px] font-black text-gray-500 uppercase px-1 tracking-widest">Manual Sheet Name</label>
-                                            <input
-                                                type="text"
-                                                value={manualSheetName}
-                                                onChange={(e) => setManualSheetName(e.target.value)}
-                                                placeholder="e.g., Sheet_01_14_2026"
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
-                                                disabled={isTransferring}
-                                            />
-                                        </div>
-
-                                        <button
-                                            onClick={handleTransfer}
-                                            disabled={isTransferring}
-                                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                        >
-                                            {isTransferring ? (
-                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                            ) : (
-                                                <Database className="w-3.5 h-3.5" />
-                                            )}
-                                            Import Latest Orders
-                                        </button>
-                                    </div>
+                            <div className="space-y-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-gray-500 uppercase px-1 tracking-widest">Manual Sheet Name</label>
+                                    <input
+                                        type="text"
+                                        value={manualSheetName}
+                                        onChange={(e) => setManualSheetName(e.target.value)}
+                                        placeholder="e.g., Sheet_01_14_2026"
+                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
+                                        disabled={isTransferring}
+                                    />
                                 </div>
 
                                 <button
-                                    onClick={handleSync}
-                                    disabled={isSyncing}
-                                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group active:scale-95 shadow-lg shadow-emerald-600/10"
+                                    onClick={handleTransfer}
+                                    disabled={isTransferring}
+                                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
                                 >
-                                    {isSyncing ? (
-                                        <Loader2 className="w-6 h-6 animate-spin" />
+                                    {isTransferring ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                     ) : (
-                                        <Database className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                                        <Database className="w-3.5 h-3.5" />
                                     )}
-                                    <div className="text-center">
-                                        <p className="text-[10px] font-black uppercase tracking-widest">Sync All to Neon DB</p>
-                                        <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">Neon DB as Source of Truth</p>
-                                    </div>
+                                    Import Latest Orders
                                 </button>
+                            </div>
+                        </div>
 
-                                {status && (
-                                    <div className={`p-4 rounded-2xl border ${status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'} flex items-start gap-3`}>
-                                        {status.type === 'success' ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <X className="w-4 h-4 mt-0.5 shrink-0" />}
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-black uppercase tracking-widest">{status.type === 'success' ? 'Success' : 'Error'}</p>
-                                            <p className="text-[9px] font-medium leading-relaxed">{status.message}</p>
-                                        </div>
-                                    </div>
-                                )}
+                        <button
+                            onClick={handleSync}
+                            disabled={isSyncing}
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group active:scale-95 shadow-lg shadow-emerald-600/10"
+                        >
+                            {isSyncing ? (
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                            ) : (
+                                <Database className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                            )}
+                            <div className="text-center">
+                                <p className="text-[10px] font-black uppercase tracking-widest">Sync All to Neon DB</p>
+                                <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">Neon DB as Source of Truth</p>
+                            </div>
+                        </button>
 
-                                <div className="space-y-2">
-                                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] ml-2 mb-4">Automation Scripts</p>
-                                    {menuItems.map((menu) => (
-                                        <div key={menu.id} className="space-y-1">
-                                            <button
-                                                onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
-                                                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${expandedMenu === menu.id ? 'bg-blue-50 text-blue-600 shadow-sm border border-blue-100' : 'bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100 hover:text-gray-900'}`}
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`p-2.5 rounded-xl transition-colors duration-300 ${expandedMenu === menu.id ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
-                                                        {menu.icon}
-                                                    </div>
-                                                    <span className="text-[11px] font-black uppercase tracking-wider">{menu.name}</span>
-                                                </div>
-                                                {expandedMenu === menu.id ? <ChevronLeft className="w-3.5 h-3.5 -rotate-90 transition-transform duration-300" /> : <ChevronRight className="w-3.5 h-3.5 transition-transform duration-300" />}
-                                            </button>
-                                            <AnimatePresence>
-                                                {expandedMenu === menu.id && (
-                                                    <motion.div
-                                                        initial={{ height: 0, opacity: 0 }}
-                                                        animate={{ height: 'auto', opacity: 1 }}
-                                                        exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden space-y-1.5 px-3 py-2"
-                                                    >
-                                                        {menu.scripts.map((script) => (
-                                                            <button
-                                                                key={script.id}
-                                                                onClick={() => runScript(script.id)}
-                                                                disabled={!!activeScript}
-                                                                className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${activeScript === script.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-900 group'} flex items-center justify-between group`}
-                                                            >
-                                                                <span className="group-hover:translate-x-1 transition-transform duration-200">{script.name}</span>
-                                                                {activeScript === script.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                                            </button>
-                                                        ))}
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
-                                        </div>
-                                    ))}
+                        {status && (
+                            <div className={`p-4 rounded-2xl border ${status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'} flex items-start gap-3`}>
+                                {status.type === 'success' ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <X className="w-4 h-4 mt-0.5 shrink-0" />}
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-black uppercase tracking-widest">{status.type === 'success' ? 'Success' : 'Error'}</p>
+                                    <p className="text-[9px] font-medium leading-relaxed">{status.message}</p>
                                 </div>
                             </div>
+                        )}
 
-                            <footer className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
-                                <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
-                            </footer>
+                        <div className="space-y-2">
+                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] ml-2 mb-4">Automation Scripts</p>
+                            {menuItems.map((menu) => (
+                                <div key={menu.id} className="space-y-1">
+                                    <button
+                                        onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
+                                        className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${expandedMenu === menu.id ? 'bg-blue-50 text-blue-600 shadow-sm border border-blue-100' : 'bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100 hover:text-gray-900'}`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={`p-2.5 rounded-xl transition-colors duration-300 ${expandedMenu === menu.id ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                                {menu.icon}
+                                            </div>
+                                            <span className="text-[11px] font-black uppercase tracking-wider">{menu.name}</span>
+                                        </div>
+                                        {expandedMenu === menu.id ? <ChevronLeft className="w-3.5 h-3.5 -rotate-90 transition-transform duration-300" /> : <ChevronRight className="w-3.5 h-3.5 transition-transform duration-300" />}
+                                    </button>
+                                    <AnimatePresence>
+                                        {expandedMenu === menu.id && (
+                                            <motion.div
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                className="overflow-hidden space-y-1.5 px-3 py-2"
+                                            >
+                                                {menu.scripts.map((script) => (
+                                                    <button
+                                                        key={script.id}
+                                                        onClick={() => runScript(script.id)}
+                                                        disabled={!!activeScript}
+                                                        className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${activeScript === script.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-900 group'} flex items-center justify-between group`}
+                                                    >
+                                                        <span className="group-hover:translate-x-1 transition-transform duration-200">{script.name}</span>
+                                                        {activeScript === script.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                                    </button>
+                                                ))}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            ))}
                         </div>
-                    </motion.aside>
-                )}
-            </AnimatePresence>
-            
-            {!isOpen && (
-                <button
-                    onClick={() => setIsOpen(true)}
-                    className="fixed top-20 left-0 z-[60] p-3 bg-white text-gray-900 rounded-r-2xl shadow-xl hover:bg-blue-600 hover:text-white transition-all duration-300 group border border-l-0 border-gray-200"
-                >
-                    <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-                </button>
-            )}
+                    </div>
+
+                    <footer className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
+                        <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
+                    </footer>
+                </div>
+            </aside>
         </div>
     );
 }

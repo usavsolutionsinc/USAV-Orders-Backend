@@ -45,7 +45,7 @@ interface Order {
 
 export default function AdminPage() {
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState<'staff' | 'tags' | 'orders'>('staff');
+    const [activeTab, setActiveTab] = useState<'staff' | 'tags' | 'orders'>('orders');
     
     // Staff state
     const [isAddingStaff, setIsAddingStaff] = useState(false);
@@ -492,7 +492,8 @@ function OrdersManagement() {
                                     {[
                                         { id: 'Tech_1', label: 'Michael' },
                                         { id: 'Tech_2', label: 'Thuc' },
-                                        { id: 'Tech_3', label: 'Sang' }
+                                        { id: 'Tech_3', label: 'Sang' },
+                                        { id: 'Other', label: 'Other' }
                                     ].map((tech) => (
                                         <button
                                             key={tech.id}

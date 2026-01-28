@@ -225,13 +225,13 @@ export function ShippedTable() {
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[(80px)_fit-content(100px)_1fr_fit-content(120px)_fit-content(110px)_fit-content(90px)_fit-content(90px)_fit-content(90px)_90px_90px] items-center gap-1 px-0.5 py-0.5 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/80 ${
-                            selectedShipped?.id === record.id ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
+                          className={`grid grid-cols-[60px_1fr_100px_110px_110px_80px_80px] items-center gap-3 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                            selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
-                          {/* 1. Date/Time */}
-                          <div className="text-[10px] font-black text-gray-400 tabular-nums uppercase text-left flex items-center gap-1">
-                            {hasAlert && <AlertTriangle className="w-3 h-3 text-red-600 animate-pulse" />}
+                          {/* 1. Time */}
+                          <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left flex items-center gap-2">
+                            {hasAlert && <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-pulse" />}
                             {ts && ts !== '1' ? (
                               (() => {
                                 try {
@@ -244,73 +244,76 @@ export function ShippedTable() {
                             ) : '--:--'}
                           </div>
                           
-                          {/* 2. Order ID */}
-                          <CopyableText 
-                            text={record.order_id || ''} 
-                            className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50/30 px-0.5 py-0.5 rounded border border-gray-100/30"
-                            variant="order"
-                          />
-                          
-                          {/* 3. Product Title */}
-                          <div className="text-[10px] font-bold text-gray-900 truncate text-left px-0.5">
-                            {(() => {
-                              const title = record.product_title || 'Unknown Product';
-                              // Split by first space to separate reason from product title
-                              const firstSpaceIndex = title.indexOf(' ');
-                              if (firstSpaceIndex > 0) {
-                                const reason = title.substring(0, firstSpaceIndex);
-                                const productTitle = title.substring(firstSpaceIndex + 1);
-                                return (
-                                  <>
-                                    <span className="font-black">{reason}</span>
-                                    {' '}
-                                    <span>{productTitle}</span>
-                                  </>
-                                );
-                              }
-                              return title;
-                            })()}
+                          {/* 2. Product Title & Condition */}
+                          <div className="flex flex-col min-w-0">
+                            <div className="text-[11px] font-bold text-gray-900 truncate">
+                              {(() => {
+                                const title = record.product_title || 'Unknown Product';
+                                // Split by first space to separate reason from product title
+                                const firstSpaceIndex = title.indexOf(' ');
+                                if (firstSpaceIndex > 0) {
+                                  const reason = title.substring(0, firstSpaceIndex);
+                                  const productTitle = title.substring(firstSpaceIndex + 1);
+                                  return (
+                                    <>
+                                      <span className="font-black text-blue-600">{reason}</span>
+                                      {' '}
+                                      <span>{productTitle}</span>
+                                    </>
+                                  );
+                                }
+                                return title;
+                              })()}
+                            </div>
+                            <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
+                              {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                            </div>
                           </div>
                           
-                          {/* 4. Condition */}
-                          <div className="text-[10px] font-semibold text-gray-600 text-left truncate px-0.5">
-                            {record.condition || '---'}
+                          {/* 3. Order ID */}
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
+                            <CopyableText 
+                              text={record.order_id || ''} 
+                              className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
+                              variant="order"
+                            />
                           </div>
                           
-                          {/* 5. Tracking Number - Blue background */}
-                          <CopyableText 
-                            text={record.shipping_tracking_number || ''} 
-                            className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50/30 px-0.5 py-0.5 rounded border border-blue-100/30"
-                            variant="tracking"
-                          />
-                          
-                          {/* 6. Serial Number - Green background */}
-                          <CopyableText 
-                            text={record.serial_number || ''} 
-                            className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-0.5 py-0.5 rounded border border-emerald-100/30"
-                            variant="serial"
-                          />
-                          
-                          {/* 7. Boxed By */}
-                          <div className="text-[10px] font-semibold text-gray-600 text-left truncate px-0.5">
-                            {record.boxed_by || '---'}
+                          {/* 4. Tracking Number */}
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
+                            <CopyableText 
+                              text={record.shipping_tracking_number || ''} 
+                              className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
+                              variant="tracking"
+                            />
                           </div>
                           
-                          {/* 8. Tested By */}
-                          <div className="text-[10px] font-semibold text-gray-600 text-left truncate px-0.5">
-                            {record.tested_by || '---'}
+                          {/* 5. Serial Number */}
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
+                            <CopyableText 
+                              text={record.serial_number || ''} 
+                              className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
+                              variant="serial"
+                            />
                           </div>
                           
-                          {/* 9. SKU */}
-                          <CopyableText 
-                            text={record.sku || ''} 
-                            className="text-[10px] font-mono font-semibold text-gray-700 px-0.5 py-0.5"
-                            variant="default"
-                          />
+                          {/* 6. Boxed By */}
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Boxed By</span>
+                            <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                              {record.boxed_by || '---'}
+                            </div>
+                          </div>
                           
-                          {/* 10. Status */}
-                          <div className="text-[10px] font-bold text-gray-700 text-left truncate px-0.5">
-                            {record.status || '---'}
+                          {/* 7. Tested By */}
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Tested By</span>
+                            <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                              {record.tested_by || '---'}
+                            </div>
                           </div>
                         </motion.div>
                       );

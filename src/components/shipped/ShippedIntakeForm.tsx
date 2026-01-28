@@ -193,7 +193,7 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
                 {/* Reason */}
                 <div className="space-y-2">
                     <label className="block text-[10px] font-black uppercase tracking-widest text-gray-700">
-                        Reason <span className="text-red-500">*</span>
+                        Reason or Ticket # <span className="text-red-500">*</span>
                     </label>
                     <input
                         type="text"
@@ -241,7 +241,7 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
                 <button
                     onClick={handleSubmit}
                     disabled={!canSubmit || isSubmitting}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-xl transition-all text-xs font-black uppercase tracking-wide disabled:cursor-not-allowed shadow-lg shadow-green-500/20"
+                    className="w-full px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:bg-gray-300 disabled:text-white-500 text-white rounded-xl transition-all text-xs font-black uppercase tracking-wide disabled:cursor-not-allowed shadow-lg shadow-green-500/20"
                 >
                     {isSubmitting ? (
                         <span className="flex items-center justify-center gap-2">

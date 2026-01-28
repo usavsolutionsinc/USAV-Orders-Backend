@@ -37,11 +37,10 @@ export default function PageLayout({
         queryParams.append('gid', gid);
     }
 
-    if (!editMode) {
-        queryParams.append('rm', 'minimal');
-        queryParams.append('single', 'true');
-        queryParams.append('widget', 'false');
-    }
+    // Always use minimal view as per 2026 requirements
+    queryParams.append('rm', 'minimal');
+    queryParams.append('single', 'true');
+    queryParams.append('widget', 'false');
     
     // Construct full URL with both query param and hash for maximum compatibility
     const iframeUrl = `${baseUrl}?${queryParams.toString()}${gid ? `#gid=${gid}` : ''}`;

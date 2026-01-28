@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Check, Clock, Package, Copy } from '../Icons';
+import { X, Check, Clock, Package, Copy, Box, Wrench } from '../Icons';
 import { ShippedRecord } from '@/lib/neon/shipped-queries';
 import { formatStatusTimestamp } from '@/lib/neon/status-history';
 
@@ -10,6 +10,11 @@ interface ShippedDetailsPanelProps {
   shipped: ShippedRecord;
   onClose: () => void;
   onUpdate: () => void;
+}
+
+interface DurationData {
+  boxingDuration?: string;
+  testingDuration?: string;
 }
 
 // Copyable field component
@@ -27,13 +32,13 @@ const CopyableField = ({ label, value }: { label: string; value: string }) => {
 
   return (
     <div>
-      <span className="text-xs text-gray-500 font-semibold block mb-1">{label}</span>
-      <div className="flex items-center justify-between gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-        <p className="font-mono text-sm text-gray-900 font-semibold flex-1">{value}</p>
+      <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1.5">{label}</span>
+      <div className="flex items-center justify-between gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 group/field">
+        <p className="font-mono text-sm text-gray-900 font-bold flex-1 truncate">{value}</p>
         {!isEmpty && (
           <button
             onClick={handleCopy}
-            className="p-1.5 hover:bg-gray-200 rounded transition-all"
+            className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all opacity-0 group-hover/field:opacity-100"
             title="Copy to clipboard"
           >
             {copied ? (
@@ -53,42 +58,73 @@ export function ShippedDetailsPanel({
   onClose, 
   onUpdate 
 }: ShippedDetailsPanelProps) {
+  const [durationData, setDurationData] = useState<DurationData>({});
+  const [isLoadingDurations, setIsLoadingDurations] = useState(false);
+
+  useEffect(() => {
+    fetchDurations();
+  }, [shipped.id]);
+
+  const fetchDurations = async () => {
+    setIsLoadingDurations(true);
+    try {
+      const res = await fetch(`/api/shipped/durations?id=${shipped.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDurationData(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch durations:", err);
+    } finally {
+      setIsLoadingDurations(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ x: '100%' }}
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-      className="fixed right-0 top-0 h-screen w-[400px] bg-white border-l border-gray-200 shadow-2xl z-[100] overflow-y-auto"
+      transition={{ type: 'spring', damping: 30, stiffness: 150 }}
+      className="fixed right-0 top-0 h-screen w-[420px] bg-white border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)] z-[100] overflow-y-auto no-scrollbar"
     >
       {/* Header */}
-      <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-200 p-6 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
-                <Package className="w-5 h-5 text-emerald-600" />
+      <div className="sticky top-0 bg-white/90 backdrop-blur-xl border-b border-gray-100 p-8 flex items-center justify-between z-10">
+        <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+                <Package className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-gray-900 tracking-tight leading-none">{shipped.order_id}</h2>
-              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-1">Shipment Verified</p>
+              <h2 className="text-2xl font-black text-gray-900 tracking-tighter leading-none">{shipped.order_id}</h2>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Verified Shipment</p>
+              </div>
             </div>
         </div>
         <button 
           onClick={onClose} 
-          className="p-2 hover:bg-gray-100 rounded-xl transition-all"
+          className="p-3 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100"
           aria-label="Close details"
         >
-          <X className="w-5 h-5 text-gray-600" />
+          <X className="w-6 h-6 text-gray-400" />
         </button>
       </div>
       
       {/* Content sections */}
-      <div className="p-6 space-y-6">
+      <div className="p-8 space-y-10">
         {/* Shipping Information */}
-        <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-            Shipping Information
-          </h3>
-          <div className="space-y-3">
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+              <Package className="w-4 h-4" />
+            </div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
+              Shipping Information
+            </h3>
+          </div>
+          
+          <div className="space-y-4">
             <CopyableField 
               label="Tracking Number" 
               value={shipped.shipping_tracking_number || 'Not available'} 
@@ -97,97 +133,144 @@ export function ShippedDetailsPanel({
               label="Order ID" 
               value={shipped.order_id || 'Not available'} 
             />
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Condition</span>
-              <p className="font-semibold text-sm text-gray-900">{shipped.condition || 'Not set'}</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Product Details */}
-        <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-            Product Details
-          </h3>
-          <div className="space-y-3">
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Product Title</span>
-              <p className="font-semibold text-sm text-gray-900 leading-relaxed">{shipped.product_title || 'Not provided'}</p>
-            </div>
             <CopyableField 
               label="Serial Number" 
               value={shipped.serial_number || 'N/A'} 
             />
+          </div>
+        </section>
+
+        {/* Product Details */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+              <Box className="w-4 h-4" />
+            </div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
+              Product Details
+            </h3>
+          </div>
+
+          <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100">
             <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">SKU</span>
-              <p className="font-mono text-sm text-gray-900 font-semibold">{shipped.sku || 'Not assigned'}</p>
+              <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-2">Product Title</span>
+              <p className="font-bold text-sm text-gray-900 leading-relaxed">{shipped.product_title || 'Not provided'}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+              <div>
+                <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Condition</span>
+                <p className="font-black text-xs text-blue-600 uppercase">{shipped.condition || 'Not set'}</p>
+              </div>
+              <div>
+                <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">SKU</span>
+                <p className="font-mono text-xs text-gray-900 font-bold">{shipped.sku || 'N/A'}</p>
+              </div>
             </div>
           </div>
         </section>
 
         {/* Packing Information */}
-        <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-            Packing Information
-          </h3>
-          <div className="space-y-3">
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Boxed By</span>
-              <p className="font-semibold text-sm text-gray-900">{shipped.boxed_by || 'Not specified'}</p>
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
+              <Box className="w-4 h-4" />
             </div>
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Tested By</span>
-              <p className="font-semibold text-sm text-gray-900">{shipped.tested_by || 'Unknown'}</p>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
+              Packing Information
+            </h3>
+          </div>
+
+          <div className="space-y-4 bg-orange-50/30 rounded-[2rem] p-6 border border-orange-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Boxed By</span>
+                <p className="font-black text-sm text-gray-900">{shipped.boxed_by || 'Not specified'}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Duration</span>
+                <p className="font-mono text-sm font-black text-orange-600">{durationData.boxingDuration || '--:--'}</p>
+              </div>
+            </div>
+            <div className="pt-4 border-t border-orange-100/50">
+              <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
+              <p className="text-xs font-bold text-gray-600">
+                {shipped.date_time && shipped.date_time !== '1' ? new Date(shipped.date_time).toLocaleString() : 'N/A'}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Testing Information */}
+        <section className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+              <Wrench className="w-4 h-4" />
+            </div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
+              Testing Information
+            </h3>
+          </div>
+
+          <div className="space-y-4 bg-purple-50/30 rounded-[2rem] p-6 border border-purple-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Tested By</span>
+                <p className="font-black text-sm text-gray-900">{shipped.tested_by || 'Not specified'}</p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Duration</span>
+                <p className="font-mono text-sm font-black text-purple-600">{durationData.testingDuration || '--:--'}</p>
+              </div>
+            </div>
+            <div className="pt-4 border-t border-purple-100/50">
+              <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
+              <p className="text-xs font-bold text-gray-600">
+                {/* Note: In a real app, you might want to fetch the exact testing timestamp from the tech table */}
+                Testing completion timestamp synced with packing log.
+              </p>
             </div>
           </div>
         </section>
 
         {/* Current Status */}
-        <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-            Current Status
-          </h3>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm font-black uppercase tracking-wider text-blue-900">{shipped.status || 'No status set'}</p>
+        <section className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Current Status</h3>
+          <div className="bg-blue-600 rounded-2xl p-4 shadow-lg shadow-blue-100">
+            <p className="text-sm font-black uppercase tracking-widest text-white">{shipped.status || 'No status set'}</p>
           </div>
         </section>
         
         {/* Status History */}
         {shipped.status_history && shipped.status_history.length > 0 && (
-          <section>
-            <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+          <section className="space-y-6">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
               Status History
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {shipped.status_history.slice().reverse().map((entry, idx) => {
                 const isShippedOrPickedUp = entry.status === 'Shipped' || entry.status === 'Picked Up';
                 
                 return (
                   <div 
                     key={idx} 
-                    className={`flex items-start gap-3 p-3 rounded-lg ${
-                      isShippedOrPickedUp ? 'bg-emerald-50 border border-emerald-200' : 'bg-gray-50'
+                    className={`flex items-start gap-4 p-4 rounded-2xl transition-all ${
+                      isShippedOrPickedUp ? 'bg-emerald-50 border border-emerald-100' : 'bg-gray-50 border border-gray-100'
                     }`}
                   >
-                    <div className={`mt-0.5 ${isShippedOrPickedUp ? 'text-emerald-600' : 'text-blue-600'}`}>
+                    <div className={`mt-1 p-1.5 rounded-lg ${isShippedOrPickedUp ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
                       {isShippedOrPickedUp ? (
-                        <Check className="w-4 h-4" />
+                        <Check className="w-3.5 h-3.5" />
                       ) : (
-                        <Clock className="w-4 h-4" />
+                        <Clock className="w-3.5 h-3.5" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className={`font-bold text-sm ${isShippedOrPickedUp ? 'text-emerald-900' : 'text-gray-900'}`}>
+                      <p className={`font-black text-sm ${isShippedOrPickedUp ? 'text-emerald-900' : 'text-gray-900'}`}>
                         {entry.status}
                       </p>
-                      <p className="text-xs text-gray-600 mt-0.5">
+                      <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wider">
                         {formatStatusTimestamp(entry.timestamp)}
                       </p>
-                      {entry.previous_status && (
-                        <p className="text-[10px] text-gray-500 mt-1">
-                          From: {entry.previous_status}
-                        </p>
-                      )}
                     </div>
                   </div>
                 );

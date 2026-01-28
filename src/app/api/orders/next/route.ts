@@ -8,6 +8,8 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const techId = searchParams.get('techId');
+    const getAll = searchParams.get('all') === 'true';
+    const filterStatus = searchParams.get('status');
 
     if (!techId) {
       return NextResponse.json(
@@ -28,12 +30,9 @@ export async function GET(req: NextRequest) {
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
-    // 2. Get the next order that:
-    // - Is assigned to this tech OR is unassigned
-    // - Is NOT completed or in_progress (unless assigned to this tech)
-    // - Has NOT been skipped by this tech
-    const result = await pool.query(
-      `SELECT 
+    // 2. Build Query
+    let query = `
+      SELECT 
         id,
         ship_by_date,
         order_id,
@@ -42,11 +41,22 @@ export async function GET(req: NextRequest) {
         urgent,
         status,
         condition,
-        shipping_tracking_number
+        shipping_tracking_number,
+        out_of_stock
       FROM orders
       WHERE 
+    `;
+    const params: any[] = [assignedTo];
+    let paramCount = 2;
+
+    if (filterStatus === 'missing_parts') {
+      query += ` status = 'missing_parts' AND (assigned_to = $1 OR assigned_to IS NULL OR assigned_to = '') `;
+    } else {
+      query += `
         -- Status is not completed or missing_parts
         status NOT IN ('completed', 'missing_parts')
+        -- Out of stock must be empty for pending
+        AND (out_of_stock IS NULL OR out_of_stock = '')
         -- Either assigned to this tech OR truly unassigned
         AND (
           assigned_to = $1 
@@ -56,19 +66,36 @@ export async function GET(req: NextRequest) {
         AND (
           skipped_by IS NULL 
           OR skipped_by = '' 
-          OR NOT (skipped_by::jsonb ? $2)
+          OR NOT (skipped_by::jsonb ? $${paramCount++})
         )
+      `;
+      params.push(techId);
+    }
+
+    query += `
       ORDER BY 
         urgent DESC,
         ship_by_date ASC
-      LIMIT 1`,
-      [assignedTo, techId]
-    );
+    `;
+
+    if (!getAll) {
+      query += ` LIMIT 1 `;
+    }
+
+    const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
       return NextResponse.json({ 
         order: null, 
+        orders: [],
         all_completed: totalPending === 0 
+      });
+    }
+
+    if (getAll) {
+      return NextResponse.json({ 
+        orders: result.rows,
+        all_completed: false
       });
     }
 

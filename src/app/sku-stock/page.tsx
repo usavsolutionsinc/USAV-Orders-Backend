@@ -5,7 +5,7 @@ import BarcodeSidebar from '@/components/BarcodeSidebar';
 export default function SkuStockPage() {
     const sheetId = "1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE";
     const gid = "527136135";
-    const iframeUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit#gid=${gid}&rm=minimal&single=true&widget=false`;
+    const iframeUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?gid=${gid}&rm=minimal&single=true&widget=false`;
 
     return (
         <div className="flex h-full w-full">
