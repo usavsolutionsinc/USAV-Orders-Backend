@@ -55,14 +55,14 @@ export function CopyableText({ text, className = '', disabled = false, variant =
     return (
         <button 
             onClick={handleCopy}
-            className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-full`}
+            className={`${className} group relative flex items-center justify-start gap-2 hover:brightness-95 active:scale-95 transition-all w-fit`}
             title={`Click to copy: ${text}`}
         >
-            <span className="truncate flex-1 text-left">{displayText}</span>
+            <span className="truncate text-left">{displayText}</span>
             {copied ? (
-                <Check className="w-2 h-2" />
+                <Check className="w-2.5 h-2.5 text-emerald-600" />
             ) : (
-                <Copy className="w-2 h-2 opacity-0 group-hover:opacity-40 transition-opacity" />
+                <Copy className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
             )}
         </button>
     );

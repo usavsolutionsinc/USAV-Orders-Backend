@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
+import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
+import { ShippedRecord } from '@/lib/neon/shipped-queries';
 
 interface SearchResult {
     id: number;
@@ -38,7 +40,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
-    const [copiedField, setCopiedField] = useState<string | null>(null);
+    const [selectedShipped, setSelectedShipped] = useState<SearchResult | null>(null);
 
     // Load search history from localStorage
     useEffect(() => {
@@ -79,6 +81,10 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
             if (data.results) {
                 setResults(data.results);
                 saveSearchHistory(query, data.count);
+                // If only one result, open it directly
+                if (data.results.length === 1) {
+                    setSelectedShipped(data.results[0]);
+                }
             } else {
                 setResults([]);
             }
@@ -97,23 +103,10 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
         }
     };
 
-    // Copy to clipboard
-    const copyToClipboard = (text: string, field: string) => {
-        navigator.clipboard.writeText(text);
-        setCopiedField(field);
-        setTimeout(() => setCopiedField(null), 2000);
-    };
-
-    // Copy entire row
-    const copyRow = (result: SearchResult) => {
-        const rowText = `Serial: ${result.serial_number || 'N/A'}\nOrder ID: ${result.order_id}\nTracking: ${result.shipping_tracking_number}\nProduct: ${result.product_title}\nCondition: ${result.condition}\nTested By: ${result.tested_by || 'N/A'}\nBoxed By: ${result.boxed_by || 'N/A'}\nShipped: ${result.is_shipped ? result.date_time : 'Not Shipped'}`;
-        copyToClipboard(rowText, `row-${result.id}`);
-    };
-
     return (
         <div className="relative flex-shrink-0 z-40 h-full">
             <aside
-                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[320px]"
+                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[300px]"
             >
                 {showIntakeForm ? (
                     <ShippedIntakeForm 
@@ -161,154 +154,46 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                         </button>
 
                         {/* Search Results */}
-                        {results.length > 0 ? (
+                        {results.length > 0 && (
                             <div className="space-y-3">
-                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
-                                    {results.length} Result{results.length !== 1 ? 's' : ''}
-                                </p>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                                        {results.length} Result{results.length !== 1 ? 's' : ''}
+                                    </p>
+                                    <button 
+                                        onClick={() => setResults([])}
+                                        className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
                                 
-                                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
-                                    {results.map((result) => {
-                                        const hasAlert = result.date_time === '1';
-                                        return (
-                                        <div
+                                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+                                    {results.map((result) => (
+                                        <button
                                             key={result.id}
-                                            className={`bg-gray-50 border rounded-xl p-4 space-y-3 transition-all relative group ${
-                                                hasAlert ? 'border-red-500 bg-red-50 ring-2 ring-red-500/20' : 'border-gray-200 hover:border-blue-300'
-                                            }`}
+                                            onClick={() => setSelectedShipped(result)}
+                                            className="w-full text-left p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
                                         >
-                                            {/* Alert Banner if date_time is 1 */}
-                                            {hasAlert && (
-                                                <div className="bg-red-600 text-white p-2 rounded-lg animate-pulse mb-2">
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <AlertTriangle className="w-4 h-4" />
-                                                        <span className="text-xs font-black uppercase">URGENT ALERT!</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            
-                                            {/* Status Badge */}
-                                            <div className="flex items-center justify-between">
-                                                <span className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
-                                                    result.is_shipped 
-                                                        ? 'bg-emerald-100 text-emerald-700'
-                                                        : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    {result.is_shipped ? '✓ Shipped' : '○ Not Shipped'}
-                                                </span>
-                                                
-                                                <button
-                                                    onClick={() => copyRow(result)}
-                                                    className="opacity-0 group-hover:opacity-100 p-1.5 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all"
-                                                    title="Copy entire row"
-                                                >
-                                                    {copiedField === `row-${result.id}` ? (
-                                                        <Check className="w-3 h-3 text-emerald-600" />
-                                                    ) : (
-                                                        <Copy className="w-3 h-3 text-gray-500" />
-                                                    )}
-                                                </button>
-                                            </div>
-
-                                            {/* Serial Number - PROMINENT */}
-                                            <div className="bg-blue-600 text-white p-3 rounded-lg">
+                                            <div className="flex flex-col gap-1">
                                                 <div className="flex items-center justify-between">
-                                                    <div className="flex-1">
-                                                        <p className="text-[8px] font-bold uppercase tracking-widest opacity-80 mb-1">
-                                                            Serial Number
-                                                        </p>
-                                                        <p className="text-sm font-black font-mono">
-                                                            {result.serial_number ? (result.serial_number.length > 6 ? result.serial_number.slice(-6) : result.serial_number) : 'N/A'}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => copyToClipboard(result.serial_number || 'N/A', `serial-${result.id}`)}
-                                                        className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
-                                                    >
-                                                        {copiedField === `serial-${result.id}` ? (
-                                                            <Check className="w-3 h-3" />
-                                                        ) : (
-                                                            <Copy className="w-3 h-3" />
-                                                        )}
-                                                    </button>
+                                                    <span className="text-[10px] font-black text-gray-900 group-hover:text-blue-600 truncate">
+                                                        {result.order_id}
+                                                    </span>
+                                                    <span className={`text-[7px] font-black px-1.5 py-0.5 rounded uppercase ${result.is_shipped ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {result.is_shipped ? 'Shipped' : 'Pending'}
+                                                    </span>
                                                 </div>
+                                                <p className="text-[9px] text-gray-500 font-medium truncate">{result.product_title}</p>
+                                                <p className="text-[8px] font-mono text-gray-400 truncate">{result.shipping_tracking_number}</p>
                                             </div>
-
-                                            {/* Other Details */}
-                                            <div className="space-y-2 text-[10px]">
-                                                {/* Order ID */}
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Order ID</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-mono font-semibold">{result.order_id ? (result.order_id.length > 10 ? result.order_id.slice(-10) : result.order_id) : 'N/A'}</span>
-                                                        <button
-                                                            onClick={() => copyToClipboard(result.order_id, `order-${result.id}`)}
-                                                            className="p-1 hover:bg-gray-200 rounded transition-all"
-                                                        >
-                                                            {copiedField === `order-${result.id}` ? (
-                                                                <Check className="w-3 h-3 text-emerald-600" />
-                                                            ) : (
-                                                                <Copy className="w-3 h-3 text-gray-400" />
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Tracking Number */}
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px]">Tracking</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-mono font-semibold">{result.shipping_tracking_number ? (result.shipping_tracking_number.length > 10 ? result.shipping_tracking_number.slice(-10) : result.shipping_tracking_number) : 'N/A'}</span>
-                                                        <button
-                                                            onClick={() => copyToClipboard(result.shipping_tracking_number, `tracking-${result.id}`)}
-                                                            className="p-1 hover:bg-gray-200 rounded transition-all"
-                                                        >
-                                                            {copiedField === `tracking-${result.id}` ? (
-                                                                <Check className="w-3 h-3 text-emerald-600" />
-                                                            ) : (
-                                                                <Copy className="w-3 h-3 text-gray-400" />
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Product */}
-                                                <div className="pt-2 border-t border-gray-200">
-                                                    <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Product:</p>
-                                                    <p className="font-semibold leading-tight">{result.product_title}</p>
-                                                </div>
-
-                                                {/* Condition */}
-                                                <div className="pt-2 border-t border-gray-200">
-                                                    <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Condition</p>
-                                                    <p className="font-semibold leading-tight">{result.condition}</p>
-                                                </div>
-
-                                                {/* Tested By */}
-                                                <div className="pt-2 border-t border-gray-200">
-                                                    <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Tested By</p>
-                                                    <p className="font-semibold leading-tight">{result.tested_by || 'N/A'}</p>
-                                                </div>
-
-                                                {/* Boxed By */}
-                                                <div className="pt-2 border-t border-gray-200">
-                                                    <p className="text-gray-500 font-bold uppercase tracking-wider text-[8px] mb-1">Boxed By</p>
-                                                    <p className="font-semibold leading-tight">{result.boxed_by || 'N/A'}</p>
-                                                </div>
-
-                                                {/* Shipped Date */}
-                                                {result.is_shipped && result.date_time && (
-                                                    <div className="text-[9px] text-gray-500 font-medium">
-                                                        Shipped: {result.date_time}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        );
-                                    })}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                        ) : hasSearched && !isSearching && (
+                        )}
+
+                        {hasSearched && !isSearching && results.length === 0 && (
                             <div className="bg-red-50 border border-red-100 rounded-xl p-6 text-center animate-in fade-in slide-in-from-top-2 duration-300">
                                 <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
                                     <Search className="w-6 h-6 text-red-600" />
@@ -329,7 +214,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                             </div>
                         )}
 
-                        {/* Search History */}
+                        {/* Recent Searches - Only show when no active results */}
                         {searchHistory.length > 0 && results.length === 0 && (
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">
@@ -337,7 +222,6 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                 </p>
                                 <div className="space-y-2">
                                     {searchHistory.slice(0, 5).map((item, index) => {
-                                        // Show last 8 digits for numeric tracking numbers
                                         const displayQuery = item.query.match(/^\d+$/) && item.query.length > 8 
                                             ? item.query.slice(-8) 
                                             : item.query;
@@ -373,6 +257,17 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                 </div>
                 )}
             </aside>
+
+            {/* Details Panel Overlay */}
+            <AnimatePresence>
+                {selectedShipped && (
+                    <ShippedDetailsPanel 
+                        shipped={selectedShipped as unknown as ShippedRecord}
+                        onClose={() => setSelectedShipped(null)}
+                        onUpdate={() => handleSearch(searchQuery)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }

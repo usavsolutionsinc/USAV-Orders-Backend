@@ -32,9 +32,11 @@ function getTrackingUrl(tracking: string): string | null {
 
 function getOrderIdUrl(orderId: string): string | null {
   if (!orderId || orderId === 'Not available' || orderId === 'N/A') return null;
-  if (/^\d+-\d+-\d+$/.test(orderId)) {
+  // Amazon order ID: 3 digits in the first group
+  if (/^\d{3}-\d+-\d+$/.test(orderId)) {
     return `https://sellercentral.amazon.com/orders-v3/order/${orderId}`;
   }
+  // Ecwid order ID: 4 digits
   if (/^\d{4}$/.test(orderId)) {
     return `https://my.ecwid.com/store/16593703#order:id=${orderId}&use_cache=true&return=orders`;
   }
@@ -109,10 +111,44 @@ export function ShippedDetailsPanel({
 }: ShippedDetailsPanelProps) {
   const [durationData, setDurationData] = useState<DurationData>({});
   const [isLoadingDurations, setIsLoadingDurations] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   useEffect(() => {
     fetchDurations();
   }, [shipped.id]);
+
+  const handleCopyAll = () => {
+    const formatDateTime = (dateStr: string) => {
+      if (!dateStr || dateStr === '1') return 'N/A';
+      try {
+        const date = new Date(dateStr);
+        return date.toLocaleString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).replace(',', '');
+      } catch (e) {
+        return dateStr;
+      }
+    };
+
+    const text = `Serial: ${shipped.serial_number || 'N/A'}
+Order ID: ${shipped.order_id || 'N/A'}
+Tracking: ${shipped.shipping_tracking_number || 'N/A'}
+Product: ${shipped.product_title || 'N/A'}
+Condition: ${shipped.condition || 'N/A'}
+Tested By: ${shipped.tested_by || 'N/A'}
+Boxed By: ${shipped.boxed_by || 'N/A'}
+Shipped: ${shipped.date_time ? formatDateTime(shipped.date_time) : 'Not Shipped'}`;
+    
+    navigator.clipboard.writeText(text);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+  };
 
   const fetchDurations = async () => {
     setIsLoadingDurations(true);
@@ -164,13 +200,29 @@ export function ShippedDetailsPanel({
       <div className="p-8 space-y-10">
         {/* Shipping Information */}
         <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-              <Package className="w-4 h-4" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                <Package className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
+                Shipping Information
+              </h3>
             </div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
-              Shipping Information
-            </h3>
+            <button
+              onClick={handleCopyAll}
+              className="p-2 hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-100 flex items-center gap-2 group"
+              title="Copy all order details"
+            >
+              {copiedAll ? (
+                <>
+                  <span className="text-[10px] font-black text-emerald-600 uppercase">Copied All!</span>
+                  <Check className="w-4 h-4 text-emerald-600" />
+                </>
+              ) : (
+                <Copy className="w-4 h-4 text-gray-400 group-hover:text-blue-600" />
+              )}
+            </button>
           </div>
           
           <div className="space-y-4">
@@ -184,7 +236,7 @@ export function ShippedDetailsPanel({
               label="Order ID" 
               value={shipped.order_id || 'Not available'} 
               externalUrl={getOrderIdUrl(shipped.order_id)}
-              externalLabel={/^\d+-\d+-\d+$/.test(shipped.order_id) ? "Open Amazon order in Seller Central in new tab" : "Open Ecwid order in new tab"}
+              externalLabel={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? "Open Amazon order in Seller Central in new tab" : "Open Ecwid order in new tab"}
             />
             <CopyableField 
               label="Serial Number" 
