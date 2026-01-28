@@ -74,16 +74,6 @@ const CopyableField = ({ label, value, externalUrl, externalLabel }: { label: st
       >
         <p className="font-mono text-sm text-gray-900 font-bold flex-1 truncate">{value}</p>
         <div className="flex items-center gap-1.5">
-          {externalUrl && (
-            <button
-              onClick={handleExternalClick}
-              className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-blue-600"
-              title={externalLabel || "Open in external tab"}
-              aria-label={externalLabel || "Open in external tab"}
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
           {!isEmpty && (
             <div className={`p-1.5 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover/field:opacity-100'}`}>
               {copied ? (
@@ -95,6 +85,16 @@ const CopyableField = ({ label, value, externalUrl, externalLabel }: { label: st
                 <Copy className="w-3.5 h-3.5 text-gray-400" />
               )}
             </div>
+          )}
+          {externalUrl && (
+            <button
+              onClick={handleExternalClick}
+              className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-blue-600"
+              title={externalLabel || "Open in external tab"}
+              aria-label={externalLabel || "Open in external tab"}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
       </div>
@@ -204,14 +204,12 @@ export function ShippedDetailsPanel({
             </h3>
           </div>
 
-          <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100 overflow-x-auto no-scrollbar">
+          <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100">
             <div>
               <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-2">Product Title</span>
-              <div className="w-[800px]">
-                <p className="font-bold text-sm text-gray-900 leading-relaxed break-words">
-                  {shipped.product_title || 'Not provided'}
-                </p>
-              </div>
+              <p className="font-bold text-sm text-gray-900 leading-relaxed truncate" title={shipped.product_title}>
+                {shipped.product_title || 'Not provided'}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
               <div>

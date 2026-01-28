@@ -202,7 +202,7 @@ export function ShippedTable() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col min-w-max">
+            <div className="flex flex-col w-full">
               {Object.entries(groupedShipped)
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, records]) => (
@@ -284,19 +284,19 @@ export function ShippedTable() {
                             />
                           </div>
                           
-                          {/* 6. Boxed By */}
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Boxed By</span>
-                            <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
-                              {record.boxed_by || '---'}
-                            </div>
-                          </div>
-                          
-                          {/* 7. Tested By */}
+                          {/* 6. Tested By */}
                           <div className="flex flex-col">
                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Tested By</span>
                             <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
                               {record.tested_by || '---'}
+                            </div>
+                          </div>
+                          
+                          {/* 7. Boxed By */}
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Boxed By</span>
+                            <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
+                              {record.boxed_by || '---'}
                             </div>
                           </div>
                         </motion.div>
