@@ -225,7 +225,7 @@ export function ShippedTable() {
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[60px_1fr_auto_auto_70px_80px_80px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                          className={`grid grid-cols-[60px_1fr_94px_auto_70px_80px_80px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
@@ -255,7 +255,7 @@ export function ShippedTable() {
                           </div>
                           
                           {/* 3. Order ID */}
-                          <div className="flex flex-col">
+                          <div className="flex flex-col w-[94px]">
                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
                             <CopyableText 
                               text={record.order_id || ''} 

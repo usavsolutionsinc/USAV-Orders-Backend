@@ -42,9 +42,9 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
         price: '130'
     });
 
-    const canProceedFromProduct = formData.product.type && formData.product.model;
+    const canProceedFromProduct = formData.product.type && (formData.product.type === 'Other' ? formData.product.model : formData.product.model);
     const canProceedFromReason = formData.repairReasons.length > 0;
-    const canSubmit = formData.customer.name && formData.customer.phone;
+    const canSubmit = formData.customer.name && formData.customer.phone && formData.customer.email && formData.serialNumber && formData.price;
 
     const handleNext = () => {
         if (currentStep === 'product' && canProceedFromProduct) {

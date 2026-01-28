@@ -62,7 +62,7 @@ export function CustomerInfoForm({
             {/* Email */}
             <div>
                 <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">
-                    Email
+                    Email <span className="text-red-500">*</span>
                 </label>
                 <input
                     type="email"
@@ -70,13 +70,14 @@ export function CustomerInfoForm({
                     onChange={(e) => onCustomerChange('email', e.target.value)}
                     placeholder="customer@example.com"
                     className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                 />
             </div>
 
             {/* Serial Number */}
             <div>
                 <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">
-                    Serial # (Last 4 digits)
+                    Serial # (Last 4 digits) <span className="text-red-500">*</span>
                 </label>
                 <input
                     type="text"
@@ -85,6 +86,7 @@ export function CustomerInfoForm({
                     placeholder="1234"
                     maxLength={4}
                     className="w-full px-3 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-900 font-mono placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
                 />
             </div>
 

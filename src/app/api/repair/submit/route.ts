@@ -7,10 +7,19 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { customer, product, repairReasons, additionalNotes, serialNumber, price } = body;
 
-        // Validate required fields
-        if (!customer?.name || !customer?.phone || !product?.type || !product?.model || !repairReasons?.length) {
+        // Validate required fields for both DB and Zendesk
+        if (!customer?.name || !customer?.phone || !customer?.email || !product?.type || !product?.model || !repairReasons?.length || !serialNumber || !price) {
+            const missing = [];
+            if (!customer?.name) missing.push('Name');
+            if (!customer?.phone) missing.push('Phone');
+            if (!customer?.email) missing.push('Email');
+            if (!product?.type || !product?.model) missing.push('Product Title');
+            if (!repairReasons?.length) missing.push('Repair Reasons');
+            if (!serialNumber) missing.push('Serial #');
+            if (!price) missing.push('Price');
+
             return NextResponse.json({ 
-                error: 'Missing required fields' 
+                error: `Missing required fields: ${missing.join(', ')}` 
             }, { status: 400 });
         }
 
@@ -30,12 +39,12 @@ export async function POST(req: NextRequest) {
             : `${product.type} Music System - ${product.model}`;
 
         // Format contact info
-        const contactInfo = `${customer.name}, ${customer.phone}${customer.email ? `, ${customer.email}` : ''}`;
+        const contactInfo = `${customer.name}, ${customer.phone}, ${customer.email}`;
 
         // Format repair reasons
         const repairReasonsString = repairReasons.join(', ') + (additionalNotes ? ` - ${additionalNotes}` : '');
 
-        // Step 1: Create Zendesk ticket via email
+        // Step 1: Create Zendesk ticket via GAS Web App
         let zendeskTicketNumber: string | null = null;
         try {
             zendeskTicketNumber = await createZendeskTicket({
@@ -48,9 +57,11 @@ export async function POST(req: NextRequest) {
                 serialNumber,
                 price
             });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to create Zendesk ticket:', error);
-            // Continue even if Zendesk fails - will use DB ID
+            return NextResponse.json({ 
+                error: error.message || 'Failed to create Zendesk ticket' 
+            }, { status: 500 });
         }
 
         // Step 2: Insert into repair_service table in NEON DB
