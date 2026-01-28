@@ -225,7 +225,7 @@ export function ShippedTable() {
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[60px_1fr_auto_auto_auto_80px_80px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                          className={`grid grid-cols-[60px_1fr_auto_auto_70px_80px_80px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
@@ -275,7 +275,7 @@ export function ShippedTable() {
                           </div>
                           
                           {/* 5. Serial Number */}
-                          <div className="flex flex-col">
+                          <div className="flex flex-col w-[70px]">
                             <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
                             <CopyableText 
                               text={record.serial_number || ''} 
