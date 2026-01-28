@@ -113,7 +113,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
     return (
         <div className="relative flex-shrink-0 z-40 h-full">
             <aside
-                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[380px]"
+                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[320px]"
             >
                 {showIntakeForm ? (
                     <ShippedIntakeForm 

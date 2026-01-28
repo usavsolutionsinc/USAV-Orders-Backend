@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Check, Clock, Package, Copy, Box, Wrench } from '../Icons';
+import { X, Check, Clock, Package, Copy, Box, Wrench, ExternalLink } from '../Icons';
 import { ShippedRecord } from '@/lib/neon/shipped-queries';
 import { formatStatusTimestamp } from '@/lib/neon/status-history';
+import { getCarrier } from '../../utils/tracking';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedRecord;
@@ -17,8 +18,31 @@ interface DurationData {
   testingDuration?: string;
 }
 
+// URL helpers for external links
+function getTrackingUrl(tracking: string): string | null {
+  if (!tracking || tracking === 'Not available' || tracking === 'N/A') return null;
+  const carrier = getCarrier(tracking);
+  switch (carrier) {
+    case 'USPS': return `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${tracking}`;
+    case 'UPS': return `https://www.ups.com/track?track=yes&trackNums=${tracking}&loc=en_US&requester=ST/trackdetails`;
+    case 'FedEx': return `https://www.fedex.com/fedextrack/?trknbr=${tracking}&trkqual=12029~397652017412~FDEG`;
+    default: return null;
+  }
+}
+
+function getOrderIdUrl(orderId: string): string | null {
+  if (!orderId || orderId === 'Not available' || orderId === 'N/A') return null;
+  if (/^\d+-\d+-\d+$/.test(orderId)) {
+    return `https://sellercentral.amazon.com/orders-v3/order/${orderId}`;
+  }
+  if (/^\d{4}$/.test(orderId)) {
+    return `https://my.ecwid.com/store/16593703#order:id=${orderId}&use_cache=true&return=orders`;
+  }
+  return null;
+}
+
 // Copyable field component
-const CopyableField = ({ label, value }: { label: string; value: string }) => {
+const CopyableField = ({ label, value, externalUrl, externalLabel }: { label: string; value: string; externalUrl?: string | null; externalLabel?: string }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -28,26 +52,51 @@ const CopyableField = ({ label, value }: { label: string; value: string }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleExternalClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (externalUrl) {
+      window.open(externalUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const isEmpty = !value || value === 'Not available' || value === 'N/A';
 
   return (
     <div>
       <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1.5">{label}</span>
-      <div className="flex items-center justify-between gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 group/field">
+      <div 
+        onClick={handleCopy}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCopy(); } }}
+        tabIndex={isEmpty ? -1 : 0}
+        role="button"
+        aria-label={`Copy ${label}: ${value}`}
+        className={`flex items-center justify-between gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 group/field transition-all ${!isEmpty ? 'cursor-pointer hover:bg-gray-100 active:scale-[0.98]' : 'cursor-default'}`}
+      >
         <p className="font-mono text-sm text-gray-900 font-bold flex-1 truncate">{value}</p>
-        {!isEmpty && (
-          <button
-            onClick={handleCopy}
-            className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all opacity-0 group-hover/field:opacity-100"
-            title="Copy to clipboard"
-          >
-            {copied ? (
-              <Check className="w-3.5 h-3.5 text-emerald-600" />
-            ) : (
-              <Copy className="w-3.5 h-3.5 text-gray-400" />
-            )}
-          </button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {externalUrl && (
+            <button
+              onClick={handleExternalClick}
+              className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-blue-600"
+              title={externalLabel || "Open in external tab"}
+              aria-label={externalLabel || "Open in external tab"}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {!isEmpty && (
+            <div className={`p-1.5 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover/field:opacity-100'}`}>
+              {copied ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-black text-emerald-600 uppercase">Copied!</span>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                </div>
+              ) : (
+                <Copy className="w-3.5 h-3.5 text-gray-400" />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -128,10 +177,14 @@ export function ShippedDetailsPanel({
             <CopyableField 
               label="Tracking Number" 
               value={shipped.shipping_tracking_number || 'Not available'} 
+              externalUrl={getTrackingUrl(shipped.shipping_tracking_number)}
+              externalLabel="Open shipment tracking in new tab"
             />
             <CopyableField 
               label="Order ID" 
               value={shipped.order_id || 'Not available'} 
+              externalUrl={getOrderIdUrl(shipped.order_id)}
+              externalLabel={/^\d+-\d+-\d+$/.test(shipped.order_id) ? "Open Amazon order in Seller Central in new tab" : "Open Ecwid order in new tab"}
             />
             <CopyableField 
               label="Serial Number" 
@@ -151,10 +204,14 @@ export function ShippedDetailsPanel({
             </h3>
           </div>
 
-          <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100">
+          <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100 overflow-x-auto no-scrollbar">
             <div>
               <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-2">Product Title</span>
-              <p className="font-bold text-sm text-gray-900 leading-relaxed">{shipped.product_title || 'Not provided'}</p>
+              <div className="w-[800px]">
+                <p className="font-bold text-sm text-gray-900 leading-relaxed break-words">
+                  {shipped.product_title || 'Not provided'}
+                </p>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
               <div>

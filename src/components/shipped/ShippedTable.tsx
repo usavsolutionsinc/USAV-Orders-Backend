@@ -247,23 +247,7 @@ export function ShippedTable() {
                           {/* 2. Product Title & Condition */}
                           <div className="flex flex-col min-w-0">
                             <div className="text-[11px] font-bold text-gray-900 truncate">
-                              {(() => {
-                                const title = record.product_title || 'Unknown Product';
-                                // Split by first space to separate reason from product title
-                                const firstSpaceIndex = title.indexOf(' ');
-                                if (firstSpaceIndex > 0) {
-                                  const reason = title.substring(0, firstSpaceIndex);
-                                  const productTitle = title.substring(firstSpaceIndex + 1);
-                                  return (
-                                    <>
-                                      <span className="font-black text-blue-600">{reason}</span>
-                                      {' '}
-                                      <span>{productTitle}</span>
-                                    </>
-                                  );
-                                }
-                                return title;
-                              })()}
+                              {record.product_title || 'Unknown Product'}
                             </div>
                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
                               {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
