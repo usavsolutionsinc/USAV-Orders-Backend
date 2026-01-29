@@ -66,10 +66,11 @@ export async function POST(req: NextRequest) {
         const packerName = `Packer ${packerId}`;
         
         // Insert into the specific packer table
-        // date_time, shipping_tracking_number, carrier, product_title, quantity
+        // date_time, shipping_tracking_number, carrier, product_title
+        // quantity column is only touched by sheet import
         await db.execute(sql.raw(`
-            INSERT INTO ${tableName} (date_time, shipping_tracking_number, carrier, product_title, quantity)
-            VALUES ('${timestamp}', '${trackingNumber}', '${carrier}', '${product}', '${orderId || ''}')
+            INSERT INTO ${tableName} (date_time, shipping_tracking_number, carrier, product_title)
+            VALUES ('${timestamp}', '${trackingNumber}', '${carrier}', '${product}')
         `));
 
         // Update shipped table with packer info

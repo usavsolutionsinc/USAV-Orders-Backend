@@ -69,7 +69,6 @@ export default function StationHistory({
     stationType 
 }: StationHistoryProps) {
     const [history, setHistory] = useState<HistoryLog[]>(initialHistory);
-    const [viewMode, setViewMode] = useState<'history' | 'checklist'>('history');
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [offset, setOffset] = useState(0);
@@ -245,35 +244,19 @@ export default function StationHistory({
         <div className="flex flex-col h-full w-full bg-white relative overflow-hidden">
             {/* Sticky Header */}
             <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
-                {viewMode === 'history' ? (
-                    <div className="flex items-center gap-2">
-                        <p className="text-[11px] font-black text-gray-900 tracking-tight">
-                            {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
-                        </p>
-                        <div className="h-2 w-px bg-gray-200" />
-                        <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
-                            Count: {currentCount || (history.length > 0 ? (history[0].count || history.length) : 0)}
-                        </p>
-                    </div>
-                ) : (
-                    <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Tasks</p>
-                )}
-                
-                {techId && (
-                    <button 
-                        onClick={() => setViewMode(viewMode === 'history' ? 'checklist' : 'history')}
-                        className={`p-1.5 rounded-lg transition-all ${viewMode === 'checklist' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
-                        title={viewMode === 'history' ? 'Show Tasks' : 'Show History'}
-                    >
-                        {viewMode === 'history' ? <List className="w-4 h-4" /> : <History className="w-4 h-4" />}
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    <p className="text-[11px] font-black text-gray-900 tracking-tight">
+                        {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
+                    </p>
+                    <div className="h-2 w-px bg-gray-200" />
+                    <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
+                        Count: {currentCount || history.length}
+                    </p>
+                </div>
             </div>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar w-full">
-                {viewMode === 'checklist' && techId ? (
-                    <Checklist role="technician" userId={techId} />
-                ) : isInitialLoading ? (
+                {isInitialLoading ? (
                     <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-400">
                         <Loader2 className="w-8 h-8 animate-spin" />
                         <p className="text-[10px] font-black uppercase tracking-widest">Loading Records...</p>

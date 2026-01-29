@@ -2,30 +2,26 @@
  * Carrier detection and tracking utilities
  */
 
-export type Carrier = 'UPS' | 'USPS' | 'FedEx' | 'Unknown';
+export type Carrier = 'UPS' | 'USPS' | 'FedEx' | 'DHL' | 'AMAZON' | 'Unknown';
 
 /**
  * Determine the carrier based on tracking number format
+ * Mirroring Working GAS detectCarrier logic
  * @param tracking - The tracking number to analyze
  * @returns The detected carrier
  */
 export function getCarrier(tracking: string): Carrier {
     const t = tracking.trim().toUpperCase();
     
-    // UPS: Starts with 1Z followed by 16 alphanumeric characters
-    if (/^1Z[A-Z0-9]{16}$/.test(t)) {
-        return 'UPS';
-    }
+    if (t.startsWith('1Z')) return 'UPS';
+    if (t.startsWith('94') || t.startsWith('92') || t.startsWith('93') || t.startsWith('42')) return 'USPS';
+    if (t.startsWith('96')) return 'FedEx';
+    if (t.startsWith('JD') || t.startsWith('JJD')) return 'DHL';
+    if (t.startsWith('TBA')) return 'AMAZON';
     
-    // USPS: Various patterns
-    if (/^(94|93|92|91|420|04)\d{20,22}$/.test(t) || /^\d{20,22}$/.test(t)) {
-        return 'USPS';
-    }
-    
-    // FedEx: 12 or 15 digits
-    if (/^\d{12}$|^\d{15}$/.test(t)) {
-        return 'FedEx';
-    }
+    // Fallback for numeric only formats
+    if (/^\d{12}$|^\d{15}$/.test(t)) return 'FedEx';
+    if (/^\d{20,22}$/.test(t)) return 'USPS';
     
     return 'Unknown';
 }

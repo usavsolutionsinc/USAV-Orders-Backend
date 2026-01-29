@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Package, Loader2, List, Copy, Check, History } from '../Icons';
 import { motion } from 'framer-motion';
-import Checklist from '../Checklist';
 
 interface PackerLog {
     id: string;

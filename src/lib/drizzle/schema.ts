@@ -18,40 +18,7 @@ export const tags = pgTable('tags', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// Task templates table
-export const taskTemplates = pgTable('task_templates', {
-  id: serial('id').primaryKey(),
-  title: text('title').notNull(),
-  description: text('description'),
-  role: varchar('role', { length: 50 }).notNull(),
-  stationId: text('station_id'), // e.g., "Tech_1", "Tech_2", "Packer_1"
-  orderNumber: varchar('order_number', { length: 100 }),
-  trackingNumber: varchar('tracking_number', { length: 100 }),
-  createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
-// Task tags relationship
-export const taskTags = pgTable('task_tags', {
-  taskTemplateId: integer('task_template_id').notNull().references(() => taskTemplates.id, { onDelete: 'cascade' }),
-  tagId: integer('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
-}, (table) => ({
-  pk: primaryKey({ columns: [table.taskTemplateId, table.tagId] }),
-}));
-
-// Daily task instances
-export const dailyTaskInstances = pgTable('daily_task_instances', {
-  id: serial('id').primaryKey(),
-  templateId: integer('template_id').references(() => taskTemplates.id, { onDelete: 'cascade' }),
-  staffId: integer('staff_id').references(() => staff.id, { onDelete: 'cascade' }),
-  taskDate: date('task_date').notNull(),
-  status: varchar('status', { length: 20 }).default('pending'),
-  startedAt: timestamp('started_at'),
-  completedAt: timestamp('completed_at'),
-  durationMinutes: integer('duration_minutes'),
-  notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
+// DAILY TASK LOGIC REMOVED
 
 // NEW: Receiving tasks table
 export const receivingTasks = pgTable('receiving_tasks', {
@@ -168,7 +135,13 @@ export const packer3 = pgTable('packer_3', {
   quantity: text('quantity'),
 });
 
-export const receiving = pgTable('receiving', { ...genericColumns });
+export const receiving = pgTable('receiving', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  receivingTrackingNumber: text('receiving_tracking_number'),
+  carrier: text('carrier'),
+  quantity: text('quantity'),
+});
 
 // Shipped table - Updated schema
 export const shipped = pgTable('shipped', {
@@ -240,12 +213,10 @@ export type Staff = typeof staff.$inferSelect;
 export type NewStaff = typeof staff.$inferInsert;
 export type Tag = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
-export type TaskTemplate = typeof taskTemplates.$inferSelect;
-export type NewTaskTemplate = typeof taskTemplates.$inferInsert;
-export type DailyTaskInstance = typeof dailyTaskInstances.$inferSelect;
-export type NewDailyTaskInstance = typeof dailyTaskInstances.$inferInsert;
 export type ReceivingTask = typeof receivingTasks.$inferSelect;
 export type NewReceivingTask = typeof receivingTasks.$inferInsert;
+export type Receiving = typeof receiving.$inferSelect;
+export type NewReceiving = typeof receiving.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
 export type Shipped = typeof shipped.$inferSelect;

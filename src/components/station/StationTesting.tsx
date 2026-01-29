@@ -106,7 +106,8 @@ export default function StationTesting({
         if (input.includes(':')) return 'SKU';
         
         // Priority 2: Tracking number regex (from Working GAS line 844)
-        if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420)/i)) return 'TRACKING';
+        // Added X0 for FNSKU support as per user request
+        if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420|X0)/i)) return 'TRACKING';
         
         // Priority 3: FBA FNSKU (skip per user request)
         // if (/^X0/i.test(input)) return 'FNSKU';
@@ -184,8 +185,7 @@ export default function StationTesting({
                         timestamp,
                         title: targetOrder.productTitle || targetOrder.title,
                         tracking,
-                        serial: finalSerial,
-                        count: todayCount + 1
+                        serial: finalSerial
                     })
                 });
 
@@ -232,8 +232,7 @@ export default function StationTesting({
                     timestamp,
                     title: processedOrder.title,
                     tracking: processedOrder.tracking || processedOrder.orderId,
-                    serial: inputValue.trim().toUpperCase() || ('SN-' + Math.random().toString(36).substr(2, 9).toUpperCase()),
-                    count: todayCount + 1
+                    serial: inputValue.trim().toUpperCase() || ('SN-' + Math.random().toString(36).substr(2, 9).toUpperCase())
                 })
             });
             
@@ -289,35 +288,7 @@ export default function StationTesting({
     };
 
     return (
-        <div className="flex h-full bg-white overflow-hidden border-r border-gray-100">
-            {/* Vertical Sub-menu */}
-            <div className="w-16 flex-shrink-0 border-r border-gray-100 bg-gray-50/50 flex flex-col items-center py-8 gap-6">
-                {[
-                    { id: 'current', icon: Zap, label: 'Current' },
-                    { id: 'pending', icon: ClipboardList, label: 'Pending' },
-                    { id: 'out-of-stock', icon: AlertCircle, label: 'Stock' }
-                ].map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveSubTab(tab.id as any)}
-                        className={`p-3 rounded-xl transition-all relative group ${
-                            activeSubTab === tab.id 
-                                ? activeColor.text + ' bg-white shadow-sm ring-1 ring-gray-200' 
-                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                        }`}
-                        title={tab.label}
-                    >
-                        <tab.icon className="w-5 h-5" />
-                        {activeSubTab === tab.id && (
-                            <motion.div 
-                                layoutId="activeSubTab"
-                                className={`absolute -left-0 top-1/2 -translate-y-1/2 w-1 h-6 ${activeColor.bg} rounded-r-full`}
-                            />
-                        )}
-                    </button>
-                ))}
-            </div>
-
+        <div className="flex flex-col h-full bg-white overflow-hidden border-r border-gray-100">
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header section */}
                 <div className="p-8 pb-4 space-y-8">
@@ -365,6 +336,34 @@ export default function StationTesting({
                             </div>
                         </form>
                     )}
+
+                    {/* Horizontal Sub-menu - Moved below scan input */}
+                    <div className="flex items-center justify-center gap-4 py-2">
+                        {[
+                            { id: 'current', icon: Zap, label: 'Current' },
+                            { id: 'pending', icon: ClipboardList, label: 'Pending' },
+                            { id: 'out-of-stock', icon: AlertCircle, label: 'Stock' }
+                        ].map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveSubTab(tab.id as any)}
+                                className={`px-4 py-2 rounded-xl transition-all relative flex items-center gap-2 ${
+                                    activeSubTab === tab.id 
+                                        ? activeColor.text + ' bg-white shadow-sm ring-1 ring-gray-200' 
+                                        : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                                }`}
+                            >
+                                <tab.icon className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
+                                {activeSubTab === tab.id && (
+                                    <motion.div 
+                                        layoutId="activeSubTab"
+                                        className={`absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-6 ${activeColor.bg} rounded-full`}
+                                    />
+                                )}
+                            </button>
+                        ))}
+                    </div>
 
                     {activeSubTab === 'current' && (
                         <CurrentWorkOrder 

@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
             ''                 // 10 - Status
         ]);
 
-        // Prepare data for Neon DB - using new schema
+        // Prepare data for Neon DB - only columns A-J from sheet
         const ordersToInsert = data.map((item: any) => ({
             shipByDate: item.shipByDate || '',
             orderId: item.orderNumber || '',
@@ -65,9 +65,7 @@ export async function POST(request: NextRequest) {
             daysLate: '',
             outOfStock: '',
             notes: item.note || '',
-            assignedTo: null,
-            status: 'unassigned',
-            urgent: false,
+            // assignedTo, status, urgent, skippedBy rely on DB defaults
         }));
 
         const shippedToInsert = data.map((item: any) => ({

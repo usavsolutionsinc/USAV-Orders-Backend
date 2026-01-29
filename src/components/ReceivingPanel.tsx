@@ -49,21 +49,20 @@ export default function ReceivingPanel({ onEntryAdded }: ReceivingPanelProps) {
 
         setIsSubmitting(true);
         try {
-            const now = new Date();
-            const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-            
             const res = await fetch('/api/receiving-entry', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     trackingNumber,
                     carrier: carrier || 'Unknown',
-                    timestamp,
+                    // Let server handle timestamp for consistency
                 }),
             });
 
             if (!res.ok) throw new Error('Failed to add entry');
 
+            const data = await res.json();
+            
             setTrackingNumber('');
             setCarrier('');
             setShowUrgentAlert(false);
@@ -159,7 +158,7 @@ export default function ReceivingPanel({ onEntryAdded }: ReceivingPanelProps) {
                             <option value="FedEx">FedEx</option>
                             <option value="USPS">USPS</option>
                             <option value="DHL">DHL</option>
-                            <option value="Amazon">Amazon</option>
+                            <option value="AMAZON">Amazon</option>
                         </select>
                     </div>
 

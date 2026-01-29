@@ -46,10 +46,11 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
 
     const getTodayCount = () => {
         if (history.length === 0) return 0;
-        const mostRecent = history[0];
-        const recordDate = new Date(mostRecent.timestamp).toDateString();
         const todayDate = new Date().toDateString();
-        return recordDate === todayDate ? (mostRecent.count || 0) : 0;
+        return history.filter(h => {
+            const date = new Date(h.timestamp);
+            return date.toDateString() === todayDate;
+        }).length;
     };
 
     return (

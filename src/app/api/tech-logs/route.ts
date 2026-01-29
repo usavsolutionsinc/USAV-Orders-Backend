@@ -40,15 +40,16 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { techId, userName, timestamp, title, tracking, serial, count } = body;
+        const { techId, userName, timestamp, title, tracking, serial } = body;
 
         const tableName = `tech_${techId}`;
         const last8 = tracking ? tracking.slice(-8).toLowerCase() : '';
         
         // 1. Update/Insert into the technician's specific table
+        // quantity column is only touched by sheet import, not manual entries
         await db.execute(sql.raw(`
-            INSERT INTO ${tableName} (date_time, product_title, shipping_tracking_number, serial_number, quantity)
-            VALUES ('${timestamp}', '${title}', '${tracking}', '${serial}', '${count}')
+            INSERT INTO ${tableName} (date_time, product_title, shipping_tracking_number, serial_number)
+            VALUES ('${timestamp}', '${title}', '${tracking}', '${serial}')
         `));
 
         // 2. Update the shipped table if tracking is provided

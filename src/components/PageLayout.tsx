@@ -1,7 +1,6 @@
 'use client';
 
 import Sidebar from './Sidebar';
-import Checklist from './Checklist';
 import { useState } from 'react';
 import { ChevronRight, ChevronLeft } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,7 +10,6 @@ interface PageLayoutProps {
     userId?: string;
     sheetId: string;
     gid?: string;
-    showChecklist?: boolean;
     showSidebar?: boolean;
     editMode?: boolean;
     customSidebar?: React.ReactNode;
@@ -22,12 +20,11 @@ export default function PageLayout({
     userId = '1', 
     sheetId, 
     gid,
-    showChecklist = false,
     showSidebar = false,
     editMode = false,
     customSidebar
 }: PageLayoutProps) {
-    const [checklistOpen, setChecklistOpen] = useState(true);
+    // ... rest of the file ...
 
     // Modern 2026 URL Construction
     const baseUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
@@ -51,43 +48,10 @@ export default function PageLayout({
             <div className="flex-shrink-0 z-50 flex h-full">
                 {showSidebar && <Sidebar />}
                 {customSidebar}
-                
-                <AnimatePresence mode="wait">
-                    {showChecklist && role && checklistOpen && (
-                        <motion.div 
-                            initial={{ width: 0, opacity: 0 }}
-                            animate={{ width: 340, opacity: 1 }}
-                            exit={{ width: 0, opacity: 0 }}
-                            transition={{ type: "spring", damping: 25, stiffness: 120 }}
-                            className="bg-white border-r border-gray-100 flex flex-col z-40 overflow-hidden relative group"
-                        >
-                            <button
-                                onClick={() => setChecklistOpen(false)}
-                                className="absolute top-4 right-4 z-50 p-2 bg-gray-50 hover:bg-gray-100 text-gray-400 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                                title="Collapse Menu"
-                            >
-                                <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            <div className="w-[340px] h-full">
-                                <Checklist role={role} userId={userId} />
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
             </div>
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col relative overflow-hidden bg-white">
-                {/* Fixed Overlay Toggles for UX */}
-                {showChecklist && !checklistOpen && (
-                    <button
-                        onClick={() => setChecklistOpen(true)}
-                        className="fixed top-20 left-0 z-[60] p-3 bg-white text-gray-950 rounded-r-2xl shadow-xl hover:bg-blue-600 hover:text-white transition-all duration-300 group"
-                    >
-                        <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                )}
-
                 <div className="flex-1 w-full h-full relative group">
                     <iframe
                         key={`${sheetId}-${gid}-${editMode}`} // Key ensures iframe reloads when mode/tab changes
