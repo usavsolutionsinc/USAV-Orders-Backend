@@ -5,7 +5,6 @@ export default function SkuPage() {
         <PageLayout
             sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
             gid="1817455143"
-            showChecklist={false}
         />
     );
 }

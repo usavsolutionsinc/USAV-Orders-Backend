@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Package, Loader2, List, ChevronRight, Copy, Check, History } from '../Icons';
 import { motion, AnimatePresence } from 'framer-motion';
-import Checklist from '../Checklist';
 
 interface HistoryLog {
     id: string;
