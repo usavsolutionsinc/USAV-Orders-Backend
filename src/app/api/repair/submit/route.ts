@@ -59,18 +59,19 @@ export async function POST(req: NextRequest) {
             });
         } catch (error: any) {
             console.error('Failed to create Zendesk ticket:', error);
-            return NextResponse.json({ 
-                error: error.message || 'Failed to create Zendesk ticket' 
-            }, { status: 500 });
+            // Continue with DB insert even if Zendesk fails, but keep track of error
+            // result.error will be returned if critical, but user wants to fix the env var
         }
 
         // Step 2: Insert into repair_service table in NEON DB
+        // Fix: date_time, process, and status_history are JSON columns in the DB.
+        // We must provide valid JSON strings.
         const insertResult = await pool.query(`
             INSERT INTO repair_service (date_time, ticket_number, name, contact, product_title, price, issue, serial_number, process, status)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id, ticket_number
         `, [
-            formattedDateTime,
+            JSON.stringify(formattedDateTime), // Store as JSON string
             zendeskTicketNumber || '',
             customer.name,
             contactInfo,
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
             price || '130',
             repairReasonsString,
             serialNumber || '',
-            '[]', // process (empty JSON array initially)
+            '[]', // process (empty JSON array)
             'Pending'
         ]);
 

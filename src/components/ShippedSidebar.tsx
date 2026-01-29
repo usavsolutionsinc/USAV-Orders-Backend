@@ -41,6 +41,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
     const [hasSearched, setHasSearched] = useState(false);
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
     const [selectedShipped, setSelectedShipped] = useState<SearchResult | null>(null);
+    const [copiedId, setCopiedId] = useState<number | null>(null);
 
     // Listen for custom event to open details (single instance coordination)
     useEffect(() => {
@@ -58,6 +59,41 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
         const event = new CustomEvent('open-shipped-details', { detail: result });
         window.dispatchEvent(event);
         setSelectedShipped(result);
+    };
+
+    const handleCopyAll = (e: React.MouseEvent, result: SearchResult) => {
+        e.stopPropagation();
+        
+        const formatDateTime = (dateStr: string) => {
+            if (!dateStr || dateStr === '1') return 'N/A';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleString('en-US', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }).replace(',', '');
+            } catch (e) {
+                return dateStr;
+            }
+        };
+
+        const text = `Serial: ${result.serial_number || 'N/A'}
+Order ID: ${result.order_id || 'N/A'}
+Tracking: ${result.shipping_tracking_number || 'N/A'}
+Product: ${result.product_title || 'N/A'}
+Condition: ${result.condition || 'N/A'}
+Tested By: ${result.tested_by || 'N/A'}
+Boxed By: ${result.boxed_by || 'N/A'}
+Shipped: ${result.date_time ? formatDateTime(result.date_time) : 'Not Shipped'}`;
+        
+        navigator.clipboard.writeText(text);
+        setCopiedId(result.id);
+        setTimeout(() => setCopiedId(null), 2000);
     };
 
     // Load search history from localStorage
@@ -186,26 +222,44 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
                                     </button>
                                 </div>
                                 
-                                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+                                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
                                     {results.map((result) => (
-                                        <button
-                                            key={result.id}
-                                            onClick={() => openDetails(result)}
-                                            className="w-full text-left p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
-                                        >
-                                            <div className="flex flex-col gap-1">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[10px] font-black text-gray-900 group-hover:text-blue-600 truncate">
-                                                        {result.order_id}
-                                                    </span>
-                                                    <span className={`text-[7px] font-black px-1.5 py-0.5 rounded uppercase ${result.is_shipped ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                        {result.is_shipped ? 'Shipped' : 'Pending'}
-                                                    </span>
+                                        <div key={result.id} className="relative group/card">
+                                            <button
+                                                onClick={() => openDetails(result)}
+                                                className="w-full text-left p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
+                                            >
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[10px] font-black text-gray-900 group-hover:text-blue-600 truncate pr-8">
+                                                            {result.order_id}
+                                                        </span>
+                                                        <span className={`text-[7px] font-black px-1.5 py-0.5 rounded uppercase ${result.is_shipped ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                            {result.is_shipped ? 'Shipped' : 'Pending'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[9px] text-gray-500 font-medium truncate">{result.product_title}</p>
+                                                    <p className="text-[8px] font-mono text-gray-400 truncate">{result.shipping_tracking_number}</p>
                                                 </div>
-                                                <p className="text-[9px] text-gray-500 font-medium truncate">{result.product_title}</p>
-                                                <p className="text-[8px] font-mono text-gray-400 truncate">{result.shipping_tracking_number}</p>
-                                            </div>
-                                        </button>
+                                            </button>
+                                            
+                                            {/* Copy All Button - Top Left of the card area */}
+                                            <button
+                                                onClick={(e) => handleCopyAll(e, result)}
+                                                className={`absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10 ${
+                                                    copiedId === result.id
+                                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                                                        : 'bg-white border-gray-100 text-gray-400 hover:text-blue-600 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm'
+                                                }`}
+                                                title="Copy all details"
+                                            >
+                                                {copiedId === result.id ? (
+                                                    <Check className="w-3 h-3" />
+                                                ) : (
+                                                    <Copy className="w-3 h-3" />
+                                                )}
+                                            </button>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
