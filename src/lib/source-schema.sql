@@ -24,73 +24,76 @@ CREATE TABLE IF NOT EXISTS orders (
 
 -- 2. TECH_1 TABLE (7 columns)
 CREATE TABLE IF NOT EXISTS tech_1 (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT,
-    col_6 TEXT,
-    col_7 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    product_title TEXT,
+    shipping_tracking_number TEXT,
+    serial_number TEXT,
+    condition TEXT,
+    quantity TEXT
 );
 
 -- 3. TECH_2 TABLE (7 columns)
 CREATE TABLE IF NOT EXISTS tech_2 (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT,
-    col_6 TEXT,
-    col_7 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    product_title TEXT,
+    shipping_tracking_number TEXT,
+    serial_number TEXT,
+    condition TEXT,
+    quantity TEXT
 );
 
 -- 4. TECH_3 TABLE (7 columns)
 CREATE TABLE IF NOT EXISTS tech_3 (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT,
-    col_6 TEXT,
-    col_7 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    product_title TEXT,
+    shipping_tracking_number TEXT,
+    serial_number TEXT,
+    condition TEXT,
+    quantity TEXT
 );
 
 -- 5. TECH_4 TABLE (7 columns)
 CREATE TABLE IF NOT EXISTS tech_4 (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT,
-    col_6 TEXT,
-    col_7 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    product_title TEXT,
+    shipping_tracking_number TEXT,
+    serial_number TEXT,
+    condition TEXT,
+    quantity TEXT
 );
 
--- 6. PACKER_1 TABLE (5 columns)
+-- 6. PACKER_1 TABLE (6 columns)
 CREATE TABLE IF NOT EXISTS packer_1 (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    shipping_tracking_number TEXT,
+    carrier TEXT,
+    product_title TEXT,
+    quantity TEXT
 );
 
--- 7. PACKER_2 TABLE (5 columns)
+-- 7. PACKER_2 TABLE (6 columns)
 CREATE TABLE IF NOT EXISTS packer_2 (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    shipping_tracking_number TEXT,
+    carrier TEXT,
+    product_title TEXT,
+    quantity TEXT
 );
 
--- 8. PACKER_3 TABLE (5 columns)
+-- 8. PACKER_3 TABLE (6 columns)
 CREATE TABLE IF NOT EXISTS packer_3 (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    shipping_tracking_number TEXT,
+    carrier TEXT,
+    product_title TEXT,
+    quantity TEXT
 );
 
 -- 9. RECEIVING TABLE (5 columns)
@@ -102,27 +105,30 @@ CREATE TABLE IF NOT EXISTS receiving (
     col_5 TEXT
 );
 
--- 10. SHIPPED TABLE (10 columns)
+-- 10. SHIPPED TABLE (13 columns)
 CREATE TABLE IF NOT EXISTS shipped (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT,
-    col_6 TEXT,
-    col_7 TEXT,
-    col_8 TEXT,
-    col_9 TEXT,
-    col_10 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    order_id TEXT,
+    product_title TEXT,
+    condition TEXT,
+    shipping_tracking_number TEXT,
+    serial_number TEXT,
+    boxed_by TEXT,
+    tested_by TEXT,
+    sku TEXT,
+    status TEXT DEFAULT 'pending',
+    status_history JSONB DEFAULT '[]',
+    test_date_time TEXT
 );
 
 -- 11. SKU_STOCK TABLE (5 columns)
 CREATE TABLE IF NOT EXISTS sku_stock (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT
+    id SERIAL PRIMARY KEY,
+    stock TEXT,
+    sku TEXT,
+    size TEXT,
+    product_title TEXT
 );
 
 -- 12. SKU TABLE (8 columns)

@@ -122,7 +122,7 @@ export default function StationNav() {
         <motion.aside
             animate={{ width: isCollapsed ? 64 : 280 }}
             transition={{ type: 'spring', damping: 25, stiffness: 150 }}
-            className="h-screen bg-white border-r border-gray-200 flex flex-col relative z-50 flex-shrink-0"
+            className="h-screen bg-white border-r border-gray-200 flex flex-col relative z-50 flex-shrink-0 no-print print:hidden"
             style={{ height: '100vh', minHeight: '100vh', maxHeight: '100vh' }}
         >
             {/* Top Bar Area inside Sidebar */}

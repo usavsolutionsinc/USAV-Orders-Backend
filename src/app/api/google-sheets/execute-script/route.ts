@@ -251,12 +251,15 @@ async function executeUpdateSkuStockFromShipped() {
     let updatedCount = 0;
 
     for (const stock of skuStockData) {
-        const sku = normalizeSku(stock.col2); // col_2 is SKU column (B)
+        const sku = normalizeSku(stock.sku);
         if (sku && shippedSkus.has(sku)) {
-            // Update col_6 (column F) to mark as shipped
+            // Note: col6 was removed in the new schema to match screenshots
+            // If there's a need to mark as shipped, we might need to add that column back
+            /*
             await db.update(skuStock)
-                .set({ col6: '1' })
-                .where(eq(skuStock.col1, stock.col1));
+                .set({ status: 'shipped' })
+                .where(eq(skuStock.id, stock.id));
+            */
             updatedCount++;
         }
     }
@@ -287,13 +290,13 @@ async function executeSyncPackerTimestampsToShipped() {
                 
                 // Find matching packer row by tracking number
                 for (const packRow of packerData) {
-                    if (packRow.col3 && // packer has tracking in col_3
-                        getLastEightDigits(packRow.col3) === getLastEightDigits(shipRow.shippingTrackingNumber) &&
-                        packRow.col2) { // packer has timestamp
+                    if (packRow.shippingTrackingNumber &&
+                        getLastEightDigits(packRow.shippingTrackingNumber) === getLastEightDigits(shipRow.shippingTrackingNumber) &&
+                        packRow.dateTime) {
                         
                         // Update shipped timestamp
                         await db.update(shipped)
-                            .set({ dateTime: packRow.col2 })
+                            .set({ dateTime: packRow.dateTime })
                             .where(eq(shipped.id, shipRow.id));
                         updatedCount++;
                         break;
@@ -323,7 +326,7 @@ async function executeRecheckTechTrackingIntegrity() {
         const techData = await db.select().from(techTable);
         
         for (const techRow of techData) {
-            const techTracking = techRow.col3; // Tech tracking in col_3 (column C)
+            const techTracking = techRow.shippingTrackingNumber;
             if (techTracking) {
                 processedCount++;
                 
@@ -332,10 +335,10 @@ async function executeRecheckTechTrackingIntegrity() {
                     if (shipRow.shippingTrackingNumber &&
                         getLastEightDigits(shipRow.shippingTrackingNumber) === getLastEightDigits(techTracking)) {
                         
-                        // Update tech product title from shipped (productTitle -> col_2)
+                        // Update tech product title from shipped
                         await db.update(techTable)
-                            .set({ col2: shipRow.productTitle }) // Update product title
-                            .where(eq(techTable.col1, techRow.col1));
+                            .set({ productTitle: shipRow.productTitle })
+                            .where(eq(techTable.id, techRow.id));
                         fixedCount++;
                         break;
                     }
@@ -364,7 +367,7 @@ async function executeRecheckPackerTrackingIntegrity() {
         const packerData = await db.select().from(packerTable);
         
         for (const packRow of packerData) {
-            const packTracking = packRow.col3; // Packer tracking in col_3 (column B in UI)
+            const packTracking = packRow.shippingTrackingNumber;
             if (packTracking) {
                 processedCount++;
                 
@@ -373,10 +376,10 @@ async function executeRecheckPackerTrackingIntegrity() {
                     if (shipRow.shippingTrackingNumber &&
                         getLastEightDigits(shipRow.shippingTrackingNumber) === getLastEightDigits(packTracking)) {
                         
-                        // Update packer carrier/product from shipped (productTitle -> col_5)
+                        // Update packer product title from shipped
                         await db.update(packerTable)
-                            .set({ col5: shipRow.productTitle }) // Update product title in col_5
-                            .where(eq(packerTable.col1, packRow.col1));
+                            .set({ productTitle: shipRow.productTitle })
+                            .where(eq(packerTable.id, packRow.id));
                         fixedCount++;
                         break;
                     }

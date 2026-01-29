@@ -173,20 +173,28 @@ export async function POST() {
         for (let i = 1; i <= 4; i++) {
             await client.query(`
                 CREATE TABLE IF NOT EXISTS tech_${i} (
-                    col_1 SERIAL PRIMARY KEY,
-                    col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 TEXT,
-                    col_6 TEXT, col_7 TEXT
+                    id SERIAL PRIMARY KEY,
+                    date_time TEXT,
+                    product_title TEXT,
+                    shipping_tracking_number TEXT,
+                    serial_number TEXT,
+                    condition TEXT,
+                    quantity TEXT
                 )
             `);
             tables.push(`tech_${i}`);
         }
 
-        // Packer tables (5 columns each)
+        // Packer tables (6 columns each)
         for (let i = 1; i <= 3; i++) {
             await client.query(`
                 CREATE TABLE IF NOT EXISTS packer_${i} (
-                    col_1 SERIAL PRIMARY KEY,
-                    col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 TEXT
+                    id SERIAL PRIMARY KEY,
+                    date_time TEXT,
+                    shipping_tracking_number TEXT,
+                    carrier TEXT,
+                    product_title TEXT,
+                    quantity TEXT
                 )
             `);
             tables.push(`packer_${i}`);
@@ -201,12 +209,22 @@ export async function POST() {
         `);
         tables.push('receiving');
 
-        // Shipped (10 columns)
+        // Shipped (13 columns)
         await client.query(`
             CREATE TABLE IF NOT EXISTS shipped (
-                col_1 SERIAL PRIMARY KEY,
-                col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 TEXT,
-                col_6 TEXT, col_7 TEXT, col_8 TEXT, col_9 TEXT, col_10 TEXT
+                id SERIAL PRIMARY KEY,
+                date_time TEXT,
+                order_id TEXT,
+                product_title TEXT,
+                condition TEXT,
+                shipping_tracking_number TEXT,
+                serial_number TEXT,
+                boxed_by TEXT,
+                tested_by TEXT,
+                sku TEXT,
+                status TEXT DEFAULT 'pending',
+                status_history JSONB DEFAULT '[]',
+                test_date_time TEXT
             )
         `);
         tables.push('shipped');
@@ -214,8 +232,11 @@ export async function POST() {
         // SKU Stock (5 columns)
         await client.query(`
             CREATE TABLE IF NOT EXISTS sku_stock (
-                col_1 SERIAL PRIMARY KEY,
-                col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 TEXT
+                id SERIAL PRIMARY KEY,
+                stock TEXT,
+                sku TEXT,
+                size TEXT,
+                product_title TEXT
             )
         `);
         tables.push('sku_stock');

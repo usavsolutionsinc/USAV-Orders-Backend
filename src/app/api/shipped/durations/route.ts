@@ -57,18 +57,18 @@ export async function GET(req: NextRequest) {
         const serial = current.serial_number;
         
         const currentTestResult = await db.execute(sql.raw(`
-          SELECT col_2 as timestamp FROM ${techTable}
-          WHERE col_4 = '${tracking}' OR col_5 = '${serial}'
-          ORDER BY col_1 DESC LIMIT 1
+          SELECT date_time as timestamp FROM ${techTable}
+          WHERE shipping_tracking_number = '${tracking}' OR serial_number = '${serial}'
+          ORDER BY id DESC LIMIT 1
         `));
 
         if (currentTestResult.length > 0) {
           const currentTestTimestamp = currentTestResult[0].timestamp as string;
           
           const prevTestResult = await db.execute(sql.raw(`
-            SELECT col_2 as timestamp FROM ${techTable}
-            WHERE col_2 < '${currentTestTimestamp}'
-            ORDER BY col_2 DESC LIMIT 1
+            SELECT date_time as timestamp FROM ${techTable}
+            WHERE date_time < '${currentTestTimestamp}'
+            ORDER BY date_time DESC LIMIT 1
           `));
 
           if (prevTestResult.length > 0) {

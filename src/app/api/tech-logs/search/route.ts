@@ -13,12 +13,12 @@ export async function GET(req: NextRequest) {
     try {
         const last8 = tracking.slice(-8).toLowerCase();
 
-        // Search in shipped table (col_6 is tracking, col_7 is serial)
+        // Search in shipped table
         // We match by last 8 digits as per GAS logic
         const result = await db.execute(sql.raw(`
-            SELECT col_2 as order_id, col_3 as product_name, col_6 as tracking, col_7 as serial, col_9 as tech_name
+            SELECT order_id, product_title as product_name, shipping_tracking_number as tracking, serial_number as serial, tested_by as tech_name
             FROM shipped
-            WHERE RIGHT(col_6, 8) = '${last8}'
+            WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
             LIMIT 1
         `));
 

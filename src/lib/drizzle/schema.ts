@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, jsonb } from 'drizzle-orm/pg-core';
 
 // Staff table
 export const staff = pgTable('staff', {
@@ -104,14 +104,72 @@ export const orders = pgTable('orders', {
   urgent: boolean('urgent').default(false),
   skippedBy: text('skipped_by').default('[]'), // JSON array of tech IDs who skipped
 });
-export const tech1 = pgTable('tech_1', { ...genericColumns });
-export const tech2 = pgTable('tech_2', { ...genericColumns });
-export const tech3 = pgTable('tech_3', { ...genericColumns });
-export const tech4 = pgTable('tech_4', { ...genericColumns });
-export const packer1 = pgTable('packer_1', { ...genericColumns });
-export const packer2 = pgTable('packer_2', { ...genericColumns });
-export const packer3 = pgTable('packer_3', { ...genericColumns });
+// Tech tables
+export const tech1 = pgTable('tech_1', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  productTitle: text('product_title'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  serialNumber: text('serial_number'),
+  condition: text('condition'),
+  quantity: text('quantity'),
+});
+export const tech2 = pgTable('tech_2', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  productTitle: text('product_title'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  serialNumber: text('serial_number'),
+  condition: text('condition'),
+  quantity: text('quantity'),
+});
+export const tech3 = pgTable('tech_3', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  productTitle: text('product_title'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  serialNumber: text('serial_number'),
+  condition: text('condition'),
+  quantity: text('quantity'),
+});
+export const tech4 = pgTable('tech_4', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  productTitle: text('product_title'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  serialNumber: text('serial_number'),
+  condition: text('condition'),
+  quantity: text('quantity'),
+});
+
+// Packer tables
+export const packer1 = pgTable('packer_1', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  carrier: text('carrier'),
+  productTitle: text('product_title'),
+  quantity: text('quantity'),
+});
+export const packer2 = pgTable('packer_2', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  carrier: text('carrier'),
+  productTitle: text('product_title'),
+  quantity: text('quantity'),
+});
+export const packer3 = pgTable('packer_3', {
+  id: serial('id').primaryKey(),
+  dateTime: text('date_time'),
+  shippingTrackingNumber: text('shipping_tracking_number'),
+  carrier: text('carrier'),
+  productTitle: text('product_title'),
+  quantity: text('quantity'),
+});
+
 export const receiving = pgTable('receiving', { ...genericColumns });
+
 // Shipped table - Updated schema
 export const shipped = pgTable('shipped', {
   id: serial('id').primaryKey(),
@@ -125,9 +183,18 @@ export const shipped = pgTable('shipped', {
   testedBy: text('tested_by'),
   sku: text('sku'),
   status: text('status').default('pending'),
-  statusHistory: text('status_history').default('[]'), // JSON array as text
+  statusHistory: jsonb('status_history').default([]),
+  testDateTime: text('test_date_time'),
 });
-export const skuStock = pgTable('sku_stock', { ...genericColumns });
+
+// Sku Stock table
+export const skuStock = pgTable('sku_stock', {
+  id: serial('id').primaryKey(),
+  stock: text('stock'),
+  sku: text('sku'),
+  size: text('size'),
+  productTitle: text('product_title'),
+});
 export const sku = pgTable('sku', {
   id: serial('id').primaryKey(),
   dateTime: text('date_time'),

@@ -25,12 +25,12 @@ export async function GET(req: NextRequest) {
             return NextResponse.json([]);
         }
 
-        // Query the packer table using raw SQL (same pattern as tech-logs)
+        // Query the packer table using raw SQL
         const logs = await db.execute(sql.raw(`
-            SELECT col_1 as id, col_2 as timestamp, col_3 as tracking, col_4 as status, col_5 as title, col_6 as count
+            SELECT id, date_time as timestamp, shipping_tracking_number as tracking, carrier as status, product_title as title, quantity as count
             FROM ${tableName} 
-            WHERE col_3 IS NOT NULL AND col_3 != ''
-            ORDER BY col_1 DESC 
+            WHERE shipping_tracking_number IS NOT NULL AND shipping_tracking_number != ''
+            ORDER BY id DESC 
             LIMIT ${limit} OFFSET ${offset}
         `));
 
@@ -66,19 +66,19 @@ export async function POST(req: NextRequest) {
         const packerName = `Packer ${packerId}`;
         
         // Insert into the specific packer table
-        // col_2: timestamp, col_3: tracking, col_4: carrier, col_5: product, col_6: orderId
+        // date_time, shipping_tracking_number, carrier, product_title, quantity
         await db.execute(sql.raw(`
-            INSERT INTO ${tableName} (col_2, col_3, col_4, col_5, col_6)
+            INSERT INTO ${tableName} (date_time, shipping_tracking_number, carrier, product_title, quantity)
             VALUES ('${timestamp}', '${trackingNumber}', '${carrier}', '${product}', '${orderId || ''}')
         `));
 
-        // Update shipped table with packer info (matching Working GAS logic)
-        // Update col_7 (Box), col_8 (By/Packer name) based on tracking number in col_5
+        // Update shipped table with packer info
+        // boxed_by based on tracking number
         await pool.query(`
             UPDATE shipped 
-            SET col_7 = $1, col_8 = $2
-            WHERE col_6 = $3
-        `, [boxSize || '', packerName, trackingNumber]);
+            SET boxed_by = $1
+            WHERE shipping_tracking_number = $2
+        `, [packerName, trackingNumber]);
 
         // Record in unified logs for photo support
         const newLog = await db.insert(packingLogs).values({

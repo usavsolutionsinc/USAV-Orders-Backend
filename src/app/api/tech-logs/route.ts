@@ -23,10 +23,10 @@ export async function GET(req: NextRequest) {
         }
 
         const logs = await db.execute(sql.raw(`
-            SELECT col_1 as id, col_2 as timestamp, col_3 as title, col_4 as tracking, col_5 as serial, col_6 as status, col_7 as count
+            SELECT id, date_time as timestamp, product_title as title, shipping_tracking_number as tracking, serial_number as serial, condition, quantity as count
             FROM ${tableName} 
-            WHERE col_4 IS NOT NULL AND col_4 != ''
-            ORDER BY col_1 DESC 
+            WHERE shipping_tracking_number IS NOT NULL AND shipping_tracking_number != ''
+            ORDER BY id DESC 
             LIMIT ${limit} OFFSET ${offset}
         `));
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         
         // 1. Update/Insert into the technician's specific table
         await db.execute(sql.raw(`
-            INSERT INTO ${tableName} (col_2, col_3, col_4, col_5, col_6)
+            INSERT INTO ${tableName} (date_time, product_title, shipping_tracking_number, serial_number, quantity)
             VALUES ('${timestamp}', '${title}', '${tracking}', '${serial}', '${count}')
         `));
 
@@ -63,9 +63,9 @@ export async function POST(req: NextRequest) {
 
             let statusHistory = [];
             if (currentRecord && currentRecord.length > 0) {
-                const existing = currentRecord[0].status_history as string | null | undefined;
+                const existing = currentRecord[0].status_history;
                 try {
-                    statusHistory = existing ? JSON.parse(existing) : [];
+                    statusHistory = typeof existing === 'string' ? JSON.parse(existing) : (existing || []);
                 } catch {
                     statusHistory = [];
                 }
@@ -80,14 +80,15 @@ export async function POST(req: NextRequest) {
                 previous_status: currentRecord && currentRecord.length > 0 ? currentRecord[0].status : 'pending'
             });
 
-            // Update serial_number, tested_by, status, and status_history
+            // Update serial_number, tested_by, status, status_history, and test_date_time
             // matching by the last 8 digits of shipping_tracking_number
             await db.execute(sql.raw(`
                 UPDATE shipped
                 SET serial_number = '${serial}',
                     tested_by = '${userName}',
                     status = 'tested',
-                    status_history = '${JSON.stringify(statusHistory).replace(/'/g, "''")}'
+                    status_history = '${JSON.stringify(statusHistory).replace(/'/g, "''")}',
+                    test_date_time = '${now}'
                 WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
             `));
         }
