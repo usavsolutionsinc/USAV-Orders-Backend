@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 
 /**
  * POST /api/orders/skip - Skip an order for a technician
+ * NOTE: skipped_by column was removed from DB, so this is currently a no-op
  */
 export async function POST(req: NextRequest) {
   try {
@@ -15,22 +15,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update skipped_by column by appending the techId to the JSON array
-    // We use COALESCE and ensure it's a valid JSON array
-    await pool.query(
-      `UPDATE orders 
-       SET skipped_by = (
-         CASE 
-           WHEN skipped_by IS NULL OR skipped_by = '' OR skipped_by = '[]' 
-           THEN jsonb_build_array($2::text)
-           ELSE (skipped_by::jsonb || jsonb_build_array($2::text))::text
-         END
-       )
-       WHERE id = $1`,
-      [orderId, techId]
-    );
-
-    return NextResponse.json({ success: true });
+    // skipped_by column was removed from DB, so we just return success
+    return NextResponse.json({ success: true, message: 'Skip acknowledged (feature disabled)' });
   } catch (error: any) {
     console.error('Error skipping order:', error);
     return NextResponse.json(

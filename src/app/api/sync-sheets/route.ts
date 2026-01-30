@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
                 if (matchingTable.table_name.toLowerCase() === 'orders') {
                     columnNames = columnNames.filter((col: string) => 
-                        !['assigned_to', 'status', 'urgent', 'skipped_by'].includes(col.toLowerCase())
+                        !['assigned_to', 'status', 'urgent'].includes(col.toLowerCase())
                     );
                 }
                 

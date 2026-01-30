@@ -62,14 +62,7 @@ export async function GET(req: NextRequest) {
           assigned_to = $1 
           OR ((assigned_to IS NULL OR assigned_to = '') AND (status IS NULL OR status = 'unassigned'))
         )
-        -- Not skipped by this tech
-        AND (
-          skipped_by IS NULL 
-          OR skipped_by = '' 
-          OR NOT (skipped_by::jsonb ? $${paramCount++})
-        )
       `;
-      params.push(techId);
     }
 
     query += `
