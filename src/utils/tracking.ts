@@ -14,7 +14,7 @@ export function getCarrier(tracking: string): Carrier {
     const t = tracking.trim().toUpperCase();
     
     if (t.startsWith('1Z')) return 'UPS';
-    if (t.startsWith('94') || t.startsWith('92') || t.startsWith('93') || t.startsWith('42')) return 'USPS';
+    if (t.startsWith('94') || t.startsWith('92') || t.startsWith('93') || t.startsWith('42') || t.startsWith('04')) return 'USPS';
     if (t.startsWith('96')) return 'FedEx';
     if (t.startsWith('JD') || t.startsWith('JJD')) return 'DHL';
     if (t.startsWith('TBA')) return 'AMAZON';

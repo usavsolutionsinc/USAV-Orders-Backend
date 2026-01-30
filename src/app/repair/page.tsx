@@ -21,9 +21,28 @@ function RepairSidebar() {
 
     const [receiptData, setReceiptData] = useState<any>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
     
     const handleNewRepair = () => {
         setShowIntakeForm(true);
+    };
+
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        const params = new URLSearchParams(window.location.search);
+        if (searchValue) {
+            params.set('search', searchValue);
+        } else {
+            params.delete('search');
+        }
+        window.history.pushState({}, '', `/repair?${params.toString()}`);
+    };
+
+    const handleClearSearch = () => {
+        setSearchValue('');
+        const params = new URLSearchParams(window.location.search);
+        params.delete('search');
+        window.history.pushState({}, '', `/repair`);
     };
 
     const handleCloseForm = () => {
@@ -85,6 +104,28 @@ function RepairSidebar() {
                             </header>
 
                             <div className="space-y-4">
+                                <form onSubmit={handleSearch} className="relative group">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-600 transition-colors">
+                                        <Search className="w-4 h-4" />
+                                    </div>
+                                    <input 
+                                        type="text"
+                                        value={searchValue}
+                                        onChange={(e) => setSearchValue(e.target.value)}
+                                        placeholder="Search repairs..."
+                                        className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all shadow-inner"
+                                    />
+                                    {searchValue && (
+                                        <button 
+                                            type="button"
+                                            onClick={handleClearSearch}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-lg transition-all text-gray-400"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </form>
+
                                 <button
                                     onClick={handleNewRepair}
                                     className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-[1.5rem] transition-all active:scale-[0.98] shadow-xl shadow-gray-900/20 group"

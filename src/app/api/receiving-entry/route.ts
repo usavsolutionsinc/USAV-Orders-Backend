@@ -46,8 +46,12 @@ export async function POST(request: NextRequest) {
     }
 }
 
-// GET - Fetch all receiving entries
-export async function GET() {
+// GET - Fetch all receiving logs
+export async function GET(req: NextRequest) {
+    const { searchParams } = new URL(req.url);
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
+
     try {
         const results = await db.select({
             id: receiving.id,
@@ -57,14 +61,16 @@ export async function GET() {
             quantity: receiving.quantity
         })
         .from(receiving)
+        .where(sql`${receiving.receivingTrackingNumber} IS NOT NULL AND ${receiving.receivingTrackingNumber} != ''`)
         .orderBy(sql`${receiving.id} DESC`)
-        .limit(100);
+        .limit(limit)
+        .offset(offset);
             
         return NextResponse.json(results);
     } catch (error) {
-        console.error('Error fetching receiving entries:', error);
+        console.error('Error fetching receiving logs:', error);
         return NextResponse.json({ 
-            error: 'Failed to fetch receiving entries',
+            error: 'Failed to fetch receiving logs',
             details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
     }

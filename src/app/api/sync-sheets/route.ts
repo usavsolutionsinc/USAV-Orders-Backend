@@ -66,9 +66,16 @@ export async function POST(req: NextRequest) {
                 if (columns.length === 0) return null;
 
                 // Filter out primary keys and auto-generated columns
-                const columnNames = columns.filter((col: string) => 
+                // Also filter out app-managed columns for the orders table
+                let columnNames = columns.filter((col: string) => 
                     !['col_1', 'id', 'created_at', 'updated_at'].includes(col.toLowerCase())
                 );
+
+                if (matchingTable.table_name.toLowerCase() === 'orders') {
+                    columnNames = columnNames.filter((col: string) => 
+                        !['assigned_to', 'status', 'urgent', 'skipped_by'].includes(col.toLowerCase())
+                    );
+                }
                 
                 return {
                     name: sheetName,

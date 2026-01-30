@@ -53,7 +53,7 @@ const genericColumns = {
   col15: text('col_15'),
 };
 
-// Orders table - Updated schema
+// Orders table - Updated schema based on user screenshot
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   shipByDate: text('ship_by_date'),
@@ -66,12 +66,12 @@ export const orders = pgTable('orders', {
   daysLate: text('days_late'),
   outOfStock: text('out_of_stock'),
   notes: text('notes'),
-  assignedTo: text('assigned_to'), // Tech_1, Tech_2, Tech_3, or NULL
-  status: text('status').default('unassigned'), // unassigned, assigned, in_progress, completed, missing_parts
-  urgent: boolean('urgent').default(false),
-  skippedBy: text('skipped_by').default('[]'), // JSON array of tech IDs who skipped
+  assignedTo: text('assigned_to'),
+  status: text('status').notNull().default('unassigned'),
+  urgent: text('urgent'),
 });
-// Tech tables
+
+// Tech tables - Updated schema based on user screenshot
 export const tech1 = pgTable('tech_1', {
   id: serial('id').primaryKey(),
   dateTime: text('date_time'),
@@ -109,7 +109,7 @@ export const tech4 = pgTable('tech_4', {
   quantity: text('quantity'),
 });
 
-// Packer tables
+// Packer tables - Updated schema based on user screenshot
 export const packer1 = pgTable('packer_1', {
   id: serial('id').primaryKey(),
   dateTime: text('date_time'),
@@ -135,12 +135,13 @@ export const packer3 = pgTable('packer_3', {
   quantity: text('quantity'),
 });
 
+// Receiving table - Updated schema based on user screenshot & sheet mapping
 export const receiving = pgTable('receiving', {
   id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
-  receivingTrackingNumber: text('receiving_tracking_number'),
-  carrier: text('carrier'),
-  quantity: text('quantity'),
+  dateTime: text('date_time'), // Sheet A
+  receivingTrackingNumber: text('receiving_tracking_number'), // Sheet B
+  carrier: text('carrier'), // Sheet C
+  quantity: text('quantity'), // Sheet D
 });
 
 // Shipped table - Updated schema

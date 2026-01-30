@@ -26,18 +26,12 @@ export async function POST(request: NextRequest) {
         const ordersSheetName = destSheets.find(s => s.properties?.sheetId === ORDERS_GID)?.properties?.title || 'Orders';
         const shippedSheetName = destSheets.find(s => s.properties?.sheetId === SHIPPED_GID)?.properties?.title || 'Shipped';
 
-        // Prepare the values for Google Sheets
+        // Prepare the values for Google Sheets - A: date_time, B: receiving_tracking_number, C: carrier, D: quantity
         const rowsToAppend = data.map((item: any) => [
-            item.shipByDate,   // A
-            item.orderNumber,  // B
-            item.itemTitle,    // C
-            item.quantity,     // D
-            item.usavSku,      // E
-            item.condition,    // F
-            item.tracking,     // G
-            '',                // H (Empty)
-            '',                // I (Empty) - Column 9
-            item.note          // J
+            item.shipByDate || '',   // A
+            item.tracking || '',     // B
+            '',                      // C
+            item.quantity || ''      // D
         ]);
 
         const shippedRowsToAppend = data.map((item: any) => [
@@ -54,6 +48,7 @@ export async function POST(request: NextRequest) {
         ]);
 
         // Prepare data for Neon DB - only columns A-J from sheet
+        // Columns: shipByDate, orderId, productTitle, quantity, sku, condition, shippingTrackingNumber, daysLate, outOfStock, notes
         const ordersToInsert = data.map((item: any) => ({
             shipByDate: item.shipByDate || '',
             orderId: item.orderNumber || '',
@@ -65,7 +60,8 @@ export async function POST(request: NextRequest) {
             daysLate: '',
             outOfStock: '',
             notes: item.note || '',
-            // assignedTo, status, urgent, skippedBy rely on DB defaults
+            urgent: 'false', // TEXT type in DB
+            status: 'unassigned', // Default status
         }));
 
         const shippedToInsert = data.map((item: any) => ({
@@ -84,7 +80,7 @@ export async function POST(request: NextRequest) {
 
         const appendOrders = sheets.spreadsheets.values.append({
             spreadsheetId,
-            range: `${ordersSheetName}!A:J`,
+            range: `${ordersSheetName}!A:D`,
             valueInputOption: 'USER_ENTERED',
             requestBody: {
                 values: rowsToAppend,

@@ -311,34 +311,32 @@ export default function StationTesting({
                         </div>
                     </div>
 
-                    {activeSubTab === 'current' && (
-                        <form onSubmit={handleSubmit} className="relative group">
-                            <div className={`absolute left-5 top-1/2 -translate-y-1/2 ${activeColor.text}`}>
-                                <Barcode className="w-5 h-5" />
-                            </div>
-                            <input 
-                                ref={inputRef}
-                                type="text"
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                placeholder="Scan Tracking, SKU, or SN..."
-                                className={`w-full pl-14 pr-14 py-5 bg-gray-50 border border-gray-100 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
-                                autoFocus
-                            />
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                {isLoading ? (
-                                    <Loader2 className={`w-5 h-5 animate-spin ${activeColor.text}`} />
-                                ) : (
-                                    <div className="px-2 py-1 bg-white rounded-md border border-gray-100 shadow-sm">
-                                        <span className="text-[9px] font-black text-gray-400">ENTER</span>
-                                    </div>
-                                )}
-                            </div>
-                        </form>
-                    )}
+                    <form onSubmit={handleSubmit} className="relative group">
+                        <div className={`absolute left-5 top-1/2 -translate-y-1/2 ${activeColor.text}`}>
+                            <Barcode className="w-5 h-5" />
+                        </div>
+                        <input 
+                            ref={inputRef}
+                            type="text"
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            placeholder="Scan Tracking, SKU, or SN..."
+                            className={`w-full pl-14 pr-14 py-5 bg-gray-50 border border-gray-100 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
+                            autoFocus
+                        />
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                            {isLoading ? (
+                                <Loader2 className={`w-5 h-5 animate-spin ${activeColor.text}`} />
+                            ) : (
+                                <div className="px-2 py-1 bg-white rounded-md border border-gray-100 shadow-sm">
+                                    <span className="text-[9px] font-black text-gray-400">ENTER</span>
+                                </div>
+                            )}
+                        </div>
+                    </form>
 
                     {/* Horizontal Sub-menu - Moved below scan input */}
-                    <div className="flex items-center justify-center gap-4 py-2">
+                    <div className="flex items-center justify-center gap-1 py-2 bg-gray-50/50 rounded-2xl p-1">
                         {[
                             { id: 'current', icon: Zap, label: 'Current' },
                             { id: 'pending', icon: ClipboardList, label: 'Pending' },
@@ -347,10 +345,10 @@ export default function StationTesting({
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveSubTab(tab.id as any)}
-                                className={`px-4 py-2 rounded-xl transition-all relative flex items-center gap-2 ${
+                                className={`flex-1 px-4 py-2.5 rounded-xl transition-all relative flex items-center justify-center gap-2 ${
                                     activeSubTab === tab.id 
-                                        ? activeColor.text + ' bg-white shadow-sm ring-1 ring-gray-200' 
-                                        : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                                        ? activeColor.text + ' bg-white shadow-sm ring-1 ring-gray-200/50' 
+                                        : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'
                                 }`}
                             >
                                 <tab.icon className="w-4 h-4" />
@@ -358,7 +356,7 @@ export default function StationTesting({
                                 {activeSubTab === tab.id && (
                                     <motion.div 
                                         layoutId="activeSubTab"
-                                        className={`absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-6 ${activeColor.bg} rounded-full`}
+                                        className={`absolute bottom-0 left-0 right-0 h-0.5 ${activeColor.bg} rounded-full mx-2`}
                                     />
                                 )}
                             </button>

@@ -223,7 +223,7 @@ export function RepairTable() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col min-w-max">
+            <div className="flex flex-col w-full">
               {Object.entries(groupedRepairs)
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, records]) => (
@@ -237,99 +237,103 @@ export function RepairTable() {
                       <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
                       <p className="text-[11px] font-black text-gray-400 uppercase">Total: {records.length} Units</p>
                     </div>
-                    <table className="w-full border-collapse">
-                      <thead className="bg-gray-50/50 border-b border-gray-100 sticky top-0 z-10 sr-only">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Date/Time</th>
-                          <th className="px-4 py-2 text-left text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Ticket #</th>
-                          <th className="px-4 py-2 text-left text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Contact</th>
-                          <th className="px-4 py-2 text-left text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Product(s)</th>
-                          <th className="px-4 py-2 text-left text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Price</th>
-                          <th className="px-4 py-2 text-left text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Status</th>
-                          <th className="px-4 py-2 text-center text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {records.map((repair, index) => (
-                          <motion.tr 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            key={repair.id}
-                            onClick={() => handleRowClick(repair)}
-                            className={`group hover:bg-blue-50/50 cursor-pointer transition-all duration-200 ${
-                              selectedRepair?.id === repair.id ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
-                            }`}
+                    {records.map((repair, index) => (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        key={repair.id}
+                        onClick={() => handleRowClick(repair)}
+                        className={`grid grid-cols-[60px_1fr_94px_auto_auto_120px_80px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                          selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+                        }`}
+                      >
+                        {/* 1. Time */}
+                        <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
+                          {repair.date_time ? (
+                            (() => {
+                              try {
+                                const dateObj = new Date(repair.date_time);
+                                return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                              } catch {
+                                return '--:--';
+                              }
+                            })()
+                          ) : '--:--'}
+                        </div>
+                        
+                        {/* 2. Product Title & Ticket */}
+                        <div className="flex flex-col min-w-0">
+                          <div className="text-[11px] font-bold text-gray-900 truncate">
+                            {repair.product_title || 'Unknown Product'}
+                          </div>
+                          <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
+                            Ticket: {repair.ticket_number || 'N/A'} • {repair.contact || 'No Contact'}
+                          </div>
+                        </div>
+                        
+                        {/* 3. Ticket # (Copyable) */}
+                        <div className="flex flex-col w-[94px]">
+                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
+                          <CopyableText 
+                            text={repair.ticket_number || ''} 
+                            className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
+                            variant="default"
+                          />
+                        </div>
+                        
+                        {/* 4. Price */}
+                        <div className="flex flex-col">
+                          <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Price</span>
+                          <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                            {repair.price ? `$${repair.price}` : '---'}
+                          </div>
+                        </div>
+                        
+                        {/* 5. Status Dropdown */}
+                        <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Status</span>
+                          <select
+                            value={repair.status || ''}
+                            onChange={(e) => handleStatusChange(repair.id, e.target.value)}
+                            disabled={updatingStatus === repair.id}
+                            className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border transition-all outline-none focus:ring-4 focus:ring-blue-500/10 ${
+                              repair.status === 'Shipped' || repair.status === 'Picked Up'
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                : repair.status?.includes('Awaiting')
+                                ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                : 'bg-blue-50 border-blue-200 text-blue-700'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
                           >
-                            <td className="px-4 py-4 text-[11px] font-bold text-gray-500 whitespace-nowrap tabular-nums">
-                              {repair.date_time ? new Date(repair.date_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'}
-                            </td>
-                            <td className="px-4 py-4">
-                              <CopyableText 
-                                text={repair.ticket_number || ''} 
-                                className="text-[11px] font-black font-mono text-gray-900 bg-gray-100/50 px-2 py-1 rounded-lg border border-gray-200/50"
-                                variant="default"
-                              />
-                            </td>
-                            <td className="px-4 py-4">
-                              <div className="max-w-[150px] truncate text-[11px] font-bold text-gray-700">
-                                {repair.contact || '---'}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4">
-                              <div className="max-w-[200px] truncate text-[11px] font-black text-gray-900" title={repair.product_title}>
-                                {repair.product_title || '---'}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                                {repair.price ? `$${repair.price}` : '---'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                              <select
-                                value={repair.status || ''}
-                                onChange={(e) => handleStatusChange(repair.id, e.target.value)}
-                                disabled={updatingStatus === repair.id}
-                                className={`text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border transition-all outline-none focus:ring-4 focus:ring-blue-500/10 ${
-                                  repair.status === 'Shipped' || repair.status === 'Picked Up'
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                    : repair.status?.includes('Awaiting')
-                                    ? 'bg-amber-50 border-amber-200 text-amber-700'
-                                    : 'bg-blue-50 border-blue-200 text-blue-700'
-                                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                              >
-                                <option value="">Status...</option>
-                                {STATUS_OPTIONS.map(status => (
-                                  <option key={status} value={status}>{status}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => handleRowClick(repair)}
-                                  className={`p-2 rounded-lg transition-all ${
-                                    selectedRepair?.id === repair.id 
-                                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
-                                      : 'bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
-                                  }`}
-                                  title="View Details"
-                                >
-                                  <Info className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank')}
-                                  className="p-2 bg-gray-100 hover:bg-orange-50 text-gray-400 hover:text-orange-600 rounded-lg transition-all"
-                                  title="Print Repair Form"
-                                >
-                                  <Printer className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </motion.tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            <option value="">Status...</option>
+                            {STATUS_OPTIONS.map(status => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        {/* 6. Actions */}
+                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleRowClick(repair)}
+                            className={`p-1.5 rounded-lg transition-all ${
+                              selectedRepair?.id === repair.id 
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
+                            }`}
+                            title="View Details"
+                          >
+                            <Info className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank')}
+                            className="p-1.5 bg-gray-50 hover:bg-orange-50 text-gray-400 hover:text-orange-600 rounded-lg transition-all"
+                            title="Print Repair Form"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
                   </div>
                 ))}
             </div>
