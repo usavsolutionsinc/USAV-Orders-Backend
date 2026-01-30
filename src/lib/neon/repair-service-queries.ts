@@ -4,7 +4,7 @@ import pool from '../db';
 // id (SERIAL PRIMARY KEY) - auto-increment
 // date_time (TEXT)
 // ticket_number (TEXT) - formerly "RS #"
-// contact (TEXT)
+// contact_info (TEXT) - CSV format: "name, phone, email"
 // product_title (TEXT) - formerly "Product(s)"
 // price (TEXT)
 // issue (TEXT)
@@ -30,8 +30,7 @@ export interface RSRecord {
   id: number;
   date_time: string;
   ticket_number: string;
-  name: string;
-  contact: string;
+  contact_info: string; // CSV format: "name, phone, email"
   product_title: string;
   price: string;
   issue: string;
@@ -82,8 +81,7 @@ export async function getAllRepairs(limit = 100, offset = 0): Promise<RSRecord[]
         id,
         date_time,
         ticket_number,
-        name,
-        contact,
+        contact_info,
         product_title,
         price,
         issue,
@@ -119,8 +117,7 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
         id,
         date_time,
         ticket_number,
-        name,
-        contact,
+        contact_info,
         product_title,
         price,
         issue,
@@ -215,8 +212,7 @@ export async function updateRepairField(id: number, field: string, value: any): 
     const validFields = [
       'date_time',
       'ticket_number',
-      'name',
-      'contact',
+      'contact_info',
       'product_title',
       'price',
       'issue',
@@ -251,8 +247,7 @@ export async function searchRepairs(query: string): Promise<RSRecord[]> {
         id,
         date_time,
         ticket_number,
-        name,
-        contact,
+        contact_info,
         product_title,
         price,
         issue,
@@ -264,8 +259,7 @@ export async function searchRepairs(query: string): Promise<RSRecord[]> {
       FROM repair_service
       WHERE 
         ticket_number ILIKE $1 OR
-        name ILIKE $1 OR
-        contact ILIKE $1 OR
+        contact_info ILIKE $1 OR
         product_title ILIKE $1 OR
         serial_number ILIKE $1
       ORDER BY id DESC

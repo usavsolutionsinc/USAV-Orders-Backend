@@ -82,8 +82,43 @@ export function RepairDetailsPanel({
           </h3>
           <div className="space-y-3">
             <div>
+              <span className="text-xs text-gray-500 font-semibold block mb-1">Name</span>
+              <p className="font-bold text-sm text-gray-900">
+                {(() => {
+                  if (!repair.contact_info) return 'Not provided';
+                  const parts = repair.contact_info.split(',').map(p => p.trim());
+                  return parts[0] || 'Not provided';
+                })()}
+              </p>
+            </div>
+            <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Contact</span>
-              <p className="font-semibold text-sm text-gray-900">{repair.contact || 'Not provided'}</p>
+              <div className="space-y-1">
+                {(() => {
+                  if (!repair.contact_info) return <p className="font-semibold text-sm text-gray-900">Not provided</p>;
+                  const parts = repair.contact_info.split(',').map(p => p.trim());
+                  const phone = parts[1] || '';
+                  const email = parts[2] || '';
+                  
+                  // Format phone number
+                  const formatPhoneNumber = (phone: string): string => {
+                    if (!phone) return '';
+                    const cleaned = phone.replace(/\D/g, '');
+                    if (cleaned.length === 10) {
+                      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+                    }
+                    return phone;
+                  };
+                  
+                  return (
+                    <>
+                      {phone && <p className="font-semibold text-sm text-gray-900">{formatPhoneNumber(phone)}</p>}
+                      {email && <p className="font-semibold text-sm text-gray-900 lowercase">{email}</p>}
+                      {!phone && !email && <p className="font-semibold text-sm text-gray-900">{repair.contact_info}</p>}
+                    </>
+                  );
+                })()}
+              </div>
             </div>
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Product(s)</span>
@@ -91,7 +126,7 @@ export function RepairDetailsPanel({
             </div>
             <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Price</span>
-              <p className="font-bold text-sm text-gray-900">{repair.price ? `$${repair.price}` : 'Not set'}</p>
+              <p className="font-bold text-sm text-emerald-600">{repair.price ? `$${repair.price}` : 'Not set'}</p>
             </div>
           </div>
         </section>
@@ -103,28 +138,12 @@ export function RepairDetailsPanel({
           </h3>
           <div className="space-y-3">
             <div>
+              <span className="text-xs text-gray-500 font-semibold block mb-1">Issue</span>
+              <p className="text-sm text-gray-900 font-bold leading-relaxed">{repair.issue || 'No issue described'}</p>
+            </div>
+            <div>
               <span className="text-xs text-gray-500 font-semibold block mb-1">Serial Number</span>
               <p className="font-mono text-sm text-gray-900 font-semibold">{repair.serial_number || 'N/A'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Issue Description</span>
-              <p className="text-sm text-gray-700 leading-relaxed">{repair.issue || 'No issue described'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 font-semibold block mb-1">Process History</span>
-              {repair.process && repair.process.length > 0 ? (
-                <div className="space-y-2">
-                  {repair.process.map((entry, idx) => (
-                    <div key={idx} className="bg-gray-50 p-2 rounded text-xs">
-                      <div className="font-semibold text-gray-900">Parts: {entry.parts}</div>
-                      <div className="text-gray-600">By: {entry.person}</div>
-                      <div className="text-gray-500">{new Date(entry.date).toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-700 leading-relaxed">No process history</p>
-              )}
             </div>
           </div>
         </section>

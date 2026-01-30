@@ -188,8 +188,7 @@ export const repairService = pgTable('repair_service', {
   productTitle: text('product_title'),
   issue: text('issue'),
   serialNumber: text('serial_number'),
-  name: text('name'),
-  contact: text('contact'),
+  contactInfo: text('contact_info'), // CSV: "name, phone, email"
   price: text('price'),
   status: text('status').default('pending'),
   repairReasons: text('repair_reasons'),

@@ -7,8 +7,7 @@ interface RepairTicketData {
     customerPhone: string;
     customerEmail: string;
     product: string;
-    repairReasons: string[];
-    additionalNotes?: string;
+    issue: string; // Combined repair reasons and notes
     serialNumber: string;
     price: string;
 }
@@ -45,6 +44,7 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
         customerPhone, 
         customerEmail, 
         product, 
+        issue,
         serialNumber, 
         price 
     } = data;
@@ -74,10 +74,10 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
     // 3. Format Price (ensure it has $)
     const formattedPrice = price.startsWith('$') ? price : `$${price}`;
 
-    // 4. Build JSON payload
+    // 4. Build JSON payload - Format like repair service paper
     const payload = {
         subject: `Repair: Walk-in ${customerName} - ${customerPhone} - Due Date: ${dueDate}`,
-        description: `${customerName}\n${serialNumber}\n${customerEmail}\n${customerPhone}\n${formattedPrice}\nDue date: ${dueDate}`,
+        description: `Product Title: ${product}\n\nSN & Issues: ${serialNumber}, ${issue}\n\nContact Info: ${customerName}, ${customerPhone}, ${customerEmail}\n\nPrice: ${formattedPrice}\n\nDue Date: ${dueDate}`,
         customerName: customerName,
         customerEmail: customerEmail
     };

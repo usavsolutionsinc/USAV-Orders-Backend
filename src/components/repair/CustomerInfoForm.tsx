@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Plus, X } from '../Icons';
 
 interface CustomerInfoFormProps {
     customer: {
@@ -15,6 +16,11 @@ interface CustomerInfoFormProps {
     onPriceChange: (value: string) => void;
 }
 
+interface SerialNumberInputProps {
+    serialNumbers: string[];
+    onSerialNumbersChange: (serialNumbers: string[]) => void;
+}
+
 export function CustomerInfoForm({ 
     customer, 
     serialNumber, 
@@ -23,102 +29,160 @@ export function CustomerInfoForm({
     onSerialNumberChange,
     onPriceChange
 }: CustomerInfoFormProps) {
+    // Parse serial numbers from comma-separated string
+    const [serialNumbers, setSerialNumbers] = React.useState<string[]>(
+        serialNumber ? serialNumber.split(',').map(s => s.trim()).filter(s => s) : ['']
+    );
+
+    // Format phone number as user types
+    const handlePhoneChange = (value: string) => {
+        const cleaned = value.replace(/\D/g, '');
+        let formatted = cleaned;
+        
+        if (cleaned.length >= 10) {
+            formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+        } else if (cleaned.length > 6) {
+            formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+        } else if (cleaned.length > 3) {
+            formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+        }
+        
+        onCustomerChange('phone', formatted);
+    };
+
+    // Update parent when serial numbers change
+    React.useEffect(() => {
+        const joined = serialNumbers.filter(s => s.trim()).join(', ');
+        if (joined !== serialNumber) {
+            onSerialNumberChange(joined);
+        }
+    }, [serialNumbers]);
+
+    const addSerialNumber = () => {
+        setSerialNumbers([...serialNumbers, '']);
+    };
+
+    const removeSerialNumber = (index: number) => {
+        if (serialNumbers.length > 1) {
+            setSerialNumbers(serialNumbers.filter((_, i) => i !== index));
+        }
+    };
+
+    const updateSerialNumber = (index: number, value: string) => {
+        const updated = [...serialNumbers];
+        updated[index] = value;
+        setSerialNumbers(updated);
+    };
+
     return (
         <div className="space-y-6">
-            <div className="bg-white text-gray-900 font-sans border-2 border-black p-6 shadow-sm">
-                <div className="flex justify-between items-start mb-6">
-                    <div>
-                        <h1 className="text-2xl font-black uppercase tracking-tighter">Repair Service</h1>
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Intake Information</p>
+            <div className="space-y-4">
+                {/* Name Field */}
+                <div className="space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
+                        Customer Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        value={customer.name}
+                        onChange={(e) => onCustomerChange('name', e.target.value)}
+                        placeholder="Enter customer name"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        required
+                    />
+                </div>
+
+                {/* Phone Field */}
+                <div className="space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
+                        Phone Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="tel"
+                        value={customer.phone}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
+                        placeholder="000-000-0000"
+                        maxLength={12}
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        required
+                    />
+                </div>
+
+                {/* Email Field */}
+                <div className="space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
+                        Email <span className="text-gray-400 text-[10px] font-normal">(Optional)</span>
+                    </label>
+                    <input
+                        type="email"
+                        value={customer.email}
+                        onChange={(e) => onCustomerChange('email', e.target.value)}
+                        placeholder="customer@example.com"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold lowercase focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                </div>
+
+                {/* Serial Numbers Field */}
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
+                            Serial Numbers <span className="text-red-500">*</span>
+                        </label>
+                        <button
+                            type="button"
+                            onClick={addSerialNumber}
+                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all"
+                        >
+                            <Plus className="w-3 h-3" />
+                            Add More
+                        </button>
                     </div>
-                    <div className="text-right">
-                        <h2 className="font-bold text-xs uppercase">USAV Solutions</h2>
-                        <p className="text-[9px] text-gray-500">16161 Gothard St. Suite A</p>
-                        <p className="text-[9px] text-gray-500">Huntington Beach, CA 92647</p>
+                    <div className="space-y-2">
+                        {serialNumbers.map((sn, index) => (
+                            <div key={index} className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={sn}
+                                    onChange={(e) => updateSerialNumber(index, e.target.value)}
+                                    placeholder={`Serial Number ${index + 1}`}
+                                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                    required={index === 0}
+                                />
+                                {serialNumbers.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => removeSerialNumber(index)}
+                                        className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                        aria-label="Remove serial number"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                <div className="border-t-2 border-l-2 border-black">
-                    {/* Name Field */}
-                    <div className="flex border-b-2 border-r-2 border-black group focus-within:bg-blue-50/30 transition-colors">
-                        <div className="w-32 p-3 font-black text-[10px] uppercase tracking-widest bg-gray-50 border-r-2 border-black flex items-center">
-                            Name <span className="text-red-500 ml-1">*</span>
-                        </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                value={customer.name}
-                                onChange={(e) => onCustomerChange('name', e.target.value)}
-                                placeholder="Enter customer name"
-                                className="w-full p-3 text-sm font-bold bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    {/* Contact Field */}
-                    <div className="flex border-b-2 border-r-2 border-black focus-within:bg-blue-50/30 transition-colors">
-                        <div className="w-32 p-3 font-black text-[10px] uppercase tracking-widest bg-gray-50 border-r-2 border-black flex flex-col justify-center">
-                            <span>Contact</span>
-                            <span className="text-[8px] text-gray-400 font-bold mt-1">(Phone & Email)</span>
-                        </div>
-                        <div className="flex-1 divide-y-2 divide-black">
-                            <input
-                                type="tel"
-                                value={customer.phone}
-                                onChange={(e) => onCustomerChange('phone', e.target.value)}
-                                placeholder="Phone: (123) 456-7890"
-                                className="w-full p-3 text-sm font-bold bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
-                                required
-                            />
-                            <input
-                                type="email"
-                                value={customer.email}
-                                onChange={(e) => onCustomerChange('email', e.target.value)}
-                                placeholder="Email: customer@example.com"
-                                className="w-full p-3 text-sm font-bold bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    {/* Serial Number Field */}
-                    <div className="flex border-b-2 border-r-2 border-black focus-within:bg-blue-50/30 transition-colors">
-                        <div className="w-32 p-3 font-black text-[10px] uppercase tracking-widest bg-gray-50 border-r-2 border-black flex items-center">
-                            Serial # <span className="text-red-500 ml-1">*</span>
-                        </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                value={serialNumber}
-                                onChange={(e) => onSerialNumberChange(e.target.value)}
-                                placeholder="Enter Serial Number"
-                                className="w-full p-3 text-sm font-mono font-bold bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    {/* Price Field */}
-                    <div className="flex border-b-2 border-r-2 border-black focus-within:bg-blue-50/30 transition-colors">
-                        <div className="w-32 p-3 font-black text-[10px] uppercase tracking-widest bg-gray-50 border-r-2 border-black flex items-center">
-                            Price <span className="text-red-500 ml-1">*</span>
-                        </div>
-                        <div className="flex-1 flex items-center px-3">
-                            <span className="font-bold text-gray-400 mr-1">$</span>
-                            <input
-                                type="text"
-                                value={price}
-                                onChange={(e) => onPriceChange(e.target.value)}
-                                placeholder="130"
-                                className="w-full py-3 text-sm font-black text-emerald-600 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
-                                required
-                            />
-                        </div>
+                {/* Price Field */}
+                <div className="space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
+                        Price <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+                        <span className="text-lg font-bold text-gray-400">$</span>
+                        <input
+                            type="text"
+                            value={price}
+                            onChange={(e) => onPriceChange(e.target.value)}
+                            placeholder="130"
+                            className="flex-1 text-sm font-black text-emerald-600 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
+                            required
+                        />
                     </div>
                 </div>
 
-                <div className="mt-6 p-4 bg-gray-50 border-2 border-black border-dashed">
+                {/* Info Box */}
+                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                     <p className="text-[10px] leading-relaxed text-gray-600 font-bold">
                         Your Bose product has been received into our repair center. Under normal circumstances it will be repaired within the next 3-10 working days.
                     </p>
@@ -129,7 +193,7 @@ export function CustomerInfoForm({
             </div>
             
             <p className="text-[9px] text-center font-bold text-gray-400 uppercase tracking-[0.2em]">
-                All fields marked with * are required for submission
+                Fields marked with <span className="text-red-500">*</span> are required
             </p>
         </div>
     );

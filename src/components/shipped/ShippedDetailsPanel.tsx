@@ -112,6 +112,7 @@ export function ShippedDetailsPanel({
   const [shipped, setShipped] = useState<ShippedRecord>(initialShipped);
   const [durationData, setDurationData] = useState<DurationData>({});
   const [isLoadingDurations, setIsLoadingDurations] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   // Update content when props change
   useEffect(() => {
@@ -146,6 +147,33 @@ export function ShippedDetailsPanel({
     } finally {
       setIsLoadingDurations(false);
     }
+  };
+
+  const handleCopyAll = () => {
+    const formattedDateTime = shipped.date_time && shipped.date_time !== '1' 
+      ? new Date(shipped.date_time).toLocaleString('en-US', { 
+          month: '2-digit', 
+          day: '2-digit', 
+          year: 'numeric', 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit',
+          hour12: false 
+        }).replace(',', '')
+      : 'N/A';
+
+    const allInfo = `Serial: ${shipped.serial_number || 'N/A'}
+Order ID: ${shipped.order_id || 'Not available'}
+Tracking: ${shipped.shipping_tracking_number || 'Not available'}
+Product: ${shipped.product_title || 'Not provided'}
+Condition: ${shipped.condition || 'Not set'}
+Tested By: ${shipped.tested_by || 'Not specified'}
+Boxed By: ${shipped.boxed_by || 'Not specified'}
+Shipped: ${formattedDateTime}`;
+
+    navigator.clipboard.writeText(allInfo);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
   };
 
   return (
@@ -194,6 +222,23 @@ export function ShippedDetailsPanel({
                 Shipping Information
               </h3>
             </div>
+            <button
+              onClick={handleCopyAll}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all hover:shadow-md active:scale-95"
+              aria-label="Copy all shipping information"
+            >
+              {copiedAll ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-black uppercase tracking-wider">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-black uppercase tracking-wider">Copy All</span>
+                </>
+              )}
+            </button>
           </div>
           
           <div className="space-y-4">

@@ -133,13 +133,6 @@ function RepairSidebar() {
                                     <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
                                     <span className="text-[11px] font-black uppercase tracking-widest">New Repair Order</span>
                                 </button>
-
-                                <div className="p-6 bg-orange-50/50 rounded-[2rem] border border-orange-100/50">
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-800 mb-3">Quick Tip</h3>
-                                    <p className="text-[11px] font-medium text-orange-700 leading-relaxed">
-                                        Use the search bar in the table to find specific tickets, customers, or products quickly.
-                                    </p>
-                                </div>
                             </div>
 
                             <div className="mt-auto pt-6 border-t border-gray-100 text-center">

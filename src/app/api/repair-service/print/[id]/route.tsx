@@ -28,101 +28,148 @@ export async function GET(
       );
     }
 
-    // Parse date_time JSON if it exists
+    // Format date
     let startDateTime = '';
     try {
-      const dateTimeData = repair.date_time ? JSON.parse(repair.date_time) : {};
-      startDateTime = dateTimeData.start || new Date().toLocaleDateString();
+      if (repair.date_time) {
+        const date = new Date(repair.date_time);
+        startDateTime = date.toLocaleString('en-US', { 
+          month: '2-digit', 
+          day: '2-digit', 
+          year: 'numeric'
+        });
+      } else {
+        const now = new Date();
+        startDateTime = now.toLocaleString('en-US', { 
+          month: '2-digit', 
+          day: '2-digit', 
+          year: 'numeric'
+        });
+      }
     } catch {
-      startDateTime = new Date().toLocaleDateString();
+      const now = new Date();
+      startDateTime = now.toLocaleString('en-US', { 
+        month: '2-digit', 
+        day: '2-digit', 
+        year: 'numeric'
+      });
     }
 
     const ticketNumber = repair.ticket_number || repair.id.toString();
     const productTitle = repair.product_title || '';
     const issue = repair.issue || '';
     const serialNumber = repair.serial_number || '';
-    const name = repair.name || '';
-    const contact = repair.contact || '';
     const price = repair.price || '';
+    
+    // Format phone number helper
+    const formatPhoneNumber = (phone: string): string => {
+      if (!phone) return '';
+      const cleaned = phone.replace(/\D/g, '');
+      if (cleaned.length === 10) {
+        return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+      }
+      return phone;
+    };
+    
+    // Parse contact_info to extract name, phone and email (format: "name, phone, email")
+    let name = '';
+    let phoneNumber = '';
+    let email = '';
+    if (repair.contact_info) {
+      const parts = repair.contact_info.split(',').map((p: string) => p.trim());
+      name = parts[0] || ''; // Name is index 0
+      phoneNumber = formatPhoneNumber(parts[1] || ''); // Phone is index 1
+      email = parts[2] || ''; // Email is index 2
+    }
+    
+    // Format contact as "Name, Phone, Email"
+    const contactDisplay = [name, phoneNumber, email].filter(Boolean).join(', ');
 
-    // Generate HTML directly
+    // Generate HTML matching Repair Service Paper exactly
     const formHtml = `
-      <div class="bg-white p-6 print:p-6">
-        <div class="max-w-4xl mx-auto">
-          <!-- Header -->
-          <div class="text-center mb-8 border-b-2 border-gray-300 pb-6">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">USAV Solutions Inc.</h1>
-            <p class="text-lg text-gray-600">Repair Service Form</p>
-            <p class="text-sm text-gray-500 mt-2">Ticket #${ticketNumber}</p>
-          </div>
+      <div class="bg-white text-gray-900 font-sans p-8">
+        
+        <!-- Header Section -->
+        <div class="text-right mb-8">
+          <h2 class="font-bold text-lg">USAV Solutions</h2>
+          <p class="text-sm">16161 Gothard St. Suite A</p>
+          <p class="text-sm">Huntington Beach, CA 92647, United States</p>
+          <p class="text-sm">Tel: (714) 596-6888</p>
+        </div>
 
-          <!-- Customer Information -->
-          <div class="mb-6">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b border-gray-200 pb-2">Customer Information</h2>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Name</label>
-                <div class="text-base text-gray-900 bg-gray-50 px-4 py-2 rounded border border-gray-200">${name || '_______________'}</div>
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Contact</label>
-                <div class="text-base text-gray-900 bg-gray-50 px-4 py-2 rounded border border-gray-200">${contact || '_______________'}</div>
-              </div>
-            </div>
-          </div>
+        <!-- Title and Ticket Number -->
+        <div class="mb-6">
+          <h1 class="text-3xl font-bold mb-2">Repair Service</h1>
+          <p class="text-lg font-semibold">${ticketNumber} - Repair Ticket Number</p>
+        </div>
 
-          <!-- Product Information -->
-          <div class="mb-6">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b border-gray-200 pb-2">Product Information</h2>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Product Title</label>
-                <div class="text-base text-gray-900 bg-gray-50 px-4 py-2 rounded border border-gray-200">${productTitle || '_______________'}</div>
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Serial Number</label>
-                <div class="text-base text-gray-900 bg-gray-50 px-4 py-2 rounded border border-gray-200">${serialNumber || '_______________'}</div>
-              </div>
-            </div>
+        <!-- Information Table -->
+        <div class="border-t border-l border-black mb-6">
+          <div class="flex border-b border-r border-black">
+            <div class="w-40 p-2 font-bold bg-gray-50 border-r border-black">Product Title:</div>
+            <div class="flex-1 p-2">${productTitle}</div>
           </div>
-
-          <!-- Issue Description -->
-          <div class="mb-6">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b border-gray-200 pb-2">Issue Description</h2>
-            <div class="text-base text-gray-900 bg-gray-50 px-4 py-4 rounded border border-gray-200 min-h-32">${issue || '_______________'}</div>
+          <div class="flex border-b border-r border-black">
+            <div class="w-40 p-2 font-bold bg-gray-50 border-r border-black">SN & Issues:</div>
+            <div class="flex-1 p-2">${serialNumber}, ${issue}</div>
           </div>
-
-          <!-- Service Information -->
-          <div class="mb-6">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 border-b border-gray-200 pb-2">Service Information</h2>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Date/Time</label>
-                <div class="text-base text-gray-900 bg-gray-50 px-4 py-2 rounded border border-gray-200">${startDateTime || '_______________'}</div>
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Price</label>
-                <div class="text-base text-gray-900 bg-gray-50 px-4 py-2 rounded border border-gray-200">${price || '_______________'}</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Signature Section -->
-          <div class="mt-8 pt-6 border-t-2 border-gray-300">
-            <div class="grid grid-cols-2 gap-8">
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Technician Signature</label>
-                <div class="border-b-2 border-gray-400 h-12"></div>
-                <p class="text-xs text-gray-500 mt-1">Date: _____________</p>
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Customer Signature</label>
-                <div class="border-b-2 border-gray-400 h-12"></div>
-                <p class="text-xs text-gray-500 mt-1">Date: _____________</p>
-              </div>
-            </div>
+          <div class="flex border-b border-r border-black">
+            <div class="w-40 p-2 font-bold bg-gray-50 border-r border-black">Contact Info:</div>
+            <div class="flex-1 p-2">${contactDisplay}</div>
           </div>
         </div>
+
+        <!-- Price Section -->
+        <div class="mb-6">
+          <p class="text-lg font-medium mb-2">
+            <span class="font-bold">$${price}</span> - Price Paid at Pick-up
+          </p>
+          <p class="text-base font-medium">
+            Card / Cash - Payment Method
+          </p>
+        </div>
+
+        <!-- Terms & Warranty -->
+        <div class="mb-10 text-sm leading-relaxed">
+          <p class="mb-4">
+            Your Bose product has been received into our repair center. Under normal circumstances it will 
+            be repaired within the next 3-10 working days and returned to you at the address above.
+          </p>
+          <p class="font-bold border-b border-black inline-block">
+            There is a 30 day Warranty on all our repair services.
+          </p>
+        </div>
+
+        <!-- Drop Off Section -->
+        <div class="mb-10 mt-28">
+          <div class="flex items-end gap-4 mb-2">
+            <span class="font-bold whitespace-nowrap">Drop Off X</span>
+            <div class="flex-1 border-b border-black" style="height: 24px;"></div>
+            <span class="font-bold whitespace-nowrap">Date: ${startDateTime}</span>
+          </div>
+          <p class="text-xs italic">
+            By signing above you agree to the listed price and any unexpected delays in the repair process.
+          </p>
+        </div>
+
+        <!-- Internal Use Table -->
+        <div class="border-t border-l border-black mb-10 flex">
+          <div class="flex-1 border-r border-b border-black p-2 font-bold">Part Repaired:</div>
+          <div class="flex-1 border-r border-b border-black p-2"></div>
+          <div class="flex-1 border-r border-b border-black p-2 font-bold">Who:</div>
+          <div class="flex-1 border-r border-b border-black p-2 font-bold">Date:</div>
+        </div>
+
+        <!-- Pick Up Section -->
+        <div class="mt-32">
+          <div class="flex items-end gap-4 mb-4">
+            <span class="font-bold whitespace-nowrap">Pick Up X</span>
+            <div class="flex-1 border-b border-black" style="height: 24px;"></div>
+            <span class="font-bold whitespace-nowrap">Date: ____ / ____ / ________</span>
+          </div>
+          <p class="text-center font-bold text-xl mt-8">Enjoy your repaired unit!</p>
+        </div>
+
       </div>
     `;
 
@@ -135,13 +182,28 @@ export async function GET(
   <title>Repair Service - ${ticketNumber}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @media print {
-      body { margin: 0; padding: 0; }
-      .print\\:p-6 { padding: 1.5rem !important; }
-    }
-    @page {
-      size: letter;
+    * {
       margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 8.5in;
+      height: 11in;
+      margin: 0;
+      padding: 0;
+    }
+    @media print {
+      html, body {
+        width: 8.5in;
+        height: 11in;
+        margin: 0;
+        padding: 0;
+      }
+      @page {
+        size: 8.5in 11in;
+        margin: 0;
+      }
     }
   </style>
   <script>

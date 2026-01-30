@@ -52,8 +52,7 @@ export async function POST(req: NextRequest) {
                 customerPhone: customer.phone,
                 customerEmail: customer.email,
                 product: productString,
-                repairReasons,
-                additionalNotes,
+                issue: repairReasonsString, // Combined repair reasons and notes
                 serialNumber,
                 price
             });
@@ -67,14 +66,13 @@ export async function POST(req: NextRequest) {
         // Fix: date_time, process, and status_history are JSON columns in the DB.
         // We must provide valid JSON strings.
         const insertResult = await pool.query(`
-            INSERT INTO repair_service (date_time, ticket_number, name, contact, product_title, price, issue, serial_number, process, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO repair_service (date_time, ticket_number, contact_info, product_title, price, issue, serial_number, process, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id, ticket_number
         `, [
             JSON.stringify(formattedDateTime), // Store as JSON string
             zendeskTicketNumber || '',
-            customer.name,
-            contactInfo,
+            contactInfo, // CSV: "name, phone, email"
             productString,
             price || '130',
             repairReasonsString,
