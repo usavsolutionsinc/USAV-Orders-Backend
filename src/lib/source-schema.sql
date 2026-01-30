@@ -8,18 +8,22 @@
 -- DROP TABLE IF EXISTS packer_1, packer_2, packer_3 CASCADE;
 -- DROP TABLE IF EXISTS receiving, shipped, sku_stock, sku, rs CASCADE;
 
--- 1. ORDERS TABLE (10 columns)
+-- 1. ORDERS TABLE
 CREATE TABLE IF NOT EXISTS orders (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT,
-    col_6 TEXT,
-    col_7 TEXT,
-    col_8 TEXT,
-    col_9 TEXT,
-    col_10 TEXT
+    id SERIAL PRIMARY KEY,
+    ship_by_date TEXT,
+    order_id TEXT,
+    product_title TEXT,
+    quantity TEXT,
+    sku TEXT,
+    condition TEXT,
+    shipping_tracking_number TEXT,
+    days_late TEXT,
+    out_of_stock TEXT,
+    notes TEXT,
+    assigned_to TEXT,
+    status TEXT NOT NULL DEFAULT 'unassigned',
+    urgent TEXT
 );
 
 -- 2. TECH_1 TABLE (7 columns)
@@ -96,13 +100,13 @@ CREATE TABLE IF NOT EXISTS packer_3 (
     quantity TEXT
 );
 
--- 9. RECEIVING TABLE (5 columns)
+-- 9. RECEIVING TABLE
 CREATE TABLE IF NOT EXISTS receiving (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    receiving_tracking_number TEXT,
+    carrier TEXT,
+    quantity TEXT
 );
 
 -- 10. SHIPPED TABLE (13 columns)
@@ -131,7 +135,7 @@ CREATE TABLE IF NOT EXISTS sku_stock (
     product_title TEXT
 );
 
--- 12. SKU TABLE (8 columns)
+-- 12. SKU TABLE
 CREATE TABLE IF NOT EXISTS sku (
     id SERIAL PRIMARY KEY,
     date_time TEXT,
@@ -143,34 +147,36 @@ CREATE TABLE IF NOT EXISTS sku (
     location TEXT
 );
 
--- 13. RS TABLE (10 columns)
-CREATE TABLE IF NOT EXISTS rs (
-    col_1 SERIAL PRIMARY KEY,
-    col_2 TEXT,
-    col_3 TEXT,
-    col_4 TEXT,
-    col_5 TEXT,
-    col_6 TEXT,
-    col_7 TEXT,
-    col_8 TEXT,
-    col_9 TEXT,
-    col_10 TEXT
+-- 13. REPAIR_SERVICE TABLE
+CREATE TABLE IF NOT EXISTS repair_service (
+    id SERIAL PRIMARY KEY,
+    date_time TEXT,
+    ticket_number TEXT,
+    product_title TEXT,
+    issue TEXT,
+    serial_number TEXT,
+    name TEXT,
+    contact TEXT,
+    price TEXT,
+    status TEXT DEFAULT 'pending',
+    repair_reasons TEXT,
+    process TEXT
 );
 
 -- Create indexes on primary keys (for performance)
-CREATE INDEX IF NOT EXISTS idx_orders_col_1 ON orders(col_1);
-CREATE INDEX IF NOT EXISTS idx_tech_1_col_1 ON tech_1(col_1);
-CREATE INDEX IF NOT EXISTS idx_tech_2_col_1 ON tech_2(col_1);
-CREATE INDEX IF NOT EXISTS idx_tech_3_col_1 ON tech_3(col_1);
-CREATE INDEX IF NOT EXISTS idx_tech_4_col_1 ON tech_4(col_1);
-CREATE INDEX IF NOT EXISTS idx_packer_1_col_1 ON packer_1(col_1);
-CREATE INDEX IF NOT EXISTS idx_packer_2_col_1 ON packer_2(col_1);
-CREATE INDEX IF NOT EXISTS idx_packer_3_col_1 ON packer_3(col_1);
-CREATE INDEX IF NOT EXISTS idx_receiving_col_1 ON receiving(col_1);
-CREATE INDEX IF NOT EXISTS idx_shipped_col_1 ON shipped(col_1);
-CREATE INDEX IF NOT EXISTS idx_sku_stock_col_1 ON sku_stock(col_1);
-CREATE INDEX IF NOT EXISTS idx_sku_col_1 ON sku(col_1);
-CREATE INDEX IF NOT EXISTS idx_rs_col_1 ON rs(col_1);
+CREATE INDEX IF NOT EXISTS idx_orders_id ON orders(id);
+CREATE INDEX IF NOT EXISTS idx_tech_1_id ON tech_1(id);
+CREATE INDEX IF NOT EXISTS idx_tech_2_id ON tech_2(id);
+CREATE INDEX IF NOT EXISTS idx_tech_3_id ON tech_3(id);
+CREATE INDEX IF NOT EXISTS idx_tech_4_id ON tech_4(id);
+CREATE INDEX IF NOT EXISTS idx_packer_1_id ON packer_1(id);
+CREATE INDEX IF NOT EXISTS idx_packer_2_id ON packer_2(id);
+CREATE INDEX IF NOT EXISTS idx_packer_3_id ON packer_3(id);
+CREATE INDEX IF NOT EXISTS idx_receiving_id ON receiving(id);
+CREATE INDEX IF NOT EXISTS idx_shipped_id ON shipped(id);
+CREATE INDEX IF NOT EXISTS idx_sku_stock_id ON sku_stock(id);
+CREATE INDEX IF NOT EXISTS idx_sku_id ON sku(id);
+CREATE INDEX IF NOT EXISTS idx_repair_service_id ON repair_service(id);
 
 -- Verify table creation
 SELECT 
@@ -183,7 +189,7 @@ WHERE table_schema = 'public'
 AND table_name IN (
     'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
     'packer_1', 'packer_2', 'packer_3', 'receiving',
-    'shipped', 'sku_stock', 'sku', 'rs'
+    'shipped', 'sku_stock', 'sku', 'repair_service'
 )
 ORDER BY table_name;
 

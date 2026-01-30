@@ -16,12 +16,12 @@ export async function GET(req: NextRequest) {
 
         // Search in receiving table
         const logs = await db.execute(sql.raw(`
-            SELECT col_1 as id, col_2 as timestamp, col_3 as tracking, col_4 as status, col_5 as count
+            SELECT id, date_time as timestamp, receiving_tracking_number as tracking, carrier as status, quantity as count
             FROM ${tableName} 
             WHERE 
-                (RIGHT(col_3::text, 8) = '${last8}' OR col_3::text ILIKE '%${query}%')
-                AND col_3 IS NOT NULL AND col_3 != ''
-            ORDER BY col_1 DESC 
+                (RIGHT(receiving_tracking_number::text, 8) = '${last8}' OR receiving_tracking_number::text ILIKE '%${query}%')
+                AND receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
+            ORDER BY id DESC 
             LIMIT 20
         `));
 

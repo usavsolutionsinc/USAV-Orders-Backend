@@ -243,7 +243,7 @@ export function RepairTable() {
                         animate={{ opacity: 1 }}
                         key={repair.id}
                         onClick={() => handleRowClick(repair)}
-                        className={`grid grid-cols-[60px_1fr_94px_auto_auto_120px_80px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                        className={`grid grid-cols-[60px_1fr_180px_94px_80px_140px_80px] items-center gap-4 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                           selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                         }`}
                       >
@@ -261,17 +261,39 @@ export function RepairTable() {
                           ) : '--:--'}
                         </div>
                         
-                        {/* 2. Product Title & Ticket */}
+                        {/* 2. Product Title */}
                         <div className="flex flex-col min-w-0">
                           <div className="text-[11px] font-bold text-gray-900 truncate">
                             {repair.product_title || 'Unknown Product'}
                           </div>
-                          <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
-                            Ticket: {repair.ticket_number || 'N/A'} • {repair.contact || 'No Contact'}
+                        </div>
+                        
+                        {/* 3. Name & Contact */}
+                        <div className="flex flex-col min-w-0">
+                          <div className="text-[11px] font-black text-gray-900 truncate uppercase tracking-tight">
+                            {repair.name || 'No Name'}
+                          </div>
+                          <div className="flex flex-col mt-0.5">
+                            <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest">Contact</span>
+                            <div className="text-[9px] font-bold text-gray-500 truncate">
+                              {(() => {
+                                if (!repair.contact) return 'No Contact Info';
+                                const parts = repair.contact.split(',').map(p => p.trim());
+                                // Index 0 is name, 1 is phone, 2 is email
+                                const phone = parts[1] || '';
+                                const email = parts[2] || '';
+                                return (
+                                  <>
+                                    {phone && <div>{phone}</div>}
+                                    {email && <div className="lowercase">{email}</div>}
+                                  </>
+                                );
+                              })()}
+                            </div>
                           </div>
                         </div>
                         
-                        {/* 3. Ticket # (Copyable) */}
+                        {/* 4. Ticket # (Copyable) */}
                         <div className="flex flex-col w-[94px]">
                           <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
                           <CopyableText 
@@ -281,7 +303,7 @@ export function RepairTable() {
                           />
                         </div>
                         
-                        {/* 4. Price */}
+                        {/* 5. Price */}
                         <div className="flex flex-col">
                           <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Price</span>
                           <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
@@ -289,7 +311,7 @@ export function RepairTable() {
                           </div>
                         </div>
                         
-                        {/* 5. Status Dropdown */}
+                        {/* 6. Status Dropdown */}
                         <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
                           <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Status</span>
                           <select
@@ -311,7 +333,7 @@ export function RepairTable() {
                           </select>
                         </div>
                         
-                        {/* 6. Actions */}
+                        {/* 7. Actions */}
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleRowClick(repair)}

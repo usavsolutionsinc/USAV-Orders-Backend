@@ -159,12 +159,23 @@ export async function POST() {
         // 7-19. Source of truth tables
         console.log('Creating source of truth tables...');
         
-        // Orders (10 columns)
+        // Orders
         await client.query(`
             CREATE TABLE IF NOT EXISTS orders (
-                col_1 SERIAL PRIMARY KEY,
-                col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 TEXT,
-                col_6 TEXT, col_7 TEXT, col_8 TEXT, col_9 TEXT, col_10 TEXT
+                id SERIAL PRIMARY KEY,
+                ship_by_date TEXT,
+                order_id TEXT,
+                product_title TEXT,
+                quantity TEXT,
+                sku TEXT,
+                condition TEXT,
+                shipping_tracking_number TEXT,
+                days_late TEXT,
+                out_of_stock TEXT,
+                notes TEXT,
+                assigned_to TEXT,
+                status TEXT NOT NULL DEFAULT 'unassigned',
+                urgent TEXT
             )
         `);
         tables.push('orders');
@@ -200,11 +211,14 @@ export async function POST() {
             tables.push(`packer_${i}`);
         }
 
-        // Receiving (5 columns)
+        // Receiving
         await client.query(`
             CREATE TABLE IF NOT EXISTS receiving (
-                col_1 SERIAL PRIMARY KEY,
-                col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 TEXT
+                id SERIAL PRIMARY KEY,
+                date_time TEXT,
+                receiving_tracking_number TEXT,
+                carrier TEXT,
+                quantity TEXT
             )
         `);
         tables.push('receiving');
@@ -241,25 +255,39 @@ export async function POST() {
         `);
         tables.push('sku_stock');
 
-        // SKU (8 columns)
+        // SKU
         await client.query(`
             CREATE TABLE IF NOT EXISTS sku (
-                col_1 SERIAL PRIMARY KEY,
-                col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 TEXT,
-                col_6 TEXT, col_7 TEXT, col_8 TEXT
+                id SERIAL PRIMARY KEY,
+                date_time TEXT,
+                static_sku TEXT,
+                serial_number TEXT,
+                shipping_tracking_number TEXT,
+                product_title TEXT,
+                notes TEXT,
+                location TEXT
             )
         `);
         tables.push('sku');
 
-        // RS (10 columns)
+        // Repair Service (formerly rs)
         await client.query(`
-            CREATE TABLE IF NOT EXISTS rs (
-                col_1 SERIAL PRIMARY KEY,
-                col_2 TEXT, col_3 TEXT, col_4 TEXT, col_5 TEXT,
-                col_6 TEXT, col_7 TEXT, col_8 TEXT, col_9 TEXT, col_10 TEXT
+            CREATE TABLE IF NOT EXISTS repair_service (
+                id SERIAL PRIMARY KEY,
+                date_time TEXT,
+                ticket_number TEXT,
+                product_title TEXT,
+                issue TEXT,
+                serial_number TEXT,
+                name TEXT,
+                contact TEXT,
+                price TEXT,
+                status TEXT DEFAULT 'pending',
+                repair_reasons TEXT,
+                process TEXT
             )
         `);
-        tables.push('rs');
+        tables.push('repair_service');
 
         // 20. Packing logs table
         console.log('Creating packing_logs table...');
@@ -389,7 +417,7 @@ export async function GET() {
             'staff', 'tags', 'task_templates', 'task_tags', 'daily_task_instances', 
             'receiving_tasks', 'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
             'packer_1', 'packer_2', 'packer_3', 'receiving', 'shipped', 'sku_stock', 
-            'sku', 'rs', 'packing_logs'
+            'sku', 'repair_service', 'packing_logs'
         ];
 
         const existingTables = result.rows.map(r => r.table_name);

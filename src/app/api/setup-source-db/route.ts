@@ -29,31 +29,97 @@ export async function POST() {
             console.log(`✓ Created table: ${tableName} (${columnCount} columns)`);
         };
 
-        // 1. orders - 10 columns
-        await createTable('orders', 10);
+        // 1. orders
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS orders (
+                id SERIAL PRIMARY KEY,
+                ship_by_date TEXT,
+                order_id TEXT,
+                product_title TEXT,
+                quantity TEXT,
+                sku TEXT,
+                condition TEXT,
+                shipping_tracking_number TEXT,
+                days_late TEXT,
+                out_of_stock TEXT,
+                notes TEXT,
+                assigned_to TEXT,
+                status TEXT NOT NULL DEFAULT 'unassigned',
+                urgent TEXT
+            )
+        `);
 
-        // 2-5. tech_1 through tech_4 - 7 columns each
-        await createTable('tech_1', 7);
-        await createTable('tech_2', 7);
-        await createTable('tech_3', 7);
-        await createTable('tech_4', 7);
+        // 2-5. tech_1 through tech_4
+        for (let i = 1; i <= 4; i++) {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS tech_${i} (
+                    id SERIAL PRIMARY KEY,
+                    date_time TEXT,
+                    product_title TEXT,
+                    shipping_tracking_number TEXT,
+                    serial_number TEXT,
+                    condition TEXT,
+                    quantity TEXT
+                )
+            `);
+        }
 
-        // 6-8. packer_1 through packer_3 - 5 columns each
-        await createTable('packer_1', 5);
-        await createTable('packer_2', 5);
-        await createTable('packer_3', 5);
+        // 6-8. packer_1 through packer_3
+        for (let i = 1; i <= 3; i++) {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS packer_${i} (
+                    id SERIAL PRIMARY KEY,
+                    date_time TEXT,
+                    shipping_tracking_number TEXT,
+                    carrier TEXT,
+                    product_title TEXT,
+                    quantity TEXT
+                )
+            `);
+        }
 
-        // 9. receiving - 5 columns
-        await createTable('receiving', 5);
+        // 9. receiving
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS receiving (
+                id SERIAL PRIMARY KEY,
+                date_time TEXT,
+                receiving_tracking_number TEXT,
+                carrier TEXT,
+                quantity TEXT
+            )
+        `);
 
-        // 10. shipped - 10 columns
-        await createTable('shipped', 10);
+        // 10. shipped
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS shipped (
+                id SERIAL PRIMARY KEY,
+                date_time TEXT,
+                order_id TEXT,
+                product_title TEXT,
+                condition TEXT,
+                shipping_tracking_number TEXT,
+                serial_number TEXT,
+                boxed_by TEXT,
+                tested_by TEXT,
+                sku TEXT,
+                status TEXT DEFAULT 'pending',
+                status_history JSONB DEFAULT '[]',
+                test_date_time TEXT
+            )
+        `);
 
-        // 11. sku_stock - 5 columns (using underscore instead of dash)
-        await createTable('sku_stock', 5);
+        // 11. sku_stock
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS sku_stock (
+                id SERIAL PRIMARY KEY,
+                stock TEXT,
+                sku TEXT,
+                size TEXT,
+                product_title TEXT
+            )
+        `);
 
-        // 12. sku - 8 columns with specific names
-        console.log('Creating table: sku (8 columns)...');
+        // 12. sku
         await client.query(`
             CREATE TABLE IF NOT EXISTS sku (
                 id SERIAL PRIMARY KEY,
@@ -66,23 +132,36 @@ export async function POST() {
                 location TEXT
             )
         `);
-        console.log('✓ Created table: sku');
 
-        // 13. rs - 10 columns
-        await createTable('rs', 10);
+        // 13. repair_service
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS repair_service (
+                id SERIAL PRIMARY KEY,
+                date_time TEXT,
+                ticket_number TEXT,
+                product_title TEXT,
+                issue TEXT,
+                serial_number TEXT,
+                name TEXT,
+                contact TEXT,
+                price TEXT,
+                status TEXT DEFAULT 'pending',
+                repair_reasons TEXT,
+                process TEXT
+            )
+        `);
 
-        // Create indexes on primary keys (automatically created, but explicit for clarity)
+        // Create indexes on primary keys
         console.log('Creating indexes...');
         const tables = [
             'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
             'packer_1', 'packer_2', 'packer_3', 'receiving',
-            'shipped', 'sku_stock', 'sku', 'rs'
+            'shipped', 'sku_stock', 'sku', 'repair_service'
         ];
 
         for (const table of tables) {
-            const pkColumn = table === 'sku' ? 'id' : 'col_1';
             await client.query(`
-                CREATE INDEX IF NOT EXISTS idx_${table}_${pkColumn} ON ${table}(${pkColumn})
+                CREATE INDEX IF NOT EXISTS idx_${table}_id ON ${table}(id)
             `);
         }
 
@@ -93,19 +172,14 @@ export async function POST() {
             message: 'Source of truth database setup completed successfully!',
             tables_created: 13,
             details: {
-                orders: '10 columns',
-                tech_1: '7 columns',
-                tech_2: '7 columns',
-                tech_3: '7 columns',
-                tech_4: '7 columns',
-                packer_1: '5 columns',
-                packer_2: '5 columns',
-                packer_3: '5 columns',
-                receiving: '5 columns',
-                shipped: '10 columns',
-                sku_stock: '5 columns',
-                sku: '8 columns',
-                rs: '10 columns'
+                orders: 'Explicit columns',
+                tech_stations: '4 tables, explicit columns',
+                packer_stations: '3 tables, explicit columns',
+                receiving: 'Explicit columns',
+                shipped: 'Explicit columns',
+                sku_stock: 'Explicit columns',
+                sku: 'Explicit columns',
+                repair_service: 'Explicit columns'
             }
         });
     } catch (error) {
@@ -127,7 +201,7 @@ export async function GET() {
         const tables = [
             'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
             'packer_1', 'packer_2', 'packer_3', 'receiving',
-            'shipped', 'sku_stock', 'sku', 'rs'
+            'shipped', 'sku_stock', 'sku', 'repair_service'
         ];
 
         const tableInfo = [];

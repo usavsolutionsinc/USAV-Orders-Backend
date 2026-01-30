@@ -24,10 +24,10 @@ export async function GET(request: NextRequest) {
 
         // Query receiving table using raw SQL (same pattern as tech-logs)
         const logs = await db.execute(sql.raw(`
-            SELECT col_1 as id, col_2 as timestamp, col_3 as tracking, col_4 as status, col_5 as count
+            SELECT id, date_time as timestamp, receiving_tracking_number as tracking, carrier as status, quantity as count
             FROM ${tableName} 
-            WHERE col_3 IS NOT NULL AND col_3 != ''
-            ORDER BY col_1 DESC 
+            WHERE receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
+            ORDER BY id DESC 
             LIMIT ${limit} OFFSET ${offset}
         `));
 
