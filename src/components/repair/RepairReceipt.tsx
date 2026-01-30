@@ -27,7 +27,6 @@ interface RepairReceiptProps {
 export function RepairReceipt({ data, onClose, autoPrint = true }: RepairReceiptProps) {
     useEffect(() => {
         if (autoPrint) {
-            // Small delay to ensure component is fully rendered
             setTimeout(() => {
                 window.print();
             }, 500);
@@ -41,60 +40,60 @@ export function RepairReceipt({ data, onClose, autoPrint = true }: RepairReceipt
     return (
         <>
             {/* Screen View - Non-printable controls */}
-            <div className="no-print fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                    <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-                        <h2 className="text-xl font-black text-gray-900">Repair Receipt</h2>
+            <div className="no-print fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-[2.5rem] max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+                    <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+                        <div>
+                            <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">Print Preview</h2>
+                            <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-1">Repair Service Paper</p>
+                        </div>
                         <div className="flex gap-3">
                             <button
                                 onClick={handlePrint}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold uppercase transition-all"
+                                className="px-8 py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-gray-900/20 active:scale-95"
                             >
-                                Print Receipt
+                                Print Document
                             </button>
                             <button
                                 onClick={onClose}
-                                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-xl text-sm font-bold uppercase transition-all"
+                                className="px-8 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95"
                             >
                                 Close
                             </button>
                         </div>
                     </div>
 
-                    {/* Receipt Preview */}
-                    <div className="p-8">
-                        <ReceiptContent data={data} />
+                    <div className="flex-1 overflow-y-auto p-12 bg-gray-50/50">
+                        <div className="bg-white shadow-2xl mx-auto p-[1in] min-h-[11in] w-[8.5in]">
+                            <ReceiptContent data={data} />
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Print View - Hidden on screen, shown when printing */}
+            {/* Print View */}
             <div className="print-only">
                 <ReceiptContent data={data} />
             </div>
 
-            {/* Print Styles */}
             <style jsx global>{`
                 @media print {
                     @page {
                         size: letter;
-                        margin: 0.5in;
+                        margin: 0;
                     }
-                    
                     .no-print {
                         display: none !important;
                     }
-                    
                     .print-only {
                         display: block !important;
                     }
-                    
                     body {
+                        background: white !important;
                         print-color-adjust: exact;
                         -webkit-print-color-adjust: exact;
                     }
                 }
-                
                 @media screen {
                     .print-only {
                         display: none;
@@ -109,111 +108,120 @@ function ReceiptContent({ data }: { data: ReceiptData }) {
     const repairReasonsString = data.repairReasons.join(', ') + (data.additionalNotes ? ` - ${data.additionalNotes}` : '');
     
     return (
-        <div className="max-w-[8.5in] mx-auto bg-white text-black" style={{ fontFamily: 'Arial, sans-serif' }}>
-            {/* Header */}
-            <div className="flex justify-end mb-6">
-                <div className="text-right text-xs">
-                    <p className="font-bold">USAV Solutions</p>
-                    <p>16161 Gothard St. Suite A</p>
-                    <p>Huntington Beach, CA 92647, United States</p>
-                    <p>Tel: (714) 596-6888</p>
+        <div className="w-full bg-white text-black p-8" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+            {/* Header Section */}
+            <div className="text-right mb-12">
+                <h2 className="font-black text-xl tracking-tighter uppercase">USAV Solutions</h2>
+                <p className="text-sm font-medium text-gray-600">16161 Gothard St. Suite A</p>
+                <p className="text-sm font-medium text-gray-600">Huntington Beach, CA 92647, United States</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">Tel: (714) 596-6888</p>
+            </div>
+
+            {/* Title and RS Number */}
+            <div className="mb-10">
+                <h1 className="text-5xl font-black mb-4 tracking-tighter uppercase">Repair Service</h1>
+                <div className="inline-block bg-gray-900 text-white px-4 py-2 rounded-lg">
+                    <p className="text-xl font-black tracking-widest uppercase">RS #: {data.rsNumber}</p>
                 </div>
             </div>
 
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-4">Repair Service</h1>
-                <p className="font-bold text-lg mb-4">RS #: {data.rsNumber}</p>
+            {/* Information Table */}
+            <div className="border-[3px] border-black mb-8 overflow-hidden rounded-xl">
+                {[
+                    { label: "Product:", value: data.product },
+                    { label: "Issue:", value: repairReasonsString },
+                    { label: "Serial #:", value: data.serialNumber },
+                    { label: "Name:", value: data.customer.name },
+                    { label: "Contact:", value: `${data.customer.phone} ${data.customer.email ? `(${data.customer.email})` : ''}` },
+                ].map((item, idx) => (
+                    <div key={idx} className={`flex ${idx !== 4 ? 'border-b-[3px] border-black' : ''}`}>
+                        <div className="w-40 p-4 font-black text-xs uppercase tracking-widest bg-gray-50 border-r-[3px] border-black flex items-center">
+                            {item.label}
+                        </div>
+                        <div className="flex-1 p-4 text-sm font-bold uppercase">
+                            {item.value}
+                        </div>
+                    </div>
+                ))}
+            </div>
 
-                <table className="w-full border-collapse border-2 border-black mb-6">
-                    <tbody>
-                        <tr>
-                            <td className="border-2 border-black p-2 w-1/4 font-medium">Product:</td>
-                            <td className="border-2 border-black p-2">{data.product}</td>
-                        </tr>
-                        <tr>
-                            <td className="border-2 border-black p-2 font-medium">Issue:</td>
-                            <td className="border-2 border-black p-2">{repairReasonsString}</td>
-                        </tr>
-                        <tr>
-                            <td className="border-2 border-black p-2 font-medium">Serial #</td>
-                            <td className="border-2 border-black p-2 font-mono">{data.serialNumber}</td>
-                        </tr>
-                        <tr>
-                            <td className="border-2 border-black p-2 font-medium">Name:</td>
-                            <td className="border-2 border-black p-2">{data.customer.name}</td>
-                        </tr>
-                        <tr>
-                            <td className="border-2 border-black p-2 font-medium">Contact:</td>
-                            <td className="border-2 border-black p-2">{data.customer.phone} {data.customer.email ? `(${data.customer.email})` : ''}</td>
-                        </tr>
-                    </tbody>
-                </table>
+            {/* Price Section */}
+            <div className="mb-10 p-6 bg-gray-50 border-[3px] border-black rounded-xl inline-block">
+                <p className="text-2xl font-black tracking-tight">
+                    <span className="text-emerald-600">${data.price}</span>
+                    <span className="ml-3 text-gray-400 uppercase text-sm tracking-[0.2em] font-black">- Price Paid at Pick-up</span>
+                </p>
+            </div>
 
-                <div className="mb-6">
-                    <p className="text-lg font-bold">${data.price} - Price Paid at Pick-up</p>
-                </div>
-
-                <div className="mb-6 text-sm space-y-4">
-                    <p>
-                        Your Bose product has been received into our repair center. Under normal circumstances it will be repaired within the next 3-10 working days and returned to you at the address above.
-                    </p>
-                    <p className="font-bold">
+            {/* Terms & Warranty */}
+            <div className="mb-12 text-sm leading-relaxed max-w-2xl">
+                <p className="mb-6 font-medium text-gray-700">
+                    Your Bose product has been received into our repair center. Under normal circumstances it will 
+                    be repaired within the next <span className="font-black text-black">3-10 working days</span> and returned to you at the address above.
+                </p>
+                <div className="p-4 border-2 border-black border-dashed rounded-lg inline-block">
+                    <p className="font-black uppercase tracking-widest text-blue-600">
                         There is a 30 day Warranty on all our repair services.
                     </p>
                 </div>
+            </div>
 
-                {/* Drop Off Section */}
-                <div className="mt-8 mb-12">
-                    <div className="flex items-center gap-4 text-sm">
-                        <span className="font-bold text-lg">Drop Off X</span>
-                        <div className="flex-1 border-b-2 border-black h-8"></div>
-                        <span className="font-bold">Date:</span>
-                        <div className="w-16 border-b-2 border-black h-8"></div>
-                        <span className="font-bold">/</span>
-                        <div className="w-16 border-b-2 border-black h-8"></div>
-                        <span className="font-bold">/</span>
-                        <div className="w-24 border-b-2 border-black h-8"></div>
-                    </div>
-                    <p className="text-[10px] mt-1 italic text-gray-600">
-                        By signing above you agree to the listed price and any unexpected delays in the repair process.
-                    </p>
-                </div>
-
-                {/* Internal Use Table */}
-                <div className="mb-12">
-                    <table className="w-full border-collapse border-2 border-black">
-                        <tbody>
-                            <tr>
-                                <td className="border-2 border-black p-2 w-[12%] font-medium text-xs">Repaired:</td>
-                                <td className="border-2 border-black p-2 w-[13%]"></td>
-                                <td className="border-2 border-black p-2 w-[8%] font-medium text-xs">Part:</td>
-                                <td className="border-2 border-black p-2 w-[37%]"></td>
-                                <td className="border-2 border-black p-2 w-[8%] font-medium text-xs">Who:</td>
-                                <td className="border-2 border-black p-2 w-[10%]"></td>
-                                <td className="border-2 border-black p-2 w-[8%] font-medium text-xs">Date:</td>
-                                <td className="border-2 border-black p-2 w-[12%]"></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pick Up Section */}
-                <div className="mt-8 mb-8">
-                    <div className="flex items-center gap-4 text-sm">
-                        <span className="font-bold text-lg">Pick Up X</span>
-                        <div className="flex-1 border-b-2 border-black h-8"></div>
-                        <span className="font-bold">Date:</span>
-                        <div className="w-16 border-b-2 border-black h-8"></div>
-                        <span className="font-bold">/</span>
-                        <div className="w-16 border-b-2 border-black h-8"></div>
-                        <span className="font-bold">/</span>
-                        <div className="w-24 border-b-2 border-black h-8"></div>
+            {/* Drop Off Section */}
+            <div className="mb-12">
+                <div className="flex items-end gap-6 mb-3">
+                    <span className="font-black text-2xl uppercase tracking-tighter italic">Drop Off X</span>
+                    <div className="flex-1 border-b-[3px] border-black h-8"></div>
+                    <div className="flex items-end gap-2">
+                        <span className="font-black text-sm uppercase tracking-widest">Date:</span>
+                        <span className="font-black text-lg border-b-[3px] border-black px-4 min-w-[150px] text-center">
+                            {data.dropOffDate.split(' ')[0]}
+                        </span>
                     </div>
                 </div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
+                    By signing above you agree to the listed price and any unexpected delays in the repair process.
+                </p>
+            </div>
 
-                <div className="text-center font-bold text-lg mt-12">
-                    <p>Enjoy your repaired unit!</p>
+            {/* Internal Use Table */}
+            <div className="border-[3px] border-black mb-12 flex rounded-xl overflow-hidden">
+                <div className="flex-1 border-r-[3px] border-black p-4">
+                    <span className="font-black text-[10px] uppercase tracking-widest text-gray-400 block mb-2">Repaired:</span>
+                    <div className="h-8"></div>
                 </div>
+                <div className="flex-1 border-r-[3px] border-black p-4">
+                    <span className="font-black text-[10px] uppercase tracking-widest text-gray-400 block mb-2">Part:</span>
+                    <div className="h-8"></div>
+                </div>
+                <div className="w-32 border-r-[3px] border-black p-4">
+                    <span className="font-black text-[10px] uppercase tracking-widest text-gray-400 block mb-2">Who:</span>
+                    <div className="h-8"></div>
+                </div>
+                <div className="w-40 p-4">
+                    <span className="font-black text-[10px] uppercase tracking-widest text-gray-400 block mb-2">Date:</span>
+                    <div className="h-8"></div>
+                </div>
+            </div>
+
+            {/* Pick Up Section */}
+            <div>
+                <div className="flex items-end gap-6 mb-8">
+                    <span className="font-black text-2xl uppercase tracking-tighter italic">Pick Up X</span>
+                    <div className="flex-1 border-b-[3px] border-black h-8"></div>
+                    <div className="flex items-end gap-2">
+                        <span className="font-black text-sm uppercase tracking-widest">Date:</span>
+                        <div className="flex gap-1">
+                            <div className="w-12 border-b-[3px] border-black h-8"></div>
+                            <span className="font-black text-xl">/</span>
+                            <div className="w-12 border-b-[3px] border-black h-8"></div>
+                            <span className="font-black text-xl">/</span>
+                            <div className="w-20 border-b-[3px] border-black h-8"></div>
+                        </div>
+                    </div>
+                </div>
+                <p className="text-center font-black text-3xl mt-16 tracking-tighter uppercase italic text-gray-900">
+                    Enjoy your repaired unit!
+                </p>
             </div>
         </div>
     );

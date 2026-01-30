@@ -2,10 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import CurrentOrder from '../CurrentOrder';
-import ActiveProductInfo from '../ActiveProductInfo';
 import UpNextOrder from '../UpNextOrder';
-import CurrentWorkOrder from '../CurrentWorkOrder';
 import confetti from 'canvas-confetti';
 import { 
   Search, 
@@ -51,7 +48,6 @@ export default function StationTesting({
     
     // Current work order state
     const [scannedTrackingNumber, setScannedTrackingNumber] = useState<string | null>(null);
-    const [currentWorkOrder, setCurrentWorkOrder] = useState<{ id: string; productTitle: string; orderId: string; sku?: string; condition?: string; serialNumber?: string } | null>(null);
     const [serialNumber, setSerialNumber] = useState('');
     
     // Search functionality
@@ -161,7 +157,7 @@ export default function StationTesting({
             } finally {
                 setIsLoading(false);
             }
-        } else if (type === 'SERIAL' && (currentWorkOrder || processedOrder)) {
+        } else if (type === 'SERIAL' && processedOrder) {
             // Priority 4: Everything else is a serial number
             // If we have an active order, this scan should complete the task
             const finalSerial = input.toUpperCase();
@@ -173,7 +169,7 @@ export default function StationTesting({
                 const now = new Date();
                 const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
-                const targetOrder = currentWorkOrder || processedOrder;
+                const targetOrder = processedOrder;
                 const tracking = scannedTrackingNumber || targetOrder.tracking || targetOrder.orderId;
 
                 const res = await fetch('/api/tech-logs', {
@@ -192,7 +188,6 @@ export default function StationTesting({
                 if (res.ok) {
                     setSerialNumber('');
                     setScannedTrackingNumber(null);
-                    setCurrentWorkOrder(null);
                     setProcessedOrder(null);
                     if (onComplete) onComplete();
                     inputRef.current?.focus();
@@ -362,36 +357,12 @@ export default function StationTesting({
                             </button>
                         ))}
                     </div>
-
-                    {activeSubTab === 'current' && (
-                        <CurrentWorkOrder 
-                            trackingNumber={scannedTrackingNumber}
-                            capturedSerialNumber={serialNumber}
-                            onLoaded={setCurrentWorkOrder}
-                        />
-                    )}
                 </div>
 
                 {/* Content Area - Vertical Stack */}
                 <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-8 space-y-4">
                     {activeSubTab === 'current' ? (
                         <>
-                            {/* Active Product Info - Shows immediately under scan field */}
-                            {processedOrder && (
-                                <ActiveProductInfo 
-                                    orderId={processedOrder.orderId || 'N/A'}
-                                    productTitle={processedOrder.title}
-                                />
-                            )}
-                            
-                            {/* Current Order Display - Original detailed view */}
-                            {processedOrder && (
-                                <CurrentOrder 
-                                    orderId={processedOrder.orderId || 'N/A'}
-                                    productTitle={processedOrder.title}
-                                />
-                            )}
-
                             <AnimatePresence mode="wait">
                                 {processedOrder ? (
                                     <motion.div 
@@ -444,7 +415,17 @@ export default function StationTesting({
                                             </button>
                                         </div>
                                     </motion.div>
-                                ) : null}
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                                        <div className={`w-16 h-16 rounded-3xl ${activeColor.light} flex items-center justify-center`}>
+                                            <Barcode className={`w-8 h-8 ${activeColor.text}`} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Ready to scan</h3>
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Scan a tracking number to start</p>
+                                        </div>
+                                    </div>
+                                )}
                             </AnimatePresence>
                         </>
                     ) : activeSubTab === 'pending' ? (
@@ -456,7 +437,6 @@ export default function StationTesting({
                                 techId={userId}
                                 onStart={(tracking) => {
                                     setScannedTrackingNumber(null);
-                                    setCurrentWorkOrder(null);
                                     setProcessedOrder(null);
                                     setSerialNumber('');
                                     setActiveSubTab('current');
