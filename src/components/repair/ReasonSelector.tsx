@@ -5,7 +5,7 @@ import { Check } from '../Icons';
 
 interface ReasonSelectorProps {
     selectedReasons: string[];
-    additionalNotes: string;
+    notes: string;
     onReasonsChange: (reasons: string[]) => void;
     onNotesChange: (notes: string) => void;
 }
@@ -21,7 +21,7 @@ const REPAIR_REASONS = [
 
 export function ReasonSelector({ 
     selectedReasons, 
-    additionalNotes, 
+    notes, 
     onReasonsChange, 
     onNotesChange 
 }: ReasonSelectorProps) {
@@ -70,13 +70,13 @@ export function ReasonSelector({
                 </div>
             </div>
 
-            {/* Additional Notes */}
+            {/* Notes */}
             <div>
                 <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">
-                    Additional Notes (Optional)
+                    Notes (Optional)
                 </label>
                 <textarea
-                    value={additionalNotes}
+                    value={notes}
                     onChange={(e) => onNotesChange(e.target.value)}
                     placeholder="Describe any additional issues or details..."
                     rows={4}

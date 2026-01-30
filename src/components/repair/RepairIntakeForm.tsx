@@ -17,7 +17,7 @@ export interface RepairFormData {
         model: string;
     };
     repairReasons: string[];
-    additionalNotes: string;
+    notes: string;
     customer: {
         name: string;
         phone: string;
@@ -36,7 +36,7 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
     const [formData, setFormData] = useState<RepairFormData>({
         product: { type: '', model: '' },
         repairReasons: [],
-        additionalNotes: '',
+        notes: '',
         customer: { name: '', phone: '', email: '' },
         serialNumber: '',
         price: '130'
@@ -136,9 +136,9 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
                 {currentStep === 'reason' && (
                     <ReasonSelector
                         selectedReasons={formData.repairReasons}
-                        additionalNotes={formData.additionalNotes}
+                        notes={formData.notes}
                         onReasonsChange={(reasons) => setFormData(prev => ({ ...prev, repairReasons: reasons }))}
-                        onNotesChange={(notes) => setFormData(prev => ({ ...prev, additionalNotes: notes }))}
+                        onNotesChange={(notes) => setFormData(prev => ({ ...prev, notes: notes }))}
                     />
                 )}
 

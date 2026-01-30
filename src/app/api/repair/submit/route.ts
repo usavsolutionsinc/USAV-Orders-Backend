@@ -5,14 +5,13 @@ import { createZendeskTicket } from '@/lib/zendesk';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { customer, product, repairReasons, additionalNotes, serialNumber, price } = body;
+        const { customer, product, repairReasons, notes, serialNumber, price } = body;
 
-        // Validate required fields for both DB and Zendesk
-        if (!customer?.name || !customer?.phone || !customer?.email || !product?.type || !product?.model || !repairReasons?.length || !serialNumber || !price) {
+        // Validate required fields (email is optional)
+        if (!customer?.name || !customer?.phone || !product?.type || !product?.model || !repairReasons?.length || !serialNumber || !price) {
             const missing = [];
             if (!customer?.name) missing.push('Name');
             if (!customer?.phone) missing.push('Phone');
-            if (!customer?.email) missing.push('Email');
             if (!product?.type || !product?.model) missing.push('Product Title');
             if (!repairReasons?.length) missing.push('Repair Reasons');
             if (!serialNumber) missing.push('Serial #');
@@ -38,11 +37,13 @@ export async function POST(req: NextRequest) {
             ? product.model 
             : `${product.type} Music System - ${product.model}`;
 
-        // Format contact info
-        const contactInfo = `${customer.name}, ${customer.phone}, ${customer.email}`;
+        // Format contact info (email is optional)
+        const contactInfo = customer.email 
+            ? `${customer.name}, ${customer.phone}, ${customer.email}`
+            : `${customer.name}, ${customer.phone}`;
 
-        // Format repair reasons
-        const repairReasonsString = repairReasons.join(', ') + (additionalNotes ? ` - ${additionalNotes}` : '');
+        // Format issue (repair reasons + notes)
+        const issueString = repairReasons.join(', ') + (notes ? ` - ${notes}` : '');
 
         // Step 1: Create Zendesk ticket via GAS Web App
         let zendeskTicketNumber: string | null = null;
@@ -50,11 +51,13 @@ export async function POST(req: NextRequest) {
             zendeskTicketNumber = await createZendeskTicket({
                 customerName: customer.name,
                 customerPhone: customer.phone,
-                customerEmail: customer.email,
-                product: productString,
-                issue: repairReasonsString, // Combined repair reasons and notes
+                customerEmail: customer.email || '', // Optional
+                productTitle: productString,
+                contactInfo: contactInfo,
+                issue: issueString,
                 serialNumber,
-                price
+                price,
+                notes: notes || '' // Optional notes at the end
             });
         } catch (error: any) {
             console.error('Failed to create Zendesk ticket:', error);
@@ -63,23 +66,36 @@ export async function POST(req: NextRequest) {
         }
 
         // Step 2: Insert into repair_service table in NEON DB
-        // Fix: date_time, process, and status_history are JSON columns in the DB.
-        // We must provide valid JSON strings.
+        console.log('📝 Inserting repair service:', {
+            date_time: formattedDateTime,
+            ticket_number: zendeskTicketNumber || '',
+            contact_info: contactInfo,
+            product_title: productString,
+            price: price || '130',
+            issue: issueString,
+            serial_number: serialNumber || '',
+            notes: notes || '',
+            status: 'Pending'
+        });
+
         const insertResult = await pool.query(`
-            INSERT INTO repair_service (date_time, ticket_number, contact_info, product_title, price, issue, serial_number, process, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO repair_service (date_time, ticket_number, contact_info, product_title, price, issue, serial_number, notes, process, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id, ticket_number
         `, [
-            JSON.stringify(formattedDateTime), // Store as JSON string
-            zendeskTicketNumber || '',
-            contactInfo, // CSV: "name, phone, email"
-            productString,
-            price || '130',
-            repairReasonsString,
-            serialNumber || '',
-            '[]', // process (empty JSON array)
-            'Pending'
+            JSON.stringify(formattedDateTime), // date_time (JSON)
+            zendeskTicketNumber || '',         // ticket_number (TEXT)
+            contactInfo,                       // contact_info (TEXT - CSV format)
+            productString,                     // product_title (TEXT)
+            price || '130',                    // price (TEXT)
+            issueString,                       // issue (TEXT - repair reasons)
+            serialNumber || '',                // serial_number (TEXT)
+            notes || '',                       // notes (TEXT - additional notes)
+            '[]',                              // process (JSON - empty array)
+            'Pending'                          // status (TEXT)
         ]);
+
+        console.log('✅ Insert successful, ID:', insertResult.rows[0]?.id);
 
         const insertedRow = insertResult.rows[0];
         const dbId = insertedRow.id;
@@ -106,10 +122,10 @@ export async function POST(req: NextRequest) {
                     values: [[
                         formattedDateTime, // Date/Time
                         finalRSNumber, // RS #
-                        contactInfo, // Contact
-                        productString, // Product(s) Title
+                        contactInfo, // Contact Info
+                        productString, // Product Title
                         price || '130', // Price
-                        repairReasonsString, // Reason for repair
+                        issueString, // Issue (repair reasons)
                         serialNumber || '', // Serial #
                         '', // OOS what we need (parts)
                         'Pending' // Status
@@ -138,7 +154,7 @@ export async function POST(req: NextRequest) {
                 serialNumber: serialNumber || 'Not provided',
                 price: price || '130',
                 repairReasons: repairReasons,
-                additionalNotes: additionalNotes || '',
+                notes: notes || '',
                 status: 'Pending'
             }
         });

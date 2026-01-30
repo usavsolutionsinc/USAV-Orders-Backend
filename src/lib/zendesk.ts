@@ -6,10 +6,12 @@ interface RepairTicketData {
     customerName: string;
     customerPhone: string;
     customerEmail: string;
-    product: string;
-    issue: string; // Combined repair reasons and notes
+    productTitle: string;
+    contactInfo: string;
+    issue: string; // Repair reasons
     serialNumber: string;
     price: string;
+    notes: string; // Additional notes
 }
 
 /**
@@ -43,19 +45,20 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
         customerName, 
         customerPhone, 
         customerEmail, 
-        product, 
+        productTitle, 
+        contactInfo,
         issue,
         serialNumber, 
-        price 
+        price,
+        notes
     } = data;
 
-    // 1. Validate required fields
-    if (!customerName || !customerPhone || !customerEmail || !product || !serialNumber || !price) {
+    // 1. Validate required fields (email is optional)
+    if (!customerName || !customerPhone || !productTitle || !serialNumber || !price) {
         const missing = [];
         if (!customerName) missing.push('Name');
         if (!customerPhone) missing.push('Phone number');
-        if (!customerEmail) missing.push('Email');
-        if (!product) missing.push('Product Title');
+        if (!productTitle) missing.push('Product Title');
         if (!serialNumber) missing.push('Serial #');
         if (!price) missing.push('Price');
         
@@ -75,11 +78,18 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
     const formattedPrice = price.startsWith('$') ? price : `$${price}`;
 
     // 4. Build JSON payload - Format like repair service paper
+    let description = `Product Title: ${productTitle}\n\nSN & Issue: ${serialNumber}, ${issue}\n\nContact Info: ${contactInfo}\n\nDue Date: ${dueDate}`;
+    
+    // Add notes at the end if present
+    if (notes) {
+        description += `\n\n${notes}`;
+    }
+    
     const payload = {
         subject: `Repair: Walk-in ${customerName} - ${customerPhone} - Due Date: ${dueDate}`,
-        description: `Product Title: ${product}\n\nSN & Issues: ${serialNumber}, ${issue}\n\nContact Info: ${customerName}, ${customerPhone}, ${customerEmail}\n\nPrice: ${formattedPrice}\n\nDue Date: ${dueDate}`,
+        description: description,
         customerName: customerName,
-        customerEmail: customerEmail
+        customerEmail: customerEmail || ''
     };
 
     try {
@@ -98,8 +108,23 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
         }
 
         const result = await response.json();
+        console.log('Zendesk GAS Response:', JSON.stringify(result));
+        
         if (result.ok) {
-            return result.ticketNumber || 'SUCCESS';
+            // Try different possible property names for ticket number
+            const ticketNumber = result.ticketNumber || result.ticket_number || result.ticketId || result.ticket_id || result.id;
+            
+            if (!ticketNumber) {
+                console.error('Zendesk ticket created but no ticket number found in response:', result);
+                throw new Error('Ticket created but ticket number not returned');
+            }
+            
+            // Format ticket number with # prefix if not already present
+            const formattedTicketNumber = ticketNumber.toString().startsWith('#') 
+                ? ticketNumber.toString() 
+                : `#${ticketNumber}`;
+            
+            return formattedTicketNumber;
         } else {
             throw new Error(result.error || 'The ticket could not be created');
         }
