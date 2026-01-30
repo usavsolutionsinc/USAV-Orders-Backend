@@ -123,9 +123,8 @@ export default function StationTesting({
         const type = detectType(input);
         
         if (type === 'TRACKING') {
-            // Set the scanned tracking number to trigger CurrentWorkOrder lookup
+            // Set the scanned tracking number to trigger search
             setScannedTrackingNumber(input);
-            setCurrentWorkOrder(null); // Reset current work order
             
             setIsLoading(true);
             try {
