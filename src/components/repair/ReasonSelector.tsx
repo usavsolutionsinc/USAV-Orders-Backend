@@ -70,10 +70,10 @@ export function ReasonSelector({
                 </div>
             </div>
 
-            {/* Notes */}
+            {/* Repair Notes */}
             <div>
                 <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-2">
-                    Notes (Optional)
+                    Repair Notes (Optional)
                 </label>
                 <textarea
                     value={notes}

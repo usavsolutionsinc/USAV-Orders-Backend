@@ -43,55 +43,57 @@ export async function POST(req: NextRequest) {
         const { techId, userName, timestamp, title, tracking, serial } = body;
 
         const tableName = `tech_${techId}`;
-        const last8 = tracking ? tracking.slice(-8).toLowerCase() : '';
         
-        // 1. Update/Insert into the technician's specific table
+        // 1. Insert into the technician's specific table with tracking only (serial can be empty)
         // quantity column is only touched by sheet import, not manual entries
+        const serialValue = serial || '';
         await db.execute(sql.raw(`
             INSERT INTO ${tableName} (date_time, product_title, shipping_tracking_number, serial_number)
-            VALUES ('${timestamp}', '${title}', '${tracking}', '${serial}')
+            VALUES ('${timestamp}', '${title}', '${tracking}', '${serialValue}')
         `));
 
-        // 2. Update the shipped table if tracking is provided
-        if (last8 && serial) {
-            // Get current status_history from shipped table
-            const currentRecord = await db.execute(sql.raw(`
-                SELECT status_history, status
-                FROM shipped
-                WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
-                LIMIT 1
-            `));
+        // 2. Only update shipped table if serial number is provided
+        if (serial) {
+            const last8 = tracking ? tracking.slice(-8).toLowerCase() : '';
+            if (last8) {
+                // Get current status_history from shipped table
+                const currentRecord = await db.execute(sql.raw(`
+                    SELECT status_history, status
+                    FROM shipped
+                    WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
+                    LIMIT 1
+                `));
 
-            let statusHistory = [];
-            if (currentRecord && currentRecord.length > 0) {
-                const existing = currentRecord[0].status_history;
-                try {
-                    statusHistory = typeof existing === 'string' ? JSON.parse(existing) : (existing || []);
-                } catch {
-                    statusHistory = [];
+                let statusHistory = [];
+                if (currentRecord && currentRecord.length > 0) {
+                    const existing = currentRecord[0].status_history;
+                    try {
+                        statusHistory = typeof existing === 'string' ? JSON.parse(existing) : (existing || []);
+                    } catch {
+                        statusHistory = [];
+                    }
                 }
+
+                // Add new history entry
+                const now = new Date().toISOString();
+                statusHistory.push({
+                    status: 'tested',
+                    timestamp: now,
+                    user: userName,
+                    previous_status: currentRecord && currentRecord.length > 0 ? currentRecord[0].status : 'pending'
+                });
+
+                // Update serial_number, tested_by, status, status_history, and test_date_time
+                await db.execute(sql.raw(`
+                    UPDATE shipped
+                    SET serial_number = '${serial}',
+                        tested_by = '${userName}',
+                        status = 'tested',
+                        status_history = '${JSON.stringify(statusHistory).replace(/'/g, "''")}',
+                        test_date_time = '${now}'
+                    WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
+                `));
             }
-
-            // Add new history entry
-            const now = new Date().toISOString();
-            statusHistory.push({
-                status: 'tested',
-                timestamp: now,
-                user: userName,
-                previous_status: currentRecord && currentRecord.length > 0 ? currentRecord[0].status : 'pending'
-            });
-
-            // Update serial_number, tested_by, status, status_history, and test_date_time
-            // matching by the last 8 digits of shipping_tracking_number
-            await db.execute(sql.raw(`
-                UPDATE shipped
-                SET serial_number = '${serial}',
-                    tested_by = '${userName}',
-                    status = 'tested',
-                    status_history = '${JSON.stringify(statusHistory).replace(/'/g, "''")}',
-                    test_date_time = '${now}'
-                WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
-            `));
         }
 
         return NextResponse.json({ success: true });

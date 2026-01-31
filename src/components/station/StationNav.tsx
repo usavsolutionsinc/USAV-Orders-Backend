@@ -56,13 +56,15 @@ export default function StationNav() {
     const pathname = usePathname();
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true); // Default to collapsed
 
     // Persist collapsed state
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed');
         if (saved !== null) {
             setIsCollapsed(saved === 'true');
+        } else {
+            setIsCollapsed(true); // Default to collapsed if not set
         }
     }, []);
 
@@ -70,6 +72,15 @@ export default function StationNav() {
         const newState = !isCollapsed;
         setIsCollapsed(newState);
         localStorage.setItem('sidebar-collapsed', String(newState));
+    };
+
+    const handleHamburgerMouseEnter = () => {
+        setIsCollapsed(false);
+    };
+
+    const handleSidebarMouseLeave = () => {
+        setIsCollapsed(true);
+        localStorage.setItem('sidebar-collapsed', 'true');
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -122,6 +133,7 @@ export default function StationNav() {
         <motion.aside
             animate={{ width: isCollapsed ? 64 : 280 }}
             transition={{ type: 'spring', damping: 25, stiffness: 150 }}
+            onMouseLeave={handleSidebarMouseLeave}
             className="h-screen bg-white border-r border-gray-200 flex flex-col relative z-50 flex-shrink-0 no-print print:hidden"
             style={{ height: '100vh', minHeight: '100vh', maxHeight: '100vh' }}
         >
@@ -134,6 +146,7 @@ export default function StationNav() {
                 )}
                 <button
                     onClick={toggleCollapsed}
+                    onMouseEnter={handleHamburgerMouseEnter}
                     className={`transition-all duration-300 border ${
                         isCollapsed 
                             ? 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50 p-2.5 rounded-xl'

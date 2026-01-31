@@ -10,14 +10,6 @@ export const staff = pgTable('staff', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// Tags table
-export const tags = pgTable('tags', {
-  id: serial('id').primaryKey(),
-  name: varchar('name', { length: 50 }).notNull().unique(),
-  color: varchar('color', { length: 20 }).notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
 // DAILY TASK LOGIC REMOVED
 
 // NEW: Receiving tasks table
@@ -211,8 +203,6 @@ export const packingLogs = pgTable('packing_logs', {
 // Type exports
 export type Staff = typeof staff.$inferSelect;
 export type NewStaff = typeof staff.$inferInsert;
-export type Tag = typeof tags.$inferSelect;
-export type NewTag = typeof tags.$inferInsert;
 export type ReceivingTask = typeof receivingTasks.$inferSelect;
 export type NewReceivingTask = typeof receivingTasks.$inferInsert;
 export type Receiving = typeof receiving.$inferSelect;

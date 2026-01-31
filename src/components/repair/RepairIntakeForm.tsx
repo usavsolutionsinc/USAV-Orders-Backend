@@ -17,7 +17,7 @@ export interface RepairFormData {
         model: string;
     };
     repairReasons: string[];
-    notes: string;
+    repairNotes: string; // Step 2 - appends to issue
     customer: {
         name: string;
         phone: string;
@@ -25,6 +25,7 @@ export interface RepairFormData {
     };
     serialNumber: string;
     price: string;
+    notes: string; // Step 3 - goes to DB notes column
 }
 
 type FormStep = 'product' | 'reason' | 'customer';
@@ -36,10 +37,11 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
     const [formData, setFormData] = useState<RepairFormData>({
         product: { type: '', model: '' },
         repairReasons: [],
-        notes: '',
+        repairNotes: '',
         customer: { name: '', phone: '', email: '' },
         serialNumber: '',
-        price: '130'
+        price: '130',
+        notes: ''
     });
 
     const canProceedFromProduct = formData.product.type && (formData.product.type === 'Other' ? formData.product.model : formData.product.model);
@@ -136,9 +138,9 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
                 {currentStep === 'reason' && (
                     <ReasonSelector
                         selectedReasons={formData.repairReasons}
-                        notes={formData.notes}
+                        notes={formData.repairNotes}
                         onReasonsChange={(reasons) => setFormData(prev => ({ ...prev, repairReasons: reasons }))}
-                        onNotesChange={(notes) => setFormData(prev => ({ ...prev, notes: notes }))}
+                        onNotesChange={(notes) => setFormData(prev => ({ ...prev, repairNotes: notes }))}
                     />
                 )}
 
@@ -147,9 +149,11 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
                         customer={formData.customer}
                         serialNumber={formData.serialNumber}
                         price={formData.price}
+                        notes={formData.notes}
                         onCustomerChange={updateCustomer}
                         onSerialNumberChange={(value) => setFormData(prev => ({ ...prev, serialNumber: value }))}
                         onPriceChange={(value) => setFormData(prev => ({ ...prev, price: value }))}
+                        onNotesChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
                     />
                 )}
             </div>

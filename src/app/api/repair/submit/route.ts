@@ -5,7 +5,7 @@ import { createZendeskTicket } from '@/lib/zendesk';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { customer, product, repairReasons, notes, serialNumber, price } = body;
+        const { customer, product, repairReasons, repairNotes, serialNumber, price, notes } = body;
 
         // Validate required fields (email is optional)
         if (!customer?.name || !customer?.phone || !product?.type || !product?.model || !repairReasons?.length || !serialNumber || !price) {
@@ -42,13 +42,14 @@ export async function POST(req: NextRequest) {
             ? `${customer.name}, ${customer.phone}, ${customer.email}`
             : `${customer.name}, ${customer.phone}`;
 
-        // Format issue (repair reasons + notes)
-        const issueString = repairReasons.join(', ') + (notes ? ` - ${notes}` : '');
+        // Format issue (repair reasons + repair notes from step 2)
+        const issueString = repairReasons.join(', ') + (repairNotes ? ` - ${repairNotes}` : '');
 
         // Step 1: Create Zendesk ticket via GAS Web App
-        let zendeskTicketNumber: string | null = null;
+        // Note: Currently unable to retrieve ticket number from Zendesk, using "NA"
+        let zendeskTicketNumber: string = 'NA';
         try {
-            zendeskTicketNumber = await createZendeskTicket({
+            await createZendeskTicket({
                 customerName: customer.name,
                 customerPhone: customer.phone,
                 customerEmail: customer.email || '', // Optional
@@ -57,25 +58,26 @@ export async function POST(req: NextRequest) {
                 issue: issueString,
                 serialNumber,
                 price,
-                notes: notes || '' // Optional notes at the end
+                notes: notes || '' // Optional notes from step 3
             });
+            // Ticket created but number not retrieved, using NA
+            console.log('✅ Zendesk ticket created (ticket number: NA)');
         } catch (error: any) {
             console.error('Failed to create Zendesk ticket:', error);
-            // Continue with DB insert even if Zendesk fails, but keep track of error
-            // result.error will be returned if critical, but user wants to fix the env var
+            // Continue with DB insert even if Zendesk fails
         }
 
         // Step 2: Insert into repair_service table in NEON DB
         console.log('📝 Inserting repair service:', {
             date_time: formattedDateTime,
-            ticket_number: zendeskTicketNumber || '',
+            ticket_number: zendeskTicketNumber,
             contact_info: contactInfo,
             product_title: productString,
             price: price || '130',
             issue: issueString,
             serial_number: serialNumber || '',
             notes: notes || '',
-            status: 'Pending'
+            status: 'Pending Repair'
         });
 
         const insertResult = await pool.query(`
@@ -84,15 +86,15 @@ export async function POST(req: NextRequest) {
             RETURNING id, ticket_number
         `, [
             JSON.stringify(formattedDateTime), // date_time (JSON)
-            zendeskTicketNumber || '',         // ticket_number (TEXT)
+            zendeskTicketNumber,               // ticket_number (TEXT) - "NA" for now
             contactInfo,                       // contact_info (TEXT - CSV format)
             productString,                     // product_title (TEXT)
             price || '130',                    // price (TEXT)
-            issueString,                       // issue (TEXT - repair reasons)
+            issueString,                       // issue (TEXT - repair reasons + repair notes)
             serialNumber || '',                // serial_number (TEXT)
-            notes || '',                       // notes (TEXT - additional notes)
+            notes || '',                       // notes (TEXT - notes from step 3)
             '[]',                              // process (JSON - empty array)
-            'Pending'                          // status (TEXT)
+            'Pending Repair'                   // status (TEXT)
         ]);
 
         console.log('✅ Insert successful, ID:', insertResult.rows[0]?.id);
@@ -128,7 +130,7 @@ export async function POST(req: NextRequest) {
                         issueString, // Issue (repair reasons)
                         serialNumber || '', // Serial #
                         '', // OOS what we need (parts)
-                        'Pending' // Status
+                        'Pending Repair' // Status
                     ]]
                 })
             });
@@ -154,8 +156,9 @@ export async function POST(req: NextRequest) {
                 serialNumber: serialNumber || 'Not provided',
                 price: price || '130',
                 repairReasons: repairReasons,
+                repairNotes: repairNotes || '',
                 notes: notes || '',
-                status: 'Pending'
+                status: 'Pending Repair'
             }
         });
 

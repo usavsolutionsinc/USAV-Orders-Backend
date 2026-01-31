@@ -14,7 +14,7 @@ interface ReceiptData {
     serialNumber: string;
     price: string;
     repairReasons: string[];
-    notes?: string;
+    repairNotes?: string;
     status: string;
 }
 
@@ -105,7 +105,7 @@ export function RepairReceipt({ data, onClose, autoPrint = true }: RepairReceipt
 }
 
 function ReceiptContent({ data }: { data: ReceiptData }) {
-    const repairReasonsString = data.repairReasons.join(', ') + (data.notes ? ` - ${data.notes}` : '');
+    const repairReasonsString = data.repairReasons.join(', ') + (data.repairNotes ? ` - ${data.repairNotes}` : '');
     
     return (
         <div className="w-full bg-white text-black p-8" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>

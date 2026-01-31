@@ -23,16 +23,6 @@ export async function POST() {
             )
         `);
 
-        // Tags Table
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS tags (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(50) NOT NULL UNIQUE,
-                color VARCHAR(20) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-
         // Check if task_templates needs migration
         const checkTemplateColumns = await client.query(`
             SELECT column_name 
@@ -65,15 +55,6 @@ export async function POST() {
                 ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES staff(id) ON DELETE SET NULL
             `);
         }
-
-        // Task-Tags Relationship
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS task_tags (
-                task_template_id INTEGER REFERENCES task_templates(id) ON DELETE CASCADE,
-                tag_id INTEGER REFERENCES tags(id) ON DELETE CASCADE,
-                PRIMARY KEY (task_template_id, tag_id)
-            )
-        `);
 
         // Check if daily_task_instances needs migration
         const checkInstanceColumns = await client.query(`
@@ -187,25 +168,6 @@ export async function POST() {
         await client.query(`CREATE INDEX IF NOT EXISTS idx_daily_instances_date ON daily_task_instances(task_date)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_daily_instances_staff ON daily_task_instances(staff_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_daily_instances_status ON daily_task_instances(status)`);
-
-        // Insert default tags
-        console.log('Inserting default tags...');
-        const tags = [
-            { name: 'Urgent', color: 'red' },
-            { name: 'Important', color: 'orange' },
-            { name: 'Follow Up', color: 'yellow' },
-            { name: 'In Review', color: 'green' },
-            { name: 'Ready', color: 'blue' },
-            { name: 'Waiting', color: 'purple' },
-            { name: 'Archive', color: 'gray' },
-        ];
-
-        for (const tag of tags) {
-            await client.query(
-                'INSERT INTO tags (name, color) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING',
-                [tag.name, tag.color]
-            );
-        }
 
         // Insert sample staff if none exist
         const staffCount = await client.query('SELECT COUNT(*) FROM staff');

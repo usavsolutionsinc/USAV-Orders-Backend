@@ -40,7 +40,7 @@ export default function StationTesting({
     goal = 50,
     onComplete
 }: StationTestingProps) {
-    const [activeSubTab, setActiveSubTab] = useState<'current' | 'pending' | 'out-of-stock'>('current');
+    const [activeSubTab, setActiveSubTab] = useState<'current' | 'out-of-stock'>('current');
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [processedOrder, setProcessedOrder] = useState<any>(null);
@@ -129,11 +129,14 @@ export default function StationTesting({
             setIsLoading(true);
             try {
                 const res = await fetch(`/api/tech-logs/search?tracking=${input}`);
+                let productTitle = 'Unknown Product';
+                
                 if (res.ok) {
                     const data = await res.json();
                     if (data.found) {
+                        productTitle = data.productName || 'Unknown Product';
                         setProcessedOrder({
-                            title: data.productName,
+                            title: productTitle,
                             sku: data.sku || 'N/A',
                             condition: data.condition || 'N/A',
                             notes: data.notes || 'N/A',
@@ -151,6 +154,25 @@ export default function StationTesting({
                         });
                     }
                 }
+
+                // Immediately create DB entry with tracking number and product title from shipped table
+                const now = new Date();
+                const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+                await fetch('/api/tech-logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        techId: userId,
+                        userName,
+                        timestamp,
+                        title: productTitle, // Use actual product title from shipped table
+                        tracking: input,
+                        serial: '' // Empty serial number on tracking scan
+                    })
+                });
+
+                if (onComplete) onComplete();
             } catch (err) {
                 console.error("Search failed:", err);
             } finally {
@@ -158,11 +180,10 @@ export default function StationTesting({
             }
         } else if (type === 'SERIAL' && processedOrder) {
             // Priority 4: Everything else is a serial number
-            // If we have an active order, this scan should complete the task
+            // Update the existing row with serial number
             const finalSerial = input.toUpperCase();
             setSerialNumber(finalSerial);
             
-            // Auto-complete logic
             setIsLoading(true);
             try {
                 const now = new Date();
@@ -171,8 +192,9 @@ export default function StationTesting({
                 const targetOrder = processedOrder;
                 const tracking = scannedTrackingNumber || targetOrder.tracking || targetOrder.orderId;
 
-                const res = await fetch('/api/tech-logs', {
-                    method: 'POST',
+                // Update the existing row with serial number
+                const res = await fetch('/api/tech-logs/update', {
+                    method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         techId: userId,
@@ -192,7 +214,7 @@ export default function StationTesting({
                     inputRef.current?.focus();
                 } else {
                     const err = await res.json();
-                    alert(`Error: ${err.error || 'Failed to complete task'}`);
+                    alert(`Error: ${err.error || 'Failed to update serial'}`);
                 }
             } catch (e) {
                 console.error(e);
@@ -200,51 +222,20 @@ export default function StationTesting({
             } finally {
                 setIsLoading(false);
             }
-        } else if (type === 'COMMAND' && input.toUpperCase() === 'TEST') {
-            setProcessedOrder({ ...mockProduct, title: 'TEST UNIT', sku: 'TEST-SKU', tracking: 'TEST-TRK' });
+        } else if (type === 'COMMAND') {
+            const command = input.toUpperCase();
+            if (command === 'TEST') {
+                setProcessedOrder({ ...mockProduct, title: 'TEST UNIT', sku: 'TEST-SKU', tracking: 'TEST-TRK' });
+            } else if (command === 'YES' && processedOrder) {
+                // Close current work order (like GAS workflow)
+                setProcessedOrder(null);
+                setSerialNumber('');
+                setScannedTrackingNumber(null);
+            }
         }
         
         setInputValue('');
         inputRef.current?.focus();
-    };
-
-    const handleComplete = async () => {
-        if (!processedOrder) return;
-
-        setIsLoading(true);
-        try {
-            // Get local timestamp in M/D/YYYY HH:mm:ss format to match DB expectation
-            const now = new Date();
-            const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-
-            const res = await fetch('/api/tech-logs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    techId: userId,
-                    userName, // Pass technician name for Shipped table update
-                    timestamp,
-                    title: processedOrder.title,
-                    tracking: processedOrder.tracking || processedOrder.orderId,
-                    serial: inputValue.trim().toUpperCase() || ('SN-' + Math.random().toString(36).substr(2, 9).toUpperCase())
-                })
-            });
-            
-            if (res.ok) {
-                if (onComplete) onComplete();
-                setProcessedOrder(null);
-                setInputValue('');
-                inputRef.current?.focus();
-            } else {
-                const err = await res.json();
-                alert(`Error: ${err.error || 'Failed to complete task'}`);
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Network error occurred');
-        } finally {
-            setIsLoading(false);
-        }
     };
 
     const handleSearch = async () => {
@@ -333,7 +324,6 @@ export default function StationTesting({
                     <div className="flex items-center justify-center gap-1 py-2 bg-gray-50/50 rounded-2xl p-1">
                         {[
                             { id: 'current', icon: Zap, label: 'Current' },
-                            { id: 'pending', icon: ClipboardList, label: 'Pending' },
                             { id: 'out-of-stock', icon: AlertCircle, label: 'Stock' }
                         ].map((tab) => (
                             <button
@@ -405,48 +395,36 @@ export default function StationTesting({
                                                 <p className="text-xs font-medium text-gray-700 bg-white/50 p-4 rounded-2xl border border-white/50 leading-relaxed">{processedOrder.notes}</p>
                                             </div>
 
-                                            <button 
-                                                onClick={handleComplete}
-                                                className={`w-full py-4 ${activeColor.bg} ${activeColor.hover} text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] transition-all active:scale-[0.98] shadow-xl ${activeColor.shadow} flex items-center justify-center gap-3`}
-                                            >
-                                                <Check className="w-4 h-4" />
-                                                Complete Task
-                                            </button>
+                                            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                                                <p className="text-[10px] font-bold text-gray-600 text-center uppercase tracking-widest">
+                                                    Scan "YES" to complete or scan next tracking number
+                                                </p>
+                                            </div>
                                         </div>
                                     </motion.div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                                        <div className={`w-16 h-16 rounded-3xl ${activeColor.light} flex items-center justify-center`}>
-                                            <Barcode className={`w-8 h-8 ${activeColor.text}`} />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">Ready to scan</h3>
-                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Scan a tracking number to start</p>
-                                        </div>
-                                    </div>
-                                )}
+                                ) : null}
                             </AnimatePresence>
-                        </>
-                    ) : activeSubTab === 'pending' ? (
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Pending Work Orders</h3>
+
+                            {/* Pending Orders Section - Always visible in Current tab */}
+                            <div className="space-y-6 mt-8">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Pending Work Orders</h3>
+                                </div>
+                                <UpNextOrder 
+                                    techId={userId}
+                                    onStart={(tracking) => {
+                                        setScannedTrackingNumber(null);
+                                        setProcessedOrder(null);
+                                        setSerialNumber('');
+                                        setTimeout(() => handleSubmit(undefined, tracking), 50);
+                                    }}
+                                    onMissingParts={(orderId, reason) => {
+                                        if (onComplete) onComplete();
+                                    }}
+                                    showAllPending={true}
+                                />
                             </div>
-                            <UpNextOrder 
-                                techId={userId}
-                                onStart={(tracking) => {
-                                    setScannedTrackingNumber(null);
-                                    setProcessedOrder(null);
-                                    setSerialNumber('');
-                                    setActiveSubTab('current');
-                                    setTimeout(() => handleSubmit(undefined, tracking), 50);
-                                }}
-                                onMissingParts={(orderId, reason) => {
-                                    if (onComplete) onComplete();
-                                }}
-                                showAllPending={true}
-                            />
-                        </div>
+                        </>
                     ) : (
                         <div className="space-y-6">
                             <div className="flex items-center justify-between">

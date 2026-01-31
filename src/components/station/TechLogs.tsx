@@ -235,7 +235,7 @@ export default function TechLogs({
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             key={log.id} 
-                                            className={`grid grid-cols-[55px_1fr_60px_80px_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
+                                            className={`grid grid-cols-[55px_1fr_60px_100px_100px] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
                                                 {ts ? (
@@ -252,12 +252,12 @@ export default function TechLogs({
                                             </div>
                                             <CopyableText 
                                                 text={log.tracking || ''} 
-                                                className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30"
+                                                className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1.5 py-0.5 rounded border border-blue-100/30 truncate"
                                                 variant="tracking"
                                             />
                                             <CopyableText 
                                                 text={log.serial || ''} 
-                                                className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1 py-0.5 rounded border border-emerald-100/30"
+                                                className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50/30 px-1.5 py-0.5 rounded border border-emerald-100/30 truncate"
                                                 variant="serial"
                                             />
                                         </motion.div>

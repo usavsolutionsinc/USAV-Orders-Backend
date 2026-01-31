@@ -26,19 +26,7 @@ export async function POST() {
         `);
         tables.push('staff');
 
-        // 2. Tags table
-        console.log('Creating tags table...');
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS tags (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(50) NOT NULL UNIQUE,
-                color VARCHAR(20) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        tables.push('tags');
-
-        // 3. Task templates table
+        // 2. Task templates table
         console.log('Creating task_templates table...');
         await client.query(`
             CREATE TABLE IF NOT EXISTS task_templates (
@@ -76,18 +64,7 @@ export async function POST() {
         `);
         tables.push('task_templates');
 
-        // 4. Task tags relationship
-        console.log('Creating task_tags table...');
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS task_tags (
-                task_template_id INTEGER NOT NULL REFERENCES task_templates(id) ON DELETE CASCADE,
-                tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-                PRIMARY KEY (task_template_id, tag_id)
-            )
-        `);
-        tables.push('task_tags');
-
-        // 5. Daily task instances
+        // 3. Daily task instances
         console.log('Creating daily_task_instances table...');
         await client.query(`
             CREATE TABLE IF NOT EXISTS daily_task_instances (
@@ -341,24 +318,6 @@ export async function POST() {
         // Insert default data
         console.log('Inserting default data...');
 
-        // Default tags
-        const defaultTags = [
-            { name: 'Urgent', color: 'red' },
-            { name: 'Important', color: 'orange' },
-            { name: 'Follow Up', color: 'yellow' },
-            { name: 'In Review', color: 'green' },
-            { name: 'Ready', color: 'blue' },
-            { name: 'Waiting', color: 'purple' },
-            { name: 'Archive', color: 'gray' },
-        ];
-
-        for (const tag of defaultTags) {
-            await client.query(
-                'INSERT INTO tags (name, color) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING',
-                [tag.name, tag.color]
-            );
-        }
-
         // Sample staff
         const defaultStaff = [
             { name: 'Tech Station 1', role: 'technician', employee_id: 'TECH001' },
@@ -385,7 +344,6 @@ export async function POST() {
             tables_created: tables.length,
             tables: tables,
             indexes_created: indexes.length,
-            default_tags_inserted: 7,
             default_staff_inserted: 5,
             timestamp: new Date().toISOString(),
         });
@@ -414,7 +372,7 @@ export async function GET() {
         `);
 
         const expectedTables = [
-            'staff', 'tags', 'task_templates', 'task_tags', 'daily_task_instances', 
+            'staff', 'task_templates', 'daily_task_instances', 
             'receiving_tasks', 'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
             'packer_1', 'packer_2', 'packer_3', 'receiving', 'shipped', 'sku_stock', 
             'sku', 'repair_service', 'packing_logs'

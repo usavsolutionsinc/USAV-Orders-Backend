@@ -11,9 +11,11 @@ interface CustomerInfoFormProps {
     };
     serialNumber: string;
     price: string;
+    notes: string;
     onCustomerChange: (field: string, value: string) => void;
     onSerialNumberChange: (value: string) => void;
     onPriceChange: (value: string) => void;
+    onNotesChange: (value: string) => void;
 }
 
 interface SerialNumberInputProps {
@@ -25,9 +27,11 @@ export function CustomerInfoForm({
     customer, 
     serialNumber, 
     price,
+    notes,
     onCustomerChange, 
     onSerialNumberChange,
-    onPriceChange
+    onPriceChange,
+    onNotesChange
 }: CustomerInfoFormProps) {
     // Parse serial numbers from comma-separated string
     const [serialNumbers, setSerialNumbers] = React.useState<string[]>(
@@ -179,6 +183,20 @@ export function CustomerInfoForm({
                             required
                         />
                     </div>
+                </div>
+
+                {/* Notes Field */}
+                <div className="space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
+                        Notes <span className="text-gray-400 text-[10px] font-normal">(Optional)</span>
+                    </label>
+                    <textarea
+                        value={notes}
+                        onChange={(e) => onNotesChange(e.target.value)}
+                        placeholder="Add any additional notes here..."
+                        rows={3}
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                    />
                 </div>
 
                 {/* Info Box */}

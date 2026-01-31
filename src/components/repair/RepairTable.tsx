@@ -305,8 +305,8 @@ export function RepairTable() {
                         </div>
                         
                         {/* 3. Issue */}
-                        <div className="flex flex-col min-w-0 justify-center">
-                          <div className="text-[13px] font-black text-gray-900 truncate leading-tight">
+                        <div className="flex flex-col min-w-0 justify-start">
+                          <div className="text-[13px] font-black text-gray-900 truncate leading-tight text-left">
                             {repair.issue || 'No issue specified'}
                           </div>
                         </div>
