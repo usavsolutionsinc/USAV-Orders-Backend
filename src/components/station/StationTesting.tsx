@@ -406,10 +406,7 @@ export default function StationTesting({
                             </AnimatePresence>
 
                             {/* Pending Orders Section - Always visible in Current tab */}
-                            <div className="space-y-6 mt-8">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">Pending Work Orders</h3>
-                                </div>
+                            <div className="space-y-3 mt-8">
                                 <UpNextOrder 
                                     techId={userId}
                                     onStart={(tracking) => {
@@ -426,10 +423,7 @@ export default function StationTesting({
                             </div>
                         </>
                     ) : (
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">What's out of stock</h3>
-                            </div>
+                        <div className="space-y-3">
                             <UpNextOrder 
                                 techId={userId}
                                 onStart={() => {}}

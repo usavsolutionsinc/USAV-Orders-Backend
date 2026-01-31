@@ -130,51 +130,54 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      className={`rounded-2xl p-4 border-2 transition-all relative ${
+      className={`rounded-2xl p-5 border transition-all relative shadow-sm hover:shadow-md ${
         order.urgent
-          ? 'bg-red-50 border-red-300 ring-2 ring-red-500/20'
-          : 'bg-blue-50 border-blue-200'
-      } ${!isNext ? 'mb-4' : ''}`}
+          ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200 ring-2 ring-red-500/10'
+          : 'bg-white border-gray-200 hover:border-blue-300'
+      } ${!isNext ? 'mb-3' : ''}`}
     >
-      {/* Skip Button - Top Left */}
-      {!showOnlyOutOfStock && (
-        <button
-          onClick={(e) => handleSkip(e, order.id)}
-          className="absolute -top-2 -left-2 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 shadow-sm transition-all z-10"
-          title="Skip this order"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 ml-2">
-        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">
-          {showOnlyOutOfStock ? 'Out of Stock' : isNext ? `Up Next ${order.status === 'assigned' ? '' : '(Unassigned)'}` : 'Pending'}
-        </h3>
-        {order.urgent && (
-          <div className="flex items-center gap-1 px-2 py-0.5 bg-red-600 text-white rounded-lg animate-pulse">
-            <AlertCircle className="w-3 h-3" />
-            <span className="text-[8px] font-black uppercase tracking-wider">Urgent</span>
-          </div>
-        )}
+      {/* Ship By Date & Order ID Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1.5">
+          <Calendar className="w-3 h-3 text-blue-600" />
+          <span className="text-[9px] font-bold text-blue-700">
+            Ship By: {order.ship_by_date || 'N/A'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {order.urgent && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white rounded shadow-sm">
+              <AlertCircle className="w-3 h-3" />
+              <span className="text-[8px] font-black uppercase tracking-wider">Urgent</span>
+            </div>
+          )}
+          {showOnlyOutOfStock && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm">
+              <AlertCircle className="w-3 h-3" />
+              <span className="text-[8px] font-black uppercase tracking-wider">Out of Stock</span>
+            </div>
+          )}
+          <span className="text-[9px] font-mono font-black text-gray-700">
+            #{order.order_id}
+          </span>
+        </div>
       </div>
 
       {/* Action Buttons Row */}
       {!showOnlyOutOfStock && (
-        <div className="flex flex-col gap-2 mb-3">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 mb-5">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setShowMissingPartsInput(showMissingPartsInput === order.id ? null : order.id)}
-              className="flex-1 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+              className="flex-1 py-3 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all"
             >
-              What's out of stock
+              Out of Stock
             </button>
             <button
               onClick={() => handleStart(order)}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/30"
+              className="flex items-center justify-center gap-2 px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
             >
-              <Play className="w-3 h-3" />
+              <Play className="w-4 h-4" />
               Start
             </button>
           </div>
@@ -193,20 +196,20 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                     value={missingPartsReason}
                     onChange={(e) => setMissingPartsReason(e.target.value)}
                     placeholder="What parts are missing?"
-                    className="w-full px-3 py-2 bg-white border border-amber-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder:text-gray-400"
+                    className="w-full px-3 py-2 bg-white border border-orange-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 placeholder:text-gray-400"
                     autoFocus
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={() => setShowMissingPartsInput(null)}
-                      className="flex-1 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-[9px] font-black uppercase tracking-widest"
+                      className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => handleMissingParts(order.id)}
                       disabled={!missingPartsReason.trim()}
-                      className="flex-1 py-1.5 bg-amber-500 text-white rounded-lg text-[9px] font-black uppercase tracking-widest disabled:opacity-50"
+                      className="flex-1 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-[9px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
                       Submit
                     </button>
@@ -218,34 +221,33 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </div>
       )}
 
-      {/* Info Row */}
-      <div className="flex items-center justify-between mb-3 text-[10px]">
-        <div className="flex items-center gap-1.5 text-gray-600">
-          <Calendar className="w-3 h-3" />
-          <span className="font-semibold">
-            Ship By: {order.ship_by_date || 'N/A'}
-          </span>
-        </div>
-        <span className="font-mono font-bold text-gray-700">
-          #{order.order_id}
-        </span>
-      </div>
-
       {/* Product Title */}
-      <div className="mb-2">
-        <h4 className="text-sm font-bold text-gray-900 leading-tight">
+      <div className="mb-4">
+        <h4 className="text-base font-black text-gray-900 leading-tight">
           {order.product_title}
         </h4>
       </div>
 
-      {/* SKU */}
-      <div className="bg-white/60 rounded-lg px-2 py-1.5 border border-gray-200/50">
-        <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">
-          SKU
-        </p>
-        <p className="text-xs font-mono font-bold text-gray-800">
-          {order.sku}
-        </p>
+      {/* Info Grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {order.shipping_tracking_number && (
+          <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
+              Tracking #
+            </p>
+            <p className="text-xs font-mono font-bold text-gray-800">
+              {order.shipping_tracking_number.slice(-4)}
+            </p>
+          </div>
+        )}
+        <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+          <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
+            SKU
+          </p>
+          <p className="text-xs font-mono font-bold text-gray-800">
+            {order.sku}
+          </p>
+        </div>
       </div>
     </motion.div>
   );
