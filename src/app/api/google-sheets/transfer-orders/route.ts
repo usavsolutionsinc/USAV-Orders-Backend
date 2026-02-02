@@ -82,10 +82,15 @@ export async function POST(req: NextRequest) {
         const existingOrdersInDb = await db.select({ tracking: ordersTable.shippingTrackingNumber }).from(ordersTable);
         const existingShippedInDb = await db.select({ tracking: shippedTable.shippingTrackingNumber }).from(shippedTable);
         
-        const existingTrackingInNeon = new Set([
-            ...existingOrdersInDb.map(o => getLastEightDigits(o.tracking)),
-            ...existingShippedInDb.map(s => getLastEightDigits(s.tracking))
-        ].filter(t => t));
+        const existingTrackingInNeon = new Set<string>();
+        existingOrdersInDb.forEach(o => {
+            const last8 = getLastEightDigits(o.tracking);
+            if (last8) existingTrackingInNeon.add(last8);
+        });
+        existingShippedInDb.forEach(s => {
+            const last8 = getLastEightDigits(s.tracking);
+            if (last8) existingTrackingInNeon.add(last8);
+        });
 
         // 3. Also check Google Sheets as fallback
         const shippedTrackingResponse = await sheets.spreadsheets.values.get({
@@ -93,15 +98,19 @@ export async function POST(req: NextRequest) {
             range: `${shippedSheetName}!E2:E`, // Column E is tracking in Shipped sheet
         });
 
-        const existingTrackingInSheets = new Set(
-            (shippedTrackingResponse.data.values || [])
-                .flat()
-                .filter(t => t && t.trim() !== '')
-                .map(t => getLastEightDigits(t))
-        );
+        const existingTrackingInSheets = new Set<string>();
+        (shippedTrackingResponse.data.values || [])
+            .flat()
+            .filter(t => t && t.trim() !== '')
+            .forEach(t => {
+                const last8 = getLastEightDigits(t);
+                if (last8) existingTrackingInSheets.add(last8);
+            });
 
         // Combine both sets for deduplication
-        const existingTracking = new Set([...existingTrackingInNeon, ...existingTrackingInSheets]);
+        const existingTracking = new Set<string>();
+        existingTrackingInNeon.forEach(t => existingTracking.add(t));
+        existingTrackingInSheets.forEach(t => existingTracking.add(t));
 
         // 4. Read the source tab from Master Sheet
         const sourceDataResponse = await sheets.spreadsheets.values.get({
