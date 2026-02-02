@@ -22,123 +22,93 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
   price,
   startDateTime
 }) => {
+  // Format contact display as "Name, Phone, Email"
+  const contactDisplay = [name, contact].filter(Boolean).join(', ')
+  
   return (
-    <div className="w-[8.5in] min-h-[11in] mx-auto bg-white text-black p-8 print:p-6">
-      {/* Header */}
-      <h1 className="text-[22px] font-semibold mb-4">Repair Service</h1>
-
-      {/* RS # */}
-      <div className="mb-3 text-[14px]">
-        <span className="font-semibold">RS #:</span>
-        <span className="inline-block min-w-[250px] border-b border-black ml-2 px-1 pb-0.5">
-          {ticketNumber}
-        </span>
+    <div className="w-[8.5in] min-h-[11in] mx-auto bg-white text-gray-900 font-sans p-8 print:p-6">
+      
+      {/* Header Section */}
+      <div className="text-right mb-8">
+        <h2 className="font-bold text-lg">USAV Solutions</h2>
+        <p className="text-sm">16161 Gothard St. Suite A</p>
+        <p className="text-sm">Huntington Beach, CA 92647, United States</p>
+        <p className="text-sm">Tel: (714) 596-6888</p>
       </div>
 
-      {/* Spacer */}
-      <div className="h-3" />
-
-      {/* Product */}
-      <div className="mb-3 text-[14px]">
-        <span className="font-semibold">Product:</span>
-        <span className="inline-block min-w-[250px] border-b border-black ml-2 px-1 pb-0.5">
-          {productTitle}
-        </span>
+      {/* Title and Ticket Number */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">Repair Service</h1>
+        <p className="text-lg font-semibold">{ticketNumber} - Repair Ticket Number</p>
       </div>
 
-      {/* Issue */}
-      <div className="mb-1 text-[14px]">
-        <span className="font-semibold">Issue:</span>
-      </div>
-      <div className="border border-black min-h-[80px] px-2 py-1 text-[14px] whitespace-pre-wrap">
-        {issue}
-      </div>
-
-      {/* Serial # */}
-      <div className="h-3" />
-      <div className="mb-3 text-[14px]">
-        <span className="font-semibold">Serial #</span>
-        <span className="inline-block min-w-[250px] border-b border-black ml-2 px-1 pb-0.5">
-          {serialNumber}
-        </span>
-      </div>
-
-      {/* Name */}
-      <div className="mb-3 text-[14px]">
-        <span className="font-semibold">Name:</span>
-        <span className="inline-block min-w-[250px] border-b border-black ml-2 px-1 pb-0.5">
-          {name}
-        </span>
+      {/* Information Table */}
+      <div className="border-t border-l border-black mb-6">
+        <div className="flex border-b border-r border-black">
+          <div className="w-40 p-2 font-bold bg-gray-50 border-r border-black">Product Title:</div>
+          <div className="flex-1 p-2">{productTitle}</div>
+        </div>
+        <div className="flex border-b border-r border-black">
+          <div className="w-40 p-2 font-bold bg-gray-50 border-r border-black">SN & Issues:</div>
+          <div className="flex-1 p-2">{serialNumber}, {issue}</div>
+        </div>
+        <div className="flex border-b border-r border-black">
+          <div className="w-40 p-2 font-bold bg-gray-50 border-r border-black">Contact Info:</div>
+          <div className="flex-1 p-2">{contactDisplay}</div>
+        </div>
       </div>
 
-      {/* Contact */}
-      <div className="mb-3 text-[14px]">
-        <span className="font-semibold">Contact:</span>
-        <span className="inline-block min-w-[250px] border-b border-black ml-2 px-1 pb-0.5">
-          {contact}
-        </span>
+      {/* Price Section */}
+      <div className="mb-6">
+        <p className="text-lg font-medium mb-2">
+          <span className="font-bold">${price}</span> - Price Paid at Pick-up
+        </p>
+        <p className="text-base font-medium">
+          Card / Cash - Payment Method
+        </p>
       </div>
 
-      {/* Spacer */}
-      <div className="h-3" />
-
-      {/* Price */}
-      <div className="mb-3 text-[14px]">
-        <span className="inline-block min-w-[250px] border-b border-black px-1 pb-0.5">
-          {price}
-        </span>
-        <span> - Price Paid at Pick-up</span>
+      {/* Terms & Warranty */}
+      <div className="mb-10 text-sm leading-relaxed">
+        <p className="mb-4">
+          Your Bose product has been received into our repair center. Under normal circumstances it will 
+          be repaired within the next 3-10 working days and returned to you at the address above.
+        </p>
+        <p className="font-bold border-b border-black inline-block">
+          There is a 30 day Warranty on all our repair services.
+        </p>
       </div>
 
-      {/* Info text */}
-      <div className="h-3" />
-      <p className="text-[12px] leading-snug mb-2">
-        Your Bose product has been received into our repair center. Under normal
-        circumstances it will be repaired within the next 3–10 working days and
-        returned to you at the address above.
-      </p>
-      <p className="text-[12px] leading-snug mb-6">
-        There is a 30 day Warranty on all our repair services.
-      </p>
-
-      {/* Drop Off */}
-      <div className="h-3" />
-      <div className="mb-2 text-[14px]">
-        Drop Off X{' '}
-        <span className="inline-block w-[260px] border-b border-black align-middle" />{' '}
-        Date:{' '}
-        <span className="inline-block min-w-[160px] border-b border-black px-1 pb-0.5 align-middle">
-          {startDateTime}
-        </span>
-      </div>
-      <p className="text-[12px] leading-snug mb-8">
-        By signing above you agree to the listed price and any unexpected delays in the
-        repair process.
-      </p>
-
-      {/* Repaired / Who / Date (blank in this version) */}
-      <div className="mb-6 text-[14px]">
-        <span className="font-semibold">Repaired:</span>
+      {/* Drop Off Section */}
+      <div className="mb-10 mt-28">
+        <div className="flex items-end gap-4 mb-2">
+          <span className="font-bold whitespace-nowrap">Drop Off X</span>
+          <div className="flex-1 border-b border-black" style={{ height: '24px' }}></div>
+          <span className="font-bold whitespace-nowrap">Date: {startDateTime}</span>
+        </div>
+        <p className="text-xs italic">
+          By signing above you agree to the listed price and any unexpected delays in the repair process.
+        </p>
       </div>
 
-      <div className="mb-3 text-[14px]">
-        <span className="font-semibold">Who:</span>
-        <span className="inline-block min-w-[250px] border-b border-black ml-2 px-1 pb-0.5" />
-      </div>
-      <div className="mb-8 text-[14px]">
-        <span className="font-semibold">Date:</span>
-        <span className="inline-block min-w-[250px] border-b border-black ml-2 px-1 pb-0.5" />
-      </div>
-
-      {/* Pick Up */}
-      <div className="mb-4 text-[14px]">
-        Pick Up X{' '}
-        <span className="inline-block w-[260px] border-b border-black align-middle" />{' '}
-        Date: ____/_____/_____
+      {/* Internal Use Table */}
+      <div className="border-t border-l border-black mb-10 flex">
+        <div className="flex-1 border-r border-b border-black p-2 font-bold">Part Repaired:</div>
+        <div className="flex-1 border-r border-b border-black p-2"></div>
+        <div className="flex-1 border-r border-b border-black p-2 font-bold">Who:</div>
+        <div className="flex-1 border-r border-b border-black p-2 font-bold">Date:</div>
       </div>
 
-      {/* Footer */}
-      <p className="text-[12px] leading-snug">Enjoy your repaired unit!</p>
+      {/* Pick Up Section */}
+      <div className="mt-32">
+        <div className="flex items-end gap-4 mb-4">
+          <span className="font-bold whitespace-nowrap">Pick Up X</span>
+          <div className="flex-1 border-b border-black" style={{ height: '24px' }}></div>
+          <span className="font-bold whitespace-nowrap">Date: ____ / ____ / ________</span>
+        </div>
+        <p className="text-center font-bold text-xl mt-8">Enjoy your repaired unit!</p>
+      </div>
+
     </div>
   )
 }

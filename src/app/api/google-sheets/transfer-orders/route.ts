@@ -78,20 +78,32 @@ export async function POST(req: NextRequest) {
         const ordersSheetName = destSheets.find(s => s.properties?.sheetId === ORDERS_GID)?.properties?.title || 'orders';
         const shippedSheetName = destSheets.find(s => s.properties?.sheetId === SHIPPED_GID)?.properties?.title || 'shipped';
 
-        // 2. Read the Shipped sheet for existing tracking numbers to deduplicate
+        // 2. Check NEON DB for existing tracking numbers (primary check)
+        const existingOrdersInDb = await db.select({ tracking: ordersTable.shippingTrackingNumber }).from(ordersTable);
+        const existingShippedInDb = await db.select({ tracking: shippedTable.shippingTrackingNumber }).from(shippedTable);
+        
+        const existingTrackingInNeon = new Set([
+            ...existingOrdersInDb.map(o => getLastEightDigits(o.tracking)),
+            ...existingShippedInDb.map(s => getLastEightDigits(s.tracking))
+        ].filter(t => t));
+
+        // 3. Also check Google Sheets as fallback
         const shippedTrackingResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: DEST_SPREADSHEET_ID,
             range: `${shippedSheetName}!E2:E`, // Column E is tracking in Shipped sheet
         });
 
-        const existingTrackingInShipped = new Set(
+        const existingTrackingInSheets = new Set(
             (shippedTrackingResponse.data.values || [])
                 .flat()
                 .filter(t => t && t.trim() !== '')
                 .map(t => getLastEightDigits(t))
         );
 
-        // 3. Read the source tab from Master Sheet
+        // Combine both sets for deduplication
+        const existingTracking = new Set([...existingTrackingInNeon, ...existingTrackingInSheets]);
+
+        // 4. Read the source tab from Master Sheet
         const sourceDataResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: SOURCE_SPREADSHEET_ID,
             range: `${targetTabName}!A1:Z`,
@@ -126,25 +138,25 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // 4. Process rows (only with tracking that contains numbers and NOT already in Shipped)
+        // 5. Process rows (only with tracking that contains numbers and NOT already in NEON DB or Sheets)
         const filteredSourceRows = sourceRows.slice(1).filter(row => {
             const tracking = row[colIndices.tracking];
             if (!tracking || tracking.trim() === '') return false;
             // Only include tracking numbers that contain at least one digit (ignore pure letter entries)
             if (!hasNumbers(tracking)) return false;
-            return !existingTrackingInShipped.has(getLastEightDigits(tracking));
+            return !existingTracking.has(getLastEightDigits(tracking));
         });
 
         if (filteredSourceRows.length === 0) {
             return NextResponse.json({ 
                 success: true, 
-                message: 'No new rows (not in Shipped) found', 
+                message: 'No new rows (not in NEON DB or Shipped) found', 
                 rowCount: 0, 
                 tabName: targetTabName 
             });
         }
 
-        // Prepare data for Google Sheets
+        // Prepare data for Google Sheets (legacy support)
         const processedOrdersRows = filteredSourceRows.map(row => {
             const destRow = new Array(10).fill(''); // A to J
             destRow[0] = row[colIndices.shipByDate] || '';
@@ -192,7 +204,10 @@ export async function POST(req: NextRequest) {
             sku: row[colIndices.usavSku] || '',
         }));
 
-        // 5. Concurrent upload to Sheets and DB
+        // 6. Insert into NEON DB (primary) and Google Sheets (legacy backup)
+        const dbInsertOrders = db.insert(ordersTable).values(ordersToInsert);
+        const dbInsertShipped = db.insert(shippedTable).values(shippedToInsert);
+
         const appendOrders = sheets.spreadsheets.values.append({
             spreadsheetId: DEST_SPREADSHEET_ID,
             range: `${ordersSheetName}!A:A`, 
@@ -207,10 +222,8 @@ export async function POST(req: NextRequest) {
             requestBody: { values: processedShippedRows },
         });
 
-        const dbInsertOrders = db.insert(ordersTable).values(ordersToInsert);
-        const dbInsertShipped = db.insert(shippedTable).values(shippedToInsert);
-
-        await Promise.all([appendOrders, appendShipped, dbInsertOrders, dbInsertShipped]);
+        // Insert to NEON first (source of truth), then Google Sheets (legacy)
+        await Promise.all([dbInsertOrders, dbInsertShipped, appendOrders, appendShipped]);
 
         return NextResponse.json({ 
             success: true, 

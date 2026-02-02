@@ -137,7 +137,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       } ${!isNext ? 'mb-3' : ''}`}
     >
       {/* Ship By Date & Order ID Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
           <Calendar className="w-3 h-3 text-blue-600" />
           <span className="text-[9px] font-bold text-blue-700">

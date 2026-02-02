@@ -51,9 +51,21 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Match sheets to tables dynamically
+        // EXCLUDE tech tables and repair_service - fully transitioned to tech website
+        // Packer tables are still synced from Google Sheets
+        const excludedTables = [
+            'tech_1', 'tech_2', 'tech_3', 'tech_4',
+            'repair_service'
+        ];
+
         const sheetsToSync = existingSheetNames.map(sheetName => {
             const matchingTable = tablesInfo.find(t => t.table_name.toLowerCase() === sheetName.toLowerCase());
             if (matchingTable) {
+                // Skip excluded tables (tech and repair_service only)
+                if (excludedTables.includes(matchingTable.table_name.toLowerCase())) {
+                    return null;
+                }
+
                 // Handle both array and PostgreSQL array string formats
                 let columns: string[] = [];
                 if (Array.isArray(matchingTable.columns)) {

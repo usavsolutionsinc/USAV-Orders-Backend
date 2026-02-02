@@ -83,14 +83,14 @@ export async function POST(req: NextRequest) {
                     previous_status: currentRecord && currentRecord.length > 0 ? currentRecord[0].status : 'pending'
                 });
 
-                // Update serial_number, tested_by, status, status_history, and test_date_time
+                // Update serial_number, tested_by, status, status_history, and test_date_time (using tech table timestamp)
                 await db.execute(sql.raw(`
                     UPDATE shipped
                     SET serial_number = '${serial}',
                         tested_by = '${userName}',
                         status = 'tested',
                         status_history = '${JSON.stringify(statusHistory).replace(/'/g, "''")}',
-                        test_date_time = '${now}'
+                        test_date_time = '${timestamp}'
                     WHERE RIGHT(shipping_tracking_number, 8) = '${last8}'
                 `));
             }
