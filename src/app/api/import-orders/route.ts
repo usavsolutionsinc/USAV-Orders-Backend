@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
-import { orders as ordersTable, shipped as shippedTable } from '@/lib/drizzle/schema';
+import { orders as ordersTable } from '@/lib/drizzle/schema';
 
-const ORDERS_GID = 719315456;
+// SHIPPED_GID syncs to orders table in Neon DB
 const SHIPPED_GID = 316829503;
 
 export async function POST(request: NextRequest) {
@@ -20,73 +20,40 @@ export async function POST(request: NextRequest) {
         const sheets = google.sheets({ version: 'v4', auth });
         const spreadsheetId = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
-        // Find destination sheet names by GID
+        // Find shipped sheet name by GID
         const destSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
         const destSheets = destSpreadsheet.data.sheets || [];
-        const ordersSheetName = destSheets.find(s => s.properties?.sheetId === ORDERS_GID)?.properties?.title || 'Orders';
-        const shippedSheetName = destSheets.find(s => s.properties?.sheetId === SHIPPED_GID)?.properties?.title || 'Shipped';
+        const shippedSheetName = destSheets.find(s => s.properties?.sheetId === SHIPPED_GID)?.properties?.title || 'shipped';
 
-        // Prepare the values for Google Sheets - A: date_time, B: receiving_tracking_number, C: carrier, D: quantity
-        const rowsToAppend = data.map((item: any) => [
-            item.shipByDate || '',   // A
-            item.tracking || '',     // B
-            '',                      // C
-            item.quantity || ''      // D
-        ]);
-
+        // Prepare the values for Shipped Google Sheet
+        // Columns: A=pack_date_time, B=order_id, C=product_title, D=quantity, E=condition, F=tracking, G=serial, H=packed_by, I=tested_by, J=sku
         const shippedRowsToAppend = data.map((item: any) => [
-            '',                // 1 - Date / Time (empty initially)
-            item.orderNumber,  // 2 - Order ID
-            item.itemTitle,    // 3 - Product Title
-            item.condition,    // 4 - Sent (product condition)
-            item.tracking,     // 5 - Shipping TRK #
-            '',                // 6 - Serial Number
-            '',                // 7 - Box
-            '',                // 8 - By
-            '',                // 9 - SKU
-            ''                 // 10 - Status
+            '',                      // A - pack_date_time (empty initially, filled when packed)
+            item.orderNumber || '',  // B - order_id
+            item.itemTitle || '',    // C - product_title
+            item.quantity || '',     // D - quantity
+            item.condition || '',    // E - condition
+            item.tracking || '',     // F - shipping_tracking_number
+            '',                      // G - serial_number (filled by tech)
+            '',                      // H - packed_by (filled by packer)
+            '',                      // I - tested_by (filled by tech)
+            item.usavSku || ''       // J - sku
         ]);
 
-        // Prepare data for Neon DB - only columns A-J from sheet
-        // Columns: shipByDate, orderId, productTitle, quantity, sku, condition, shippingTrackingNumber, daysLate, outOfStock, notes
+        // Prepare data for Neon DB - insert into orders table (from shipped sheet data)
         const ordersToInsert = data.map((item: any) => ({
+            orderId: item.orderNumber || '',
+            productTitle: item.itemTitle || '',
+            sku: item.usavSku || '',
+            condition: item.condition || '',
+            shippingTrackingNumber: item.tracking || '',
             shipByDate: item.shipByDate || '',
-            orderId: item.orderNumber || '',
-            productTitle: item.itemTitle || '',
-            quantity: item.quantity || '',
-            sku: item.usavSku || '',
-            condition: item.condition || '',
-            shippingTrackingNumber: item.tracking || '',
-            daysLate: '',
-            outOfStock: '',
             notes: item.note || '',
-            urgent: 'false', // TEXT type in DB
-            status: 'unassigned', // Default status
+            status: 'unassigned',
+            isShipped: false, // New orders are not shipped yet
         }));
 
-        const shippedToInsert = data.map((item: any) => ({
-            dateTime: '',                                    // Will be set when packer confirms shipment
-            orderId: item.orderNumber || '',
-            productTitle: item.itemTitle || '',
-            condition: item.condition || '',
-            shippingTrackingNumber: item.tracking || '',
-            serialNumber: '',                                // Will be filled by tech scan
-            boxedBy: '',                                     // Will be filled by packer
-            testedBy: '',                                    // Will be filled by tech scan
-            sku: item.usavSku || '',
-            status: 'pending',
-            statusHistory: '[]',
-        }));
-
-        const appendOrders = sheets.spreadsheets.values.append({
-            spreadsheetId,
-            range: `${ordersSheetName}!A:D`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: {
-                values: rowsToAppend,
-            },
-        });
-
+        // Append to Shipped sheet and insert into orders table in DB
         const appendShipped = sheets.spreadsheets.values.append({
             spreadsheetId,
             range: `${shippedSheetName}!A:J`,
@@ -97,9 +64,9 @@ export async function POST(request: NextRequest) {
         });
 
         const dbInsertOrders = db.insert(ordersTable).values(ordersToInsert);
-        const dbInsertShipped = db.insert(shippedTable).values(shippedToInsert);
 
-        await Promise.all([appendOrders, appendShipped, dbInsertOrders, dbInsertShipped]);
+        // Append to shipped sheet (not orders sheet) and orders DB table
+        await Promise.all([appendShipped, dbInsertOrders]);
 
         // Automatically run calculateLateOrders after import
         try {

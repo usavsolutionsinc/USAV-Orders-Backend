@@ -67,10 +67,13 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Match sheets to tables dynamically
-        // EXCLUDE tech/packer tables and repair_service - they update orders table
+        // EXCLUDE tech/packer/shipped tables and repair_service - they update orders table
+        // EXCLUDE orders table - it's NOT synced from the orders sheet
         const excludedTables = [
             'tech_1', 'tech_2', 'tech_3', 'tech_4',
             'packer_1', 'packer_2', 'packer_3',
+            'shipped',
+            'orders',  // Orders sheet does NOT sync to orders table
             'repair_service'
         ];
 
@@ -94,16 +97,9 @@ export async function POST(req: NextRequest) {
                 if (columns.length === 0) return null;
 
                 // Filter out primary keys and auto-generated columns
-                // Also filter out app-managed columns for the orders table
                 let columnNames = columns.filter((col: string) => 
                     !['col_1', 'id', 'created_at', 'updated_at'].includes(col.toLowerCase())
                 );
-
-                if (matchingTable.table_name.toLowerCase() === 'orders') {
-                    columnNames = columnNames.filter((col: string) => 
-                        !['assigned_to', 'status', 'urgent'].includes(col.toLowerCase())
-                    );
-                }
                 
                 return {
                     name: sheetName,
