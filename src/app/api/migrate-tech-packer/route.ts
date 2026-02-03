@@ -222,10 +222,7 @@ export async function POST() {
                             ELSE t.date_time
                         END,
                         'user', 'Michael',
-                        'previous_status', COALESCE(
-                            (o.status_history->-1->>'status')::text,
-                            null
-                        )
+                        'previous_status', o.status_history->-1->>'status'
                     )::jsonb
             FROM tech_1 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
@@ -253,10 +250,7 @@ export async function POST() {
                             ELSE t.date_time
                         END,
                         'user', 'Thuc',
-                        'previous_status', COALESCE(
-                            (o.status_history->-1->>'status')::text,
-                            null
-                        )
+                        'previous_status', o.status_history->-1->>'status'
                     )::jsonb
             FROM tech_2 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
@@ -284,10 +278,7 @@ export async function POST() {
                             ELSE t.date_time
                         END,
                         'user', 'Sang',
-                        'previous_status', COALESCE(
-                            (o.status_history->-1->>'status')::text,
-                            null
-                        )
+                        'previous_status', o.status_history->-1->>'status'
                     )::jsonb
             FROM tech_3 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
@@ -348,10 +339,7 @@ export async function POST() {
                             ELSE p.date_time
                         END,
                         'user', 'Tuan',
-                        'previous_status', COALESCE(
-                            (o.status_history->-1->>'status')::text,
-                            null
-                        )
+                        'previous_status', o.status_history->-1->>'status'
                     )::jsonb
             FROM packer_1 p
             WHERE o.shipping_tracking_number = p.shipping_tracking_number
@@ -380,10 +368,7 @@ export async function POST() {
                             ELSE p.date_time
                         END,
                         'user', 'Thuy',
-                        'previous_status', COALESCE(
-                            (o.status_history->-1->>'status')::text,
-                            null
-                        )
+                        'previous_status', o.status_history->-1->>'status'
                     )::jsonb
             FROM packer_2 p
             WHERE o.shipping_tracking_number = p.shipping_tracking_number
