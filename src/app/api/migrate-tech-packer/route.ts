@@ -213,8 +213,8 @@ export async function POST() {
             SET 
                 tested_by = $1,
                 test_date_time = t.date_time,
-                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
-                    jsonb_build_object(
+                status_history = (COALESCE(o.status_history, '[]'::jsonb) || 
+                    to_jsonb(json_build_object(
                         'status', 'tested',
                         'timestamp', CASE 
                             WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
@@ -223,7 +223,7 @@ export async function POST() {
                         END,
                         'user', 'Michael',
                         'previous_status', o.status_history->-1->>'status'
-                    )::jsonb
+                    )))::jsonb
             FROM tech_1 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
                 AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -241,8 +241,8 @@ export async function POST() {
             SET 
                 tested_by = $1,
                 test_date_time = t.date_time,
-                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
-                    jsonb_build_object(
+                status_history = (COALESCE(o.status_history, '[]'::jsonb) || 
+                    to_jsonb(json_build_object(
                         'status', 'tested',
                         'timestamp', CASE 
                             WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
@@ -251,7 +251,7 @@ export async function POST() {
                         END,
                         'user', 'Thuc',
                         'previous_status', o.status_history->-1->>'status'
-                    )::jsonb
+                    )))::jsonb
             FROM tech_2 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
                 AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -269,8 +269,8 @@ export async function POST() {
             SET 
                 tested_by = $1,
                 test_date_time = t.date_time,
-                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
-                    jsonb_build_object(
+                status_history = (COALESCE(o.status_history, '[]'::jsonb) || 
+                    to_jsonb(json_build_object(
                         'status', 'tested',
                         'timestamp', CASE 
                             WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
@@ -279,7 +279,7 @@ export async function POST() {
                         END,
                         'user', 'Sang',
                         'previous_status', o.status_history->-1->>'status'
-                    )::jsonb
+                    )))::jsonb
             FROM tech_3 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
                 AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -330,8 +330,8 @@ export async function POST() {
                 packed_by = $1,
                 pack_date_time = p.date_time,
                 is_shipped = true,
-                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
-                    jsonb_build_object(
+                status_history = (COALESCE(o.status_history, '[]'::jsonb) || 
+                    to_jsonb(json_build_object(
                         'status', 'packed',
                         'timestamp', CASE 
                             WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
@@ -340,7 +340,7 @@ export async function POST() {
                         END,
                         'user', 'Tuan',
                         'previous_status', o.status_history->-1->>'status'
-                    )::jsonb
+                    )))::jsonb
             FROM packer_1 p
             WHERE o.shipping_tracking_number = p.shipping_tracking_number
                 AND p.shipping_tracking_number NOT LIKE 'X00%'
@@ -359,8 +359,8 @@ export async function POST() {
                 packed_by = $1,
                 pack_date_time = p.date_time,
                 is_shipped = true,
-                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
-                    jsonb_build_object(
+                status_history = (COALESCE(o.status_history, '[]'::jsonb) || 
+                    to_jsonb(json_build_object(
                         'status', 'packed',
                         'timestamp', CASE 
                             WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
@@ -369,7 +369,7 @@ export async function POST() {
                         END,
                         'user', 'Thuy',
                         'previous_status', o.status_history->-1->>'status'
-                    )::jsonb
+                    )))::jsonb
             FROM packer_2 p
             WHERE o.shipping_tracking_number = p.shipping_tracking_number
                 AND p.shipping_tracking_number NOT LIKE 'X00%'
