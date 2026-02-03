@@ -14,7 +14,6 @@ export interface ShippedOrder {
   test_date_time: string;
   packed_by: number; // Staff ID (changed from boxed_by)
   pack_date_time: string;
-  days_late: string;
   notes: string;
   status_history: any; // JSONB status history
 }
@@ -40,26 +39,24 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
         o.packed_by,
         s2.name as packed_by_name,
         o.pack_date_time,
-        o.days_late,
         o.notes,
         o.status_history,
         o.is_shipped
       FROM orders o
       LEFT JOIN staff s1 ON o.tested_by = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
-      WHERE o.is_shipped IS TRUE 
+      WHERE (o.is_shipped = true OR o.is_shipped::text = 'true')
         AND o.packed_by IS NOT NULL
-        AND o.pack_date_time IS NOT NULL
-        AND o.pack_date_time != '1'
-      ORDER BY o.pack_date_time DESC, o.id DESC
+      ORDER BY o.id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
 
     return result.rows;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching shipped orders:', error);
-    throw new Error('Failed to fetch shipped orders');
+    console.error('Error details:', error.message, error.stack);
+    throw error;
   }
 }
 
@@ -84,13 +81,13 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         o.packed_by,
         s2.name as packed_by_name,
         o.pack_date_time,
-        o.days_late,
         o.notes,
-        o.status_history
+        o.status_history,
+        o.is_shipped
       FROM orders o
       LEFT JOIN staff s1 ON o.tested_by = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
-      WHERE o.id = $1 AND o.is_shipped = true`,
+      WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true`,
       [id]
     );
 
@@ -123,13 +120,14 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
         o.packed_by,
         s2.name as packed_by_name,
         o.pack_date_time,
-        o.days_late,
         o.notes,
-        o.status_history
+        o.status_history,
+        o.is_shipped
       FROM orders o
       LEFT JOIN staff s1 ON o.tested_by = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
-      WHERE o.is_shipped = true
+      WHERE COALESCE(o.is_shipped, false) = true
+        AND o.packed_by IS NOT NULL
         AND (
           o.shipping_tracking_number ILIKE $1
           OR o.order_id ILIKE $1
@@ -137,7 +135,13 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           OR o.serial_number ILIKE $1
           OR o.sku ILIKE $1
         )
-      ORDER BY o.id DESC
+      ORDER BY 
+        CASE 
+          WHEN o.pack_date_time IS NOT NULL AND o.pack_date_time != '1' 
+          THEN o.pack_date_time::text 
+          ELSE '9999-12-31' 
+        END DESC,
+        o.id DESC
       LIMIT 100`,
       [searchTerm]
     );
@@ -174,7 +178,7 @@ export async function updateShippedOrderField(
     }
 
     await pool.query(
-      `UPDATE orders SET ${field} = $1 WHERE id = $2 AND is_shipped = true`,
+      `UPDATE orders SET ${field} = $1 WHERE id = $2 AND COALESCE(is_shipped, false) = true`,
       [value, id]
     );
   } catch (error) {
@@ -205,13 +209,14 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
         o.packed_by,
         s2.name as packed_by_name,
         o.pack_date_time,
-        o.days_late,
         o.notes,
-        o.status_history
+        o.status_history,
+        o.is_shipped
       FROM orders o
       LEFT JOIN staff s1 ON o.tested_by = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
-      WHERE o.is_shipped = true
+      WHERE COALESCE(o.is_shipped, false) = true
+        AND o.packed_by IS NOT NULL
         AND RIGHT(o.shipping_tracking_number, 8) = $1
       LIMIT 1`,
       [last8]
@@ -230,7 +235,10 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
 export async function getShippedOrdersCount(): Promise<number> {
   try {
     const result = await pool.query(
-      'SELECT COUNT(*) as count FROM orders WHERE is_shipped = true'
+      `SELECT COUNT(*) as count 
+       FROM orders 
+       WHERE COALESCE(is_shipped, false) = true
+         AND packed_by IS NOT NULL`
     );
     return parseInt(result.rows[0].count);
   } catch (error) {

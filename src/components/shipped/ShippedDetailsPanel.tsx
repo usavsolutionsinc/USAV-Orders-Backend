@@ -17,6 +17,21 @@ interface DurationData {
   testingDuration?: string;
 }
 
+// Hard-coded staff ID to name mapping
+const STAFF_NAMES: { [key: number]: string } = {
+  1: 'Michael',
+  2: 'Thuc',
+  3: 'Sang',
+  4: 'Tuan',
+  5: 'Thuy',
+  6: 'Cuong'
+};
+
+function getStaffName(staffId: number | null | undefined): string {
+  if (!staffId) return 'Not specified';
+  return STAFF_NAMES[staffId] || `Staff #${staffId}`;
+}
+
 // URL helpers for external links
 function getTrackingUrl(tracking: string): string | null {
   if (!tracking || tracking === 'Not available' || tracking === 'N/A') return null;
@@ -166,8 +181,8 @@ Order ID: ${shipped.order_id || 'Not available'}
 Tracking: ${shipped.shipping_tracking_number || 'Not available'}
 Product: ${shipped.product_title || 'Not provided'}
 Condition: ${shipped.condition || 'Not set'}
-Tested By: ${shipped.tested_by || 'Not specified'}
-Packed By: ${shipped.packed_by || 'Not specified'}
+Tested By: ${getStaffName(shipped.tested_by)}
+Packed By: ${getStaffName(shipped.packed_by)}
 Shipped: ${formattedDateTime}`;
 
     navigator.clipboard.writeText(allInfo);
@@ -318,7 +333,7 @@ Shipped: ${formattedDateTime}`;
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Packed By</span>
-                <p className="font-black text-sm text-gray-900">{shipped.packed_by || 'Not specified'}</p>
+                <p className="font-black text-sm text-gray-900">{getStaffName(shipped.packed_by)}</p>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Duration</span>
@@ -349,7 +364,7 @@ Shipped: ${formattedDateTime}`;
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Tested By</span>
-                <p className="font-black text-sm text-gray-900">{shipped.tested_by || 'Not specified'}</p>
+                <p className="font-black text-sm text-gray-900">{getStaffName(shipped.tested_by)}</p>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Duration</span>
