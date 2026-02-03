@@ -213,25 +213,31 @@ export async function POST() {
             SET 
                 tested_by = $1,
                 test_date_time = t.date_time,
-                status_history = (COALESCE(o.status_history, '[]'::jsonb) || 
-                    to_jsonb(json_build_object(
-                        'status', 'tested',
-                        'timestamp', CASE 
-                            WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
-                                to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
-                            ELSE t.date_time
-                        END,
-                        'user', 'Michael',
-                        'previous_status', o.status_history->-1->>'status'
-                    )))::jsonb
-                            'timestamp', CASE 
+                status_history = CASE 
+                    WHEN o.status_history IS NULL THEN 
+                        jsonb_build_array(
+                            jsonb_build_object(
+                                'status', 'tested',
+                                'time', CASE 
+                                    WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                                        to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                                    ELSE t.date_time
+                                END,
+                                'user', 'Michael',
+                                'previous_status', NULL
+                            )
+                        )
+                    ELSE 
+                        o.status_history || jsonb_build_object(
+                            'status', 'tested',
+                            'time', CASE 
                                 WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                     to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                 ELSE t.date_time
                             END,
                             'user', 'Michael',
                             'previous_status', o.status_history->-1->>'status'
-                        )::jsonb)::json
+                        )
                 END
             FROM tech_1 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
@@ -252,10 +258,10 @@ export async function POST() {
                 test_date_time = t.date_time,
                 status_history = CASE 
                     WHEN o.status_history IS NULL THEN 
-                        json_build_array(
-                            json_build_object(
+                        jsonb_build_array(
+                            jsonb_build_object(
                                 'status', 'tested',
-                                'timestamp', CASE 
+                                'time', CASE 
                                     WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                         to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                     ELSE t.date_time
@@ -263,18 +269,18 @@ export async function POST() {
                                 'user', 'Thuc',
                                 'previous_status', NULL
                             )
-                        )::json
+                        )
                     ELSE 
-                        (o.status_history::jsonb || json_build_object(
+                        o.status_history || jsonb_build_object(
                             'status', 'tested',
-                            'timestamp', CASE 
+                            'time', CASE 
                                 WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                     to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                 ELSE t.date_time
                             END,
                             'user', 'Thuc',
                             'previous_status', o.status_history->-1->>'status'
-                        )::jsonb)::json
+                        )
                 END
             FROM tech_2 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
@@ -295,10 +301,10 @@ export async function POST() {
                 test_date_time = t.date_time,
                 status_history = CASE 
                     WHEN o.status_history IS NULL THEN 
-                        json_build_array(
-                            json_build_object(
+                        jsonb_build_array(
+                            jsonb_build_object(
                                 'status', 'tested',
-                                'timestamp', CASE 
+                                'time', CASE 
                                     WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                         to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                     ELSE t.date_time
@@ -306,18 +312,18 @@ export async function POST() {
                                 'user', 'Sang',
                                 'previous_status', NULL
                             )
-                        )::json
+                        )
                     ELSE 
-                        (o.status_history::jsonb || json_build_object(
+                        o.status_history || jsonb_build_object(
                             'status', 'tested',
-                            'timestamp', CASE 
+                            'time', CASE 
                                 WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                     to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                 ELSE t.date_time
                             END,
                             'user', 'Sang',
                             'previous_status', o.status_history->-1->>'status'
-                        )::jsonb)::json
+                        )
                 END
             FROM tech_3 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
@@ -371,10 +377,10 @@ export async function POST() {
                 is_shipped = true,
                 status_history = CASE 
                     WHEN o.status_history IS NULL THEN 
-                        json_build_array(
-                            json_build_object(
+                        jsonb_build_array(
+                            jsonb_build_object(
                                 'status', 'packed',
-                                'timestamp', CASE 
+                                'time', CASE 
                                     WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                         to_timestamp(p.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                     ELSE p.date_time
@@ -382,18 +388,18 @@ export async function POST() {
                                 'user', 'Tuan',
                                 'previous_status', NULL
                             )
-                        )::json
+                        )
                     ELSE 
-                        (o.status_history::jsonb || json_build_object(
+                        o.status_history || jsonb_build_object(
                             'status', 'packed',
-                            'timestamp', CASE 
+                            'time', CASE 
                                 WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                     to_timestamp(p.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                 ELSE p.date_time
                             END,
                             'user', 'Tuan',
                             'previous_status', o.status_history->-1->>'status'
-                        )::jsonb)::json
+                        )
                 END
             FROM packer_1 p
             WHERE o.shipping_tracking_number = p.shipping_tracking_number
@@ -415,10 +421,10 @@ export async function POST() {
                 is_shipped = true,
                 status_history = CASE 
                     WHEN o.status_history IS NULL THEN 
-                        json_build_array(
-                            json_build_object(
+                        jsonb_build_array(
+                            jsonb_build_object(
                                 'status', 'packed',
-                                'timestamp', CASE 
+                                'time', CASE 
                                     WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                         to_timestamp(p.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                     ELSE p.date_time
@@ -426,18 +432,18 @@ export async function POST() {
                                 'user', 'Thuy',
                                 'previous_status', NULL
                             )
-                        )::json
+                        )
                     ELSE 
-                        (o.status_history::jsonb || json_build_object(
+                        o.status_history || jsonb_build_object(
                             'status', 'packed',
-                            'timestamp', CASE 
+                            'time', CASE 
                                 WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
                                     to_timestamp(p.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
                                 ELSE p.date_time
                             END,
                             'user', 'Thuy',
                             'previous_status', o.status_history->-1->>'status'
-                        )::jsonb)::json
+                        )
                 END
             FROM packer_2 p
             WHERE o.shipping_tracking_number = p.shipping_tracking_number
