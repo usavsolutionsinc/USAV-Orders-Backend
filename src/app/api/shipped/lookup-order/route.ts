@@ -17,12 +17,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Query shipped table for matching order_id
+    // Query orders table for matching order_id (shipped orders only)
     // Return product_title
     const result = await pool.query(
       `SELECT product_title
-       FROM shipped
-       WHERE order_id = $1
+       FROM orders
+       WHERE order_id = $1 AND is_shipped = true
        LIMIT 1`,
       [orderId]
     );

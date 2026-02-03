@@ -27,6 +27,23 @@ export async function POST(req: NextRequest) {
         });
         const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
 
+        // Tech and packer sheets update orders table directly
+        const techSheets = ['tech_1', 'tech_2', 'tech_3', 'tech_4'];
+        const packerSheets = ['packer_1', 'packer_2', 'packer_3'];
+
+        const techNames: { [key: string]: string } = {
+            'tech_1': 'Michael',
+            'tech_2': 'Thuc',
+            'tech_3': 'Sang',
+            'tech_4': 'Tech 4'
+        };
+
+        const packerNames: { [key: string]: string } = {
+            'packer_1': 'Tuan',
+            'packer_2': 'Thuy',
+            'packer_3': 'Packer 3'
+        };
+
         // 2. Get all tables and their columns from Neon DB
         const client = await pool.connect();
         let tablesInfo: any[] = [];
@@ -51,10 +68,10 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Match sheets to tables dynamically
-        // EXCLUDE tech tables and repair_service - fully transitioned to tech website
-        // Packer tables are still synced from Google Sheets
+        // EXCLUDE tech/packer tables and repair_service - they update orders table
         const excludedTables = [
             'tech_1', 'tech_2', 'tech_3', 'tech_4',
+            'packer_1', 'packer_2', 'packer_3',
             'repair_service'
         ];
 
@@ -98,7 +115,7 @@ export async function POST(req: NextRequest) {
             return null;
         }).filter((s): s is any => s !== null);
 
-        if (sheetsToSync.length === 0) {
+        if (sheetsToSync.length === 0 && !existingSheetNames.some(s => techSheets.includes(s.toLowerCase()) || packerSheets.includes(s.toLowerCase()))) {
             return NextResponse.json({ 
                 success: true, 
                 message: 'No matching sheets and tables found to sync.',
@@ -106,6 +123,115 @@ export async function POST(req: NextRequest) {
             });
         }
 
+        // Sync tech and packer sheets to orders table
+        const techPackerResults = [];
+
+        for (const sheetName of existingSheetNames) {
+            const lowerName = sheetName.toLowerCase();
+            
+            // Handle Tech Sheets
+            if (techSheets.includes(lowerName)) {
+                try {
+                    const response = await sheets.spreadsheets.values.get({
+                        spreadsheetId: targetSpreadsheetId,
+                        range: `${sheetName}!A2:D`, // A=date_time, C=tracking, D=serial
+                    });
+
+                    const rows = response.data.values || [];
+                    const techName = techNames[lowerName];
+                    const client = await pool.connect();
+                    let updatedCount = 0;
+
+                    try {
+                        for (const row of rows) {
+                            const dateTime = row[0] || ''; // Column A
+                            const tracking = row[2] || ''; // Column C
+                            const serial = row[3] || ''; // Column D
+
+                            if (tracking && serial && dateTime) {
+                                await client.query(`
+                                    UPDATE orders
+                                    SET serial_number = $1,
+                                        tested_by = $2,
+                                        test_date_time = $3
+                                    WHERE shipping_tracking_number = $4
+                                `, [serial, techName, dateTime, tracking]);
+                                updatedCount++;
+                            }
+                        }
+                        
+                        techPackerResults.push({ 
+                            sheet: sheetName, 
+                            table: 'orders (tech)', 
+                            status: 'updated', 
+                            rows: updatedCount 
+                        });
+                    } finally {
+                        client.release();
+                    }
+                } catch (err) {
+                    console.error(`Error syncing tech sheet ${sheetName}:`, err);
+                    techPackerResults.push({ 
+                        sheet: sheetName, 
+                        table: 'orders (tech)', 
+                        status: 'error', 
+                        error: err instanceof Error ? err.message : String(err) 
+                    });
+                }
+            }
+            
+            // Handle Packer Sheets
+            if (packerSheets.includes(lowerName)) {
+                try {
+                    const response = await sheets.spreadsheets.values.get({
+                        spreadsheetId: targetSpreadsheetId,
+                        range: `${sheetName}!A2:B`, // A=date_time, B=tracking
+                    });
+
+                    const rows = response.data.values || [];
+                    const packerName = packerNames[lowerName];
+                    const client = await pool.connect();
+                    let updatedCount = 0;
+
+                    try {
+                        for (const row of rows) {
+                            const dateTime = row[0] || ''; // Column A
+                            const tracking = row[1] || ''; // Column B
+
+                            if (tracking && dateTime) {
+                                await client.query(`
+                                    UPDATE orders
+                                    SET boxed_by = $1,
+                                        pack_date_time = $2,
+                                        is_shipped = true
+                                    WHERE shipping_tracking_number = $3
+                                `, [packerName, dateTime, tracking]);
+                                updatedCount++;
+                            }
+                        }
+                        
+                        techPackerResults.push({ 
+                            sheet: sheetName, 
+                            table: 'orders (packer)', 
+                            status: 'updated', 
+                            rows: updatedCount 
+                        });
+                    } finally {
+                        client.release();
+                    }
+                } catch (err) {
+                    console.error(`Error syncing packer sheet ${sheetName}:`, err);
+                    techPackerResults.push({ 
+                        sheet: sheetName, 
+                        table: 'orders (packer)', 
+                        status: 'error', 
+                        error: err instanceof Error ? err.message : String(err) 
+                    });
+                }
+            }
+        }
+
+        // Continue with normal table sync for other sheets
         const syncResults = await Promise.all(sheetsToSync.map(async (config) => {
             try {
                 const columnNames = config.columnNames;
@@ -196,10 +322,13 @@ export async function POST(req: NextRequest) {
             }
         }));
 
+        // Combine results
+        const allResults = [...techPackerResults, ...syncResults];
+
         return NextResponse.json({ 
             success: true, 
             message: 'Sync process completed',
-            results: syncResults,
+            results: allResults,
             timestamp: new Date().toISOString()
         });
 

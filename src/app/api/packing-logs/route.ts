@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
-import { packingLogs, shipped as shippedTable } from '@/lib/drizzle/schema';
-import { sql } from 'drizzle-orm';
+import { packingLogs } from '@/lib/drizzle/schema';
 import pool from '@/lib/db';
 
 export async function GET(req: NextRequest) {
@@ -11,41 +10,40 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        const tableName = `packer_${packerId}`;
+        // Map packerId to packer name
+        const packerNames: { [key: string]: string } = {
+            '1': 'Tuan',
+            '2': 'Thuy',
+            '3': 'Packer 3'
+        };
+        const packerName = packerNames[packerId] || 'Tuan';
 
-        // Check if table exists
-        const tableCheck = await db.execute(sql.raw(`
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_name = '${tableName}'
-            );
-        `));
-
-        if (!tableCheck[0] || !tableCheck[0].exists) {
-            return NextResponse.json([]);
-        }
-
-        // Query the packer table using raw SQL
-        const logs = await db.execute(sql.raw(`
-            SELECT id, date_time as timestamp, shipping_tracking_number as tracking, carrier as status, product_title as title, quantity as count
-            FROM ${tableName} 
-            WHERE shipping_tracking_number IS NOT NULL AND shipping_tracking_number != ''
+        // Query orders table for this packer's completed orders
+        const result = await pool.query(`
+            SELECT 
+                id, 
+                pack_date_time as timestamp, 
+                shipping_tracking_number as tracking, 
+                product_title as title, 
+                quantity as count
+            FROM orders
+            WHERE boxed_by = $1
+              AND pack_date_time IS NOT NULL 
+              AND pack_date_time != ''
             ORDER BY id DESC 
-            LIMIT ${limit} OFFSET ${offset}
-        `));
+            LIMIT $2 OFFSET $3
+        `, [packerName, limit, offset]);
 
         // Map to format expected by StationHistory (include all fields for compatibility)
-        const formattedLogs = logs.map((log: any) => ({
+        const formattedLogs = result.rows.map((log: any) => ({
             id: `packer${packerId}-${log.id}`,
             timestamp: log.timestamp || '',
             tracking: log.tracking || '',
-            trackingNumber: log.tracking || '',  // For compatibility
-            status: log.status || '',
-            carrier: log.status || '',            // For compatibility
+            trackingNumber: log.tracking || '',
             title: log.title || '',
-            product: log.title || '',             // For compatibility
+            product: log.title || '',
             count: log.count || 0,
-            packedAt: log.timestamp,              // For compatibility
+            packedAt: log.timestamp,
         }));
 
         return NextResponse.json(formattedLogs);
@@ -58,28 +56,24 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { trackingNumber, orderId, photos, packerId, boxSize, carrier, timestamp, product } = body;
-
-        const tableName = `packer_${packerId}`;
+        const { trackingNumber, orderId, photos, packerId, boxSize, timestamp, product } = body;
         
-        // Get packer name
-        const packerName = `Packer ${packerId}`;
+        // Map packerId to packer name
+        const packerNames: { [key: string]: string } = {
+            '1': 'Tuan',
+            '2': 'Thuy',
+            '3': 'Packer 3'
+        };
+        const packerName = packerNames[packerId] || `Packer ${packerId}`;
         
-        // Insert into the specific packer table
-        // date_time, shipping_tracking_number, carrier, product_title
-        // quantity column is only touched by sheet import
-        await db.execute(sql.raw(`
-            INSERT INTO ${tableName} (date_time, shipping_tracking_number, carrier, product_title)
-            VALUES ('${timestamp}', '${trackingNumber}', '${carrier}', '${product}')
-        `));
-
-        // Update shipped table with packer info
-        // boxed_by based on tracking number
+        // Update orders table ONLY (no packer table insert)
         await pool.query(`
-            UPDATE shipped 
-            SET boxed_by = $1
-            WHERE shipping_tracking_number = $2
-        `, [packerName, trackingNumber]);
+            UPDATE orders 
+            SET boxed_by = $1,
+                pack_date_time = $2,
+                is_shipped = true
+            WHERE shipping_tracking_number = $3
+        `, [packerName, timestamp, trackingNumber]);
 
         // Record in unified logs for photo support
         const newLog = await db.insert(packingLogs).values({

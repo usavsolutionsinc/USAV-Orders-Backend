@@ -4,15 +4,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Search, X, Copy, Check, AlertTriangle } from '../Icons';
-import { ShippedRecord } from '@/lib/neon/shipped-queries';
+import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { ShippedDetailsPanel } from './ShippedDetailsPanel';
 import { CopyableText } from '../ui/CopyableText';
 
 export function ShippedTable() {
   const searchParams = useSearchParams();
   const search = searchParams.get('search');
-  const [shipped, setShipped] = useState<ShippedRecord[]>([]);
-  const [selectedShipped, setSelectedShipped] = useState<ShippedRecord | null>(null);
+  const [shipped, setShipped] = useState<ShippedOrder[]>([]);
+  const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
@@ -102,7 +102,7 @@ export function ShippedTable() {
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, shipped]);
 
-  const handleRowClick = (record: ShippedRecord) => {
+  const handleRowClick = (record: ShippedOrder) => {
     setSelectedShipped(record);
   };
 
@@ -114,14 +114,14 @@ export function ShippedTable() {
     fetchShipped();
   };
 
-  // Group records by date
-  const groupedShipped: { [key: string]: ShippedRecord[] } = {};
+  // Group records by date (using pack_date_time)
+  const groupedShipped: { [key: string]: ShippedOrder[] } = {};
   shipped.forEach(record => {
-    if (!record.date_time || record.date_time === '1') return;
+    if (!record.pack_date_time || record.pack_date_time === '1') return;
     
     let date = '';
     try {
-      const dateObj = new Date(record.date_time);
+      const dateObj = new Date(record.pack_date_time);
       date = dateObj.toISOString().split('T')[0];
     } catch (e) {
       date = 'Unknown';
@@ -217,8 +217,8 @@ export function ShippedTable() {
                       <p className="text-[11px] font-black text-gray-400 uppercase">Total: {records.length} Units</p>
                     </div>
                     {records.map((record, index) => {
-                      const hasAlert = record.date_time === '1';
-                      const ts = record.date_time;
+                      const hasAlert = record.pack_date_time === '1';
+                      const ts = record.pack_date_time;
                       return (
                         <motion.div 
                           initial={{ opacity: 0 }}

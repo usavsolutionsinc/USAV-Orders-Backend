@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
-import { ShippedRecord } from '@/lib/neon/shipped-queries';
+import { ShippedOrder } from '@/lib/neon/orders-queries';
 
 /**
  * Fetch all shipped records
@@ -61,7 +61,7 @@ export function useUpdateShippedStatus() {
         if (!old) return old;
         return {
           ...old,
-          shipped: old.shipped?.map((s: ShippedRecord) =>
+          shipped: old.shipped?.map((s: ShippedOrder) =>
             s.id === id ? { ...s, status } : s
           ),
         };

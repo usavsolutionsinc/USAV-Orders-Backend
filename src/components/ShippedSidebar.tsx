@@ -5,11 +5,11 @@ import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } f
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
-import { ShippedRecord } from '@/lib/neon/shipped-queries';
+import { ShippedOrder } from '@/lib/neon/orders-queries';
 
 interface SearchResult {
     id: number;
-    date_time: string;
+    pack_date_time: string;
     order_id: string;
     product_title: string;
     condition: string;
@@ -18,7 +18,6 @@ interface SearchResult {
     boxed_by: string;
     tested_by: string;
     sku: string;
-    status: string;
     is_shipped: boolean;
 }
 
@@ -89,7 +88,7 @@ Product: ${result.product_title || 'N/A'}
 Condition: ${result.condition || 'N/A'}
 Tested By: ${result.tested_by || 'N/A'}
 Boxed By: ${result.boxed_by || 'N/A'}
-Shipped: ${result.date_time ? formatDateTime(result.date_time) : 'Not Shipped'}`;
+Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not Shipped'}`;
         
         navigator.clipboard.writeText(text);
         setCopiedId(result.id);
@@ -335,7 +334,7 @@ Shipped: ${result.date_time ? formatDateTime(result.date_time) : 'Not Shipped'}`
                 {selectedShipped && (
                     <ShippedDetailsPanel 
                         key="single-shipped-details-instance"
-                        shipped={selectedShipped as unknown as ShippedRecord}
+                        shipped={selectedShipped as unknown as ShippedOrder}
                         onClose={() => setSelectedShipped(null)}
                         onUpdate={() => handleSearch(searchQuery)}
                     />

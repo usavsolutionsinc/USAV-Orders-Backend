@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getShippedById } from '@/lib/neon/shipped-queries';
+import { getShippedOrderById } from '@/lib/neon/orders-queries';
 
 /**
  * GET /api/shipped/[id] - Fetch single shipped record by ID
@@ -19,11 +19,11 @@ export async function GET(
       );
     }
 
-    const shipped = await getShippedById(shippedId);
+    const shipped = await getShippedOrderById(shippedId);
 
     if (!shipped) {
       return NextResponse.json(
-        { error: 'Shipped record not found' },
+        { error: 'Shipped order not found' },
         { status: 404 }
       );
     }

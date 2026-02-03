@@ -61,70 +61,12 @@ export const orders = pgTable('orders', {
   assignedTo: text('assigned_to'),
   status: text('status').notNull().default('unassigned'),
   urgent: text('urgent'),
-});
-
-// Tech tables - Updated schema based on user screenshot
-export const tech1 = pgTable('tech_1', {
-  id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
-  productTitle: text('product_title'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
   serialNumber: text('serial_number'),
-  condition: text('condition'),
-  quantity: text('quantity'),
-});
-export const tech2 = pgTable('tech_2', {
-  id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
-  productTitle: text('product_title'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
-  serialNumber: text('serial_number'),
-  condition: text('condition'),
-  quantity: text('quantity'),
-});
-export const tech3 = pgTable('tech_3', {
-  id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
-  productTitle: text('product_title'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
-  serialNumber: text('serial_number'),
-  condition: text('condition'),
-  quantity: text('quantity'),
-});
-export const tech4 = pgTable('tech_4', {
-  id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
-  productTitle: text('product_title'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
-  serialNumber: text('serial_number'),
-  condition: text('condition'),
-  quantity: text('quantity'),
-});
-
-// Packer tables - Updated schema based on user screenshot
-export const packer1 = pgTable('packer_1', {
-  id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
-  carrier: text('carrier'),
-  productTitle: text('product_title'),
-  quantity: text('quantity'),
-});
-export const packer2 = pgTable('packer_2', {
-  id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
-  carrier: text('carrier'),
-  productTitle: text('product_title'),
-  quantity: text('quantity'),
-});
-export const packer3 = pgTable('packer_3', {
-  id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
-  carrier: text('carrier'),
-  productTitle: text('product_title'),
-  quantity: text('quantity'),
+  testedBy: text('tested_by'),
+  testDateTime: text('test_date_time'),
+  packDateTime: text('pack_date_time'),
+  boxedBy: text('boxed_by'),
+  isShipped: boolean('is_shipped').default(false),
 });
 
 // Receiving table - Updated schema based on user screenshot & sheet mapping

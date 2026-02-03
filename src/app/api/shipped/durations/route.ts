@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 });
     }
 
-    // 1. Get current record
-    const currentResult = await pool.query('SELECT * FROM shipped WHERE id = $1', [id]);
+    // 1. Get current record from orders table
+    const currentResult = await pool.query('SELECT * FROM orders WHERE id = $1 AND is_shipped = true', [id]);
     if (currentResult.rows.length === 0) {
       return NextResponse.json({ error: 'Record not found' }, { status: 404 });
     }
@@ -23,61 +23,36 @@ export async function GET(req: NextRequest) {
     let testingDuration = 'N/A';
 
     // 2. Calculate Boxing Duration
-    if (current.boxed_by && current.date_time && current.date_time !== '1') {
+    if (current.boxed_by && current.pack_date_time && current.pack_date_time !== '1') {
       const prevBoxingResult = await pool.query(
-        `SELECT date_time FROM shipped 
-         WHERE boxed_by = $1 AND date_time < $2 AND date_time != '1'
-         ORDER BY date_time DESC LIMIT 1`,
-        [current.boxed_by, current.date_time]
+        `SELECT pack_date_time FROM orders 
+         WHERE boxed_by = $1 AND pack_date_time < $2 AND pack_date_time != '1' AND is_shipped = true
+         ORDER BY pack_date_time DESC LIMIT 1`,
+        [current.boxed_by, current.pack_date_time]
       );
 
       if (prevBoxingResult.rows.length > 0) {
-        const prevTime = new Date(prevBoxingResult.rows[0].date_time).getTime();
-        const currTime = new Date(current.date_time).getTime();
+        const prevTime = parseDate(prevBoxingResult.rows[0].pack_date_time).getTime();
+        const currTime = parseDate(current.pack_date_time).getTime();
         const diffMs = currTime - prevTime;
         boxingDuration = formatDuration(diffMs);
       }
     }
 
     // 3. Calculate Testing Duration
-    if (current.tested_by) {
-      // Map name to tech table
-      const techMap: Record<string, string> = {
-        'Michael': 'tech_1',
-        'Thuc': 'tech_2',
-        'Sang': 'tech_3'
-      };
-      
-      const techTable = techMap[current.tested_by];
-      
-      if (techTable) {
-        // We need to find the timestamp for THIS order's test in the tech table first
-        // Usually tracking or serial matches
-        const tracking = current.shipping_tracking_number;
-        const serial = current.serial_number;
-        
-        const currentTestResult = await db.execute(sql.raw(`
-          SELECT date_time as timestamp FROM ${techTable}
-          WHERE shipping_tracking_number = '${tracking}' OR serial_number = '${serial}'
-          ORDER BY id DESC LIMIT 1
-        `));
+    if (current.tested_by && current.test_date_time) {
+      const prevTestResult = await pool.query(
+        `SELECT test_date_time FROM orders
+         WHERE tested_by = $1 AND test_date_time < $2 AND test_date_time IS NOT NULL AND test_date_time != ''
+         ORDER BY test_date_time DESC LIMIT 1`,
+        [current.tested_by, current.test_date_time]
+      );
 
-        if (currentTestResult.length > 0) {
-          const currentTestTimestamp = currentTestResult[0].timestamp as string;
-          
-          const prevTestResult = await db.execute(sql.raw(`
-            SELECT date_time as timestamp FROM ${techTable}
-            WHERE date_time < '${currentTestTimestamp}'
-            ORDER BY date_time DESC LIMIT 1
-          `));
-
-          if (prevTestResult.length > 0) {
-            const prevTime = parseDate(prevTestResult[0].timestamp as string).getTime();
-            const currTime = parseDate(currentTestTimestamp).getTime();
-            const diffMs = currTime - prevTime;
-            testingDuration = formatDuration(diffMs);
-          }
-        }
+      if (prevTestResult.rows.length > 0) {
+        const prevTime = parseDate(prevTestResult.rows[0].test_date_time).getTime();
+        const currTime = parseDate(current.test_date_time).getTime();
+        const diffMs = currTime - prevTime;
+        testingDuration = formatDuration(diffMs);
       }
     }
 

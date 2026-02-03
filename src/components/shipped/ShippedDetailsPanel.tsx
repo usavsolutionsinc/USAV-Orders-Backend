@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Check, Clock, Package, Copy, Box, Wrench, ExternalLink } from '../Icons';
-import { ShippedRecord } from '@/lib/neon/shipped-queries';
-import { formatStatusTimestamp } from '@/lib/neon/status-history';
+import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getCarrier } from '../../utils/tracking';
 
 interface ShippedDetailsPanelProps {
-  shipped: ShippedRecord;
+  shipped: ShippedOrder;
   onClose: () => void;
   onUpdate: () => void;
 }
@@ -109,7 +108,7 @@ export function ShippedDetailsPanel({
   onClose, 
   onUpdate 
 }: ShippedDetailsPanelProps) {
-  const [shipped, setShipped] = useState<ShippedRecord>(initialShipped);
+  const [shipped, setShipped] = useState<ShippedOrder>(initialShipped);
   const [durationData, setDurationData] = useState<DurationData>({});
   const [isLoadingDurations, setIsLoadingDurations] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
@@ -150,8 +149,8 @@ export function ShippedDetailsPanel({
   };
 
   const handleCopyAll = () => {
-    const formattedDateTime = shipped.date_time && shipped.date_time !== '1' 
-      ? new Date(shipped.date_time).toLocaleString('en-US', { 
+    const formattedDateTime = shipped.pack_date_time && shipped.pack_date_time !== '1' 
+      ? parseDate(shipped.pack_date_time).toLocaleString('en-US', { 
           month: '2-digit', 
           day: '2-digit', 
           year: 'numeric', 
@@ -175,6 +174,18 @@ Shipped: ${formattedDateTime}`;
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2000);
   };
+
+  // Helper function to parse date strings
+  function parseDate(dateStr: string): Date {
+    if (dateStr.includes('/')) {
+      // Handle M/D/YYYY HH:mm:ss
+      const [datePart, timePart] = dateStr.split(' ');
+      const [m, d, y] = datePart.split('/').map(Number);
+      const [h, min, s] = timePart.split(':').map(Number);
+      return new Date(y, m - 1, d, h, min, s);
+    }
+    return new Date(dateStr);
+  }
 
   return (
     <motion.div
@@ -317,7 +328,7 @@ Shipped: ${formattedDateTime}`;
             <div className="pt-4 border-t border-orange-100/50">
               <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
-                {shipped.date_time && shipped.date_time !== '1' ? new Date(shipped.date_time).toLocaleString() : 'N/A'}
+                {shipped.pack_date_time && shipped.pack_date_time !== '1' ? parseDate(shipped.pack_date_time).toLocaleString() : 'N/A'}
               </p>
             </div>
           </div>
@@ -348,59 +359,11 @@ Shipped: ${formattedDateTime}`;
             <div className="pt-4 border-t border-purple-100/50">
               <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
-                {/* Note: In a real app, you might want to fetch the exact testing timestamp from the tech table */}
-                Testing completion timestamp synced with packing log.
+                {shipped.test_date_time && shipped.test_date_time !== '' ? parseDate(shipped.test_date_time).toLocaleString() : 'N/A'}
               </p>
             </div>
           </div>
         </section>
-
-        {/* Current Status */}
-        <section className="space-y-4">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Current Status</h3>
-          <div className="bg-blue-600 rounded-2xl p-4 shadow-lg shadow-blue-100">
-            <p className="text-sm font-black uppercase tracking-widest text-white">{shipped.status || 'No status set'}</p>
-          </div>
-        </section>
-        
-        {/* Status History */}
-        {shipped.status_history && shipped.status_history.length > 0 && (
-          <section className="space-y-6">
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
-              Status History
-            </h3>
-            <div className="space-y-3">
-              {shipped.status_history.slice().reverse().map((entry, idx) => {
-                const isShippedOrPickedUp = entry.status === 'Shipped' || entry.status === 'Picked Up';
-                
-                return (
-                  <div 
-                    key={idx} 
-                    className={`flex items-start gap-4 p-4 rounded-2xl transition-all ${
-                      isShippedOrPickedUp ? 'bg-emerald-50 border border-emerald-100' : 'bg-gray-50 border border-gray-100'
-                    }`}
-                  >
-                    <div className={`mt-1 p-1.5 rounded-lg ${isShippedOrPickedUp ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                      {isShippedOrPickedUp ? (
-                        <Check className="w-3.5 h-3.5" />
-                      ) : (
-                        <Clock className="w-3.5 h-3.5" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`font-black text-sm ${isShippedOrPickedUp ? 'text-emerald-900' : 'text-gray-900'}`}>
-                        {entry.status}
-                      </p>
-                      <p className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wider">
-                        {formatStatusTimestamp(entry.timestamp)}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
       </div>
     </motion.div>
   );

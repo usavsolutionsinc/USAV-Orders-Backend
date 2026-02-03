@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllShipped, updateShippedStatus, updateShippedField, searchShipped } from '@/lib/neon/shipped-queries';
+import { getAllShippedOrders, updateShippedOrderField, searchShippedOrders } from '@/lib/neon/orders-queries';
 
 /**
  * GET /api/shipped - Fetch all shipped records (paginated) or search
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const query = searchParams.get('q');
 
     if (query) {
-      const results = await searchShipped(query);
+      const results = await searchShippedOrders(query);
       return NextResponse.json({
         shipped: results,
         results,
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
-    const shipped = await getAllShipped(limit, offset);
+    const shipped = await getAllShippedOrders(limit, offset);
     
     return NextResponse.json({
       shipped,
@@ -55,14 +55,9 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    // Update status if provided
-    if (status) {
-      await updateShippedStatus(id, status);
-    }
-
     // Update generic field if provided
     if (field && value !== undefined) {
-      await updateShippedField(id, field, value);
+      await updateShippedOrderField(id, field, value);
     }
 
     return NextResponse.json({ success: true });

@@ -20,60 +20,60 @@ export async function GET(req: NextRequest) {
 
     const assignedTo = `Tech_${techId}`;
 
-    // 1. Check if there are ANY pending orders left for today (not completed, not missing_parts, not tested, not assigned to someone else)
+    // 1. Check if there are ANY pending orders left for today (not completed, not missing_parts, not tested, not shipped)
     const totalPendingResult = await pool.query(
       `SELECT COUNT(*) as count
        FROM orders o
-       LEFT JOIN shipped s ON RIGHT(o.shipping_tracking_number, 8) = RIGHT(s.shipping_tracking_number, 8)
        WHERE o.status NOT IN ('completed', 'missing_parts')
          AND (o.assigned_to = $1 OR o.assigned_to IS NULL OR o.assigned_to = '')
-         AND NOT (s.tested_by IS NOT NULL AND s.tested_by != '' AND s.test_date_time IS NOT NULL AND s.test_date_time != '')`,
+         AND (o.test_date_time IS NULL OR o.test_date_time = '')
+         AND o.is_shipped = false`,
       [assignedTo]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
-    // 2. Build Query - Filter out orders already tested (checked via shipped.tested_by AND test_date_time)
+    // 2. Build Query - Filter out orders already tested or shipped
     let query = `
       SELECT 
-        o.id,
-        o.ship_by_date,
-        o.order_id,
-        o.product_title,
-        o.sku,
-        o.urgent,
-        o.status,
-        o.condition,
-        o.shipping_tracking_number,
-        o.out_of_stock
-      FROM orders o
-      LEFT JOIN shipped s ON RIGHT(o.shipping_tracking_number, 8) = RIGHT(s.shipping_tracking_number, 8)
+        id,
+        ship_by_date,
+        order_id,
+        product_title,
+        sku,
+        urgent,
+        status,
+        condition,
+        shipping_tracking_number,
+        out_of_stock
+      FROM orders
       WHERE 
-        -- Exclude orders that have been tested (BOTH tested_by AND test_date_time must be filled to exclude)
-        NOT (s.tested_by IS NOT NULL AND s.tested_by != '' AND s.test_date_time IS NOT NULL AND s.test_date_time != '')
+        -- Only show if not tested yet and not shipped
+        (test_date_time IS NULL OR test_date_time = '')
+        AND is_shipped = false
     `;
     const params: any[] = [assignedTo];
     let paramCount = 2;
 
     if (filterStatus === 'missing_parts') {
-      query += ` AND o.status = 'missing_parts' AND (o.assigned_to = $1 OR o.assigned_to IS NULL OR o.assigned_to = '') `;
+      query += ` AND status = 'missing_parts' AND (assigned_to = $1 OR assigned_to IS NULL OR assigned_to = '') `;
     } else {
       query += `
         -- Status is not completed or missing_parts
-        AND o.status NOT IN ('completed', 'missing_parts')
+        AND status NOT IN ('completed', 'missing_parts')
         -- Out of stock must be empty for pending
-        AND (o.out_of_stock IS NULL OR o.out_of_stock = '')
+        AND (out_of_stock IS NULL OR out_of_stock = '')
         -- Either assigned to this tech OR truly unassigned
         AND (
-          o.assigned_to = $1 
-          OR ((o.assigned_to IS NULL OR o.assigned_to = '') AND (o.status IS NULL OR o.status = 'unassigned'))
+          assigned_to = $1 
+          OR ((assigned_to IS NULL OR assigned_to = '') AND (status IS NULL OR status = 'unassigned'))
         )
       `;
     }
 
     query += `
       ORDER BY 
-        o.urgent DESC,
-        o.ship_by_date ASC
+        urgent DESC,
+        ship_by_date ASC
     `;
 
     if (!getAll) {

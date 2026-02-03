@@ -42,12 +42,20 @@ export async function POST(req: NextRequest) {
     const now = new Date();
     const formattedDate = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
-    // Insert into shipped table
+    // Insert into orders table or update existing order to is_shipped = true
     const result = await pool.query(
-      `INSERT INTO shipped (date_time, order_id, product_title, condition, shipping_tracking_number, sku)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO orders (order_id, product_title, condition, shipping_tracking_number, sku, is_shipped, pack_date_time)
+       VALUES ($1, $2, $3, $4, $5, true, $6)
+       ON CONFLICT (order_id) 
+       DO UPDATE SET 
+         product_title = EXCLUDED.product_title,
+         condition = EXCLUDED.condition,
+         shipping_tracking_number = EXCLUDED.shipping_tracking_number,
+         sku = EXCLUDED.sku,
+         is_shipped = true,
+         pack_date_time = EXCLUDED.pack_date_time
        RETURNING id`,
-      [formattedDate, order_id, finalProductTitle, condition, shipping_tracking_number, sku]
+      [order_id, finalProductTitle, condition, shipping_tracking_number, sku, formattedDate]
     );
 
     const insertedId = result.rows[0]?.id;

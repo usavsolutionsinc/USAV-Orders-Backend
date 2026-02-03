@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
-import { orders as ordersTable, shipped as shippedTable } from '@/lib/drizzle/schema';
+import { orders as ordersTable } from '@/lib/drizzle/schema';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
 const DEST_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
@@ -80,15 +80,10 @@ export async function POST(req: NextRequest) {
 
         // 2. Check NEON DB for existing tracking numbers (primary check)
         const existingOrdersInDb = await db.select({ tracking: ordersTable.shippingTrackingNumber }).from(ordersTable);
-        const existingShippedInDb = await db.select({ tracking: shippedTable.shippingTrackingNumber }).from(shippedTable);
         
         const existingTrackingInNeon = new Set<string>();
         existingOrdersInDb.forEach(o => {
             const last8 = getLastEightDigits(o.tracking);
-            if (last8) existingTrackingInNeon.add(last8);
-        });
-        existingShippedInDb.forEach(s => {
-            const last8 = getLastEightDigits(s.tracking);
             if (last8) existingTrackingInNeon.add(last8);
         });
 
@@ -204,18 +199,8 @@ export async function POST(req: NextRequest) {
             notes: row[colIndices.note] || '',
         }));
 
-        const shippedToInsert = filteredSourceRows.map(row => ({
-            dateTime: '', // Date / Time (empty)
-            orderId: row[colIndices.orderNumber] || '',
-            productTitle: row[colIndices.itemTitle] || '',
-            condition: row[colIndices.condition] || '',
-            shippingTrackingNumber: row[colIndices.tracking] || '',
-            sku: row[colIndices.usavSku] || '',
-        }));
-
         // 6. Insert into NEON DB (primary) and Google Sheets (legacy backup)
         const dbInsertOrders = db.insert(ordersTable).values(ordersToInsert);
-        const dbInsertShipped = db.insert(shippedTable).values(shippedToInsert);
 
         const appendOrders = sheets.spreadsheets.values.append({
             spreadsheetId: DEST_SPREADSHEET_ID,
@@ -232,7 +217,7 @@ export async function POST(req: NextRequest) {
         });
 
         // Insert to NEON first (source of truth), then Google Sheets (legacy)
-        await Promise.all([dbInsertOrders, dbInsertShipped, appendOrders, appendShipped]);
+        await Promise.all([dbInsertOrders, appendOrders, appendShipped]);
 
         return NextResponse.json({ 
             success: true, 
