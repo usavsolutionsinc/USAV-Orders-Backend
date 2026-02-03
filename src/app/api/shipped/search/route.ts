@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
                 condition,
                 shipping_tracking_number,
                 serial_number,
-                boxed_by,
+                packed_by,
                 tested_by,
                 sku,
                 test_date_time,

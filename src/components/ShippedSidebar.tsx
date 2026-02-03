@@ -15,7 +15,7 @@ interface SearchResult {
     condition: string;
     shipping_tracking_number: string;
     serial_number: string;
-    boxed_by: string;
+    packed_by: string;
     tested_by: string;
     sku: string;
     is_shipped: boolean;
@@ -87,7 +87,7 @@ Tracking: ${result.shipping_tracking_number || 'N/A'}
 Product: ${result.product_title || 'N/A'}
 Condition: ${result.condition || 'N/A'}
 Tested By: ${result.tested_by || 'N/A'}
-Boxed By: ${result.boxed_by || 'N/A'}
+Packed By: ${result.packed_by || 'N/A'}
 Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not Shipped'}`;
         
         navigator.clipboard.writeText(text);

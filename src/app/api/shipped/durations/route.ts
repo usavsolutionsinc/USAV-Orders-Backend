@@ -23,12 +23,12 @@ export async function GET(req: NextRequest) {
     let testingDuration = 'N/A';
 
     // 2. Calculate Boxing Duration
-    if (current.boxed_by && current.pack_date_time && current.pack_date_time !== '1') {
+    if (current.packed_by && current.pack_date_time && current.pack_date_time !== '1') {
       const prevBoxingResult = await pool.query(
         `SELECT pack_date_time FROM orders 
-         WHERE boxed_by = $1 AND pack_date_time < $2 AND pack_date_time != '1' AND is_shipped = true
+         WHERE packed_by = $1 AND pack_date_time < $2 AND pack_date_time != '1' AND is_shipped = true
          ORDER BY pack_date_time DESC LIMIT 1`,
-        [current.boxed_by, current.pack_date_time]
+        [current.packed_by, current.pack_date_time]
       );
 
       if (prevBoxingResult.rows.length > 0) {

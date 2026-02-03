@@ -167,7 +167,7 @@ Tracking: ${shipped.shipping_tracking_number || 'Not available'}
 Product: ${shipped.product_title || 'Not provided'}
 Condition: ${shipped.condition || 'Not set'}
 Tested By: ${shipped.tested_by || 'Not specified'}
-Boxed By: ${shipped.boxed_by || 'Not specified'}
+Packed By: ${shipped.packed_by || 'Not specified'}
 Shipped: ${formattedDateTime}`;
 
     navigator.clipboard.writeText(allInfo);
@@ -317,8 +317,8 @@ Shipped: ${formattedDateTime}`;
           <div className="space-y-4 bg-orange-50/30 rounded-[2rem] p-6 border border-orange-100">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Boxed By</span>
-                <p className="font-black text-sm text-gray-900">{shipped.boxed_by || 'Not specified'}</p>
+                <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Packed By</span>
+                <p className="font-black text-sm text-gray-900">{shipped.packed_by || 'Not specified'}</p>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Duration</span>

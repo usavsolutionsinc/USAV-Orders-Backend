@@ -210,7 +210,7 @@ export async function POST() {
                 condition TEXT,
                 shipping_tracking_number TEXT,
                 serial_number TEXT,
-                boxed_by TEXT,
+                packed_by TEXT,
                 tested_by TEXT,
                 sku TEXT,
                 status TEXT DEFAULT 'pending',
