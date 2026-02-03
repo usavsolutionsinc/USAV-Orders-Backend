@@ -10,13 +10,13 @@ export interface ShippedOrder {
   shipping_tracking_number: string;
   serial_number: string;
   sku: string;
-  tested_by: string;
+  tested_by: number; // Staff ID
   test_date_time: string;
-  boxed_by: string;
+  packed_by: number; // Staff ID (changed from boxed_by)
   pack_date_time: string;
-  quantity: string;
   days_late: string;
   notes: string;
+  status_history: any; // JSONB status history
 }
 
 /**
@@ -26,24 +26,28 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
   try {
     const result = await pool.query(
       `SELECT 
-        id,
-        ship_by_date,
-        order_id,
-        product_title,
-        condition,
-        shipping_tracking_number,
-        serial_number,
-        sku,
-        tested_by,
-        test_date_time,
-        boxed_by,
-        pack_date_time,
-        quantity,
-        days_late,
-        notes
-      FROM orders
-      WHERE is_shipped = true
-      ORDER BY id DESC
+        o.id,
+        o.ship_by_date,
+        o.order_id,
+        o.product_title,
+        o.condition,
+        o.shipping_tracking_number,
+        o.serial_number,
+        o.sku,
+        o.tested_by,
+        s1.name as tested_by_name,
+        o.test_date_time,
+        o.packed_by,
+        s2.name as packed_by_name,
+        o.pack_date_time,
+        o.days_late,
+        o.notes,
+        o.status_history
+      FROM orders o
+      LEFT JOIN staff s1 ON o.tested_by = s1.id
+      LEFT JOIN staff s2 ON o.packed_by = s2.id
+      WHERE o.is_shipped = true
+      ORDER BY o.id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
@@ -62,23 +66,27 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
   try {
     const result = await pool.query(
       `SELECT 
-        id,
-        ship_by_date,
-        order_id,
-        product_title,
-        condition,
-        shipping_tracking_number,
-        serial_number,
-        sku,
-        tested_by,
-        test_date_time,
-        boxed_by,
-        pack_date_time,
-        quantity,
-        days_late,
-        notes
-      FROM orders
-      WHERE id = $1 AND is_shipped = true`,
+        o.id,
+        o.ship_by_date,
+        o.order_id,
+        o.product_title,
+        o.condition,
+        o.shipping_tracking_number,
+        o.serial_number,
+        o.sku,
+        o.tested_by,
+        s1.name as tested_by_name,
+        o.test_date_time,
+        o.packed_by,
+        s2.name as packed_by_name,
+        o.pack_date_time,
+        o.days_late,
+        o.notes,
+        o.status_history
+      FROM orders o
+      LEFT JOIN staff s1 ON o.tested_by = s1.id
+      LEFT JOIN staff s2 ON o.packed_by = s2.id
+      WHERE o.id = $1 AND o.is_shipped = true`,
       [id]
     );
 
@@ -97,31 +105,35 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
     const searchTerm = `%${query}%`;
     const result = await pool.query(
       `SELECT 
-        id,
-        ship_by_date,
-        order_id,
-        product_title,
-        condition,
-        shipping_tracking_number,
-        serial_number,
-        sku,
-        tested_by,
-        test_date_time,
-        boxed_by,
-        pack_date_time,
-        quantity,
-        days_late,
-        notes
-      FROM orders
-      WHERE is_shipped = true
+        o.id,
+        o.ship_by_date,
+        o.order_id,
+        o.product_title,
+        o.condition,
+        o.shipping_tracking_number,
+        o.serial_number,
+        o.sku,
+        o.tested_by,
+        s1.name as tested_by_name,
+        o.test_date_time,
+        o.packed_by,
+        s2.name as packed_by_name,
+        o.pack_date_time,
+        o.days_late,
+        o.notes,
+        o.status_history
+      FROM orders o
+      LEFT JOIN staff s1 ON o.tested_by = s1.id
+      LEFT JOIN staff s2 ON o.packed_by = s2.id
+      WHERE o.is_shipped = true
         AND (
-          shipping_tracking_number ILIKE $1
-          OR order_id ILIKE $1
-          OR product_title ILIKE $1
-          OR serial_number ILIKE $1
-          OR sku ILIKE $1
+          o.shipping_tracking_number ILIKE $1
+          OR o.order_id ILIKE $1
+          OR o.product_title ILIKE $1
+          OR o.serial_number ILIKE $1
+          OR o.sku ILIKE $1
         )
-      ORDER BY id DESC
+      ORDER BY o.id DESC
       LIMIT 100`,
       [searchTerm]
     );
@@ -146,10 +158,11 @@ export async function updateShippedOrderField(
       'serial_number',
       'tested_by',
       'test_date_time',
-      'boxed_by',
+      'packed_by',
       'pack_date_time',
       'notes',
-      'is_shipped'
+      'is_shipped',
+      'status_history'
     ];
 
     if (!allowedFields.includes(field)) {
@@ -174,24 +187,28 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
     const last8 = tracking.slice(-8).toLowerCase();
     const result = await pool.query(
       `SELECT 
-        id,
-        ship_by_date,
-        order_id,
-        product_title,
-        condition,
-        shipping_tracking_number,
-        serial_number,
-        sku,
-        tested_by,
-        test_date_time,
-        boxed_by,
-        pack_date_time,
-        quantity,
-        days_late,
-        notes
-      FROM orders
-      WHERE is_shipped = true
-        AND RIGHT(shipping_tracking_number, 8) = $1
+        o.id,
+        o.ship_by_date,
+        o.order_id,
+        o.product_title,
+        o.condition,
+        o.shipping_tracking_number,
+        o.serial_number,
+        o.sku,
+        o.tested_by,
+        s1.name as tested_by_name,
+        o.test_date_time,
+        o.packed_by,
+        s2.name as packed_by_name,
+        o.pack_date_time,
+        o.days_late,
+        o.notes,
+        o.status_history
+      FROM orders o
+      LEFT JOIN staff s1 ON o.tested_by = s1.id
+      LEFT JOIN staff s2 ON o.packed_by = s2.id
+      WHERE o.is_shipped = true
+        AND RIGHT(o.shipping_tracking_number, 8) = $1
       LIMIT 1`,
       [last8]
     );

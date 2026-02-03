@@ -288,15 +288,15 @@ export function ShippedTable() {
                           <div className="flex flex-col">
                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Tested By</span>
                             <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
-                              {record.tested_by || '---'}
+                              {(record as any).tested_by_name || '---'}
                             </div>
                           </div>
                           
-                          {/* 7. Boxed By */}
+                          {/* 7. Packed By */}
                           <div className="flex flex-col">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Boxed By</span>
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Packed By</span>
                             <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
-                              {record.boxed_by || '---'}
+                              {(record as any).packed_by_name || '---'}
                             </div>
                           </div>
                         </motion.div>

@@ -84,22 +84,7 @@ export const receiving = pgTable('receiving', {
   quantity: text('quantity'), // Sheet D
 });
 
-// Shipped table - Updated schema
-export const shipped = pgTable('shipped', {
-  id: serial('id').primaryKey(),
-  dateTime: text('date_time'), // TEXT timestamp when shipped
-  orderId: text('order_id'),
-  productTitle: text('product_title'),
-  condition: text('condition'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
-  serialNumber: text('serial_number'),
-  boxedBy: text('boxed_by'),
-  testedBy: text('tested_by'),
-  sku: text('sku'),
-  status: text('status').default('pending'),
-  statusHistory: jsonb('status_history').default([]),
-  testDateTime: text('test_date_time'),
-});
+// Shipped table - DEPRECATED: Now using orders table with is_shipped = true
 
 // Sku Stock table
 export const skuStock = pgTable('sku_stock', {
@@ -157,8 +142,6 @@ export type Receiving = typeof receiving.$inferSelect;
 export type NewReceiving = typeof receiving.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
-export type Shipped = typeof shipped.$inferSelect;
-export type NewShipped = typeof shipped.$inferInsert;
 export type RepairService = typeof repairService.$inferSelect;
 export type NewRepairService = typeof repairService.$inferInsert;
 export type PackingLog = typeof packingLogs.$inferSelect;
