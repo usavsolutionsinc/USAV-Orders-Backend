@@ -6,6 +6,7 @@ export const staff = pgTable('staff', {
   name: varchar('name', { length: 100 }).notNull(),
   role: varchar('role', { length: 50 }).notNull(),
   employeeId: varchar('employee_id', { length: 50 }).unique(),
+  sourceTable: text('source_table'), // Maps to tech_1, tech_2, tech_3, packer_1, packer_2
   active: boolean('active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -62,10 +63,14 @@ export const orders = pgTable('orders', {
   status: text('status').notNull().default('unassigned'),
   urgent: text('urgent'),
   serialNumber: text('serial_number'),
-  testedBy: text('tested_by'),
+  // Completion tracking (who completed the work) - FK to staff.id
+  testedBy: integer('tested_by').references(() => staff.id, { onDelete: 'set null' }),
   testDateTime: text('test_date_time'),
+  packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
   packDateTime: text('pack_date_time'),
-  boxedBy: text('boxed_by'),
+  // Assignment tracking (who is assigned) - FK to staff.id
+  testerId: integer('tester_id').references(() => staff.id, { onDelete: 'set null' }),
+  packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
   isShipped: boolean('is_shipped').default(false),
 });
 
