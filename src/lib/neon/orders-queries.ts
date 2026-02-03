@@ -42,12 +42,16 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
         o.pack_date_time,
         o.days_late,
         o.notes,
-        o.status_history
+        o.status_history,
+        o.is_shipped
       FROM orders o
       LEFT JOIN staff s1 ON o.tested_by = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
-      WHERE o.is_shipped = true
-      ORDER BY o.id DESC
+      WHERE o.is_shipped IS TRUE 
+        AND o.packed_by IS NOT NULL
+        AND o.pack_date_time IS NOT NULL
+        AND o.pack_date_time != '1'
+      ORDER BY o.pack_date_time DESC, o.id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
