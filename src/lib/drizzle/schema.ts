@@ -52,7 +52,6 @@ export const orders = pgTable('orders', {
   shipByDate: text('ship_by_date'),
   orderId: text('order_id'),
   productTitle: text('product_title'),
-  quantity: text('quantity'),
   sku: text('sku'),
   condition: text('condition'),
   shippingTrackingNumber: text('shipping_tracking_number'),
@@ -71,6 +70,8 @@ export const orders = pgTable('orders', {
   // Assignment tracking (who is assigned) - FK to staff.id
   testerId: integer('tester_id').references(() => staff.id, { onDelete: 'set null' }),
   packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
+  // Status tracking
+  statusHistory: jsonb('status_history').default([]),
   isShipped: boolean('is_shipped').default(false),
 });
 

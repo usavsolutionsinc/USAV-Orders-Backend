@@ -10,29 +10,41 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        // Map packerId to packer name
-        const packerNames: { [key: string]: string } = {
-            '1': 'Tuan',
-            '2': 'Thuy',
-            '3': 'Packer 3'
+        // Map packerId to employee_id
+        const packerEmployeeIds: { [key: string]: string } = {
+            '1': 'PACK001',
+            '2': 'PACK002',
+            '3': 'PACK003'
         };
-        const packerName = packerNames[packerId] || 'Tuan';
+        const employeeId = packerEmployeeIds[packerId] || 'PACK001';
 
-        // Query orders table for this packer's completed orders
+        // Get staff ID
+        const staffResult = await pool.query(
+            'SELECT id FROM staff WHERE employee_id = $1',
+            [employeeId]
+        );
+
+        if (staffResult.rows.length === 0) {
+            return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
+        }
+
+        const staffId = staffResult.rows[0].id;
+
+        // Query orders table for this packer's completed orders using packed_by
         const result = await pool.query(`
             SELECT 
                 id, 
                 pack_date_time as timestamp, 
                 shipping_tracking_number as tracking, 
-                product_title as title, 
-                quantity as count
+                product_title as title,
+                status
             FROM orders
-            WHERE boxed_by = $1
+            WHERE packed_by = $1
               AND pack_date_time IS NOT NULL 
               AND pack_date_time != ''
             ORDER BY id DESC 
             LIMIT $2 OFFSET $3
-        `, [packerName, limit, offset]);
+        `, [staffId, limit, offset]);
 
         // Map to format expected by StationHistory (include all fields for compatibility)
         const formattedLogs = result.rows.map((log: any) => ({
@@ -42,7 +54,7 @@ export async function GET(req: NextRequest) {
             trackingNumber: log.tracking || '',
             title: log.title || '',
             product: log.title || '',
-            count: log.count || 0,
+            status: log.status || '',
             packedAt: log.timestamp,
         }));
 
@@ -58,29 +70,68 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { trackingNumber, orderId, photos, packerId, boxSize, timestamp, product } = body;
         
-        // Map packerId to packer name
-        const packerNames: { [key: string]: string } = {
-            '1': 'Tuan',
-            '2': 'Thuy',
-            '3': 'Packer 3'
+        // Map packerId to employee_id and get staff info
+        const packerEmployeeIds: { [key: string]: string } = {
+            '1': 'PACK001',
+            '2': 'PACK002',
+            '3': 'PACK003'
         };
-        const packerName = packerNames[packerId] || `Packer ${packerId}`;
+        const employeeId = packerEmployeeIds[packerId] || 'PACK001';
         
-        // Update orders table ONLY (no packer table insert)
+        // Get staff ID and name
+        const staffResult = await pool.query(
+            'SELECT id, name FROM staff WHERE employee_id = $1',
+            [employeeId]
+        );
+
+        if (staffResult.rows.length === 0) {
+            return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
+        }
+
+        const staffId = staffResult.rows[0].id;
+        const staffName = staffResult.rows[0].name;
+        
+        // Convert timestamp to ISO format for status_history
+        let isoTimestamp = timestamp;
+        try {
+            if (timestamp && timestamp.includes('/')) {
+                const [datePart, timePart] = timestamp.split(' ');
+                const [m, d, y] = datePart.split('/');
+                isoTimestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${timePart || '00:00:00'}`).toISOString();
+            }
+        } catch (e) {
+            // Keep original if conversion fails
+        }
+        
+        // Update orders table ONLY (no packer table insert) - use packed_by instead of boxed_by
         await pool.query(`
             UPDATE orders 
-            SET boxed_by = $1,
+            SET packed_by = $1,
                 pack_date_time = $2,
-                is_shipped = true
+                is_shipped = true,
+                status_history = COALESCE(status_history, '[]'::jsonb) || 
+                    jsonb_build_object(
+                        'status', 'packed',
+                        'timestamp', $5,
+                        'user', $4,
+                        'previous_status', (
+                            SELECT COALESCE(
+                                (status_history->-1->>'status')::text,
+                                null
+                            )
+                            FROM orders 
+                            WHERE shipping_tracking_number = $3
+                        )
+                    )::jsonb
             WHERE shipping_tracking_number = $3
-        `, [packerName, timestamp, trackingNumber]);
+        `, [staffId, timestamp, trackingNumber, staffName, isoTimestamp]);
 
         // Record in unified logs for photo support
         const newLog = await db.insert(packingLogs).values({
             trackingNumber,
             orderId: orderId || null,
             photos: JSON.stringify(photos),
-            packerId: packerId ? parseInt(packerId) : null,
+            packerId: staffId,
             boxSize,
             notes: product,
             status: 'completed'

@@ -8,14 +8,26 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        // Map techId to tech name
-        const techNames: { [key: string]: string } = {
-            '1': 'Michael',
-            '2': 'Thuc',
-            '3': 'Sang',
-            '4': 'Tech 4'
+        // Map techId to employee_id
+        const techEmployeeIds: { [key: string]: string } = {
+            '1': 'TECH001',
+            '2': 'TECH002',
+            '3': 'TECH003',
+            '4': 'TECH004'
         };
-        const techName = techNames[techId] || 'Michael';
+        const employeeId = techEmployeeIds[techId] || 'TECH001';
+
+        // Get staff ID
+        const staffResult = await pool.query(
+            'SELECT id FROM staff WHERE employee_id = $1',
+            [employeeId]
+        );
+
+        if (staffResult.rows.length === 0) {
+            return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
+        }
+
+        const staffId = staffResult.rows[0].id;
 
         // Query orders table for this tech's completed orders
         const result = await pool.query(`
@@ -25,15 +37,15 @@ export async function GET(req: NextRequest) {
                 product_title as title, 
                 shipping_tracking_number as tracking, 
                 serial_number as serial, 
-                condition, 
-                quantity as count
+                condition,
+                status
             FROM orders
             WHERE tested_by = $1
               AND test_date_time IS NOT NULL 
               AND test_date_time != ''
             ORDER BY id DESC 
             LIMIT $2 OFFSET $3
-        `, [techName, limit, offset]);
+        `, [staffId, limit, offset]);
 
         return NextResponse.json(result.rows);
     } catch (error: any) {
@@ -47,16 +59,55 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { userName, timestamp, tracking, serial } = body;
         
+        // Get staff ID by name
+        const staffResult = await pool.query(
+            'SELECT id FROM staff WHERE name = $1',
+            [userName]
+        );
+
+        if (staffResult.rows.length === 0) {
+            return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
+        }
+
+        const staffId = staffResult.rows[0].id;
+        
         // Update orders table ONLY (no tech table insert)
         if (serial && tracking) {
             const last8 = tracking.slice(-8).toLowerCase();
+            
+            // Convert timestamp to ISO format for status_history
+            let isoTimestamp = timestamp;
+            try {
+                if (timestamp && timestamp.includes('/')) {
+                    const [datePart, timePart] = timestamp.split(' ');
+                    const [m, d, y] = datePart.split('/');
+                    isoTimestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${timePart || '00:00:00'}`).toISOString();
+                }
+            } catch (e) {
+                // Keep original if conversion fails
+            }
+
             await pool.query(`
                 UPDATE orders
                 SET serial_number = $1,
                     tested_by = $2,
-                    test_date_time = $3
+                    test_date_time = $3,
+                    status_history = COALESCE(status_history, '[]'::jsonb) || 
+                        jsonb_build_object(
+                            'status', 'tested',
+                            'timestamp', $6,
+                            'user', $5,
+                            'previous_status', (
+                                SELECT COALESCE(
+                                    (status_history->-1->>'status')::text,
+                                    null
+                                )
+                                FROM orders 
+                                WHERE RIGHT(shipping_tracking_number, 8) = $4
+                            )
+                        )::jsonb
                 WHERE RIGHT(shipping_tracking_number, 8) = $4
-            `, [serial, userName, timestamp, last8]);
+            `, [serial, staffId, timestamp, last8, userName, isoTimestamp]);
         }
 
         return NextResponse.json({ success: true });

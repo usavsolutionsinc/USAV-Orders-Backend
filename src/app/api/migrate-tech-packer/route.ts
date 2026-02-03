@@ -40,9 +40,9 @@ export async function POST() {
         await client.query('BEGIN');
 
         // =============================================================================
-        // STEP 1: Update Staff Table Structure
+        // STEP 1: Update Table Structure
         // =============================================================================
-        logs.push('\n=== STEP 1: Updating Staff Table Structure ===');
+        logs.push('\n=== STEP 1: Updating Table Structure ===');
         
         const checkColumn = await client.query(`
             SELECT 1 FROM information_schema.columns 
@@ -54,6 +54,18 @@ export async function POST() {
             logs.push('✓ Added source_table column to staff table');
         } else {
             logs.push('✓ source_table column already exists');
+        }
+        
+        const checkStatusHistory = await client.query(`
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'orders' AND column_name = 'status_history'
+        `);
+        
+        if (checkStatusHistory.rows.length === 0) {
+            await client.query(`ALTER TABLE orders ADD COLUMN status_history JSONB DEFAULT '[]'::jsonb`);
+            logs.push('✓ Added status_history column to orders table');
+        } else {
+            logs.push('✓ status_history column already exists');
         }
 
         // Update staff records with source table mappings
@@ -200,7 +212,21 @@ export async function POST() {
             UPDATE orders o
             SET 
                 tested_by = $1,
-                test_date_time = t.date_time
+                test_date_time = t.date_time,
+                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                    jsonb_build_object(
+                        'status', 'tested',
+                        'timestamp', CASE 
+                            WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                                to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                            ELSE t.date_time
+                        END,
+                        'user', 'Michael',
+                        'previous_status', COALESCE(
+                            (o.status_history->-1->>'status')::text,
+                            null
+                        )
+                    )::jsonb
             FROM tech_1 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
                 AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -210,14 +236,28 @@ export async function POST() {
                 AND t.date_time != ''
         `, [staffMap['TECH001']]);
 
-        logs.push(`✓ Migrated ${tech1Result.rowCount} orders from tech_1 (Michael)`);
+        logs.push(`✓ Migrated ${tech1Result.rowCount} orders from tech_1 (Michael) with status_history`);
 
         // Migrate tech_2 → Thuc
         const tech2Result = await client.query(`
             UPDATE orders o
             SET 
                 tested_by = $1,
-                test_date_time = t.date_time
+                test_date_time = t.date_time,
+                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                    jsonb_build_object(
+                        'status', 'tested',
+                        'timestamp', CASE 
+                            WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                                to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                            ELSE t.date_time
+                        END,
+                        'user', 'Thuc',
+                        'previous_status', COALESCE(
+                            (o.status_history->-1->>'status')::text,
+                            null
+                        )
+                    )::jsonb
             FROM tech_2 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
                 AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -227,14 +267,28 @@ export async function POST() {
                 AND t.date_time != ''
         `, [staffMap['TECH002']]);
 
-        logs.push(`✓ Migrated ${tech2Result.rowCount} orders from tech_2 (Thuc)`);
+        logs.push(`✓ Migrated ${tech2Result.rowCount} orders from tech_2 (Thuc) with status_history`);
 
         // Migrate tech_3 → Sang
         const tech3Result = await client.query(`
             UPDATE orders o
             SET 
                 tested_by = $1,
-                test_date_time = t.date_time
+                test_date_time = t.date_time,
+                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                    jsonb_build_object(
+                        'status', 'tested',
+                        'timestamp', CASE 
+                            WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                                to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                            ELSE t.date_time
+                        END,
+                        'user', 'Sang',
+                        'previous_status', COALESCE(
+                            (o.status_history->-1->>'status')::text,
+                            null
+                        )
+                    )::jsonb
             FROM tech_3 t
             WHERE o.shipping_tracking_number = t.shipping_tracking_number
                 AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -244,7 +298,7 @@ export async function POST() {
                 AND t.date_time != ''
         `, [staffMap['TECH003']]);
 
-        logs.push(`✓ Migrated ${tech3Result.rowCount} orders from tech_3 (Sang)`);
+        logs.push(`✓ Migrated ${tech3Result.rowCount} orders from tech_3 (Sang) with status_history`);
 
         const totalTechMigrated = (tech1Result.rowCount || 0) + (tech2Result.rowCount || 0) + (tech3Result.rowCount || 0);
         logs.push(`Total tech records migrated: ${totalTechMigrated}`);
@@ -283,7 +337,22 @@ export async function POST() {
             UPDATE orders o
             SET 
                 packed_by = $1,
-                pack_date_time = p.date_time
+                pack_date_time = p.date_time,
+                is_shipped = true,
+                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                    jsonb_build_object(
+                        'status', 'packed',
+                        'timestamp', CASE 
+                            WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                                to_timestamp(p.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                            ELSE p.date_time
+                        END,
+                        'user', 'Tuan',
+                        'previous_status', COALESCE(
+                            (o.status_history->-1->>'status')::text,
+                            null
+                        )
+                    )::jsonb
             FROM packer_1 p
             WHERE o.shipping_tracking_number = p.shipping_tracking_number
                 AND p.shipping_tracking_number NOT LIKE 'X00%'
@@ -293,14 +362,29 @@ export async function POST() {
                 AND p.date_time != ''
         `, [packerStaffMap['PACK001']]);
 
-        logs.push(`✓ Migrated ${packer1Result.rowCount} orders from packer_1 (Tuan)`);
+        logs.push(`✓ Migrated ${packer1Result.rowCount} orders from packer_1 (Tuan) with status_history + is_shipped`);
 
         // Migrate packer_2 → Thuy
         const packer2Result = await client.query(`
             UPDATE orders o
             SET 
                 packed_by = $1,
-                pack_date_time = p.date_time
+                pack_date_time = p.date_time,
+                is_shipped = true,
+                status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                    jsonb_build_object(
+                        'status', 'packed',
+                        'timestamp', CASE 
+                            WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                                to_timestamp(p.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                            ELSE p.date_time
+                        END,
+                        'user', 'Thuy',
+                        'previous_status', COALESCE(
+                            (o.status_history->-1->>'status')::text,
+                            null
+                        )
+                    )::jsonb
             FROM packer_2 p
             WHERE o.shipping_tracking_number = p.shipping_tracking_number
                 AND p.shipping_tracking_number NOT LIKE 'X00%'
@@ -310,7 +394,7 @@ export async function POST() {
                 AND p.date_time != ''
         `, [packerStaffMap['PACK002']]);
 
-        logs.push(`✓ Migrated ${packer2Result.rowCount} orders from packer_2 (Thuy)`);
+        logs.push(`✓ Migrated ${packer2Result.rowCount} orders from packer_2 (Thuy) with status_history + is_shipped`);
 
         const totalPackerMigrated = (packer1Result.rowCount || 0) + (packer2Result.rowCount || 0);
         logs.push(`Total packer records migrated: ${totalPackerMigrated}`);

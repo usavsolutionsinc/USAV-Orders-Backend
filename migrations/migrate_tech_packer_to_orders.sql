@@ -5,13 +5,13 @@
 BEGIN;
 
 -- =============================================================================
--- STEP 1: Add source_table column to staff table
+-- STEP 1: Add source_table and status_history columns
 -- =============================================================================
 DO $$
 BEGIN
-    RAISE NOTICE '=== STEP 1: Updating Staff Table Structure ===';
+    RAISE NOTICE '=== STEP 1: Updating Table Structure ===';
     
-    -- Add source_table column if it doesn't exist
+    -- Add source_table column to staff if it doesn't exist
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'staff' AND column_name = 'source_table'
@@ -20,6 +20,17 @@ BEGIN
         RAISE NOTICE '✓ Added source_table column to staff table';
     ELSE
         RAISE NOTICE '✓ source_table column already exists';
+    END IF;
+    
+    -- Add status_history column to orders if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'orders' AND column_name = 'status_history'
+    ) THEN
+        ALTER TABLE orders ADD COLUMN status_history JSONB DEFAULT '[]'::jsonb;
+        RAISE NOTICE '✓ Added status_history column to orders table';
+    ELSE
+        RAISE NOTICE '✓ status_history column already exists';
     END IF;
 END $$;
 
@@ -215,7 +226,21 @@ BEGIN
         UPDATE orders o
         SET 
             tested_by = michael_id,
-            test_date_time = t.date_time
+            test_date_time = t.date_time,
+            status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                jsonb_build_object(
+                    'status', 'tested',
+                    'timestamp', CASE 
+                        WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                            to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                        ELSE t.date_time
+                    END,
+                    'user', 'Michael',
+                    'previous_status', COALESCE(
+                        (o.status_history->-1->>'status')::text,
+                        null
+                    )
+                )::jsonb
         FROM tech_1 t
         WHERE o.shipping_tracking_number = t.shipping_tracking_number
             AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -227,14 +252,28 @@ BEGIN
     )
     SELECT COUNT(*) INTO tech1_updated FROM updated;
     
-    RAISE NOTICE '✓ Migrated % orders from tech_1 (Michael)', tech1_updated;
+    RAISE NOTICE '✓ Migrated % orders from tech_1 (Michael) with status_history', tech1_updated;
     
     -- Migrate tech_2 → Thuc
     WITH updated AS (
         UPDATE orders o
         SET 
             tested_by = thuc_id,
-            test_date_time = t.date_time
+            test_date_time = t.date_time,
+            status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                jsonb_build_object(
+                    'status', 'tested',
+                    'timestamp', CASE 
+                        WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                            to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                        ELSE t.date_time
+                    END,
+                    'user', 'Thuc',
+                    'previous_status', COALESCE(
+                        (o.status_history->-1->>'status')::text,
+                        null
+                    )
+                )::jsonb
         FROM tech_2 t
         WHERE o.shipping_tracking_number = t.shipping_tracking_number
             AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -246,14 +285,28 @@ BEGIN
     )
     SELECT COUNT(*) INTO tech2_updated FROM updated;
     
-    RAISE NOTICE '✓ Migrated % orders from tech_2 (Thuc)', tech2_updated;
+    RAISE NOTICE '✓ Migrated % orders from tech_2 (Thuc) with status_history', tech2_updated;
     
     -- Migrate tech_3 → Sang
     WITH updated AS (
         UPDATE orders o
         SET 
             tested_by = sang_id,
-            test_date_time = t.date_time
+            test_date_time = t.date_time,
+            status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                jsonb_build_object(
+                    'status', 'tested',
+                    'timestamp', CASE 
+                        WHEN t.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                            to_timestamp(t.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                        ELSE t.date_time
+                    END,
+                    'user', 'Sang',
+                    'previous_status', COALESCE(
+                        (o.status_history->-1->>'status')::text,
+                        null
+                    )
+                )::jsonb
         FROM tech_3 t
         WHERE o.shipping_tracking_number = t.shipping_tracking_number
             AND t.shipping_tracking_number NOT LIKE 'X00%'
@@ -265,7 +318,7 @@ BEGIN
     )
     SELECT COUNT(*) INTO tech3_updated FROM updated;
     
-    RAISE NOTICE '✓ Migrated % orders from tech_3 (Sang)', tech3_updated;
+    RAISE NOTICE '✓ Migrated % orders from tech_3 (Sang) with status_history', tech3_updated;
     RAISE NOTICE 'Total tech records migrated: %', tech1_updated + tech2_updated + tech3_updated;
 END $$;
 
@@ -296,7 +349,22 @@ BEGIN
         UPDATE orders o
         SET 
             packed_by = tuan_id,
-            pack_date_time = p.date_time
+            pack_date_time = p.date_time,
+            is_shipped = true,
+            status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                jsonb_build_object(
+                    'status', 'packed',
+                    'timestamp', CASE 
+                        WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                            to_timestamp(p.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                        ELSE p.date_time
+                    END,
+                    'user', 'Tuan',
+                    'previous_status', COALESCE(
+                        (o.status_history->-1->>'status')::text,
+                        null
+                    )
+                )::jsonb
         FROM packer_1 p
         WHERE o.shipping_tracking_number = p.shipping_tracking_number
             AND p.shipping_tracking_number NOT LIKE 'X00%'
@@ -308,14 +376,29 @@ BEGIN
     )
     SELECT COUNT(*) INTO packer1_updated FROM updated;
     
-    RAISE NOTICE '✓ Migrated % orders from packer_1 (Tuan)', packer1_updated;
+    RAISE NOTICE '✓ Migrated % orders from packer_1 (Tuan) with status_history + is_shipped', packer1_updated;
     
     -- Migrate packer_2 → Thuy
     WITH updated AS (
         UPDATE orders o
         SET 
             packed_by = thuy_id,
-            pack_date_time = p.date_time
+            pack_date_time = p.date_time,
+            is_shipped = true,
+            status_history = COALESCE(o.status_history, '[]'::jsonb) || 
+                jsonb_build_object(
+                    'status', 'packed',
+                    'timestamp', CASE 
+                        WHEN p.date_time ~ '^\d{1,2}/\d{1,2}/\d{4}' THEN
+                            to_timestamp(p.date_time, 'MM/DD/YYYY HH24:MI:SS')::text
+                        ELSE p.date_time
+                    END,
+                    'user', 'Thuy',
+                    'previous_status', COALESCE(
+                        (o.status_history->-1->>'status')::text,
+                        null
+                    )
+                )::jsonb
         FROM packer_2 p
         WHERE o.shipping_tracking_number = p.shipping_tracking_number
             AND p.shipping_tracking_number NOT LIKE 'X00%'
@@ -327,7 +410,7 @@ BEGIN
     )
     SELECT COUNT(*) INTO packer2_updated FROM updated;
     
-    RAISE NOTICE '✓ Migrated % orders from packer_2 (Thuy)', packer2_updated;
+    RAISE NOTICE '✓ Migrated % orders from packer_2 (Thuy) with status_history + is_shipped', packer2_updated;
     RAISE NOTICE 'Total packer records migrated: %', packer1_updated + packer2_updated;
 END $$;
 

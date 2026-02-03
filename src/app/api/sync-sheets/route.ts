@@ -30,18 +30,17 @@ export async function POST(req: NextRequest) {
         // Tech and packer sheets update orders table directly
         const techSheets = ['tech_1', 'tech_2', 'tech_3', 'tech_4'];
         const packerSheets = ['packer_1', 'packer_2', 'packer_3'];
+        const shippedSheet = 'shipped';
 
-        const techNames: { [key: string]: string } = {
-            'tech_1': 'Michael',
-            'tech_2': 'Thuc',
-            'tech_3': 'Sang',
-            'tech_4': 'Tech 4'
+        const techEmployeeIds: { [key: string]: string } = {
+            'tech_1': 'TECH001',
+            'tech_2': 'TECH002',
+            'tech_3': 'TECH003'
         };
 
-        const packerNames: { [key: string]: string } = {
-            'packer_1': 'Tuan',
-            'packer_2': 'Thuy',
-            'packer_3': 'Packer 3'
+        const packerEmployeeIds: { [key: string]: string } = {
+            'packer_1': 'PACK001',
+            'packer_2': 'PACK002'
         };
 
         // 2. Get all tables and their columns from Neon DB
@@ -123,11 +122,155 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // Sync tech and packer sheets to orders table
+        // Sync tech, packer, and shipped sheets to orders table
         const techPackerResults = [];
 
         for (const sheetName of existingSheetNames) {
             const lowerName = sheetName.toLowerCase();
+            
+            // Handle Shipped Sheet - sync entire sheet to orders table
+            if (lowerName === shippedSheet) {
+                try {
+                    const response = await sheets.spreadsheets.values.get({
+                        spreadsheetId: targetSpreadsheetId,
+                        range: `${sheetName}!A2:J`, // A-J columns
+                    });
+
+                    const rows = response.data.values || [];
+                    const client = await pool.connect();
+                    let updatedCount = 0;
+                    let insertedCount = 0;
+
+                    try {
+                        // Staff name to ID mappings
+                        const packerNameMap: { [key: string]: number } = {
+                            'Tuan': 4,
+                            'Thuy': 5
+                        };
+                        
+                        const techNameMap: { [key: string]: number } = {
+                            'Mike': 1,
+                            'Michael': 1,
+                            'Thuc': 2,
+                            'Sang': 3
+                        };
+
+                        for (const row of rows) {
+                            const packDateTime = row[0] || ''; // Column A
+                            const orderId = row[1] || ''; // Column B
+                            const productTitle = row[2] || ''; // Column C
+                            const quantity = row[3] || ''; // Column D
+                            const condition = row[4] || ''; // Column E
+                            const shippingTracking = row[5] || ''; // Column F
+                            const serialNumber = row[6] || ''; // Column G
+                            const packerName = row[7] || ''; // Column H
+                            const techName = row[8] || ''; // Column I
+                            const sku = row[9] || ''; // Column J
+
+                            if (!shippingTracking) continue; // Skip if no tracking number
+
+                            // Map names to staff IDs
+                            const packedBy = packerName ? (packerNameMap[packerName] || null) : null;
+                            const testedBy = techName ? (techNameMap[techName] || 6) : 6; // Default to 6 (Cuong) if empty or unknown
+
+                            // Convert dateTime to ISO format for status_history if needed
+                            let isoPackTimestamp = packDateTime;
+                            try {
+                                if (packDateTime && packDateTime.includes('/')) {
+                                    const [datePart, timePart] = packDateTime.split(' ');
+                                    const [m, d, y] = datePart.split('/');
+                                    isoPackTimestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${timePart || '00:00:00'}`).toISOString();
+                                }
+                            } catch (e) {
+                                // Keep original if conversion fails
+                            }
+
+                            // Check if order exists
+                            const existingOrder = await client.query(
+                                'SELECT id, status_history FROM orders WHERE shipping_tracking_number = $1',
+                                [shippingTracking]
+                            );
+
+                            if (existingOrder.rows.length > 0) {
+                                // Update existing order
+                                const statusHistory = existingOrder.rows[0].status_history || [];
+                                let newStatusHistory = statusHistory;
+
+                                // Add packed status to history if packed_by is set
+                                if (packedBy && packDateTime) {
+                                    const packerStaffName = Object.keys(packerNameMap).find(key => packerNameMap[key] === packedBy) || 'Unknown';
+                                    newStatusHistory = [...statusHistory, {
+                                        status: 'packed',
+                                        timestamp: isoPackTimestamp,
+                                        user: packerStaffName,
+                                        previous_status: statusHistory.length > 0 ? statusHistory[statusHistory.length - 1].status : null
+                                    }];
+                                }
+
+                                await client.query(`
+                                    UPDATE orders
+                                    SET 
+                                        order_id = COALESCE(NULLIF($1, ''), order_id),
+                                        product_title = COALESCE(NULLIF($2, ''), product_title),
+                                        condition = COALESCE(NULLIF($3, ''), condition),
+                                        serial_number = COALESCE(NULLIF($4, ''), serial_number),
+                                        sku = COALESCE(NULLIF($5, ''), sku),
+                                        packed_by = COALESCE($6, packed_by),
+                                        tested_by = COALESCE($7, tested_by),
+                                        pack_date_time = COALESCE(NULLIF($8, ''), pack_date_time),
+                                        is_shipped = CASE WHEN $8 != '' THEN true ELSE is_shipped END,
+                                        status_history = $9::jsonb
+                                    WHERE shipping_tracking_number = $10
+                                `, [orderId, productTitle, condition, serialNumber, sku, packedBy, testedBy, packDateTime, JSON.stringify(newStatusHistory), shippingTracking]);
+                                updatedCount++;
+                            } else {
+                                // Insert new order
+                                const statusHistory = [];
+                                if (packedBy && packDateTime) {
+                                    const packerStaffName = Object.keys(packerNameMap).find(key => packerNameMap[key] === packedBy) || 'Unknown';
+                                    statusHistory.push({
+                                        status: 'packed',
+                                        timestamp: isoPackTimestamp,
+                                        user: packerStaffName,
+                                        previous_status: null
+                                    });
+                                }
+
+                                await client.query(`
+                                    INSERT INTO orders (
+                                        order_id, product_title, condition, shipping_tracking_number,
+                                        serial_number, sku, packed_by, tested_by, pack_date_time,
+                                        is_shipped, status, status_history
+                                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
+                                `, [orderId, productTitle, condition, shippingTracking, serialNumber, sku, 
+                                    packedBy, testedBy, packDateTime, packDateTime ? true : false, 
+                                    'shipped', JSON.stringify(statusHistory)]);
+                                insertedCount++;
+                            }
+                        }
+                        
+                        techPackerResults.push({ 
+                            sheet: sheetName, 
+                            table: 'orders (shipped)', 
+                            status: 'synced', 
+                            updated: updatedCount,
+                            inserted: insertedCount,
+                            total: updatedCount + insertedCount
+                        });
+                    } finally {
+                        client.release();
+                    }
+                } catch (err) {
+                    console.error(`Error syncing shipped sheet ${sheetName}:`, err);
+                    techPackerResults.push({ 
+                        sheet: sheetName, 
+                        table: 'orders (shipped)', 
+                        status: 'error', 
+                        error: err instanceof Error ? err.message : String(err) 
+                    });
+                }
+            }
+            
             
             // Handle Tech Sheets
             if (techSheets.includes(lowerName)) {
@@ -138,24 +281,63 @@ export async function POST(req: NextRequest) {
                     });
 
                     const rows = response.data.values || [];
-                    const techName = techNames[lowerName];
+                    const employeeId = techEmployeeIds[lowerName];
                     const client = await pool.connect();
                     let updatedCount = 0;
 
                     try {
+                        // Get staff ID and name
+                        const staffResult = await client.query(
+                            'SELECT id, name FROM staff WHERE employee_id = $1',
+                            [employeeId]
+                        );
+                        
+                        if (staffResult.rows.length === 0) {
+                            throw new Error(`Staff not found for employee_id: ${employeeId}`);
+                        }
+                        
+                        const staffId = staffResult.rows[0].id;
+                        const staffName = staffResult.rows[0].name;
+
                         for (const row of rows) {
                             const dateTime = row[0] || ''; // Column A
                             const tracking = row[2] || ''; // Column C
                             const serial = row[3] || ''; // Column D
 
                             if (tracking && serial && dateTime) {
+                                // Convert dateTime to ISO format for status_history
+                                let isoTimestamp = dateTime;
+                                try {
+                                    if (dateTime.includes('/')) {
+                                        const [datePart, timePart] = dateTime.split(' ');
+                                        const [m, d, y] = datePart.split('/');
+                                        isoTimestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${timePart || '00:00:00'}`).toISOString();
+                                    }
+                                } catch (e) {
+                                    // Keep original if conversion fails
+                                }
+
                                 await client.query(`
                                     UPDATE orders
                                     SET serial_number = $1,
                                         tested_by = $2,
-                                        test_date_time = $3
-                                    WHERE shipping_tracking_number = $4
-                                `, [serial, techName, dateTime, tracking]);
+                                        test_date_time = $3,
+                                        status_history = COALESCE(status_history, '[]'::jsonb) || 
+                                            jsonb_build_object(
+                                                'status', 'tested',
+                                                'timestamp', $6,
+                                                'user', $4,
+                                                'previous_status', (
+                                                    SELECT COALESCE(
+                                                        (status_history->-1->>'status')::text,
+                                                        null
+                                                    )
+                                                    FROM orders 
+                                                    WHERE shipping_tracking_number = $5
+                                                )
+                                            )::jsonb
+                                    WHERE shipping_tracking_number = $5
+                                `, [serial, staffId, dateTime, staffName, tracking, isoTimestamp]);
                                 updatedCount++;
                             }
                         }
@@ -189,23 +371,62 @@ export async function POST(req: NextRequest) {
                     });
 
                     const rows = response.data.values || [];
-                    const packerName = packerNames[lowerName];
+                    const employeeId = packerEmployeeIds[lowerName];
                     const client = await pool.connect();
                     let updatedCount = 0;
 
                     try {
+                        // Get staff ID and name
+                        const staffResult = await client.query(
+                            'SELECT id, name FROM staff WHERE employee_id = $1',
+                            [employeeId]
+                        );
+                        
+                        if (staffResult.rows.length === 0) {
+                            throw new Error(`Staff not found for employee_id: ${employeeId}`);
+                        }
+                        
+                        const staffId = staffResult.rows[0].id;
+                        const staffName = staffResult.rows[0].name;
+
                         for (const row of rows) {
                             const dateTime = row[0] || ''; // Column A
                             const tracking = row[1] || ''; // Column B
 
                             if (tracking && dateTime) {
+                                // Convert dateTime to ISO format for status_history
+                                let isoTimestamp = dateTime;
+                                try {
+                                    if (dateTime.includes('/')) {
+                                        const [datePart, timePart] = dateTime.split(' ');
+                                        const [m, d, y] = datePart.split('/');
+                                        isoTimestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${timePart || '00:00:00'}`).toISOString();
+                                    }
+                                } catch (e) {
+                                    // Keep original if conversion fails
+                                }
+
                                 await client.query(`
                                     UPDATE orders
-                                    SET boxed_by = $1,
+                                    SET packed_by = $1,
                                         pack_date_time = $2,
-                                        is_shipped = true
+                                        is_shipped = true,
+                                        status_history = COALESCE(status_history, '[]'::jsonb) || 
+                                            jsonb_build_object(
+                                                'status', 'packed',
+                                                'timestamp', $5,
+                                                'user', $4,
+                                                'previous_status', (
+                                                    SELECT COALESCE(
+                                                        (status_history->-1->>'status')::text,
+                                                        null
+                                                    )
+                                                    FROM orders 
+                                                    WHERE shipping_tracking_number = $3
+                                                )
+                                            )::jsonb
                                     WHERE shipping_tracking_number = $3
-                                `, [packerName, dateTime, tracking]);
+                                `, [staffId, dateTime, tracking, staffName, isoTimestamp]);
                                 updatedCount++;
                             }
                         }
