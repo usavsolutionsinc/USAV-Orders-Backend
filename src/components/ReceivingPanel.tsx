@@ -19,29 +19,11 @@ export default function ReceivingPanel({ onEntryAdded }: ReceivingPanelProps) {
     const [trackingNumber, setTrackingNumber] = useState('');
     const [carrier, setCarrier] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [urgentTracking, setUrgentTracking] = useState<string | null>(null);
-    const [showUrgentAlert, setShowUrgentAlert] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [copiedField, setCopiedField] = useState<string | null>(null);
-
-    // Load urgent tracking number from localStorage
-    useEffect(() => {
-        const urgent = localStorage.getItem('urgentTrackingNumber');
-        setUrgentTracking(urgent);
-    }, []);
-
-    // Check if entered tracking matches urgent tracking
-    useEffect(() => {
-        if (trackingNumber && urgentTracking) {
-            const matches = trackingNumber.toLowerCase().trim() === urgentTracking.toLowerCase().trim();
-            setShowUrgentAlert(matches);
-        } else {
-            setShowUrgentAlert(false);
-        }
-    }, [trackingNumber, urgentTracking]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,7 +47,6 @@ export default function ReceivingPanel({ onEntryAdded }: ReceivingPanelProps) {
             
             setTrackingNumber('');
             setCarrier('');
-            setShowUrgentAlert(false);
             
             if (onEntryAdded) onEntryAdded();
         } catch (error) {
@@ -114,15 +95,6 @@ export default function ReceivingPanel({ onEntryAdded }: ReceivingPanelProps) {
         <div className="flex flex-col h-full bg-white border-r border-gray-200">
             {/* Entry Form at Top */}
             <div className="p-4 border-b border-gray-200">
-                {showUrgentAlert && (
-                    <div className="mb-3 bg-red-600 text-white p-2 rounded-lg animate-pulse">
-                        <div className="flex items-center justify-center gap-2">
-                            <AlertTriangle className="w-4 h-4" />
-                            <span className="text-xs font-black uppercase">URGENT!</span>
-                        </div>
-                    </div>
-                )}
-
                 <div className="flex items-center gap-2 mb-3">
                     <Package className="w-5 h-5 text-blue-600" />
                     <h3 className="text-sm font-black uppercase tracking-tight text-gray-900">
@@ -137,11 +109,7 @@ export default function ReceivingPanel({ onEntryAdded }: ReceivingPanelProps) {
                             value={trackingNumber}
                             onChange={(e) => setTrackingNumber(e.target.value)}
                             placeholder="Scan tracking number..."
-                            className={`w-full px-3 py-2 bg-gray-50 border rounded-lg text-sm font-semibold outline-none transition-all ${
-                                showUrgentAlert 
-                                    ? 'border-red-500 ring-2 ring-red-500/20 bg-red-50' 
-                                    : 'border-gray-200 focus:ring-2 focus:ring-blue-500'
-                            }`}
+                            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold outline-none transition-all focus:ring-2 focus:ring-blue-500"
                             autoFocus
                             required
                         />
@@ -165,11 +133,7 @@ export default function ReceivingPanel({ onEntryAdded }: ReceivingPanelProps) {
                     <button
                         type="submit"
                         disabled={isSubmitting || !trackingNumber.trim()}
-                        className={`w-full py-2 rounded-lg font-black text-xs uppercase tracking-wider transition-all ${
-                            showUrgentAlert
-                                ? 'bg-red-600 hover:bg-red-700 text-white'
-                                : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        } disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed`}
+                        className="w-full py-2 rounded-lg font-black text-xs uppercase tracking-wider transition-all bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? 'Adding...' : 'Add Entry'}
                     </button>

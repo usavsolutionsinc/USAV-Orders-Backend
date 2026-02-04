@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, Play, Package, Calendar, X, Check } from './Icons';
+import { TabSwitch } from './ui/TabSwitch';
 
 interface Order {
   id: number;
@@ -10,9 +11,9 @@ interface Order {
   order_id: string;
   product_title: string;
   sku: string;
-  urgent: boolean;
   status: string;
   shipping_tracking_number: string;
+  out_of_stock: string | null;
 }
 
 interface UpNextOrderProps {
@@ -20,12 +21,10 @@ interface UpNextOrderProps {
   onStart: (tracking: string) => void;
   onMissingParts: (orderId: number, reason: string) => void;
   onAllCompleted?: () => void;
-  showAllPending?: boolean;
-  showOnlyOutOfStock?: boolean;
 }
 
-export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted, showAllPending = false, showOnlyOutOfStock = false }: UpNextOrderProps) {
-  const [nextOrder, setNextOrder] = useState<Order | null>(null);
+export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
+  const [activeTab, setActiveTab] = useState<'current' | 'stock'>('current');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [allCompletedToday, setAllCompletedToday] = useState(false);
@@ -37,28 +36,26 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     // Poll every 30 seconds for new orders
     const interval = setInterval(fetchOrders, 30000);
     return () => clearInterval(interval);
-  }, [techId, showAllPending, showOnlyOutOfStock]);
+  }, [techId, activeTab]);
 
   const fetchOrders = async () => {
     try {
-      let url = `/api/orders/next?techId=${techId}`;
-      if (showAllPending || showOnlyOutOfStock) {
-        url += '&all=true';
-      }
-      if (showOnlyOutOfStock) {
-        url += '&status=missing_parts';
+      // Fetch orders and filter based on out_of_stock column
+      let url = `/api/orders/next?techId=${techId}&all=true`;
+      
+      // Add filter parameter for out_of_stock
+      if (activeTab === 'stock') {
+        url += '&outOfStock=true';
+      } else {
+        url += '&outOfStock=false';
       }
 
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (showAllPending || showOnlyOutOfStock) {
-          setOrders(data.orders || []);
-        } else {
-          setNextOrder(data.order || null);
-        }
+        setOrders(data.orders || []);
         setAllCompletedToday(data.all_completed || false);
-        if (data.all_completed && onAllCompleted && !showOnlyOutOfStock) {
+        if (data.all_completed && onAllCompleted && activeTab === 'current') {
           onAllCompleted();
         }
       }
@@ -124,17 +121,13 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     }
   };
 
-  const renderOrderCard = (order: Order, isNext: boolean = false) => (
+  const renderOrderCard = (order: Order) => (
     <motion.div
       key={order.id}
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      className={`rounded-2xl p-5 border transition-all relative shadow-sm hover:shadow-md ${
-        order.urgent
-          ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200 ring-2 ring-red-500/10'
-          : 'bg-white border-gray-200 hover:border-blue-300'
-      } ${!isNext ? 'mb-3' : ''}`}
+      className="rounded-2xl p-5 border transition-all relative shadow-sm hover:shadow-md mb-3 bg-white border-gray-200 hover:border-blue-300"
     >
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-2">
@@ -145,13 +138,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {order.urgent && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white rounded shadow-sm">
-              <AlertCircle className="w-3 h-3" />
-              <span className="text-[8px] font-black uppercase tracking-wider">Urgent</span>
-            </div>
-          )}
-          {showOnlyOutOfStock && (
+          {order.out_of_stock && activeTab === 'stock' && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm">
               <AlertCircle className="w-3 h-3" />
               <span className="text-[8px] font-black uppercase tracking-wider">Out of Stock</span>
@@ -163,8 +150,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </div>
       </div>
 
-      {/* Action Buttons Row */}
-      {!showOnlyOutOfStock && (
+      {/* Action Buttons Row - Only show for Current tab */}
+      {activeTab === 'current' && (
         <div className="flex flex-col gap-2 mb-5">
           <div className="flex items-center gap-3">
             <button
@@ -261,61 +248,49 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     );
   }
 
-  if (allCompletedToday && !showOnlyOutOfStock) {
-    return (
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-emerald-50 rounded-2xl p-8 border-2 border-emerald-200 text-center space-y-4"
-      >
-        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2">
-          <Check className="w-8 h-8 text-emerald-600" />
-        </div>
-        <h3 className="text-sm font-black text-emerald-900 uppercase tracking-widest leading-tight">
-          All orders have been completed today!
-        </h3>
-        <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest">
-          Great job!
-        </p>
-      </motion.div>
-    );
-  }
+  return (
+    <div className="flex flex-col space-y-4">
+      {/* Tab Switcher */}
+      <TabSwitch
+        tabs={[
+          { id: 'current', label: 'Current', color: 'blue' },
+          { id: 'stock', label: 'Stock', color: 'orange' }
+        ]}
+        activeTab={activeTab}
+        onTabChange={(tab) => setActiveTab(tab as 'current' | 'stock')}
+      />
 
-  if (showAllPending || showOnlyOutOfStock) {
-    if (orders.length === 0) {
-      return (
+      {/* Content Area */}
+      {allCompletedToday && activeTab === 'current' ? (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-emerald-50 rounded-2xl p-8 border-2 border-emerald-200 text-center space-y-4"
+        >
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2">
+            <Check className="w-8 h-8 text-emerald-600" />
+          </div>
+          <h3 className="text-sm font-black text-emerald-900 uppercase tracking-widest leading-tight">
+            All orders have been completed today!
+          </h3>
+          <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest">
+            Great job!
+          </p>
+        </motion.div>
+      ) : orders.length === 0 ? (
         <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center">
           <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-            {showOnlyOutOfStock ? 'No out-of-stock orders' : 'No pending orders'}
+            {activeTab === 'stock' ? 'No out-of-stock orders' : 'No current orders'}
           </p>
         </div>
-      );
-    }
-
-    return (
-      <div className="flex flex-col">
-        <AnimatePresence mode="popLayout">
-          {orders.map((order) => renderOrderCard(order))}
-        </AnimatePresence>
-      </div>
-    );
-  }
-
-  if (!nextOrder) {
-    return (
-      <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center">
-        <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-          No orders unassigned
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <AnimatePresence mode="wait">
-      {renderOrderCard(nextOrder, true)}
-    </AnimatePresence>
+      ) : (
+        <div className="flex flex-col">
+          <AnimatePresence mode="popLayout">
+            {orders.map((order) => renderOrderCard(order))}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
   );
 }

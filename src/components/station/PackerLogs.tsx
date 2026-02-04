@@ -9,7 +9,6 @@ interface PackerLog {
     timestamp: string;
     title?: string;
     tracking?: string;
-    status?: string;
     count?: number;
 }
 
@@ -206,13 +205,12 @@ export default function PackerLogs({
         
         if (!groupedHistory[date]) groupedHistory[date] = [];
         
-        const rawCount = log.count || (log as any).status; 
+        const rawCount = log.count;
         const normalizedLog = {
             ...log,
             timestamp,
             title: log.title || (log as any).product || 'Unknown Product',
             tracking: log.tracking || (log as any).trackingNumber || '',
-            status: log.status || (log as any).carrier || '', 
             count: typeof rawCount === 'number' ? rawCount : parseInt(rawCount) || 0
         };
         
@@ -266,7 +264,7 @@ export default function PackerLogs({
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             key={log.id} 
-                                            className={`grid grid-cols-[55px_1fr_60px_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
+                                            className={`grid grid-cols-[55px_1fr_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
                                                 {ts ? (
@@ -277,9 +275,6 @@ export default function PackerLogs({
                                             </div>
                                             <div className="text-[11px] font-bold text-gray-900 truncate text-left">
                                                 {log.title || (log as any).product || 'Unknown Product'}
-                                            </div>
-                                            <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
-                                                {log.status || (log as any).carrier || ''}
                                             </div>
                                             <CopyableText 
                                                 text={log.tracking || (log as any).trackingNumber || ''} 

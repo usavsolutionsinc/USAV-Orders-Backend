@@ -19,16 +19,13 @@ export async function GET(req: NextRequest) {
         ship_by_date,
         order_id,
         product_title,
-        quantity,
         sku,
         condition,
         shipping_tracking_number,
-        days_late,
         out_of_stock,
         notes,
-        assigned_to,
-        status,
-        urgent
+        tester_id,
+        packer_id
       FROM orders
       WHERE 1=1
     `;
@@ -41,11 +38,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (assignedTo) {
-      query += ` AND assigned_to = $${paramCount++}`;
+      query += ` AND (tester_id = $${paramCount} OR packer_id = $${paramCount})`;
+      paramCount++;
       params.push(assignedTo);
     }
 
-    query += ` ORDER BY urgent DESC, ship_by_date ASC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
+    query += ` ORDER BY ship_by_date ASC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
     params.push(limit, offset);
 
     const result = await pool.query(query, params);

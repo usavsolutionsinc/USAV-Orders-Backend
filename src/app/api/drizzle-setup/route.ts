@@ -123,7 +123,6 @@ export async function POST() {
                 tracking_number VARCHAR(100) NOT NULL,
                 order_number VARCHAR(100),
                 status VARCHAR(20) DEFAULT 'pending',
-                urgent BOOLEAN DEFAULT false,
                 received_date TIMESTAMP,
                 processed_date TIMESTAMP,
                 notes TEXT,
@@ -147,12 +146,9 @@ export async function POST() {
                 sku TEXT,
                 condition TEXT,
                 shipping_tracking_number TEXT,
-                days_late TEXT,
                 out_of_stock TEXT,
                 notes TEXT,
-                assigned_to TEXT,
-                status TEXT NOT NULL DEFAULT 'unassigned',
-                urgent TEXT
+                status TEXT NOT NULL DEFAULT 'unassigned'
             )
         `);
         tables.push('orders');
@@ -306,7 +302,6 @@ export async function POST() {
             'CREATE INDEX IF NOT EXISTS idx_daily_instances_status ON daily_task_instances(status)',
             'CREATE INDEX IF NOT EXISTS idx_receiving_tasks_tracking ON receiving_tasks(tracking_number)',
             'CREATE INDEX IF NOT EXISTS idx_receiving_tasks_status ON receiving_tasks(status)',
-            'CREATE INDEX IF NOT EXISTS idx_receiving_tasks_urgent ON receiving_tasks(urgent)',
             'CREATE INDEX IF NOT EXISTS idx_packing_logs_tracking ON packing_logs(tracking_number)',
             'CREATE INDEX IF NOT EXISTS idx_packing_logs_order_id ON packing_logs(order_id)',
         ];

@@ -8,6 +8,21 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { ShippedDetailsPanel } from './ShippedDetailsPanel';
 import { CopyableText } from '../ui/CopyableText';
 
+// Hard-coded staff ID to name mapping
+const STAFF_NAMES: { [key: number]: string } = {
+  1: 'Michael',
+  2: 'Thuc',
+  3: 'Sang',
+  4: 'Tuan',
+  5: 'Thuy',
+  6: 'Cuong'
+};
+
+function getStaffName(staffId: number | null | undefined): string {
+  if (!staffId) return '---';
+  return STAFF_NAMES[staffId] || `#${staffId}`;
+}
+
 export function ShippedTable() {
   const searchParams = useSearchParams();
   const search = searchParams.get('search');
@@ -225,7 +240,7 @@ export function ShippedTable() {
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[60px_1fr_94px_auto_70px_80px_80px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                          className={`grid grid-cols-[60px_1fr_94px_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
@@ -244,13 +259,13 @@ export function ShippedTable() {
                             ) : '--:--'}
                           </div>
                           
-                          {/* 2. Product Title & Condition */}
+                          {/* 2. Product Title, Tested By, Packed By, Condition & SKU */}
                           <div className="flex flex-col min-w-0">
                             <div className="text-[11px] font-bold text-gray-900 truncate">
                               {record.product_title || 'Unknown Product'}
                             </div>
                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
-                              {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                              {getStaffName((record as any).tested_by)} • {getStaffName((record as any).packed_by)} • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
                             </div>
                           </div>
                           
@@ -282,22 +297,6 @@ export function ShippedTable() {
                               className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
                               variant="serial"
                             />
-                          </div>
-                          
-                          {/* 6. Tested By */}
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Tested By</span>
-                            <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
-                              {(record as any).tested_by_name || '---'}
-                            </div>
-                          </div>
-                          
-                          {/* 7. Packed By */}
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Packed By</span>
-                            <div className="text-[10px] font-bold text-gray-600 truncate bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
-                              {(record as any).packed_by_name || '---'}
-                            </div>
                           </div>
                         </motion.div>
                       );

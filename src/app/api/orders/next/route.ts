@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     const techId = searchParams.get('techId');
     const getAll = searchParams.get('all') === 'true';
     const filterStatus = searchParams.get('status');
+    const outOfStock = searchParams.get('outOfStock');
 
     if (!techId) {
       return NextResponse.json(
@@ -18,17 +19,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const assignedTo = `Tech_${techId}`;
+    const techIdNum = parseInt(techId);
 
     // 1. Check if there are ANY pending orders left for today (not completed, not missing_parts, not tested, not shipped)
     const totalPendingResult = await pool.query(
       `SELECT COUNT(*) as count
        FROM orders o
        WHERE o.status NOT IN ('completed', 'missing_parts')
-         AND (o.assigned_to = $1 OR o.assigned_to IS NULL OR o.assigned_to = '')
+         AND (o.tester_id = $1 OR o.tester_id IS NULL)
          AND (o.test_date_time IS NULL OR o.test_date_time = '')
-         AND o.is_shipped = false`,
-      [assignedTo]
+         AND (o.is_shipped = false OR o.is_shipped IS NULL)`,
+      [techIdNum]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
@@ -40,39 +41,45 @@ export async function GET(req: NextRequest) {
         order_id,
         product_title,
         sku,
-        urgent,
         status,
         condition,
         shipping_tracking_number,
+        serial_number,
         out_of_stock
       FROM orders
       WHERE 
         -- Only show if not tested yet and not shipped
         (test_date_time IS NULL OR test_date_time = '')
-        AND is_shipped = false
+        AND (is_shipped = false OR is_shipped IS NULL)
     `;
-    const params: any[] = [assignedTo];
+    const params: any[] = [techIdNum];
     let paramCount = 2;
 
+    // Filter based on out_of_stock parameter
+    if (outOfStock === 'true') {
+      // Show orders where out_of_stock is NOT NULL and NOT empty
+      query += ` AND out_of_stock IS NOT NULL AND out_of_stock != '' `;
+    } else if (outOfStock === 'false') {
+      // Show orders where out_of_stock is NULL or empty (current orders)
+      query += ` AND (out_of_stock IS NULL OR out_of_stock = '') `;
+    }
+
     if (filterStatus === 'missing_parts') {
-      query += ` AND status = 'missing_parts' AND (assigned_to = $1 OR assigned_to IS NULL OR assigned_to = '') `;
+      query += ` AND status = 'missing_parts' AND (tester_id = $1 OR tester_id IS NULL) `;
     } else {
       query += `
         -- Status is not completed or missing_parts
         AND status NOT IN ('completed', 'missing_parts')
-        -- Out of stock must be empty for pending
-        AND (out_of_stock IS NULL OR out_of_stock = '')
         -- Either assigned to this tech OR truly unassigned
         AND (
-          assigned_to = $1 
-          OR ((assigned_to IS NULL OR assigned_to = '') AND (status IS NULL OR status = 'unassigned'))
+          tester_id = $1 
+          OR (tester_id IS NULL AND (status IS NULL OR status = 'unassigned'))
         )
       `;
     }
 
     query += `
       ORDER BY 
-        urgent DESC,
         ship_by_date ASC
     `;
 

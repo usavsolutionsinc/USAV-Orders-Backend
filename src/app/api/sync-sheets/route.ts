@@ -321,19 +321,12 @@ export async function POST(req: NextRequest) {
                                         status_history = COALESCE(status_history, '[]'::jsonb) || 
                                             jsonb_build_object(
                                                 'status', 'tested',
-                                                'timestamp', $6,
-                                                'user', $4,
-                                                'previous_status', (
-                                                    SELECT COALESCE(
-                                                        (status_history->-1->>'status')::text,
-                                                        null
-                                                    )
-                                                    FROM orders 
-                                                    WHERE shipping_tracking_number = $5
-                                                )
+                                                'time', $4::text,
+                                                'user', $5::text,
+                                                'previous_status', status_history->-1->>'status'
                                             )::jsonb
-                                    WHERE shipping_tracking_number = $5
-                                `, [serial, staffId, dateTime, staffName, tracking, isoTimestamp]);
+                                    WHERE shipping_tracking_number = $6
+                                `, [serial, staffId, dateTime, isoTimestamp, staffName, tracking]);
                                 updatedCount++;
                             }
                         }
@@ -410,19 +403,12 @@ export async function POST(req: NextRequest) {
                                         status_history = COALESCE(status_history, '[]'::jsonb) || 
                                             jsonb_build_object(
                                                 'status', 'packed',
-                                                'timestamp', $5,
-                                                'user', $4,
-                                                'previous_status', (
-                                                    SELECT COALESCE(
-                                                        (status_history->-1->>'status')::text,
-                                                        null
-                                                    )
-                                                    FROM orders 
-                                                    WHERE shipping_tracking_number = $3
-                                                )
+                                                'time', $4::text,
+                                                'user', $5::text,
+                                                'previous_status', status_history->-1->>'status'
                                             )::jsonb
                                     WHERE shipping_tracking_number = $3
-                                `, [staffId, dateTime, tracking, staffName, isoTimestamp]);
+                                `, [staffId, dateTime, tracking, isoTimestamp, staffName]);
                                 updatedCount++;
                             }
                         }

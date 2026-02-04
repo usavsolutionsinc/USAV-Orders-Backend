@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
         // 3. Also check Google Sheets as fallback
         const shippedTrackingResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: DEST_SPREADSHEET_ID,
-            range: `${shippedSheetName}!E2:E`, // Column E is tracking in Shipped sheet
+            range: `${shippedSheetName}!F2:F`, // Column F is tracking in Shipped sheet
         });
 
         const existingTrackingInSheets = new Set<string>();
@@ -176,30 +176,34 @@ export async function POST(req: NextRequest) {
         });
 
         const processedShippedRows = filteredSourceRows.map(row => {
-            const destRow = new Array(10).fill(''); // A to J
-            destRow[0] = ''; // Column 1 empty as requested
-            destRow[1] = row[colIndices.orderNumber] || '';
-            destRow[2] = row[colIndices.itemTitle] || '';
-            destRow[3] = row[colIndices.condition] || '';
-            destRow[4] = row[colIndices.tracking] || '';
-            // F-J remain empty
+            const destRow = new Array(12).fill(''); // A to L (12 columns)
+            destRow[0] = ''; // A = Pack Date/Time (empty, filled by packer)
+            destRow[1] = row[colIndices.orderNumber] || ''; // B = Order ID
+            destRow[2] = row[colIndices.itemTitle] || ''; // C = Product Title
+            destRow[3] = row[colIndices.quantity] || ''; // D = Quantity
+            destRow[4] = row[colIndices.condition] || ''; // E = Condition
+            destRow[5] = row[colIndices.tracking] || ''; // F = Shipping TRK #
+            // G, H, I remain empty (Serial Number, Packed By, Tested By - filled later)
+            destRow[9] = row[colIndices.shipByDate] || ''; // J = Ship By Date
+            destRow[10] = row[colIndices.usavSku] || ''; // K = SKU
+            destRow[11] = row[colIndices.note] || ''; // L = Notes
             return destRow;
         });
 
-        // Prepare data for Neon DB
+        // Prepare data for Neon DB - orders table
+        // Note: quantity is stored in Google Sheets but not in orders table schema
         const ordersToInsert = filteredSourceRows.map(row => ({
             shipByDate: row[colIndices.shipByDate] || '',
             orderId: row[colIndices.orderNumber] || '',
             productTitle: row[colIndices.itemTitle] || '',
-            quantity: row[colIndices.quantity] || '',
             sku: row[colIndices.usavSku] || '',
             condition: row[colIndices.condition] || '',
             shippingTrackingNumber: row[colIndices.tracking] || '',
-            outOfStock: '', // OOS
+            outOfStock: '',
             notes: row[colIndices.note] || '',
         }));
 
-        // 6. Insert into NEON DB (primary) and Google Sheets (legacy backup)
+        // 6. Insert into NEON DB (orders table only) and Google Sheets Orders tab
         const dbInsertOrders = db.insert(ordersTable).values(ordersToInsert);
 
         const appendOrders = sheets.spreadsheets.values.append({
@@ -216,7 +220,7 @@ export async function POST(req: NextRequest) {
             requestBody: { values: processedShippedRows },
         });
 
-        // Insert to NEON first (source of truth), then Google Sheets (legacy)
+        // Insert to NEON orders table (source of truth), then Google Sheets (legacy)
         await Promise.all([dbInsertOrders, appendOrders, appendShipped]);
 
         return NextResponse.json({ 

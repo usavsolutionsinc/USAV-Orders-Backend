@@ -40,7 +40,6 @@ export default function StationTesting({
     goal = 50,
     onComplete
 }: StationTestingProps) {
-    const [activeSubTab, setActiveSubTab] = useState<'current' | 'out-of-stock'>('current');
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [processedOrder, setProcessedOrder] = useState<any>(null);
@@ -320,40 +319,12 @@ export default function StationTesting({
                         </div>
                     </form>
 
-                    {/* Horizontal Sub-menu - Moved below scan input */}
-                    <div className="flex items-center justify-center gap-1 py-2 bg-gray-50/50 rounded-2xl p-1">
-                        {[
-                            { id: 'current', icon: Zap, label: 'Current' },
-                            { id: 'out-of-stock', icon: AlertCircle, label: 'Stock' }
-                        ].map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveSubTab(tab.id as any)}
-                                className={`flex-1 px-4 py-2.5 rounded-xl transition-all relative flex items-center justify-center gap-2 ${
-                                    activeSubTab === tab.id 
-                                        ? activeColor.text + ' bg-white shadow-sm ring-1 ring-gray-200/50' 
-                                        : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'
-                                }`}
-                            >
-                                <tab.icon className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">{tab.label}</span>
-                                {activeSubTab === tab.id && (
-                                    <motion.div 
-                                        layoutId="activeSubTab"
-                                        className={`absolute bottom-0 left-0 right-0 h-0.5 ${activeColor.bg} rounded-full mx-2`}
-                                    />
-                                )}
-                            </button>
-                        ))}
-                    </div>
                 </div>
 
                 {/* Content Area - Vertical Stack */}
                 <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-8 space-y-4">
-                    {activeSubTab === 'current' ? (
-                        <>
-                            <AnimatePresence mode="wait">
-                                {processedOrder ? (
+                    <AnimatePresence mode="wait">
+                        {processedOrder ? (
                                     <motion.div 
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
@@ -403,35 +374,23 @@ export default function StationTesting({
                                         </div>
                                     </motion.div>
                                 ) : null}
-                            </AnimatePresence>
+                    </AnimatePresence>
 
-                            {/* Pending Orders Section - Always visible in Current tab */}
-                            <div className="space-y-3 mt-8">
-                                <UpNextOrder 
-                                    techId={userId}
-                                    onStart={(tracking) => {
-                                        setScannedTrackingNumber(null);
-                                        setProcessedOrder(null);
-                                        setSerialNumber('');
-                                        setTimeout(() => handleSubmit(undefined, tracking), 50);
-                                    }}
-                                    onMissingParts={(orderId, reason) => {
-                                        if (onComplete) onComplete();
-                                    }}
-                                    showAllPending={true}
-                                />
-                            </div>
-                        </>
-                    ) : (
-                        <div className="space-y-3">
-                            <UpNextOrder 
-                                techId={userId}
-                                onStart={() => {}}
-                                onMissingParts={() => {}}
-                                showOnlyOutOfStock={true}
-                            />
-                        </div>
-                    )}
+                    {/* Pending Orders Section with built-in tabs */}
+                    <div className="space-y-3 mt-8">
+                        <UpNextOrder 
+                            techId={userId}
+                            onStart={(tracking) => {
+                                setScannedTrackingNumber(null);
+                                setProcessedOrder(null);
+                                setSerialNumber('');
+                                setTimeout(() => handleSubmit(undefined, tracking), 50);
+                            }}
+                            onMissingParts={(orderId, reason) => {
+                                if (onComplete) onComplete();
+                            }}
+                        />
+                    </div>
 
                     {/* Footer Logistics */}
                     <div className="mt-auto pt-6 border-t border-gray-50 text-center">

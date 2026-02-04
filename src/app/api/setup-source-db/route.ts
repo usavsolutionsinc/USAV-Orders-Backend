@@ -40,12 +40,9 @@ export async function POST() {
                 sku TEXT,
                 condition TEXT,
                 shipping_tracking_number TEXT,
-                days_late TEXT,
                 out_of_stock TEXT,
                 notes TEXT,
-                assigned_to TEXT,
-                status TEXT NOT NULL DEFAULT 'unassigned',
-                urgent TEXT
+                status TEXT NOT NULL DEFAULT 'unassigned'
             )
         `);
 

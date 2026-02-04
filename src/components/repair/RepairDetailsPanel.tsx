@@ -12,6 +12,15 @@ interface RepairDetailsPanelProps {
   onUpdate: () => void;
 }
 
+const STATUS_OPTIONS = [
+  'Awaiting Parts',
+  'Pending Repair',
+  'Awaiting Pickup',
+  'Repaired, Contact Customer',
+  'Awaiting Payment',
+  'Done'
+];
+
 export function RepairDetailsPanel({ 
   repair, 
   onClose, 
@@ -19,6 +28,7 @@ export function RepairDetailsPanel({
 }: RepairDetailsPanelProps) {
   const [notes, setNotes] = useState(repair.notes || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const handleSaveNotes = async () => {
     if (notes === repair.notes) return;
@@ -42,6 +52,23 @@ export function RepairDetailsPanel({
       setNotes(repair.notes || '');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    setUpdatingStatus(true);
+    try {
+      const res = await fetch('/api/repair-service', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: repair.id, status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating status:', error);
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -151,11 +178,25 @@ export function RepairDetailsPanel({
         {/* Current Status */}
         <section>
           <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-            Current Status
+            Update Status
           </h3>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm font-black uppercase tracking-wider text-blue-900">{repair.status || 'No status set'}</p>
-          </div>
+          <select
+            value={repair.status || ''}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            disabled={updatingStatus}
+            className={`w-full text-sm font-black uppercase tracking-wider px-4 py-3 rounded-lg border transition-all outline-none focus:ring-4 focus:ring-blue-500/10 ${
+              repair.status === 'Done'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : repair.status?.includes('Awaiting')
+                ? 'bg-amber-50 border-amber-200 text-amber-700'
+                : 'bg-blue-50 border-blue-200 text-blue-700'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            <option value="">Select Status...</option>
+            {STATUS_OPTIONS.map(status => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
         </section>
         
         {/* Status History */}
@@ -166,24 +207,24 @@ export function RepairDetailsPanel({
             </h3>
             <div className="space-y-2">
               {repair.status_history.slice().reverse().map((entry, idx) => {
-                const isShippedOrPickedUp = entry.status === 'Shipped' || entry.status === 'Picked Up';
+                const isDone = entry.status === 'Done';
                 
                 return (
                   <div 
                     key={idx} 
                     className={`flex items-start gap-3 p-3 rounded-lg ${
-                      isShippedOrPickedUp ? 'bg-emerald-50 border border-emerald-200' : 'bg-gray-50'
+                      isDone ? 'bg-emerald-50 border border-emerald-200' : 'bg-gray-50'
                     }`}
                   >
-                    <div className={`mt-0.5 ${isShippedOrPickedUp ? 'text-emerald-600' : 'text-blue-600'}`}>
-                      {isShippedOrPickedUp ? (
+                    <div className={`mt-0.5 ${isDone ? 'text-emerald-600' : 'text-blue-600'}`}>
+                      {isDone ? (
                         <Check className="w-4 h-4" />
                       ) : (
                         <Clock className="w-4 h-4" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className={`font-bold text-sm ${isShippedOrPickedUp ? 'text-emerald-900' : 'text-gray-900'}`}>
+                      <p className={`font-bold text-sm ${isDone ? 'text-emerald-900' : 'text-gray-900'}`}>
                         {entry.status}
                       </p>
                       <p className="text-xs text-gray-600 mt-0.5">

@@ -9,7 +9,6 @@ interface ReceivingTask {
     trackingNumber: string;
     orderNumber: string | null;
     status: string;
-    urgent: boolean;
     receivedDate: string | null;
     processedDate: string | null;
     notes: string | null;
@@ -130,21 +129,13 @@ export default function ReceivingTaskList() {
                         <div
                             key={task.id}
                             className={`group relative flex items-start gap-4 p-4 rounded-2xl border transition-all ${
-                                task.urgent 
-                                    ? 'bg-red-50 border-red-200 ring-2 ring-red-100' 
-                                    : isCompleted 
+                                isCompleted 
                                     ? 'bg-emerald-50 border-emerald-100 opacity-75' 
                                     : isInProgress
                                     ? 'bg-blue-50 border-blue-100'
                                     : 'bg-gray-50 border-gray-200 hover:bg-white hover:border-blue-300'
                             }`}
                         >
-                            {task.urgent && (
-                                <div className="absolute -top-2 -right-2 bg-red-600 text-white px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-lg animate-pulse flex items-center gap-1">
-                                    <AlertTriangle className="w-3 h-3" />
-                                    URGENT
-                                </div>
-                            )}
 
                             <div className="relative mt-1">
                                 <button

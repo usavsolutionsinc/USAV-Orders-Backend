@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
- * POST /api/orders/assign - Assign order to technician
+ * POST /api/orders/assign - Assign order to technician or packer
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, assignedTo, urgent, shipByDate, outOfStock } = body;
+    const { orderId, testerId, packerId, shipByDate, outOfStock } = body;
 
     if (!orderId) {
       return NextResponse.json(
@@ -21,24 +21,14 @@ export async function POST(req: NextRequest) {
     const values: any[] = [];
     let paramCount = 1;
 
-    if (assignedTo !== undefined) {
-      updates.push(`assigned_to = $${paramCount++}`);
-      values.push(assignedTo || null);
-      
-      // If assigning to a tech, change status to 'assigned'
-      if (assignedTo) {
-        updates.push(`status = $${paramCount++}`);
-        values.push('assigned');
-      } else {
-        // If unassigning, change status back to 'unassigned'
-        updates.push(`status = $${paramCount++}`);
-        values.push('unassigned');
-      }
+    if (testerId !== undefined) {
+      updates.push(`tester_id = $${paramCount++}`);
+      values.push(testerId || null);
     }
 
-    if (urgent !== undefined) {
-      updates.push(`urgent = $${paramCount++}`);
-      values.push(urgent);
+    if (packerId !== undefined) {
+      updates.push(`packer_id = $${paramCount++}`);
+      values.push(packerId || null);
     }
 
     if (shipByDate !== undefined) {

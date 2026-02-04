@@ -36,8 +36,7 @@ export async function GET(req: NextRequest) {
                 id, 
                 pack_date_time as timestamp, 
                 shipping_tracking_number as tracking, 
-                product_title as title,
-                status
+                product_title as title
             FROM orders
             WHERE packed_by = $1
               AND pack_date_time IS NOT NULL 
@@ -54,7 +53,6 @@ export async function GET(req: NextRequest) {
             trackingNumber: log.tracking || '',
             title: log.title || '',
             product: log.title || '',
-            status: log.status || '',
             packedAt: log.timestamp,
         }));
 

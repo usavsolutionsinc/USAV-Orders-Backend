@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Search, X, Printer, Info, AlertTriangle } from '../Icons';
+import { Loader2, Search, X, Printer, AlertTriangle } from '../Icons';
 import { CopyableText } from '../ui/CopyableText';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
@@ -19,24 +19,16 @@ const formatPhoneNumber = (phone: string): string => {
   return phone;
 };
 
-const STATUS_OPTIONS = [
-  'Awaiting Parts',
-  'Pending Repair',
-  'Awaiting Pickup',
-  'Repaired, Contact Customer',
-  'Awaiting Payment',
-  'Awaiting Additional Parts Payment',
-  'Shipped',
-  'Picked Up'
-];
+interface RepairTableProps {
+  filter: 'active' | 'done';
+}
 
-export function RepairTable() {
+export function RepairTable({ filter }: RepairTableProps) {
   const searchParams = useSearchParams();
   const search = searchParams.get('search');
   const [repairs, setRepairs] = useState<RSRecord[]>([]);
   const [selectedRepair, setSelectedRepair] = useState<RSRecord | null>(null);
   const [loading, setLoading] = useState(true);
-  const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -120,27 +112,6 @@ export function RepairTable() {
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, repairs]);
 
-  const handleStatusChange = async (id: number, newStatus: string) => {
-    setRepairs(prev => prev.map(r => 
-      r.id === id ? { ...r, status: newStatus } : r
-    ));
-    setUpdatingStatus(id);
-    try {
-      const res = await fetch('/api/repair-service', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: newStatus }),
-      });
-      if (!res.ok) throw new Error('Failed to update status');
-      await fetchRepairs();
-    } catch (error) {
-      console.error('Error updating status:', error);
-      fetchRepairs();
-    } finally {
-      setUpdatingStatus(null);
-    }
-  };
-
   const handleRowClick = (repair: RSRecord) => {
     setSelectedRepair(repair);
   };
@@ -153,9 +124,18 @@ export function RepairTable() {
     fetchRepairs();
   };
 
+  // Filter repairs based on active/done tab
+  const filteredRepairs = repairs.filter(repair => {
+    if (filter === 'done') {
+      return repair.status === 'Done';
+    } else {
+      return repair.status !== 'Done';
+    }
+  });
+
   // Group records by date
   const groupedRepairs: { [key: string]: RSRecord[] } = {};
-  repairs.forEach(record => {
+  filteredRepairs.forEach(record => {
     if (!record.date_time) return;
     let date = '';
     try {
@@ -216,7 +196,7 @@ export function RepairTable() {
               <LoadingSpinner size="lg" className="text-blue-600" />
               <p className="text-[10px] font-black uppercase tracking-widest">Loading Repairs...</p>
             </div>
-          ) : repairs.length === 0 ? (
+          ) : filteredRepairs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               {search ? (
                 <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
@@ -253,7 +233,7 @@ export function RepairTable() {
                         animate={{ opacity: 1 }}
                         key={repair.id}
                         onClick={() => handleRowClick(repair)}
-                        className={`grid grid-cols-[60px_2fr_1fr_94px_80px_140px_80px] items-center gap-3 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                        className={`grid grid-cols-[60px_2fr_1fr_180px] items-center gap-1 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                           selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                         }`}
                       >
@@ -271,14 +251,14 @@ export function RepairTable() {
                           ) : '--:--'}
                         </div>
                         
-                        {/* 2. Product Title, Name, Phone & Email */}
+                        {/* 2. Product Title, Name, Phone, Email & Price */}
                         <div className="flex flex-col min-w-0 gap-1">
                           {/* Product Title - Large */}
                           <div className="text-[13px] font-black text-gray-900 truncate leading-tight">
                             {repair.product_title || 'Unknown Product'}
                           </div>
                           
-                          {/* Customer Name, Phone & Email - All on one line */}
+                          {/* Customer Name, Phone, Email & Price - All on one line */}
                           <div className="flex items-center gap-3 mt-0.5">
                             <div className="text-[10px] font-black text-gray-700 truncate uppercase tracking-tight">
                               {(() => {
@@ -301,6 +281,10 @@ export function RepairTable() {
                                 return parts[2] || '';
                               })()}
                             </div>
+                            {/* Price - Green value only */}
+                            <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                              {repair.price ? `$${repair.price}` : '---'}
+                            </div>
                           </div>
                         </div>
                         
@@ -311,59 +295,16 @@ export function RepairTable() {
                           </div>
                         </div>
                         
-                        {/* 4. Ticket # (Copyable) */}
-                        <div className="flex flex-col w-[94px]">
-                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
-                          <CopyableText 
-                            text={repair.ticket_number || ''} 
-                            className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
-                            variant="default"
-                          />
-                        </div>
-                        
-                        {/* 5. Price */}
-                        <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Price</span>
-                          <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                            {repair.price ? `$${repair.price}` : '---'}
-                          </div>
-                        </div>
-                        
-                        {/* 6. Status Dropdown */}
-                        <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
-                          <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Status</span>
-                          <select
-                            value={repair.status || ''}
-                            onChange={(e) => handleStatusChange(repair.id, e.target.value)}
-                            disabled={updatingStatus === repair.id}
-                            className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border transition-all outline-none focus:ring-4 focus:ring-blue-500/10 ${
-                              repair.status === 'Shipped' || repair.status === 'Picked Up'
-                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                : repair.status?.includes('Awaiting')
-                                ? 'bg-amber-50 border-amber-200 text-amber-700'
-                                : 'bg-blue-50 border-blue-200 text-blue-700'
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
-                          >
-                            <option value="">Status...</option>
-                            {STATUS_OPTIONS.map(status => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                        </div>
-                        
-                        {/* 7. Actions */}
+                        {/* 4. Ticket # and Actions */}
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => handleRowClick(repair)}
-                            className={`p-1.5 rounded-lg transition-all ${
-                              selectedRepair?.id === repair.id 
-                                ? 'bg-blue-600 text-white' 
-                                : 'bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
-                            }`}
-                            title="View Details"
-                          >
-                            <Info className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
+                            <CopyableText 
+                              text={repair.ticket_number || ''} 
+                              className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
+                              variant="default"
+                            />
+                          </div>
                           <button
                             onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank')}
                             className="p-1.5 bg-gray-50 hover:bg-orange-50 text-gray-400 hover:text-orange-600 rounded-lg transition-all"

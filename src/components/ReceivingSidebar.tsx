@@ -80,10 +80,10 @@ export default function ReceivingSidebar({ hideToggle = false }: ReceivingSideba
             <header className="flex justify-between items-start">
                 <div>
                     <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-                        Urgent Ship
+                        Incoming Ship
                     </h2>
                     <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
-                        Incoming Trackings
+                        Tracked Deliveries
                     </p>
                 </div>
             </header>
@@ -133,7 +133,7 @@ export default function ReceivingSidebar({ hideToggle = false }: ReceivingSideba
                         <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 border-dashed flex flex-col items-center justify-center text-center">
                             <Package className="w-6 h-6 text-gray-300 mb-2" />
                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                                No Urgent Deliveries
+                                No Tracked Deliveries
                             </p>
                         </div>
                     ) : (

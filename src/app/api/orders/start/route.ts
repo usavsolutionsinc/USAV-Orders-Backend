@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
- * POST /api/orders/start - Start an order (assign if unassigned)
+ * POST /api/orders/start - Start an order (assign to technician if not already assigned)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -15,15 +15,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const assignedTo = `Tech_${techId}`;
-
-    // Update status to in_progress and assign to tech if not already assigned
+    // Assign to tech if not already assigned
     await pool.query(
       `UPDATE orders 
-       SET status = 'in_progress',
-           assigned_to = COALESCE(assigned_to, $2)
+       SET tester_id = COALESCE(tester_id, $2)
        WHERE id = $1`,
-      [orderId, assignedTo]
+      [orderId, parseInt(techId)]
     );
 
     return NextResponse.json({ success: true });

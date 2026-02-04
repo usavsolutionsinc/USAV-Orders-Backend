@@ -187,7 +187,7 @@ export default function DashboardSidebar() {
                             )}
                             <div className="text-center">
                                 <p className="text-[10px] font-black uppercase tracking-widest">Sync All to Neon DB</p>
-                                <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">Includes Packer Tables</p>
+                                <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">Full Database Sync</p>
                             </div>
                         </button>
 

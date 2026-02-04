@@ -4,10 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Plus, Search, Loader2, X, Package, Tool } from '@/components/Icons';
 import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { RepairIntakeForm, RepairReceipt, RepairFormData, RepairTable } from '@/components/repair';
+import { RepairIntakeForm, RepairFormData, RepairTable } from '@/components/repair';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { TabSwitch } from '@/components/ui/TabSwitch';
 
-function RepairSidebar() {
+interface RepairSidebarProps {
+    activeTab: 'active' | 'done';
+    setActiveTab: (tab: 'active' | 'done') => void;
+}
+
+function RepairSidebar({ activeTab, setActiveTab }: RepairSidebarProps) {
     const [showIntakeForm, setShowIntakeForm] = useState(false);
     const searchParams = useSearchParams();
     const isNew = searchParams.get('new') === 'true';
@@ -19,7 +25,6 @@ function RepairSidebar() {
         }
     }, [isNew]);
 
-    const [receiptData, setReceiptData] = useState<any>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
     
@@ -61,8 +66,9 @@ function RepairSidebar() {
             const result = await response.json();
 
             if (result.success) {
-                setReceiptData(result.receiptData);
                 setShowIntakeForm(false);
+                // Open the repair service form in a new window for printing
+                window.open(`/api/repair-service/print/${result.id}`, '_blank');
             } else {
                 alert('Failed to submit repair form. Please try again.');
             }
@@ -72,10 +78,6 @@ function RepairSidebar() {
         } finally {
             setIsSubmitting(false);
         }
-    };
-
-    const handleCloseReceipt = () => {
-        setReceiptData(null);
     };
 
     return (
@@ -133,6 +135,16 @@ function RepairSidebar() {
                                     <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
                                     <span className="text-[11px] font-black uppercase tracking-widest">New Repair Order</span>
                                 </button>
+
+                                {/* Active / Done Tabs */}
+                                <TabSwitch
+                                    tabs={[
+                                        { id: 'active', label: 'Active', color: 'blue' },
+                                        { id: 'done', label: 'Done', color: 'emerald' }
+                                    ]}
+                                    activeTab={activeTab}
+                                    onTabChange={(tab) => setActiveTab(tab as 'active' | 'done')}
+                                />
                             </div>
 
                             <div className="mt-auto pt-6 border-t border-gray-100 text-center">
@@ -142,34 +154,32 @@ function RepairSidebar() {
                     )}
                 </motion.aside>
             </AnimatePresence>
-
-            {receiptData && (
-                <RepairReceipt 
-                    data={receiptData} 
-                    onClose={handleCloseReceipt}
-                    autoPrint={true}
-                />
-            )}
         </>
+    );
+}
+
+function RepairPageContent() {
+    const [activeTab, setActiveTab] = useState<'active' | 'done'>('active');
+    
+    return (
+        <div className="flex h-full w-full bg-white">
+            <RepairSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+            
+            <div className="flex-1 flex flex-col min-w-0">
+                <RepairTable filter={activeTab} />
+            </div>
+        </div>
     );
 }
 
 export default function RepairPage() {
     return (
-        <div className="flex h-full w-full bg-white">
-            <Suspense fallback={null}>
-                <RepairSidebar />
-            </Suspense>
-            
-            <div className="flex-1 flex flex-col min-w-0">
-                <Suspense fallback={
-                    <div className="flex-1 flex items-center justify-center bg-gray-50">
-                        <LoadingSpinner size="lg" className="text-blue-600" />
-                    </div>
-                }>
-                    <RepairTable />
-                </Suspense>
+        <Suspense fallback={
+            <div className="flex h-full w-full items-center justify-center bg-gray-50">
+                <LoadingSpinner size="lg" className="text-blue-600" />
             </div>
-        </div>
+        }>
+            <RepairPageContent />
+        </Suspense>
     );
 }

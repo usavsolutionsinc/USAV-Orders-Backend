@@ -8,16 +8,12 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const status = searchParams.get('status');
-        const urgent = searchParams.get('urgent');
 
         let query = db.select().from(receivingTasks);
 
         const conditions = [];
         if (status) {
             conditions.push(eq(receivingTasks.status, status));
-        }
-        if (urgent === 'true') {
-            conditions.push(eq(receivingTasks.urgent, true));
         }
 
         const results = await db
@@ -40,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { trackingNumber, orderNumber, urgent, notes, staffId } = body;
+        const { trackingNumber, orderNumber, notes, staffId } = body;
 
         if (!trackingNumber) {
             return NextResponse.json({ 
@@ -51,7 +47,6 @@ export async function POST(request: NextRequest) {
         const [result] = await db.insert(receivingTasks).values({
             trackingNumber,
             orderNumber: orderNumber || null,
-            urgent: urgent || false,
             notes: notes || null,
             staffId: staffId || null,
             status: 'pending',
@@ -71,7 +66,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
-        const { id, status, urgent, notes, receivedDate, processedDate, staffId } = body;
+        const { id, status, notes, receivedDate, processedDate, staffId } = body;
 
         if (!id) {
             return NextResponse.json({ error: 'id is required' }, { status: 400 });
@@ -79,7 +74,6 @@ export async function PUT(request: NextRequest) {
 
         const updateData: any = {};
         if (status !== undefined) updateData.status = status;
-        if (urgent !== undefined) updateData.urgent = urgent;
         if (notes !== undefined) updateData.notes = notes;
         if (receivedDate !== undefined) updateData.receivedDate = receivedDate ? new Date(receivedDate) : null;
         if (processedDate !== undefined) updateData.processedDate = processedDate ? new Date(processedDate) : null;

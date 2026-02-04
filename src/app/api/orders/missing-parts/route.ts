@@ -16,10 +16,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update order status to missing_parts, clear assignment, and set reason
+    // Update order to mark missing parts and set reason
     await pool.query(
-      'UPDATE orders SET status = $1, assigned_to = NULL, out_of_stock = $2 WHERE id = $3',
-      ['missing_parts', reason || null, orderId]
+      'UPDATE orders SET out_of_stock = $1 WHERE id = $2',
+      [reason || null, orderId]
     );
 
     return NextResponse.json({ success: true });
