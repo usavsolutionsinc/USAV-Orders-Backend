@@ -211,7 +211,7 @@ export default function PackerLogs({
             timestamp,
             title: log.title || (log as any).product || 'Unknown Product',
             tracking: log.tracking || (log as any).trackingNumber || '',
-            count: typeof rawCount === 'number' ? rawCount : parseInt(rawCount) || 0
+            count: typeof rawCount === 'number' ? rawCount : parseInt(String(rawCount || 0)) || 0
         };
         
         groupedHistory[date].push(normalizedLog);
