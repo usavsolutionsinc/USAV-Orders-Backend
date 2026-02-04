@@ -10,25 +10,19 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        // Map packerId to employee_id
-        const packerEmployeeIds: { [key: string]: string } = {
-            '1': 'PACK001',
-            '2': 'PACK002',
-            '3': 'PACK003'
+        // Map packerId directly to staff ID
+        // packer_1 (from mobile) -> staff id 4 (Tuan)
+        // packer_2 (from mobile) -> staff id 5 (Thuy)
+        const packerStaffIds: { [key: string]: number } = {
+            '1': 4,  // Tuan
+            '2': 5,  // Thuy
+            '3': 6   // Future packer (if needed)
         };
-        const employeeId = packerEmployeeIds[packerId] || 'PACK001';
+        const staffId = packerStaffIds[packerId];
 
-        // Get staff ID
-        const staffResult = await pool.query(
-            'SELECT id FROM staff WHERE employee_id = $1',
-            [employeeId]
-        );
-
-        if (staffResult.rows.length === 0) {
-            return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
+        if (!staffId) {
+            return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
         }
-
-        const staffId = staffResult.rows[0].id;
 
         // Query orders table for this packer's completed orders using packed_by
         const result = await pool.query(`
@@ -68,25 +62,30 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { trackingNumber, orderId, photos, packerId, boxSize, timestamp, product } = body;
         
-        // Map packerId to employee_id and get staff info
-        const packerEmployeeIds: { [key: string]: string } = {
-            '1': 'PACK001',
-            '2': 'PACK002',
-            '3': 'PACK003'
+        // Map packerId directly to staff ID
+        // packer_1 (from mobile) -> staff id 4 (Tuan)
+        // packer_2 (from mobile) -> staff id 5 (Thuy)
+        const packerStaffIds: { [key: string]: number } = {
+            '1': 4,  // Tuan
+            '2': 5,  // Thuy
+            '3': 6   // Future packer (if needed)
         };
-        const employeeId = packerEmployeeIds[packerId] || 'PACK001';
+        const staffId = packerStaffIds[packerId];
+
+        if (!staffId) {
+            return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
+        }
         
-        // Get staff ID and name
+        // Get staff name
         const staffResult = await pool.query(
-            'SELECT id, name FROM staff WHERE employee_id = $1',
-            [employeeId]
+            'SELECT name FROM staff WHERE id = $1',
+            [staffId]
         );
 
         if (staffResult.rows.length === 0) {
             return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
         }
 
-        const staffId = staffResult.rows[0].id;
         const staffName = staffResult.rows[0].name;
         
         // Convert timestamp to ISO format for status_history
