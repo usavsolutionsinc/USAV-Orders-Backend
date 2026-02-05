@@ -8,10 +8,10 @@ export interface ShippedOrder {
   product_title: string;
   condition: string;
   shipping_tracking_number: string;
-  serial_number: string;
+  serial_number: string; // Aggregated from tech_serial_numbers table
   sku: string;
-  tested_by: number; // Staff ID
-  test_date_time: string;
+  tested_by: number | null; // Staff ID - derived from first serial scan
+  test_date_time: string | null; // Derived from first serial scan
   packed_by: number; // Staff ID (changed from boxed_by)
   pack_date_time: string;
   notes: string;
@@ -32,11 +32,11 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
         o.product_title,
         o.condition,
         o.shipping_tracking_number,
-        o.serial_number,
+        COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
         o.sku,
-        o.tested_by,
+        MIN(tsn.tester_id) as tested_by,
         s1.name as tested_by_name,
-        o.test_date_time,
+        MIN(tsn.test_date_time)::text as test_date_time,
         o.packed_by,
         s2.name as packed_by_name,
         o.pack_date_time,
@@ -44,10 +44,14 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
         o.status_history,
         o.is_shipped
       FROM orders o
-      LEFT JOIN staff s1 ON o.tested_by = s1.id
+      LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
+      LEFT JOIN staff s1 ON MIN(tsn.tester_id) = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
       WHERE (o.is_shipped = true OR o.is_shipped::text = 'true')
         AND o.packed_by IS NOT NULL
+      GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
+               o.shipping_tracking_number, o.sku, o.packed_by, s2.name,
+               o.pack_date_time, o.notes, o.status_history, o.is_shipped, s1.name
       ORDER BY o.pack_date_time DESC NULLS LAST, o.id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
@@ -74,11 +78,11 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         o.product_title,
         o.condition,
         o.shipping_tracking_number,
-        o.serial_number,
+        COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
         o.sku,
-        o.tested_by,
+        MIN(tsn.tester_id) as tested_by,
         s1.name as tested_by_name,
-        o.test_date_time,
+        MIN(tsn.test_date_time)::text as test_date_time,
         o.packed_by,
         s2.name as packed_by_name,
         o.pack_date_time,
@@ -86,9 +90,13 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         o.status_history,
         o.is_shipped
       FROM orders o
-      LEFT JOIN staff s1 ON o.tested_by = s1.id
+      LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
+      LEFT JOIN staff s1 ON MIN(tsn.tester_id) = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
-      WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true`,
+      WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
+      GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
+               o.shipping_tracking_number, o.sku, o.packed_by, s2.name,
+               o.pack_date_time, o.notes, o.status_history, o.is_shipped, s1.name`,
       [id]
     );
 
@@ -113,11 +121,11 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
         o.product_title,
         o.condition,
         o.shipping_tracking_number,
-        o.serial_number,
+        COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
         o.sku,
-        o.tested_by,
+        MIN(tsn.tester_id) as tested_by,
         s1.name as tested_by_name,
-        o.test_date_time,
+        MIN(tsn.test_date_time)::text as test_date_time,
         o.packed_by,
         s2.name as packed_by_name,
         o.pack_date_time,
@@ -125,7 +133,8 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
         o.status_history,
         o.is_shipped
       FROM orders o
-      LEFT JOIN staff s1 ON o.tested_by = s1.id
+      LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
+      LEFT JOIN staff s1 ON MIN(tsn.tester_id) = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
       WHERE COALESCE(o.is_shipped, false) = true
         AND o.packed_by IS NOT NULL
@@ -133,9 +142,12 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           o.shipping_tracking_number ILIKE $1
           OR o.order_id ILIKE $1
           OR o.product_title ILIKE $1
-          OR o.serial_number ILIKE $1
+          OR tsn.serial_number ILIKE $1
           OR o.sku ILIKE $1
         )
+      GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
+               o.shipping_tracking_number, o.sku, o.packed_by, s2.name,
+               o.pack_date_time, o.notes, o.status_history, o.is_shipped, s1.name
       ORDER BY 
         CASE 
           WHEN o.pack_date_time IS NOT NULL AND o.pack_date_time != '1' 
@@ -163,10 +175,8 @@ export async function updateShippedOrderField(
   value: any
 ): Promise<void> {
   try {
+    // Note: serial_number, tested_by, test_date_time removed - now in tech_serial_numbers table
     const allowedFields = [
-      'serial_number',
-      'tested_by',
-      'test_date_time',
       'packed_by',
       'pack_date_time',
       'notes',
@@ -175,7 +185,7 @@ export async function updateShippedOrderField(
     ];
 
     if (!allowedFields.includes(field)) {
-      throw new Error(`Field ${field} is not allowed to be updated`);
+      throw new Error(`Field ${field} is not allowed to be updated. Use tech_serial_numbers table for serial/test data.`);
     }
 
     await pool.query(
@@ -202,11 +212,11 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
         o.product_title,
         o.condition,
         o.shipping_tracking_number,
-        o.serial_number,
+        COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
         o.sku,
-        o.tested_by,
+        MIN(tsn.tester_id) as tested_by,
         s1.name as tested_by_name,
-        o.test_date_time,
+        MIN(tsn.test_date_time)::text as test_date_time,
         o.packed_by,
         s2.name as packed_by_name,
         o.pack_date_time,
@@ -214,11 +224,15 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
         o.status_history,
         o.is_shipped
       FROM orders o
-      LEFT JOIN staff s1 ON o.tested_by = s1.id
+      LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
+      LEFT JOIN staff s1 ON MIN(tsn.tester_id) = s1.id
       LEFT JOIN staff s2 ON o.packed_by = s2.id
       WHERE COALESCE(o.is_shipped, false) = true
         AND o.packed_by IS NOT NULL
         AND RIGHT(o.shipping_tracking_number, 8) = $1
+      GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
+               o.shipping_tracking_number, o.sku, o.packed_by, s2.name,
+               o.pack_date_time, o.notes, o.status_history, o.is_shipped, s1.name
       LIMIT 1`,
       [last8]
     );

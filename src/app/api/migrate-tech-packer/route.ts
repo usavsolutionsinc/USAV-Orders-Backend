@@ -1,6 +1,20 @@
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 
+/**
+ * DEPRECATED MIGRATION ROUTE
+ * 
+ * This route was used to migrate legacy tech/packer data to the new staff system.
+ * It references old schema columns (tested_by, test_date_time in orders table) 
+ * that have been moved to the tech_serial_numbers table as of 2026-02-05.
+ * 
+ * This route is kept for historical reference but should not be used.
+ * For current serial/test tracking, use:
+ * - /api/tech/scan-tracking
+ * - /api/tech/add-serial
+ * - tech_serial_numbers table
+ */
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL || 'postgres://localhost:5432/postgres',
     ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,

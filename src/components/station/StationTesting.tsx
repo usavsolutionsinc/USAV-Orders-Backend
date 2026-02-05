@@ -42,18 +42,42 @@ export default function StationTesting({
 }: StationTestingProps) {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [processedOrder, setProcessedOrder] = useState<any>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     
-    // Current work order state
-    const [scannedTrackingNumber, setScannedTrackingNumber] = useState<string | null>(null);
-    const [serialNumber, setSerialNumber] = useState('');
+    // Active order state - NEW unified state structure
+    const [activeOrder, setActiveOrder] = useState<{
+        id: number;
+        orderId: string;
+        productTitle: string;
+        sku: string;
+        condition: string;
+        notes: string;
+        tracking: string;
+        serialNumbers: string[];
+        testDateTime: string | null;
+        testedBy: number | null;
+    } | null>(null);
+    
+    // UI feedback messages
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     
     // Search functionality
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
+    
+    // Auto-clear messages after 3 seconds
+    useEffect(() => {
+        if (errorMessage || successMessage) {
+            const timer = setTimeout(() => {
+                setErrorMessage(null);
+                setSuccessMessage(null);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [errorMessage, successMessage]);
 
     // Color definitions
     const colors = {
@@ -85,32 +109,20 @@ export default function StationTesting({
 
     const activeColor = colors[themeColor];
 
-    const mockProduct = {
-        title: 'Sony Alpha a7 IV Mirrorless Camera',
-        sku: 'SONY-A7IV-01',
-        condition: 'Used - Excellent',
-        notes: 'Check sensor for dust. Verify firmware v2.0.',
-        customer: 'John Doe',
-        orderId: 'ORD-7721'
-    };
-
     const detectType = (val: string) => {
         const input = val.trim();
         
         // Priority 1: SKU with colon (from Working GAS logic)
         if (input.includes(':')) return 'SKU';
         
-        // Priority 2: Tracking number regex (from Working GAS line 844)
-        // Added X0 for FNSKU support as per user request
-        if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420|X0)/i)) return 'TRACKING';
-        
-        // Priority 3: FBA FNSKU (skip per user request)
-        // if (/^X0/i.test(input)) return 'FNSKU';
+        // Priority 2: Tracking number regex (includes FNSKU X0/B0)
+        // X0 and B0 FNSKU codes are treated as tracking numbers
+        if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420|X0|B0|FBA)/i)) return 'TRACKING';
         
         // Commands
         if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input.toUpperCase())) return 'COMMAND';
         
-        // Priority 4: Everything else is a serial number
+        // Priority 3: Everything else is a serial number
         return 'SERIAL';
     };
 
@@ -119,117 +131,181 @@ export default function StationTesting({
         const input = (manualValue || inputValue).trim();
         if (!input) return;
         
+        // Clear previous messages
+        setErrorMessage(null);
+        setSuccessMessage(null);
+        
         const type = detectType(input);
         
         if (type === 'TRACKING') {
-            // Set the scanned tracking number to trigger search
-            setScannedTrackingNumber(input);
+            setIsLoading(true);
+            try {
+                // Call NEW scan-tracking API
+                const res = await fetch(`/api/tech/scan-tracking?tracking=${encodeURIComponent(input)}&techId=${userId}`);
+                const data = await res.json();
+                
+                if (!data.found) {
+                    setErrorMessage('Tracking number not found in orders');
+                    setActiveOrder(null);
+                    return;
+                }
+                
+                // Load order with existing serials
+                setActiveOrder({
+                    id: data.order.id,
+                    orderId: data.order.orderId,
+                    productTitle: data.order.productTitle,
+                    sku: data.order.sku,
+                    condition: data.order.condition,
+                    notes: data.order.notes,
+                    tracking: input,
+                    serialNumbers: data.order.serialNumbers || [],
+                    testDateTime: data.order.testDateTime,
+                    testedBy: data.order.testedBy
+                });
+                
+                const serialCount = data.order.serialNumbers?.length || 0;
+                if (serialCount > 0) {
+                    setSuccessMessage(`Order loaded: ${serialCount} serial${serialCount !== 1 ? 's' : ''} already scanned`);
+                } else {
+                    setSuccessMessage('Order loaded - ready to scan serials');
+                }
+                
+                // Trigger history refresh
+                if (onComplete) onComplete();
+            } catch (err) {
+                console.error("Tracking scan failed:", err);
+                setErrorMessage('Failed to load order. Please try again.');
+            } finally {
+                setIsLoading(false);
+                setInputValue('');
+                inputRef.current?.focus();
+            }
+        } else if (type === 'SKU' && activeOrder) {
+            // SKU with colon scan - lookup serials from sku table
+            const skuCode = input;
             
             setIsLoading(true);
             try {
-                const res = await fetch(`/api/tech-logs/search?tracking=${input}`);
-                let productTitle = 'Unknown Product';
-                
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.found) {
-                        productTitle = data.productName || 'Unknown Product';
-                        setProcessedOrder({
-                            title: productTitle,
-                            sku: data.sku || 'N/A',
-                            condition: data.condition || 'N/A',
-                            notes: data.notes || 'N/A',
-                            customer: data.customer || 'N/A',
-                            orderId: data.orderId || 'N/A',
-                            tracking: input
-                        });
-                    } else {
-                        setProcessedOrder({
-                            title: 'Unknown Product',
-                            sku: 'N/A',
-                            orderId: 'N/A',
-                            tracking: input,
-                            notes: 'Tracking not found in Shipped table.'
-                        });
-                    }
-                }
-
-                // Immediately create DB entry with tracking number and product title from shipped table
-                const now = new Date();
-                const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-
-                await fetch('/api/tech-logs', {
+                const res = await fetch('/api/tech/scan-sku', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        techId: userId,
-                        userName,
-                        timestamp,
-                        title: productTitle, // Use actual product title from shipped table
-                        tracking: input,
-                        serial: '' // Empty serial number on tracking scan
+                        skuCode,
+                        tracking: activeOrder.tracking,
+                        techId: userId
                     })
                 });
-
+                
+                const data = await res.json();
+                
+                if (!data.success) {
+                    setErrorMessage(data.error || 'Failed to process SKU');
+                    return;
+                }
+                
+                // Show notes alert if SKU has notes
+                if (data.notes) {
+                    alert(`Notes for SKU:\n\n${data.notes}`);
+                }
+                
+                // Update active order with new serial list
+                setActiveOrder({
+                    ...activeOrder,
+                    serialNumbers: data.updatedSerials
+                });
+                
+                setSuccessMessage(
+                    `SKU matched! Added ${data.serialNumbers.length} serial(s) from SKU lookup (Stock: -${data.quantityDecremented})`
+                );
+                
+                // Trigger history refresh
                 if (onComplete) onComplete();
-            } catch (err) {
-                console.error("Search failed:", err);
+            } catch (e) {
+                console.error('SKU scan error:', e);
+                setErrorMessage('Failed to process SKU');
             } finally {
                 setIsLoading(false);
+                setInputValue('');
+                inputRef.current?.focus();
             }
-        } else if (type === 'SERIAL' && processedOrder) {
-            // Priority 4: Everything else is a serial number
-            // Update the existing row with serial number
+        } else if (type === 'SKU' && !activeOrder) {
+            // SKU scanned without active order
+            setErrorMessage('Please scan a tracking number first');
+        } else if (type === 'SERIAL' && activeOrder) {
+            // Scan serial number and add to order
             const finalSerial = input.toUpperCase();
-            setSerialNumber(finalSerial);
             
             setIsLoading(true);
             try {
-                const now = new Date();
-                const timestamp = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-
-                const targetOrder = processedOrder;
-                const tracking = scannedTrackingNumber || targetOrder.tracking || targetOrder.orderId;
-
-                // Update the existing row with serial number
-                const res = await fetch('/api/tech-logs/update', {
-                    method: 'PATCH',
+                const res = await fetch('/api/tech/add-serial', {
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        techId: userId,
-                        userName,
-                        timestamp,
-                        title: targetOrder.productTitle || targetOrder.title,
-                        tracking,
-                        serial: finalSerial
+                        tracking: activeOrder.tracking,
+                        serial: finalSerial,
+                        techId: userId
                     })
                 });
-
-                if (res.ok) {
-                    setSerialNumber('');
-                    setScannedTrackingNumber(null);
-                    setProcessedOrder(null);
-                    if (onComplete) onComplete();
-                    inputRef.current?.focus();
-                } else {
-                    const err = await res.json();
-                    alert(`Error: ${err.error || 'Failed to update serial'}`);
+                
+                const data = await res.json();
+                
+                if (!data.success) {
+                    // Duplicate detected or other error
+                    setErrorMessage(data.error || 'Failed to add serial');
+                    return;
                 }
+                
+                // Update active order with new serial list
+                setActiveOrder({
+                    ...activeOrder,
+                    serialNumbers: data.serialNumbers
+                });
+                
+                setSuccessMessage(`Serial ${finalSerial} added ✓ (${data.serialNumbers.length} total)`);
+                
+                // Trigger confetti if complete (future: check against quantity)
+                if (data.isComplete) {
+                    confetti({ particleCount: 100, spread: 70 });
+                }
+                
+                // Trigger history refresh
+                if (onComplete) onComplete();
             } catch (e) {
-                console.error(e);
-                alert('Network error occurred');
+                console.error('Add serial error:', e);
+                setErrorMessage('Network error occurred');
             } finally {
                 setIsLoading(false);
+                setInputValue('');
+                inputRef.current?.focus();
             }
+        } else if (type === 'SERIAL' && !activeOrder) {
+            // Serial scanned without active order
+            setErrorMessage('Please scan a tracking number first');
         } else if (type === 'COMMAND') {
             const command = input.toUpperCase();
             if (command === 'TEST') {
-                setProcessedOrder({ ...mockProduct, title: 'TEST UNIT', sku: 'TEST-SKU', tracking: 'TEST-TRK' });
-            } else if (command === 'YES' && processedOrder) {
-                // Close current work order (like GAS workflow)
-                setProcessedOrder(null);
-                setSerialNumber('');
-                setScannedTrackingNumber(null);
+                // Test mode for debugging
+                setActiveOrder({
+                    id: 99999,
+                    orderId: 'TEST-ORD-001',
+                    productTitle: 'TEST UNIT - Sony Alpha a7 IV',
+                    sku: 'TEST-SKU',
+                    condition: 'Used - Excellent',
+                    notes: 'This is a test order for debugging',
+                    tracking: 'TEST-TRK-123',
+                    serialNumbers: [],
+                    testDateTime: null,
+                    testedBy: null
+                });
+                setSuccessMessage('Test order loaded');
+            } else if (command === 'YES' && activeOrder) {
+                // Close current work order
+                setActiveOrder(null);
+                setSuccessMessage('Order completed!');
+                if (onComplete) onComplete();
+            } else if (command === 'YES' && !activeOrder) {
+                setErrorMessage('No active order to complete');
             }
         }
         
@@ -267,9 +343,6 @@ export default function StationTesting({
         }
     };
 
-    const handleSaveSerialNumber = async (e: React.FormEvent) => {
-        // ... kept for potential internal use but UI div removed
-    };
 
     return (
         <div className="flex flex-col h-full bg-white overflow-hidden border-r border-gray-100">
@@ -323,57 +396,103 @@ export default function StationTesting({
 
                 {/* Content Area - Vertical Stack */}
                 <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-6 space-y-3">
+                    {/* Error/Success Messages - Top Level */}
                     <AnimatePresence mode="wait">
-                        {processedOrder ? (
-                                    <motion.div 
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: 10 }}
-                                        className="space-y-4"
-                                    >
-                                        <div className={`${activeColor.light} rounded-[2rem] p-6 border ${activeColor.border} space-y-6`}>
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${activeColor.bg} animate-pulse`} />
-                                                    <p className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>Active Order</p>
-                                                </div>
-                                                <h3 className="text-lg font-black text-gray-900 leading-tight tracking-tighter">{processedOrder.title}</h3>
-                                            </div>
+                        {errorMessage && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-200 flex items-center gap-3"
+                            >
+                                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                                <p className="text-xs font-bold">{errorMessage}</p>
+                            </motion.div>
+                        )}
+                        
+                        {successMessage && !errorMessage && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="p-4 bg-green-50 text-green-700 rounded-2xl border border-green-200 flex items-center gap-3"
+                            >
+                                <Check className="w-5 h-5 flex-shrink-0" />
+                                <p className="text-xs font-bold">{successMessage}</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
-                                                    <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.sku}</p>
-                                                </div>
-                                                <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order</p>
-                                                    <p className="text-xs font-bold text-gray-900 truncate">{processedOrder.orderId}</p>
-                                                </div>
-                                            </div>
+                    {/* Active Order Card */}
+                    <AnimatePresence mode="wait">
+                        {activeOrder ? (
+                            <motion.div 
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 10 }}
+                                className="space-y-4"
+                            >
+                                <div className={`${activeColor.light} rounded-[2rem] p-6 border ${activeColor.border} space-y-6`}>
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${activeColor.bg} animate-pulse`} />
+                                            <p className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>Active Order</p>
+                                        </div>
+                                        <h3 className="text-lg font-black text-gray-900 leading-tight tracking-tighter">{activeOrder.productTitle}</h3>
+                                    </div>
 
-                                            {serialNumber && (
-                                                <div className="p-4 bg-emerald-600 text-white rounded-2xl shadow-lg">
-                                                    <p className="text-[9px] font-black uppercase opacity-80 mb-1">Captured Serial</p>
-                                                    <p className="text-sm font-mono font-black">{serialNumber}</p>
-                                                </div>
-                                            )}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
+                                            <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.sku}</p>
+                                        </div>
+                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order</p>
+                                            <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.orderId}</p>
+                                        </div>
+                                    </div>
 
-                                            <div className="space-y-3">
-                                                <div className="flex items-center gap-2">
-                                                    <ClipboardList className={`w-4 h-4 ${activeColor.text}`} />
-                                                    <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
-                                                </div>
-                                                <p className="text-xs font-medium text-gray-700 bg-white/50 p-4 rounded-2xl border border-white/50 leading-relaxed">{processedOrder.notes}</p>
-                                            </div>
-
-                                            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200">
-                                                <p className="text-[10px] font-bold text-gray-600 text-center uppercase tracking-widest">
-                                                    Scan "YES" to complete or scan next tracking number
-                                                </p>
+                                    {/* Serial Numbers List */}
+                                    {activeOrder.serialNumbers.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase">
+                                                Scanned Serials ({activeOrder.serialNumbers.length})
+                                            </p>
+                                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                                                {activeOrder.serialNumbers.map((sn, idx) => (
+                                                    <motion.div 
+                                                        key={idx}
+                                                        initial={{ opacity: 0, x: -10 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        transition={{ delay: idx * 0.05 }}
+                                                        className="flex items-center gap-2 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100"
+                                                    >
+                                                        <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                                                        <span className="text-xs font-mono font-bold text-emerald-700">{sn}</span>
+                                                    </motion.div>
+                                                ))}
                                             </div>
                                         </div>
-                                    </motion.div>
-                                ) : null}
+                                    )}
+
+                                    {activeOrder.notes && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2">
+                                                <ClipboardList className={`w-4 h-4 ${activeColor.text}`} />
+                                                <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
+                                            </div>
+                                            <p className="text-xs font-medium text-gray-700 bg-white/50 p-4 rounded-2xl border border-white/50 leading-relaxed">{activeOrder.notes}</p>
+                                        </div>
+                                    )}
+
+                                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                                        <p className="text-[10px] font-bold text-gray-600 text-center uppercase tracking-widest">
+                                            Scan serial numbers or type "YES" to complete
+                                        </p>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ) : null}
                     </AnimatePresence>
 
                     {/* Pending Orders Section with built-in tabs */}
@@ -381,9 +500,9 @@ export default function StationTesting({
                         <UpNextOrder 
                             techId={userId}
                             onStart={(tracking) => {
-                                setScannedTrackingNumber(null);
-                                setProcessedOrder(null);
-                                setSerialNumber('');
+                                setActiveOrder(null);
+                                setErrorMessage(null);
+                                setSuccessMessage(null);
                                 setTimeout(() => handleSubmit(undefined, tracking), 50);
                             }}
                             onMissingParts={(orderId, reason) => {

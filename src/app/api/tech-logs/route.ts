@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { toISOStringPST } from '@/lib/timezone';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -30,21 +29,24 @@ export async function GET(req: NextRequest) {
 
         const staffId = staffResult.rows[0].id;
 
-        // Query orders table for this tech's completed orders
+        // Query from tech_serial_numbers and join to orders
+        // Sort by most recent test activity (per-serial)
         const result = await pool.query(`
             SELECT 
-                id, 
-                test_date_time as timestamp, 
-                product_title as title, 
-                shipping_tracking_number as tracking, 
-                serial_number as serial, 
-                condition,
-                status
-            FROM orders
-            WHERE tested_by = $1
-              AND test_date_time IS NOT NULL 
-              AND test_date_time != ''
-            ORDER BY id DESC 
+                o.id,
+                MIN(tsn.test_date_time) as timestamp,
+                o.product_title as title,
+                o.shipping_tracking_number as tracking,
+                STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time) as serial,
+                o.condition,
+                o.status_history->-1->>'status' as status,
+                COUNT(tsn.serial_number) as serial_count
+            FROM tech_serial_numbers tsn
+            INNER JOIN orders o ON o.shipping_tracking_number = tsn.shipping_tracking_number
+            WHERE tsn.tester_id = $1
+            GROUP BY o.id, o.product_title, o.shipping_tracking_number, 
+                     o.condition, o.status_history
+            ORDER BY MIN(tsn.test_date_time) DESC
             LIMIT $2 OFFSET $3
         `, [staffId, limit, offset]);
 
@@ -55,56 +57,4 @@ export async function GET(req: NextRequest) {
     }
 }
 
-export async function POST(req: NextRequest) {
-    try {
-        const body = await req.json();
-        const { userName, timestamp, tracking, serial } = body;
-        
-        // Get staff ID by name
-        const staffResult = await pool.query(
-            'SELECT id FROM staff WHERE name = $1',
-            [userName]
-        );
-
-        if (staffResult.rows.length === 0) {
-            return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
-        }
-
-        const staffId = staffResult.rows[0].id;
-        
-        // Update orders table ONLY (no tech table insert)
-        if (serial && tracking) {
-            const last8 = tracking.slice(-8).toLowerCase();
-            
-            // Convert timestamp to ISO format for status_history (using PST timezone)
-            const isoTimestamp = toISOStringPST(timestamp);
-
-            await pool.query(`
-                UPDATE orders
-                SET serial_number = $1,
-                    tested_by = $2,
-                    test_date_time = $3,
-                    status_history = COALESCE(status_history, '[]'::jsonb) || 
-                        jsonb_build_object(
-                            'status', 'tested',
-                            'timestamp', $6,
-                            'user', $5,
-                            'previous_status', (
-                                SELECT COALESCE(
-                                    (status_history->-1->>'status')::text,
-                                    null
-                                )
-                                FROM orders 
-                                WHERE RIGHT(shipping_tracking_number, 8) = $4
-                            )
-                        )::jsonb
-                WHERE RIGHT(shipping_tracking_number, 8) = $4
-            `, [serial, staffId, timestamp, last8, userName, isoTimestamp]);
-        }
-
-        return NextResponse.json({ success: true });
-    } catch (error: any) {
-        console.error('Error creating tech log:', error);
-        return NextResponse.json({ error: 'Failed to create log', details: error.message }, { status: 500 });
-    }
-}
+// POST endpoint removed - replaced by /api/tech/scan-tracking and /api/tech/add-serial

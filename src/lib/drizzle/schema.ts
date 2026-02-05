@@ -61,7 +61,7 @@ const genericColumns = {
   col15: text('col_15'),
 };
 
-// Orders table - Updated schema based on user screenshot
+// Orders table - Updated schema (serial tracking moved to tech_serial_numbers)
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   shipByDate: text('ship_by_date'),
@@ -72,10 +72,8 @@ export const orders = pgTable('orders', {
   shippingTrackingNumber: text('shipping_tracking_number'),
   outOfStock: text('out_of_stock'),
   notes: text('notes'),
-  serialNumber: text('serial_number'),
-  // Completion tracking (who completed the work) - FK to staff.id
-  testedBy: integer('tested_by').references(() => staff.id, { onDelete: 'set null' }),
-  testDateTime: text('test_date_time'),
+  quantity: integer('quantity').default(1),
+  // Completion tracking for packing (who completed the work) - FK to staff.id
   packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
   packDateTime: text('pack_date_time'),
   // Assignment tracking (who is assigned) - FK to staff.id
@@ -147,6 +145,17 @@ export const packingLogs = pgTable('packing_logs', {
   status: varchar('status', { length: 20 }).default('completed'),
 });
 
+// NEW: Tech Serial Numbers table - Individual serial tracking with types
+export const techSerialNumbers = pgTable('tech_serial_numbers', {
+  id: serial('id').primaryKey(),
+  shippingTrackingNumber: text('shipping_tracking_number').notNull(),
+  serialNumber: text('serial_number').notNull(),
+  serialType: varchar('serial_type', { length: 20 }).notNull().default('SERIAL'),
+  testDateTime: timestamp('test_date_time').defaultNow(),
+  testerId: integer('tester_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // Type exports
 export type EbayAccount = typeof ebayAccounts.$inferSelect;
 export type NewEbayAccount = typeof ebayAccounts.$inferInsert;
@@ -162,3 +171,5 @@ export type RepairService = typeof repairService.$inferSelect;
 export type NewRepairService = typeof repairService.$inferInsert;
 export type PackingLog = typeof packingLogs.$inferSelect;
 export type NewPackingLog = typeof packingLogs.$inferInsert;
+export type TechSerialNumber = typeof techSerialNumbers.$inferSelect;
+export type NewTechSerialNumber = typeof techSerialNumbers.$inferInsert;
