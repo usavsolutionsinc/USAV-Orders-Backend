@@ -21,13 +21,12 @@ export async function GET(req: NextRequest) {
 
     const techIdNum = parseInt(techId);
 
-    // 1. Check if there are ANY pending orders left for today (not completed, not missing_parts, not tested, not shipped)
+    // 1. Check if there are ANY pending orders left for today (not completed, not shipped)
+    // Note: tester_id removed - now checking all unshipped orders
     const totalPendingResult = await pool.query(
       `SELECT COUNT(*) as count
        FROM orders o
-       WHERE (o.tester_id = $1 OR o.tester_id IS NULL)
-         AND (o.is_shipped = false OR o.is_shipped IS NULL)`,
-      [techIdNum]
+       WHERE (o.is_shipped = false OR o.is_shipped IS NULL)`
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
@@ -47,8 +46,7 @@ export async function GET(req: NextRequest) {
       WHERE 
         (is_shipped = false OR is_shipped IS NULL)
     `;
-    const params: any[] = [techIdNum];
-    let paramCount = 2;
+    const params: any[] = [];
 
     // Filter based on out_of_stock parameter
     if (outOfStock === 'true') {
@@ -59,13 +57,10 @@ export async function GET(req: NextRequest) {
       query += ` AND (out_of_stock IS NULL OR out_of_stock = '') `;
     }
 
+    // Note: tester_id assignment removed - techs can now work on any order
+    // Filter by status if specified
     if (filterStatus === 'missing_parts') {
-      query += ` AND status = 'missing_parts' AND (tester_id = $1 OR tester_id IS NULL) `;
-    } else {
-      query += `
-        -- Either assigned to this tech OR truly unassigned
-        AND (tester_id = $1 OR tester_id IS NULL)
-      `;
+      query += ` AND status = 'missing_parts' `;
     }
 
     query += `

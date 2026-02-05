@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
- * POST /api/orders/assign - Assign order to technician or packer
+ * POST /api/orders/assign - Assign order to packer
+ * Note: tester_id removed 2026-02-05 - test assignment now implicit when tech scans order
  */
 export async function POST(req: NextRequest) {
   try {
@@ -23,9 +24,9 @@ export async function POST(req: NextRequest) {
     const values: any[] = [];
     let paramCount = 1;
 
+    // Note: testerId assignment removed - techs are now assigned implicitly when they scan
     if (testerId !== undefined) {
-      updates.push(`tester_id = $${paramCount++}`);
-      values.push(testerId === 0 ? null : (testerId || null));
+      console.warn('testerId assignment ignored - tester_id column removed from orders table');
     }
 
     if (packerId !== undefined) {

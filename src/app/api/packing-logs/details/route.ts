@@ -12,14 +12,14 @@ export async function GET(req: NextRequest) {
 
         // Fetch from orders table
         // Query order_id, product_title, condition, shipping_tracking_number
-        // Match only last 8 digits, only return orders that haven't been packed yet
+        // Match only last 8 digits, return order regardless of pack status
+        // Allows packers to rescan and update orders (retake photos, redo packing)
         const result = await pool.query(`
             SELECT order_id, product_title, condition, shipping_tracking_number as tracking
             FROM orders
             WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
             AND shipping_tracking_number IS NOT NULL 
             AND shipping_tracking_number != ''
-            AND (pack_date_time IS NULL OR pack_date_time = '')
             LIMIT 1
         `, [tracking]);
 

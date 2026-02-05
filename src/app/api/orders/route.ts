@@ -24,7 +24,6 @@ export async function GET(req: NextRequest) {
         shipping_tracking_number,
         out_of_stock,
         notes,
-        tester_id,
         packer_id,
         is_shipped
       FROM orders
@@ -38,8 +37,9 @@ export async function GET(req: NextRequest) {
       params.push(status);
     }
 
+    // Note: tester_id removed - assignment now tracked in tech_serial_numbers
     if (assignedTo) {
-      query += ` AND (tester_id = $${paramCount} OR packer_id = $${paramCount})`;
+      query += ` AND packer_id = $${paramCount}`;
       paramCount++;
       params.push(assignedTo);
     }
