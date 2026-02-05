@@ -24,9 +24,20 @@ export async function syncAccountOrders(accountName: string): Promise<SyncResult
     );
     
     const lastSyncDate = lastSyncResult.rows[0]?.last_sync_date;
-    const lastModifiedFilter = lastSyncDate 
-      ? new Date(lastSyncDate).toISOString() 
-      : undefined;
+    
+    // Build lastModifiedFilter, accounting for timezone issues
+    // Subtract 5 minutes to account for clock drift and timezone conversion
+    let lastModifiedFilter: string | undefined = undefined;
+    if (lastSyncDate) {
+      const syncDate = new Date(lastSyncDate);
+      const fiveMinutesAgo = new Date(syncDate.getTime() - 5 * 60 * 1000);
+      
+      // Don't filter if last sync was very recent (< 1 minute ago) to avoid future date issues
+      const timeSinceLastSync = Date.now() - syncDate.getTime();
+      if (timeSinceLastSync > 60 * 1000) {
+        lastModifiedFilter = fiveMinutesAgo.toISOString();
+      }
+    }
 
     console.log(`[${accountName}] Last sync: ${lastSyncDate || 'Never'}`);
 
@@ -78,47 +89,50 @@ async function upsertOrder(accountName: string, ebayOrder: any): Promise<void> {
   const lineItems = ebayOrder.lineItems || [];
   const firstItem = lineItems[0] || {};
   
-  // Extract buyer information
-  const buyerUsername = ebayOrder.buyer?.username || null;
-  const buyerEmail = ebayOrder.buyer?.buyerRegistrationAddress?.email || 
-                     ebayOrder.buyer?.contactAddress?.email || null;
-  
   // Extract tracking number
   const trackingNumber = ebayOrder.fulfillmentStartInstructions?.[0]?.shippingStep?.shipmentTracking?.[0]?.trackingNumber || null;
-  
-  // Extract order status
-  const orderStatus = ebayOrder.orderFulfillmentStatus || 'UNKNOWN';
   
   // Extract dates
   const orderDate = ebayOrder.creationDate ? new Date(ebayOrder.creationDate) : new Date();
   
   try {
-    await pool.query(
-      `INSERT INTO orders (
-        account_source, order_id, buyer_username, buyer_email,
-        product_title, sku, order_status, order_date, 
-        shipping_tracking_number, raw_order_data
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (order_id, account_source) 
-      DO UPDATE SET
-        order_status = EXCLUDED.order_status,
-        buyer_username = EXCLUDED.buyer_username,
-        buyer_email = EXCLUDED.buyer_email,
-        shipping_tracking_number = EXCLUDED.shipping_tracking_number,
-        raw_order_data = EXCLUDED.raw_order_data`,
-      [
-        accountName,
-        ebayOrder.orderId, // Use eBay order ID as order_id
-        buyerUsername,
-        buyerEmail,
-        firstItem.title || 'No title',
-        firstItem.sku || '',
-        orderStatus,
-        orderDate,
-        trackingNumber,
-        JSON.stringify(ebayOrder),
-      ]
+    // Check if order_id already exists (regardless of account_source)
+    const existingOrder = await pool.query(
+      'SELECT id, account_source FROM orders WHERE order_id = $1 LIMIT 1',
+      [ebayOrder.orderId]
     );
+    
+    if (existingOrder.rows.length > 0) {
+      // Order exists - only update account_source if not already set
+      const currentAccountSource = existingOrder.rows[0].account_source;
+      
+      if (!currentAccountSource || currentAccountSource === '') {
+        await pool.query(
+          'UPDATE orders SET account_source = $1 WHERE order_id = $2',
+          [accountName, ebayOrder.orderId]
+        );
+        console.log(`  [${accountName}] Updated account_source for existing order: ${ebayOrder.orderId}`);
+      } else {
+        console.log(`  [${accountName}] Order ${ebayOrder.orderId} already has account_source: ${currentAccountSource}`);
+      }
+    } else {
+      // Order doesn't exist - create full record
+      await pool.query(
+        `INSERT INTO orders (
+          account_source, order_id, product_title, sku, 
+          order_date, shipping_tracking_number
+        ) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          accountName,
+          ebayOrder.orderId,
+          firstItem.title || 'No title',
+          firstItem.sku || '',
+          orderDate,
+          trackingNumber,
+        ]
+      );
+      console.log(`  [${accountName}] Created new order: ${ebayOrder.orderId}`);
+    }
   } catch (error: any) {
     console.error(`Error upserting order ${ebayOrder.orderId}:`, error.message);
     throw error;

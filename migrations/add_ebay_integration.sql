@@ -24,30 +24,13 @@ BEGIN
         ALTER TABLE orders ADD COLUMN account_source VARCHAR(50);
     END IF;
     
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='buyer_username') THEN
-        ALTER TABLE orders ADD COLUMN buyer_username VARCHAR(100);
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='buyer_email') THEN
-        ALTER TABLE orders ADD COLUMN buyer_email VARCHAR(255);
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='order_status') THEN
-        ALTER TABLE orders ADD COLUMN order_status VARCHAR(50);
-    END IF;
-    
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='order_date') THEN
         ALTER TABLE orders ADD COLUMN order_date TIMESTAMP;
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='raw_order_data') THEN
-        ALTER TABLE orders ADD COLUMN raw_order_data JSONB;
     END IF;
 END $$;
 
 -- Create indexes for search performance
 CREATE INDEX IF NOT EXISTS idx_orders_account_source ON orders(account_source);
-CREATE INDEX IF NOT EXISTS idx_orders_buyer_username ON orders(buyer_username);
 CREATE INDEX IF NOT EXISTS idx_orders_order_date ON orders(order_date);
 
 -- Create unique constraint on order_id and account_source combination
@@ -56,10 +39,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_unique_account_order
     ON orders(order_id, account_source) 
     WHERE account_source IS NOT NULL;
 
--- Insert the USAV eBay account with placeholder tokens (will be updated from env vars)
+-- Insert the three eBay accounts with placeholder tokens (will be updated from env vars)
 INSERT INTO ebay_accounts (account_name, access_token, refresh_token, token_expires_at, refresh_token_expires_at)
 VALUES 
-    ('USAV', 'placeholder', 'placeholder', NOW() + INTERVAL '2 hours', NOW() + INTERVAL '18 months')
+    ('USAV', 'placeholder', 'placeholder', NOW() + INTERVAL '2 hours', NOW() + INTERVAL '18 months'),
+    ('DRAGON', 'placeholder', 'placeholder', NOW() + INTERVAL '2 hours', NOW() + INTERVAL '18 months'),
+    ('MEKONG', 'placeholder', 'placeholder', NOW() + INTERVAL '2 hours', NOW() + INTERVAL '18 months')
 ON CONFLICT (account_name) DO NOTHING;
 
 -- Add comment to document the schema

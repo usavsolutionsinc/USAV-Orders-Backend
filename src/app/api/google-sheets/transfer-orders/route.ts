@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
 import { orders as ordersTable } from '@/lib/drizzle/schema';
+import { sql } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
 const DEST_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
@@ -190,42 +191,100 @@ export async function POST(req: NextRequest) {
             return destRow;
         });
 
-        // Prepare data for Neon DB - orders table
-        // Note: quantity is stored in Google Sheets but not in orders table schema
-        const ordersToInsert = filteredSourceRows.map(row => ({
-            shipByDate: row[colIndices.shipByDate] || '',
-            orderId: row[colIndices.orderNumber] || '',
-            productTitle: row[colIndices.itemTitle] || '',
-            sku: row[colIndices.usavSku] || '',
-            condition: row[colIndices.condition] || '',
-            shippingTrackingNumber: row[colIndices.tracking] || '',
-            outOfStock: '',
-            notes: row[colIndices.note] || '',
-        }));
+        // 6. Smart import: Check if order_id exists and match tracking number
+        const ordersToInsert = [];
+        const sheetsOnlyRows = [];
+        
+        for (let i = 0; i < filteredSourceRows.length; i++) {
+            const row = filteredSourceRows[i];
+            const orderId = row[colIndices.orderNumber] || '';
+            const trackingNumber = row[colIndices.tracking] || '';
+            
+            if (!orderId) continue;
+            
+            // Check if order_id exists in database
+            const existingOrder = await db
+                .select({ id: ordersTable.id, tracking: ordersTable.shippingTrackingNumber })
+                .from(ordersTable)
+                .where(sql`${ordersTable.orderId} = ${orderId}`)
+                .limit(1);
+            
+            if (existingOrder.length > 0) {
+                // Order exists - check if tracking matches
+                const existingTracking = existingOrder[0].tracking || '';
+                
+                if (existingTracking !== trackingNumber) {
+                    // Tracking doesn't match - this is a different order, import it
+                    ordersToInsert.push({
+                        shipByDate: row[colIndices.shipByDate] || '',
+                        orderId: orderId,
+                        productTitle: row[colIndices.itemTitle] || '',
+                        sku: row[colIndices.usavSku] || '',
+                        condition: row[colIndices.condition] || '',
+                        shippingTrackingNumber: trackingNumber,
+                        outOfStock: '',
+                        notes: row[colIndices.note] || '',
+                    });
+                    sheetsOnlyRows.push(i); // Track for Google Sheets import
+                } else {
+                    console.log(`Skipping duplicate: order_id=${orderId}, tracking=${trackingNumber}`);
+                }
+            } else {
+                // Order doesn't exist - import it
+                ordersToInsert.push({
+                    shipByDate: row[colIndices.shipByDate] || '',
+                    orderId: orderId,
+                    productTitle: row[colIndices.itemTitle] || '',
+                    sku: row[colIndices.usavSku] || '',
+                    condition: row[colIndices.condition] || '',
+                    shippingTrackingNumber: trackingNumber,
+                    outOfStock: '',
+                    notes: row[colIndices.note] || '',
+                });
+                sheetsOnlyRows.push(i); // Track for Google Sheets import
+            }
+        }
 
-        // 6. Insert into NEON DB (orders table only) and Google Sheets Orders tab
-        const dbInsertOrders = db.insert(ordersTable).values(ordersToInsert);
+        // Only insert non-duplicate orders
+        if (ordersToInsert.length > 0) {
+            await db.insert(ordersTable).values(ordersToInsert);
+        }
 
-        const appendOrders = sheets.spreadsheets.values.append({
-            spreadsheetId: DEST_SPREADSHEET_ID,
-            range: `${ordersSheetName}!A:A`, 
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: processedOrdersRows },
-        });
+        // Only append non-duplicate rows to Google Sheets
+        const processedOrdersRowsFiltered = sheetsOnlyRows.map(i => processedOrdersRows[i]);
+        const processedShippedRowsFiltered = sheetsOnlyRows.map(i => processedShippedRows[i]);
 
-        const appendShipped = sheets.spreadsheets.values.append({
-            spreadsheetId: DEST_SPREADSHEET_ID,
-            range: `${shippedSheetName}!A:A`, 
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: processedShippedRows },
-        });
+        const appendPromises = [];
+        if (processedOrdersRowsFiltered.length > 0) {
+            appendPromises.push(
+                sheets.spreadsheets.values.append({
+                    spreadsheetId: DEST_SPREADSHEET_ID,
+                    range: `${ordersSheetName}!A:A`, 
+                    valueInputOption: 'USER_ENTERED',
+                    requestBody: { values: processedOrdersRowsFiltered },
+                })
+            );
+        }
+        
+        if (processedShippedRowsFiltered.length > 0) {
+            appendPromises.push(
+                sheets.spreadsheets.values.append({
+                    spreadsheetId: DEST_SPREADSHEET_ID,
+                    range: `${shippedSheetName}!A:A`, 
+                    valueInputOption: 'USER_ENTERED',
+                    requestBody: { values: processedShippedRowsFiltered },
+                })
+            );
+        }
 
-        // Insert to NEON orders table (source of truth), then Google Sheets (legacy)
-        await Promise.all([dbInsertOrders, appendOrders, appendShipped]);
+        if (appendPromises.length > 0) {
+            await Promise.all(appendPromises);
+        }
 
         return NextResponse.json({ 
             success: true, 
-            rowCount: processedOrdersRows.length, 
+            rowCount: ordersToInsert.length,
+            skipped: filteredSourceRows.length - ordersToInsert.length,
             tabName: targetTabName 
         });
 

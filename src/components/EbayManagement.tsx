@@ -18,9 +18,6 @@ interface EbayOrder {
   product_title: string;
   sku: string;
   account_source: string;
-  buyer_username: string | null;
-  buyer_email: string | null;
-  order_status: string;
   order_date: string;
   shipping_tracking_number: string | null;
 }
@@ -63,6 +60,22 @@ export default function EbayManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ebay-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
+    },
+  });
+
+  // Token refresh mutation
+  const refreshTokenMutation = useMutation({
+    mutationFn: async (accountName: string) => {
+      const res = await fetch('/api/ebay/refresh-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountName }),
+      });
+      if (!res.ok) throw new Error('Failed to refresh token');
+      return res.json();
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
     },
   });
@@ -119,7 +132,9 @@ export default function EbayManagement() {
               ? new Date(account.last_sync_date)
               : null;
             const tokenExpiry = new Date(account.token_expires_at);
-            const isTokenExpired = tokenExpiry < new Date();
+            const now = new Date();
+            const isTokenExpired = tokenExpiry < now;
+            const tokenExpiresInMinutes = Math.floor((tokenExpiry.getTime() - now.getTime()) / 1000 / 60);
 
             return (
               <div key={account.id} className="p-4 bg-white rounded-2xl border border-gray-200">
@@ -132,17 +147,31 @@ export default function EbayManagement() {
                   </div>
                 </div>
                 
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <div className="text-[9px] text-gray-500">
                     {lastSyncDate
                       ? `Last sync: ${lastSyncDate.toLocaleString()}`
                       : 'Never synced'}
                   </div>
                   
-                  {isTokenExpired && (
-                    <div className="text-[8px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded">
-                      ⚠️ Token expired
-                    </div>
+                  <div className="text-[9px] text-gray-500">
+                    Token expires: {isTokenExpired ? (
+                      <span className="text-red-600 font-bold">Expired</span>
+                    ) : (
+                      <span className={tokenExpiresInMinutes < 30 ? 'text-orange-600 font-bold' : ''}>
+                        {tokenExpiresInMinutes < 60 ? `${tokenExpiresInMinutes}m` : `${Math.floor(tokenExpiresInMinutes / 60)}h`}
+                      </span>
+                    )}
+                  </div>
+
+                  {(isTokenExpired || tokenExpiresInMinutes < 30) && (
+                    <button
+                      onClick={() => refreshTokenMutation.mutate(account.account_name)}
+                      disabled={refreshTokenMutation.isPending}
+                      className="w-full text-[9px] font-bold px-2 py-1 rounded bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors disabled:opacity-50"
+                    >
+                      {refreshTokenMutation.isPending ? '⟳ Refreshing...' : '🔄 Refresh Token'}
+                    </button>
                   )}
                 </div>
               </div>
@@ -159,7 +188,7 @@ export default function EbayManagement() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by order ID, buyer, SKU, product, tracking..."
+            placeholder="Search by order ID, SKU, product, tracking..."
             className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-2xl text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
@@ -204,29 +233,40 @@ export default function EbayManagement() {
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-[9px] font-bold text-gray-500 uppercase">
                       <div>
-                        <span className="text-gray-400">Order ID:</span> {order.order_id}
+                        <span className="text-gray-400">Order ID:</span>{' '}
+                        <a 
+                          href={`https://www.ebay.com/sh/ord/details?orderid=${order.order_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline"
+                        >
+                          {order.order_id}
+                        </a>
                       </div>
                       <div>
                         <span className="text-gray-400">SKU:</span> {order.sku || 'N/A'}
                       </div>
                       <div>
-                        <span className="text-gray-400">Buyer:</span> {order.buyer_username || 'N/A'}
-                      </div>
-                      <div>
                         <span className="text-gray-400">Date:</span>{' '}
                         {order.order_date ? new Date(order.order_date).toLocaleDateString() : 'N/A'}
                       </div>
+                      {order.shipping_tracking_number && (
+                        <div>
+                          <span className="text-gray-400">Tracking:</span>{' '}
+                          <span className="font-mono">{order.shipping_tracking_number}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 items-end">
-                    <span className="px-3 py-1 rounded-xl text-[8px] font-black uppercase bg-blue-100 text-blue-700">
-                      {order.order_status}
-                    </span>
-                    {order.shipping_tracking_number && (
-                      <span className="text-[9px] font-mono text-gray-500">
-                        {order.shipping_tracking_number}
-                      </span>
-                    )}
+                    <a
+                      href={`https://www.ebay.com/sh/ord/details?orderid=${order.order_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 rounded-xl text-[8px] font-black uppercase bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    >
+                      View on eBay →
+                    </a>
                   </div>
                 </div>
               </div>

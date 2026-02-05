@@ -86,11 +86,7 @@ export const orders = pgTable('orders', {
   isShipped: boolean('is_shipped').default(false),
   // eBay integration columns
   accountSource: varchar('account_source', { length: 50 }),
-  buyerUsername: varchar('buyer_username', { length: 100 }),
-  buyerEmail: varchar('buyer_email', { length: 255 }),
-  orderStatus: varchar('order_status', { length: 50 }),
   orderDate: timestamp('order_date'),
-  rawOrderData: jsonb('raw_order_data'),
 });
 
 // Receiving table - Updated schema based on user screenshot & sheet mapping

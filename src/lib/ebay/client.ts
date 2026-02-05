@@ -1,5 +1,6 @@
 import { eBayApi } from 'ebay-api';
 import pool from '@/lib/db';
+import { refreshEbayAccessToken } from './token-refresh';
 
 /**
  * eBay API Client
@@ -11,18 +12,33 @@ export class EbayClient {
 
   constructor(accountName: string) {
     this.accountName = accountName;
+    
+    const sandbox = process.env.EBAY_ENVIRONMENT !== 'PRODUCTION';
+    
     this.api = new eBayApi({
       appId: process.env.EBAY_APP_ID!,
       certId: process.env.EBAY_CERT_ID!,
-      sandbox: process.env.EBAY_ENVIRONMENT !== 'PRODUCTION',
+      sandbox: sandbox,
+      siteId: 0, // EBAY_US
+      marketplaceId: 'EBAY_US',
+      acceptLanguage: 'en-US',
+      contentLanguage: 'en-US',
+      ruName: process.env.EBAY_RU_NAME,
+    });
+    
+    console.log(`[${accountName}] eBay API initialized:`, {
+      appId: process.env.EBAY_APP_ID?.substring(0, 20) + '...',
+      sandbox,
+      ruName: process.env.EBAY_RU_NAME,
     });
   }
 
   /**
    * Get a valid access token for the account
    * Automatically refreshes if expired or about to expire
+   * Returns both access token and refresh token
    */
-  async getValidAccessToken(): Promise<string> {
+  async getValidAccessToken(): Promise<{ accessToken: string; refreshToken: string }> {
     // Query database for current token
     const result = await pool.query(
       'SELECT access_token, token_expires_at, refresh_token FROM ebay_accounts WHERE account_name = $1',
@@ -42,31 +58,28 @@ export class EbayClient {
 
     if (expiresAt < fiveMinutesFromNow) {
       console.log(`[${this.accountName}] Access token expired or expiring soon, refreshing...`);
-      return await this.refreshAccessToken(refresh_token);
+      const newAccessToken = await this.refreshAccessToken(refresh_token);
+      return { accessToken: newAccessToken, refreshToken: refresh_token };
     }
 
-    return access_token;
+    return { accessToken: access_token, refreshToken: refresh_token };
   }
 
   /**
    * Refresh the access token using the refresh token
+   * Uses direct HTTP call to eBay OAuth2 endpoint (more reliable)
    */
   async refreshAccessToken(refreshToken: string): Promise<string> {
     try {
-      // Set the refresh token in the API instance
-      this.api.oAuth2.setCredentials({
-        access_token: '',
-        refresh_token: refreshToken,
-        expires_in: 0,
-        refresh_token_expires_in: 0,
-        token_type: 'User Access Token'
-      });
-
-      // Refresh the token
-      const response = await this.api.oAuth2.refreshToken();
+      console.log(`[${this.accountName}] Refreshing access token...`);
       
-      const newAccessToken = response.access_token;
-      const expiresIn = response.expires_in || 7200; // Default 2 hours
+      // Use direct HTTP call instead of ebay-api library (more reliable)
+      const { accessToken, expiresIn } = await refreshEbayAccessToken(
+        process.env.EBAY_APP_ID!,
+        process.env.EBAY_CERT_ID!,
+        refreshToken
+      );
+      
       const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
 
       // Update database with new token
@@ -74,11 +87,11 @@ export class EbayClient {
         `UPDATE ebay_accounts 
          SET access_token = $1, token_expires_at = $2, updated_at = NOW() 
          WHERE account_name = $3`,
-        [newAccessToken, newExpiresAt, this.accountName]
+        [accessToken, newExpiresAt, this.accountName]
       );
 
-      console.log(`[${this.accountName}] Access token refreshed successfully`);
-      return newAccessToken;
+      console.log(`[${this.accountName}] Access token refreshed successfully (expires in ${expiresIn}s)`);
+      return accessToken;
     } catch (error: any) {
       console.error(`[${this.accountName}] Failed to refresh access token:`, error.message);
       throw new Error(`Failed to refresh access token for ${this.accountName}: ${error.message}`);
@@ -94,12 +107,12 @@ export class EbayClient {
     offset?: number;
   } = {}): Promise<any[]> {
     try {
-      const token = await this.getValidAccessToken();
+      const { accessToken, refreshToken } = await this.getValidAccessToken();
       
       // Set credentials for this API call
       this.api.oAuth2.setCredentials({
-        access_token: token,
-        refresh_token: '',
+        access_token: accessToken,
+        refresh_token: refreshToken,
         expires_in: 7200,
         refresh_token_expires_in: 0,
         token_type: 'User Access Token'
@@ -137,12 +150,12 @@ export class EbayClient {
    */
   async getOrderDetails(orderId: string): Promise<any> {
     try {
-      const token = await this.getValidAccessToken();
+      const { accessToken, refreshToken } = await this.getValidAccessToken();
       
       // Set credentials for this API call
       this.api.oAuth2.setCredentials({
-        access_token: token,
-        refresh_token: '',
+        access_token: accessToken,
+        refresh_token: refreshToken,
         expires_in: 7200,
         refresh_token_expires_in: 0,
         token_type: 'User Access Token'

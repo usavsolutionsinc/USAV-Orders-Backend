@@ -26,9 +26,6 @@ export async function GET(req: NextRequest) {
         product_title, 
         sku,
         account_source, 
-        buyer_username, 
-        buyer_email,
-        order_status, 
         order_date, 
         shipping_tracking_number,
         serial_number,
@@ -44,8 +41,6 @@ export async function GET(req: NextRequest) {
     if (query && query.trim() !== '') {
       sql += ` AND (
         order_id ILIKE $${paramCount} OR
-        buyer_username ILIKE $${paramCount} OR
-        buyer_email ILIKE $${paramCount} OR
         sku ILIKE $${paramCount} OR
         product_title ILIKE $${paramCount} OR
         shipping_tracking_number ILIKE $${paramCount}
