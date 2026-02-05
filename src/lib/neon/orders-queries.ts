@@ -48,7 +48,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
       LEFT JOIN staff s2 ON o.packed_by = s2.id
       WHERE (o.is_shipped = true OR o.is_shipped::text = 'true')
         AND o.packed_by IS NOT NULL
-      ORDER BY o.id DESC
+      ORDER BY o.pack_date_time DESC NULLS LAST, o.id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );

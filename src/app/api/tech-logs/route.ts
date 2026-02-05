@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { toISOStringPST } from '@/lib/timezone';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -75,17 +76,8 @@ export async function POST(req: NextRequest) {
         if (serial && tracking) {
             const last8 = tracking.slice(-8).toLowerCase();
             
-            // Convert timestamp to ISO format for status_history
-            let isoTimestamp = timestamp;
-            try {
-                if (timestamp && timestamp.includes('/')) {
-                    const [datePart, timePart] = timestamp.split(' ');
-                    const [m, d, y] = datePart.split('/');
-                    isoTimestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${timePart || '00:00:00'}`).toISOString();
-                }
-            } catch (e) {
-                // Keep original if conversion fails
-            }
+            // Convert timestamp to ISO format for status_history (using PST timezone)
+            const isoTimestamp = toISOStringPST(timestamp);
 
             await pool.query(`
                 UPDATE orders

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { formatPSTTimestamp } from '@/lib/timezone';
 
 export interface ShippedFormData {
   order_id: string;
@@ -38,9 +39,8 @@ export async function POST(req: NextRequest) {
     // Combine reason with product_title ([Reason] - [Product Title])
     const finalProductTitle = `${reason} - ${product_title}`;
 
-    // Get current timestamp in MM/DD/YYYY HH:mm:ss format (24-hour)
-    const now = new Date();
-    const formattedDate = `${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    // Get current timestamp in MM/DD/YYYY HH:mm:ss format (24-hour) in PST
+    const formattedDate = formatPSTTimestamp();
 
     // Insert into orders table or update existing order to is_shipped = true
     const result = await pool.query(

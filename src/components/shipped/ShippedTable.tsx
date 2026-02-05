@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Search, X, AlertTriangle } from '../Icons';
+import { Loader2, Search, X, AlertTriangle, ChevronLeft, ChevronRight } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { CopyableText } from '../ui/CopyableText';
 
@@ -30,6 +30,7 @@ export function ShippedTable() {
   const [loading, setLoading] = useState(true);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
+  const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = previous week, etc.
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,11 +42,16 @@ export function ShippedTable() {
     try {
       const url = search 
         ? `/api/shipped/search?q=${encodeURIComponent(search)}`
-        : `/api/shipped?limit=1000`;
+        : `/api/shipped?limit=5000`;
       const res = await fetch(url);
       const data = await res.json();
       
       const records = data.results || data.shipped || [];
+      console.log('Fetched shipped records:', records.length);
+      if (records.length > 0) {
+        console.log('First record date:', records[0].pack_date_time);
+        console.log('Last record date:', records[records.length - 1].pack_date_time);
+      }
       setShipped(records);
     } catch (error) {
       console.error('Error fetching shipped records:', error);
@@ -63,6 +69,23 @@ export function ShippedTable() {
   const formatDate = (dateStr: string) => {
     try {
       if (!dateStr) return 'Unknown';
+      
+      // Handle YYYY-MM-DD format as local date to avoid timezone shifts
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        
+        const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+        
+        const dayName = days[date.getDay()];
+        const monthName = months[date.getMonth()];
+        const dayNum = date.getDate();
+        
+        return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
+      }
+      
+      // For other formats (like ISO timestamps), parse normally
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return dateStr;
 
@@ -81,7 +104,10 @@ export function ShippedTable() {
 
   const formatHeaderDate = () => {
     const now = new Date();
-    return formatDate(now.toISOString());
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return formatDate(`${year}-${month}-${day}`);
   };
 
   const handleScroll = useCallback(() => {
@@ -150,7 +176,11 @@ export function ShippedTable() {
     let date = '';
     try {
       const dateObj = new Date(record.pack_date_time);
-      date = dateObj.toISOString().split('T')[0];
+      // Use local date to avoid timezone issues
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      date = `${year}-${month}-${day}`;
     } catch (e) {
       date = 'Unknown';
     }
@@ -161,8 +191,54 @@ export function ShippedTable() {
 
   // Get today's count for initial display
   const getTodayCount = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
     return groupedShipped[today]?.length || 0;
+  };
+
+  // Calculate week date range based on weekOffset (Monday-Friday only)
+  const getWeekRange = () => {
+    const now = new Date();
+    
+    // Calculate the Monday of the current week
+    const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1; // If Sunday, go back 6 days, else go back to Monday
+    
+    // Get Monday of the target week (accounting for weekOffset)
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysFromMonday - (weekOffset * 7));
+    monday.setHours(0, 0, 0, 0);
+    
+    // Get Friday of the same week (4 days after Monday)
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    friday.setHours(23, 59, 59, 999);
+
+    return {
+      start: monday,
+      end: friday,
+      startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
+      endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`
+    };
+  };
+
+  // Filter grouped data by current week (all data is weekdays, so no need to filter by day of week)
+  const weekRange = getWeekRange();
+  const filteredGroupedShipped = search 
+    ? groupedShipped // Don't filter when searching
+    : Object.fromEntries(
+        Object.entries(groupedShipped).filter(([date]) => {
+          // Check if date is in range (Monday-Friday of the target week)
+          return date >= weekRange.startStr && date <= weekRange.endStr;
+        })
+      );
+
+  // Get total count for current week
+  const getWeekCount = () => {
+    return Object.values(filteredGroupedShipped).reduce((sum, records) => sum + records.length, 0);
   };
 
   if (loading) {
@@ -188,26 +264,49 @@ export function ShippedTable() {
             </p>
             <div className="h-2 w-px bg-gray-200" />
             <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
-              Count: {currentCount || getTodayCount()}
+              Count: {currentCount || getWeekCount()}
             </p>
           </div>
-          {search && (
-            <div className="flex items-center gap-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
-              <Search className="w-3 h-3" />
-              <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
-              <button 
-                onClick={() => window.history.pushState({}, '', '/shipped')}
-                className="hover:text-blue-900 transition-colors"
-              >
-                <X className="w-2.5 h-2.5" />
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {search ? (
+              <div className="flex items-center gap-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
+                <Search className="w-3 h-3" />
+                <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
+                <button 
+                  onClick={() => window.history.pushState({}, '', '/shipped')}
+                  className="hover:text-blue-900 transition-colors"
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mr-1">
+                  {formatDate(weekRange.startStr)} - {formatDate(weekRange.endStr)}
+                </span>
+                <button
+                  onClick={() => setWeekOffset(weekOffset + 1)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                  title="Previous week"
+                >
+                  <ChevronLeft className="w-4 h-4 text-gray-600" />
+                </button>
+                <button
+                  onClick={() => setWeekOffset(Math.max(0, weekOffset - 1))}
+                  disabled={weekOffset === 0}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Next week"
+                >
+                  <ChevronRight className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         
         {/* Logs List */}
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
-          {shipped.length === 0 ? (
+          {Object.keys(filteredGroupedShipped).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               {search ? (
                 <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
@@ -226,14 +325,32 @@ export function ShippedTable() {
                   </button>
                 </div>
               ) : (
-                <p className="text-gray-500 font-medium italic opacity-20">No shipped records found</p>
+                <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
+                  <p className="text-gray-500 font-medium italic opacity-20">No shipped records for this week</p>
+                  {weekOffset > 0 && (
+                    <button 
+                      onClick={() => setWeekOffset(0)}
+                      className="mt-4 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
+                    >
+                      Go to Current Week
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ) : (
             <div className="flex flex-col w-full">
-              {Object.entries(groupedShipped)
+              {Object.entries(filteredGroupedShipped)
                 .sort((a, b) => b[0].localeCompare(a[0]))
-                .map(([date, records]) => (
+                .map(([date, records]) => {
+                  // Sort records within each day by pack_date_time (latest first)
+                  const sortedRecords = [...records].sort((a, b) => {
+                    const timeA = new Date(a.pack_date_time || 0).getTime();
+                    const timeB = new Date(b.pack_date_time || 0).getTime();
+                    return timeB - timeA;
+                  });
+                  
+                  return (
                   <div key={date} className="flex flex-col">
                     <div 
                       data-day-header
@@ -244,7 +361,7 @@ export function ShippedTable() {
                       <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
                       <p className="text-[11px] font-black text-gray-400 uppercase">Total: {records.length} Units</p>
                     </div>
-                    {records.map((record, index) => {
+                    {sortedRecords.map((record, index) => {
                       const hasAlert = record.pack_date_time === '1';
                       const ts = record.pack_date_time;
                       return (
@@ -315,7 +432,8 @@ export function ShippedTable() {
                       );
                     })}
                   </div>
-                ))}
+                  );
+                })}
             </div>
           )}
         </div>

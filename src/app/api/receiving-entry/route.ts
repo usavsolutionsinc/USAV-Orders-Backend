@@ -3,6 +3,7 @@ import { db } from '@/lib/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { receiving } from '@/lib/drizzle/schema';
 import { getCarrier } from '@/utils/tracking';
+import { formatPSTTimestamp } from '@/lib/timezone';
 
 // POST - Add entry to receiving table
 export async function POST(request: NextRequest) {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
             ? providedCarrier 
             : getCarrier(trackingNumber);
 
-        const now = timestamp || `${new Date().getMonth() + 1}/${new Date().getDate()}/${new Date().getFullYear()} ${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2, '0')}:${String(new Date().getSeconds()).padStart(2, '0')}`;
+        const now = timestamp || formatPSTTimestamp();
         
         // Insert into receiving table using explicit column names
         await db.insert(receiving).values({

@@ -98,22 +98,50 @@ async function upsertOrder(accountName: string, ebayOrder: any): Promise<void> {
   try {
     // Check if order_id already exists (regardless of account_source)
     const existingOrder = await pool.query(
-      'SELECT id, account_source FROM orders WHERE order_id = $1 LIMIT 1',
+      'SELECT id, account_source, order_date, sku, shipping_tracking_number FROM orders WHERE order_id = $1 LIMIT 1',
       [ebayOrder.orderId]
     );
     
     if (existingOrder.rows.length > 0) {
-      // Order exists - only update account_source if not already set
-      const currentAccountSource = existingOrder.rows[0].account_source;
+      // Order exists - update empty fields
+      const current = existingOrder.rows[0];
+      const updates: string[] = [];
+      const values: any[] = [];
+      let paramIndex = 1;
       
-      if (!currentAccountSource || currentAccountSource === '') {
+      // Update account_source if empty
+      if (!current.account_source || current.account_source === '') {
+        updates.push(`account_source = $${paramIndex++}`);
+        values.push(accountName);
+      }
+      
+      // Update order_date if empty
+      if (!current.order_date) {
+        updates.push(`order_date = $${paramIndex++}`);
+        values.push(orderDate);
+      }
+      
+      // Update sku if empty
+      if (!current.sku || current.sku === '') {
+        updates.push(`sku = $${paramIndex++}`);
+        values.push(firstItem.sku || '');
+      }
+      
+      // Update shipping_tracking_number if empty
+      if (!current.shipping_tracking_number && trackingNumber) {
+        updates.push(`shipping_tracking_number = $${paramIndex++}`);
+        values.push(trackingNumber);
+      }
+      
+      if (updates.length > 0) {
+        values.push(ebayOrder.orderId); // WHERE condition
         await pool.query(
-          'UPDATE orders SET account_source = $1 WHERE order_id = $2',
-          [accountName, ebayOrder.orderId]
+          `UPDATE orders SET ${updates.join(', ')} WHERE order_id = $${paramIndex}`,
+          values
         );
-        console.log(`  [${accountName}] Updated account_source for existing order: ${ebayOrder.orderId}`);
+        console.log(`  [${accountName}] Updated ${updates.length} empty fields for order: ${ebayOrder.orderId}`);
       } else {
-        console.log(`  [${accountName}] Order ${ebayOrder.orderId} already has account_source: ${currentAccountSource}`);
+        console.log(`  [${accountName}] Order ${ebayOrder.orderId} already has all data`);
       }
     } else {
       // Order doesn't exist - create full record
