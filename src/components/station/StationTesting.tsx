@@ -275,18 +275,18 @@ export default function StationTesting({
         <div className="flex flex-col h-full bg-white overflow-hidden border-r border-gray-100">
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header section */}
-                <div className="p-8 pb-4 space-y-8">
-                    <div className="space-y-1">
-                        <h2 className="text-2xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
+                <div className="p-4 pb-2 space-y-4">
+                    <div className="space-y-0.5">
+                        <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
                     </div>
 
                     {/* Progress Bar - Moved above scan input */}
-                    <div className="space-y-3 px-2">
+                    <div className="space-y-2 px-1">
                         <div className="flex items-center justify-between">
-                            <p className={`text-[10px] font-black ${activeColor.text} tabular-nums`}>{todayCount} SHIPPED</p>
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Goal: {goal}</p>
+                            <p className={`text-[9px] font-black ${activeColor.text} tabular-nums`}>{todayCount} SHIPPED</p>
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Goal: {goal}</p>
                         </div>
-                        <div className="h-2.5 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
+                        <div className="h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
                             <motion.div 
                                 initial={{ width: 0 }} 
                                 animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }} 
@@ -296,8 +296,8 @@ export default function StationTesting({
                     </div>
 
                     <form onSubmit={handleSubmit} className="relative group">
-                        <div className={`absolute left-5 top-1/2 -translate-y-1/2 ${activeColor.text}`}>
-                            <Barcode className="w-5 h-5" />
+                        <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${activeColor.text}`}>
+                            <Barcode className="w-4 h-4" />
                         </div>
                         <input 
                             ref={inputRef}
@@ -305,15 +305,15 @@ export default function StationTesting({
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             placeholder="Scan Tracking, SKU, or SN..."
-                            className={`w-full pl-14 pr-14 py-5 bg-gray-50 border border-gray-100 rounded-[1.5rem] text-sm font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
+                            className={`w-full pl-11 pr-14 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
                             autoFocus
                         />
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
                             {isLoading ? (
-                                <Loader2 className={`w-5 h-5 animate-spin ${activeColor.text}`} />
+                                <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
                             ) : (
-                                <div className="px-2 py-1 bg-white rounded-md border border-gray-100 shadow-sm">
-                                    <span className="text-[9px] font-black text-gray-400">ENTER</span>
+                                <div className="px-1.5 py-0.5 bg-white rounded border border-gray-100 shadow-sm">
+                                    <span className="text-[8px] font-black text-gray-400">ENTER</span>
                                 </div>
                             )}
                         </div>
@@ -322,7 +322,7 @@ export default function StationTesting({
                 </div>
 
                 {/* Content Area - Vertical Stack */}
-                <div className="flex-1 overflow-y-auto no-scrollbar px-8 pb-8 space-y-4">
+                <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-6 space-y-3">
                     <AnimatePresence mode="wait">
                         {processedOrder ? (
                                     <motion.div 

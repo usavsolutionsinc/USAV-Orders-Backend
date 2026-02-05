@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Search, Loader2, Package, Copy, Check } from './Icons';
+import { SearchBar } from './ui/SearchBar';
 
 interface SearchResult {
     id: number;
@@ -43,12 +44,6 @@ export default function TechSearchPanel() {
         }
     };
 
-    const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            handleSearch();
-        }
-    };
-
     const copyToClipboard = (text: string, field: string) => {
         navigator.clipboard.writeText(text);
         setCopiedField(field);
@@ -67,33 +62,28 @@ export default function TechSearchPanel() {
                 </div>
 
                 <div className="space-y-2">
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                            <Search className="w-3 h-3 text-gray-400" />
-                        </div>
-                        <input
-                            type="text"
-                            placeholder="Tracking, Order ID, Serial..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyPress={handleKeyPress}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2 pl-8 pr-3 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-gray-400"
-                            autoFocus
-                        />
-                        {isSearching && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
-                            </div>
-                        )}
-                    </div>
-
-                    <button
-                        onClick={handleSearch}
-                        disabled={isSearching || !searchQuery.trim()}
-                        className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed"
-                    >
-                        {isSearching ? 'Searching...' : 'Search NEON DB'}
-                    </button>
+                    <SearchBar
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        onSearch={handleSearch}
+                        placeholder="Tracking, Order ID, Serial..."
+                        isSearching={isSearching}
+                        variant="blue"
+                        rightElement={
+                            <button
+                                onClick={handleSearch}
+                                disabled={isSearching || !searchQuery.trim()}
+                                className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-600/10 disabled:cursor-not-allowed"
+                                title="Search Neon DB"
+                            >
+                                {isSearching ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Search className="w-4 h-4" />
+                                )}
+                            </button>
+                        }
+                    />
                 </div>
             </div>
 

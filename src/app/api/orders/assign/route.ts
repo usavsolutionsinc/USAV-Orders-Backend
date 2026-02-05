@@ -7,14 +7,16 @@ import pool from '@/lib/db';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, testerId, packerId, shipByDate, outOfStock } = body;
+    const { orderId, orderIds, testerId, packerId, shipByDate, outOfStock } = body;
 
-    if (!orderId) {
+    if (!orderId && (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0)) {
       return NextResponse.json(
-        { error: 'orderId is required' },
+        { error: 'orderId or orderIds array is required' },
         { status: 400 }
       );
     }
+
+    const idsToUpdate = orderId ? [orderId] : orderIds;
 
     // Build update query dynamically
     const updates: string[] = [];
@@ -23,12 +25,12 @@ export async function POST(req: NextRequest) {
 
     if (testerId !== undefined) {
       updates.push(`tester_id = $${paramCount++}`);
-      values.push(testerId || null);
+      values.push(testerId === 0 ? null : (testerId || null));
     }
 
     if (packerId !== undefined) {
       updates.push(`packer_id = $${paramCount++}`);
-      values.push(packerId || null);
+      values.push(packerId === 0 ? null : (packerId || null));
     }
 
     if (shipByDate !== undefined) {
@@ -48,10 +50,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    values.push(orderId);
+    // Add ids to values
+    const idPlaceholders = idsToUpdate.map(() => `$${paramCount++}`).join(', ');
+    values.push(...idsToUpdate);
 
     await pool.query(
-      `UPDATE orders SET ${updates.join(', ')} WHERE id = $${paramCount}`,
+      `UPDATE orders SET ${updates.join(', ')} WHERE id IN (${idPlaceholders})`,
       values
     );
 

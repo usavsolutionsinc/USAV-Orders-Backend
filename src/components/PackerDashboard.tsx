@@ -1,23 +1,26 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
 import PackerLogs from './station/PackerLogs';
 import { Package, TrendingUp, Clock, AlertCircle } from './Icons';
+import StaffSelector from './StaffSelector';
 
 interface PackerDashboardProps {
     packerId: string;
 }
 
 export default function PackerDashboard({ packerId }: PackerDashboardProps) {
+    const router = useRouter();
     const [history, setHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
     // Mock names for packers
     const getPackerInfo = (id: string) => {
-        if (id === '1') return { name: 'Tuan', color: 'emerald' as const };
-        if (id === '2') return { name: 'Thuy', color: 'blue' as const };
+        if (id === '4') return { name: 'Tuan', color: 'emerald' as const };
+        if (id === '5') return { name: 'Thuy', color: 'blue' as const };
         return { name: 'Packer', color: 'purple' as const };
     };
 
@@ -101,11 +104,22 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
             stationId={packerId}
             navContent={<StationNav />}
             historyContent={
-                <PackerLogs 
-                    history={history} 
-                    isLoading={isLoadingHistory}
-                    packerId={packerId}
-                />
+                <div className="flex flex-col h-full">
+                    <div className="p-2 bg-white border-b border-gray-100 flex items-center">
+                        <StaffSelector 
+                            role="packer" 
+                            selectedStaffId={parseInt(packerId)} 
+                            onSelect={(id) => router.push(`/packer/${id}`)}
+                        />
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                        <PackerLogs 
+                            history={history} 
+                            isLoading={isLoadingHistory}
+                            packerId={packerId}
+                        />
+                    </div>
+                </div>
             }
         >
             <div className="flex flex-col h-full bg-white">

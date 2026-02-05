@@ -6,20 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-
-interface SearchResult {
-    id: number;
-    pack_date_time: string;
-    order_id: string;
-    product_title: string;
-    condition: string;
-    shipping_tracking_number: string;
-    serial_number: string;
-    packed_by: string;
-    tested_by: string;
-    sku: string;
-    is_shipped: boolean;
-}
+import { SearchBar } from './ui/SearchBar';
 
 interface SearchHistory {
     query: string;
@@ -33,34 +20,58 @@ interface ShippedSidebarProps {
     onFormSubmit?: (data: ShippedFormData) => void;
 }
 
+// Hard-coded staff ID to name mapping
+const STAFF_NAMES: { [key: number]: string } = {
+    1: 'Michael',
+    2: 'Thuc',
+    3: 'Sang',
+    4: 'Tuan',
+    5: 'Thuy',
+    6: 'Cuong'
+};
+
+function getStaffName(staffId: number | null | undefined): string {
+    if (!staffId) return 'N/A';
+    return STAFF_NAMES[staffId] || `Staff #${staffId}`;
+}
+
 export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit }: ShippedSidebarProps) {
     const [searchQuery, setSearchQuery] = useState('');
-    const [results, setResults] = useState<SearchResult[]>([]);
+    const [results, setResults] = useState<ShippedOrder[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
-    const [selectedShipped, setSelectedShipped] = useState<SearchResult | null>(null);
+    const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [copiedId, setCopiedId] = useState<number | null>(null);
 
-    // Listen for custom event to open details (single instance coordination)
+    // Listen for custom events to coordinate details panel
     useEffect(() => {
-        const handleOpenDetails = (e: CustomEvent<SearchResult>) => {
+        const handleOpenDetails = (e: CustomEvent<ShippedOrder>) => {
             if (e.detail) {
                 setSelectedShipped(e.detail);
             }
         };
+        const handleCloseDetails = () => {
+            setSelectedShipped(null);
+        };
+
         window.addEventListener('open-shipped-details' as any, handleOpenDetails as any);
-        return () => window.removeEventListener('open-shipped-details' as any, handleOpenDetails as any);
+        window.addEventListener('close-shipped-details' as any, handleCloseDetails as any);
+        
+        return () => {
+            window.removeEventListener('open-shipped-details' as any, handleOpenDetails as any);
+            window.removeEventListener('close-shipped-details' as any, handleCloseDetails as any);
+        };
     }, []);
 
-    const openDetails = (result: SearchResult) => {
+    const openDetails = (result: ShippedOrder) => {
         // Use custom event to coordinate single instance behavior
         const event = new CustomEvent('open-shipped-details', { detail: result });
         window.dispatchEvent(event);
         setSelectedShipped(result);
     };
 
-    const handleCopyAll = (e: React.MouseEvent, result: SearchResult) => {
+    const handleCopyAll = (e: React.MouseEvent, result: ShippedOrder) => {
         e.stopPropagation();
         
         const formatDateTime = (dateStr: string) => {
@@ -86,8 +97,8 @@ Order ID: ${result.order_id || 'N/A'}
 Tracking: ${result.shipping_tracking_number || 'N/A'}
 Product: ${result.product_title || 'N/A'}
 Condition: ${result.condition || 'N/A'}
-Tested By: ${result.tested_by || 'N/A'}
-Packed By: ${result.packed_by || 'N/A'}
+Tested By: ${getStaffName(result.tested_by)}
+Packed By: ${getStaffName(result.packed_by)}
 Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not Shipped'}`;
         
         navigator.clipboard.writeText(text);
@@ -149,13 +160,6 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
         }
     };
 
-    // Handle enter key
-    const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            handleSearch(searchQuery);
-        }
-    };
-
     return (
         <div className="relative flex-shrink-0 z-40 h-full">
             <aside
@@ -179,32 +183,28 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
                     
                     <div className="space-y-4">
                         {/* Search Bar */}
-                        <div className="relative group">
-                            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                                <Search className="w-3.5 h-3.5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Order ID, Tracking, or Serial..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyPress={handleKeyPress}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-[11px] font-semibold tracking-wide focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400"
-                            />
-                            {isSearching && (
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                </div>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={() => handleSearch(searchQuery)}
-                            disabled={isSearching || !searchQuery.trim()}
-                            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed"
-                        >
-                            {isSearching ? 'Searching...' : 'Search'}
-                        </button>
+                        <SearchBar
+                            value={searchQuery}
+                            onChange={setSearchQuery}
+                            onSearch={handleSearch}
+                            placeholder="Order ID, Tracking, or Serial..."
+                            isSearching={isSearching}
+                            variant="blue"
+                            rightElement={
+                                <button
+                                    onClick={() => handleSearch(searchQuery)}
+                                    disabled={isSearching || !searchQuery.trim()}
+                                    className="p-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10 disabled:cursor-not-allowed"
+                                    title="Search"
+                                >
+                                    {isSearching ? (
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    ) : (
+                                        <Search className="w-4 h-4" />
+                                    )}
+                                </button>
+                            }
+                        />
 
                         {/* Search Results */}
                         {results.length > 0 && (
@@ -214,7 +214,10 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
                                         {results.length} Result{results.length !== 1 ? 's' : ''}
                                     </p>
                                     <button 
-                                        onClick={() => setResults([])}
+                                        onClick={() => {
+                                            setResults([]);
+                                            setHasSearched(false);
+                                        }}
                                         className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
                                     >
                                         Clear
@@ -330,12 +333,15 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
             </aside>
 
             {/* Details Panel Overlay - Reused Instance coordinated by shared state/events */}
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
                 {selectedShipped && (
                     <ShippedDetailsPanel 
-                        key="single-shipped-details-instance"
-                        shipped={selectedShipped as unknown as ShippedOrder}
-                        onClose={() => setSelectedShipped(null)}
+                        key="shipped-details-panel-shared-instance"
+                        shipped={selectedShipped}
+                        onClose={() => {
+                            setSelectedShipped(null);
+                            window.dispatchEvent(new CustomEvent('close-shipped-details'));
+                        }}
                         onUpdate={() => handleSearch(searchQuery)}
                     />
                 )}

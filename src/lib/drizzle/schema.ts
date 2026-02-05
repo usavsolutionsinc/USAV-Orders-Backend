@@ -1,5 +1,21 @@
 import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, jsonb } from 'drizzle-orm/pg-core';
 
+// eBay Accounts table
+export const ebayAccounts = pgTable('ebay_accounts', {
+  id: serial('id').primaryKey(),
+  accountName: varchar('account_name', { length: 50 }).notNull().unique(),
+  ebayUserId: varchar('ebay_user_id', { length: 100 }),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token').notNull(),
+  tokenExpiresAt: timestamp('token_expires_at').notNull(),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at').notNull(),
+  marketplaceId: varchar('marketplace_id', { length: 20 }).default('EBAY_US'),
+  lastSyncDate: timestamp('last_sync_date'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Staff table
 export const staff = pgTable('staff', {
   id: serial('id').primaryKey(),
@@ -68,6 +84,13 @@ export const orders = pgTable('orders', {
   // Status tracking
   statusHistory: jsonb('status_history').default([]),
   isShipped: boolean('is_shipped').default(false),
+  // eBay integration columns
+  accountSource: varchar('account_source', { length: 50 }),
+  buyerUsername: varchar('buyer_username', { length: 100 }),
+  buyerEmail: varchar('buyer_email', { length: 255 }),
+  orderStatus: varchar('order_status', { length: 50 }),
+  orderDate: timestamp('order_date'),
+  rawOrderData: jsonb('raw_order_data'),
 });
 
 // Receiving table - Updated schema based on user screenshot & sheet mapping
@@ -129,6 +152,8 @@ export const packingLogs = pgTable('packing_logs', {
 });
 
 // Type exports
+export type EbayAccount = typeof ebayAccounts.$inferSelect;
+export type NewEbayAccount = typeof ebayAccounts.$inferInsert;
 export type Staff = typeof staff.$inferSelect;
 export type NewStaff = typeof staff.$inferInsert;
 export type ReceivingTask = typeof receivingTasks.$inferSelect;

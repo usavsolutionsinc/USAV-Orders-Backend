@@ -5,15 +5,32 @@ import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
 import ReceivingLogs from './station/ReceivingLogs';
 import ReceivingPanel from './ReceivingPanel';
-import { Package, TrendingUp, Clock, AlertCircle } from './Icons';
+import { Package, TrendingUp, Clock, AlertCircle, Search, Loader2 } from './Icons';
+import { SearchBar } from './ui/SearchBar';
 
 export default function ReceivingDashboard() {
     const [history, setHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
 
     useEffect(() => {
         fetchHistory();
     }, []);
+
+    const handleSearch = async (query: string) => {
+        if (!query.trim()) return;
+        setIsSearching(true);
+        try {
+            // Re-use logic or redirect to search results
+            // For now, let's just simulate or use it as a filter if appropriate
+            // Actually, the panel has the search results, so maybe this search should be for something else
+            // or we could just filter the history.
+            console.log("Searching for:", query);
+        } finally {
+            setIsSearching(false);
+        }
+    };
 
     const handleEntryAdded = () => {
         fetchHistory();
@@ -88,13 +105,21 @@ export default function ReceivingDashboard() {
     };
 
     return (
-        <div className="flex h-full w-full">
-            <ReceivingPanel onEntryAdded={handleEntryAdded} />
-            <div className="flex-1 flex flex-col overflow-hidden">
-                <ReceivingLogs 
-                    history={history} 
-                    isLoading={isLoadingHistory}
-                />
+        <div className="flex h-full w-full bg-white overflow-hidden">
+            <ReceivingPanel 
+                onEntryAdded={handleEntryAdded} 
+                todayCount={getTodayCount()}
+                averageTime={getAverageTime()}
+            />
+            
+            <div className="flex-1 flex flex-col min-w-0">
+                {/* Dashboard Logs View */}
+                <div className="flex-1 overflow-hidden">
+                    <ReceivingLogs 
+                        history={history} 
+                        isLoading={isLoadingHistory}
+                    />
+                </div>
             </div>
         </div>
     );

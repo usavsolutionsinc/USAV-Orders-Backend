@@ -30,20 +30,14 @@ interface StationNavProps {
 const mainNavItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Receiving', href: '/receiving', icon: ClipboardList },
-    { name: 'Shipped', href: '/shipped', icon: PackageCheck },
+    { name: 'Orders', href: '/shipped', icon: PackageCheck },
     { name: 'Repair', href: '/repair', icon: Tool },
     { name: 'Sku Stock', href: '/sku-stock', icon: Box },
 ];
 
-const packerItems = [
-    { name: 'Tuan (Packer 1)', href: '/packer/1', icon: User },
-    { name: 'Thuy (Packer 2)', href: '/packer/2', icon: User },
-];
-
-const techItems = [
-    { name: 'Michael (Tech 1)', href: '/tech/1', icon: Wrench },
-    { name: 'Thuc (Tech 2)', href: '/tech/2', icon: Wrench },
-    { name: 'Sang (Tech 3)', href: '/tech/3', icon: Wrench },
+const stationItems = [
+    { name: 'Technicians', href: '/tech/1', icon: Wrench, type: 'Station' },
+    { name: 'Packers', href: '/packer/4', icon: User, type: 'Station' },
 ];
 
 const bottomNavItems = [
@@ -91,8 +85,8 @@ export default function StationNav() {
         }
     };
 
-    const renderNavItem = (item: typeof mainNavItems[0], isQuickAccess = false) => {
-        const isActive = pathname === item.href;
+    const renderNavItem = (item: any, isQuickAccess = false) => {
+        const isActive = pathname.startsWith(item.href);
         const Icon = item.icon;
         
         return (
@@ -101,11 +95,11 @@ export default function StationNav() {
                 href={item.href}
                 title={isCollapsed ? item.name : undefined}
                 className={`group flex items-center transition-all duration-300 relative ${
-                    isCollapsed ? 'p-2.5 rounded-xl' : 'gap-4 px-4 rounded-2xl'
+                    isCollapsed ? 'justify-center py-2.5 rounded-l-xl' : 'gap-5 px-6 py-3 rounded-2xl'
                 } ${
                     isActive
                         ? isCollapsed 
-                            ? 'text-blue-600'
+                            ? 'text-blue-600 bg-blue-50/50'
                             : 'bg-blue-600 text-white shadow-xl shadow-blue-600/25 scale-[1.02]'
                         : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                 }`}
@@ -114,7 +108,10 @@ export default function StationNav() {
                     <Icon className={`w-5 h-5 ${isActive ? (isCollapsed ? 'text-blue-600' : 'text-white') : 'text-gray-400 group-hover:text-blue-500'}`} />
                 </div>
                 {!isCollapsed && (
-                    <span className="text-sm font-black tracking-tight uppercase whitespace-nowrap">{item.name}</span>
+                    <div className="flex flex-col items-start text-left">
+                        <span className="text-sm font-black tracking-tight uppercase whitespace-nowrap">{item.name}</span>
+                        {item.type && <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-0.5">{item.type}</span>}
+                    </div>
                 )}
                 {isActive && !isCollapsed && (
                     <motion.div 
@@ -123,7 +120,7 @@ export default function StationNav() {
                     />
                 )}
                 {isActive && isCollapsed && (
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-l-full shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
+                    <div className="absolute right-0 top-0 bottom-0 w-1 bg-blue-600 rounded-l-full shadow-[0_0_8px_rgba(37,99,235,0.4)]" />
                 )}
             </Link>
         );
@@ -131,14 +128,14 @@ export default function StationNav() {
 
     return (
         <motion.aside
-            animate={{ width: isCollapsed ? 64 : 280 }}
+            animate={{ width: isCollapsed ? 56 : 300 }}
             transition={{ type: 'spring', damping: 25, stiffness: 150 }}
             onMouseLeave={handleSidebarMouseLeave}
             className="h-screen bg-white border-r border-gray-200 flex flex-col relative z-50 flex-shrink-0 no-print print:hidden"
             style={{ height: '100vh', minHeight: '100vh', maxHeight: '100vh' }}
         >
             {/* Top Bar Area inside Sidebar */}
-            <div className={`flex items-center mb-4 ${isCollapsed ? 'p-4' : 'justify-between p-4'}`}>
+            <div className={`flex items-center transition-all duration-300 ${isCollapsed ? 'p-2 flex justify-center mt-2' : 'justify-between p-6 pb-2 mt-2'}`}>
                 {!isCollapsed && (
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-black text-gray-900 leading-tight tracking-tighter uppercase">USAV</h1>
@@ -158,7 +155,7 @@ export default function StationNav() {
                 </button>
             </div>
 
-            <div className={`flex-1 flex flex-col overflow-y-auto scrollbar-hide pb-6 ${isCollapsed ? 'pl-3 pr-0' : 'px-3'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className={`flex-1 flex flex-col overflow-y-auto scrollbar-hide pb-6 ${isCollapsed ? 'px-0' : 'px-4 pt-10'}`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 {/* Quick Search Area */}
                 {!isCollapsed && (
                     <div className="mb-6 space-y-3 px-1">
@@ -171,43 +168,45 @@ export default function StationNav() {
                                 placeholder="Quick search..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400"
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400"
                             />
                         </form>
 
-                        <Link
-                            href="/shipped?new=true"
-                            className="flex items-center justify-start gap-2 px-6 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-green-500/20"
-                        >
-                            <Plus className="w-4 h-4" />
-                            <span className="text-sm font-black uppercase tracking-wider">Shipped</span>
-                        </Link>
+                        <div className="grid grid-cols-2 gap-2">
+                            <Link
+                                href="/shipped?new=true"
+                                className="flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                            >
+                                <Plus className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-wider">Orders</span>
+                            </Link>
 
-                        <Link
-                            href="/repair?new=true"
-                            className="flex items-center justify-start gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-orange-500/20"
-                        >
-                            <Plus className="w-4 h-4" />
-                            <span className="text-sm font-black uppercase tracking-wider">Repair</span>
-                        </Link>
+                            <Link
+                                href="/repair?new=true"
+                                className="flex items-center justify-center gap-2 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-orange-500/20"
+                            >
+                                <Plus className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-wider">Repair</span>
+                            </Link>
+                        </div>
                     </div>
                 )}
 
                 {isCollapsed && (
-                    <div className="mb-6 space-y-3">
+                    <div className="mb-6 space-y-2 flex flex-col items-center">
                         <Link
                             href="/shipped?new=true"
                             title="New Shipped"
-                            className="flex items-center p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-l-2xl shadow-lg shadow-green-500/20 active:scale-95 transition-all"
+                            className="p-2 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
                         >
-                            <Plus className="w-5 h-5" />
+                            <Plus className="w-4 h-4" />
                         </Link>
                         <Link
                             href="/repair?new=true"
                             title="New Repair"
-                            className="flex items-center p-2.5 bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-l-2xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
+                            className="p-2 bg-orange-500 text-white rounded-xl shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
                         >
-                            <Plus className="w-5 h-5" />
+                            <Plus className="w-4 h-4" />
                         </Link>
                     </div>
                 )}
@@ -216,50 +215,39 @@ export default function StationNav() {
                 <nav className="space-y-1 flex-1">
                     {!isCollapsed && (
                         <div className="mb-2 px-2">
-                            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">Navigation</h2>
+                            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">Main</h2>
                         </div>
                     )}
                     
                     {mainNavItems.map(item => renderNavItem(item))}
 
-                    {/* Packers Section */}
-                    <div className="pt-4">
+                    {/* Staff Section */}
+                    <div className={isCollapsed ? "pt-2" : "pt-6"}>
                         {!isCollapsed ? (
-                            <h3 className="px-2 mb-2 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">
-                                Packers
-                            </h3>
+                            <div className="flex items-center justify-between px-2 mb-2">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
+                                    Stations
+                                </h3>
+                            </div>
                         ) : (
-                            <div className="border-t border-gray-100 my-4" />
+                            <div className="border-t border-gray-100 my-2 mx-2" />
                         )}
                         <div className="space-y-1">
-                            {packerItems.map(item => renderNavItem(item))}
-                        </div>
-                    </div>
-
-                    {/* Techs Section */}
-                    <div className="pt-4">
-                        {!isCollapsed ? (
-                            <h3 className="px-2 mb-2 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">
-                                Techs
-                            </h3>
-                        ) : (
-                            <div className="border-t border-gray-100 my-4" />
-                        )}
-                        <div className="space-y-1">
-                            {techItems.map(item => renderNavItem(item))}
+                            {stationItems.map(item => renderNavItem(item))}
                         </div>
                     </div>
 
                     {/* Bottom Navigation */}
-                    <div className="pt-4">
-                        {!isCollapsed && (
-                            <div className="border-t border-gray-100 my-4" />
+                    <div className={isCollapsed ? "pt-2" : "pt-6"}>
+                        {!isCollapsed ? (
+                            <div className="border-t border-gray-100 my-6 mx-2" />
+                        ) : (
+                            <div className="border-t border-gray-100 my-2 mx-2" />
                         )}
                         {bottomNavItems.map(item => renderNavItem(item))}
                     </div>
                 </nav>
             </div>
-
         </motion.aside>
     );
 }

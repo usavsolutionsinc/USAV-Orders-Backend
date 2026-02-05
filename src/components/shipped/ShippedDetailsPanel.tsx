@@ -133,23 +133,13 @@ export function ShippedDetailsPanel({
     setShipped(initialShipped);
   }, [initialShipped]);
 
-  // Listen for custom event to reuse instance (single instance behavior)
-  useEffect(() => {
-    const handleOpenDetails = (e: any) => {
-        if (e.detail && e.detail.id !== shipped.id) {
-            setShipped(e.detail);
-        }
-    };
-    window.addEventListener('open-shipped-details', handleOpenDetails);
-    return () => window.removeEventListener('open-shipped-details', handleOpenDetails);
-  }, [shipped.id]);
-
   useEffect(() => {
     fetchDurations();
   }, [shipped.id]);
 
   const fetchDurations = async () => {
     setIsLoadingDurations(true);
+    setDurationData({}); // Clear old data while loading new
     try {
       const res = await fetch(`/api/shipped/durations?id=${shipped.id}`);
       if (res.ok) {
@@ -207,7 +197,7 @@ Shipped: ${formattedDateTime}`;
       initial={{ x: '100%' }}
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 30, stiffness: 150 }}
+      transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
       className="fixed right-0 top-0 h-screen w-[420px] bg-white border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)] z-[100] overflow-y-auto no-scrollbar"
     >
       {/* Header */}

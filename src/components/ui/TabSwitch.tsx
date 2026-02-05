@@ -35,7 +35,7 @@ export function TabSwitch({ tabs, activeTab, onTabChange, className = '' }: TabS
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
-          className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+          className={`flex-1 px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
             getColorClasses(tab.color, activeTab === tab.id)
           }`}
         >

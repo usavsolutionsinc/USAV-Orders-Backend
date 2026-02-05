@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, Settings, History } from './Icons';
+import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, Settings, History, Search } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SearchBar } from './ui/SearchBar';
 
 export default function DashboardSidebar() {
     const [isSyncing, setIsSyncing] = useState(false);
@@ -11,6 +12,13 @@ export default function DashboardSidebar() {
     const [activeScript, setActiveScript] = useState<string | null>(null);
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const handleSearch = (query: string) => {
+        if (!query.trim()) return;
+        // Search logic could go here or redirect to a search page
+        window.location.href = `/shipped?search=${encodeURIComponent(query)}`;
+    };
 
     const handleSync = async () => {
         setIsSyncing(true);
@@ -134,12 +142,29 @@ export default function DashboardSidebar() {
                         <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                             Management
                         </h2>
-                        <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
+                            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
                             Database & Metrics
                         </p>
                     </header>
                     
                     <div className="space-y-4">
+                        <SearchBar 
+                            value={searchQuery}
+                            onChange={setSearchQuery}
+                            onSearch={handleSearch}
+                            placeholder="Search orders, serials..."
+                            variant="blue"
+                            rightElement={
+                                <button
+                                    onClick={() => handleSearch(searchQuery)}
+                                    className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
+                                    title="Search"
+                                >
+                                    <Search className="w-4 h-4" />
+                                </button>
+                            }
+                        />
+
                         {/* Order Management Tools */}
                         <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                             <div className="flex items-center gap-2 mb-2">

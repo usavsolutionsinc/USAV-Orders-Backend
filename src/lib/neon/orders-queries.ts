@@ -16,6 +16,7 @@ export interface ShippedOrder {
   pack_date_time: string;
   notes: string;
   status_history: any; // JSONB status history
+  is_shipped?: boolean;
 }
 
 /**

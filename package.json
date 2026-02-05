@@ -19,6 +19,7 @@
     "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
+    "ebay-api": "^9.4.0",
     "framer-motion": "^11.0.0",
     "googleapis": "^169.0.0",
     "html5-qrcode": "^2.3.8",

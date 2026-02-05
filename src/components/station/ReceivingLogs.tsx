@@ -262,7 +262,7 @@ export default function ReceivingLogs({
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             key={log.id} 
-                                            className={`grid grid-cols-[55px_1fr_80px] items-center gap-1 px-1 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
+                                            className={`grid grid-cols-[55px_85px_1fr] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
                                                 {ts ? (
@@ -271,12 +271,14 @@ export default function ReceivingLogs({
                                                         : new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
                                                 ) : '--:--'}
                                             </div>
-                                            <CopyableText 
-                                                text={log.tracking || ''} 
-                                                className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50/30 px-1 py-0.5 rounded border border-blue-100/30" 
-                                            />
-                                            <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
-                                                {log.status || ''}
+                                            <div className="flex justify-start">
+                                                <CopyableText 
+                                                    text={log.tracking || ''} 
+                                                    className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 w-[85px]" 
+                                                />
+                                            </div>
+                                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-left opacity-60">
+                                                {log.status || 'Unknown'}
                                             </div>
                                         </motion.div>
                                     );

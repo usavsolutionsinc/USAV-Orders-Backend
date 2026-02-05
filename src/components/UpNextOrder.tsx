@@ -127,7 +127,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      className="rounded-2xl p-5 border transition-all relative shadow-sm hover:shadow-md mb-3 bg-white border-gray-200 hover:border-blue-300"
+      className="rounded-2xl p-4 border transition-all relative shadow-sm hover:shadow-md mb-2 bg-white border-gray-200 hover:border-blue-300"
     >
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-2">
@@ -249,7 +249,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   }
 
   return (
-    <div className="flex flex-col space-y-4">
+    <div className="flex flex-col space-y-2">
       {/* Tab Switcher */}
       <TabSwitch
         tabs={[

@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { RepairIntakeForm, RepairFormData, RepairTable } from '@/components/repair';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { TabSwitch } from '@/components/ui/TabSwitch';
+import { SearchBar } from '@/components/ui/SearchBar';
 
 interface RepairSidebarProps {
     activeTab: 'active' | 'done';
@@ -30,17 +31,6 @@ function RepairSidebar({ activeTab, setActiveTab }: RepairSidebarProps) {
     
     const handleNewRepair = () => {
         setShowIntakeForm(true);
-    };
-
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        const params = new URLSearchParams(window.location.search);
-        if (searchValue) {
-            params.set('search', searchValue);
-        } else {
-            params.delete('search');
-        }
-        window.history.pushState({}, '', `/repair?${params.toString()}`);
     };
 
     const handleClearSearch = () => {
@@ -98,43 +88,36 @@ function RepairSidebar({ activeTab, setActiveTab }: RepairSidebarProps) {
                         <div className="p-6 space-y-8 h-full flex flex-col">
                             {/* Header */}
                             <header>
-                                <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
-                                    <Tool className="w-6 h-6 text-orange-600" />
-                                </div>
                                 <h2 className="text-2xl font-black tracking-tighter text-gray-900 uppercase leading-none">Repairs</h2>
-                                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-[0.3em] mt-2">Bose Wave Center</p>
+                                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-[0.3em] mt-2">USAV Repair Service</p>
                             </header>
 
                             <div className="space-y-4">
-                                <form onSubmit={handleSearch} className="relative group">
-                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-600 transition-colors">
-                                        <Search className="w-4 h-4" />
-                                    </div>
-                                    <input 
-                                        type="text"
-                                        value={searchValue}
-                                        onChange={(e) => setSearchValue(e.target.value)}
-                                        placeholder="Search repairs..."
-                                        className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 outline-none transition-all shadow-inner"
-                                    />
-                                    {searchValue && (
-                                        <button 
-                                            type="button"
-                                            onClick={handleClearSearch}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-lg transition-all text-gray-400"
+                                <SearchBar
+                                    value={searchValue}
+                                    onChange={setSearchValue}
+                                    onSearch={() => {
+                                        const params = new URLSearchParams(window.location.search);
+                                        if (searchValue) {
+                                            params.set('search', searchValue);
+                                        } else {
+                                            params.delete('search');
+                                        }
+                                        window.history.pushState({}, '', `/repair?${params.toString()}`);
+                                    }}
+                                    onClear={handleClearSearch}
+                                    placeholder="Search repairs..."
+                                    variant="orange"
+                                    rightElement={
+                                        <button
+                                            onClick={handleNewRepair}
+                                            className="p-3 bg-gray-900 hover:bg-gray-800 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-gray-900/10 group"
+                                            title="New Repair Order"
                                         >
-                                            <X className="w-3 h-3" />
+                                            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
                                         </button>
-                                    )}
-                                </form>
-
-                                <button
-                                    onClick={handleNewRepair}
-                                    className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-[1.5rem] transition-all active:scale-[0.98] shadow-xl shadow-gray-900/20 group"
-                                >
-                                    <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-                                    <span className="text-[11px] font-black uppercase tracking-widest">New Repair Order</span>
-                                </button>
+                                    }
+                                />
 
                                 {/* Active / Done Tabs */}
                                 <TabSwitch

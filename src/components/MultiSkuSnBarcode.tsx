@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Import refactored sub-components
 import { ModeSelector, BarcodeMode } from './barcode/ModeSelector';
@@ -302,61 +303,91 @@ export default function MultiSkuSnBarcode() {
             {/* Mode Selector - Using Refactored Component */}
             <ModeSelector mode={mode} onModeChange={handleModeChange} />
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
-                {/* Step 1: SKU - Using Refactored Component */}
-                <SkuInput
-                    sku={sku}
-                    uniqueSku={uniqueSku}
-                    mode={mode}
-                    skuInputRef={skuInputRef}
-                    isActive={step >= 1}
-                    onChange={handleSkuChange}
-                    onNext={handleNextStepSku}
-                />
+            <div className="flex-1 overflow-hidden p-8 relative">
+                <motion.div 
+                    animate={{ y: step === 1 ? 0 : step === 2 ? -280 : -600 }}
+                    transition={{ type: 'spring', damping: 30, stiffness: 200 }}
+                    className="space-y-12 pb-40"
+                >
+                    {/* Step 1: SKU - Using Refactored Component */}
+                    <motion.div
+                        animate={{ 
+                            opacity: step === 1 ? 1 : 0.4,
+                            scale: step === 1 ? 1 : 0.95,
+                            filter: step === 1 ? 'blur(0px)' : 'blur(2px)'
+                        }}
+                    >
+                        <SkuInput
+                            sku={sku}
+                            uniqueSku={uniqueSku}
+                            mode={mode}
+                            skuInputRef={skuInputRef}
+                            isActive={step >= 1}
+                            onChange={handleSkuChange}
+                            onNext={handleNextStepSku}
+                        />
+                    </motion.div>
 
-                {/* Step 2: Serial Numbers & Details - Using Refactored Component */}
-                {mode !== 'reprint' && (
-                    <SerialNumberInput
-                        sku={sku}
-                        mode={mode}
-                        title={title}
-                        stock={stock}
-                        snInput={snInput}
-                        location={location}
-                        currentLocation={currentLocation}
-                        snInputRef={snInputRef}
-                        isLoadingTitle={isLoadingTitle}
-                        isActive={step >= 2}
-                        showChangeSku={mode === 'print' && step === 2}
-                        onSnInputChange={handleSnInputChange}
-                        onLocationChange={setLocation}
-                        onNext={handleNextStepSn}
-                        onFinalAction={handleFinalAction}
-                        isPosting={isPosting}
-                        onChangeSku={handleChangeSku}
-                    />
-                )}
+                    {/* Step 2: Serial Numbers & Details - Using Refactored Component */}
+                    {mode !== 'reprint' && (
+                        <motion.div
+                            animate={{ 
+                                opacity: step === 2 ? 1 : 0.4,
+                                scale: step === 2 ? 1 : 0.95,
+                                filter: step === 2 ? 'blur(0px)' : 'blur(2px)'
+                            }}
+                        >
+                            <SerialNumberInput
+                                sku={sku}
+                                mode={mode}
+                                title={title}
+                                stock={stock}
+                                snInput={snInput}
+                                location={location}
+                                currentLocation={currentLocation}
+                                snInputRef={snInputRef}
+                                isLoadingTitle={isLoadingTitle}
+                                isActive={step >= 2}
+                                showChangeSku={mode === 'print' && step === 2}
+                                onSnInputChange={handleSnInputChange}
+                                onLocationChange={setLocation}
+                                onNext={handleNextStepSn}
+                                onFinalAction={handleFinalAction}
+                                isPosting={isPosting}
+                                onChangeSku={handleChangeSku}
+                            />
+                        </motion.div>
+                    )}
 
-                {/* Step 3: Preview & Print - Using Refactored Component */}
-                {mode !== 'change-location' && (
-                    <BarcodePreview
-                        mode={mode}
-                        uniqueSku={uniqueSku}
-                        sku={sku}
-                        title={title}
-                        serialNumbers={serialNumbers}
-                        notes={notes}
-                        location={location}
-                        showNotes={showNotes}
-                        barcodeCanvasRef={barcodeCanvasRef}
-                        isPosting={isPosting}
-                        isActive={step >= 3}
-                        getSerialLast6={getSerialLast6}
-                        onToggleNotes={() => setShowNotes(!showNotes)}
-                        onNotesChange={setNotes}
-                        onPrint={handleFinalAction}
-                    />
-                )}
+                    {/* Step 3: Preview & Print - Using Refactored Component */}
+                    {mode !== 'change-location' && (
+                        <motion.div
+                            animate={{ 
+                                opacity: step === 3 ? 1 : 0.4,
+                                scale: step === 3 ? 1 : 0.95,
+                                filter: step === 3 ? 'blur(0px)' : 'blur(2px)'
+                            }}
+                        >
+                            <BarcodePreview
+                                mode={mode}
+                                uniqueSku={uniqueSku}
+                                sku={sku}
+                                title={title}
+                                serialNumbers={serialNumbers}
+                                notes={notes}
+                                location={location}
+                                showNotes={showNotes}
+                                barcodeCanvasRef={barcodeCanvasRef}
+                                isPosting={isPosting}
+                                isActive={step >= 3}
+                                getSerialLast6={getSerialLast6}
+                                onToggleNotes={() => setShowNotes(!showNotes)}
+                                onNotesChange={setNotes}
+                                onPrint={handleFinalAction}
+                            />
+                        </motion.div>
+                    )}
+                </motion.div>
             </div>
 
             {error && (

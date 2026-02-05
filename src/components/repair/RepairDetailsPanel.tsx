@@ -27,8 +27,39 @@ export function RepairDetailsPanel({
   onUpdate 
 }: RepairDetailsPanelProps) {
   const [notes, setNotes] = useState(repair.notes || '');
+  const [ticketNumber, setTicketNumber] = useState(repair.ticket_number || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingTicket, setIsSavingTicket] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  const handleSaveTicket = async () => {
+    if (ticketNumber === repair.ticket_number) return;
+    
+    setIsSavingTicket(true);
+    try {
+      const res = await fetch('/api/repair-service', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: repair.id, 
+          field: 'ticket_number', 
+          value: ticketNumber 
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to save ticket number');
+      }
+
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving ticket number:', error);
+      // Revert on error
+      setTicketNumber(repair.ticket_number || '');
+    } finally {
+      setIsSavingTicket(false);
+    }
+  };
 
   const handleSaveNotes = async () => {
     if (notes === repair.notes) return;
@@ -82,18 +113,28 @@ export function RepairDetailsPanel({
     >
       {/* Header */}
       <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-200 p-6 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-1">
             <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
                 <Clock className="w-5 h-5 text-orange-600" />
             </div>
-            <div>
-              <h2 className="text-xl font-black text-gray-900 tracking-tight leading-none">{repair.ticket_number}</h2>
-              <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-1">Repair In-Progress</p>
+            <div className="flex-1">
+              <input
+                type="text"
+                value={ticketNumber}
+                onChange={(e) => setTicketNumber(e.target.value)}
+                onBlur={handleSaveTicket}
+                className="text-xl font-black text-gray-900 tracking-tight leading-none w-full border-none focus:ring-0 p-0 bg-transparent uppercase"
+                placeholder="TK Number"
+                disabled={isSavingTicket}
+              />
+              <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-1">
+                {isSavingTicket ? 'Saving...' : 'Repair In-Progress'}
+              </p>
             </div>
         </div>
         <button 
           onClick={onClose} 
-          className="p-2 hover:bg-gray-100 rounded-xl transition-all"
+          className="p-2 hover:bg-gray-100 rounded-xl transition-all ml-2"
           aria-label="Close details"
         >
           <X className="w-5 h-5 text-gray-600" />
@@ -102,6 +143,30 @@ export function RepairDetailsPanel({
       
       {/* Content sections */}
       <div className="p-6 space-y-6">
+        {/* Current Status - Moved to Top */}
+        <section>
+          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+            Update Status
+          </h3>
+          <select
+            value={repair.status || ''}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            disabled={updatingStatus}
+            className={`w-full text-sm font-black uppercase tracking-wider px-4 py-3 rounded-lg border transition-all outline-none focus:ring-4 focus:ring-blue-500/10 ${
+              repair.status === 'Done'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                : repair.status?.includes('Awaiting')
+                ? 'bg-amber-50 border-amber-200 text-amber-700'
+                : 'bg-blue-50 border-blue-200 text-blue-700'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            <option value="">Select Status...</option>
+            {STATUS_OPTIONS.map(status => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
+        </section>
+
         {/* Customer Information */}
         <section>
           <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
@@ -173,30 +238,6 @@ export function RepairDetailsPanel({
               <p className="font-mono text-sm text-gray-900 font-semibold">{repair.serial_number || 'N/A'}</p>
             </div>
           </div>
-        </section>
-
-        {/* Current Status */}
-        <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-            Update Status
-          </h3>
-          <select
-            value={repair.status || ''}
-            onChange={(e) => handleStatusChange(e.target.value)}
-            disabled={updatingStatus}
-            className={`w-full text-sm font-black uppercase tracking-wider px-4 py-3 rounded-lg border transition-all outline-none focus:ring-4 focus:ring-blue-500/10 ${
-              repair.status === 'Done'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : repair.status?.includes('Awaiting')
-                ? 'bg-amber-50 border-amber-200 text-amber-700'
-                : 'bg-blue-50 border-blue-200 text-blue-700'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            <option value="">Select Status...</option>
-            {STATUS_OPTIONS.map(status => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
         </section>
         
         {/* Status History */}

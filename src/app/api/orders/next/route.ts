@@ -25,15 +25,13 @@ export async function GET(req: NextRequest) {
     const totalPendingResult = await pool.query(
       `SELECT COUNT(*) as count
        FROM orders o
-       WHERE o.status NOT IN ('completed', 'missing_parts')
-         AND (o.tester_id = $1 OR o.tester_id IS NULL)
-         AND (o.test_date_time IS NULL OR o.test_date_time = '')
+       WHERE (o.tester_id = $1 OR o.tester_id IS NULL)
          AND (o.is_shipped = false OR o.is_shipped IS NULL)`,
       [techIdNum]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
-    // 2. Build Query - Filter out orders already tested or shipped
+    // 2. Build Query
     let query = `
       SELECT 
         id,
@@ -48,9 +46,7 @@ export async function GET(req: NextRequest) {
         out_of_stock
       FROM orders
       WHERE 
-        -- Only show if not tested yet and not shipped
-        (test_date_time IS NULL OR test_date_time = '')
-        AND (is_shipped = false OR is_shipped IS NULL)
+        (is_shipped = false OR is_shipped IS NULL)
     `;
     const params: any[] = [techIdNum];
     let paramCount = 2;
@@ -68,13 +64,8 @@ export async function GET(req: NextRequest) {
       query += ` AND status = 'missing_parts' AND (tester_id = $1 OR tester_id IS NULL) `;
     } else {
       query += `
-        -- Status is not completed or missing_parts
-        AND status NOT IN ('completed', 'missing_parts')
         -- Either assigned to this tech OR truly unassigned
-        AND (
-          tester_id = $1 
-          OR (tester_id IS NULL AND (status IS NULL OR status = 'unassigned'))
-        )
+        AND (tester_id = $1 OR tester_id IS NULL)
       `;
     }
 

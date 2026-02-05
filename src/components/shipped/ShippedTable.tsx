@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Search, X, Copy, Check, AlertTriangle } from '../Icons';
+import { Loader2, Search, X, AlertTriangle } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { ShippedDetailsPanel } from './ShippedDetailsPanel';
 import { CopyableText } from '../ui/CopyableText';
 
 // Hard-coded staff ID to name mapping
@@ -117,16 +116,30 @@ export function ShippedTable() {
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, shipped]);
 
+  // Listen for external open/close events to sync selection state
+  useEffect(() => {
+    const handleOpen = (e: CustomEvent<ShippedOrder>) => {
+      if (e.detail) {
+        setSelectedShipped(e.detail);
+      }
+    };
+    const handleClose = () => {
+      setSelectedShipped(null);
+    };
+
+    window.addEventListener('open-shipped-details' as any, handleOpen as any);
+    window.addEventListener('close-shipped-details' as any, handleClose as any);
+    
+    return () => {
+      window.removeEventListener('open-shipped-details' as any, handleOpen as any);
+      window.removeEventListener('close-shipped-details' as any, handleClose as any);
+    };
+  }, []);
+
   const handleRowClick = (record: ShippedOrder) => {
+    const event = new CustomEvent('open-shipped-details', { detail: record });
+    window.dispatchEvent(event);
     setSelectedShipped(record);
-  };
-
-  const handleCloseDetails = () => {
-    setSelectedShipped(null);
-  };
-
-  const handleUpdate = () => {
-    fetchShipped();
   };
 
   // Group records by date (using pack_date_time)
@@ -308,16 +321,7 @@ export function ShippedTable() {
         </div>
       </div>
       
-      {/* Details Panel - Overlay */}
-      <AnimatePresence>
-        {selectedShipped && (
-          <ShippedDetailsPanel 
-            shipped={selectedShipped}
-            onClose={handleCloseDetails}
-            onUpdate={handleUpdate}
-          />
-        )}
-      </AnimatePresence>
+      {/* Details Panel - Overlay is now handled by ShippedSidebar via global events to prevent multiple overlays */}
     </div>
   );
 }
