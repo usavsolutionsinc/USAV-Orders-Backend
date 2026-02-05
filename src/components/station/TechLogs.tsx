@@ -235,7 +235,7 @@ export default function TechLogs({
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             key={log.id} 
-                                            className={`grid grid-cols-[55px_1fr_60px_100px_100px] items-center gap-2 pl-2 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
+                                            className={`grid grid-cols-[55px_1fr_100px_100px] items-center gap-2 pl-2 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
                                                 {ts ? (
@@ -246,9 +246,6 @@ export default function TechLogs({
                                             </div>
                                             <div className="text-[11px] font-bold text-gray-900 truncate text-left">
                                                 {log.title || 'Unknown Product'}
-                                            </div>
-                                            <div className="text-[11px] font-black text-gray-400 uppercase tracking-widest text-left truncate opacity-60">
-                                                {log.status || ''}
                                             </div>
                                             <CopyableText 
                                                 text={log.tracking || ''} 

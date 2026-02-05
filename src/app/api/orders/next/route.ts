@@ -42,7 +42,6 @@ export async function GET(req: NextRequest) {
         status,
         condition,
         shipping_tracking_number,
-        serial_number,
         out_of_stock
       FROM orders
       WHERE 

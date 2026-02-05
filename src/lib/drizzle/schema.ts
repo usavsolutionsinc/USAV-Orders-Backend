@@ -62,6 +62,7 @@ const genericColumns = {
 };
 
 // Orders table - Updated schema (serial tracking moved to tech_serial_numbers)
+// tester_id removed 2026-02-05 - test tracking now in tech_serial_numbers table
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   shipByDate: text('ship_by_date'),
@@ -77,7 +78,6 @@ export const orders = pgTable('orders', {
   packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
   packDateTime: text('pack_date_time'),
   // Assignment tracking (who is assigned) - FK to staff.id
-  testerId: integer('tester_id').references(() => staff.id, { onDelete: 'set null' }),
   packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
   // Status tracking
   statusHistory: jsonb('status_history').default([]),

@@ -7,6 +7,16 @@ export const maxDuration = 60; // Increase timeout for Vercel
 
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
+/**
+ * NOTE: Tech sheet sync has been updated!
+ * 
+ * As of 2026-02-05, tech sheet data (test_date_time, tester_id) now syncs to 
+ * the tech_serial_numbers table instead of orders table.
+ * 
+ * For tech sheet sync, use: /api/sync-sheets-to-tech-serials
+ * This endpoint still handles: shipped sheet, packer sheets, and other general tables
+ */
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -209,15 +219,14 @@ export async function POST(req: NextRequest) {
                                         order_id = COALESCE(NULLIF($1, ''), order_id),
                                         product_title = COALESCE(NULLIF($2, ''), product_title),
                                         condition = COALESCE(NULLIF($3, ''), condition),
-                                        serial_number = COALESCE(NULLIF($4, ''), serial_number),
-                                        sku = COALESCE(NULLIF($5, ''), sku),
-                                        packed_by = COALESCE($6, packed_by),
-                                        tested_by = COALESCE($7, tested_by),
-                                        pack_date_time = COALESCE(NULLIF($8, ''), pack_date_time),
-                                        is_shipped = CASE WHEN $8 != '' THEN true ELSE is_shipped END,
-                                        status_history = $9::jsonb
-                                    WHERE shipping_tracking_number = $10
-                                `, [orderId, productTitle, condition, serialNumber, sku, packedBy, testedBy, packDateTime, JSON.stringify(newStatusHistory), shippingTracking]);
+                                        sku = COALESCE(NULLIF($4, ''), sku),
+                                        packed_by = COALESCE($5, packed_by),
+                                        pack_date_time = COALESCE(NULLIF($6, ''), pack_date_time),
+                                        is_shipped = CASE WHEN $6 != '' THEN true ELSE is_shipped END,
+                                        status_history = $7::jsonb,
+                                        quantity = COALESCE(NULLIF($8, ''), quantity)
+                                    WHERE shipping_tracking_number = $9
+                                `, [orderId, productTitle, condition, sku, packedBy, packDateTime, JSON.stringify(newStatusHistory), quantity, shippingTracking]);
                                 updatedCount++;
                             } else {
                                 // Insert new order
@@ -235,11 +244,11 @@ export async function POST(req: NextRequest) {
                                 await client.query(`
                                     INSERT INTO orders (
                                         order_id, product_title, condition, shipping_tracking_number,
-                                        serial_number, sku, packed_by, tested_by, pack_date_time,
+                                        sku, packed_by, pack_date_time, quantity,
                                         is_shipped, status, status_history
-                                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
-                                `, [orderId, productTitle, condition, shippingTracking, serialNumber, sku, 
-                                    packedBy, testedBy, packDateTime, packDateTime ? true : false, 
+                                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+                                `, [orderId, productTitle, condition, shippingTracking, sku, 
+                                    packedBy, packDateTime, quantity, packDateTime ? true : false, 
                                     'shipped', JSON.stringify(statusHistory)]);
                                 insertedCount++;
                             }
@@ -268,87 +277,15 @@ export async function POST(req: NextRequest) {
             }
             
             
-            // Handle Tech Sheets
+            // Handle Tech Sheets - DEPRECATED for new sync
+            // Use /api/sync-sheets-to-tech-serials for tech data
             if (techSheets.includes(lowerName)) {
-                try {
-                    const response = await sheets.spreadsheets.values.get({
-                        spreadsheetId: targetSpreadsheetId,
-                        range: `${sheetName}!A2:D`, // A=date_time, C=tracking, D=serial
-                    });
-
-                    const rows = response.data.values || [];
-                    const employeeId = techEmployeeIds[lowerName];
-                    const client = await pool.connect();
-                    let updatedCount = 0;
-
-                    try {
-                        // Get staff ID and name
-                        const staffResult = await client.query(
-                            'SELECT id, name FROM staff WHERE employee_id = $1',
-                            [employeeId]
-                        );
-                        
-                        if (staffResult.rows.length === 0) {
-                            throw new Error(`Staff not found for employee_id: ${employeeId}`);
-                        }
-                        
-                        const staffId = staffResult.rows[0].id;
-                        const staffName = staffResult.rows[0].name;
-
-                        for (const row of rows) {
-                            const dateTime = row[0] || ''; // Column A
-                            const tracking = row[2] || ''; // Column C
-                            const serial = row[3] || ''; // Column D
-
-                            if (tracking && serial && dateTime) {
-                                // Convert dateTime to ISO format for status_history
-                                let isoTimestamp = dateTime;
-                                try {
-                                    if (dateTime.includes('/')) {
-                                        const [datePart, timePart] = dateTime.split(' ');
-                                        const [m, d, y] = datePart.split('/');
-                                        isoTimestamp = new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T${timePart || '00:00:00'}`).toISOString();
-                                    }
-                                } catch (e) {
-                                    // Keep original if conversion fails
-                                }
-
-                                await client.query(`
-                                    UPDATE orders
-                                    SET serial_number = $1,
-                                        tested_by = $2,
-                                        test_date_time = $3,
-                                        status_history = COALESCE(status_history, '[]'::jsonb) || 
-                                            jsonb_build_object(
-                                                'status', 'tested',
-                                                'time', $4::text,
-                                                'user', $5::text,
-                                                'previous_status', status_history->-1->>'status'
-                                            )::jsonb
-                                    WHERE shipping_tracking_number = $6
-                                `, [serial, staffId, dateTime, isoTimestamp, staffName, tracking]);
-                                updatedCount++;
-                            }
-                        }
-                        
-                        techPackerResults.push({ 
-                            sheet: sheetName, 
-                            table: 'orders (tech)', 
-                            status: 'updated', 
-                            rows: updatedCount 
-                        });
-                    } finally {
-                        client.release();
-                    }
-                } catch (err) {
-                    console.error(`Error syncing tech sheet ${sheetName}:`, err);
-                    techPackerResults.push({ 
-                        sheet: sheetName, 
-                        table: 'orders (tech)', 
-                        status: 'error', 
-                        error: err instanceof Error ? err.message : String(err) 
-                    });
-                }
+                techPackerResults.push({ 
+                    sheet: sheetName, 
+                    table: 'tech_serial_numbers', 
+                    status: 'skipped', 
+                    message: 'Use /api/sync-sheets-to-tech-serials for tech sheet sync'
+                });
             }
             
             // Handle Packer Sheets
