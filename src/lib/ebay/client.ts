@@ -53,7 +53,17 @@ export class EbayClient {
    */
   async refreshAccessToken(refreshToken: string): Promise<string> {
     try {
-      const response = await this.api.oauth2.refreshAuthToken(refreshToken);
+      // Set the refresh token in the API instance
+      this.api.oAuth2.setCredentials({
+        access_token: '',
+        refresh_token: refreshToken,
+        expires_in: 0,
+        refresh_token_expires_in: 0,
+        token_type: 'User Access Token'
+      });
+
+      // Refresh the token
+      const response = await this.api.oAuth2.refreshToken();
       
       const newAccessToken = response.access_token;
       const expiresIn = response.expires_in || 7200; // Default 2 hours
@@ -86,6 +96,15 @@ export class EbayClient {
     try {
       const token = await this.getValidAccessToken();
       
+      // Set credentials for this API call
+      this.api.oAuth2.setCredentials({
+        access_token: token,
+        refresh_token: '',
+        expires_in: 7200,
+        refresh_token_expires_in: 0,
+        token_type: 'User Access Token'
+      });
+      
       const params: any = {
         limit: options.limit || 100,
       };
@@ -101,12 +120,7 @@ export class EbayClient {
 
       console.log(`[${this.accountName}] Fetching orders with params:`, params);
 
-      const response = await this.api.sell.fulfillment.getOrders(params, { 
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        } 
-      });
+      const response = await this.api.sell.fulfillment.getOrders(params);
 
       const orders = response.orders || [];
       console.log(`[${this.accountName}] Fetched ${orders.length} orders`);
@@ -125,12 +139,16 @@ export class EbayClient {
     try {
       const token = await this.getValidAccessToken();
       
-      const response = await this.api.sell.fulfillment.getOrder(orderId, { 
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        } 
+      // Set credentials for this API call
+      this.api.oAuth2.setCredentials({
+        access_token: token,
+        refresh_token: '',
+        expires_in: 7200,
+        refresh_token_expires_in: 0,
+        token_type: 'User Access Token'
       });
+      
+      const response = await this.api.sell.fulfillment.getOrder(orderId);
 
       return response;
     } catch (error: any) {

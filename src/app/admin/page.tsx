@@ -518,15 +518,15 @@ function OrdersManagement({
                                                 </h3>
                                             </div>
                                             <div className="flex items-center gap-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                                                {order.ship_by_date && (
+                                                    <>
+                                                        <span className="text-blue-600">Ship: {order.ship_by_date}</span>
+                                                        <span>•</span>
+                                                    </>
+                                                )}
                                                 <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700 font-mono">#{order.order_id}</span>
                                                 <span>•</span>
                                                 <span>SKU: {order.sku}</span>
-                                                {order.ship_by_date && (
-                                                    <>
-                                                        <span>•</span>
-                                                        <span className="text-blue-600">Ship: {order.ship_by_date}</span>
-                                                    </>
-                                                )}
                                             </div>
                                         </div>
                                         

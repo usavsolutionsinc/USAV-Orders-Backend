@@ -56,12 +56,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_unique_account_order
     ON orders(order_id, account_source) 
     WHERE account_source IS NOT NULL;
 
--- Insert the three eBay accounts with placeholder tokens (will be updated from env vars)
+-- Insert the USAV eBay account with placeholder tokens (will be updated from env vars)
 INSERT INTO ebay_accounts (account_name, access_token, refresh_token, token_expires_at, refresh_token_expires_at)
 VALUES 
-    ('DRAGON', 'placeholder', 'placeholder', NOW() + INTERVAL '2 hours', NOW() + INTERVAL '18 months'),
-    ('USAV', 'placeholder', 'placeholder', NOW() + INTERVAL '2 hours', NOW() + INTERVAL '18 months'),
-    ('MEKONG', 'placeholder', 'placeholder', NOW() + INTERVAL '2 hours', NOW() + INTERVAL '18 months')
+    ('USAV', 'placeholder', 'placeholder', NOW() + INTERVAL '2 hours', NOW() + INTERVAL '18 months')
 ON CONFLICT (account_name) DO NOTHING;
 
 -- Add comment to document the schema
