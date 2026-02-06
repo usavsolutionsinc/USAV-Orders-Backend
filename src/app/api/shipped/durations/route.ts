@@ -23,17 +23,31 @@ export async function GET(req: NextRequest) {
     let testingDuration = 'N/A';
 
     // 2. Calculate Boxing Duration
-    if (current.packed_by && current.pack_date_time && current.pack_date_time !== '1') {
+    const currentPackResult = await pool.query(
+      `SELECT packed_by, pack_date_time
+       FROM packer_logs
+       WHERE shipping_tracking_number = $1
+         AND tracking_type = 'ORDERS'
+       ORDER BY pack_date_time DESC NULLS LAST, id DESC
+       LIMIT 1`,
+      [current.shipping_tracking_number]
+    );
+
+    const currentPack = currentPackResult.rows[0];
+    if (currentPack?.packed_by && currentPack?.pack_date_time) {
       const prevBoxingResult = await pool.query(
-        `SELECT pack_date_time FROM orders 
-         WHERE packed_by = $1 AND pack_date_time < $2 AND pack_date_time != '1' AND is_shipped = true
-         ORDER BY pack_date_time DESC LIMIT 1`,
-        [current.packed_by, current.pack_date_time]
+        `SELECT pack_date_time FROM packer_logs
+         WHERE packed_by = $1
+           AND tracking_type = 'ORDERS'
+           AND pack_date_time < $2
+         ORDER BY pack_date_time DESC NULLS LAST, id DESC
+         LIMIT 1`,
+        [currentPack.packed_by, currentPack.pack_date_time]
       );
 
       if (prevBoxingResult.rows.length > 0) {
         const prevTime = parseDate(prevBoxingResult.rows[0].pack_date_time).getTime();
-        const currTime = parseDate(current.pack_date_time).getTime();
+        const currTime = parseDate(currentPack.pack_date_time).getTime();
         const diffMs = currTime - prevTime;
         boxingDuration = formatDuration(diffMs);
       }
@@ -63,7 +77,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-function parseDate(dateStr: string): Date {
+function parseDate(dateStr: string | Date): Date {
+  if (dateStr instanceof Date) return dateStr;
   if (dateStr.includes('/')) {
     // Handle M/D/YYYY HH:mm:ss
     const [datePart, timePart] = dateStr.split(' ');

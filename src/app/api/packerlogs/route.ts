@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
-import { orders } from '@/lib/drizzle/schema';
-import { desc, eq, and, isNotNull } from 'drizzle-orm';
+import { orders, packerLogs } from '@/lib/drizzle/schema';
+import { desc, eq } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -10,21 +10,41 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        let query = db.select().from(orders);
+        let query = db
+            .select({
+                id: packerLogs.id,
+                packDateTime: packerLogs.packDateTime,
+                shippingTrackingNumber: packerLogs.shippingTrackingNumber,
+                trackingType: packerLogs.trackingType,
+                packedBy: packerLogs.packedBy,
+                packerPhotosUrl: packerLogs.packerPhotosUrl,
+                orderId: orders.orderId,
+                productTitle: orders.productTitle,
+                condition: orders.condition,
+                sku: orders.sku,
+                statusHistory: orders.statusHistory,
+                isShipped: orders.isShipped,
+                shipByDate: orders.shipByDate,
+                packerId: orders.packerId,
+                notes: orders.notes,
+                quantity: orders.quantity,
+                outOfStock: orders.outOfStock,
+                accountSource: orders.accountSource,
+                orderDate: orders.orderDate,
+            })
+            .from(packerLogs)
+            .leftJoin(orders, eq(orders.shippingTrackingNumber, packerLogs.shippingTrackingNumber));
 
         // Filter by packerId if provided
         if (packerId) {
             const packerIdNum = parseInt(packerId);
             if (!isNaN(packerIdNum)) {
-                query = query.where(eq(orders.packedBy, packerIdNum)) as any;
+                query = query.where(eq(packerLogs.packedBy, packerIdNum)) as any;
             }
         }
 
-        // Filter out entries without pack_date_time
-        query = query.where(isNotNull(orders.packDateTime)) as any;
-
         // Order by id descending (most recent first)
-        query = query.orderBy(desc(orders.id)) as any;
+        query = query.orderBy(desc(packerLogs.id)) as any;
 
         // Apply pagination
         query = query.limit(limit).offset(offset) as any;
@@ -40,7 +60,7 @@ export async function GET(req: NextRequest) {
             condition: log.condition,
             shippingTrackingNumber: log.shippingTrackingNumber,
             sku: log.sku,
-            status: log.status,
+            status: log.trackingType,
             statusHistory: log.statusHistory,
             isShipped: log.isShipped,
             shipByDate: log.shipByDate,
@@ -51,6 +71,7 @@ export async function GET(req: NextRequest) {
             outOfStock: log.outOfStock,
             accountSource: log.accountSource,
             orderDate: log.orderDate,
+            trackingType: log.trackingType,
             // Legacy field mappings for backward compatibility
             timestamp: log.packDateTime,
             tracking: log.shippingTrackingNumber,
@@ -68,24 +89,12 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
         
-        // Create new order entry
-        const newLog = await db.insert(orders).values({
+        const newLog = await db.insert(packerLogs).values({
             packDateTime: body.packDateTime,
-            orderId: body.orderId,
-            productTitle: body.productTitle,
-            condition: body.condition,
             shippingTrackingNumber: body.shippingTrackingNumber,
-            sku: body.sku,
-            statusHistory: body.statusHistory || [],
-            isShipped: body.isShipped !== undefined ? body.isShipped : false,
-            shipByDate: body.shipByDate,
-            packerId: body.packerId,
+            trackingType: body.trackingType || 'ORDERS',
             packedBy: body.packedBy,
-            notes: body.notes,
-            quantity: body.quantity ? parseInt(body.quantity) : 1,
-            outOfStock: body.outOfStock,
-            accountSource: body.accountSource,
-            orderDate: body.orderDate,
+            packerPhotosUrl: body.packerPhotosUrl || [],
         }).returning();
 
         return NextResponse.json(newLog[0]);
@@ -105,9 +114,9 @@ export async function PUT(req: NextRequest) {
         }
 
         const updatedLog = await db
-            .update(orders)
+            .update(packerLogs)
             .set(updateData)
-            .where(eq(orders.id, parseInt(id)))
+            .where(eq(packerLogs.id, parseInt(id)))
             .returning();
 
         if (updatedLog.length === 0) {
@@ -131,8 +140,8 @@ export async function DELETE(req: NextRequest) {
         }
 
         const deletedLog = await db
-            .delete(orders)
-            .where(eq(orders.id, parseInt(id)))
+            .delete(packerLogs)
+            .where(eq(packerLogs.id, parseInt(id)))
             .returning();
 
         if (deletedLog.length === 0) {

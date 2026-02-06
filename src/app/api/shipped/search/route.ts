@@ -17,27 +17,38 @@ export async function GET(req: NextRequest) {
         // Only return orders where is_shipped = true
         const result = await pool.query(`
             SELECT 
-                id,
-                ship_by_date,
-                order_id,
-                product_title,
-                condition,
-                shipping_tracking_number,
-                serial_number,
-                packed_by,
-                tested_by,
-                sku,
-                test_date_time,
-                pack_date_time,
-                is_shipped
-            FROM orders
-            WHERE is_shipped = true
+                o.id,
+                o.ship_by_date,
+                o.order_id,
+                o.product_title,
+                o.condition,
+                o.shipping_tracking_number,
+                o.packed_by,
+                o.tester_id,
+                o.sku,
+                tsn.test_date_time,
+                pl.pack_date_time,
+                o.is_shipped
+            FROM orders o
+            LEFT JOIN LATERAL (
+                SELECT pack_date_time
+                FROM packer_logs
+                WHERE shipping_tracking_number = o.shipping_tracking_number
+                  AND tracking_type = 'ORDERS'
+                ORDER BY pack_date_time DESC NULLS LAST, id DESC
+                LIMIT 1
+            ) pl ON true
+            LEFT JOIN LATERAL (
+                SELECT MIN(test_date_time) as test_date_time
+                FROM tech_serial_numbers
+                WHERE shipping_tracking_number = o.shipping_tracking_number
+            ) tsn ON true
+            WHERE o.is_shipped = true
                 AND (
-                    (RIGHT(shipping_tracking_number::text, 8) = $1 OR shipping_tracking_number::text ILIKE $2)
-                    OR (RIGHT(order_id::text, 8) = $1 OR order_id::text ILIKE $2)
-                    OR (RIGHT(serial_number::text, 8) = $1 OR serial_number::text ILIKE $2)
+                    (RIGHT(o.shipping_tracking_number::text, 8) = $1 OR o.shipping_tracking_number::text ILIKE $2)
+                    OR (RIGHT(o.order_id::text, 8) = $1 OR o.order_id::text ILIKE $2)
                 )
-            ORDER BY id DESC
+            ORDER BY o.id DESC
             LIMIT 20
         `, [last8, `%${query}%`]);
 

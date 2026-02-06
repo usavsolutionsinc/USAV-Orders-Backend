@@ -43,22 +43,29 @@ export async function POST(req: NextRequest) {
     const formattedDate = formatPSTTimestamp();
 
     // Insert into orders table or update existing order to is_shipped = true
+    // Note: pack_date_time moved to packer_logs table
     const result = await pool.query(
-      `INSERT INTO orders (order_id, product_title, condition, shipping_tracking_number, sku, is_shipped, pack_date_time)
-       VALUES ($1, $2, $3, $4, $5, true, $6)
+      `INSERT INTO orders (order_id, product_title, condition, shipping_tracking_number, sku, is_shipped)
+       VALUES ($1, $2, $3, $4, $5, true)
        ON CONFLICT (order_id) 
        DO UPDATE SET 
          product_title = EXCLUDED.product_title,
          condition = EXCLUDED.condition,
          shipping_tracking_number = EXCLUDED.shipping_tracking_number,
          sku = EXCLUDED.sku,
-         is_shipped = true,
-         pack_date_time = EXCLUDED.pack_date_time
+         is_shipped = true
        RETURNING id`,
-      [order_id, finalProductTitle, condition, shipping_tracking_number, sku, formattedDate]
+      [order_id, finalProductTitle, condition, shipping_tracking_number, sku]
     );
 
     const insertedId = result.rows[0]?.id;
+
+    // Insert packer log for audit trail
+    await pool.query(
+      `INSERT INTO packer_logs (shipping_tracking_number, tracking_type, pack_date_time)
+       VALUES ($1, 'ORDERS', $2)`,
+      [shipping_tracking_number, formattedDate]
+    );
 
     return NextResponse.json({
       success: true,

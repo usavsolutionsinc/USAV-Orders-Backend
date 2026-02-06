@@ -62,7 +62,7 @@ const genericColumns = {
 };
 
 // Orders table - Updated schema (serial tracking moved to tech_serial_numbers)
-// tester_id removed 2026-02-05 - test tracking now in tech_serial_numbers table
+// Packing completion tracking moved to packer_logs table (packed_by, pack_date_time, packer_photos_url)
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   shipByDate: text('ship_by_date'),
@@ -74,20 +74,27 @@ export const orders = pgTable('orders', {
   outOfStock: text('out_of_stock'),
   notes: text('notes'),
   quantity: integer('quantity').default(1),
-  // Completion tracking for packing (who completed the work) - FK to staff.id
-  packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
-  packDateTime: text('pack_date_time'),
-  // Assignment tracking (who is assigned) - FK to staff.id
+  // Assignment tracking (who is assigned to pack) - FK to staff.id
   packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
-  // Photo URLs from packer mobile app (JSONB array of photo objects)
-  // Format: [{"url": "blob_url", "uploadedAt": "timestamp", "index": 1}]
-  packerPhotosUrl: jsonb('packer_photos_url'),
+  // Assignment tracking (who is assigned to test) - FK to staff.id
+  testerId: integer('tester_id').references(() => staff.id, { onDelete: 'set null' }),
   // Status tracking
   statusHistory: jsonb('status_history').default([]),
   isShipped: boolean('is_shipped').default(false),
   // eBay integration columns
   accountSource: varchar('account_source', { length: 50 }),
   orderDate: timestamp('order_date'),
+});
+
+// Packer logs - audit trail for all packer scans (orders, SKU, FNSKU, FBA, etc.)
+export const packerLogs = pgTable('packer_logs', {
+  id: serial('id').primaryKey(),
+  shippingTrackingNumber: text('shipping_tracking_number').notNull(),
+  trackingType: varchar('tracking_type', { length: 20 }).notNull(),
+  packDateTime: timestamp('pack_date_time'),
+  packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
+  packerPhotosUrl: jsonb('packer_photos_url'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // Receiving table - Updated schema based on user screenshot & sheet mapping
@@ -160,6 +167,8 @@ export type Receiving = typeof receiving.$inferSelect;
 export type NewReceiving = typeof receiving.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
+export type PackerLog = typeof packerLogs.$inferSelect;
+export type NewPackerLog = typeof packerLogs.$inferInsert;
 export type RepairService = typeof repairService.$inferSelect;
 export type NewRepairService = typeof repairService.$inferInsert;
 export type TechSerialNumber = typeof techSerialNumbers.$inferSelect;

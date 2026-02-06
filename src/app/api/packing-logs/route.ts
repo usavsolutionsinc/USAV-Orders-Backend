@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { classifyScan } from '@/utils/packer';
+import { normalizeSku } from '@/utils/sku';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -22,18 +24,17 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
         }
 
-        // Query orders table for this packer's completed orders using packed_by
         const result = await pool.query(`
             SELECT 
-                id, 
-                pack_date_time as timestamp, 
-                shipping_tracking_number as tracking, 
-                product_title as title
-            FROM orders
-            WHERE packed_by = $1
-              AND pack_date_time IS NOT NULL 
-              AND pack_date_time != ''
-            ORDER BY id DESC 
+                pl.id,
+                pl.pack_date_time as timestamp,
+                pl.shipping_tracking_number as tracking,
+                pl.tracking_type,
+                o.product_title as title
+            FROM packer_logs pl
+            LEFT JOIN orders o ON o.shipping_tracking_number = pl.shipping_tracking_number
+            WHERE pl.packed_by = $1
+            ORDER BY pl.id DESC
             LIMIT $2 OFFSET $3
         `, [staffId, limit, offset]);
 
@@ -46,6 +47,7 @@ export async function GET(req: NextRequest) {
             title: log.title || '',
             product: log.title || '',
             packedAt: log.timestamp,
+            trackingType: log.tracking_type || '',
         }));
 
         return NextResponse.json(formattedLogs);
@@ -58,11 +60,14 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { trackingNumber, orderId, photos, packerId, timestamp, product } = body;
+        const { trackingNumber, photos, packerId, timestamp } = body;
+        const scanInput = String(trackingNumber || '').trim();
+        if (!scanInput) {
+            return NextResponse.json({ error: 'trackingNumber is required' }, { status: 400 });
+        }
         
         console.log('Received packing request:', {
             trackingNumber,
-            orderId,
             photosCount: photos?.length,
             packerId,
             timestamp
@@ -82,18 +87,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
         }
         
-        // Create proper timestamp - use current server time
         const now = new Date();
-        const packDateTime = now.toLocaleString('en-US', { 
-            timeZone: 'America/Los_Angeles',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
+        const packDateTime = parseScanTimestamp(timestamp) || now;
         
         // Convert photos array to structured JSONB format
         const photosJsonb = Array.isArray(photos) 
@@ -115,58 +110,91 @@ export async function POST(req: NextRequest) {
             status: 'shipped'
         });
         
-        // Update orders table with only the required fields
-        const result = await pool.query(`
-            UPDATE orders 
-            SET packed_by = $1,
-                pack_date_time = $2,
-                is_shipped = true,
-                packer_photos_url = $3::jsonb,
-                status = 'shipped'
-            WHERE shipping_tracking_number = $4
-            RETURNING id, order_id, shipping_tracking_number, packer_photos_url, pack_date_time, is_shipped, status
-        `, [staffId, packDateTime, photosJsonb, trackingNumber]);
+        const classification = classifyScan(scanInput);
 
-        if (result.rows.length === 0) {
-            console.log('ERROR: No order found with tracking:', trackingNumber);
-            return NextResponse.json({ 
-                error: 'Order not found',
-                details: `No order found with tracking number: ${trackingNumber}`
-            }, { status: 404 });
+        if (classification.trackingType === 'ORDERS') {
+            const orderLookup = await pool.query(
+                `SELECT id, order_id, shipping_tracking_number
+                 FROM orders
+                 WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
+                 AND shipping_tracking_number IS NOT NULL
+                 AND shipping_tracking_number != ''
+                 ORDER BY id DESC
+                 LIMIT 1`,
+                [scanInput]
+            );
+
+            if (orderLookup.rows.length === 0) {
+                return NextResponse.json({
+                    error: 'Order not found',
+                    details: `No order found with tracking number: ${scanInput}`
+                }, { status: 404 });
+            }
+
+            const order = orderLookup.rows[0];
+
+            await pool.query(`
+                UPDATE orders
+                SET packed_by = $1,
+                    is_shipped = true,
+                    packer_photos_url = $2::jsonb,
+                    status = 'shipped'
+                WHERE id = $3
+            `, [staffId, photosJsonb, order.id]);
+
+            await pool.query(`
+                INSERT INTO packer_logs (
+                    shipping_tracking_number,
+                    tracking_type,
+                    pack_date_time,
+                    packed_by,
+                    packer_photos_url
+                ) VALUES ($1, $2, $3, $4, $5::jsonb)
+            `, [order.shipping_tracking_number, classification.trackingType, packDateTime, staffId, photosJsonb]);
+
+            return NextResponse.json({
+                success: true,
+                trackingType: classification.trackingType,
+                orderId: order.order_id,
+                shippingTrackingNumber: order.shipping_tracking_number,
+                packedBy: staffId,
+                packDateTime,
+                photosCount: Array.isArray(photos) ? photos.length : 0,
+                message: 'Order packed successfully'
+            });
         }
 
-        const updatedOrder = result.rows[0];
-        console.log('=== ORDER UPDATED SUCCESSFULLY ===');
-        console.log('Order ID:', updatedOrder.order_id);
-        console.log('Tracking:', updatedOrder.shipping_tracking_number);
-        console.log('Photos saved:', updatedOrder.packer_photos_url);
-        console.log('Packed by:', updatedOrder.packed_by || 'NOT SET');
-        console.log('Is shipped:', updatedOrder.is_shipped);
-        console.log('Status:', updatedOrder.status);
-        console.log('Pack date:', updatedOrder.pack_date_time);
-        
-        // Double-check by querying the database again
-        const verifyResult = await pool.query(
-            'SELECT packer_photos_url FROM orders WHERE shipping_tracking_number = $1',
-            [trackingNumber]
-        );
-        
-        console.log('=== VERIFICATION QUERY ===');
-        console.log('Photos in DB after update:', verifyResult.rows[0]?.packer_photos_url);
-        
-        // Verify photos were actually saved
-        if (!updatedOrder.packer_photos_url || updatedOrder.packer_photos_url.length === 0) {
-            console.error('WARNING: Photos were not saved to database!');
-            console.error('This might be a data type issue. Check if packer_photos_url column is JSONB type.');
+        // Non-order scans: write only to packer_logs
+        await pool.query(`
+            INSERT INTO packer_logs (
+                shipping_tracking_number,
+                tracking_type,
+                pack_date_time,
+                packed_by,
+                packer_photos_url
+            ) VALUES ($1, $2, $3, $4, $5::jsonb)
+        `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId, photosJsonb]);
+
+        let skuUpdated = false;
+        if (classification.trackingType === 'SKU' && classification.skuBase) {
+            const skuRows = await pool.query('SELECT id, stock, sku FROM sku_stock');
+            const target = skuRows.rows.find((r: any) => normalizeSku(String(r.sku || '')) === normalizeSku(classification.skuBase || ''));
+            if (target) {
+                const currentQty = parseInt(target.stock || '0', 10) || 0;
+                const addQty = classification.skuQty || 1;
+                await pool.query('UPDATE sku_stock SET stock = $1 WHERE id = $2', [String(currentQty + addQty), target.id]);
+                skuUpdated = true;
+            }
         }
 
         return NextResponse.json({
             success: true,
-            order: updatedOrder,
-            photosCount: Array.isArray(updatedOrder.packer_photos_url) 
-                ? updatedOrder.packer_photos_url.length 
-                : 0,
-            message: 'Order packed successfully'
+            trackingType: classification.trackingType,
+            shippingTrackingNumber: classification.normalizedInput,
+            packedBy: staffId,
+            packDateTime,
+            photosCount: Array.isArray(photos) ? photos.length : 0,
+            skuUpdated
         });
     } catch (error: any) {
         console.error('Error updating order:', error);
@@ -175,4 +203,21 @@ export async function POST(req: NextRequest) {
             details: error.message 
         }, { status: 500 });
     }
+}
+
+function parseScanTimestamp(input: any): Date | null {
+    if (!input) return null;
+    const raw = String(input).trim();
+    if (!raw) return null;
+    if (raw.includes('/')) {
+        const cleaned = raw.replace(',', '');
+        const [datePart, timePart] = cleaned.split(' ');
+        if (!datePart || !timePart) return null;
+        const [m, d, y] = datePart.split('/').map(Number);
+        const [h, min, s] = timePart.split(':').map(Number);
+        if (!m || !d || !y) return null;
+        return new Date(y, m - 1, d, h || 0, min || 0, s || 0);
+    }
+    const parsed = new Date(raw);
+    return isNaN(parsed.getTime()) ? null : parsed;
 }

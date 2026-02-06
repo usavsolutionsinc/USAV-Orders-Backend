@@ -153,6 +153,20 @@ export async function POST() {
         `);
         tables.push('orders');
 
+        // Packer logs - audit trail for all packer scans
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS packer_logs (
+                id SERIAL PRIMARY KEY,
+                shipping_tracking_number TEXT NOT NULL,
+                tracking_type VARCHAR(20) NOT NULL,
+                pack_date_time TIMESTAMP,
+                packed_by INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+                packer_photos_url JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        tables.push('packer_logs');
+
         // Tech tables (7 columns each)
         for (let i = 1; i <= 4; i++) {
             await client.query(`
@@ -395,4 +409,3 @@ export async function GET() {
         }, { status: 500 });
     }
 }
-

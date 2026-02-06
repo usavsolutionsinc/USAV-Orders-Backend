@@ -17,41 +17,45 @@ export async function GET(req: NextRequest) {
     const client = await pool.connect();
     
     try {
-        // Check in orders table
+        // Check in orders table with packer_logs join (latest ORDERS scan)
         const ordersResult = await client.query(
-            `SELECT id, order_id, shipping_tracking_number, is_shipped, packed_by, pack_date_time, product_title 
-             FROM orders 
-             WHERE shipping_tracking_number LIKE $1`,
+            `SELECT o.id, o.order_id, o.shipping_tracking_number, o.is_shipped, 
+                    o.packer_id, o.tester_id, o.product_title,
+                    pl.packed_by, pl.pack_date_time
+             FROM orders o
+             LEFT JOIN LATERAL (
+                 SELECT packed_by, pack_date_time
+                 FROM packer_logs
+                 WHERE shipping_tracking_number = o.shipping_tracking_number
+                   AND tracking_type = 'ORDERS'
+                 ORDER BY pack_date_time DESC NULLS LAST, id DESC
+                 LIMIT 1
+             ) pl ON true
+             WHERE o.shipping_tracking_number LIKE $1`,
             [`%${tracking}%`]
         );
         
-        // Check in packer_1 table
-        const packer1Result = await client.query(
-            `SELECT shipping_tracking_number, date_time 
-             FROM packer_1 
-             WHERE shipping_tracking_number LIKE $1`,
-            [`%${tracking}%`]
-        );
-        
-        // Check in packer_2 table
-        const packer2Result = await client.query(
-            `SELECT shipping_tracking_number, date_time 
-             FROM packer_2 
-             WHERE shipping_tracking_number LIKE $1`,
+        // Check in packer_logs table
+        const packerLogsResult = await client.query(
+            `SELECT shipping_tracking_number, tracking_type, pack_date_time 
+             FROM packer_logs 
+             WHERE shipping_tracking_number ILIKE $1
+             ORDER BY pack_date_time DESC NULLS LAST
+             LIMIT 50`,
             [`%${tracking}%`]
         );
         
         return NextResponse.json({
             tracking,
             found_in_orders: ordersResult.rows,
-            found_in_packer_1: packer1Result.rows,
-            found_in_packer_2: packer2Result.rows,
+            found_in_packer_logs: packerLogsResult.rows,
             summary: {
                 in_orders: ordersResult.rows.length > 0,
-                in_packer_1: packer1Result.rows.length > 0,
-                in_packer_2: packer2Result.rows.length > 0,
+                in_packer_logs: packerLogsResult.rows.length > 0,
                 is_shipped: ordersResult.rows[0]?.is_shipped,
-                has_packed_by: ordersResult.rows[0]?.packed_by != null
+                has_packed_by: ordersResult.rows[0]?.packed_by != null,
+                packer_id: ordersResult.rows[0]?.packer_id,
+                tester_id: ordersResult.rows[0]?.tester_id
             }
         });
         

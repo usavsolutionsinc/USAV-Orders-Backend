@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Clock, Package, Copy, Box, Wrench, ExternalLink } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getCarrier } from '../../utils/tracking';
+import { PhotoGallery } from './PhotoGallery';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -159,28 +160,6 @@ export function ShippedDetailsPanel({
   const [durationData, setDurationData] = useState<DurationData>({});
   const [isLoadingDurations, setIsLoadingDurations] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
-  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
-  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
-  
-  // Parse photo URLs from JSONB array format
-  const photoUrls = (() => {
-    if (!shipped.packer_photos_url) return [];
-    
-    // Handle JSONB array format: [{url: string, index: number, uploadedAt: string}]
-    if (Array.isArray(shipped.packer_photos_url)) {
-      return shipped.packer_photos_url
-        .map((photo: any) => photo.url || photo)
-        .filter((url: string) => url && url.trim());
-    }
-    
-    // Fallback: handle old comma-separated string format (in case of mixed data)
-    if (typeof shipped.packer_photos_url === 'string') {
-      return shipped.packer_photos_url.split(',').filter(url => url.trim());
-    }
-    
-    return [];
-  })();
-  const hasPhotos = photoUrls.length > 0;
 
   // Update content when props change
   useEffect(() => {
@@ -246,24 +225,6 @@ Shipped: ${formattedDateTime}`;
     return new Date(dateStr);
   }
 
-  // Photo navigation handlers
-  const handleNextPhoto = () => {
-    setCurrentPhotoIndex((prev) => (prev + 1) % photoUrls.length);
-  };
-
-  const handlePrevPhoto = () => {
-    setCurrentPhotoIndex((prev) => (prev - 1 + photoUrls.length) % photoUrls.length);
-  };
-
-  const openPhotoViewer = (index: number) => {
-    setCurrentPhotoIndex(index);
-    setPhotoViewerOpen(true);
-  };
-
-  const closePhotoViewer = () => {
-    setPhotoViewerOpen(false);
-  };
-
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
 
   return (
@@ -302,7 +263,7 @@ Shipped: ${formattedDateTime}`;
       
       {/* Content sections */}
       <div className="px-8 pb-8 pt-4 space-y-10">
-        {/* Packer Photos Section - Always visible at top */}
+        {/* Packer Photos Section - Enhanced Gallery */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -314,73 +275,13 @@ Shipped: ${formattedDateTime}`;
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
                 Packing Photos
               </h3>
-              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-full">
-                {hasPhotos ? `${photoUrls.length} ${photoUrls.length === 1 ? 'Photo' : 'Photos'}` : 'No Photos'}
-              </span>
             </div>
           </div>
           
-          {hasPhotos ? (
-            <button
-              onClick={() => openPhotoViewer(0)}
-              className="w-full bg-blue-50/50 border-2 border-blue-100 rounded-[2.5rem] p-4 hover:shadow-xl hover:border-blue-300 transition-all active:scale-[0.98] group relative overflow-hidden"
-            >
-              <div className="flex items-center gap-4">
-                {/* Photo Stack with Blurred Overlay */}
-                <div className="relative w-full h-32 rounded-3xl overflow-hidden bg-gray-100 border border-blue-100 shadow-sm flex items-center justify-center">
-                  {/* Background Photo */}
-                  <img 
-                    src={photoUrls[0]} 
-                    alt="Packing evidence" 
-                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  
-                  {/* Blurred Overlay */}
-                  <div className="absolute inset-0 bg-blue-900/40 backdrop-blur-md flex flex-col items-center justify-center text-center p-4">
-                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2 border border-white/30">
-                        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                    </div>
-                    <p className="text-white text-base font-black tracking-tight leading-tight">
-                        {photoUrls.length} Photos Captured
-                    </p>
-                    <p className="text-blue-100 text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80 flex items-center gap-1.5">
-                        Click to view all photos
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                    </p>
-                  </div>
-
-                  {/* Tiny thumbnails inside the overlay for visual hint */}
-                  <div className="absolute right-4 bottom-4 flex -space-x-3">
-                    {photoUrls.slice(0, 3).map((url, idx) => (
-                        <div key={idx} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden shadow-sm">
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                        </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </button>
-          ) : (
-            <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2.5rem] p-8">
-              <div className="flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <p className="text-sm font-black text-gray-400 uppercase tracking-wider">
-                  No Photos Taken
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  No packing photos for this order
-                </p>
-              </div>
-            </div>
-          )}
+          <PhotoGallery 
+            photos={shipped.packer_photos_url || []} 
+            orderId={shipped.order_id}
+          />
         </section>
 
         {/* Shipping Information */}
@@ -565,81 +466,6 @@ Shipped: ${formattedDateTime}`;
           </div>
         </section>
       </div>
-
-      {/* Photo Viewer Modal */}
-      <AnimatePresence>
-        {photoViewerOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] flex items-center justify-center"
-            onClick={closePhotoViewer}
-          >
-            <button
-              onClick={closePhotoViewer}
-              className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white"
-              aria-label="Close photo viewer"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            {/* Photo Counter */}
-            <div className="absolute top-6 left-6 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full">
-              <span className="text-white text-sm font-black">
-                {currentPhotoIndex + 1} / {photoUrls.length}
-              </span>
-            </div>
-
-            {/* Main Photo */}
-            <motion.div
-              key={currentPhotoIndex}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.2 }}
-              className="relative max-w-5xl max-h-[80vh] w-full mx-8"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <img
-                src={photoUrls[currentPhotoIndex]}
-                alt={`Packing photo ${currentPhotoIndex + 1}`}
-                className="w-full h-full object-contain rounded-2xl shadow-2xl"
-              />
-            </motion.div>
-
-            {/* Navigation Arrows */}
-            {photoUrls.length > 1 && (
-              <>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handlePrevPhoto();
-                  }}
-                  className="absolute left-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md"
-                  aria-label="Previous photo"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNextPhoto();
-                  }}
-                  className="absolute right-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md"
-                  aria-label="Next photo"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

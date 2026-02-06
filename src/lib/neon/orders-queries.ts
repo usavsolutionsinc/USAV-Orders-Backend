@@ -10,11 +10,13 @@ export interface ShippedOrder {
   shipping_tracking_number: string;
   serial_number: string; // Aggregated from tech_serial_numbers table
   sku: string;
-  tested_by: number | null; // Staff ID - derived from first serial scan
+  tester_id: number | null; // Staff ID - who is assigned to test (from orders.tester_id)
+  tested_by: number | null; // Staff ID - who actually tested (derived from first serial scan in tech_serial_numbers)
   test_date_time: string | null; // Derived from first serial scan
-  packed_by: number; // Staff ID (changed from boxed_by)
-  pack_date_time: string;
-  packer_photos_url: any; // JSONB array: [{url: string, index: number, uploadedAt: string}]
+  packer_id: number | null; // Staff ID - who is assigned to pack (from orders.packer_id)
+  packed_by: number | null; // Staff ID - who actually packed (from packer_logs.packed_by)
+  pack_date_time: string | null; // Derived from packer_logs.pack_date_time
+  packer_photos_url: any; // JSONB array from packer_logs: [{url: string, index: number, uploadedAt: string}]
   account_source: string | null; // Account source (Amazon, eBay account name, etc.)
   notes: string;
   status_history: any; // JSONB status history
@@ -36,31 +38,44 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           o.condition,
           o.shipping_tracking_number,
           o.sku,
-          o.packed_by,
-          o.pack_date_time,
-          o.packer_photos_url,
+          o.packer_id,
+          o.tester_id,
           o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
+          pl.packed_by,
+          pl.pack_date_time,
+          pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
           MIN(tsn.tester_id) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT packed_by, pack_date_time, packer_photos_url
+          FROM packer_logs
+          WHERE shipping_tracking_number = o.shipping_tracking_number
+            AND tracking_type = 'ORDERS'
+          ORDER BY pack_date_time DESC NULLS LAST, id DESC
+          LIMIT 1
+        ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE (o.is_shipped = true OR o.is_shipped::text = 'true')
-          AND o.packed_by IS NOT NULL
+          AND pl.packed_by IS NOT NULL
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
-                 o.shipping_tracking_number, o.sku, o.packed_by,
-                 o.pack_date_time, o.packer_photos_url, o.account_source, o.notes, o.status_history, o.is_shipped
+                 o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.account_source, o.notes, o.status_history, o.is_shipped,
+                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url
       )
       SELECT 
         os.*,
         s1.name as tested_by_name,
-        s2.name as packed_by_name
+        s2.name as packed_by_name,
+        s3.name as tester_name
       FROM order_serials os
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
+      LEFT JOIN staff s3 ON os.tester_id = s3.id
       ORDER BY os.pack_date_time DESC NULLS LAST, os.id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
@@ -89,30 +104,43 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.condition,
           o.shipping_tracking_number,
           o.sku,
-          o.packed_by,
-          o.pack_date_time,
-          o.packer_photos_url,
+          o.packer_id,
+          o.tester_id,
           o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
+          pl.packed_by,
+          pl.pack_date_time,
+          pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
           MIN(tsn.tester_id) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT packed_by, pack_date_time, packer_photos_url
+          FROM packer_logs
+          WHERE shipping_tracking_number = o.shipping_tracking_number
+            AND tracking_type = 'ORDERS'
+          ORDER BY pack_date_time DESC NULLS LAST, id DESC
+          LIMIT 1
+        ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
-                 o.shipping_tracking_number, o.sku, o.packed_by,
-                 o.pack_date_time, o.packer_photos_url, o.account_source, o.notes, o.status_history, o.is_shipped
+                 o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.account_source, o.notes, o.status_history, o.is_shipped,
+                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url
       )
       SELECT 
         os.*,
         s1.name as tested_by_name,
-        s2.name as packed_by_name
+        s2.name as packed_by_name,
+        s3.name as tester_name
       FROM order_serials os
       LEFT JOIN staff s1 ON os.tested_by = s1.id
-      LEFT JOIN staff s2 ON os.packed_by = s2.id`,
+      LEFT JOIN staff s2 ON os.packed_by = s2.id
+      LEFT JOIN staff s3 ON os.tester_id = s3.id`,
       [id]
     );
 
@@ -139,20 +167,30 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           o.condition,
           o.shipping_tracking_number,
           o.sku,
-          o.packed_by,
-          o.pack_date_time,
-          o.packer_photos_url,
+          o.packer_id,
+          o.tester_id,
           o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
+          pl.packed_by,
+          pl.pack_date_time,
+          pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
           MIN(tsn.tester_id) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT packed_by, pack_date_time, packer_photos_url
+          FROM packer_logs
+          WHERE shipping_tracking_number = o.shipping_tracking_number
+            AND tracking_type = 'ORDERS'
+          ORDER BY pack_date_time DESC NULLS LAST, id DESC
+          LIMIT 1
+        ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE COALESCE(o.is_shipped, false) = true
-          AND o.packed_by IS NOT NULL
+          AND pl.packed_by IS NOT NULL
           AND (
             o.shipping_tracking_number ILIKE $1
             OR o.order_id ILIKE $1
@@ -161,16 +199,19 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
             OR o.sku ILIKE $1
           )
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
-                 o.shipping_tracking_number, o.sku, o.packed_by,
-                 o.pack_date_time, o.packer_photos_url, o.account_source, o.notes, o.status_history, o.is_shipped
+                 o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.account_source, o.notes, o.status_history, o.is_shipped,
+                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url
       )
       SELECT 
         os.*,
         s1.name as tested_by_name,
-        s2.name as packed_by_name
+        s2.name as packed_by_name,
+        s3.name as tester_name
       FROM order_serials os
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
+      LEFT JOIN staff s3 ON os.tester_id = s3.id
       ORDER BY 
         CASE 
           WHEN os.pack_date_time IS NOT NULL AND os.pack_date_time != '1' 
@@ -198,17 +239,19 @@ export async function updateShippedOrderField(
   value: any
 ): Promise<void> {
   try {
-    // Note: serial_number, tested_by, test_date_time removed - now in tech_serial_numbers table
+    // Note: Fields moved to other tables:
+    // - serial_number, tested_by, test_date_time -> tech_serial_numbers table
+    // - packed_by, pack_date_time, packer_photos_url -> packer_logs table
     const allowedFields = [
-      'packed_by',
-      'pack_date_time',
+      'packer_id',
+      'tester_id',
       'notes',
       'is_shipped',
       'status_history'
     ];
 
     if (!allowedFields.includes(field)) {
-      throw new Error(`Field ${field} is not allowed to be updated. Use tech_serial_numbers table for serial/test data.`);
+      throw new Error(`Field ${field} is not allowed to be updated. Use tech_serial_numbers for serial/test data, or packer_logs for packing completion data.`);
     }
 
     await pool.query(
@@ -237,32 +280,45 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
           o.condition,
           o.shipping_tracking_number,
           o.sku,
-          o.packed_by,
-          o.pack_date_time,
-          o.packer_photos_url,
+          o.packer_id,
+          o.tester_id,
           o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
+          pl.packed_by,
+          pl.pack_date_time,
+          pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
           MIN(tsn.tester_id) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT packed_by, pack_date_time, packer_photos_url
+          FROM packer_logs
+          WHERE shipping_tracking_number = o.shipping_tracking_number
+            AND tracking_type = 'ORDERS'
+          ORDER BY pack_date_time DESC NULLS LAST, id DESC
+          LIMIT 1
+        ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE COALESCE(o.is_shipped, false) = true
-          AND o.packed_by IS NOT NULL
+          AND pl.packed_by IS NOT NULL
           AND RIGHT(o.shipping_tracking_number, 8) = $1
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
-                 o.shipping_tracking_number, o.sku, o.packed_by,
-                 o.pack_date_time, o.packer_photos_url, o.account_source, o.notes, o.status_history, o.is_shipped
+                 o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.account_source, o.notes, o.status_history, o.is_shipped,
+                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url
       )
       SELECT 
         os.*,
         s1.name as tested_by_name,
-        s2.name as packed_by_name
+        s2.name as packed_by_name,
+        s3.name as tester_name
       FROM order_serials os
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
+      LEFT JOIN staff s3 ON os.tester_id = s3.id
       LIMIT 1`,
       [last8]
     );
@@ -280,10 +336,18 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
 export async function getShippedOrdersCount(): Promise<number> {
   try {
     const result = await pool.query(
-      `SELECT COUNT(*) as count 
-       FROM orders 
-       WHERE COALESCE(is_shipped, false) = true
-         AND packed_by IS NOT NULL`
+      `SELECT COUNT(DISTINCT o.id) as count 
+       FROM orders o
+       INNER JOIN LATERAL (
+          SELECT packed_by, pack_date_time, packer_photos_url
+          FROM packer_logs
+          WHERE shipping_tracking_number = o.shipping_tracking_number
+            AND tracking_type = 'ORDERS'
+          ORDER BY pack_date_time DESC NULLS LAST, id DESC
+          LIMIT 1
+        ) pl ON true
+       WHERE COALESCE(o.is_shipped, false) = true
+         AND pl.packed_by IS NOT NULL`
     );
     return parseInt(result.rows[0].count);
   } catch (error) {

@@ -14,20 +14,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Tracking number required' }, { status: 400 });
     }
 
-    // Fetch from orders table
+    // Fetch from orders table, join with packer_logs for pack status
     // Match only last 8 digits, return order regardless of pack status
     const result = await pool.query(`
       SELECT 
-        order_id, 
-        product_title, 
-        condition, 
-        shipping_tracking_number as tracking,
-        pack_date_time,
-        is_shipped
-      FROM orders
-      WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
-      AND shipping_tracking_number IS NOT NULL 
-      AND shipping_tracking_number != ''
+        o.order_id, 
+        o.product_title, 
+        o.condition, 
+        o.shipping_tracking_number as tracking,
+        o.is_shipped,
+        pl.pack_date_time
+      FROM orders o
+      LEFT JOIN LATERAL (
+        SELECT pack_date_time
+        FROM packer_logs
+        WHERE shipping_tracking_number = o.shipping_tracking_number
+          AND tracking_type = 'ORDERS'
+        ORDER BY pack_date_time DESC NULLS LAST, id DESC
+        LIMIT 1
+      ) pl ON true
+      WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT($1, 8)
+      AND o.shipping_tracking_number IS NOT NULL 
+      AND o.shipping_tracking_number != ''
       LIMIT 1
     `, [tracking]);
 
