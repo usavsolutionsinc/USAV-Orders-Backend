@@ -104,7 +104,10 @@ export async function POST(req: NextRequest) {
               })))
             : '[]';
         
-        console.log('Updating order with:', {
+        console.log('=== PACKING UPDATE DEBUG ===');
+        console.log('Photos received:', photos);
+        console.log('Photos JSONB:', photosJsonb);
+        console.log('Update parameters:', {
             staffId,
             packDateTime,
             trackingNumber,
@@ -121,21 +124,48 @@ export async function POST(req: NextRequest) {
                 packer_photos_url = $3::jsonb,
                 status = 'shipped'
             WHERE shipping_tracking_number = $4
-            RETURNING id, order_id, shipping_tracking_number
+            RETURNING id, order_id, shipping_tracking_number, packer_photos_url, pack_date_time, is_shipped, status
         `, [staffId, packDateTime, photosJsonb, trackingNumber]);
 
         if (result.rows.length === 0) {
+            console.log('ERROR: No order found with tracking:', trackingNumber);
             return NextResponse.json({ 
                 error: 'Order not found',
                 details: `No order found with tracking number: ${trackingNumber}`
             }, { status: 404 });
         }
 
-        console.log('Order updated successfully:', result.rows[0]);
+        const updatedOrder = result.rows[0];
+        console.log('=== ORDER UPDATED SUCCESSFULLY ===');
+        console.log('Order ID:', updatedOrder.order_id);
+        console.log('Tracking:', updatedOrder.shipping_tracking_number);
+        console.log('Photos saved:', updatedOrder.packer_photos_url);
+        console.log('Packed by:', updatedOrder.packed_by || 'NOT SET');
+        console.log('Is shipped:', updatedOrder.is_shipped);
+        console.log('Status:', updatedOrder.status);
+        console.log('Pack date:', updatedOrder.pack_date_time);
+        
+        // Double-check by querying the database again
+        const verifyResult = await pool.query(
+            'SELECT packer_photos_url FROM orders WHERE shipping_tracking_number = $1',
+            [trackingNumber]
+        );
+        
+        console.log('=== VERIFICATION QUERY ===');
+        console.log('Photos in DB after update:', verifyResult.rows[0]?.packer_photos_url);
+        
+        // Verify photos were actually saved
+        if (!updatedOrder.packer_photos_url || updatedOrder.packer_photos_url.length === 0) {
+            console.error('WARNING: Photos were not saved to database!');
+            console.error('This might be a data type issue. Check if packer_photos_url column is JSONB type.');
+        }
 
         return NextResponse.json({
             success: true,
-            order: result.rows[0],
+            order: updatedOrder,
+            photosCount: Array.isArray(updatedOrder.packer_photos_url) 
+                ? updatedOrder.packer_photos_url.length 
+                : 0,
             message: 'Order packed successfully'
         });
     } catch (error: any) {
