@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
-import PackerLogs from './station/PackerLogs';
+import { ShippedTable } from './shipped/ShippedTable';
 import { Package, TrendingUp, Clock, AlertCircle } from './Icons';
 import StaffSelector from './StaffSelector';
+import { StationDetailsHandler } from './station/StationDetailsHandler';
 
 interface PackerDashboardProps {
     packerId: string;
@@ -99,6 +100,7 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
     };
 
     return (
+        <>
         <StationLayout
             stationType="testing"
             stationId={packerId}
@@ -113,11 +115,7 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
                         />
                     </div>
                     <div className="flex-1 overflow-hidden">
-                        <PackerLogs 
-                            history={history} 
-                            isLoading={isLoadingHistory}
-                            packerId={packerId}
-                        />
+                        <ShippedTable packedBy={parseInt(packerId)} />
                     </div>
                 </div>
             }
@@ -182,5 +180,7 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
             </div>
             
         </StationLayout>
+        <StationDetailsHandler />
+        </>
     );
 }

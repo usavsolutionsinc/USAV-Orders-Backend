@@ -22,7 +22,12 @@ function getStaffName(staffId: number | null | undefined): string {
   return STAFF_NAMES[staffId] || `#${staffId}`;
 }
 
-export function ShippedTable() {
+interface ShippedTableProps {
+  packedBy?: number; // Filter by packer ID
+  testedBy?: number; // Filter by tester ID
+}
+
+export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
   const searchParams = useSearchParams();
   const search = searchParams.get('search');
   const [shipped, setShipped] = useState<ShippedOrder[]>([]);
@@ -35,7 +40,7 @@ export function ShippedTable() {
 
   useEffect(() => {
     fetchShipped();
-  }, [search]);
+  }, [search, packedBy, testedBy]);
 
   const fetchShipped = async () => {
     setLoading(true);
@@ -46,7 +51,16 @@ export function ShippedTable() {
       const res = await fetch(url);
       const data = await res.json();
       
-      const records = data.results || data.shipped || [];
+      let records = data.results || data.shipped || [];
+      
+      // Apply client-side filters if provided
+      if (packedBy !== undefined) {
+        records = records.filter((record: ShippedOrder) => record.packed_by === packedBy);
+      }
+      if (testedBy !== undefined) {
+        records = records.filter((record: ShippedOrder) => record.tested_by === testedBy);
+      }
+      
       console.log('Fetched shipped records:', records.length);
       if (records.length > 0) {
         console.log('First record date:', records[0].pack_date_time);
@@ -75,14 +89,14 @@ export function ShippedTable() {
         const [year, month, day] = dateStr.split('-').map(Number);
         const date = new Date(year, month - 1, day);
         
-        const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-        const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
-        
-        const dayName = days[date.getDay()];
-        const monthName = months[date.getMonth()];
-        const dayNum = date.getDate();
-        
-        return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
+      const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+      
+      const dayName = days[date.getDay()];
+      const monthName = months[date.getMonth()];
+      const dayNum = date.getDate();
+      
+      return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
       }
       
       // For other formats (like ISO timestamps), parse normally
@@ -90,7 +104,7 @@ export function ShippedTable() {
       if (isNaN(date.getTime())) return dateStr;
 
       const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-      const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
       
       const dayName = days[date.getDay()];
       const monthName = months[date.getMonth()];

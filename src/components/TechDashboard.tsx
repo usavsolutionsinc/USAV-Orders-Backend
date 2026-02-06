@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StationLayout from './station/StationLayout';
-import TechLogs from './station/TechLogs';
+import { ShippedTable } from './shipped/ShippedTable';
 import StationTesting from './station/StationTesting';
 import StaffSelector from './StaffSelector';
+import { StationDetailsHandler } from './station/StationDetailsHandler';
 
 interface TechDashboardProps {
     techId: string;
@@ -58,7 +59,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
     };
 
     return (
-        <div className="flex h-full w-full">
+        <div className="flex h-full w-full relative">
             <div className="w-[400px] min-w-[350px] border-r border-gray-100 flex-shrink-0 bg-gray-50/30 overflow-hidden flex flex-col">
                 <div className="p-2 bg-white border-b border-gray-100 flex items-center">
                     <StaffSelector 
@@ -80,12 +81,9 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
                 </div>
             </div>
             <div className="flex-1 overflow-hidden">
-                <TechLogs 
-                    history={history} 
-                    isLoading={isLoadingHistory}
-                    techId={techId}
-                />
+                <ShippedTable testedBy={parseInt(techId)} />
             </div>
+            <StationDetailsHandler />
         </div>
     );
 }
