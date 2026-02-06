@@ -87,13 +87,37 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
         }
 
-        const staffName = staffResult.rows[0].name;
+        const staffName = String(staffResult.rows[0].name);
         
         // Convert timestamp to ISO format for status_history (using PST timezone)
         const isoTimestamp = toISOStringPST(timestamp);
         
-        // Convert photos array to comma-separated string
-        const photosUrlString = Array.isArray(photos) ? photos.join(',') : '';
+        // Convert photos array to structured JSONB format
+        const photosJsonb = Array.isArray(photos) 
+            ? JSON.stringify(photos.map((url, index) => ({
+                url,
+                index: index + 1,
+                uploadedAt: isoTimestamp
+              })))
+            : '[]';
+        
+        console.log('Updating order:', {
+            staffId,
+            timestamp,
+            trackingNumber,
+            staffName,
+            isoTimestamp,
+            photosJsonb
+        });
+        
+        // Build the status history entry as a JavaScript object, then convert to JSONB
+        // This avoids PostgreSQL type inference issues with parameters inside jsonb_build_object
+        const statusEntry = JSON.stringify({
+            status: 'packed',
+            timestamp: isoTimestamp,
+            user: staffName,
+            previous_status: null  // Will be filled by the query
+        });
         
         // Update orders table ONLY (no packer table insert) - use packed_by instead of boxed_by
         await pool.query(`
@@ -101,23 +125,18 @@ export async function POST(req: NextRequest) {
             SET packed_by = $1,
                 pack_date_time = $2,
                 is_shipped = true,
-                packer_photos_url = $6,
+                packer_photos_url = $4::jsonb,
                 status_history = COALESCE(status_history, '[]'::jsonb) || 
-                    jsonb_build_object(
-                        'status', 'packed',
-                        'timestamp', $5,
-                        'user', $4,
-                        'previous_status', (
-                            SELECT COALESCE(
-                                (status_history->-1->>'status')::text,
-                                null
-                            )
-                            FROM orders 
-                            WHERE shipping_tracking_number = $3
-                        )
-                    )::jsonb
+                    jsonb_set(
+                        $5::jsonb,
+                        '{previous_status}',
+                        to_jsonb(COALESCE(
+                            (status_history->-1->>'status')::text,
+                            'null'::text
+                        ))
+                    )
             WHERE shipping_tracking_number = $3
-        `, [staffId, timestamp, trackingNumber, staffName, isoTimestamp, photosUrlString]);
+        `, [staffId, timestamp, trackingNumber, photosJsonb, statusEntry]);
 
         // Record in unified logs for photo support
         const newLog = await db.insert(packingLogs).values({

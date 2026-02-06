@@ -14,7 +14,7 @@ export interface ShippedOrder {
   test_date_time: string | null; // Derived from first serial scan
   packed_by: number; // Staff ID (changed from boxed_by)
   pack_date_time: string;
-  packer_photos_url: string | null; // Comma-separated Vercel Blob URLs
+  packer_photos_url: any; // JSONB array: [{url: string, index: number, uploadedAt: string}]
   account_source: string | null; // Account source (Amazon, eBay account name, etc.)
   notes: string;
   status_history: any; // JSONB status history

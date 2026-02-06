@@ -6,6 +6,9 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const tracking = searchParams.get('tracking');
 
+        console.log('=== Order Lookup Request ===');
+        console.log('Tracking number received:', tracking);
+
         if (!tracking) {
             return NextResponse.json({ error: 'Tracking number required' }, { status: 400 });
         }
@@ -14,6 +17,9 @@ export async function GET(req: NextRequest) {
         // Query order_id, product_title, condition, shipping_tracking_number
         // Match only last 8 digits, return order regardless of pack status
         // Allows packers to rescan and update orders (retake photos, redo packing)
+        const last8 = tracking.slice(-8);
+        console.log('Using last 8 digits:', last8);
+        
         const result = await pool.query(`
             SELECT order_id, product_title, condition, shipping_tracking_number as tracking
             FROM orders
@@ -23,11 +29,15 @@ export async function GET(req: NextRequest) {
             LIMIT 1
         `, [tracking]);
 
+        console.log('Query result rows:', result.rows.length);
+
         if (result.rows.length === 0) {
+            console.log('No order found with matching tracking number');
             return NextResponse.json({ found: false });
         }
 
         const row = result.rows[0];
+        console.log('Order found:', { orderId: row.order_id, tracking: row.tracking });
         
         return NextResponse.json({
             found: true,

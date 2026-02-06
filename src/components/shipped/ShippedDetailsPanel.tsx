@@ -162,10 +162,24 @@ export function ShippedDetailsPanel({
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   
-  // Parse photo URLs from comma-separated string
-  const photoUrls = shipped.packer_photos_url 
-    ? shipped.packer_photos_url.split(',').filter(url => url.trim())
-    : [];
+  // Parse photo URLs from JSONB array format
+  const photoUrls = (() => {
+    if (!shipped.packer_photos_url) return [];
+    
+    // Handle JSONB array format: [{url: string, index: number, uploadedAt: string}]
+    if (Array.isArray(shipped.packer_photos_url)) {
+      return shipped.packer_photos_url
+        .map((photo: any) => photo.url || photo)
+        .filter((url: string) => url && url.trim());
+    }
+    
+    // Fallback: handle old comma-separated string format (in case of mixed data)
+    if (typeof shipped.packer_photos_url === 'string') {
+      return shipped.packer_photos_url.split(',').filter(url => url.trim());
+    }
+    
+    return [];
+  })();
   const hasPhotos = photoUrls.length > 0;
 
   // Update content when props change

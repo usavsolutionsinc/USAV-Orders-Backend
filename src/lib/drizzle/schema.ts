@@ -79,8 +79,9 @@ export const orders = pgTable('orders', {
   packDateTime: text('pack_date_time'),
   // Assignment tracking (who is assigned) - FK to staff.id
   packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
-  // Photo URLs from packer mobile app (comma-separated Vercel Blob URLs)
-  packerPhotosUrl: text('packer_photos_url'),
+  // Photo URLs from packer mobile app (JSONB array of photo objects)
+  // Format: [{"url": "blob_url", "uploadedAt": "timestamp", "index": 1}]
+  packerPhotosUrl: jsonb('packer_photos_url'),
   // Status tracking
   statusHistory: jsonb('status_history').default([]),
   isShipped: boolean('is_shipped').default(false),
