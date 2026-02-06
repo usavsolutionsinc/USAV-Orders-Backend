@@ -306,7 +306,7 @@ Shipped: ${formattedDateTime}`;
         <section>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+              <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -314,7 +314,7 @@ Shipped: ${formattedDateTime}`;
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
                 Packing Photos
               </h3>
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-full">
                 {hasPhotos ? `${photoUrls.length} ${photoUrls.length === 1 ? 'Photo' : 'Photos'}` : 'No Photos'}
               </span>
             </div>
@@ -323,54 +323,49 @@ Shipped: ${formattedDateTime}`;
           {hasPhotos ? (
             <button
               onClick={() => openPhotoViewer(0)}
-              className="w-full bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-[2rem] p-6 hover:shadow-xl hover:border-indigo-400 transition-all active:scale-[0.98] group"
+              className="w-full bg-blue-50/50 border-2 border-blue-100 rounded-[2.5rem] p-4 hover:shadow-xl hover:border-blue-300 transition-all active:scale-[0.98] group relative overflow-hidden"
             >
               <div className="flex items-center gap-4">
-                {/* First Photo Preview */}
-                <div className="w-20 h-20 bg-white rounded-xl overflow-hidden border border-indigo-200 flex-shrink-0 shadow-md">
+                {/* Photo Stack with Blurred Overlay */}
+                <div className="relative w-full h-32 rounded-3xl overflow-hidden bg-gray-100 border border-blue-100 shadow-sm flex items-center justify-center">
+                  {/* Background Photo */}
                   <img 
                     src={photoUrls[0]} 
-                    alt="First packing photo" 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                    alt="Packing evidence" 
+                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                </div>
-                
-                {/* Photo Count & CTA */}
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-black text-gray-900 mb-1">
-                    {photoUrls.length} {photoUrls.length === 1 ? 'Photo' : 'Photos'} Captured
-                  </p>
-                  <p className="text-xs text-indigo-600 font-bold flex items-center gap-2">
-                    Click to view all photos
-                    <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </p>
-                </div>
-                
-                {/* Additional Photo Thumbnails */}
-                {photoUrls.length > 1 && (
-                  <div className="flex gap-2">
-                    {photoUrls.slice(1, 3).map((url, index) => (
-                      <div key={index} className="w-16 h-16 bg-white rounded-lg overflow-hidden border border-indigo-200 shadow-sm">
-                        <img 
-                          src={url} 
-                          alt={`Photo ${index + 2}`} 
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                    {photoUrls.length > 3 && (
-                      <div className="w-16 h-16 bg-indigo-100 rounded-lg flex items-center justify-center border border-indigo-200">
-                        <span className="text-xs font-black text-indigo-700">+{photoUrls.length - 3}</span>
-                      </div>
-                    )}
+                  
+                  {/* Blurred Overlay */}
+                  <div className="absolute inset-0 bg-blue-900/40 backdrop-blur-md flex flex-col items-center justify-center text-center p-4">
+                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2 border border-white/30">
+                        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <p className="text-white text-base font-black tracking-tight leading-tight">
+                        {photoUrls.length} Photos Captured
+                    </p>
+                    <p className="text-blue-100 text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80 flex items-center gap-1.5">
+                        Click to view all photos
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </p>
                   </div>
-                )}
+
+                  {/* Tiny thumbnails inside the overlay for visual hint */}
+                  <div className="absolute right-4 bottom-4 flex -space-x-3">
+                    {photoUrls.slice(0, 3).map((url, idx) => (
+                        <div key={idx} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden shadow-sm">
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                        </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </button>
           ) : (
-            <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2rem] p-8">
+            <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2.5rem] p-8">
               <div className="flex flex-col items-center justify-center text-center">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                   <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
