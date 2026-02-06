@@ -57,6 +57,38 @@ function getOrderIdUrl(orderId: string): string | null {
   return null;
 }
 
+// Get account source label based on order ID pattern
+function getAccountSourceLabel(orderId: string, accountSource: string | null | undefined): string {
+  if (!orderId || orderId === 'Not available' || orderId === 'N/A') return '';
+  
+  // Check for FBA
+  if (orderId.toUpperCase().includes('FBA')) {
+    return 'FBA';
+  }
+  
+  // Amazon order ID: 3 digits in the first group (000-0000000-0000000)
+  if (/^\d{3}-\d+-\d+$/.test(orderId)) {
+    return 'Amazon';
+  }
+  
+  // eBay order ID: 2 digits in the first group (00-00000-00000)
+  if (/^\d{2}-\d+-\d+$/.test(orderId)) {
+    return accountSource ? `ebay - ${accountSource}` : 'ebay';
+  }
+  
+  // Walmart order ID: 15 digits only (000000000000000)
+  if (/^\d{15}$/.test(orderId)) {
+    return 'Walmart';
+  }
+  
+  // Ecwid order ID: 4 digits only
+  if (/^\d{4}$/.test(orderId)) {
+    return 'ECWID';
+  }
+  
+  return accountSource || '';
+}
+
 // Copyable field component
 const CopyableField = ({ label, value, externalUrl, externalLabel }: { label: string; value: string; externalUrl?: string | null; externalLabel?: string }) => {
   const [copied, setCopied] = useState(false);
@@ -218,6 +250,8 @@ Shipped: ${formattedDateTime}`;
     setPhotoViewerOpen(false);
   };
 
+  const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
+
   return (
     <motion.div
       initial={{ x: '100%' }}
@@ -234,7 +268,7 @@ Shipped: ${formattedDateTime}`;
                     <Package className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-black text-gray-900 tracking-tighter leading-none">{shipped.order_id}</h2>
+                  <h2 className="text-[22px] font-black text-gray-900 tracking-tighter leading-none">{shipped.order_id}</h2>
                   <div className="flex items-center gap-2 mt-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Verified Shipment</p>
@@ -253,41 +287,92 @@ Shipped: ${formattedDateTime}`;
 
       
       {/* Content sections */}
-      <div className="p-8 space-y-10">
-        {/* Packer Photos Section */}
-        {hasPhotos && (
-          <section className="space-y-4">
+      <div className="px-8 pb-8 pt-4 space-y-10">
+        {/* Packer Photos Section - Always visible at top */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
-                <Package className="w-4 h-4" />
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </div>
               <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
                 Packing Photos
               </h3>
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                {photoUrls.length} {photoUrls.length === 1 ? 'Photo' : 'Photos'}
+                {hasPhotos ? `${photoUrls.length} ${photoUrls.length === 1 ? 'Photo' : 'Photos'}` : 'No Photos'}
               </span>
             </div>
-            
-            {/* Photo Thumbnails */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {photoUrls.map((url, index) => (
-                <button
-                  key={index}
-                  onClick={() => openPhotoViewer(index)}
-                  className="flex-shrink-0 w-24 h-24 bg-gray-100 rounded-xl overflow-hidden border-2 border-gray-200 hover:border-indigo-500 transition-all hover:shadow-lg active:scale-95 group"
-                  aria-label={`View photo ${index + 1}`}
-                >
+          </div>
+          
+          {hasPhotos ? (
+            <button
+              onClick={() => openPhotoViewer(0)}
+              className="w-full bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-[2rem] p-6 hover:shadow-xl hover:border-indigo-400 transition-all active:scale-[0.98] group"
+            >
+              <div className="flex items-center gap-4">
+                {/* First Photo Preview */}
+                <div className="w-20 h-20 bg-white rounded-xl overflow-hidden border border-indigo-200 flex-shrink-0 shadow-md">
                   <img 
-                    src={url} 
-                    alt={`Packing photo ${index + 1}`} 
+                    src={photoUrls[0]} 
+                    alt="First packing photo" 
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform"
                   />
-                </button>
-              ))}
+                </div>
+                
+                {/* Photo Count & CTA */}
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-black text-gray-900 mb-1">
+                    {photoUrls.length} {photoUrls.length === 1 ? 'Photo' : 'Photos'} Captured
+                  </p>
+                  <p className="text-xs text-indigo-600 font-bold flex items-center gap-2">
+                    Click to view all photos
+                    <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </p>
+                </div>
+                
+                {/* Additional Photo Thumbnails */}
+                {photoUrls.length > 1 && (
+                  <div className="flex gap-2">
+                    {photoUrls.slice(1, 3).map((url, index) => (
+                      <div key={index} className="w-16 h-16 bg-white rounded-lg overflow-hidden border border-indigo-200 shadow-sm">
+                        <img 
+                          src={url} 
+                          alt={`Photo ${index + 2}`} 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                    {photoUrls.length > 3 && (
+                      <div className="w-16 h-16 bg-indigo-100 rounded-lg flex items-center justify-center border border-indigo-200">
+                        <span className="text-xs font-black text-indigo-700">+{photoUrls.length - 3}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </button>
+          ) : (
+            <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2rem] p-8">
+              <div className="flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <p className="text-sm font-black text-gray-400 uppercase tracking-wider">
+                  No Photos Taken
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  No packing photos for this order
+                </p>
+              </div>
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
         {/* Shipping Information */}
         <section className="space-y-6">
@@ -313,7 +398,7 @@ Shipped: ${formattedDateTime}`;
               ) : (
                 <>
                   <Copy className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-black uppercase tracking-wider">Copy All</span>
+                  <span className="text-[10px] font-black uppercase tracking-wider">Copy</span>
                 </>
               )}
             </button>
@@ -326,12 +411,51 @@ Shipped: ${formattedDateTime}`;
               externalUrl={getTrackingUrl(shipped.shipping_tracking_number)}
               externalLabel="Open shipment tracking in new tab"
             />
-            <CopyableField 
-              label="Order ID" 
-              value={shipped.order_id || 'Not available'} 
-              externalUrl={getOrderIdUrl(shipped.order_id)}
-              externalLabel={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? "Open Amazon order in Seller Central in new tab" : "Open Ecwid order in new tab"}
-            />
+            
+            {/* Order ID with Account Source */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Order ID</span>
+                {accountSourceLabel && (
+                  <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                    {accountSourceLabel}
+                  </span>
+                )}
+              </div>
+              <div 
+                onClick={() => {
+                  const value = shipped.order_id || 'Not available';
+                  if (value && value !== 'Not available' && value !== 'N/A') {
+                    navigator.clipboard.writeText(value);
+                  }
+                }}
+                className={`flex items-center justify-between gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 group/field transition-all ${shipped.order_id && shipped.order_id !== 'Not available' && shipped.order_id !== 'N/A' ? 'cursor-pointer hover:bg-gray-100 active:scale-[0.98]' : 'cursor-default'}`}
+              >
+                <p className="font-mono text-sm text-gray-900 font-bold flex-1 truncate">{shipped.order_id || 'Not available'}</p>
+                <div className="flex items-center gap-1.5">
+                  {shipped.order_id && shipped.order_id !== 'Not available' && shipped.order_id !== 'N/A' && (
+                    <div className="p-1.5 transition-all opacity-0 group-hover/field:opacity-100">
+                      <Copy className="w-3.5 h-3.5 text-gray-400" />
+                    </div>
+                  )}
+                  {getOrderIdUrl(shipped.order_id) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const url = getOrderIdUrl(shipped.order_id);
+                        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                      }}
+                      className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-blue-600"
+                      title={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? "Open Amazon order in Seller Central in new tab" : "Open Ecwid order in new tab"}
+                      aria-label={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? "Open Amazon order in Seller Central in new tab" : "Open Ecwid order in new tab"}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            
             <CopyableField 
               label="Serial Number" 
               value={shipped.serial_number || 'N/A'} 

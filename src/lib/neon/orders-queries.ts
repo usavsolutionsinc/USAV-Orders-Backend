@@ -15,6 +15,7 @@ export interface ShippedOrder {
   packed_by: number; // Staff ID (changed from boxed_by)
   pack_date_time: string;
   packer_photos_url: string | null; // Comma-separated Vercel Blob URLs
+  account_source: string | null; // Account source (Amazon, eBay account name, etc.)
   notes: string;
   status_history: any; // JSONB status history
   is_shipped?: boolean;
@@ -38,6 +39,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           o.packed_by,
           o.pack_date_time,
           o.packer_photos_url,
+          o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
@@ -50,7 +52,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           AND o.packed_by IS NOT NULL
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.shipping_tracking_number, o.sku, o.packed_by,
-                 o.pack_date_time, o.packer_photos_url, o.notes, o.status_history, o.is_shipped
+                 o.pack_date_time, o.packer_photos_url, o.account_source, o.notes, o.status_history, o.is_shipped
       )
       SELECT 
         os.*,
@@ -90,6 +92,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.packed_by,
           o.pack_date_time,
           o.packer_photos_url,
+          o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
@@ -101,7 +104,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.shipping_tracking_number, o.sku, o.packed_by,
-                 o.pack_date_time, o.packer_photos_url, o.notes, o.status_history, o.is_shipped
+                 o.pack_date_time, o.packer_photos_url, o.account_source, o.notes, o.status_history, o.is_shipped
       )
       SELECT 
         os.*,
@@ -139,6 +142,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           o.packed_by,
           o.pack_date_time,
           o.packer_photos_url,
+          o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
@@ -158,7 +162,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           )
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.shipping_tracking_number, o.sku, o.packed_by,
-                 o.pack_date_time, o.packer_photos_url, o.notes, o.status_history, o.is_shipped
+                 o.pack_date_time, o.packer_photos_url, o.account_source, o.notes, o.status_history, o.is_shipped
       )
       SELECT 
         os.*,
@@ -236,6 +240,7 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
           o.packed_by,
           o.pack_date_time,
           o.packer_photos_url,
+          o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
@@ -249,7 +254,7 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
           AND RIGHT(o.shipping_tracking_number, 8) = $1
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.shipping_tracking_number, o.sku, o.packed_by,
-                 o.pack_date_time, o.packer_photos_url, o.notes, o.status_history, o.is_shipped
+                 o.pack_date_time, o.packer_photos_url, o.account_source, o.notes, o.status_history, o.is_shipped
       )
       SELECT 
         os.*,
