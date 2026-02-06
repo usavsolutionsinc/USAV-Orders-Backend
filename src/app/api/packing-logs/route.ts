@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/drizzle/db';
-import { packingLogs } from '@/lib/drizzle/schema';
 import pool from '@/lib/db';
-import { toISOStringPST } from '@/lib/timezone';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -61,7 +58,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { trackingNumber, orderId, photos, packerId, boxSize, timestamp, product } = body;
+        const { trackingNumber, orderId, photos, packerId, timestamp, product } = body;
+        
+        console.log('Received packing request:', {
+            trackingNumber,
+            orderId,
+            photosCount: photos?.length,
+            packerId,
+            timestamp
+        });
         
         // Map packerId directly to staff ID
         // packer_1 (from mobile) -> staff id 4 (Tuan)
@@ -77,81 +82,67 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
         }
         
-        // Get staff name
-        const staffResult = await pool.query(
-            'SELECT name FROM staff WHERE id = $1',
-            [staffId]
-        );
-
-        if (staffResult.rows.length === 0) {
-            return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
-        }
-
-        const staffName = String(staffResult.rows[0].name);
-        
-        // Convert timestamp to ISO format for status_history (using PST timezone)
-        const isoTimestamp = toISOStringPST(timestamp);
+        // Create proper timestamp - use current server time
+        const now = new Date();
+        const packDateTime = now.toLocaleString('en-US', { 
+            timeZone: 'America/Los_Angeles',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
         
         // Convert photos array to structured JSONB format
         const photosJsonb = Array.isArray(photos) 
             ? JSON.stringify(photos.map((url, index) => ({
                 url,
                 index: index + 1,
-                uploadedAt: isoTimestamp
+                uploadedAt: now.toISOString()
               })))
             : '[]';
         
-        console.log('Updating order:', {
+        console.log('Updating order with:', {
             staffId,
-            timestamp,
+            packDateTime,
             trackingNumber,
-            staffName,
-            isoTimestamp,
-            photosJsonb
+            photosCount: photos?.length,
+            status: 'shipped'
         });
         
-        // Build the status history entry as a JavaScript object, then convert to JSONB
-        // This avoids PostgreSQL type inference issues with parameters inside jsonb_build_object
-        const statusEntry = JSON.stringify({
-            status: 'packed',
-            timestamp: isoTimestamp,
-            user: staffName,
-            previous_status: null  // Will be filled by the query
-        });
-        
-        // Update orders table ONLY (no packer table insert) - use packed_by instead of boxed_by
-        await pool.query(`
+        // Update orders table with only the required fields
+        const result = await pool.query(`
             UPDATE orders 
             SET packed_by = $1,
                 pack_date_time = $2,
                 is_shipped = true,
-                packer_photos_url = $4::jsonb,
-                status_history = COALESCE(status_history, '[]'::jsonb) || 
-                    jsonb_set(
-                        $5::jsonb,
-                        '{previous_status}',
-                        to_jsonb(COALESCE(
-                            (status_history->-1->>'status')::text,
-                            'null'::text
-                        ))
-                    )
-            WHERE shipping_tracking_number = $3
-        `, [staffId, timestamp, trackingNumber, photosJsonb, statusEntry]);
+                packer_photos_url = $3::jsonb,
+                status = 'shipped'
+            WHERE shipping_tracking_number = $4
+            RETURNING id, order_id, shipping_tracking_number
+        `, [staffId, packDateTime, photosJsonb, trackingNumber]);
 
-        // Record in unified logs for photo support
-        const newLog = await db.insert(packingLogs).values({
-            trackingNumber,
-            orderId: orderId || null,
-            photos: JSON.stringify(photos),
-            packerId: staffId,
-            boxSize,
-            notes: product,
-            status: 'completed'
-        }).returning();
+        if (result.rows.length === 0) {
+            return NextResponse.json({ 
+                error: 'Order not found',
+                details: `No order found with tracking number: ${trackingNumber}`
+            }, { status: 404 });
+        }
 
-        return NextResponse.json(newLog[0]);
+        console.log('Order updated successfully:', result.rows[0]);
+
+        return NextResponse.json({
+            success: true,
+            order: result.rows[0],
+            message: 'Order packed successfully'
+        });
     } catch (error: any) {
-        console.error('Error creating packing log:', error);
-        return NextResponse.json({ error: 'Failed to create log', details: error.message }, { status: 500 });
+        console.error('Error updating order:', error);
+        return NextResponse.json({ 
+            error: 'Failed to update order', 
+            details: error.message 
+        }, { status: 500 });
     }
 }

@@ -135,18 +135,8 @@ export const repairService = pgTable('repair_service', {
   process: text('process'), // JSON: [{parts: string, person: string, date: timestamp}]
 });
 
-// NEW: Packing logs for the packer dashboard
-export const packingLogs = pgTable('packing_logs', {
-  id: serial('id').primaryKey(),
-  trackingNumber: varchar('tracking_number', { length: 100 }).notNull(),
-  orderId: varchar('order_id', { length: 100 }),
-  photos: text('photos'), // Store as JSON string or comma-separated URLs
-  packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
-  boxSize: varchar('box_size', { length: 50 }),
-  packedAt: timestamp('packed_at').defaultNow(),
-  notes: text('notes'),
-  status: varchar('status', { length: 20 }).default('completed'),
-});
+// Packing logs table removed - all packing data now stored in orders table
+// (packed_by, pack_date_time, packer_photos_url, is_shipped, status)
 
 // NEW: Tech Serial Numbers table - Individual serial tracking with types
 export const techSerialNumbers = pgTable('tech_serial_numbers', {
@@ -172,7 +162,5 @@ export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
 export type RepairService = typeof repairService.$inferSelect;
 export type NewRepairService = typeof repairService.$inferInsert;
-export type PackingLog = typeof packingLogs.$inferSelect;
-export type NewPackingLog = typeof packingLogs.$inferInsert;
 export type TechSerialNumber = typeof techSerialNumbers.$inferSelect;
 export type NewTechSerialNumber = typeof techSerialNumbers.$inferInsert;
