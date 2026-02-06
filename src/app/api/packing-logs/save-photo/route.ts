@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+import { put } from '@vercel/blob';
 
 export async function POST(req: NextRequest) {
     try {
@@ -17,21 +16,19 @@ export async function POST(req: NextRequest) {
 
         // Create filename: OrderID_1.jpg, OrderID_2.jpg, etc.
         const filename = `${orderId}_${photoIndex + 1}.jpg`;
-        const folderPath = join(process.cwd(), 'public', 'packer-photos', `Packer_${packerId}`);
-        const filepath = join(folderPath, filename);
+        // Save to packer_photos/packer_1 or packer_photos/packer_2
+        const pathname = `packer_photos/packer_${packerId}/${filename}`;
 
-        // Ensure directory exists
-        await mkdir(folderPath, { recursive: true });
+        // Upload to Vercel Blob Storage
+        const blob = await put(pathname, buffer, {
+            access: 'public',
+            contentType: 'image/jpeg',
+        });
 
-        // Save file
-        await writeFile(filepath, buffer);
-
-        // Return the public URL path
-        const publicPath = `/packer-photos/Packer_${packerId}/${filename}`;
-        
+        // Return the full URL from Vercel Blob
         return NextResponse.json({ 
             success: true, 
-            path: publicPath,
+            path: blob.url,
             filename 
         });
     } catch (error: any) {

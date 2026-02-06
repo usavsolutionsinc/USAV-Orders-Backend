@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Clock, Package, Copy, Box, Wrench, ExternalLink } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getCarrier } from '../../utils/tracking';
@@ -127,6 +127,14 @@ export function ShippedDetailsPanel({
   const [durationData, setDurationData] = useState<DurationData>({});
   const [isLoadingDurations, setIsLoadingDurations] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  
+  // Parse photo URLs from comma-separated string
+  const photoUrls = shipped.packer_photos_url 
+    ? shipped.packer_photos_url.split(',').filter(url => url.trim())
+    : [];
+  const hasPhotos = photoUrls.length > 0;
 
   // Update content when props change
   useEffect(() => {
@@ -192,6 +200,24 @@ Shipped: ${formattedDateTime}`;
     return new Date(dateStr);
   }
 
+  // Photo navigation handlers
+  const handleNextPhoto = () => {
+    setCurrentPhotoIndex((prev) => (prev + 1) % photoUrls.length);
+  };
+
+  const handlePrevPhoto = () => {
+    setCurrentPhotoIndex((prev) => (prev - 1 + photoUrls.length) % photoUrls.length);
+  };
+
+  const openPhotoViewer = (index: number) => {
+    setCurrentPhotoIndex(index);
+    setPhotoViewerOpen(true);
+  };
+
+  const closePhotoViewer = () => {
+    setPhotoViewerOpen(false);
+  };
+
   return (
     <motion.div
       initial={{ x: '100%' }}
@@ -224,9 +250,45 @@ Shipped: ${formattedDateTime}`;
           <X className="w-6 h-6 text-gray-400" />
         </button>
       </div>
+
       
       {/* Content sections */}
       <div className="p-8 space-y-10">
+        {/* Packer Photos Section */}
+        {hasPhotos && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                <Package className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">
+                Packing Photos
+              </h3>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                {photoUrls.length} {photoUrls.length === 1 ? 'Photo' : 'Photos'}
+              </span>
+            </div>
+            
+            {/* Photo Thumbnails */}
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {photoUrls.map((url, index) => (
+                <button
+                  key={index}
+                  onClick={() => openPhotoViewer(index)}
+                  className="flex-shrink-0 w-24 h-24 bg-gray-100 rounded-xl overflow-hidden border-2 border-gray-200 hover:border-indigo-500 transition-all hover:shadow-lg active:scale-95 group"
+                  aria-label={`View photo ${index + 1}`}
+                >
+                  <img 
+                    src={url} 
+                    alt={`Packing photo ${index + 1}`} 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                  />
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Shipping Information */}
         <section className="space-y-6">
           <div className="flex items-center justify-between">
@@ -370,6 +432,81 @@ Shipped: ${formattedDateTime}`;
           </div>
         </section>
       </div>
+
+      {/* Photo Viewer Modal */}
+      <AnimatePresence>
+        {photoViewerOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[200] flex items-center justify-center"
+            onClick={closePhotoViewer}
+          >
+            <button
+              onClick={closePhotoViewer}
+              className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white"
+              aria-label="Close photo viewer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Photo Counter */}
+            <div className="absolute top-6 left-6 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full">
+              <span className="text-white text-sm font-black">
+                {currentPhotoIndex + 1} / {photoUrls.length}
+              </span>
+            </div>
+
+            {/* Main Photo */}
+            <motion.div
+              key={currentPhotoIndex}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+              className="relative max-w-5xl max-h-[80vh] w-full mx-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={photoUrls[currentPhotoIndex]}
+                alt={`Packing photo ${currentPhotoIndex + 1}`}
+                className="w-full h-full object-contain rounded-2xl shadow-2xl"
+              />
+            </motion.div>
+
+            {/* Navigation Arrows */}
+            {photoUrls.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePrevPhoto();
+                  }}
+                  className="absolute left-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md"
+                  aria-label="Previous photo"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNextPhoto();
+                  }}
+                  className="absolute right-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md"
+                  aria-label="Next photo"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

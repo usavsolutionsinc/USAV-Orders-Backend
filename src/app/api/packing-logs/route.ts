@@ -92,12 +92,16 @@ export async function POST(req: NextRequest) {
         // Convert timestamp to ISO format for status_history (using PST timezone)
         const isoTimestamp = toISOStringPST(timestamp);
         
+        // Convert photos array to comma-separated string
+        const photosUrlString = Array.isArray(photos) ? photos.join(',') : '';
+        
         // Update orders table ONLY (no packer table insert) - use packed_by instead of boxed_by
         await pool.query(`
             UPDATE orders 
             SET packed_by = $1,
                 pack_date_time = $2,
                 is_shipped = true,
+                packer_photos_url = $6,
                 status_history = COALESCE(status_history, '[]'::jsonb) || 
                     jsonb_build_object(
                         'status', 'packed',
@@ -113,7 +117,7 @@ export async function POST(req: NextRequest) {
                         )
                     )::jsonb
             WHERE shipping_tracking_number = $3
-        `, [staffId, timestamp, trackingNumber, staffName, isoTimestamp]);
+        `, [staffId, timestamp, trackingNumber, staffName, isoTimestamp, photosUrlString]);
 
         // Record in unified logs for photo support
         const newLog = await db.insert(packingLogs).values({
