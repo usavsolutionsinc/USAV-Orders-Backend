@@ -152,7 +152,7 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   serialNumber: text('serial_number').notNull(),
   serialType: varchar('serial_type', { length: 20 }).notNull().default('SERIAL'),
   testDateTime: timestamp('test_date_time').defaultNow(),
-  testerId: integer('tester_id').references(() => staff.id, { onDelete: 'set null' }),
+  testedBy: integer('tested_by').references(() => staff.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

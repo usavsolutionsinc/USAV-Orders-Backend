@@ -177,9 +177,21 @@ export async function POST(req: NextRequest) {
                             await client.query(`
                                 INSERT INTO tech_serial_numbers (
                                     shipping_tracking_number, serial_number,
-                                    serial_type, tester_id
+                                    serial_type, tested_by
                                 ) VALUES ($1, $2, $3, $4)
+                                ON CONFLICT DO NOTHING
                             `, [shippingTracking, serialNumber, 'SERIAL', testedById]);
+                        }
+                        
+                        // ALSO update tested_by for ALL existing tech_serial_numbers records
+                        // This ensures tester assignment from shipped sheet is applied
+                        if (testedById) {
+                            await client.query(`
+                                UPDATE tech_serial_numbers
+                                SET tested_by = $1
+                                WHERE shipping_tracking_number = $2
+                                  AND (tested_by IS NULL OR tested_by != $1)
+                            `, [testedById, shippingTracking]);
                         }
 
                         insertedCount++;
@@ -233,13 +245,14 @@ export async function POST(req: NextRequest) {
 
                     try {
                         let insertedCount = 0;
+                        let updatedCount = 0;
 
                         for (const row of rows) {
                             const testDateTime = row[0] || null;          // A - test_date_time
                             const shippingTracking = row[2] || null;      // C - shipping_tracking_number
                             const serialNumber = row[3] || null;          // D - serial_number
 
-                            if (!shippingTracking || !serialNumber) continue;
+                            if (!shippingTracking) continue;
 
                             // Check if order exists
                             const orderCheck = await client.query(
@@ -248,21 +261,35 @@ export async function POST(req: NextRequest) {
                             );
 
                             if (orderCheck.rows.length > 0) {
-                                // Insert into tech_serial_numbers (append mode, not truncate)
-                                await client.query(`
-                                    INSERT INTO tech_serial_numbers (
-                                        shipping_tracking_number, serial_number,
-                                        serial_type, test_date_time, tester_id
-                                    ) VALUES ($1, $2, $3, $4, $5)
-                                    ON CONFLICT DO NOTHING
-                                `, [
-                                    shippingTracking,
-                                    serialNumber,
-                                    'SERIAL',
-                                    testDateTime,
-                                    techSheet.testerId
-                                ]);
-                                insertedCount++;
+                                // Insert into tech_serial_numbers if serial number provided (append mode, not truncate)
+                                if (serialNumber) {
+                                    await client.query(`
+                                        INSERT INTO tech_serial_numbers (
+                                            shipping_tracking_number, serial_number,
+                                            serial_type, test_date_time, tested_by
+                                        ) VALUES ($1, $2, $3, $4, $5)
+                                        ON CONFLICT DO NOTHING
+                                    `, [
+                                        shippingTracking,
+                                        serialNumber,
+                                        'SERIAL',
+                                        testDateTime,
+                                        techSheet.testerId
+                                    ]);
+                                    insertedCount++;
+                                }
+
+                                // ALSO update tested_by for ALL existing records with this tracking number
+                                // This ensures tech sheet ownership is properly recorded
+                                const updateResult = await client.query(`
+                                    UPDATE tech_serial_numbers
+                                    SET tested_by = $1
+                                    WHERE shipping_tracking_number = $2
+                                      AND (tested_by IS NULL OR tested_by != $1)
+                                    RETURNING id
+                                `, [techSheet.testerId, shippingTracking]);
+                                
+                                updatedCount += updateResult.rowCount || 0;
                             }
                         }
 
@@ -270,7 +297,8 @@ export async function POST(req: NextRequest) {
                             sheet: sheetName,
                             table: 'tech_serial_numbers',
                             status: 'synced',
-                            rows: insertedCount
+                            rows: insertedCount,
+                            updated: updatedCount
                         });
 
                     } finally {

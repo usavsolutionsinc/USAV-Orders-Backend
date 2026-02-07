@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 import { db } from '@/lib/drizzle/db';
-import { orders, packerLogs } from '@/lib/drizzle/schema';
-import { desc, eq } from 'drizzle-orm';
+import { packerLogs } from '@/lib/drizzle/schema';
+import { eq } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -10,75 +11,39 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        let query = db
-            .select({
-                id: packerLogs.id,
-                packDateTime: packerLogs.packDateTime,
-                shippingTrackingNumber: packerLogs.shippingTrackingNumber,
-                trackingType: packerLogs.trackingType,
-                packedBy: packerLogs.packedBy,
-                packerPhotosUrl: packerLogs.packerPhotosUrl,
-                orderId: orders.orderId,
-                productTitle: orders.productTitle,
-                condition: orders.condition,
-                sku: orders.sku,
-                statusHistory: orders.statusHistory,
-                isShipped: orders.isShipped,
-                shipByDate: orders.shipByDate,
-                packerId: orders.packerId,
-                notes: orders.notes,
-                quantity: orders.quantity,
-                outOfStock: orders.outOfStock,
-                accountSource: orders.accountSource,
-                orderDate: orders.orderDate,
-            })
-            .from(packerLogs)
-            .leftJoin(orders, eq(orders.shippingTrackingNumber, packerLogs.shippingTrackingNumber));
-
-        // Filter by packerId if provided
+        // Use raw SQL for better control over the last 8 digits matching
+        let query = `
+            SELECT 
+                pl.id,
+                pl.pack_date_time,
+                pl.shipping_tracking_number,
+                pl.packed_by,
+                pl.packer_photos_url,
+                o.order_id,
+                o.product_title,
+                o.condition,
+                o.sku
+            FROM packer_logs pl
+            LEFT JOIN orders o ON RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
+        `;
+        
+        const params: any[] = [];
+        
         if (packerId) {
             const packerIdNum = parseInt(packerId);
             if (!isNaN(packerIdNum)) {
-                query = query.where(eq(packerLogs.packedBy, packerIdNum)) as any;
+                query += ` WHERE pl.packed_by = $1`;
+                params.push(packerIdNum);
             }
         }
+        
+        query += ` ORDER BY pl.pack_date_time DESC NULLS LAST`;
+        query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+        params.push(limit, offset);
 
-        // Order by id descending (most recent first)
-        query = query.orderBy(desc(packerLogs.id)) as any;
+        const result = await pool.query(query, params);
 
-        // Apply pagination
-        query = query.limit(limit).offset(offset) as any;
-
-        const logs = await query;
-
-        // Format for the component
-        const formattedLogs = logs.map((log: any) => ({
-            id: log.id.toString(),
-            packDateTime: log.packDateTime,
-            orderId: log.orderId,
-            productTitle: log.productTitle,
-            condition: log.condition,
-            shippingTrackingNumber: log.shippingTrackingNumber,
-            sku: log.sku,
-            status: log.trackingType,
-            statusHistory: log.statusHistory,
-            isShipped: log.isShipped,
-            shipByDate: log.shipByDate,
-            packerId: log.packerId,
-            packedBy: log.packedBy,
-            notes: log.notes,
-            quantity: log.quantity?.toString() || '1',
-            outOfStock: log.outOfStock,
-            accountSource: log.accountSource,
-            orderDate: log.orderDate,
-            trackingType: log.trackingType,
-            // Legacy field mappings for backward compatibility
-            timestamp: log.packDateTime,
-            tracking: log.shippingTrackingNumber,
-            title: log.productTitle,
-        }));
-
-        return NextResponse.json(formattedLogs);
+        return NextResponse.json(result.rows);
     } catch (error: any) {
         console.error('Error fetching packer logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });

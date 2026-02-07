@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StationLayout from './station/StationLayout';
-import { ShippedTable } from './shipped/ShippedTable';
+import { TechTable } from './TechTable';
 import StationTesting from './station/StationTesting';
 import StaffSelector from './StaffSelector';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
@@ -81,7 +81,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
                 </div>
             </div>
             <div className="flex-1 overflow-hidden">
-                <ShippedTable testedBy={parseInt(techId)} />
+                <TechTable testedBy={parseInt(techId)} />
             </div>
             <StationDetailsHandler />
         </div>

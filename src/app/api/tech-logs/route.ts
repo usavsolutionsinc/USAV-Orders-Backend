@@ -29,24 +29,23 @@ export async function GET(req: NextRequest) {
 
         const staffId = staffResult.rows[0].id;
 
-        // Query from tech_serial_numbers and join to orders
-        // Sort by most recent test activity (per-serial)
+        // Query ALL individual records from tech_serial_numbers
+        // LEFT JOIN orders using last 8 digits of tracking number (faster queries)
         const result = await pool.query(`
             SELECT 
-                o.id,
-                MIN(tsn.test_date_time) as timestamp,
-                o.product_title as title,
-                o.shipping_tracking_number as tracking,
-                STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time) as serial,
+                tsn.id,
+                tsn.test_date_time,
+                tsn.shipping_tracking_number,
+                tsn.serial_number,
+                tsn.tested_by,
+                o.order_id,
+                o.product_title,
                 o.condition,
-                o.status_history->-1->>'status' as status,
-                COUNT(tsn.serial_number) as serial_count
+                o.sku
             FROM tech_serial_numbers tsn
-            INNER JOIN orders o ON o.shipping_tracking_number = tsn.shipping_tracking_number
-            WHERE tsn.tester_id = $1
-            GROUP BY o.id, o.product_title, o.shipping_tracking_number, 
-                     o.condition, o.status_history
-            ORDER BY MIN(tsn.test_date_time) DESC
+            LEFT JOIN orders o ON RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+            WHERE tsn.tested_by = $1
+            ORDER BY tsn.test_date_time DESC NULLS LAST
             LIMIT $2 OFFSET $3
         `, [staffId, limit, offset]);
 

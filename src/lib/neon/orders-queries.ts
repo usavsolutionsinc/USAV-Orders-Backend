@@ -48,7 +48,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           pl.pack_date_time,
           pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tester_id) as tested_by,
+          MIN(tsn.tested_by) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
@@ -114,7 +114,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           pl.pack_date_time,
           pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tester_id) as tested_by,
+          MIN(tsn.tested_by) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
@@ -177,7 +177,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           pl.pack_date_time,
           pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tester_id) as tested_by,
+          MIN(tsn.tested_by) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
@@ -290,7 +290,7 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
           pl.pack_date_time,
           pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tester_id) as tested_by,
+          MIN(tsn.tested_by) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (

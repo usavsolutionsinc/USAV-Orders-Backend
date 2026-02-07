@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StationLayout from './station/StationLayout';
 import StationNav from './station/StationNav';
-import { ShippedTable } from './shipped/ShippedTable';
+import { PackerTable } from './PackerTable';
 import { Package, TrendingUp, Clock, AlertCircle } from './Icons';
 import StaffSelector from './StaffSelector';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
@@ -115,7 +115,7 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
                         />
                     </div>
                     <div className="flex-1 overflow-hidden">
-                        <ShippedTable packedBy={parseInt(packerId)} />
+                        <PackerTable packedBy={parseInt(packerId)} />
                     </div>
                 </div>
             }
