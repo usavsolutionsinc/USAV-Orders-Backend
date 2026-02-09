@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
                     } finally {
                         client.release();
                     }
-                } catch (err) {
+                } catch (err: any) {
                     console.error(`Error syncing ${packerSheet.name}:`, err);
                     results.push({
                         sheet: sheetName,
@@ -373,7 +373,7 @@ export async function POST(req: NextRequest) {
                 } finally {
                     client.release();
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error('Error syncing sku-stock sheet:', err);
                 results.push({
                     sheet: skuStockSheetName,
@@ -439,7 +439,7 @@ export async function POST(req: NextRequest) {
                 } finally {
                     client.release();
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error('Error syncing sku sheet:', err);
                 results.push({
                     sheet: skuSheetName,
