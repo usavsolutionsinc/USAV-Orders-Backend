@@ -197,6 +197,9 @@ export async function POST(req: NextRequest) {
         
         for (let i = 0; i < filteredSourceRows.length; i++) {
             const row = filteredSourceRows[i];
+            const rawShipByDate = row[colIndices.shipByDate] || '';
+            const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
+            const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
             const orderId = row[colIndices.orderNumber] || '';
             const trackingNumber = row[colIndices.tracking] || '';
             
@@ -216,7 +219,7 @@ export async function POST(req: NextRequest) {
                 if (existingTracking !== trackingNumber) {
                     // Tracking doesn't match - this is a different order, import it
                     ordersToInsert.push({
-                        shipByDate: row[colIndices.shipByDate] || '',
+                        shipByDate,
                         orderId: orderId,
                         productTitle: row[colIndices.itemTitle] || '',
                         sku: row[colIndices.usavSku] || '',
@@ -224,6 +227,9 @@ export async function POST(req: NextRequest) {
                         shippingTrackingNumber: trackingNumber,
                         outOfStock: '',
                         notes: row[colIndices.note] || '',
+                        status: 'unassigned',
+                        statusHistory: [],
+                        isShipped: false,
                     });
                     sheetsOnlyRows.push(i); // Track for Google Sheets import
                 } else {
@@ -232,7 +238,7 @@ export async function POST(req: NextRequest) {
             } else {
                 // Order doesn't exist - import it
                 ordersToInsert.push({
-                    shipByDate: row[colIndices.shipByDate] || '',
+                    shipByDate,
                     orderId: orderId,
                     productTitle: row[colIndices.itemTitle] || '',
                     sku: row[colIndices.usavSku] || '',
@@ -240,6 +246,9 @@ export async function POST(req: NextRequest) {
                     shippingTrackingNumber: trackingNumber,
                     outOfStock: '',
                     notes: row[colIndices.note] || '',
+                    status: 'unassigned',
+                    statusHistory: [],
+                    isShipped: false,
                 });
                 sheetsOnlyRows.push(i); // Track for Google Sheets import
             }

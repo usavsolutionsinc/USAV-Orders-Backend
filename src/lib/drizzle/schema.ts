@@ -65,7 +65,7 @@ const genericColumns = {
 // Packing completion tracking moved to packer_logs table (packed_by, pack_date_time, packer_photos_url)
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
-  shipByDate: text('ship_by_date'),
+  shipByDate: timestamp('ship_by_date'),
   orderId: text('order_id'),
   productTitle: text('product_title'),
   sku: text('sku'),
@@ -73,17 +73,19 @@ export const orders = pgTable('orders', {
   shippingTrackingNumber: text('shipping_tracking_number'),
   outOfStock: text('out_of_stock'),
   notes: text('notes'),
-  quantity: integer('quantity').default(1),
+  quantity: text('quantity').default('1'),
   // Assignment tracking (who is assigned to pack) - FK to staff.id
   packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
   // Assignment tracking (who is assigned to test) - FK to staff.id
   testerId: integer('tester_id').references(() => staff.id, { onDelete: 'set null' }),
+  status: text('status'),
   // Status tracking
   statusHistory: jsonb('status_history').default([]),
-  isShipped: boolean('is_shipped').default(false),
+  isShipped: boolean('is_shipped').notNull().default(false),
   // eBay integration columns
-  accountSource: varchar('account_source', { length: 50 }),
+  accountSource: text('account_source'),
   orderDate: timestamp('order_date'),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // Packer logs - audit trail for all packer scans (orders, SKU, FNSKU, FBA, etc.)

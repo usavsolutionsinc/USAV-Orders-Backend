@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Search, X, AlertTriangle, ChevronLeft, ChevronRight } from '../Icons';
+import { Loader2, Search, X, AlertTriangle } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { CopyableText } from '../ui/CopyableText';
+import WeekHeader from '../ui/WeekHeader';
+import { formatDateWithOrdinal } from '@/lib/date-format';
 
 // Hard-coded staff ID to name mapping
 const STAFF_NAMES: { [key: number]: string } = {
@@ -74,47 +76,7 @@ export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
     }
   };
 
-  const getOrdinal = (n: number) => {
-    const s = ["th", "st", "nd", "rd"];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  };
-
-  const formatDate = (dateStr: string) => {
-    try {
-      if (!dateStr) return 'Unknown';
-      
-      // Handle YYYY-MM-DD format as local date to avoid timezone shifts
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        
-      const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-      
-      const dayName = days[date.getDay()];
-      const monthName = months[date.getMonth()];
-      const dayNum = date.getDate();
-      
-      return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
-      }
-      
-      // For other formats (like ISO timestamps), parse normally
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-
-      const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-      
-      const dayName = days[date.getDay()];
-      const monthName = months[date.getMonth()];
-      const dayNum = date.getDate();
-      
-      return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
-    } catch (e) { 
-      return dateStr; 
-    }
-  };
+  const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
   const formatHeaderDate = () => {
     const now = new Date();
@@ -271,52 +233,29 @@ export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
       {/* Main table container */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Sticky header */}
-        <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <p className="text-[11px] font-black text-gray-900 tracking-tight">
-              {stickyDate || formatHeaderDate()}
-            </p>
-            <div className="h-2 w-px bg-gray-200" />
-            <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
-              Count: {currentCount || getWeekCount()}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {search ? (
-              <div className="flex items-center gap-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
-                <Search className="w-3 h-3" />
-                <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
-                <button 
-                  onClick={() => window.history.pushState({}, '', '/shipped')}
-                  className="hover:text-blue-900 transition-colors"
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1">
-                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mr-1">
-                  {formatDate(weekRange.startStr)} - {formatDate(weekRange.endStr)}
-                </span>
-                <button
-                  onClick={() => setWeekOffset(weekOffset + 1)}
-                  className="p-1 hover:bg-gray-100 rounded transition-colors"
-                  title="Previous week"
-                >
-                  <ChevronLeft className="w-4 h-4 text-gray-600" />
-                </button>
-                <button
-                  onClick={() => setWeekOffset(Math.max(0, weekOffset - 1))}
-                  disabled={weekOffset === 0}
-                  className="p-1 hover:bg-gray-100 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  title="Next week"
-                >
-                  <ChevronRight className="w-4 h-4 text-gray-600" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <WeekHeader
+          stickyDate={stickyDate}
+          fallbackDate={formatHeaderDate()}
+          count={currentCount || getWeekCount()}
+          countClassName="text-blue-600"
+          weekRange={weekRange}
+          weekOffset={weekOffset}
+          onPrevWeek={() => setWeekOffset(weekOffset + 1)}
+          onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
+          formatDate={formatDate}
+          rightSlot={search ? (
+            <div className="flex items-center gap-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
+              <Search className="w-3 h-3" />
+              <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
+              <button 
+                onClick={() => window.history.pushState({}, '', '/shipped')}
+                className="hover:text-blue-900 transition-colors"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          ) : undefined}
+        />
         
         {/* Logs List */}
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">

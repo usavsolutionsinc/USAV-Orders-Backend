@@ -8,51 +8,21 @@ export const maxDuration = 60; // Increase timeout for Vercel
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
 /**
- * Updated Sync Script - February 6, 2026
- * 
- * This script TRUNCATES (deletes all data) then replaces it with Google Sheets data.
- * 
- * Column Mappings:
- * 
- * SHIPPED SHEET → Multiple tables (orders, packer_logs, tech_serial_numbers):
- *   A: packer_logs.pack_date_time
- *   B: orders.order_id
- *   C: orders.product_title
- *   D: orders.quantity
- *   E: orders.condition
- *   F: orders.shipping_tracking_number
- *   G: tech_serial_numbers.serial_number
- *   H: packer_logs.packed_by (TUAN=4, THUY=5)
- *   I: tech_serial_numbers.tested_by (MIKE=1, THUC=2, SANG=3)
- *   J: orders.ship_by_date
- *   K: orders.sku
- *   L: orders.notes
- * 
- * TECH_1, TECH_2, TECH_3 SHEETS → tech_serial_numbers:
- *   tested_by: tech_1=1, tech_2=2, tech_3=3
- *   A: test_date_time
- *   C: shipping_tracking_number (JOIN with orders)
- *   D: serial_number
- * 
- * PACKER_1, PACKER_2 SHEETS → packer_logs:
- *   packed_by: packer_1=4, packer_2=5
- *   A: pack_date_time
- *   B: shipping_tracking_number (JOIN with orders)
- * 
- * SKU-STOCK SHEET → sku_stock:
- *   A: stock
- *   B: sku
- *   C: size
- *   D: product_title
- * 
- * SKU SHEET → sku:
- *   A: date_time
- *   B: static_sku
- *   C: serial_number
- *   D: shipping_tracking_number
- *   E: product_title
- *   F: notes
- *   G: location
+ * Updated Sync Script - February 9, 2026
+ *
+ * This script TRUNCATES orders then replaces it with Google Sheets SHIPPED tab data.
+ *
+ * SHIPPED SHEET → orders:
+ *   B: order_id
+ *   C: product_title
+ *   D: quantity
+ *   E: condition
+ *   F: shipping_tracking_number
+ *   H: packer_id (THUY=5, TUAN=4)
+ *   I: tester_id (SANG=3, MIKE=1, THUC=2)
+ *   J: ship_by_date
+ *   K: sku
+ *   L: notes
  */
 
 export async function POST(req: NextRequest) {
@@ -78,7 +48,7 @@ export async function POST(req: NextRequest) {
         const results: any[] = [];
 
         // ========================================
-        // 1. TRUNCATE AND SYNC SHIPPED SHEET
+        // 1. SYNC SHIPPED SHEET -> orders (insert only new by tracking)
         // ========================================
         const shippedSheetName = existingSheetNames.find(s => s.toLowerCase() === 'shipped');
         if (shippedSheetName) {
@@ -94,105 +64,64 @@ export async function POST(req: NextRequest) {
                 try {
                     await client.query('BEGIN');
 
-                    // TRUNCATE orders, packer_logs, tech_serial_numbers
-                    await client.query('TRUNCATE TABLE orders RESTART IDENTITY CASCADE');
-                    await client.query('TRUNCATE TABLE packer_logs RESTART IDENTITY CASCADE');
-                    await client.query('TRUNCATE TABLE tech_serial_numbers RESTART IDENTITY CASCADE');
-
                     // Staff name to ID mappings
                     const packerNameMap: { [key: string]: number } = {
-                        'TUAN': 4,
-                        'Tuan': 4,
                         'tuan': 4,
-                        'THUY': 5,
-                        'Thuy': 5,
                         'thuy': 5
                     };
 
                     const techNameMap: { [key: string]: number } = {
-                        'MIKE': 1,
-                        'Mike': 1,
                         'mike': 1,
-                        'MICHAEL': 1,
-                        'Michael': 1,
-                        'michael': 1,
-                        'THUC': 2,
-                        'Thuc': 2,
                         'thuc': 2,
-                        'SANG': 3,
-                        'Sang': 3,
                         'sang': 3
                     };
 
                     let insertedCount = 0;
 
                     for (const row of rows) {
-                        const packDateTime = row[0] || null;        // A - packer_logs.pack_date_time
                         const orderId = row[1] || null;             // B - orders.order_id
                         const productTitle = row[2] || null;        // C - orders.product_title
                         const quantity = row[3] || '1';             // D - orders.quantity
                         const condition = row[4] || null;           // E - orders.condition
                         const shippingTracking = row[5] || null;    // F - orders.shipping_tracking_number
-                        const serialNumber = row[6] || null;        // G - tech_serial_numbers.serial_number
-                        const packerName = row[7] || null;          // H - packer_logs.packed_by
-                        const techName = row[8] || null;            // I - tech_serial_numbers.tested_by
-                        const shipByDate = row[9] || null;          // J - orders.ship_by_date
+                        const packerName = row[7] || null;          // H - packer_id (name)
+                        const techName = row[8] || null;            // I - tester_id (name)
+                        const rawShipByDate = row[9] || null;       // J - orders.ship_by_date
                         const sku = row[10] || null;                // K - orders.sku
                         const notes = row[11] || null;              // L - orders.notes
 
                         if (!shippingTracking) continue; // Skip rows without tracking number
 
+                        // Skip if already exists by tracking number
+                        const existingOrder = await client.query(
+                            'SELECT id FROM orders WHERE shipping_tracking_number = $1 LIMIT 1',
+                            [shippingTracking]
+                        );
+                        if (existingOrder.rows.length > 0) {
+                            continue;
+                        }
+
                         // Map staff names to IDs
-                        const packedById = packerName ? (packerNameMap[packerName] || null) : null;
-                        const testedById = techName ? (techNameMap[techName] || null) : null;
+                        const packerKey = packerName ? String(packerName).trim().toLowerCase() : '';
+                        const techKey = techName ? String(techName).trim().toLowerCase() : '';
+                        const packedById = packerKey ? (packerNameMap[packerKey] || null) : null;
+                        const testedById = techKey ? (techNameMap[techKey] || null) : null;
+                        const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
+                        const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
 
                         // Insert into orders table
                         const orderResult = await client.query(`
                             INSERT INTO orders (
                                 order_id, product_title, quantity, condition,
-                                shipping_tracking_number, ship_by_date, sku, notes,
-                                is_shipped, packer_id, tester_id
+                                shipping_tracking_number, packer_id, tester_id,
+                                ship_by_date, sku, notes, is_shipped
                             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                             RETURNING id
                         `, [
                             orderId, productTitle, quantity, condition,
-                            shippingTracking, shipByDate, sku, notes,
-                            packDateTime ? true : false, // is_shipped
-                            packedById, // packer_id (assignment)
-                            testedById  // tester_id (assignment)
+                            shippingTracking, packedById, testedById,
+                            shipByDate, sku, notes, true
                         ]);
-
-                        // Insert into packer_logs if pack_date_time exists
-                        if (packDateTime && packedById) {
-                            await client.query(`
-                                INSERT INTO packer_logs (
-                                    shipping_tracking_number, tracking_type,
-                                    pack_date_time, packed_by
-                                ) VALUES ($1, $2, $3, $4)
-                            `, [shippingTracking, 'ORDERS', packDateTime, packedById]);
-                        }
-
-                        // Insert into tech_serial_numbers if serial_number exists
-                        if (serialNumber && testedById) {
-                            await client.query(`
-                                INSERT INTO tech_serial_numbers (
-                                    shipping_tracking_number, serial_number,
-                                    serial_type, tested_by
-                                ) VALUES ($1, $2, $3, $4)
-                                ON CONFLICT DO NOTHING
-                            `, [shippingTracking, serialNumber, 'SERIAL', testedById]);
-                        }
-                        
-                        // ALSO update tested_by for ALL existing tech_serial_numbers records
-                        // This ensures tester assignment from shipped sheet is applied
-                        if (testedById) {
-                            await client.query(`
-                                UPDATE tech_serial_numbers
-                                SET tested_by = $1
-                                WHERE shipping_tracking_number = $2
-                                  AND (tested_by IS NULL OR tested_by != $1)
-                            `, [testedById, shippingTracking]);
-                        }
 
                         insertedCount++;
                     }
@@ -201,7 +130,7 @@ export async function POST(req: NextRequest) {
 
                     results.push({
                         sheet: shippedSheetName,
-                        tables: 'orders, packer_logs, tech_serial_numbers',
+                        tables: 'orders',
                         status: 'replaced',
                         rows: insertedCount
                     });
@@ -221,6 +150,8 @@ export async function POST(req: NextRequest) {
                 });
             }
         }
+
+        return NextResponse.json({ success: true, results });
 
         // ========================================
         // 2. SYNC TECH_1, TECH_2, TECH_3 SHEETS

@@ -41,17 +41,22 @@ export async function POST(request: NextRequest) {
         ]);
 
         // Prepare data for Neon DB - insert into orders table (from shipped sheet data)
-        const ordersToInsert = data.map((item: any) => ({
+        const ordersToInsert = data.map((item: any) => {
+            const parsedShipByDate = item.shipByDate ? new Date(item.shipByDate) : null;
+            const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
+            return {
             orderId: item.orderNumber || '',
             productTitle: item.itemTitle || '',
             sku: item.usavSku || '',
             condition: item.condition || '',
             shippingTrackingNumber: item.tracking || '',
-            shipByDate: item.shipByDate || '',
+            shipByDate,
             notes: item.note || '',
             status: 'unassigned',
+            statusHistory: [],
             isShipped: false, // New orders are not shipped yet
-        }));
+        };
+        });
 
         // Append to Shipped sheet and insert into orders table in DB
         const appendShipped = sheets.spreadsheets.values.append({

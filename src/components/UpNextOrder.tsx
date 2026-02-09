@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, Play, Package, Calendar, X, Check } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
+import { ShipByDate } from './ui/ShipByDate';
 
 interface Order {
   id: number;
@@ -14,6 +15,7 @@ interface Order {
   status: string;
   shipping_tracking_number: string;
   out_of_stock: string | null;
+  is_shipped: boolean;
 }
 
 interface UpNextOrderProps {
@@ -53,7 +55,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setOrders(data.orders || []);
+        const unshippedOrders = (data.orders || []).filter((order: Order) => !order.is_shipped);
+        setOrders(unshippedOrders);
         setAllCompletedToday(data.all_completed || false);
         if (data.all_completed && onAllCompleted && activeTab === 'current') {
           onAllCompleted();
@@ -131,12 +134,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     >
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5">
-          <Calendar className="w-3 h-3 text-blue-600" />
-          <span className="text-[9px] font-bold text-blue-700">
-            Ship By: {order.ship_by_date || 'N/A'}
-          </span>
-        </div>
+        <ShipByDate date={order.ship_by_date} />
         <div className="flex items-center gap-2">
           {order.out_of_stock && activeTab === 'stock' && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm">

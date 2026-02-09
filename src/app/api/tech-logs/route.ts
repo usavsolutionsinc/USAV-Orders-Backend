@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
         const staffId = staffResult.rows[0].id;
 
         // Query ALL individual records from tech_serial_numbers
-        // LEFT JOIN orders using last 8 digits of tracking number (faster queries)
+        // Use scalar subqueries to ensure exactly one row per tech_serial_numbers record
         const result = await pool.query(`
             SELECT 
                 tsn.id,
@@ -38,12 +38,31 @@ export async function GET(req: NextRequest) {
                 tsn.shipping_tracking_number,
                 tsn.serial_number,
                 tsn.tested_by,
-                o.order_id,
-                o.product_title,
-                o.condition,
-                o.sku
+                (
+                    SELECT o.order_id 
+                    FROM orders o 
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as order_id,
+                (
+                    SELECT o.product_title 
+                    FROM orders o 
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as product_title,
+                (
+                    SELECT o.condition 
+                    FROM orders o 
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as condition,
+                (
+                    SELECT o.sku 
+                    FROM orders o 
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as sku
             FROM tech_serial_numbers tsn
-            LEFT JOIN orders o ON RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
             WHERE tsn.tested_by = $1
             ORDER BY tsn.test_date_time DESC NULLS LAST
             LIMIT $2 OFFSET $3

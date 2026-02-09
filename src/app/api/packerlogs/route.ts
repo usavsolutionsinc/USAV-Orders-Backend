@@ -11,34 +11,56 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        // Use raw SQL for better control over the last 8 digits matching
-        let query = `
+        // Build query with proper filtering
+        const params: any[] = [];
+        let whereClause = '';
+        
+        if (packerId) {
+            const packerIdNum = parseInt(packerId);
+            if (!isNaN(packerIdNum)) {
+                whereClause = ` WHERE pl.packed_by = $1`;
+                params.push(packerIdNum);
+            }
+        }
+        
+        // Use subquery to get one order per packer_log entry, then order and paginate
+        const query = `
             SELECT 
                 pl.id,
                 pl.pack_date_time,
                 pl.shipping_tracking_number,
                 pl.packed_by,
                 pl.packer_photos_url,
-                o.order_id,
-                o.product_title,
-                o.condition,
-                o.sku
+                (
+                    SELECT o.order_id 
+                    FROM orders o 
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as order_id,
+                (
+                    SELECT o.product_title 
+                    FROM orders o 
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as product_title,
+                (
+                    SELECT o.condition 
+                    FROM orders o 
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as condition,
+                (
+                    SELECT o.sku 
+                    FROM orders o 
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as sku
             FROM packer_logs pl
-            LEFT JOIN orders o ON RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
+            ${whereClause}
+            ORDER BY pl.pack_date_time DESC NULLS LAST
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
         `;
         
-        const params: any[] = [];
-        
-        if (packerId) {
-            const packerIdNum = parseInt(packerId);
-            if (!isNaN(packerIdNum)) {
-                query += ` WHERE pl.packed_by = $1`;
-                params.push(packerIdNum);
-            }
-        }
-        
-        query += ` ORDER BY pl.pack_date_time DESC NULLS LAST`;
-        query += ` LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
         params.push(limit, offset);
 
         const result = await pool.query(query, params);

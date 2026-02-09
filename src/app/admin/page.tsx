@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Pencil, Check, X, Wrench, Package, Search } from '@/components/Icons';
+import { Plus, Trash2, Pencil, Check, X, Wrench, Package, Search, RefreshCw } from '@/components/Icons';
 import { motion, AnimatePresence } from 'framer-motion';
-import EbayManagement from '@/components/EbayManagement';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { ShipByDate } from '@/components/ui/ShipByDate';
+import DeleteOrdersButton from '@/components/ui/DeleteOrdersButton';
 
 interface Staff {
     id: number;
@@ -17,7 +18,7 @@ interface Staff {
 
 interface Order {
     id: number;
-    ship_by_date: string;
+    ship_by_date: string | null;
     order_id: string;
     product_title: string;
     sku: string;
@@ -25,11 +26,20 @@ interface Order {
     packer_id: number | null;
     out_of_stock: string | null;
     is_shipped: boolean;
+    created_at: string | null;
+}
+
+interface EbayAccount {
+    id: number;
+    account_name: string;
+    last_sync_date: string | null;
+    is_active: boolean;
+    token_expires_at: string;
 }
 
 export default function AdminPage() {
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState<'staff' | 'orders' | 'ebay'>('orders');
+    const [activeTab, setActiveTab] = useState<'staff' | 'orders'>('orders');
     const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
     
     // Staff state
@@ -100,14 +110,6 @@ export default function AdminPage() {
                             Orders
                         </button>
                         <button
-                            onClick={() => setActiveTab('ebay')}
-                            className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all ${
-                                activeTab === 'ebay' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                            }`}
-                        >
-                            eBay
-                        </button>
-                        <button
                             onClick={() => setActiveTab('staff')}
                             className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all ${
                                 activeTab === 'staff' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
@@ -119,9 +121,7 @@ export default function AdminPage() {
                 </header>
 
                 <div className="grid gap-6">
-                    {activeTab === 'ebay' ? (
-                        <EbayManagement />
-                    ) : activeTab === 'staff' ? (
+                    {activeTab === 'staff' ? (
                         <div className="space-y-4">
                             <div className="flex justify-between items-center">
                                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Active Personnel</h2>
@@ -351,6 +351,16 @@ export default function AdminPage() {
 
                             {/* Quick Actions */}
                             <section className="pt-6 border-t border-gray-100">
+                                <DeleteOrdersButton
+                                    orderIds={selectedOrderIds}
+                                    className="w-full py-3.5 mb-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-all active:scale-[0.98] shadow-lg shadow-red-600/20"
+                                    onDeleted={() => {
+                                        queryClient.invalidateQueries({ queryKey: ['orders'] });
+                                        setSelectedOrderIds([]);
+                                    }}
+                                    confirmMessage="Delete selected order(s)? This cannot be undone."
+                                    label="Delete Selected"
+                                />
                                 <button
                                     onClick={() => setSelectedOrderIds([])}
                                     className="w-full py-3.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-[0.98] shadow-lg shadow-blue-600/20"
@@ -380,6 +390,47 @@ function OrdersManagement({
     const [filterTab, setFilterTab] = useState<'out of stock' | 'unassigned' | 'assigned' | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Fetch eBay accounts
+    const { data: accountsData } = useQuery({
+        queryKey: ['ebay-accounts'],
+        queryFn: async () => {
+            const res = await fetch('/api/ebay/accounts');
+            if (!res.ok) throw new Error('Failed to fetch accounts');
+            return res.json();
+        },
+    });
+
+    // eBay sync mutation
+    const ebaySyncMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch('/api/ebay/sync', { method: 'POST' });
+            if (!res.ok) throw new Error('Failed to sync');
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+            queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
+        },
+    });
+
+    // Token refresh mutation
+    const refreshTokenMutation = useMutation({
+        mutationFn: async (accountName: string) => {
+            const res = await fetch('/api/ebay/refresh-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountName }),
+            });
+            if (!res.ok) throw new Error('Failed to refresh token');
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
+        },
+    });
+
+    const accounts: EbayAccount[] = accountsData?.accounts || [];
+
     // Fetch orders
     const { data: ordersData } = useQuery<{ orders: Order[] }>({
         queryKey: ['orders'],
@@ -394,6 +445,7 @@ function OrdersManagement({
     
     // Apply filtering
     const orders = allOrders.filter(order => {
+        if (order.is_shipped) return false;
         // Filter by tab
         const matchesTab = (() => {
             if (filterTab === 'out of stock') return order.out_of_stock && (order.is_shipped === false || !order.is_shipped);
@@ -433,7 +485,110 @@ function OrdersManagement({
 
     return (
         <div className="space-y-4">
-            {/* Header Area with Search and Tabs */}
+            {/* eBay Management Section */}
+            <div className="space-y-4 p-5 bg-white rounded-3xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">
+                            eBay Integration
+                        </h2>
+                        <p className="text-[9px] font-bold text-gray-500 mt-1">
+                            Multi-account order synchronization
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => ebaySyncMutation.mutate()}
+                        disabled={ebaySyncMutation.isPending}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${ebaySyncMutation.isPending ? 'animate-spin' : ''}`} />
+                        {ebaySyncMutation.isPending ? 'Syncing...' : 'Sync eBay'}
+                    </button>
+                </div>
+
+                {/* Sync Results */}
+                {ebaySyncMutation.isSuccess && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 bg-green-50 border border-green-200 rounded-2xl"
+                    >
+                        <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
+                            {ebaySyncMutation.data?.message || 'Sync completed successfully'}
+                        </div>
+                    </motion.div>
+                )}
+
+                {ebaySyncMutation.isError && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 bg-red-50 border border-red-200 rounded-2xl"
+                    >
+                        <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">
+                            Sync failed - check console for details
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Account Status Cards */}
+                {accounts.length > 0 && (
+                    <div className="grid grid-cols-3 gap-3">
+                        {accounts.map((account) => {
+                            const lastSyncDate = account.last_sync_date 
+                                ? new Date(account.last_sync_date)
+                                : null;
+                            const tokenExpiry = new Date(account.token_expires_at);
+                            const now = new Date();
+                            const isTokenExpired = tokenExpiry < now;
+                            const tokenExpiresInMinutes = Math.floor((tokenExpiry.getTime() - now.getTime()) / 1000 / 60);
+
+                            return (
+                                <div key={account.id} className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                                    <div className="flex items-start justify-between mb-2">
+                                        <div className="text-xs font-black text-gray-900">{account.account_name}</div>
+                                        <div className={`px-2 py-0.5 rounded text-[8px] font-bold ${
+                                            account.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                                        }`}>
+                                            {account.is_active ? 'ACTIVE' : 'INACTIVE'}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-1.5">
+                                        <div className="text-[9px] text-gray-500">
+                                            {lastSyncDate
+                                                ? `Last: ${lastSyncDate.toLocaleString()}`
+                                                : 'Never synced'}
+                                        </div>
+                                        
+                                        <div className="text-[9px] text-gray-500">
+                                            Token: {isTokenExpired ? (
+                                                <span className="text-red-600 font-bold">Expired</span>
+                                            ) : (
+                                                <span className={tokenExpiresInMinutes < 30 ? 'text-orange-600 font-bold' : ''}>
+                                                    {tokenExpiresInMinutes < 60 ? `${tokenExpiresInMinutes}m` : `${Math.floor(tokenExpiresInMinutes / 60)}h`}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {(isTokenExpired || tokenExpiresInMinutes < 30) && (
+                                            <button
+                                                onClick={() => refreshTokenMutation.mutate(account.account_name)}
+                                                disabled={refreshTokenMutation.isPending}
+                                                className="w-full text-[9px] font-bold px-2 py-1 rounded bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors disabled:opacity-50"
+                                            >
+                                                {refreshTokenMutation.isPending ? '⟳ Refreshing...' : '🔄 Refresh'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Search and Filter Section */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <SearchBar 
                     value={searchTerm}
@@ -442,7 +597,7 @@ function OrdersManagement({
                     className="flex-1 max-w-md w-full"
                 />
 
-                {/* Filter Tabs (Right) */}
+                {/* Filter Tabs */}
                 <div className="flex gap-2 p-1 bg-white rounded-2xl border border-gray-200 shadow-sm w-fit">
                     {(['out of stock', 'unassigned', 'assigned', 'all'] as const).map((tab) => (
                         <button
@@ -512,18 +667,14 @@ function OrdersManagement({
                                 <div className="flex-1 text-left">
                                     <div className="flex items-start justify-between mb-3">
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
+                                            <div className="flex items-center gap-2 mb-2">
                                                 <h3 className="text-base font-black text-gray-900">
                                                     {order.product_title}
                                                 </h3>
                                             </div>
                                             <div className="flex items-center gap-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">
-                                                {order.ship_by_date && (
-                                                    <>
-                                                        <span className="text-blue-600">Ship: {order.ship_by_date}</span>
-                                                        <span>•</span>
-                                                    </>
-                                                )}
+                                                <ShipByDate date={order.ship_by_date || order.created_at} />
+                                                <span>•</span>
                                                 <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700 font-mono">#{order.order_id}</span>
                                                 <span>•</span>
                                                 <span>SKU: {order.sku}</span>

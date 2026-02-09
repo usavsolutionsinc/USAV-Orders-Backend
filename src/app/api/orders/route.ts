@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
         out_of_stock,
         notes,
         packer_id,
-        is_shipped
+        tester_id,
+        is_shipped,
+        created_at
       FROM orders
       WHERE 1=1
     `;

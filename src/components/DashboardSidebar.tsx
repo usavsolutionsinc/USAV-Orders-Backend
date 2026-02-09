@@ -98,36 +98,8 @@ export default function DashboardSidebar() {
             name: 'Shipping Operations',
             icon: <TrendingUp className="w-4 h-4" />,
             scripts: [
-                { id: 'checkTrackingInShipped', name: 'Transfer Orders to Shipped' },
-                { id: 'removeDuplicateShipped', name: 'Clean Duplicate Shipped Rows' }
-            ]
-        },
-        {
-            id: 'orders',
-            name: 'Order Management',
-            icon: <Settings className="w-4 h-4" />,
-            scripts: [
-                { id: 'transferExistingOrdersToRestock', name: 'Clear Processed Orders' },
-                { id: 'calculateLateOrders', name: 'Update Late Order Days' },
-                { id: 'removeDuplicateOrders', name: 'Clean Duplicate Order Rows' }
-            ]
-        },
-        {
-            id: 'sku',
-            name: 'Inventory Tools',
-            icon: <Package className="w-4 h-4" />,
-            scripts: [
-                { id: 'updateSkuStockFromShipped', name: 'Update Stock Status from Shipped' }
-            ]
-        },
-        {
-            id: 'integrity',
-            name: 'Data Integrity',
-            icon: <History className="w-4 h-4" />,
-            scripts: [
-                { id: 'recheckTechTrackingIntegrity', name: 'Validate Tech Tracking' },
-                { id: 'recheckPackerTrackingIntegrity', name: 'Validate Packer Tracking' },
-                { id: 'syncPackerTimestampsToShipped', name: 'Sync Packer Timestamps' }
+                { id: 'checkShippedOrders', name: 'Check Shipped Orders' },
+                { id: 'updateNonshippedOrders', name: 'Update Nonshipped Orders' }
             ]
         }
     ];
@@ -242,13 +214,13 @@ export default function DashboardSidebar() {
                                         </div>
                                         {expandedMenu === menu.id ? <ChevronLeft className="w-3.5 h-3.5 -rotate-90 transition-transform duration-300" /> : <ChevronRight className="w-3.5 h-3.5 transition-transform duration-300" />}
                                     </button>
-                                    <AnimatePresence>
+                                    <AnimatePresence initial={false}>
                                         {expandedMenu === menu.id && (
                                             <motion.div
-                                                initial={{ height: 0, opacity: 0 }}
-                                                animate={{ height: 'auto', opacity: 1 }}
-                                                exit={{ height: 0, opacity: 0 }}
-                                                className="overflow-hidden space-y-1.5 px-3 py-2"
+                                                initial={{ height: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
+                                                animate={{ height: 'auto', opacity: 1, paddingTop: 8, paddingBottom: 8 }}
+                                                exit={{ height: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
+                                                className="overflow-hidden space-y-1.5 px-3"
                                             >
                                                 {menu.scripts.map((script) => (
                                                     <button

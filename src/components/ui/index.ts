@@ -8,3 +8,4 @@ export { StatusBadge, getCarrierVariant } from './StatusBadge';
 export { EmptyState } from './EmptyState';
 export { LoadingSpinner } from './LoadingSpinner';
 export { SearchBar } from './SearchBar';
+export { ShipByDate } from './ShipByDate';

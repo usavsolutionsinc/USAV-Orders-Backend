@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from './Icons';
 import { CopyableText } from './ui/CopyableText';
+import WeekHeader from './ui/WeekHeader';
+import { formatDateWithOrdinal } from '@/lib/date-format';
 
 // Hard-coded staff ID to name mapping
 const STAFF_NAMES: { [key: number]: string } = {
@@ -41,6 +43,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
   const [loading, setLoading] = useState(true);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
+  const [weekOffset, setWeekOffset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,31 +65,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     }
   };
 
-  const getOrdinal = (n: number) => {
-    const s = ["th", "st", "nd", "rd"];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  };
-
-  const formatDate = (dateStr: string) => {
-    try {
-      if (!dateStr) return 'Unknown';
-      
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-
-      const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-      const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-      
-      const dayName = days[date.getDay()];
-      const monthName = months[date.getMonth()];
-      const dayNum = date.getDate();
-      
-      return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
-    } catch (e) { 
-      return dateStr; 
-    }
-  };
+  const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
   const formatHeaderDate = () => {
     const now = new Date();
@@ -147,13 +126,36 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     groupedRecords[date].push(record);
   });
 
-  const getTodayCount = () => {
+  // Calculate week date range based on weekOffset (Monday-Friday only)
+  const getWeekRange = () => {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
-    return groupedRecords[today]?.length || 0;
+    const currentDay = now.getDay();
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysFromMonday - (weekOffset * 7));
+    monday.setHours(0, 0, 0, 0);
+
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    friday.setHours(23, 59, 59, 999);
+
+    return {
+      start: monday,
+      end: friday,
+      startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
+      endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
+    };
+  };
+
+  const weekRange = getWeekRange();
+  const filteredGroupedRecords = Object.fromEntries(
+    Object.entries(groupedRecords).filter(([date]) => {
+      return date >= weekRange.startStr && date <= weekRange.endStr;
+    })
+  );
+
+  const getWeekCount = () => {
+    return Object.values(filteredGroupedRecords).reduce((sum, records) => sum + records.length, 0);
   };
 
   if (loading) {
@@ -172,32 +174,27 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       {/* Main table container */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Sticky header */}
-        <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <p className="text-[11px] font-black text-gray-900 tracking-tight">
-              {stickyDate || formatHeaderDate()}
-            </p>
-            <div className="h-2 w-px bg-gray-200" />
-            <p className="text-[11px] font-black text-purple-600 uppercase tracking-widest">
-              Count: {currentCount || getTodayCount()}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-              {getStaffName(packedBy)} - Packer Records
-            </span>
-          </div>
-        </div>
+        <WeekHeader
+          stickyDate={stickyDate}
+          fallbackDate={formatHeaderDate()}
+          count={currentCount || getWeekCount()}
+          countClassName="text-purple-600"
+          weekRange={weekRange}
+          weekOffset={weekOffset}
+          onPrevWeek={() => setWeekOffset(weekOffset + 1)}
+          onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
+          formatDate={formatDate}
+        />
         
         {/* Logs List */}
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
-          {Object.keys(groupedRecords).length === 0 ? (
+          {Object.keys(filteredGroupedRecords).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               <p className="text-gray-500 font-medium italic opacity-20">No packer records found</p>
             </div>
           ) : (
             <div className="flex flex-col w-full">
-              {Object.entries(groupedRecords)
+              {Object.entries(filteredGroupedRecords)
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, dateRecords]) => {
                   // Sort records within each day by pack_date_time (latest first)

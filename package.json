@@ -9,7 +9,9 @@
     "lint": "next lint",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "sync:packer-logs": "node sync-packer-sheets-to-logs.js",
+    "sync:packer-logs:preview": "node sync-packer-sheets-to-logs-dry-run.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

@@ -11,9 +11,10 @@ import { StationDetailsHandler } from './station/StationDetailsHandler';
 
 interface PackerDashboardProps {
     packerId: string;
+    showStaffSelector?: boolean;
 }
 
-export default function PackerDashboard({ packerId }: PackerDashboardProps) {
+export default function PackerDashboard({ packerId, showStaffSelector = true }: PackerDashboardProps) {
     const router = useRouter();
     const [history, setHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -107,13 +108,6 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
             navContent={<StationNav />}
             historyContent={
                 <div className="flex flex-col h-full">
-                    <div className="p-2 bg-white border-b border-gray-100 flex items-center">
-                        <StaffSelector 
-                            role="packer" 
-                            selectedStaffId={parseInt(packerId)} 
-                            onSelect={(id) => router.push(`/packer/${id}`)}
-                        />
-                    </div>
                     <div className="flex-1 overflow-hidden">
                         <PackerTable packedBy={parseInt(packerId)} />
                     </div>
@@ -121,6 +115,15 @@ export default function PackerDashboard({ packerId }: PackerDashboardProps) {
             }
         >
             <div className="flex flex-col h-full bg-white">
+                {showStaffSelector && (
+                    <div className="p-2 bg-white border-b border-gray-100 flex items-center">
+                        <StaffSelector 
+                            role="packer" 
+                            selectedStaffId={parseInt(packerId)} 
+                            onSelect={(id) => router.push(`/packer/${id}`)}
+                        />
+                    </div>
+                )}
                 {/* Header */}
                 <div className="p-8 border-b border-gray-100">
                     <h2 className="text-2xl font-black text-gray-900 tracking-tighter">
