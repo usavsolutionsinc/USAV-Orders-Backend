@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
                     } finally {
                         client.release();
                     }
-                } catch (err) {
+                } catch (err: any) {
                     console.error(`Error syncing ${techSheet.name}:`, err);
                     results.push({
                         sheet: sheetName,
