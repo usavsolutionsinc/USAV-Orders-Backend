@@ -8,6 +8,7 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { CopyableText } from '../ui/CopyableText';
 import WeekHeader from '../ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
+import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 
 // Hard-coded staff ID to name mapping
 const STAFF_NAMES: { [key: number]: string } = {
@@ -27,33 +28,46 @@ function getStaffName(staffId: number | null | undefined): string {
 interface ShippedTableProps {
   packedBy?: number; // Filter by packer ID
   testedBy?: number; // Filter by tester ID
+  unshippedOnly?: boolean;
 }
 
-export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
+export function ShippedTable({ packedBy, testedBy, unshippedOnly = false }: ShippedTableProps = {}) {
   const searchParams = useSearchParams();
-  const search = searchParams.get('search');
+  const search = searchParams.get('search') || '';
   const [shipped, setShipped] = useState<ShippedOrder[]>([]);
   const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = previous week, etc.
+  const [dashboardSearch, setDashboardSearch] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { normalizeTrackingQuery } = useLast8TrackingSearch();
 
-  useEffect(() => {
-    fetchShipped();
-  }, [search, packedBy, testedBy]);
-
-  const fetchShipped = async () => {
+  const fetchShipped = useCallback(async () => {
     setLoading(true);
     try {
-      const url = search 
-        ? `/api/shipped/search?q=${encodeURIComponent(search)}`
-        : `/api/shipped?limit=5000`;
+      const url = unshippedOnly
+        ? '/api/orders'
+        : (
+          search
+            ? `/api/shipped/search?q=${encodeURIComponent(search)}`
+            : `/api/shipped?limit=5000`
+        );
       const res = await fetch(url);
       const data = await res.json();
       
       let records = data.results || data.shipped || [];
+      if (unshippedOnly) {
+        records = (data.orders || []).map((order: any) => ({
+          ...order,
+          pack_date_time: order.ship_by_date || null,
+          packed_by: order.packer_id ?? null,
+          tested_by: order.tester_id ?? null,
+          serial_number: '',
+          condition: order.condition || '',
+        }));
+      }
       
       // Apply client-side filters if provided
       if (packedBy !== undefined) {
@@ -74,7 +88,31 @@ export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, packedBy, testedBy, unshippedOnly]);
+
+  useEffect(() => {
+    fetchShipped();
+  }, [fetchShipped]);
+
+  useEffect(() => {
+    if (!unshippedOnly) return;
+
+    const handleDashboardSearch = (e: any) => {
+      setDashboardSearch(String(e?.detail?.query || '').trim());
+    };
+
+    const handleDashboardRefresh = () => {
+      fetchShipped();
+    };
+
+    window.addEventListener('dashboard-search' as any, handleDashboardSearch as any);
+    window.addEventListener('dashboard-refresh' as any, handleDashboardRefresh as any);
+
+    return () => {
+      window.removeEventListener('dashboard-search' as any, handleDashboardSearch as any);
+      window.removeEventListener('dashboard-refresh' as any, handleDashboardRefresh as any);
+    };
+  }, [unshippedOnly, fetchShipped]);
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
@@ -144,14 +182,58 @@ export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
     setSelectedShipped(record);
   };
 
-  // Group records by date (using pack_date_time)
+  const activeSearch = unshippedOnly ? dashboardSearch : search;
+  const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
+  const searchDigits = normalizedSearch.replace(/\D/g, '');
+  const last8 = searchDigits.slice(-8);
+
+  const filteredRecords = (unshippedOnly && normalizedSearch)
+    ? shipped.filter((record) => {
+        const productTitle = String(record.product_title || '').toLowerCase();
+        const orderId = String(record.order_id || '').toLowerCase();
+        const sku = String(record.sku || '').toLowerCase();
+        const tracking = String(record.shipping_tracking_number || '').toLowerCase();
+        const serial = String(record.serial_number || '').toLowerCase();
+        const queryLower = normalizedSearch.toLowerCase();
+
+        const directMatch =
+          orderId === queryLower ||
+          tracking === queryLower ||
+          productTitle.includes(queryLower) ||
+          orderId.includes(queryLower) ||
+          sku.includes(queryLower) ||
+          tracking.includes(queryLower) ||
+          serial.includes(queryLower);
+
+        const last8Match =
+          !!last8 &&
+          last8.length >= 8 &&
+          (tracking.replace(/\D/g, '').slice(-8) === last8 ||
+           orderId.replace(/\D/g, '').slice(-8) === last8);
+
+        return directMatch || last8Match;
+      })
+    : shipped;
+
+  useEffect(() => {
+    if (!unshippedOnly || !normalizedSearch) return;
+    if (filteredRecords.length === 1) {
+      handleRowClick(filteredRecords[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unshippedOnly, normalizedSearch, filteredRecords.length]);
+
+  // Group records by date (using ship_by_date for unshipped view, pack_date_time otherwise)
   const groupedShipped: { [key: string]: ShippedOrder[] } = {};
-  shipped.forEach(record => {
-    if (!record.pack_date_time || record.pack_date_time === '1') return;
+  filteredRecords.forEach(record => {
+    const dateSource = unshippedOnly
+      ? (record.ship_by_date || record.created_at)
+      : record.pack_date_time;
+    if (!dateSource || dateSource === '1') return;
     
     let date = '';
     try {
-      const dateObj = new Date(record.pack_date_time);
+      const dateObj = new Date(dateSource);
       // Use local date to avoid timezone issues
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -203,8 +285,8 @@ export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
 
   // Filter grouped data by current week (all data is weekdays, so no need to filter by day of week)
   const weekRange = getWeekRange();
-  const filteredGroupedShipped = search 
-    ? groupedShipped // Don't filter when searching
+  const filteredGroupedShipped = activeSearch || unshippedOnly
+    ? groupedShipped
     : Object.fromEntries(
         Object.entries(groupedShipped).filter(([date]) => {
           // Check if date is in range (Monday-Friday of the target week)
@@ -243,12 +325,19 @@ export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
           onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
           formatDate={formatDate}
-          rightSlot={search ? (
+          rightSlot={activeSearch ? (
             <div className="flex items-center gap-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
               <Search className="w-3 h-3" />
-              <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
+              <span className="text-[9px] font-black uppercase tracking-widest">{activeSearch}</span>
               <button 
-                onClick={() => window.history.pushState({}, '', '/shipped')}
+                onClick={() => {
+                  if (unshippedOnly) {
+                    setDashboardSearch('');
+                    window.dispatchEvent(new CustomEvent('dashboard-search', { detail: { query: '' } }));
+                  } else {
+                    window.history.pushState({}, '', '/shipped');
+                  }
+                }}
                 className="hover:text-blue-900 transition-colors"
               >
                 <X className="w-2.5 h-2.5" />
@@ -261,17 +350,24 @@ export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {Object.keys(filteredGroupedShipped).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
-              {search ? (
+              {activeSearch ? (
                 <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
                   <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Search className="w-8 h-8 text-red-400" />
                   </div>
                   <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">Order not found</h3>
                   <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                    We couldn't find any records matching "{search}"
+                    We couldn't find any records matching "{activeSearch}"
                   </p>
                   <button 
-                    onClick={() => window.history.pushState({}, '', '/shipped')}
+                    onClick={() => {
+                      if (unshippedOnly) {
+                        setDashboardSearch('');
+                        window.dispatchEvent(new CustomEvent('dashboard-search', { detail: { query: '' } }));
+                      } else {
+                        window.history.pushState({}, '', '/shipped');
+                      }
+                    }}
                     className="mt-6 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
                   >
                     Show All Orders
@@ -294,13 +390,13 @@ export function ShippedTable({ packedBy, testedBy }: ShippedTableProps = {}) {
           ) : (
             <div className="flex flex-col w-full">
               {Object.entries(filteredGroupedShipped)
-                .sort((a, b) => b[0].localeCompare(a[0]))
+                .sort((a, b) => unshippedOnly ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0]))
                 .map(([date, records]) => {
                   // Sort records within each day by pack_date_time (latest first)
                   const sortedRecords = [...records].sort((a, b) => {
                     const timeA = new Date(a.pack_date_time || 0).getTime();
                     const timeB = new Date(b.pack_date_time || 0).getTime();
-                    return timeB - timeA;
+                    return unshippedOnly ? timeA - timeB : timeB - timeA;
                   });
                   
                   return (

@@ -15,9 +15,10 @@ export default function DashboardSidebar() {
     const [searchQuery, setSearchQuery] = useState('');
 
     const handleSearch = (query: string) => {
-        if (!query.trim()) return;
-        // Search logic could go here or redirect to a search page
-        window.location.href = `/shipped?search=${encodeURIComponent(query)}`;
+        const trimmedQuery = query.trim();
+        window.dispatchEvent(new CustomEvent('dashboard-search', {
+            detail: { query: trimmedQuery }
+        }));
     };
 
     const handleSync = async () => {
@@ -32,6 +33,7 @@ export default function DashboardSidebar() {
             const data = await res.json();
             if (data.success) {
                 setStatus({ type: 'success', message: data.message || 'Sync completed successfully' });
+                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
             } else {
                 setStatus({ type: 'error', message: data.error || data.message || 'Sync failed' });
             }
@@ -59,6 +61,7 @@ export default function DashboardSidebar() {
                     ? `Successfully transferred ${data.rowCount} order${data.rowCount === 1 ? '' : 's'}` 
                     : 'Orders are already transferred';
                 setStatus({ type: 'success', message });
+                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
             } else {
                 setStatus({ type: 'error', message: data.error || 'Transfer failed' });
             }
@@ -81,6 +84,7 @@ export default function DashboardSidebar() {
             const data = await res.json();
             if (data.success) {
                 setStatus({ type: 'success', message: data.message });
+                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
             } else {
                 setStatus({ type: 'error', message: data.error || 'Script execution failed' });
             }
@@ -97,7 +101,7 @@ export default function DashboardSidebar() {
             name: 'Orders',
             icon: <Database className="w-4 h-4" />,
             scripts: [
-                { id: 'updateNonshippedOrders', name: 'Update Nonshipped Orders' }
+                { id: 'updateNonshippedOrders', name: 'Check Unshipped Orders' }
             ]
         },
         {
@@ -158,6 +162,10 @@ export default function DashboardSidebar() {
                                 </button>
                             }
                         />
+                        <div className="text-center -mt-1">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">pening orders</p>
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mt-1">orders sorted by ship by dates</p>
+                        </div>
 
                         {/* Order Management Tools */}
                         <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">

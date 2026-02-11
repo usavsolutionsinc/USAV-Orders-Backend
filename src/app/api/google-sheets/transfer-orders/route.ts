@@ -123,6 +123,7 @@ export async function POST(req: NextRequest) {
         const colIndices = {
             shipByDate: headerRow.indexOf('Ship by date'),
             orderNumber: headerRow.indexOf('Order Number'),
+            itemNumber: headerRow.indexOf('Item Number'),
             itemTitle: headerRow.indexOf('Item title'),
             quantity: headerRow.indexOf('Quantity'),
             usavSku: headerRow.indexOf('USAV SKU'),
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
 
         // Prepare data for Google Sheets (legacy support)
         const processedOrdersRows = filteredSourceRows.map(row => {
-            const destRow = new Array(10).fill(''); // A to J
+            const destRow = new Array(11).fill(''); // A to K
             destRow[0] = row[colIndices.shipByDate] || '';
             destRow[1] = row[colIndices.orderNumber] || '';
             destRow[2] = row[colIndices.itemTitle] || '';
@@ -173,6 +174,7 @@ export async function POST(req: NextRequest) {
             destRow[6] = row[colIndices.tracking] || '';
             // I (index 8) is blank
             destRow[9] = row[colIndices.note] || ''; // J (index 9)
+            destRow[10] = row[colIndices.itemNumber] || ''; // K (index 10) = Item Number
             return destRow;
         });
 
@@ -221,6 +223,7 @@ export async function POST(req: NextRequest) {
                     ordersToInsert.push({
                         shipByDate,
                         orderId: orderId,
+                        itemNumber: row[colIndices.itemNumber] || '',
                         productTitle: row[colIndices.itemTitle] || '',
                         sku: row[colIndices.usavSku] || '',
                         condition: row[colIndices.condition] || '',
@@ -240,6 +243,7 @@ export async function POST(req: NextRequest) {
                 ordersToInsert.push({
                     shipByDate,
                     orderId: orderId,
+                    itemNumber: row[colIndices.itemNumber] || '',
                     productTitle: row[colIndices.itemTitle] || '',
                     sku: row[colIndices.usavSku] || '',
                     condition: row[colIndices.condition] || '',

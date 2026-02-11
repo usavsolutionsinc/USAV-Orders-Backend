@@ -67,6 +67,7 @@ export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   shipByDate: timestamp('ship_by_date'),
   orderId: text('order_id'),
+  itemNumber: text('item_number'),
   productTitle: text('product_title'),
   sku: text('sku'),
   condition: text('condition'),

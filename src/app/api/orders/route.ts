@@ -9,9 +9,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
     const assignedTo = searchParams.get('assignedTo');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = (page - 1) * limit;
 
     let query = `
       SELECT 
@@ -29,7 +26,7 @@ export async function GET(req: NextRequest) {
         is_shipped,
         created_at
       FROM orders
-      WHERE 1=1
+      WHERE (is_shipped = false OR is_shipped IS NULL)
     `;
     const params: any[] = [];
     let paramCount = 1;
@@ -46,15 +43,12 @@ export async function GET(req: NextRequest) {
       params.push(assignedTo);
     }
 
-    query += ` ORDER BY ship_by_date ASC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
-    params.push(limit, offset);
+    query += ` ORDER BY ship_by_date ASC`;
 
     const result = await pool.query(query, params);
 
     return NextResponse.json({
       orders: result.rows,
-      page,
-      limit,
       count: result.rows.length,
     });
   } catch (error: any) {

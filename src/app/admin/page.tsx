@@ -22,6 +22,7 @@ interface Order {
     order_id: string;
     product_title: string;
     sku: string;
+    shipping_tracking_number: string | null;
     tester_id: number | null;
     packer_id: number | null;
     out_of_stock: string | null;
@@ -665,27 +666,45 @@ function OrdersManagement({
                                 </div>
 
                                 <div className="flex-1 text-left">
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <h3 className="text-base font-black text-gray-900">
-                                                    {order.product_title}
-                                                </h3>
-                                            </div>
-                                            <div className="flex items-center gap-3 text-[9px] font-bold text-gray-500 uppercase tracking-widest">
-                                                <ShipByDate date={order.ship_by_date || order.created_at} />
-                                                <span>•</span>
-                                                <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-700 font-mono">#{order.order_id}</span>
-                                                <span>•</span>
-                                                <span>SKU: {order.sku}</span>
-                                            </div>
-                                        </div>
-                                        
-                                        {order.out_of_stock && (
-                                            <span className="px-3 py-1 rounded-xl text-[8px] font-black uppercase tracking-widest bg-orange-100 text-orange-700">
-                                                {order.out_of_stock}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <ShipByDate date={order.ship_by_date} />
+                                        <div className="flex items-center gap-2">
+                                            {order.out_of_stock && (
+                                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-orange-100 text-orange-700">
+                                                    Out of Stock
+                                                </span>
+                                            )}
+                                            <span className="text-[9px] font-mono font-black text-gray-700">
+                                                #{order.order_id}
                                             </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <h3 className="text-base font-black text-gray-900 leading-tight">
+                                            {order.product_title}
+                                        </h3>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                        {order.shipping_tracking_number && (
+                                            <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                                                    Tracking #
+                                                </p>
+                                                <p className="text-xs font-mono font-bold text-gray-800">
+                                                    {order.shipping_tracking_number.slice(-4)}
+                                                </p>
+                                            </div>
                                         )}
+                                        <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                                                SKU
+                                            </p>
+                                            <p className="text-xs font-mono font-bold text-gray-800">
+                                                {order.sku}
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center gap-2">

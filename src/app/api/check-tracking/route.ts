@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
                 in_orders: ordersResult.rows.length > 0,
                 in_packer_logs: packerLogsResult.rows.length > 0,
                 is_shipped: ordersResult.rows[0]?.is_shipped,
-                has_packed_by: ordersResult.rows[0]?.packed_by != null,
+                has_packer_id: ordersResult.rows[0]?.packer_id != null,
                 packer_id: ordersResult.rows[0]?.packer_id,
                 tester_id: ordersResult.rows[0]?.tester_id
             }

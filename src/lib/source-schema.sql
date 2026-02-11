@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     ship_by_date TEXT,
     order_id TEXT,
+    item_number TEXT,
     product_title TEXT,
     quantity TEXT,
     sku TEXT,
@@ -192,4 +193,3 @@ AND table_name IN (
     'shipped', 'sku_stock', 'sku', 'repair_service'
 )
 ORDER BY table_name;
-

@@ -35,6 +35,7 @@ export async function POST() {
                 id SERIAL PRIMARY KEY,
                 ship_by_date TEXT,
                 order_id TEXT,
+                item_number TEXT,
                 product_title TEXT,
                 quantity TEXT,
                 sku TEXT,
@@ -233,4 +234,3 @@ export async function GET() {
         }, { status: 500 });
     }
 }
-

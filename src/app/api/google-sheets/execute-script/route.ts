@@ -73,13 +73,99 @@ async function executeUpdateNonshippedOrders() {
     const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
 
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-    const sheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
+    const sheetInfos = spreadsheet.data.sheets || [];
+    const sheetNames = sheetInfos.map(s => s.properties?.title || '');
     const ordersSheetName = sheetNames.find(s => s.toLowerCase() === 'orders');
+    const shippedSheetName = sheetNames.find(s => s.toLowerCase() === 'shipped');
 
     if (!ordersSheetName) {
         return NextResponse.json({ success: false, error: 'Orders sheet not found' }, { status: 404 });
     }
+    if (!shippedSheetName) {
+        return NextResponse.json({ success: false, error: 'Shipped sheet not found' }, { status: 404 });
+    }
 
+    const getLastEightDigits = (value: any) => {
+        const digits = String(value || '').replace(/\D/g, '');
+        return digits.slice(-8);
+    };
+
+    // Step 1: GAS-equivalent transferExistingOrdersToRestock:
+    // Delete Orders rows where Shipped has timestamp + matching tracking/order id.
+    let deletedFromOrdersSheet = 0;
+    const ordersSheetId = sheetInfos.find(s => s.properties?.title === ordersSheetName)?.properties?.sheetId;
+    if (ordersSheetId !== undefined) {
+        const [shippedResponse, ordersIdsResponse, ordersTrackingResponse] = await Promise.all([
+            sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${shippedSheetName}!A2:F`,
+            }),
+            sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${ordersSheetName}!B2:B`,
+            }),
+            sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${ordersSheetName}!G2:G`,
+            }),
+        ]);
+
+        const shippedRows = shippedResponse.data.values || [];
+        const ordersIdRows = ordersIdsResponse.data.values || [];
+        const ordersTrackingRows = ordersTrackingResponse.data.values || [];
+
+        const shippedTrackings = new Set<string>();
+        const shippedOrderIds = new Set<string>();
+
+        for (const row of shippedRows) {
+            const timestamp = String(row[0] || '').trim(); // A
+            const orderId = String(row[1] || '').trim(); // B
+            const tracking = String(row[5] || '').trim(); // F
+            if (!timestamp) continue;
+            if (tracking) shippedTrackings.add(getLastEightDigits(tracking));
+            if (orderId) shippedOrderIds.add(orderId);
+        }
+
+        const rowsToDelete = new Set<number>();
+
+        for (let i = 0; i < ordersTrackingRows.length; i++) {
+            const tracking = String(ordersTrackingRows[i]?.[0] || '').trim();
+            if (!tracking) continue;
+            if (shippedTrackings.has(getLastEightDigits(tracking))) {
+                rowsToDelete.add(i + 2); // A1 header offset
+            }
+        }
+
+        for (let i = 0; i < ordersIdRows.length; i++) {
+            const orderId = String(ordersIdRows[i]?.[0] || '').trim();
+            if (!orderId) continue;
+            if (shippedOrderIds.has(orderId)) {
+                rowsToDelete.add(i + 2); // A1 header offset
+            }
+        }
+
+        const sortedRowsToDelete = Array.from(rowsToDelete).sort((a, b) => b - a);
+        if (sortedRowsToDelete.length > 0) {
+            await sheets.spreadsheets.batchUpdate({
+                spreadsheetId,
+                requestBody: {
+                    requests: sortedRowsToDelete.map((rowNumber) => ({
+                        deleteDimension: {
+                            range: {
+                                sheetId: ordersSheetId,
+                                dimension: 'ROWS',
+                                startIndex: rowNumber - 1, // 0-based inclusive
+                                endIndex: rowNumber, // 0-based exclusive
+                            },
+                        },
+                    })),
+                },
+            });
+            deletedFromOrdersSheet = sortedRowsToDelete.length;
+        }
+    }
+
+    // Step 2: Re-read remaining Orders G column and sync DB shipped state.
     const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${ordersSheetName}!G2:G`,
@@ -125,7 +211,7 @@ async function executeUpdateNonshippedOrders() {
 
     return NextResponse.json({
         success: true,
-        message: `Marked all orders shipped, then set ${updatedCount} matching Orders sheet column G to non-shipped.`,
+        message: `Processed Orders sheet cleanup (deleted ${deletedFromOrdersSheet} row(s)), then marked all DB orders shipped and set ${updatedCount} matching Orders sheet column G tracking row(s) to non-shipped.`,
     });
 }
 

@@ -135,12 +135,12 @@ export async function POST(req: NextRequest) {
 
             await pool.query(`
                 UPDATE orders
-                SET packed_by = $1,
+                SET packer_id = $1,
                     is_shipped = true,
-                    packer_photos_url = $2::jsonb,
                     status = 'shipped'
-                WHERE id = $3
-            `, [staffId, photosJsonb, order.id]);
+                WHERE id = $2
+                AND is_shipped = false
+            `, [staffId, order.id]);
 
             await pool.query(`
                 INSERT INTO packer_logs (

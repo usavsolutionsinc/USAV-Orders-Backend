@@ -86,17 +86,17 @@ export async function POST(req: NextRequest) {
       const packerLogId = insertResult.rows[0]?.id;
       console.log('Inserted into packer_logs, ID:', packerLogId);
 
-      // 2. Update orders table - set is_shipped to true and update photos
+      // 2. Update orders table - set is_shipped to true only if not already shipped
       const updateResult = await client.query(`
         UPDATE orders
         SET 
           is_shipped = true,
           status = 'shipped',
-          packed_by = $1,
-          packer_photos_url = $2::jsonb
-        WHERE shipping_tracking_number = $3
+          packer_id = $1
+        WHERE shipping_tracking_number = $2
+        AND is_shipped = false
         RETURNING id, order_id
-      `, [staffId, photosJsonb, shippingTrackingNumber]);
+      `, [staffId, shippingTrackingNumber]);
 
       if (updateResult.rows.length === 0) {
         console.warn('No order found with tracking number:', shippingTrackingNumber);

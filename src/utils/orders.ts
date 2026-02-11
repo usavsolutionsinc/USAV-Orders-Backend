@@ -3,6 +3,7 @@ import { defineSchema } from './lib';
 export default defineSchema('orders', [
   { name: 'id', type: 'SERIAL', primaryKey: true },
   { name: 'order_id', type: 'TEXT' },
+  { name: 'item_number', type: 'TEXT' },
   { name: 'product_title', type: 'TEXT' },
   { name: 'condition', type: 'TEXT' },
   { name: 'shipping_tracking_number', type: 'TEXT' },

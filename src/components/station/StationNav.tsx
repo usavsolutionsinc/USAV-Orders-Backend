@@ -85,8 +85,13 @@ export default function StationNav() {
         }
     };
 
+    const isPathActive = (href: string) => {
+        if (!pathname) return false;
+        return pathname === href || pathname.startsWith(`${href}/`);
+    };
+
     const renderNavItem = (item: any, isQuickAccess = false) => {
-        const isActive = pathname.startsWith(item.href);
+        const isActive = isPathActive(item.href);
         const Icon = item.icon;
         
         return (
