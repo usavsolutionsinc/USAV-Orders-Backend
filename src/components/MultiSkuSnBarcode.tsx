@@ -69,7 +69,8 @@ export default function MultiSkuSnBarcode() {
     const fetchProductInfo = async (skuValue: string) => {
         setIsLoadingTitle(true);
         try {
-            const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(skuValue))}`);
+            const baseSku = skuValue.includes(':') ? skuValue.split(':')[0] : skuValue;
+            const res = await fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(normalizeSku(baseSku))}`);
             const data = await res.json();
             setTitle(data.title || "Not found");
             setStock(data.stock || "0");
@@ -88,8 +89,15 @@ export default function MultiSkuSnBarcode() {
             return;
         }
         await fetchProductInfo(sku);
-        
-        if ((mode === 'print' || mode === 'reprint') && !uniqueSku) {
+
+        if (mode === 'reprint') {
+            // Reprint exact same label value; no increment/current backend calls.
+            setUniqueSku(sku.trim());
+            setStep(3);
+            return;
+        }
+
+        if (mode === 'print' && !uniqueSku) {
             setIsGenerating(true);
             try {
                 const res = await fetch(`/api/sku-manager?baseSku=${encodeURIComponent(normalizeSku(sku))}&action=current`);
@@ -105,11 +113,6 @@ export default function MultiSkuSnBarcode() {
             }
         }
 
-        if (mode === 'reprint') {
-            setStep(3);
-            return;
-        }
-        
         setStep(2);
         setTimeout(() => snInputRef.current?.focus(), 100);
     };

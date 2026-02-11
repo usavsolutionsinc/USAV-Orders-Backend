@@ -162,9 +162,9 @@ export default function DashboardSidebar() {
                                 </button>
                             }
                         />
-                        <div className="text-center -mt-1">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">pening orders</p>
-                            <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mt-1">orders sorted by ship by dates</p>
+                        <div className="-mt-1 text-left">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Click for an order for more details</p>
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mt-1">orders are sorted by ship by dates</p>
                         </div>
 
                         {/* Order Management Tools */}

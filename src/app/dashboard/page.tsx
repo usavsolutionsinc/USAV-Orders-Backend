@@ -33,7 +33,7 @@ export default function DashboardPage() {
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                 </div>
             }>
-                <ShippedTable unshippedOnly />
+                <ShippedTable unshippedOnly showTimeColumn={false} />
             </Suspense>
 
             <AnimatePresence>

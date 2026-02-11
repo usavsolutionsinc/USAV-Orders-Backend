@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Pencil, Check, X, Wrench, Package, Search, RefreshCw } from '@/components/Icons';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, RefreshCw } from '@/components/Icons';
+import { motion } from 'framer-motion';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ShipByDate } from '@/components/ui/ShipByDate';
-import DeleteOrdersButton from '@/components/ui/DeleteOrdersButton';
 
 interface Staff {
     id: number;
@@ -41,7 +40,6 @@ interface EbayAccount {
 export default function AdminPage() {
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<'staff' | 'orders'>('orders');
-    const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
     
     // Staff state
     const [isAddingStaff, setIsAddingStaff] = useState(false);
@@ -220,175 +218,18 @@ export default function AdminPage() {
                             </div>
                         </div>
                     ) : (
-                        <OrdersManagement 
-                            staff={staff} 
-                            selectedOrderIds={selectedOrderIds}
-                            setSelectedOrderIds={setSelectedOrderIds}
-                        />
+                        <OrdersManagement />
                     )}
                 </div>
             </div>
-
-            {/* Assignment Sidebar - Right Side */}
-            <AnimatePresence>
-                {selectedOrderIds.length > 0 && (
-                    <motion.div
-                        initial={{ x: '100%' }}
-                        animate={{ x: 0 }}
-                        exit={{ x: '100%' }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-                        className="fixed inset-y-0 right-0 w-[240px] bg-white border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)] z-[100] overflow-y-auto no-scrollbar"
-                    >
-                        {/* Header */}
-                        <div className="sticky top-0 bg-white/90 backdrop-blur-xl border-b border-gray-100 p-5 flex items-center justify-between z-10">
-                            <div className="flex flex-col text-left">
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-600 mb-1">Selection</span>
-                                <h2 className="text-lg font-black text-gray-900 tracking-tighter leading-none">
-                                    {selectedOrderIds.length} Order{selectedOrderIds.length !== 1 ? 's' : ''}
-                                </h2>
-                            </div>
-                            <button 
-                                onClick={() => setSelectedOrderIds([])} 
-                                className="p-1.5 hover:bg-gray-50 rounded-xl transition-all border border-transparent hover:border-gray-100"
-                            >
-                                <X className="w-5 h-5 text-gray-400" />
-                            </button>
-                        </div>
-
-                        <div className="p-5 space-y-8">
-                            {/* Technicians Section */}
-                            <section className="space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                                        <Wrench className="w-3.5 h-3.5" />
-                                    </div>
-                                    <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-900">
-                                        Technicians
-                                    </h3>
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                    {staff.filter(s => s.role === 'technician' && s.active).map(member => (
-                                        <button
-                                            key={member.id}
-                                            onClick={() => {
-                                                fetch('/api/orders/assign', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ orderIds: selectedOrderIds, testerId: member.id }),
-                                                }).then(() => {
-                                                    queryClient.invalidateQueries({ queryKey: ['orders'] });
-                                                    setSelectedOrderIds([]);
-                                                });
-                                            }}
-                                            className="w-full px-4 py-2.5 bg-gray-50 hover:bg-blue-600 text-gray-700 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border border-gray-100 hover:border-blue-400 shadow-sm text-left"
-                                        >
-                                            {member.name}
-                                        </button>
-                                    ))}
-                                    <button
-                                        onClick={() => {
-                                            fetch('/api/orders/assign', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({ orderIds: selectedOrderIds, testerId: 0 }),
-                                            }).then(() => {
-                                                queryClient.invalidateQueries({ queryKey: ['orders'] });
-                                                setSelectedOrderIds([]);
-                                            });
-                                        }}
-                                        className="w-full px-4 py-2.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border border-red-100 hover:border-red-400 shadow-sm text-left"
-                                    >
-                                        Unassign Tech
-                                    </button>
-                                </div>
-                            </section>
-
-                            {/* Packers Section */}
-                            <section className="space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                                        <Package className="w-3.5 h-3.5" />
-                                    </div>
-                                    <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-900">
-                                        Packers
-                                    </h3>
-                                </div>
-                                <div className="flex flex-col gap-1.5">
-                                    {staff.filter(s => s.role === 'packer' && s.active).map(member => (
-                                        <button
-                                            key={member.id}
-                                            onClick={() => {
-                                                fetch('/api/orders/assign', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ orderIds: selectedOrderIds, packerId: member.id }),
-                                                }).then(() => {
-                                                    queryClient.invalidateQueries({ queryKey: ['orders'] });
-                                                    setSelectedOrderIds([]);
-                                                });
-                                            }}
-                                            className="w-full px-4 py-2.5 bg-gray-50 hover:bg-blue-600 text-gray-700 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border border-gray-100 hover:border-blue-400 shadow-sm text-left"
-                                        >
-                                            {member.name}
-                                        </button>
-                                    ))}
-                                    <button
-                                        onClick={() => {
-                                            fetch('/api/orders/assign', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({ orderIds: selectedOrderIds, packerId: 0 }),
-                                            }).then(() => {
-                                                queryClient.invalidateQueries({ queryKey: ['orders'] });
-                                                setSelectedOrderIds([]);
-                                            });
-                                        }}
-                                        className="w-full px-4 py-2.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border border-red-100 hover:border-red-400 shadow-sm text-left"
-                                    >
-                                        Unassign Packer
-                                    </button>
-                                </div>
-                            </section>
-
-                            {/* Quick Actions */}
-                            <section className="pt-6 border-t border-gray-100">
-                                <DeleteOrdersButton
-                                    orderIds={selectedOrderIds}
-                                    className="w-full py-3.5 mb-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-all active:scale-[0.98] shadow-lg shadow-red-600/20"
-                                    onDeleted={() => {
-                                        queryClient.invalidateQueries({ queryKey: ['orders'] });
-                                        setSelectedOrderIds([]);
-                                    }}
-                                    confirmMessage="Delete selected order(s)? This cannot be undone."
-                                    label="Delete Selected"
-                                />
-                                <button
-                                    onClick={() => setSelectedOrderIds([])}
-                                    className="w-full py-3.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-[0.98] shadow-lg shadow-blue-600/20"
-                                >
-                                    Done
-                                </button>
-                            </section>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </div>
     );
 }
 
 // Orders Management Component
-function OrdersManagement({ 
-    staff, 
-    selectedOrderIds, 
-    setSelectedOrderIds 
-}: { 
-    staff: Staff[]; 
-    selectedOrderIds: number[];
-    setSelectedOrderIds: (ids: number[] | ((prev: number[]) => number[])) => void;
-}) {
+function OrdersManagement() {
     const queryClient = useQueryClient();
-    const [filterTab, setFilterTab] = useState<'out of stock' | 'unassigned' | 'assigned' | 'all'>('all');
+    const [filterTab, setFilterTab] = useState<'out of stock' | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
 
     // Fetch eBay accounts
@@ -450,8 +291,6 @@ function OrdersManagement({
         // Filter by tab
         const matchesTab = (() => {
             if (filterTab === 'out of stock') return order.out_of_stock && (order.is_shipped === false || !order.is_shipped);
-            if (filterTab === 'assigned') return order.tester_id || order.packer_id;
-            if (filterTab === 'unassigned') return !order.tester_id && !order.packer_id;
             return true;
         })();
 
@@ -462,27 +301,6 @@ function OrdersManagement({
 
         return matchesTab && matchesSearch;
     });
-
-    const handleSelectOrder = (orderId: number) => {
-        setSelectedOrderIds(prev => 
-            prev.includes(orderId) 
-                ? prev.filter(id => id !== orderId)
-                : [...prev, orderId]
-        );
-    };
-
-    const handleSelectAll = () => {
-        if (selectedOrderIds.length === orders.length) {
-            setSelectedOrderIds([]);
-        } else {
-            setSelectedOrderIds(orders.map(o => o.id));
-        }
-    };
-
-    const getStaffName = (id: number | null) => {
-        if (!id) return null;
-        return staff.find(s => s.id === id)?.name || `ID: ${id}`;
-    };
 
     return (
         <div className="space-y-4">
@@ -600,7 +418,7 @@ function OrdersManagement({
 
                 {/* Filter Tabs */}
                 <div className="flex gap-2 p-1 bg-white rounded-2xl border border-gray-200 shadow-sm w-fit">
-                    {(['out of stock', 'unassigned', 'assigned', 'all'] as const).map((tab) => (
+                    {(['out of stock', 'all'] as const).map((tab) => (
                         <button
                             key={tab}
                             onClick={() => setFilterTab(tab)}
@@ -619,24 +437,10 @@ function OrdersManagement({
             </div>
 
             <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-200 shadow-sm">
-                <div className="flex items-center gap-3">
-                    <button 
-                        onClick={handleSelectAll}
-                        className="w-5 h-5 border-2 border-gray-300 rounded-md flex items-center justify-center transition-all hover:border-blue-500"
-                    >
-                        {selectedOrderIds.length === orders.length && orders.length > 0 && (
-                            <div className="w-2.5 h-2.5 bg-blue-600 rounded-sm" />
-                        )}
-                    </button>
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">
-                        {selectedOrderIds.length > 0 
-                            ? `${selectedOrderIds.length} Selected` 
-                            : 'Order Management'}
-                    </h2>
-                </div>
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Order Management</h2>
             </div>
 
-            <div className="grid gap-3 pb-32">
+            <div className="grid gap-3">
                 {orders.length === 0 ? (
                     <div className="p-8 text-center bg-white rounded-3xl border border-gray-200">
                         <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
@@ -645,89 +449,40 @@ function OrdersManagement({
                     </div>
                 ) : (
                     orders.map((order) => (
-                        <div 
-                            key={order.id} 
-                            onClick={() => handleSelectOrder(order.id)}
-                            className={`p-5 rounded-3xl border transition-all cursor-pointer ${
-                                selectedOrderIds.includes(order.id) 
-                                    ? 'bg-blue-50 border-blue-200 shadow-sm' 
-                                    : 'bg-white border-gray-200 hover:shadow-sm'
-                            }`}
-                        >
-                            <div className="flex items-start gap-4">
-                                <div className="pt-1">
-                                    <div className={`w-5 h-5 border-2 rounded-md flex items-center justify-center transition-all ${
-                                        selectedOrderIds.includes(order.id)
-                                            ? 'bg-blue-600 border-blue-600'
-                                            : 'border-gray-300'
-                                    }`}>
-                                        {selectedOrderIds.includes(order.id) && <Check className="w-3.5 h-3.5 text-white" />}
+                        <div key={order.id} className="bg-white border border-gray-200 hover:shadow-sm p-5 rounded-3xl transition-all">
+                            <div className="flex-1 text-left">
+                                <div className="flex items-center justify-between mb-2">
+                                    <ShipByDate date={order.ship_by_date} />
+                                    <div className="flex items-center gap-2">
+                                        {order.out_of_stock && (
+                                            <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-orange-100 text-orange-700">
+                                                Out of Stock
+                                            </span>
+                                        )}
+                                        <span className="text-[9px] font-mono font-black text-gray-700">#{order.order_id}</span>
                                     </div>
                                 </div>
 
-                                <div className="flex-1 text-left">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <ShipByDate date={order.ship_by_date} />
-                                        <div className="flex items-center gap-2">
-                                            {order.out_of_stock && (
-                                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-orange-100 text-orange-700">
-                                                    Out of Stock
-                                                </span>
-                                            )}
-                                            <span className="text-[9px] font-mono font-black text-gray-700">
-                                                #{order.order_id}
-                                            </span>
-                                        </div>
-                                    </div>
+                                <div className="mb-4">
+                                    <h3 className="text-base font-black text-gray-900 leading-tight">{order.product_title}</h3>
+                                </div>
 
-                                    <div className="mb-4">
-                                        <h3 className="text-base font-black text-gray-900 leading-tight">
-                                            {order.product_title}
-                                        </h3>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3 mb-3">
-                                        {order.shipping_tracking_number && (
-                                            <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
-                                                    Tracking #
-                                                </p>
-                                                <p className="text-xs font-mono font-bold text-gray-800">
-                                                    {order.shipping_tracking_number.slice(-4)}
-                                                </p>
-                                            </div>
-                                        )}
+                                <div className="grid grid-cols-2 gap-3">
+                                    {order.shipping_tracking_number && (
                                         <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
-                                                SKU
+                                                Tracking #
                                             </p>
                                             <p className="text-xs font-mono font-bold text-gray-800">
-                                                {order.sku}
+                                                {order.shipping_tracking_number.slice(-4)}
                                             </p>
                                         </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        {order.tester_id ? (
-                                            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                                                <Wrench className="w-3 h-3" />
-                                                Tester: {getStaffName(order.tester_id)}
-                                            </span>
-                                        ) : (
-                                            <span className="px-3 py-1.5 bg-gray-50 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-dashed border-gray-200">
-                                                Tester: Unassigned
-                                            </span>
-                                        )}
-                                        {order.packer_id ? (
-                                            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                                                <Package className="w-3 h-3" />
-                                                Packer: {getStaffName(order.packer_id)}
-                                            </span>
-                                        ) : (
-                                            <span className="px-3 py-1.5 bg-gray-50 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-dashed border-gray-200">
-                                                Packer: Unassigned
-                                            </span>
-                                        )}
+                                    )}
+                                    <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
+                                            SKU
+                                        </p>
+                                        <p className="text-xs font-mono font-bold text-gray-800">{order.sku}</p>
                                     </div>
                                 </div>
                             </div>

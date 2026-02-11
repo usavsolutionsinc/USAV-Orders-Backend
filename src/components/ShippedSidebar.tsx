@@ -209,7 +209,7 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
                             }
                         />
                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
-                            Click a Shipped Row for More Details.
+                            Click a Shipped Row for More Details
                         </p>
 
                         {/* Search Results */}

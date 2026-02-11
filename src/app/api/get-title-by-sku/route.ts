@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { google } from 'googleapis';
-import { getGoogleAuth } from '@/lib/google-auth';
+import pool from '@/lib/db';
+import { normalizeSku } from '@/utils/sku';
 
 export async function GET(request: NextRequest) {
     try {
@@ -11,38 +11,23 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Missing sku query param' }, { status: 400 });
         }
 
-        const auth = getGoogleAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
-        
-        const spreadsheetId = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
-        const range = "'Sku-Stock'!A:D";
+        const normalizedInputSku = normalizeSku(String(sku).trim());
+        const result = await pool.query(
+            `SELECT stock, sku, size, product_title
+             FROM sku_stock`
+        );
 
-        const { data } = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range,
-            majorDimension: 'ROWS',
-        });
+        for (const row of result.rows) {
+            const rowSku = String(row.sku || '').trim();
+            if (!rowSku) continue;
+            if (normalizeSku(rowSku) !== normalizedInputSku) continue;
 
-        const rows = data.values || [];
-        const normalizedInputSku = String(sku).trim().replace(/^0+/, '') || '0';
-
-        for (const row of rows) {
-            const stock = row[0]; // Column A
-            const rowSku = row[1]; // Column B
-            const location = row[2]; // Column C
-            const title = row[3]; // Column D
-
-            if (rowSku) {
-                const normalizedRowSku = String(rowSku).trim().replace(/^0+/, '') || '0';
-                if (normalizedRowSku === normalizedInputSku) {
-                    return NextResponse.json({
-                        sku,
-                        title: title || '',
-                        stock: stock ? String(stock).trim() : '0',
-                        location: location || ''
-                    });
-                }
-            }
+            return NextResponse.json({
+                sku,
+                title: row.product_title || '',
+                stock: row.stock ? String(row.stock).trim() : '0',
+                location: row.size || ''
+            });
         }
 
         return NextResponse.json({ sku, title: '', stock: '0', location: '' });
@@ -51,4 +36,3 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
 }
-

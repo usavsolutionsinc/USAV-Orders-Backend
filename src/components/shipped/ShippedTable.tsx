@@ -29,9 +29,10 @@ interface ShippedTableProps {
   packedBy?: number; // Filter by packer ID
   testedBy?: number; // Filter by tester ID
   unshippedOnly?: boolean;
+  showTimeColumn?: boolean;
 }
 
-export function ShippedTable({ packedBy, testedBy, unshippedOnly = false }: ShippedTableProps = {}) {
+export function ShippedTable({ packedBy, testedBy, unshippedOnly = false, showTimeColumn = true }: ShippedTableProps = {}) {
   const searchParams = useSearchParams();
   const search = searchParams.get('search') || '';
   const [shipped, setShipped] = useState<ShippedOrder[]>([]);
@@ -419,24 +420,25 @@ export function ShippedTable({ packedBy, testedBy, unshippedOnly = false }: Ship
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[60px_1fr_94px_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                          className={`grid ${showTimeColumn ? 'grid-cols-[60px_1fr_94px_auto_70px]' : 'grid-cols-[1fr_94px_auto_70px]'} items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
-                          {/* 1. Time */}
-                          <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left flex items-center gap-2">
-                            {hasAlert && <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-pulse" />}
-                            {ts && ts !== '1' ? (
-                              (() => {
-                                try {
-                                  const dateObj = new Date(ts);
-                                  return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                                } catch {
-                                  return '--:--';
-                                }
-                              })()
-                            ) : '--:--'}
-                          </div>
+                          {showTimeColumn && (
+                            <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left flex items-center gap-2">
+                              {hasAlert && <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-pulse" />}
+                              {ts && ts !== '1' ? (
+                                (() => {
+                                  try {
+                                    const dateObj = new Date(ts);
+                                    return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                                  } catch {
+                                    return '--:--';
+                                  }
+                                })()
+                              ) : '--:--'}
+                            </div>
+                          )}
                           
                           {/* 2. Product Title, Tested By, Packed By, Condition & SKU */}
                           <div className="flex flex-col min-w-0">
