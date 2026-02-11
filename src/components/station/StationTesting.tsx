@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
 import confetti from 'canvas-confetti';
-import { 
+import {
   Search, 
   Check, 
   X, 
@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   AlertCircle
 } from '../Icons';
+import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 
 interface StationTestingProps {
     userId: string;
@@ -67,6 +68,7 @@ export default function StationTesting({
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
+    const { normalizeTrackingQuery } = useLast8TrackingSearch();
     
     // Auto-clear messages after 3 seconds
     useEffect(() => {
@@ -111,6 +113,8 @@ export default function StationTesting({
 
     const detectType = (val: string) => {
         const input = val.trim();
+        const digitsOnly = input.replace(/\D/g, '');
+        if (digitsOnly.length >= 8) return 'TRACKING';
         
         // Priority 1: SKU with colon (from Working GAS logic)
         if (input.includes(':')) return 'SKU';
@@ -118,7 +122,7 @@ export default function StationTesting({
         // Priority 2: Tracking number regex (includes FNSKU X0/B0)
         // X0 and B0 FNSKU codes are treated as tracking numbers
         if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420|X0|B0|FBA)/i)) return 'TRACKING';
-        
+
         // Commands
         if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input.toUpperCase())) return 'COMMAND';
         
@@ -140,8 +144,9 @@ export default function StationTesting({
         if (type === 'TRACKING') {
             setIsLoading(true);
             try {
-                // Call NEW scan-tracking API
-                const res = await fetch(`/api/tech/scan-tracking?tracking=${encodeURIComponent(input)}&techId=${userId}`);
+                // Call NEW scan-tracking API (use shared last-8 normalization)
+                const normalizedTracking = normalizeTrackingQuery(input);
+                const res = await fetch(`/api/tech/scan-tracking?tracking=${encodeURIComponent(normalizedTracking)}&techId=${userId}`);
                 const data = await res.json();
                 
                 if (!data.found) {
@@ -158,7 +163,7 @@ export default function StationTesting({
                     sku: data.order.sku,
                     condition: data.order.condition,
                     notes: data.order.notes,
-                    tracking: input,
+                    tracking: data.order.tracking,
                     serialNumbers: data.order.serialNumbers || [],
                     testDateTime: data.order.testDateTime,
                     testedBy: data.order.testedBy
@@ -322,7 +327,8 @@ export default function StationTesting({
 
         setIsSearching(true);
         try {
-            const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(searchQuery)}`);
+            const normalizedQuery = normalizeTrackingQuery(searchQuery);
+            const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(normalizedQuery)}`);
             const data = await res.json();
             
             if (data.results) {
@@ -443,12 +449,12 @@ export default function StationTesting({
 
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
-                                            <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.sku}</p>
-                                        </div>
-                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
                                             <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order</p>
                                             <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.orderId}</p>
+                                        </div>
+                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
+                                            <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.sku}</p>
                                         </div>
                                     </div>
 
@@ -485,11 +491,7 @@ export default function StationTesting({
                                         </div>
                                     )}
 
-                                    <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200">
-                                        <p className="text-[10px] font-bold text-gray-600 text-center uppercase tracking-widest">
-                                            Scan serial numbers or type "YES" to complete
-                                        </p>
-                                    </div>
+                                    {/* Removed serial scan / YES hint */}
                                 </div>
                             </motion.div>
                         ) : null}

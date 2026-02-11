@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { normalizeTrackingLast8 } from '@/lib/tracking-format';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -15,10 +16,63 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        // Match by last 8 digits of tracking number
-        const last8 = tracking.slice(-8).toLowerCase();
+        // Match by last 8 digits of tracking number (digits-only)
+        const last8 = normalizeTrackingLast8(tracking).toLowerCase();
+        const techIdNum = parseInt(techId, 10);
+        if (!techIdNum) {
+            return NextResponse.json({ error: 'Invalid Tech ID' }, { status: 400 });
+        }
 
-        // Query orders table
+        const staffResult = await pool.query(
+            `SELECT id FROM staff WHERE id = $1 LIMIT 1`,
+            [techIdNum]
+        );
+        if (staffResult.rows.length === 0) {
+            return NextResponse.json({ error: 'Tech not found in staff table' }, { status: 404 });
+        }
+        const testedBy = staffResult.rows[0].id;
+
+        // First check tech_serial_numbers for an existing tracking entry
+        const existingTracking = await pool.query(
+            `SELECT id, shipping_tracking_number 
+             FROM tech_serial_numbers 
+             WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
+             LIMIT 1`,
+            [last8]
+        );
+
+        if (existingTracking.rows.length > 0) {
+            const trackingValue = existingTracking.rows[0].shipping_tracking_number;
+            return NextResponse.json({
+                found: true,
+                orderFound: false,
+                order: {
+                    id: null,
+                    orderId: 'N/A',
+                    productTitle: 'Unknown Product',
+                    sku: 'N/A',
+                    condition: 'N/A',
+                    notes: '',
+                    tracking: trackingValue,
+                    serialNumbers: [],
+                    testDateTime: null,
+                    testedBy,
+                    accountSource: null,
+                    quantity: 1,
+                    status: null,
+                    statusHistory: [],
+                    isShipped: false,
+                    packerId: null,
+                    testerId: null,
+                    outOfStock: null,
+                    shipByDate: null,
+                    orderDate: null,
+                    createdAt: null
+                }
+            });
+        }
+
+        // Query orders table by tracking
         const result = await pool.query(`
             SELECT 
                 id,
@@ -29,37 +83,43 @@ export async function GET(req: NextRequest) {
                 notes,
                 shipping_tracking_number,
                 account_source,
+                status,
+                status_history,
+                is_shipped,
+                packer_id,
+                tester_id,
+                out_of_stock,
+                ship_by_date,
+                order_date,
+                created_at,
                 quantity
             FROM orders
-            WHERE RIGHT(LOWER(shipping_tracking_number), 8) = $1
+            WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
+               OR RIGHT(shipping_tracking_number, 8) = $1
+               OR shipping_tracking_number ILIKE '%' || $1
+              AND shipping_tracking_number IS NOT NULL
+              AND shipping_tracking_number != ''
             LIMIT 1
         `, [last8]);
 
         if (result.rows.length === 0) {
-            return NextResponse.json({ found: false });
+            return NextResponse.json({ found: false, error: 'Tracking number not found in orders' });
         }
 
         const row = result.rows[0];
-        
-        // Query tech_serial_numbers table for this order's serials and test info
-        const serialsResult = await pool.query(`
-            SELECT 
-                serial_number, 
-                serial_type, 
-                test_date_time,
-                tester_id
-            FROM tech_serial_numbers
-            WHERE shipping_tracking_number = $1
-            ORDER BY test_date_time ASC
-        `, [row.shipping_tracking_number]);
+        const trackingValue = row.shipping_tracking_number;
 
-        const serialNumbers = serialsResult.rows.map((r: any) => r.serial_number);
-        
-        // Get first test info (earliest serial scan)
-        const firstTest = serialsResult.rows.length > 0 ? serialsResult.rows[0] : null;
+        // Insert into tech_serial_numbers (no serial number yet)
+        await pool.query(
+            `INSERT INTO tech_serial_numbers (
+                shipping_tracking_number, serial_number, tested_by
+            ) VALUES ($1, $2, $3)`,
+            [trackingValue, null, testedBy]
+        );
 
         return NextResponse.json({
             found: true,
+            orderFound: true,
             order: {
                 id: row.id,
                 orderId: row.order_id || 'N/A',
@@ -67,12 +127,21 @@ export async function GET(req: NextRequest) {
                 sku: row.sku || 'N/A',
                 condition: row.condition || 'N/A',
                 notes: row.notes || '',
-                tracking: row.shipping_tracking_number,
-                serialNumbers,
-                testDateTime: firstTest?.test_date_time,
-                testedBy: firstTest?.tester_id,
-                accountSource: row.account_source,
-                quantity: row.quantity || 1
+                tracking: trackingValue,
+                serialNumbers: [],
+                testDateTime: null,
+                testedBy,
+                accountSource: row.account_source || null,
+                quantity: row.quantity || 1,
+                status: row.status || null,
+                statusHistory: row.status_history || [],
+                isShipped: row.is_shipped || false,
+                packerId: row.packer_id || null,
+                testerId: row.tester_id || null,
+                outOfStock: row.out_of_stock || null,
+                shipByDate: row.ship_by_date || null,
+                orderDate: row.order_date || null,
+                createdAt: row.created_at || null
             }
         });
     } catch (error: any) {

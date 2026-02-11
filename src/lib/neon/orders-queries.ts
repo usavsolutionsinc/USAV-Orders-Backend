@@ -21,6 +21,10 @@ export interface ShippedOrder {
   notes: string;
   status_history: any; // JSONB status history
   is_shipped?: boolean;
+  created_at: string | null;
+  tested_by_name?: string | null;
+  packed_by_name?: string | null;
+  tester_name?: string | null;
 }
 
 /**
@@ -44,24 +48,27 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           o.notes,
           o.status_history,
           o.is_shipped,
+          o.created_at,
           pl.packed_by,
           pl.pack_date_time,
           pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by) as tested_by,
+          MIN(tsn.tested_by)::int as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
           SELECT packed_by, pack_date_time, packer_photos_url
-          FROM packer_logs
-          WHERE shipping_tracking_number = o.shipping_tracking_number
-            AND tracking_type = 'ORDERS'
-          ORDER BY pack_date_time DESC NULLS LAST, id DESC
+          FROM packer_logs pl
+          WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
+                RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+            AND pl.tracking_type = 'ORDERS'
+          ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
           LIMIT 1
         ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
-        WHERE (o.is_shipped = true OR o.is_shipped::text = 'true')
-          AND pl.packed_by IS NOT NULL
+        LEFT JOIN tech_serial_numbers tsn 
+          ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
+             RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+        WHERE pl.pack_date_time IS NOT NULL
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
@@ -110,11 +117,12 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.notes,
           o.status_history,
           o.is_shipped,
+          o.created_at,
           pl.packed_by,
           pl.pack_date_time,
           pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by) as tested_by,
+          MIN(tsn.tested_by)::int as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
@@ -157,6 +165,8 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
 export async function searchShippedOrders(query: string): Promise<ShippedOrder[]> {
   try {
     const searchTerm = `%${query}%`;
+    const digitsOnly = query.replace(/\D/g, '');
+    const last8 = digitsOnly.slice(-8);
     const result = await pool.query(
       `WITH order_serials AS (
         SELECT 
@@ -173,31 +183,27 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           o.notes,
           o.status_history,
           o.is_shipped,
+          o.created_at,
           pl.packed_by,
           pl.pack_date_time,
           pl.packer_photos_url,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by) as tested_by,
+          MIN(tsn.tested_by)::int as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
           SELECT packed_by, pack_date_time, packer_photos_url
-          FROM packer_logs
-          WHERE shipping_tracking_number = o.shipping_tracking_number
-            AND tracking_type = 'ORDERS'
-          ORDER BY pack_date_time DESC NULLS LAST, id DESC
+          FROM packer_logs pl
+          WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
+                RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+            AND pl.tracking_type = 'ORDERS'
+          ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
           LIMIT 1
         ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
-        WHERE COALESCE(o.is_shipped, false) = true
-          AND pl.packed_by IS NOT NULL
-          AND (
-            o.shipping_tracking_number ILIKE $1
-            OR o.order_id ILIKE $1
-            OR o.product_title ILIKE $1
-            OR tsn.serial_number ILIKE $1
-            OR o.sku ILIKE $1
-          )
+        LEFT JOIN tech_serial_numbers tsn 
+          ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
+             RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+        WHERE pl.pack_date_time IS NOT NULL
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
@@ -212,15 +218,28 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
       LEFT JOIN staff s3 ON os.tester_id = s3.id
+      WHERE
+        os.shipping_tracking_number::text = $2
+        OR os.order_id::text = $2
+        OR os.shipping_tracking_number::text ILIKE $1
+        OR os.order_id::text ILIKE $1
+        OR os.product_title::text ILIKE $1
+        OR os.sku::text ILIKE $1
+        OR os.serial_number::text ILIKE $1
+        OR (
+          $3 != '' AND LENGTH($3) >= 8 AND (
+            RIGHT(regexp_replace(os.shipping_tracking_number::text, '\\D', '', 'g'), 8) = $3
+            OR RIGHT(os.order_id::text, 8) = $3
+          )
+        )
       ORDER BY 
         CASE 
-          WHEN os.pack_date_time IS NOT NULL AND os.pack_date_time != '1' 
-          THEN os.pack_date_time::text 
-          ELSE '9999-12-31' 
-        END DESC,
+          WHEN os.shipping_tracking_number::text = $2 OR os.order_id::text = $2 THEN 1
+          ELSE 2
+        END,
         os.id DESC
       LIMIT 100`,
-      [searchTerm]
+      [searchTerm, query, last8]
     );
 
     return result.rows;

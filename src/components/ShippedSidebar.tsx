@@ -7,6 +7,7 @@ import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
+import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 
 interface SearchHistory {
     query: string;
@@ -43,6 +44,7 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [copiedId, setCopiedId] = useState<number | null>(null);
+    const { normalizeTrackingQuery } = useLast8TrackingSearch();
 
     // Listen for custom events to coordinate details panel
     useEffect(() => {
@@ -129,17 +131,18 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
     };
 
     // Handle search
-    const handleSearch = async (query: string) => {
+        const handleSearch = async (query: string) => {
         if (!query.trim()) {
             setResults([]);
             setHasSearched(false);
             return;
         }
 
+        const normalizedQuery = normalizeTrackingQuery(query);
         setIsSearching(true);
         setHasSearched(true);
         try {
-            const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(query)}`);
+            const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(normalizedQuery)}`);
             const data = await res.json();
             
             if (data.results) {
@@ -205,6 +208,9 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
                                 </button>
                             }
                         />
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
+                            Click a Shipped Row for More Details.
+                        </p>
 
                         {/* Search Results */}
                         {results.length > 0 && (

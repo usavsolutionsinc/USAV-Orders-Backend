@@ -31,10 +31,9 @@ export default function DashboardSidebar() {
             });
             const data = await res.json();
             if (data.success) {
-                const totalSheets = data.results.filter((r: any) => r.status === 'replaced').length;
-                setStatus({ type: 'success', message: `Successfully transferred ${totalSheets} sheets to Neon DB` });
+                setStatus({ type: 'success', message: data.message || 'Sync completed successfully' });
             } else {
-                setStatus({ type: 'error', message: data.error || 'Sync failed' });
+                setStatus({ type: 'error', message: data.error || data.message || 'Sync failed' });
             }
         } catch (error) {
             setStatus({ type: 'error', message: 'Network error occurred' });
@@ -94,12 +93,35 @@ export default function DashboardSidebar() {
 
     const menuItems = [
         {
+            id: 'orders',
+            name: 'Orders',
+            icon: <Database className="w-4 h-4" />,
+            scripts: [
+                { id: 'updateNonshippedOrders', name: 'Update Nonshipped Orders' }
+            ]
+        },
+        {
             id: 'shipping',
-            name: 'Shipping Operations',
+            name: 'Shipping',
             icon: <TrendingUp className="w-4 h-4" />,
             scripts: [
-                { id: 'checkShippedOrders', name: 'Check Shipped Orders' },
-                { id: 'updateNonshippedOrders', name: 'Update Nonshipped Orders' }
+                { id: 'checkShippedOrders', name: 'Check Shipped Orders' }
+            ]
+        },
+        {
+            id: 'technicians',
+            name: 'Technicians',
+            icon: <Tool className="w-4 h-4" />,
+            scripts: [
+                { id: 'syncTechSerialNumbers', name: 'Sync Tech Serial Numbers' }
+            ]
+        },
+        {
+            id: 'packers',
+            name: 'Packers',
+            icon: <Package className="w-4 h-4" />,
+            scripts: [
+                { id: 'syncPackerLogs', name: 'Sync Packer Logs' }
             ]
         }
     ];
@@ -201,7 +223,7 @@ export default function DashboardSidebar() {
                         <div className="space-y-2">
                             <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] ml-2 mb-4">Automation Scripts</p>
                             {menuItems.map((menu) => (
-                                <div key={menu.id} className="space-y-1">
+                                <motion.div key={menu.id} layout className="space-y-1">
                                     <button
                                         onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
                                         className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${expandedMenu === menu.id ? 'bg-blue-50 text-blue-600 shadow-sm border border-blue-100' : 'bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100 hover:text-gray-900'}`}
@@ -217,26 +239,37 @@ export default function DashboardSidebar() {
                                     <AnimatePresence initial={false}>
                                         {expandedMenu === menu.id && (
                                             <motion.div
-                                                initial={{ height: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                                                animate={{ height: 'auto', opacity: 1, paddingTop: 8, paddingBottom: 8 }}
-                                                exit={{ height: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                                                className="overflow-hidden space-y-1.5 px-3"
+                                                initial={{ gridTemplateRows: '0fr', opacity: 0, paddingTop: 0, paddingBottom: 0 }}
+                                                animate={{ gridTemplateRows: '1fr', opacity: 1, paddingTop: 8, paddingBottom: 8 }}
+                                                exit={{ gridTemplateRows: '0fr', opacity: 0, paddingTop: 0, paddingBottom: 0 }}
+                                                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                                                className="grid px-3 overflow-hidden"
                                             >
-                                                {menu.scripts.map((script) => (
-                                                    <button
-                                                        key={script.id}
-                                                        onClick={() => runScript(script.id)}
-                                                        disabled={!!activeScript}
-                                                        className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${activeScript === script.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-900 group'} flex items-center justify-between group`}
-                                                    >
-                                                        <span className="group-hover:translate-x-1 transition-transform duration-200">{script.name}</span>
-                                                        {activeScript === script.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                                    </button>
-                                                ))}
+                                                <div className="overflow-hidden">
+                                                    <div className="space-y-1.5">
+                                                        {menu.scripts.length > 0 ? (
+                                                            menu.scripts.map((script) => (
+                                                                <button
+                                                                    key={script.id}
+                                                                    onClick={() => runScript(script.id)}
+                                                                    disabled={!!activeScript}
+                                                                    className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${activeScript === script.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-900 group'} flex items-center justify-between group`}
+                                                                >
+                                                                    <span className="group-hover:translate-x-1 transition-transform duration-200">{script.name}</span>
+                                                                    {activeScript === script.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                                                </button>
+                                                            ))
+                                                        ) : (
+                                                            <div className="p-3.5 rounded-xl bg-gray-50 text-gray-400 text-[10px] font-bold uppercase tracking-widest">
+                                                                No scripts configured yet
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
-                                </div>
+                                </motion.div>
                             ))}
                         </div>
                     </div>

@@ -4,6 +4,7 @@ import { orders, packerLogs } from '@/lib/drizzle/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
+import pool from '@/lib/db';
 
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
@@ -12,12 +13,14 @@ export async function POST(req: NextRequest) {
         const { scriptName } = await req.json();
 
         switch (scriptName) {
-            case 'removeDuplicateOrders':
-                return await executeRemoveDuplicateOrders();
             case 'checkShippedOrders':
                 return await executeCheckShippedOrders();
             case 'updateNonshippedOrders':
                 return await executeUpdateNonshippedOrders();
+            case 'syncTechSerialNumbers':
+                return await executeSyncTechSerialNumbers();
+            case 'syncPackerLogs':
+                return await executeSyncPackerLogs();
             default:
                 return NextResponse.json({ success: false, error: 'Unknown script name' }, { status: 400 });
         }
@@ -25,37 +28,6 @@ export async function POST(req: NextRequest) {
         console.error('Script execution error:', error);
         return NextResponse.json({ success: false, error: error.message || 'Internal Server Error' }, { status: 500 });
     }
-}
-
-async function executeRemoveDuplicateOrders() {
-    // Get all orders
-    const ordersData = await db.select().from(orders).orderBy(orders.id);
-    
-    const trackingMap = new Map();
-    const idsToDelete: number[] = [];
-
-    for (const order of ordersData) {
-        const tracking = String(order.shippingTrackingNumber || '').trim();
-        if (tracking) {
-            if (trackingMap.has(tracking)) {
-                // Duplicate found
-                idsToDelete.push(order.id);
-            } else {
-                // First occurrence
-                trackingMap.set(tracking, order.id);
-            }
-        }
-    }
-
-    // Delete duplicate orders
-    if (idsToDelete.length > 0) {
-        await db.delete(orders).where(inArray(orders.id, idsToDelete));
-    }
-
-    return NextResponse.json({ 
-        success: true, 
-        message: `Processed ${ordersData.length} orders. Removed ${idsToDelete.length} duplicate tracking numbers.` 
-    });
 }
 
 async function executeCheckShippedOrders() {
@@ -121,8 +93,15 @@ async function executeUpdateNonshippedOrders() {
     }
 
     const trackingList = Array.from(trackingSet);
+
+    // Default: mark all orders shipped
+    await db.update(orders).set({ isShipped: true });
+
     if (trackingList.length === 0) {
-        return NextResponse.json({ success: true, message: 'No tracking numbers found in Orders sheet column G.' });
+        return NextResponse.json({
+            success: true,
+            message: 'No tracking numbers found in Orders sheet column G. Marked all orders as shipped.',
+        });
     }
 
     let updatedCount = 0;
@@ -146,6 +125,202 @@ async function executeUpdateNonshippedOrders() {
 
     return NextResponse.json({
         success: true,
-        message: `Updated ${updatedCount} orders to non-shipped based on Orders sheet column G.`,
+        message: `Marked all orders shipped, then set ${updatedCount} matching Orders sheet column G to non-shipped.`,
+    });
+}
+
+async function executeSyncTechSerialNumbers() {
+    const auth = getGoogleAuth();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+
+    const techSheets = [
+        { name: 'tech_1', testedBy: 1 },
+        { name: 'tech_2', testedBy: 2 },
+        { name: 'tech_3', testedBy: 3 },
+    ];
+
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+    const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
+
+    const client = await pool.connect();
+    const summary: Array<{ sheet: string; inserted: number; skippedExisting: number; skippedMissingTracking: number }> = [];
+    let totalInserted = 0;
+    let totalSkippedExisting = 0;
+    let totalSkippedMissingTracking = 0;
+
+    try {
+        await client.query('BEGIN');
+
+        for (const techSheet of techSheets) {
+            const sheetName = existingSheetNames.find(name => name.toLowerCase() === techSheet.name);
+            if (!sheetName) {
+                summary.push({ sheet: techSheet.name, inserted: 0, skippedExisting: 0, skippedMissingTracking: 0 });
+                continue;
+            }
+
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A2:D`,
+            });
+
+            const rows = response.data.values || [];
+            let insertedForSheet = 0;
+            let skippedExistingForSheet = 0;
+            let skippedMissingTrackingForSheet = 0;
+
+            for (const row of rows) {
+                const rawTestDateTime = String(row[0] || '').trim(); // A
+                const shippingTrackingNumber = String(row[2] || '').trim(); // C
+                const serialNumber = String(row[3] || '').trim(); // D
+
+                if (!shippingTrackingNumber) {
+                    skippedMissingTrackingForSheet++;
+                    continue;
+                }
+
+                const testDateTime = rawTestDateTime || null;
+                const existingTrackingResult = await client.query(
+                    `SELECT id FROM tech_serial_numbers WHERE shipping_tracking_number = $1 LIMIT 1`,
+                    [shippingTrackingNumber]
+                );
+                if (existingTrackingResult.rows.length > 0) {
+                    skippedExistingForSheet++;
+                    continue;
+                }
+
+                await client.query(
+                    `INSERT INTO tech_serial_numbers (
+                        shipping_tracking_number,
+                        serial_number,
+                        serial_type,
+                        test_date_time,
+                        tested_by
+                    ) VALUES ($1, $2, 'SERIAL', $3, $4)`,
+                    [shippingTrackingNumber, serialNumber, testDateTime, techSheet.testedBy]
+                );
+
+                insertedForSheet++;
+            }
+
+            totalInserted += insertedForSheet;
+            totalSkippedExisting += skippedExistingForSheet;
+            totalSkippedMissingTracking += skippedMissingTrackingForSheet;
+            summary.push({
+                sheet: sheetName,
+                inserted: insertedForSheet,
+                skippedExisting: skippedExistingForSheet,
+                skippedMissingTracking: skippedMissingTrackingForSheet
+            });
+        }
+
+        await client.query('COMMIT');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+
+    return NextResponse.json({
+        success: true,
+        message: `Synced technician sheets to tech_serial_numbers. Inserted ${totalInserted} row(s), skipped ${totalSkippedExisting} existing tracking row(s), skipped ${totalSkippedMissingTracking} row(s) missing tracking.`,
+        details: summary,
+    });
+}
+
+async function executeSyncPackerLogs() {
+    const auth = getGoogleAuth();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+
+    const packerSheets = [
+        { name: 'packer_1', packedBy: 4 },
+        { name: 'packer_2', packedBy: 5 },
+    ];
+
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+    const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
+
+    const client = await pool.connect();
+    const summary: Array<{ sheet: string; inserted: number; skippedExisting: number; skippedMissingTracking: number }> = [];
+    let totalInserted = 0;
+    let totalSkippedExisting = 0;
+    let totalSkippedMissingTracking = 0;
+
+    try {
+        await client.query('BEGIN');
+
+        for (const packerSheet of packerSheets) {
+            const sheetName = existingSheetNames.find(name => name.toLowerCase() === packerSheet.name);
+            if (!sheetName) {
+                summary.push({ sheet: packerSheet.name, inserted: 0, skippedExisting: 0, skippedMissingTracking: 0 });
+                continue;
+            }
+
+            const response = await sheets.spreadsheets.values.get({
+                spreadsheetId,
+                range: `${sheetName}!A2:B`,
+            });
+
+            const rows = response.data.values || [];
+            let insertedForSheet = 0;
+            let skippedExistingForSheet = 0;
+            let skippedMissingTrackingForSheet = 0;
+
+            for (const row of rows) {
+                const packDateTime = String(row[0] || '').trim(); // A
+                const shippingTrackingNumber = String(row[1] || '').trim(); // B
+
+                if (!shippingTrackingNumber) {
+                    skippedMissingTrackingForSheet++;
+                    continue;
+                }
+
+                const existingTrackingResult = await client.query(
+                    `SELECT id FROM packer_logs WHERE shipping_tracking_number = $1 LIMIT 1`,
+                    [shippingTrackingNumber]
+                );
+                if (existingTrackingResult.rows.length > 0) {
+                    skippedExistingForSheet++;
+                    continue;
+                }
+
+                await client.query(
+                    `INSERT INTO packer_logs (
+                        shipping_tracking_number,
+                        tracking_type,
+                        pack_date_time,
+                        packed_by
+                    ) VALUES ($1, $2, $3, $4)`,
+                    [shippingTrackingNumber, 'ORDERS', packDateTime || null, packerSheet.packedBy]
+                );
+
+                insertedForSheet++;
+            }
+
+            totalInserted += insertedForSheet;
+            totalSkippedExisting += skippedExistingForSheet;
+            totalSkippedMissingTracking += skippedMissingTrackingForSheet;
+            summary.push({
+                sheet: sheetName,
+                inserted: insertedForSheet,
+                skippedExisting: skippedExistingForSheet,
+                skippedMissingTracking: skippedMissingTrackingForSheet
+            });
+        }
+
+        await client.query('COMMIT');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+
+    return NextResponse.json({
+        success: true,
+        message: `Synced packer sheets to packer_logs. Inserted ${totalInserted} row(s), skipped ${totalSkippedExisting} existing tracking row(s), skipped ${totalSkippedMissingTracking} row(s) missing tracking.`,
+        details: summary,
     });
 }

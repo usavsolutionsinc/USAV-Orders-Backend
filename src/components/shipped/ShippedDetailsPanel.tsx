@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Clock, Package, Copy, Box, Wrench, ExternalLink } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { getCarrier } from '../../utils/tracking';
 import { PhotoGallery } from './PhotoGallery';
+import { getStaffName } from '@/utils/staff';
+import { getTrackingUrl, getOrderIdUrl, getAccountSourceLabel } from '@/utils/order-links';
+import { buildShippedCopyInfo, parseShippedDate } from '@/utils/copyallshipped';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -16,78 +18,6 @@ interface ShippedDetailsPanelProps {
 interface DurationData {
   boxingDuration?: string;
   testingDuration?: string;
-}
-
-// Hard-coded staff ID to name mapping
-const STAFF_NAMES: { [key: number]: string } = {
-  1: 'Michael',
-  2: 'Thuc',
-  3: 'Sang',
-  4: 'Tuan',
-  5: 'Thuy',
-  6: 'Cuong'
-};
-
-function getStaffName(staffId: number | null | undefined): string {
-  if (!staffId) return 'Not specified';
-  return STAFF_NAMES[staffId] || `Staff #${staffId}`;
-}
-
-// URL helpers for external links
-function getTrackingUrl(tracking: string): string | null {
-  if (!tracking || tracking === 'Not available' || tracking === 'N/A') return null;
-  const carrier = getCarrier(tracking);
-  switch (carrier) {
-    case 'USPS': return `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${tracking}`;
-    case 'UPS': return `https://www.ups.com/track?track=yes&trackNums=${tracking}&loc=en_US&requester=ST/trackdetails`;
-    case 'FedEx': return `https://www.fedex.com/fedextrack/?trknbr=${tracking}&trkqual=12029~397652017412~FDEG`;
-    default: return null;
-  }
-}
-
-function getOrderIdUrl(orderId: string): string | null {
-  if (!orderId || orderId === 'Not available' || orderId === 'N/A') return null;
-  // Amazon order ID: 3 digits in the first group
-  if (/^\d{3}-\d+-\d+$/.test(orderId)) {
-    return `https://sellercentral.amazon.com/orders-v3/order/${orderId}`;
-  }
-  // Ecwid order ID: 4 digits
-  if (/^\d{4}$/.test(orderId)) {
-    return `https://my.ecwid.com/store/16593703#order:id=${orderId}&use_cache=true&return=orders`;
-  }
-  return null;
-}
-
-// Get account source label based on order ID pattern
-function getAccountSourceLabel(orderId: string, accountSource: string | null | undefined): string {
-  if (!orderId || orderId === 'Not available' || orderId === 'N/A') return '';
-  
-  // Check for FBA
-  if (orderId.toUpperCase().includes('FBA')) {
-    return 'FBA';
-  }
-  
-  // Amazon order ID: 3 digits in the first group (000-0000000-0000000)
-  if (/^\d{3}-\d+-\d+$/.test(orderId)) {
-    return 'Amazon';
-  }
-  
-  // eBay order ID: 2 digits in the first group (00-00000-00000)
-  if (/^\d{2}-\d+-\d+$/.test(orderId)) {
-    return accountSource ? `ebay - ${accountSource}` : 'ebay';
-  }
-  
-  // Walmart order ID: 15 digits only (000000000000000)
-  if (/^\d{15}$/.test(orderId)) {
-    return 'Walmart';
-  }
-  
-  // Ecwid order ID: 4 digits only
-  if (/^\d{4}$/.test(orderId)) {
-    return 'ECWID';
-  }
-  
-  return accountSource || '';
 }
 
 // Copyable field component
@@ -187,43 +117,11 @@ export function ShippedDetailsPanel({
   };
 
   const handleCopyAll = () => {
-    const formattedDateTime = shipped.pack_date_time && shipped.pack_date_time !== '1' 
-      ? parseDate(shipped.pack_date_time).toLocaleString('en-US', { 
-          month: '2-digit', 
-          day: '2-digit', 
-          year: 'numeric', 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit',
-          hour12: false 
-        }).replace(',', '')
-      : 'N/A';
-
-    const allInfo = `Serial: ${shipped.serial_number || 'N/A'}
-Order ID: ${shipped.order_id || 'Not available'}
-Tracking: ${shipped.shipping_tracking_number || 'Not available'}
-Product: ${shipped.product_title || 'Not provided'}
-Condition: ${shipped.condition || 'Not set'}
-Tested By: ${getStaffName(shipped.tested_by)}
-Packed By: ${getStaffName(shipped.packed_by)}
-Shipped: ${formattedDateTime}`;
-
+    const allInfo = buildShippedCopyInfo(shipped);
     navigator.clipboard.writeText(allInfo);
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 2000);
   };
-
-  // Helper function to parse date strings
-  function parseDate(dateStr: string): Date {
-    if (dateStr.includes('/')) {
-      // Handle M/D/YYYY HH:mm:ss
-      const [datePart, timePart] = dateStr.split(' ');
-      const [m, d, y] = datePart.split('/').map(Number);
-      const [h, min, s] = timePart.split(':').map(Number);
-      return new Date(y, m - 1, d, h, min, s);
-    }
-    return new Date(dateStr);
-  }
 
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
 
@@ -429,7 +327,7 @@ Shipped: ${formattedDateTime}`;
             <div className="pt-4 border-t border-orange-100/50">
               <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
-                {shipped.pack_date_time && shipped.pack_date_time !== '1' ? parseDate(shipped.pack_date_time).toLocaleString() : 'N/A'}
+                {shipped.pack_date_time && shipped.pack_date_time !== '1' ? parseShippedDate(shipped.pack_date_time).toLocaleString() : 'N/A'}
               </p>
             </div>
           </div>
@@ -460,7 +358,7 @@ Shipped: ${formattedDateTime}`;
             <div className="pt-4 border-t border-purple-100/50">
               <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
-                {shipped.test_date_time && shipped.test_date_time !== '' ? parseDate(shipped.test_date_time).toLocaleString() : 'N/A'}
+                {shipped.test_date_time && shipped.test_date_time !== '' ? parseShippedDate(shipped.test_date_time).toLocaleString() : 'N/A'}
               </p>
             </div>
           </div>
