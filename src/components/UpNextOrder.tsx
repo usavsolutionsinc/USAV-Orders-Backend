@@ -2,15 +2,17 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, Play, Package, Calendar, X, Check } from './Icons';
+import { AlertCircle, Play, Package, Calendar, X, Check, ExternalLink } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
 import { ShipByDate } from './ui/ShipByDate';
+import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 
 interface Order {
   id: number;
   ship_by_date: string;
   order_id: string;
   product_title: string;
+  item_number: string | null;
   sku: string;
   status: string;
   shipping_tracking_number: string;
@@ -32,6 +34,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const [allCompletedToday, setAllCompletedToday] = useState(false);
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
+  const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
 
   useEffect(() => {
     fetchOrders();
@@ -211,6 +214,15 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         <h4 className="text-base font-black text-gray-900 leading-tight">
           {order.product_title}
         </h4>
+        <button
+          type="button"
+          onClick={() => openExternalByItemNumber(order.item_number)}
+          disabled={!getExternalUrlByItemNumber(order.item_number)}
+          className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-wider"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          External Page
+        </button>
       </div>
 
       {/* Info Grid */}

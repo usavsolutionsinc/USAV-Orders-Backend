@@ -7,6 +7,7 @@ import { PhotoGallery } from './PhotoGallery';
 import { getStaffName } from '@/utils/staff';
 import { getTrackingUrl, getOrderIdUrl, getAccountSourceLabel } from '@/utils/order-links';
 import { parseShippedDate } from '@/utils/copyallshipped';
+import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 
 interface DurationData {
   boxingDuration?: string;
@@ -21,6 +22,7 @@ interface ShippedDetailsPanelContentProps {
   showPackingPhotos?: boolean;
   showPackingInformation?: boolean;
   showTestingInformation?: boolean;
+  showShippingTimestamp?: boolean;
 }
 
 const CopyableField = ({
@@ -105,9 +107,11 @@ export function ShippedDetailsPanelContent({
   onCopyAll,
   showPackingPhotos = true,
   showPackingInformation = true,
-  showTestingInformation = true
+  showTestingInformation = true,
+  showShippingTimestamp = false
 }: ShippedDetailsPanelContentProps) {
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
+  const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
 
   return (
     <div className="px-8 pb-8 pt-4 space-y-10">
@@ -207,15 +211,37 @@ export function ShippedDetailsPanelContent({
           </div>
 
           <CopyableField label="Serial Number" value={shipped.serial_number || 'N/A'} />
+
+          {showShippingTimestamp && (
+            <div>
+              <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1.5">Shipped Date & Time</span>
+              <p className="text-sm font-bold text-gray-900 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100">
+                {shipped.pack_date_time && shipped.pack_date_time !== '1'
+                  ? parseShippedDate(shipped.pack_date_time).toLocaleString()
+                  : 'N/A'}
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
       <section className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
-            <Box className="w-4 h-4" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+              <Box className="w-4 h-4" />
+            </div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Product Details</h3>
           </div>
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Product Details</h3>
+          <button
+            type="button"
+            onClick={() => openExternalByItemNumber(shipped.item_number)}
+            disabled={!getExternalUrlByItemNumber(shipped.item_number)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-wider"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Product Page
+          </button>
         </div>
 
         <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100">

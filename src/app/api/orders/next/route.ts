@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
         ship_by_date,
         order_id,
         product_title,
+        item_number,
         sku,
         status,
         condition,

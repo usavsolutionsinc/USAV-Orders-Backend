@@ -11,4 +11,5 @@ export interface DetailsStackProps {
   copiedAll: boolean;
   onCopyAll: () => void;
   onUpdate?: () => void;
+  showShippingTimestamp?: boolean;
 }

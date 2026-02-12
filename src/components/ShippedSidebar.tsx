@@ -344,6 +344,7 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
                     <ShippedDetailsPanel 
                         key="shipped-details-panel-shared-instance"
                         shipped={selectedShipped}
+                        context="shipped"
                         onClose={() => {
                             setSelectedShipped(null);
                             window.dispatchEvent(new CustomEvent('close-shipped-details'));

@@ -18,7 +18,8 @@ export function DashboardDetailsStack({
   durationData,
   copiedAll,
   onCopyAll,
-  onUpdate
+  onUpdate,
+  showShippingTimestamp = false
 }: DetailsStackProps) {
   const [testerId, setTesterId] = useState<string>('0');
   const [packerId, setPackerId] = useState<string>('0');
@@ -140,6 +141,7 @@ export function DashboardDetailsStack({
         showPackingPhotos={false}
         showPackingInformation={false}
         showTestingInformation={false}
+        showShippingTimestamp={showShippingTimestamp}
       />
     </>
   );

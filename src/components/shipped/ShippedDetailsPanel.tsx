@@ -7,17 +7,20 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { DashboardDetailsStack } from './stacks/dashboarddetailsStack';
 import { DetailsStackDurationData } from './stacks/types';
+import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
   onClose: () => void;
   onUpdate: () => void;
+  context?: 'dashboard' | 'shipped' | 'station';
 }
 
 export function ShippedDetailsPanel({
   shipped: initialShipped,
   onClose,
-  onUpdate: _onUpdate
+  onUpdate: _onUpdate,
+  context = 'dashboard'
 }: ShippedDetailsPanelProps) {
   const [shipped, setShipped] = useState<ShippedOrder>(initialShipped);
   const [durationData, setDurationData] = useState<DetailsStackDurationData>({});
@@ -83,13 +86,24 @@ export function ShippedDetailsPanel({
         </button>
       </div>
 
-      <DashboardDetailsStack
-        shipped={shipped}
-        durationData={durationData}
-        copiedAll={copiedAll}
-        onCopyAll={handleCopyAll}
-        onUpdate={_onUpdate}
-      />
+      {context === 'dashboard' ? (
+        <DashboardDetailsStack
+          shipped={shipped}
+          durationData={durationData}
+          copiedAll={copiedAll}
+          onCopyAll={handleCopyAll}
+          onUpdate={_onUpdate}
+          showShippingTimestamp={false}
+        />
+      ) : (
+        <ShippedDetailsPanelContent
+          shipped={shipped}
+          durationData={durationData}
+          copiedAll={copiedAll}
+          onCopyAll={handleCopyAll}
+          showShippingTimestamp={context === 'shipped'}
+        />
+      )}
     </motion.div>
   );
 }

@@ -94,11 +94,21 @@ async function upsertOrder(accountName: string, ebayOrder: any): Promise<void> {
   
   // Extract dates
   const orderDate = ebayOrder.creationDate ? new Date(ebayOrder.creationDate) : new Date();
+  const quantity = firstItem.quantity ? String(firstItem.quantity) : '1';
+  const condition = firstItem.condition || firstItem.conditionId || '';
+  const productTitle = firstItem.title || 'No title';
+  const sku = firstItem.sku || '';
   
   try {
     // Check if order_id already exists (regardless of account_source)
     const existingOrder = await pool.query(
-      'SELECT id, account_source, order_date, sku, shipping_tracking_number FROM orders WHERE order_id = $1 LIMIT 1',
+      `SELECT 
+         id, account_source, order_date, sku, shipping_tracking_number,
+         product_title, condition, quantity, status, status_history,
+         is_shipped, packer_id, notes, out_of_stock, tester_id, ship_by_date
+       FROM orders
+       WHERE order_id = $1
+       LIMIT 1`,
       [ebayOrder.orderId]
     );
     
@@ -124,13 +134,31 @@ async function upsertOrder(accountName: string, ebayOrder: any): Promise<void> {
       // Update sku if empty
       if (!current.sku || current.sku === '') {
         updates.push(`sku = $${paramIndex++}`);
-        values.push(firstItem.sku || '');
+        values.push(sku);
       }
       
       // Update shipping_tracking_number if empty
       if (!current.shipping_tracking_number && trackingNumber) {
         updates.push(`shipping_tracking_number = $${paramIndex++}`);
         values.push(trackingNumber);
+      }
+
+      // Update product_title if empty
+      if (!current.product_title || current.product_title === '') {
+        updates.push(`product_title = $${paramIndex++}`);
+        values.push(productTitle);
+      }
+
+      // Update condition if empty
+      if (!current.condition || current.condition === '') {
+        updates.push(`condition = $${paramIndex++}`);
+        values.push(condition);
+      }
+
+      // Update quantity if empty
+      if (!current.quantity || current.quantity === '') {
+        updates.push(`quantity = $${paramIndex++}`);
+        values.push(quantity);
       }
       
       if (updates.length > 0) {
@@ -144,19 +172,45 @@ async function upsertOrder(accountName: string, ebayOrder: any): Promise<void> {
         console.log(`  [${accountName}] Order ${ebayOrder.orderId} already has all data`);
       }
     } else {
-      // Order doesn't exist - create full record
+      // Order doesn't exist - create full record with current orders schema defaults
       await pool.query(
         `INSERT INTO orders (
-          account_source, order_id, product_title, sku, 
-          order_date, shipping_tracking_number
-        ) VALUES ($1, $2, $3, $4, $5, $6)`,
+          order_id,
+          product_title,
+          condition,
+          shipping_tracking_number,
+          sku,
+          status,
+          status_history,
+          is_shipped,
+          packer_id,
+          notes,
+          quantity,
+          out_of_stock,
+          account_source,
+          order_date,
+          tester_id,
+          ship_by_date
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16
+        )`,
         [
-          accountName,
           ebayOrder.orderId,
-          firstItem.title || 'No title',
-          firstItem.sku || '',
-          orderDate,
+          productTitle,
+          condition,
           trackingNumber,
+          sku,
+          'unassigned',
+          JSON.stringify([]),
+          false,
+          5,
+          '',
+          quantity,
+          '',
+          accountName,
+          orderDate,
+          6,
+          null,
         ]
       );
       console.log(`  [${accountName}] Created new order: ${ebayOrder.orderId}`);

@@ -1,12 +1,25 @@
 import { NextResponse } from 'next/server';
 import { syncAllAccounts, getSyncStatus } from '@/lib/ebay/sync';
 
+const ALLOWED_SYNC_ORIGINS = [
+  'http://localhost:3000',
+  'https://usav-orders-backend.vercel.app',
+];
+
 /**
  * POST /api/ebay/sync
  * Trigger manual sync for all active eBay accounts
  */
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    const origin = req.headers.get('origin');
+    if (origin && !ALLOWED_SYNC_ORIGINS.includes(origin)) {
+      return NextResponse.json(
+        { success: false, error: `Origin not allowed: ${origin}` },
+        { status: 403 }
+      );
+    }
+
     console.log('Manual sync triggered via API');
     const results = await syncAllAccounts();
     

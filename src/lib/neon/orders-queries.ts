@@ -6,6 +6,7 @@ export interface ShippedOrder {
   ship_by_date: string;
   order_id: string;
   product_title: string;
+  item_number?: string | null;
   condition: string;
   shipping_tracking_number: string;
   serial_number: string; // Aggregated from tech_serial_numbers table
@@ -39,6 +40,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           o.ship_by_date,
           o.order_id,
           o.product_title,
+          o.item_number,
           o.condition,
           o.shipping_tracking_number,
           o.sku,
@@ -70,7 +72,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
              RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
         WHERE pl.pack_date_time IS NOT NULL
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
-                 o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url
       )
@@ -108,6 +110,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.ship_by_date,
           o.order_id,
           o.product_title,
+          o.item_number,
           o.condition,
           o.shipping_tracking_number,
           o.sku,
@@ -136,7 +139,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
-                 o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url
       )
@@ -174,6 +177,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           o.ship_by_date,
           o.order_id,
           o.product_title,
+          o.item_number,
           o.condition,
           o.shipping_tracking_number,
           o.sku,
@@ -205,7 +209,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
              RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
         WHERE pl.pack_date_time IS NOT NULL
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
-                 o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url
       )

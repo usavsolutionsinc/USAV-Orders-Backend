@@ -16,9 +16,11 @@ import {
   Zap,
   History,
   LayoutDashboard,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from '../Icons';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
+import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 
 interface StationTestingProps {
     userId: string;
@@ -50,6 +52,7 @@ export default function StationTesting({
         id: number;
         orderId: string;
         productTitle: string;
+        itemNumber: string | null;
         sku: string;
         condition: string;
         notes: string;
@@ -69,14 +72,15 @@ export default function StationTesting({
     const [isSearching, setIsSearching] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
     const { normalizeTrackingQuery } = useLast8TrackingSearch();
+    const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
     
-    // Auto-clear messages after 3 seconds
+    // Auto-clear messages after 0.5 seconds
     useEffect(() => {
         if (errorMessage || successMessage) {
             const timer = setTimeout(() => {
                 setErrorMessage(null);
                 setSuccessMessage(null);
-            }, 3000);
+            }, 500);
             return () => clearTimeout(timer);
         }
     }, [errorMessage, successMessage]);
@@ -113,21 +117,66 @@ export default function StationTesting({
 
     const detectType = (val: string) => {
         const input = val.trim();
-        const digitsOnly = input.replace(/\D/g, '');
-        if (digitsOnly.length >= 8) return 'TRACKING';
-        
-        // Priority 1: SKU with colon (from Working GAS logic)
+
+        // Priority 1: SKU with colon
         if (input.includes(':')) return 'SKU';
-        
-        // Priority 2: Tracking number regex (includes FNSKU X0/B0)
-        // X0 and B0 FNSKU codes are treated as tracking numbers
-        if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420|X0|B0|FBA)/i)) return 'TRACKING';
+
+        // Priority 2: Tracking regex (carrier formats only)
+        if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420)/i)) return 'TRACKING';
+
+        // Priority 3: X00/X0 FNSKU
+        if (input.match(/^X0/i)) return 'FNSKU';
 
         // Commands
         if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input.toUpperCase())) return 'COMMAND';
         
-        // Priority 3: Everything else is a serial number
+        // Priority 4: Everything else is a serial number
         return 'SERIAL';
+    };
+
+    const handleFnskuScan = async (fnskuInput: string) => {
+        setIsLoading(true);
+        try {
+            const fnsku = fnskuInput.toUpperCase();
+            const res = await fetch(`/api/tech/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&techId=${userId}`);
+            const data = await res.json();
+
+            if (!data.found) {
+                setErrorMessage(data.error || 'FNSKU not found');
+                setActiveOrder(null);
+                return;
+            }
+
+            setActiveOrder({
+                id: data.order.id,
+                orderId: data.order.orderId,
+                productTitle: data.order.productTitle,
+                itemNumber: data.order.itemNumber ?? null,
+                sku: data.order.sku,
+                condition: data.order.condition,
+                notes: data.order.notes,
+                tracking: data.order.tracking,
+                serialNumbers: data.order.serialNumbers || [],
+                testDateTime: data.order.testDateTime,
+                testedBy: data.order.testedBy
+            });
+
+            const serialCount = data.order.serialNumbers?.length || 0;
+            if (serialCount > 0) {
+                setSuccessMessage(`FNSKU loaded: ${serialCount} serial${serialCount !== 1 ? 's' : ''} already scanned`);
+            } else {
+                setSuccessMessage('FNSKU loaded - ready to scan serials');
+            }
+
+            if (onComplete) onComplete();
+        } catch (err) {
+            console.error('FNSKU scan failed:', err);
+            setErrorMessage('Failed to load FNSKU. Please try again.');
+        } finally {
+            setIsLoading(false);
+            setInputValue('');
+            inputRef.current?.focus();
+        }
     };
 
     const handleSubmit = async (e?: React.FormEvent, manualValue?: string) => {
@@ -160,6 +209,7 @@ export default function StationTesting({
                     id: data.order.id,
                     orderId: data.order.orderId,
                     productTitle: data.order.productTitle,
+                    itemNumber: data.order.itemNumber ?? null,
                     sku: data.order.sku,
                     condition: data.order.condition,
                     notes: data.order.notes,
@@ -186,6 +236,8 @@ export default function StationTesting({
                 setInputValue('');
                 inputRef.current?.focus();
             }
+        } else if (type === 'FNSKU') {
+            await handleFnskuScan(input);
         } else if (type === 'SKU' && activeOrder) {
             // SKU with colon scan - lookup serials from sku table
             const skuCode = input;
@@ -295,6 +347,7 @@ export default function StationTesting({
                     id: 99999,
                     orderId: 'TEST-ORD-001',
                     productTitle: 'TEST UNIT - Sony Alpha a7 IV',
+                    itemNumber: 'B000TEST000',
                     sku: 'TEST-SKU',
                     condition: 'Used - Excellent',
                     notes: 'This is a test order for debugging',
@@ -455,6 +508,24 @@ export default function StationTesting({
                                         <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
                                             <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
                                             <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.sku}</p>
+                                        </div>
+                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Tracking #</p>
+                                            <p className="text-xs font-mono font-bold text-gray-900 truncate">
+                                                {String(activeOrder.tracking || '').slice(-4) || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">External Page</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => openExternalByItemNumber(activeOrder.itemNumber)}
+                                                disabled={!getExternalUrlByItemNumber(activeOrder.itemNumber)}
+                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-wider"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                Open
+                                            </button>
                                         </div>
                                     </div>
 

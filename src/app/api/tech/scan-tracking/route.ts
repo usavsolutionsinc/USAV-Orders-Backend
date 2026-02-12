@@ -32,52 +32,13 @@ export async function GET(req: NextRequest) {
         }
         const testedBy = staffResult.rows[0].id;
 
-        // First check tech_serial_numbers for an existing tracking entry
-        const existingTracking = await pool.query(
-            `SELECT id, shipping_tracking_number 
-             FROM tech_serial_numbers 
-             WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
-             LIMIT 1`,
-            [last8]
-        );
-
-        if (existingTracking.rows.length > 0) {
-            const trackingValue = existingTracking.rows[0].shipping_tracking_number;
-            return NextResponse.json({
-                found: true,
-                orderFound: false,
-                order: {
-                    id: null,
-                    orderId: 'N/A',
-                    productTitle: 'Unknown Product',
-                    sku: 'N/A',
-                    condition: 'N/A',
-                    notes: '',
-                    tracking: trackingValue,
-                    serialNumbers: [],
-                    testDateTime: null,
-                    testedBy,
-                    accountSource: null,
-                    quantity: 1,
-                    status: null,
-                    statusHistory: [],
-                    isShipped: false,
-                    packerId: null,
-                    testerId: null,
-                    outOfStock: null,
-                    shipByDate: null,
-                    orderDate: null,
-                    createdAt: null
-                }
-            });
-        }
-
-        // Query orders table by tracking
+        // Query orders table by tracking first so active order always has product info
         const result = await pool.query(`
             SELECT 
                 id,
                 order_id,
                 product_title,
+                item_number,
                 sku,
                 condition,
                 notes,
@@ -102,20 +63,65 @@ export async function GET(req: NextRequest) {
             LIMIT 1
         `, [last8]);
 
-        if (result.rows.length === 0) {
+        // Check tech_serial_numbers for existing tracking entry
+        const existingTracking = await pool.query(
+            `SELECT shipping_tracking_number
+             FROM tech_serial_numbers
+             WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
+             LIMIT 1`,
+            [last8]
+        );
+
+        const row = result.rows[0] || null;
+        const trackingValue =
+            row?.shipping_tracking_number ||
+            existingTracking.rows[0]?.shipping_tracking_number ||
+            tracking;
+
+        if (!row && existingTracking.rows.length > 0) {
+            return NextResponse.json({
+                found: true,
+                orderFound: false,
+                order: {
+                    id: null,
+                    orderId: 'N/A',
+                    productTitle: 'Unknown Product',
+                    itemNumber: null,
+                    sku: 'N/A',
+                    condition: 'N/A',
+                    notes: '',
+                    tracking: trackingValue,
+                    serialNumbers: [],
+                    testDateTime: null,
+                    testedBy,
+                    accountSource: null,
+                    quantity: 1,
+                    status: null,
+                    statusHistory: [],
+                    isShipped: false,
+                    packerId: null,
+                    testerId: null,
+                    outOfStock: null,
+                    shipByDate: null,
+                    orderDate: null,
+                    createdAt: null
+                }
+            });
+        }
+
+        if (!row) {
             return NextResponse.json({ found: false, error: 'Tracking number not found in orders' });
         }
 
-        const row = result.rows[0];
-        const trackingValue = row.shipping_tracking_number;
-
-        // Insert into tech_serial_numbers (no serial number yet)
-        await pool.query(
-            `INSERT INTO tech_serial_numbers (
-                shipping_tracking_number, serial_number, tested_by
-            ) VALUES ($1, $2, $3)`,
-            [trackingValue, null, testedBy]
-        );
+        // Insert into tech_serial_numbers only if this tracking hasn't been initialized yet
+        if (existingTracking.rows.length === 0) {
+            await pool.query(
+                `INSERT INTO tech_serial_numbers (
+                    shipping_tracking_number, serial_number, tested_by
+                ) VALUES ($1, $2, $3)`,
+                [trackingValue, null, testedBy]
+            );
+        }
 
         return NextResponse.json({
             found: true,
@@ -124,6 +130,7 @@ export async function GET(req: NextRequest) {
                 id: row.id,
                 orderId: row.order_id || 'N/A',
                 productTitle: row.product_title || 'Unknown Product',
+                itemNumber: row.item_number || null,
                 sku: row.sku || 'N/A',
                 condition: row.condition || 'N/A',
                 notes: row.notes || '',
