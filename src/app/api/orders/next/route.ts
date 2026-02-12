@@ -19,14 +19,22 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const techIdNum = parseInt(techId);
+    const techIdNum = parseInt(techId, 10);
+    if (!Number.isFinite(techIdNum)) {
+      return NextResponse.json(
+        { error: 'Invalid techId' },
+        { status: 400 }
+      );
+    }
 
     // 1. Check if there are ANY pending orders left for today (not completed, not shipped)
     // Note: tester_id removed - now checking all unshipped orders
     const totalPendingResult = await pool.query(
       `SELECT COUNT(*) as count
        FROM orders o
-       WHERE (o.is_shipped = false OR o.is_shipped IS NULL)`
+       WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
+         AND o.tester_id = $1`,
+      [techIdNum]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
@@ -35,10 +43,12 @@ export async function GET(req: NextRequest) {
       SELECT 
         id,
         ship_by_date,
+        created_at,
         order_id,
         product_title,
         item_number,
         sku,
+        account_source,
         status,
         condition,
         shipping_tracking_number,
@@ -46,8 +56,9 @@ export async function GET(req: NextRequest) {
       FROM orders
       WHERE 
         (is_shipped = false OR is_shipped IS NULL)
+        AND tester_id = $1
     `;
-    const params: any[] = [];
+    const params: any[] = [techIdNum];
 
     // Filter based on out_of_stock parameter
     if (outOfStock === 'true') {
@@ -66,7 +77,7 @@ export async function GET(req: NextRequest) {
 
     query += `
       ORDER BY 
-        ship_by_date ASC
+        COALESCE(ship_by_date, created_at) ASC
     `;
 
     if (!getAll) {

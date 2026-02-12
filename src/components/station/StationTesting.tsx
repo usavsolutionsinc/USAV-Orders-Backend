@@ -16,11 +16,9 @@ import {
   Zap,
   History,
   LayoutDashboard,
-  AlertCircle,
-  ExternalLink
+  AlertCircle
 } from '../Icons';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
-import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 
 interface StationTestingProps {
     userId: string;
@@ -72,7 +70,6 @@ export default function StationTesting({
     const [isSearching, setIsSearching] = useState(false);
     const [showSearchResults, setShowSearchResults] = useState(false);
     const { normalizeTrackingQuery } = useLast8TrackingSearch();
-    const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
     
     // Auto-clear messages after 0.5 seconds
     useEffect(() => {
@@ -132,6 +129,12 @@ export default function StationTesting({
         
         // Priority 4: Everything else is a serial number
         return 'SERIAL';
+    };
+
+    const getOrderIdLast4 = (orderId: string) => {
+        const digits = String(orderId || '').replace(/\D/g, '');
+        if (digits.length >= 4) return digits.slice(-4);
+        return String(orderId || '').slice(-4);
     };
 
     const handleFnskuScan = async (fnskuInput: string) => {
@@ -500,32 +503,20 @@ export default function StationTesting({
                                         <h3 className="text-lg font-black text-gray-900 leading-tight tracking-tighter">{activeOrder.productTitle}</h3>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-3 gap-3">
                                         <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order</p>
-                                            <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.orderId}</p>
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Tracking</p>
+                                            <p className="text-xs font-mono font-bold text-gray-900 truncate">
+                                                {String(activeOrder.tracking || '').slice(-4) || 'N/A'}
+                                            </p>
                                         </div>
                                         <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
                                             <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
                                             <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.sku}</p>
                                         </div>
                                         <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Tracking #</p>
-                                            <p className="text-xs font-mono font-bold text-gray-900 truncate">
-                                                {String(activeOrder.tracking || '').slice(-4) || 'N/A'}
-                                            </p>
-                                        </div>
-                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">External Page</p>
-                                            <button
-                                                type="button"
-                                                onClick={() => openExternalByItemNumber(activeOrder.itemNumber)}
-                                                disabled={!getExternalUrlByItemNumber(activeOrder.itemNumber)}
-                                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-wider"
-                                            >
-                                                <ExternalLink className="w-3.5 h-3.5" />
-                                                Open
-                                            </button>
+                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order ID</p>
+                                            <p className="text-xs font-mono font-bold text-gray-900 truncate">{getOrderIdLast4(activeOrder.orderId)}</p>
                                         </div>
                                     </div>
 

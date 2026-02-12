@@ -6,13 +6,16 @@ import { AlertCircle, Play, Package, Calendar, X, Check, ExternalLink } from './
 import { TabSwitch } from './ui/TabSwitch';
 import { ShipByDate } from './ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
+import { getOrderPlatformLabel } from '@/utils/order-platform';
 
 interface Order {
   id: number;
-  ship_by_date: string;
+  ship_by_date: string | null;
+  created_at: string | null;
   order_id: string;
   product_title: string;
   item_number: string | null;
+  account_source: string | null;
   sku: string;
   status: string;
   shipping_tracking_number: string;
@@ -35,6 +38,12 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
   const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
+
+  const getOrderIdLast4 = (orderId: string) => {
+    const digits = String(orderId || '').replace(/\D/g, '');
+    if (digits.length >= 4) return digits.slice(-4);
+    return String(orderId || '').slice(-4);
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -137,7 +146,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     >
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-2">
-        <ShipByDate date={order.ship_by_date} />
+        <ShipByDate date={order.ship_by_date || order.created_at || ''} />
         <div className="flex items-center gap-2">
           {order.out_of_stock && activeTab === 'stock' && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm">
@@ -145,9 +154,24 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               <span className="text-[8px] font-black uppercase tracking-wider">Out of Stock</span>
             </div>
           )}
+          {getOrderPlatformLabel(order.order_id, order.account_source) && (
+            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+              {getOrderPlatformLabel(order.order_id, order.account_source)}
+            </span>
+          )}
           <span className="text-[9px] font-mono font-black text-gray-700">
-            #{order.order_id}
+            #{getOrderIdLast4(order.order_id)}
           </span>
+          <button
+            type="button"
+            onClick={() => openExternalByItemNumber(order.item_number)}
+            disabled={!getExternalUrlByItemNumber(order.item_number)}
+            className="inline-flex items-center justify-center p-1.5 rounded-md bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Open external page"
+            aria-label="Open external page"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -214,15 +238,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         <h4 className="text-base font-black text-gray-900 leading-tight">
           {order.product_title}
         </h4>
-        <button
-          type="button"
-          onClick={() => openExternalByItemNumber(order.item_number)}
-          disabled={!getExternalUrlByItemNumber(order.item_number)}
-          className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-wider"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          External Page
-        </button>
       </div>
 
       {/* Info Grid */}

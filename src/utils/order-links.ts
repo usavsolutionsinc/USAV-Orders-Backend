@@ -1,3 +1,5 @@
+import { getOrderPlatformLabel } from './order-platform';
+
 function getCarrier(tracking: string): 'USPS' | 'UPS' | 'FedEx' | 'Unknown' {
   const t = tracking.toUpperCase();
   if (t.startsWith('1Z')) return 'UPS';
@@ -33,27 +35,5 @@ export function getOrderIdUrl(orderId: string): string | null {
 }
 
 export function getAccountSourceLabel(orderId: string, accountSource: string | null | undefined): string {
-  if (!orderId || orderId === 'Not available' || orderId === 'N/A') return '';
-
-  if (orderId.toUpperCase().includes('FBA')) {
-    return 'FBA';
-  }
-
-  if (/^\d{3}-\d+-\d+$/.test(orderId)) {
-    return 'Amazon';
-  }
-
-  if (/^\d{2}-\d+-\d+$/.test(orderId)) {
-    return accountSource ? `ebay - ${accountSource}` : 'ebay';
-  }
-
-  if (/^\d{15}$/.test(orderId)) {
-    return 'Walmart';
-  }
-
-  if (/^\d{4}$/.test(orderId)) {
-    return 'ECWID';
-  }
-
-  return accountSource || '';
+  return getOrderPlatformLabel(orderId, accountSource);
 }
