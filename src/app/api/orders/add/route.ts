@@ -26,15 +26,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if order already exists with this tracking number
+    // Check if order already exists with this tracking number (match by last 8 digits)
     const existingOrder = await pool.query(
-      `SELECT id FROM orders WHERE shipping_tracking_number = $1`,
+      `SELECT id, order_id, shipping_tracking_number 
+       FROM orders 
+       WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
+       AND shipping_tracking_number IS NOT NULL
+       AND shipping_tracking_number != ''`,
       [shippingTrackingNumber]
     );
 
     if (existingOrder.rows.length > 0) {
       return NextResponse.json(
-        { error: 'Order with this tracking number already exists' },
+        { 
+          error: 'Order with this tracking number already exists',
+          existingOrderId: existingOrder.rows[0].order_id,
+          existingTrackingNumber: existingOrder.rows[0].shipping_tracking_number
+        },
         { status: 409 }
       );
     }

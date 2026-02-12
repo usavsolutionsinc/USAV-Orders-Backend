@@ -87,22 +87,29 @@ export async function POST(req: NextRequest) {
       console.log('Inserted into packer_logs, ID:', packerLogId);
 
       // 2. Update orders table - set is_shipped to true only if not already shipped
+      // Match using last 8 digits to handle scanned vs manual entry variations
       const updateResult = await client.query(`
         UPDATE orders
         SET 
           is_shipped = true,
           status = 'shipped',
           packer_id = $1
-        WHERE shipping_tracking_number = $2
+        WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($2, 8)
+        AND shipping_tracking_number IS NOT NULL
+        AND shipping_tracking_number != ''
         AND is_shipped = false
-        RETURNING id, order_id
+        RETURNING id, order_id, shipping_tracking_number
       `, [staffId, shippingTrackingNumber]);
 
       if (updateResult.rows.length === 0) {
-        console.warn('No order found with tracking number:', shippingTrackingNumber);
+        console.warn('No order found with matching last 8 digits:', shippingTrackingNumber.slice(-8));
+        console.warn('Full tracking number sent:', shippingTrackingNumber);
         // Don't fail if order not found - packer_logs still saved
       } else {
-        console.log('Updated orders table, Order ID:', updateResult.rows[0].order_id);
+        console.log('Updated orders table successfully');
+        console.log('Order ID:', updateResult.rows[0].order_id);
+        console.log('DB Tracking:', updateResult.rows[0].shipping_tracking_number);
+        console.log('Matched last 8 digits:', shippingTrackingNumber.slice(-8));
       }
 
       await client.query('COMMIT');

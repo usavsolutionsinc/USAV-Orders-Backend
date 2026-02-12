@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import DashboardSidebar from '@/components/DashboardSidebar';
-import { ShippedTable, ShippedDetailsPanel } from '@/components/shipped';
+import { DashboardShippedTable, ShippedDetailsPanel } from '@/components/shipped';
 import { Loader2 } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 
@@ -33,7 +33,7 @@ export default function DashboardPage() {
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                 </div>
             }>
-                <ShippedTable unshippedOnly />
+                <DashboardShippedTable />
             </Suspense>
 
             <AnimatePresence>

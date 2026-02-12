@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import { AlertCircle, Play, Package, Calendar, X, Check, ExternalLink } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
 import { ShipByDate } from './ui/ShipByDate';
@@ -38,6 +39,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
   const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
+  const hasCelebratedRef = useRef(false);
 
   const getOrderIdLast4 = (orderId: string) => {
     const digits = String(orderId || '').replace(/\D/g, '');
@@ -51,6 +53,17 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     const interval = setInterval(fetchOrders, 30000);
     return () => clearInterval(interval);
   }, [techId, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'current' && allCompletedToday && !hasCelebratedRef.current) {
+      confetti({ particleCount: 180, spread: 80, origin: { y: 0.7 } });
+      hasCelebratedRef.current = true;
+      return;
+    }
+    if (!allCompletedToday) {
+      hasCelebratedRef.current = false;
+    }
+  }, [allCompletedToday, activeTab]);
 
   const fetchOrders = async () => {
     try {

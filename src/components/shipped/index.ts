@@ -1,4 +1,6 @@
 export { ShippedTable } from './ShippedTable';
+export { DashboardShippedTable } from './DashboardShippedTable';
+export { RepairShippedTable } from './RepairShippedTable';
 export { ShippedDetailsPanel } from './ShippedDetailsPanel';
 export { ShippedIntakeForm, type ShippedFormData } from './ShippedIntakeForm';
 export { DashboardDetailsStack } from './stacks/dashboarddetailsStack';

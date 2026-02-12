@@ -2,8 +2,8 @@
 
 import { ShippedTableBase, ShippedTableBaseProps } from './ShippedTableBase';
 
-export type ShippedTableProps = ShippedTableBaseProps;
+export type RepairShippedTableProps = ShippedTableBaseProps;
 
-export function ShippedTable(props: ShippedTableProps = {}) {
+export function RepairShippedTable(props: RepairShippedTableProps = {}) {
   return <ShippedTableBase {...props} />;
 }
