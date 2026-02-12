@@ -37,7 +37,7 @@ export function ShippedDetailsPanel({
   const fetchDurations = async () => {
     setDurationData({});
     try {
-      const res = await fetch(`/api/shipped/durations?id=${shipped.id}`);
+      const res = await fetch(`/api/shipped/durations?orderId=${encodeURIComponent(shipped.order_id)}`);
       if (res.ok) {
         const data = await res.json();
         setDurationData(data);

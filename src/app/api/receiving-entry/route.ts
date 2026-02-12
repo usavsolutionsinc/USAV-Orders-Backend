@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/drizzle/db';
-import { sql } from 'drizzle-orm';
-import { receiving } from '@/lib/drizzle/schema';
+import pool from '@/lib/db';
 import { getCarrier } from '@/utils/tracking';
 import { formatPSTTimestamp } from '@/lib/timezone';
+import { resolveReceivingSchema } from '@/utils/receiving-schema';
 
 // POST - Add entry to receiving table
 export async function POST(request: NextRequest) {
@@ -24,13 +23,12 @@ export async function POST(request: NextRequest) {
 
         const now = timestamp || formatPSTTimestamp();
         
-        // Insert into receiving table using explicit column names
-        await db.insert(receiving).values({
-            dateTime: now,
-            receivingTrackingNumber: trackingNumber,
-            carrier: detectedCarrier,
-            // quantity is only touched by sheet import
-        });
+        const { dateColumn } = await resolveReceivingSchema();
+        await pool.query(
+            `INSERT INTO receiving (${dateColumn}, receiving_tracking_number, carrier)
+             VALUES ($1, $2, $3)`,
+            [now, trackingNumber, detectedCarrier]
+        );
 
         return NextResponse.json({
             success: true,
@@ -54,20 +52,23 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        const results = await db.select({
-            id: receiving.id,
-            timestamp: receiving.dateTime,
-            tracking: receiving.receivingTrackingNumber,
-            carrier: receiving.carrier,
-            quantity: receiving.quantity
-        })
-        .from(receiving)
-        .where(sql`${receiving.receivingTrackingNumber} IS NOT NULL AND ${receiving.receivingTrackingNumber} != ''`)
-        .orderBy(sql`${receiving.id} DESC`)
-        .limit(limit)
-        .offset(offset);
+        const { dateColumn, hasQuantity } = await resolveReceivingSchema();
+        const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
+        const result = await pool.query(
+            `SELECT
+                id,
+                ${dateColumn} AS timestamp,
+                receiving_tracking_number AS tracking,
+                carrier,
+                ${countExpr} AS quantity
+             FROM receiving
+             WHERE receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
+             ORDER BY id DESC
+             LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
             
-        return NextResponse.json(results);
+        return NextResponse.json(result.rows);
     } catch (error) {
         console.error('Error fetching receiving logs:', error);
         return NextResponse.json({ 

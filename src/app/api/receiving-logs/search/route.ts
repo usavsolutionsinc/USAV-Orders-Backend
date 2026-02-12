@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/drizzle/db';
-import { sql } from 'drizzle-orm';
+import pool from '@/lib/db';
+import { resolveReceivingSchema } from '@/utils/receiving-schema';
 
 export async function GET(req: NextRequest) {
     try {
@@ -11,26 +11,27 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Search query is required' }, { status: 400 });
         }
 
-        const tableName = 'receiving';
         const last8 = query.slice(-8);
+        const { dateColumn, hasQuantity } = await resolveReceivingSchema();
+        const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
 
-        // Search in receiving table
-        const logs = await db.execute(sql.raw(`
-            SELECT id, date_time as timestamp, receiving_tracking_number as tracking, carrier as status, quantity as count
-            FROM ${tableName} 
-            WHERE 
-                (RIGHT(receiving_tracking_number::text, 8) = '${last8}' OR receiving_tracking_number::text ILIKE '%${query}%')
-                AND receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
-            ORDER BY id DESC 
-            LIMIT 20
-        `));
+        const logs = await pool.query(
+            `SELECT id, ${dateColumn} AS timestamp, receiving_tracking_number AS tracking, carrier AS status, ${countExpr} AS count
+             FROM receiving
+             WHERE
+               (RIGHT(receiving_tracking_number::text, 8) = $1 OR receiving_tracking_number::text ILIKE $2)
+               AND receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
+             ORDER BY id DESC
+             LIMIT 20`,
+            [last8, `%${query}%`]
+        );
 
-        const formattedLogs = (logs as any[]).map((log: any) => ({
+        const formattedLogs = logs.rows.map((log: any) => ({
             id: String(log.id),
             timestamp: log.timestamp || '',
             tracking: log.tracking || '',
             status: log.status || '',
-            count: log.count || 0,
+            count: parseInt(String(log.count || '1'), 10) || 1,
         }));
 
         return NextResponse.json({

@@ -7,7 +7,7 @@ import pool from '@/lib/db';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, orderIds, testerId, packerId, shipByDate, outOfStock } = body;
+    const { orderId, orderIds, testerId, packerId, shipByDate, outOfStock, notes } = body;
 
     if (!orderId && (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0)) {
       return NextResponse.json(
@@ -41,6 +41,11 @@ export async function POST(req: NextRequest) {
     if (outOfStock !== undefined) {
       updates.push(`out_of_stock = $${paramCount++}`);
       values.push(outOfStock);
+    }
+
+    if (notes !== undefined) {
+      updates.push(`notes = $${paramCount++}`);
+      values.push(notes);
     }
 
     if (updates.length === 0) {

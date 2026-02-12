@@ -103,10 +103,12 @@ export const packerLogs = pgTable('packer_logs', {
 // Receiving table - Updated schema based on user screenshot & sheet mapping
 export const receiving = pgTable('receiving', {
   id: serial('id').primaryKey(),
-  dateTime: text('date_time'), // Sheet A
+  // Support both legacy and current column names
+  dateTime: text('date_time'),
+  receivingDateTime: text('receiving_date_time'), // Sheet A
   receivingTrackingNumber: text('receiving_tracking_number'), // Sheet B
   carrier: text('carrier'), // Sheet C
-  quantity: text('quantity'), // Sheet D
+  quantity: text('quantity'),
 });
 
 // Shipped table - DEPRECATED: Now using orders table with is_shipped = true

@@ -18,6 +18,7 @@ export interface ShippedOrder {
   packed_by: number | null; // Staff ID - who actually packed (from packer_logs.packed_by)
   pack_date_time: string | null; // Derived from packer_logs.pack_date_time
   packer_photos_url: any; // JSONB array from packer_logs: [{url: string, index: number, uploadedAt: string}]
+  tracking_type: string | null; // Carrier type from packer_logs (UPS, USPS, FEDEX, ORDERS, etc.)
   account_source: string | null; // Account source (Amazon, eBay account name, etc.)
   notes: string;
   status_history: any; // JSONB status history
@@ -54,27 +55,27 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           pl.packed_by,
           pl.pack_date_time,
           pl.packer_photos_url,
+          pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
           MIN(tsn.tested_by)::int as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url
+          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs pl
           WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
                 RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-            AND pl.tracking_type = 'ORDERS'
           ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
           LIMIT 1
         ) pl ON true
         LEFT JOIN tech_serial_numbers tsn 
           ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
              RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-        WHERE pl.pack_date_time IS NOT NULL
+        WHERE COALESCE(o.is_shipped, false) = true
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
-                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url
+                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       )
       SELECT 
         os.*,
@@ -85,7 +86,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
       LEFT JOIN staff s3 ON os.tester_id = s3.id
-      ORDER BY os.pack_date_time DESC NULLS LAST, os.id DESC
+      ORDER BY COALESCE(os.pack_date_time, os.created_at) DESC NULLS LAST, os.id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
@@ -124,15 +125,15 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           pl.packed_by,
           pl.pack_date_time,
           pl.packer_photos_url,
+          pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
           MIN(tsn.tested_by)::int as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url
+          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs
           WHERE shipping_tracking_number = o.shipping_tracking_number
-            AND tracking_type = 'ORDERS'
           ORDER BY pack_date_time DESC NULLS LAST, id DESC
           LIMIT 1
         ) pl ON true
@@ -141,7 +142,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
-                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url
+                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       )
       SELECT 
         os.*,
@@ -191,27 +192,27 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           pl.packed_by,
           pl.pack_date_time,
           pl.packer_photos_url,
+          pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
           MIN(tsn.tested_by)::int as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url
+          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs pl
           WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
                 RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-            AND pl.tracking_type = 'ORDERS'
           ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
           LIMIT 1
         ) pl ON true
         LEFT JOIN tech_serial_numbers tsn 
           ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
              RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-        WHERE pl.pack_date_time IS NOT NULL
+        WHERE COALESCE(o.is_shipped, false) = true
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
-                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url
+                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       )
       SELECT 
         os.*,
@@ -312,26 +313,25 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
           pl.packed_by,
           pl.pack_date_time,
           pl.packer_photos_url,
+          pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
           MIN(tsn.tested_by) as tested_by,
           MIN(tsn.test_date_time)::text as test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url
+          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs
           WHERE shipping_tracking_number = o.shipping_tracking_number
-            AND tracking_type = 'ORDERS'
           ORDER BY pack_date_time DESC NULLS LAST, id DESC
           LIMIT 1
         ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE COALESCE(o.is_shipped, false) = true
-          AND pl.packed_by IS NOT NULL
           AND RIGHT(o.shipping_tracking_number, 8) = $1
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
                  o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
-                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url
+                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       )
       SELECT 
         os.*,
@@ -359,18 +359,9 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
 export async function getShippedOrdersCount(): Promise<number> {
   try {
     const result = await pool.query(
-      `SELECT COUNT(DISTINCT o.id) as count 
-       FROM orders o
-       INNER JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url
-          FROM packer_logs
-          WHERE shipping_tracking_number = o.shipping_tracking_number
-            AND tracking_type = 'ORDERS'
-          ORDER BY pack_date_time DESC NULLS LAST, id DESC
-          LIMIT 1
-        ) pl ON true
-       WHERE COALESCE(o.is_shipped, false) = true
-         AND pl.packed_by IS NOT NULL`
+      `SELECT COUNT(DISTINCT id) as count 
+       FROM orders
+       WHERE COALESCE(is_shipped, false) = true`
     );
     return parseInt(result.rows[0].count);
   } catch (error) {

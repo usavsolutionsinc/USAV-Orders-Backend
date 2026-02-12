@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/drizzle/db';
-import { sql } from 'drizzle-orm';
+import pool from '@/lib/db';
+import { resolveReceivingSchema } from '@/utils/receiving-schema';
 
 export async function GET(request: NextRequest) {
     try {
@@ -8,36 +8,34 @@ export async function GET(request: NextRequest) {
         const limit = parseInt(searchParams.get('limit') || '50');
         const offset = parseInt(searchParams.get('offset') || '0');
 
-        const tableName = 'receiving';
-
-        // Check if table exists
-        const tableCheck = await db.execute(sql.raw(`
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_name = '${tableName}'
-            );
-        `));
-
-        if (!tableCheck[0] || !tableCheck[0].exists) {
+        const tableCheck = await pool.query(
+            `SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'receiving'
+            ) AS exists`
+        );
+        if (!tableCheck.rows[0]?.exists) {
             return NextResponse.json([]);
         }
 
-        // Query receiving table using raw SQL (same pattern as tech-logs)
-        const logs = await db.execute(sql.raw(`
-            SELECT id, date_time as timestamp, receiving_tracking_number as tracking, carrier as status, quantity as count
-            FROM ${tableName} 
+        const { dateColumn, hasQuantity } = await resolveReceivingSchema();
+        const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
+
+        const logs = await pool.query(`
+            SELECT id, ${dateColumn} AS timestamp, receiving_tracking_number AS tracking, carrier AS status, ${countExpr} AS count
+            FROM receiving
             WHERE receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
-            ORDER BY id DESC 
-            LIMIT ${limit} OFFSET ${offset}
-        `));
+            ORDER BY id DESC
+            LIMIT $1 OFFSET $2
+        `, [limit, offset]);
 
         // Map to StationHistory interface format
-        const formattedLogs = logs.map((log: any) => ({
+        const formattedLogs = logs.rows.map((log: any) => ({
             id: String(log.id),
             timestamp: log.timestamp || '',
             tracking: log.tracking || '',
             status: log.status || '',         // Carrier
-            count: log.count || 0,
+            count: parseInt(String(log.count || '1'), 10) || 1,
         }));
 
         return NextResponse.json(formattedLogs);

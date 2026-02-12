@@ -104,7 +104,7 @@ export function ShippedDetailsPanel({
     setIsLoadingDurations(true);
     setDurationData({}); // Clear old data while loading new
     try {
-      const res = await fetch(`/api/shipped/durations?id=${shipped.id}`);
+      const res = await fetch(`/api/shipped/durations?orderId=${encodeURIComponent(shipped.order_id)}`);
       if (res.ok) {
         const data = await res.json();
         setDurationData(data);

@@ -18,6 +18,12 @@ export default function ReceivingDashboard() {
         fetchHistory();
     }, []);
 
+    useEffect(() => {
+        const handleRefresh = () => fetchHistory();
+        window.addEventListener('usav-refresh-data', handleRefresh as any);
+        return () => window.removeEventListener('usav-refresh-data', handleRefresh as any);
+    }, []);
+
     const handleSearch = async (query: string) => {
         if (!query.trim()) return;
         setIsSearching(true);

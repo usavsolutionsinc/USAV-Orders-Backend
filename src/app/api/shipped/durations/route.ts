@@ -6,14 +6,17 @@ import { sql } from 'drizzle-orm';
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
+    const orderId = searchParams.get('orderId');
+    const id = searchParams.get('id'); // Backward-compatible fallback
 
-    if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+    if (!orderId && !id) {
+      return NextResponse.json({ error: 'orderId is required' }, { status: 400 });
     }
 
     // 1. Get current record from orders table
-    const currentResult = await pool.query('SELECT * FROM orders WHERE id = $1 AND is_shipped = true', [id]);
+    const currentResult = orderId
+      ? await pool.query('SELECT * FROM orders WHERE order_id = $1 AND is_shipped = true', [orderId])
+      : await pool.query('SELECT * FROM orders WHERE id = $1 AND is_shipped = true', [id]);
     if (currentResult.rows.length === 0) {
       return NextResponse.json({ error: 'Record not found' }, { status: 404 });
     }

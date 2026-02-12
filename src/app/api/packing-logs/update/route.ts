@@ -54,11 +54,21 @@ export async function POST(req: NextRequest) {
     // Parse pack date time
     const packDate = packDateTime ? new Date(packDateTime) : new Date();
     
+    // Format timestamp without milliseconds for uploadedAt
+    const uploadedAtDate = new Date();
+    const year = uploadedAtDate.getFullYear();
+    const month = String(uploadedAtDate.getMonth() + 1).padStart(2, '0');
+    const day = String(uploadedAtDate.getDate()).padStart(2, '0');
+    const hours = String(uploadedAtDate.getHours()).padStart(2, '0');
+    const minutes = String(uploadedAtDate.getMinutes()).padStart(2, '0');
+    const seconds = String(uploadedAtDate.getSeconds()).padStart(2, '0');
+    const uploadedAtFormatted = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    
     // Format photos as JSONB
     const photosJsonb = JSON.stringify(packerPhotosUrl.map((url, index) => ({
       url,
       index: index + 1,
-      uploadedAt: new Date().toISOString()
+      uploadedAt: uploadedAtFormatted
     })));
 
     console.log('=== DATABASE UPDATE ===');
@@ -86,7 +96,32 @@ export async function POST(req: NextRequest) {
       const packerLogId = insertResult.rows[0]?.id;
       console.log('Inserted into packer_logs, ID:', packerLogId);
 
-      // 2. Update orders table - set is_shipped to true only if not already shipped
+      // 2. First check if order exists and its current state
+      const checkResult = await client.query(`
+        SELECT id, order_id, shipping_tracking_number, is_shipped, status
+        FROM orders
+        WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
+        AND shipping_tracking_number IS NOT NULL
+        AND shipping_tracking_number != ''
+        LIMIT 1
+      `, [shippingTrackingNumber]);
+
+      console.log('=== ORDERS TABLE CHECK ===');
+      if (checkResult.rows.length === 0) {
+        console.error('❌ NO ORDER FOUND with last 8 digits:', shippingTrackingNumber.slice(-8));
+        console.error('   Full tracking sent:', shippingTrackingNumber);
+      } else {
+        const orderState = checkResult.rows[0];
+        console.log('✅ Order found in database:');
+        console.log('   Order ID:', orderState.order_id);
+        console.log('   DB Tracking:', orderState.shipping_tracking_number);
+        console.log('   Current is_shipped:', orderState.is_shipped);
+        console.log('   Current status:', orderState.status);
+        console.log('   Sent tracking last 8:', shippingTrackingNumber.slice(-8));
+        console.log('   DB tracking last 8:', orderState.shipping_tracking_number.slice(-8));
+      }
+
+      // 3. Update orders table - set is_shipped to true only if not already shipped
       // Match using last 8 digits to handle scanned vs manual entry variations
       const updateResult = await client.query(`
         UPDATE orders
@@ -101,15 +136,21 @@ export async function POST(req: NextRequest) {
         RETURNING id, order_id, shipping_tracking_number
       `, [staffId, shippingTrackingNumber]);
 
+      console.log('=== UPDATE RESULT ===');
       if (updateResult.rows.length === 0) {
-        console.warn('No order found with matching last 8 digits:', shippingTrackingNumber.slice(-8));
-        console.warn('Full tracking number sent:', shippingTrackingNumber);
-        // Don't fail if order not found - packer_logs still saved
+        console.warn('⚠️  NO ROWS UPDATED');
+        if (checkResult.rows.length > 0 && checkResult.rows[0].is_shipped === true) {
+          console.warn('   Reason: Order was already marked as shipped');
+        } else {
+          console.warn('   Reason: No matching order found or other constraint failed');
+        }
       } else {
-        console.log('Updated orders table successfully');
-        console.log('Order ID:', updateResult.rows[0].order_id);
-        console.log('DB Tracking:', updateResult.rows[0].shipping_tracking_number);
-        console.log('Matched last 8 digits:', shippingTrackingNumber.slice(-8));
+        console.log('✅ Updated orders table successfully');
+        console.log('   Order ID:', updateResult.rows[0].order_id);
+        console.log('   DB Tracking:', updateResult.rows[0].shipping_tracking_number);
+        console.log('   Set is_shipped = true');
+        console.log('   Set status = shipped');
+        console.log('   Set packer_id =', staffId);
       }
 
       await client.query('COMMIT');

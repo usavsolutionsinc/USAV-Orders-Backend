@@ -50,6 +50,12 @@ export function TechTable({ testedBy }: TechTableProps) {
     fetchRecords();
   }, [testedBy]);
 
+  useEffect(() => {
+    const handleRefresh = () => fetchRecords();
+    window.addEventListener('usav-refresh-data', handleRefresh as any);
+    return () => window.removeEventListener('usav-refresh-data', handleRefresh as any);
+  }, [testedBy]);
+
   const fetchRecords = async () => {
     setLoading(true);
     try {

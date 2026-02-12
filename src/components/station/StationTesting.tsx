@@ -137,6 +137,11 @@ export default function StationTesting({
         return String(orderId || '').slice(-4);
     };
 
+    const triggerGlobalRefresh = () => {
+        if (onComplete) onComplete();
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    };
+
     const handleFnskuScan = async (fnskuInput: string) => {
         setIsLoading(true);
         try {
@@ -171,7 +176,7 @@ export default function StationTesting({
                 setSuccessMessage('FNSKU loaded - ready to scan serials');
             }
 
-            if (onComplete) onComplete();
+            triggerGlobalRefresh();
         } catch (err) {
             console.error('FNSKU scan failed:', err);
             setErrorMessage('Failed to load FNSKU. Please try again.');
@@ -230,7 +235,7 @@ export default function StationTesting({
                 }
                 
                 // Trigger history refresh
-                if (onComplete) onComplete();
+                triggerGlobalRefresh();
             } catch (err) {
                 console.error("Tracking scan failed:", err);
                 setErrorMessage('Failed to load order. Please try again.');
@@ -280,7 +285,7 @@ export default function StationTesting({
                 );
                 
                 // Trigger history refresh
-                if (onComplete) onComplete();
+                triggerGlobalRefresh();
             } catch (e) {
                 console.error('SKU scan error:', e);
                 setErrorMessage('Failed to process SKU');
@@ -330,7 +335,7 @@ export default function StationTesting({
                 }
                 
                 // Trigger history refresh
-                if (onComplete) onComplete();
+                triggerGlobalRefresh();
             } catch (e) {
                 console.error('Add serial error:', e);
                 setErrorMessage('Network error occurred');
@@ -364,7 +369,7 @@ export default function StationTesting({
                 // Close current work order
                 setActiveOrder(null);
                 setSuccessMessage('Order completed!');
-                if (onComplete) onComplete();
+                triggerGlobalRefresh();
             } else if (command === 'YES' && !activeOrder) {
                 setErrorMessage('No active order to complete');
             }
@@ -570,7 +575,7 @@ export default function StationTesting({
                                 setTimeout(() => handleSubmit(undefined, tracking), 50);
                             }}
                             onMissingParts={(orderId, reason) => {
-                                if (onComplete) onComplete();
+                                triggerGlobalRefresh();
                             }}
                         />
                     </div>
