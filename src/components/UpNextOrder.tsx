@@ -47,6 +47,19 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     return String(orderId || '').slice(-4);
   };
 
+  const getDisplayShipByDate = (order: Order) => {
+    const shipByRaw = String(order.ship_by_date || '').trim();
+    const createdAtRaw = String(order.created_at || '').trim();
+
+    const isInvalidShipBy =
+      !shipByRaw ||
+      /^\d+$/.test(shipByRaw) ||
+      Number.isNaN(new Date(shipByRaw).getTime());
+
+    if (isInvalidShipBy) return createdAtRaw || null;
+    return shipByRaw;
+  };
+
   useEffect(() => {
     fetchOrders();
     // Poll every 30 seconds for new orders
@@ -159,7 +172,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     >
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-2">
-        <ShipByDate date={order.ship_by_date || order.created_at || ''} />
+        <ShipByDate date={getDisplayShipByDate(order) || ''} />
         <div className="flex items-center gap-2">
           {order.out_of_stock && activeTab === 'stock' && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm">

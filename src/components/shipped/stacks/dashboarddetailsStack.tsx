@@ -14,15 +14,74 @@ export function DashboardDetailsStack({
 }: DetailsStackProps) {
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
   const [notes, setNotes] = useState(shipped.notes || '');
+  const [shipByDate, setShipByDate] = useState(''); // MM-DD-YY
   const [isSavingOutOfStock, setIsSavingOutOfStock] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [isSavingShipByDate, setIsSavingShipByDate] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
+
+  const isValidShipByDate = (value: any) => {
+    if (!value) return false;
+    const raw = String(value).trim();
+    if (!raw || /^\d+$/.test(raw)) return false;
+    const parsed = new Date(raw);
+    return !Number.isNaN(parsed.getTime());
+  };
+
+  const toMonthDayYearCurrent = (value: string | null | undefined) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const year = (date.getFullYear() % 100).toString().padStart(2, '0');
+    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${year}`;
+  };
 
   useEffect(() => {
     setOutOfStock((shipped as any).out_of_stock || '');
     setNotes(shipped.notes || '');
+    const preferredDate = isValidShipByDate(shipped.ship_by_date)
+      ? (shipped.ship_by_date as any)
+      : shipped.created_at;
+    setShipByDate(toMonthDayYearCurrent(preferredDate));
     setActiveInput('none');
   }, [shipped.id, (shipped as any).out_of_stock, shipped.notes]);
+
+  const saveShipByDate = async () => {
+    setIsSavingShipByDate(true);
+    try {
+      const entered = String(shipByDate || '').trim();
+      const mdMatch = entered.match(/^(\d{1,2})-(\d{1,2})(?:-(\d{2}|\d{4}))?$/);
+      if (!mdMatch) {
+        setIsSavingShipByDate(false);
+        return;
+      }
+      const month = Number(mdMatch[1]);
+      const day = Number(mdMatch[2]);
+      if (month < 1 || month > 12 || day < 1 || day > 31) {
+        setIsSavingShipByDate(false);
+        return;
+      }
+      const year = new Date().getFullYear();
+      const shipByDateValue = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+      await fetch('/api/orders/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: shipped.id,
+          shipByDate: shipByDateValue
+        })
+      });
+      onUpdate?.();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSavingShipByDate(false);
+    }
+  };
 
   const saveOutOfStock = async () => {
     setIsSavingOutOfStock(true);
@@ -69,6 +128,27 @@ export function DashboardDetailsStack({
   return (
     <div className="pb-8 pt-4 space-y-4">
       <section className="mx-8 space-y-2">
+        <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
+          <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Ship By Date</span>
+          <input
+            type="text"
+            value={shipByDate}
+            onChange={(e) => setShipByDate(e.target.value)}
+            placeholder="MM-DD-YY"
+            maxLength={8}
+            className="flex-1 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[10px] font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+          />
+          <button
+            type="button"
+            onClick={saveShipByDate}
+            disabled={isSavingShipByDate}
+            className="h-8 px-2.5 inline-flex items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
+          >
+            <Check className="w-3 h-3" />
+            {isSavingShipByDate ? 'Saving' : 'Save'}
+          </button>
+        </div>
+
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
@@ -163,6 +243,7 @@ export function DashboardDetailsStack({
         durationData={durationData}
         copiedAll={copiedAll}
         onCopyAll={onCopyAll}
+        productDetailsFirst
         showPackingPhotos={false}
         showPackingInformation={false}
         showTestingInformation={false}

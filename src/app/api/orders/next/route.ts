@@ -77,7 +77,10 @@ export async function GET(req: NextRequest) {
 
     query += `
       ORDER BY 
-        COALESCE(ship_by_date, created_at) ASC
+        CASE
+          WHEN ship_by_date IS NULL OR ship_by_date::text ~ '^\\d+$' THEN created_at
+          ELSE ship_by_date
+        END ASC
     `;
 
     if (!getAll) {

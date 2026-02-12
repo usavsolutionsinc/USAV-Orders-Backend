@@ -23,6 +23,7 @@ interface ShippedDetailsPanelContentProps {
   showPackingInformation?: boolean;
   showTestingInformation?: boolean;
   showShippingTimestamp?: boolean;
+  productDetailsFirst?: boolean;
 }
 
 const CopyableField = ({
@@ -108,10 +109,51 @@ export function ShippedDetailsPanelContent({
   showPackingPhotos = true,
   showPackingInformation = true,
   showTestingInformation = true,
-  showShippingTimestamp = false
+  showShippingTimestamp = false,
+  productDetailsFirst = false
 }: ShippedDetailsPanelContentProps) {
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
   const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
+  const productDetailsSection = (
+    <section className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
+            <Box className="w-4 h-4" />
+          </div>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Product Details</h3>
+        </div>
+        <button
+          type="button"
+          onClick={() => openExternalByItemNumber(shipped.item_number)}
+          disabled={!getExternalUrlByItemNumber(shipped.item_number)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-wider"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Product Page
+        </button>
+      </div>
+
+      <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100">
+        <div>
+          <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-2">Product Title</span>
+          <p className="font-bold text-sm text-gray-900 leading-relaxed truncate" title={shipped.product_title}>
+            {shipped.product_title || 'Not provided'}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+          <div>
+            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Condition</span>
+            <p className="font-black text-xs text-blue-600 uppercase">{shipped.condition || 'Not set'}</p>
+          </div>
+          <div>
+            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">SKU</span>
+            <p className="font-mono text-xs text-gray-900 font-bold">{shipped.sku || 'N/A'}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <div className="px-8 pb-8 pt-4 space-y-10">
@@ -131,6 +173,8 @@ export function ShippedDetailsPanelContent({
           <PhotoGallery photos={shipped.packer_photos_url || []} orderId={shipped.order_id} />
         </section>
       )}
+
+      {productDetailsFirst && productDetailsSection}
 
       <section className="space-y-6">
         <div className="flex items-center justify-between">
@@ -225,44 +269,7 @@ export function ShippedDetailsPanelContent({
         </div>
       </section>
 
-      <section className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
-              <Box className="w-4 h-4" />
-            </div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Product Details</h3>
-          </div>
-          <button
-            type="button"
-            onClick={() => openExternalByItemNumber(shipped.item_number)}
-            disabled={!getExternalUrlByItemNumber(shipped.item_number)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-wider"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Product Page
-          </button>
-        </div>
-
-        <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100">
-          <div>
-            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-2">Product Title</span>
-            <p className="font-bold text-sm text-gray-900 leading-relaxed truncate" title={shipped.product_title}>
-              {shipped.product_title || 'Not provided'}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
-            <div>
-              <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Condition</span>
-              <p className="font-black text-xs text-blue-600 uppercase">{shipped.condition || 'Not set'}</p>
-            </div>
-            <div>
-              <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">SKU</span>
-              <p className="font-mono text-xs text-gray-900 font-bold">{shipped.sku || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-      </section>
+      {!productDetailsFirst && productDetailsSection}
 
       {showPackingInformation && (
         <section className="space-y-6">

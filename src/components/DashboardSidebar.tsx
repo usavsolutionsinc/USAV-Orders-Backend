@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, Settings, History, Search } from './Icons';
+import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, History, Search } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SearchBar } from './ui/SearchBar';
 
@@ -163,17 +163,12 @@ export default function DashboardSidebar() {
                             }
                         />
                         <div className="-mt-1 text-left">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Click for an order for more details</p>
-                            <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mt-1">orders are sorted by ship by dates</p>
+                            <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">Click an order for more details</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Orders are sorted by ship-by date</p>
                         </div>
 
                         {/* Order Management Tools */}
                         <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Settings className="w-4 h-4 text-blue-600" />
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-900">Order Management</h3>
-                            </div>
-
                             <div className="space-y-3">
                                 <div className="space-y-1.5">
                                     <label className="text-[9px] font-black text-gray-500 uppercase px-1 tracking-widest">Manual Sheet Name</label>
