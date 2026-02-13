@@ -4,8 +4,15 @@ import { useState } from 'react';
 import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, History, Search } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SearchBar } from './ui/SearchBar';
+import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 
-export default function DashboardSidebar() {
+interface DashboardSidebarProps {
+    showIntakeForm?: boolean;
+    onCloseForm?: () => void;
+    onFormSubmit?: (data: ShippedFormData) => void;
+}
+
+export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit }: DashboardSidebarProps) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
     const [manualSheetName, setManualSheetName] = useState('');
@@ -135,6 +142,12 @@ export default function DashboardSidebar() {
             <aside
                 className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[340px]"
             >
+                {showIntakeForm ? (
+                    <ShippedIntakeForm
+                        onClose={onCloseForm || (() => {})}
+                        onSubmit={onFormSubmit || (() => {})}
+                    />
+                ) : (
                 <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
                     <header>
                         <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
@@ -281,6 +294,7 @@ export default function DashboardSidebar() {
                         <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
                     </footer>
                 </div>
+                )}
             </aside>
         </div>
     );

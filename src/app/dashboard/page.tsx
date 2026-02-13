@@ -3,12 +3,14 @@
 import { Suspense, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import DashboardSidebar from '@/components/DashboardSidebar';
-import { DashboardShippedTable, ShippedDetailsPanel } from '@/components/shipped';
+import { DashboardShippedTable, ShippedDetailsPanel, type ShippedFormData } from '@/components/shipped';
 import { Loader2 } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 
 export default function DashboardPage() {
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
+    const [showIntakeForm, setShowIntakeForm] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     useEffect(() => {
         const handleOpen = (e: CustomEvent<ShippedOrder>) => {
@@ -25,15 +27,77 @@ export default function DashboardPage() {
         };
     }, []);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const isNew = new URLSearchParams(window.location.search).get('new') === 'true';
+        if (isNew) {
+            setShowIntakeForm(true);
+            window.history.replaceState({}, '', '/dashboard');
+        }
+    }, []);
+
+    useEffect(() => {
+        const handleOpenIntake = () => setShowIntakeForm(true);
+        window.addEventListener('dashboard-open-intake', handleOpenIntake as any);
+        return () => {
+            window.removeEventListener('dashboard-open-intake', handleOpenIntake as any);
+        };
+    }, []);
+
+    const handleCloseForm = () => {
+        setShowIntakeForm(false);
+    };
+
+    const handleSubmitForm = async (data: ShippedFormData) => {
+        try {
+            const response = data.mode === 'add_order'
+                ? await fetch('/api/orders/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        orderId: data.order_id,
+                        productTitle: data.product_title,
+                        shippingTrackingNumber: data.shipping_tracking_number,
+                        sku: data.sku || null,
+                        accountSource: 'Manual',
+                        condition: data.condition,
+                    })
+                })
+                : await fetch('/api/shipped/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+            const result = await response.json();
+            if (!result.success) {
+                alert(result.error || 'Failed to submit form. Please try again.');
+                return;
+            }
+
+            setShowIntakeForm(false);
+            setRefreshKey((prev) => prev + 1);
+            window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        } catch (error) {
+            console.error('Error submitting dashboard intake form:', error);
+            alert('Error submitting form. Please try again.');
+        }
+    };
+
     return (
         <div className="flex h-full w-full">
-            <DashboardSidebar />
+            <DashboardSidebar
+                showIntakeForm={showIntakeForm}
+                onCloseForm={handleCloseForm}
+                onFormSubmit={handleSubmitForm}
+            />
             <Suspense fallback={
                 <div className="flex-1 flex items-center justify-center bg-gray-50">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                 </div>
             }>
-                <DashboardShippedTable />
+                <DashboardShippedTable key={refreshKey} />
             </Suspense>
 
             <AnimatePresence>

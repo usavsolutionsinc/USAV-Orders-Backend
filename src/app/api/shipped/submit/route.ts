@@ -8,7 +8,7 @@ export interface ShippedFormData {
   reason: string;
   condition: string;
   shipping_tracking_number: string;
-  sku: string;
+  sku?: string;
 }
 
 /**
@@ -29,9 +29,9 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!order_id || !product_title || !reason || !condition || !shipping_tracking_number || !sku) {
+    if (!order_id || !product_title || !reason || !condition || !shipping_tracking_number) {
       return NextResponse.json(
-        { error: 'All fields are required', success: false },
+        { error: 'order_id, product_title, reason, condition, and shipping_tracking_number are required', success: false },
         { status: 400 }
       );
     }
@@ -42,30 +42,14 @@ export async function POST(req: NextRequest) {
     // Get current timestamp in MM/DD/YYYY HH:mm:ss format (24-hour) in PST
     const formattedDate = formatPSTTimestamp();
 
-    // Insert into orders table or update existing order to is_shipped = true
-    // Note: pack_date_time moved to packer_logs table
-    const result = await pool.query(
-      `INSERT INTO orders (order_id, product_title, condition, shipping_tracking_number, sku, is_shipped)
-       VALUES ($1, $2, $3, $4, $5, true)
-       ON CONFLICT (order_id) 
-       DO UPDATE SET 
-         product_title = EXCLUDED.product_title,
-         condition = EXCLUDED.condition,
-         shipping_tracking_number = EXCLUDED.shipping_tracking_number,
-         sku = EXCLUDED.sku,
-         is_shipped = true
+    // Always insert a new row in orders. Matching order_id is lookup-only in UI.
+    const insertResult = await pool.query(
+      `INSERT INTO orders (order_id, product_title, condition, shipping_tracking_number, sku, is_shipped, created_at)
+       VALUES ($1, $2, $3, $4, $5, true, NOW())
        RETURNING id`,
-      [order_id, finalProductTitle, condition, shipping_tracking_number, sku]
+      [order_id, finalProductTitle, condition, shipping_tracking_number, sku?.trim() || null]
     );
-
-    const insertedId = result.rows[0]?.id;
-
-    // Insert packer log for audit trail
-    await pool.query(
-      `INSERT INTO packer_logs (shipping_tracking_number, tracking_type, pack_date_time)
-       VALUES ($1, 'ORDERS', $2)`,
-      [shipping_tracking_number, formattedDate]
-    );
+    const insertedId = insertResult.rows[0]?.id ?? null;
 
     return NextResponse.json({
       success: true,
@@ -76,7 +60,7 @@ export async function POST(req: NextRequest) {
         product_title: finalProductTitle,
         condition,
         shipping_tracking_number,
-        sku,
+        sku: sku?.trim() || null,
         date_time: formattedDate,
       }
     });

@@ -29,25 +29,42 @@ function ShippedPageContent() {
     const handleSubmitForm = async (data: ShippedFormData) => {
         setIsSubmitting(true);
         try {
-            const response = await fetch('/api/shipped/submit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
+            const response = data.mode === 'add_order'
+                ? await fetch('/api/orders/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        orderId: data.order_id,
+                        productTitle: data.product_title,
+                        shippingTrackingNumber: data.shipping_tracking_number,
+                        sku: data.sku || null,
+                        accountSource: 'Manual',
+                        condition: data.condition,
+                    })
+                })
+                : await fetch('/api/shipped/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
 
             const result = await response.json();
 
             if (result.success) {
-                alert(`✓ Shipped entry created successfully!\n\nOrder ID: ${data.order_id}\nTracking: ${data.shipping_tracking_number}`);
+                if (data.mode === 'add_order') {
+                    alert(`✓ Order added successfully!\n\nOrder ID: ${data.order_id}\nTracking: ${data.shipping_tracking_number}`);
+                } else {
+                    alert(`✓ Shipped entry created successfully!\n\nOrder ID: ${data.order_id}\nTracking: ${data.shipping_tracking_number}`);
+                }
                 setShowIntakeForm(false);
                 // Trigger table refresh
                 setRefreshKey(prev => prev + 1);
             } else {
-                alert('Failed to submit shipped entry. Please try again.');
+                alert(result.error || 'Failed to submit form. Please try again.');
             }
         } catch (error) {
-            console.error('Error submitting shipped entry:', error);
-            alert('Error submitting shipped entry. Please try again.');
+            console.error('Error submitting shipped form:', error);
+            alert('Error submitting form. Please try again.');
         } finally {
             setIsSubmitting(false);
         }

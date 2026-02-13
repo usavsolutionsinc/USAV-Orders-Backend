@@ -85,6 +85,13 @@ export default function StationNav() {
         }
     };
 
+    const handleNewOrdersClick = (e: React.MouseEvent) => {
+        if (pathname === '/dashboard') {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent('dashboard-open-intake'));
+        }
+    };
+
     const isPathActive = (href: string) => {
         if (!pathname) return false;
         return pathname === href || pathname.startsWith(`${href}/`);
@@ -179,7 +186,8 @@ export default function StationNav() {
 
                         <div className="grid grid-cols-2 gap-2">
                             <Link
-                                href="/shipped?new=true"
+                                href="/dashboard?new=true"
+                                onClick={handleNewOrdersClick}
                                 className="flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
                             >
                                 <Plus className="w-4 h-4" />
@@ -200,7 +208,8 @@ export default function StationNav() {
                 {isCollapsed && (
                     <div className="mb-6 space-y-2 flex flex-col items-center">
                         <Link
-                            href="/shipped?new=true"
+                            href="/dashboard?new=true"
+                            onClick={handleNewOrdersClick}
                             title="New Shipped"
                             className="p-2 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
                         >
