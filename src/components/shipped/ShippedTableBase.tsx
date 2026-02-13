@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Search, X } from '../Icons';
+import { Loader2, Search } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { CopyableText } from '../ui/CopyableText';
 import WeekHeader from '../ui/WeekHeader';
@@ -115,6 +115,10 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
   }, [unshippedOnly, fetchShipped]);
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
+  const getLast4 = (value: string | null | undefined) => {
+    const raw = String(value || '');
+    return raw.length > 4 ? raw.slice(-4) : raw || '---';
+  };
 
   const formatHeaderDate = () => {
     const now = new Date();
@@ -325,25 +329,6 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
           onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
           formatDate={formatDate}
-          rightSlot={activeSearch ? (
-            <div className="flex items-center gap-2 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
-              <Search className="w-3 h-3" />
-              <span className="text-[9px] font-black uppercase tracking-widest">{activeSearch}</span>
-              <button 
-                onClick={() => {
-                  if (unshippedOnly) {
-                    setDashboardSearch('');
-                    window.dispatchEvent(new CustomEvent('dashboard-search', { detail: { query: '' } }));
-                  } else {
-                    window.history.pushState({}, '', '/shipped');
-                  }
-                }}
-                className="hover:text-blue-900 transition-colors"
-              >
-                <X className="w-2.5 h-2.5" />
-              </button>
-            </div>
-          ) : undefined}
         />
         
         {/* Logs List */}
@@ -417,7 +402,7 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[1fr_94px_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                          className={`grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
@@ -433,24 +418,28 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
                             </div>
                           </div>
                           
-                          {/* 3. Order ID */}
-                          <div className="flex flex-col w-[94px]">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
-                            <CopyableText 
-                              text={record.order_id || ''} 
-                              className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
-                              variant="order"
-                            />
-                          </div>
-                          
-                          {/* 4. Tracking Number */}
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
-                            <CopyableText 
-                              text={record.shipping_tracking_number || ''} 
-                              className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
-                              variant="tracking"
-                            />
+                          <div className="flex items-start justify-end gap-1.5">
+                            {/* 3. Order ID */}
+                            <div className="flex flex-col w-[94px]">
+                              <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
+                              <CopyableText 
+                                text={record.order_id || ''}
+                                displayText={getLast4(record.order_id)}
+                                className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
+                                variant="order"
+                              />
+                            </div>
+                            
+                            {/* 4. Tracking Number */}
+                            <div className="flex flex-col w-[94px]">
+                              <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
+                              <CopyableText 
+                                text={record.shipping_tracking_number || ''}
+                                displayText={getLast4(record.shipping_tracking_number)}
+                                className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
+                                variant="tracking"
+                              />
+                            </div>
                           </div>
                           
                           {/* 5. Serial Number */}

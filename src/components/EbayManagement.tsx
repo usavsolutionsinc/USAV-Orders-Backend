@@ -126,7 +126,7 @@ export default function EbayManagement() {
       {accountsLoading ? (
         <div className="text-sm text-gray-400">Loading accounts...</div>
       ) : (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="flex gap-4 overflow-x-auto pb-1 no-scrollbar">
           {accounts.map((account) => {
             const lastSyncDate = account.last_sync_date 
               ? new Date(account.last_sync_date)
@@ -137,7 +137,7 @@ export default function EbayManagement() {
             const tokenExpiresInMinutes = Math.floor((tokenExpiry.getTime() - now.getTime()) / 1000 / 60);
 
             return (
-              <div key={account.id} className="p-4 bg-white rounded-2xl border border-gray-200">
+              <div key={account.id} className="p-4 bg-white rounded-2xl border border-gray-200 min-w-[280px] flex-shrink-0">
                 <div className="flex items-start justify-between mb-2">
                   <div className="text-sm font-black text-gray-900">{account.account_name}</div>
                   <div className={`px-2 py-1 rounded text-[8px] font-bold ${

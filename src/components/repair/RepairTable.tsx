@@ -123,6 +123,10 @@ export function RepairTable({ filter }: RepairTableProps) {
   const handleUpdate = () => {
     fetchRepairs();
   };
+  const getLast4 = (value: string | null | undefined) => {
+    const raw = String(value || '');
+    return raw.length > 4 ? raw.slice(-4) : raw || '---';
+  };
 
   // Filter repairs based on active/done tab
   const filteredRepairs = repairs.filter(repair => {
@@ -233,25 +237,11 @@ export function RepairTable({ filter }: RepairTableProps) {
                         animate={{ opacity: 1 }}
                         key={repair.id}
                         onClick={() => handleRowClick(repair)}
-                        className={`grid grid-cols-[60px_2fr_1fr_180px] items-center gap-1 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                        className={`grid grid-cols-[2fr_1fr_180px] items-center gap-1 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                           selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                         }`}
                       >
-                        {/* 1. Time */}
-                        <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
-                          {repair.date_time ? (
-                            (() => {
-                              try {
-                                const dateObj = new Date(repair.date_time);
-                                return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                              } catch {
-                                return '--:--';
-                              }
-                            })()
-                          ) : '--:--'}
-                        </div>
-                        
-                        {/* 2. Product Title, Name, Phone, Email & Price */}
+                        {/* 1. Product Title, Name, Phone, Email & Price */}
                         <div className="flex flex-col min-w-0 gap-1">
                           {/* Product Title - Large */}
                           <div className="text-[13px] font-black text-gray-900 truncate leading-tight">
@@ -288,19 +278,20 @@ export function RepairTable({ filter }: RepairTableProps) {
                           </div>
                         </div>
                         
-                        {/* 3. Issue */}
+                        {/* 2. Issue */}
                         <div className="flex flex-col min-w-0 justify-start">
                           <div className="text-[13px] font-black text-gray-900 truncate leading-tight text-left">
                             {repair.issue || 'No issue specified'}
                           </div>
                         </div>
                         
-                        {/* 4. Ticket # and Actions */}
+                        {/* 3. Ticket # and Actions */}
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-col">
                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
                             <CopyableText 
                               text={repair.ticket_number || ''} 
+                              displayText={getLast4(repair.ticket_number)}
                               className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
                               variant="default"
                             />

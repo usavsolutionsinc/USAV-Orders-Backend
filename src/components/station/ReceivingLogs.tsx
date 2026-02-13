@@ -28,7 +28,7 @@ const CopyableText = ({ text, className, disabled = false }: { text: string; cla
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const displayText = text.length > 8 ? text.slice(-8) : text;
+    const displayText = text.length > 4 ? text.slice(-4) : text;
     const isEmpty = !text || text === '---' || disabled;
 
     if (isEmpty) {
@@ -262,7 +262,7 @@ export default function ReceivingLogs({
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             key={log.id} 
-                                            className={`grid grid-cols-[55px_85px_1fr] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
+                                            className={`grid grid-cols-[55px_110px_1fr] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
                                                 {ts ? (
@@ -274,7 +274,7 @@ export default function ReceivingLogs({
                                             <div className="flex justify-start">
                                                 <CopyableText 
                                                     text={log.tracking || ''} 
-                                                    className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 w-[85px]" 
+                                                    className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 w-[110px]" 
                                                 />
                                             </div>
                                             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-left opacity-60">

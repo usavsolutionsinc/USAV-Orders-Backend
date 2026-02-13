@@ -165,7 +165,7 @@ export default function ReceivingTaskList() {
                                         isInProgress ? 'text-blue-600' : 
                                         'text-gray-900'
                                     }`}>
-                                        {task.trackingNumber}
+                                        {task.trackingNumber.slice(-4)}
                                     </div>
                                     {task.orderNumber && (
                                         <div className="px-2 py-0.5 bg-gray-100 rounded text-[9px] font-mono text-gray-500">
@@ -216,4 +216,3 @@ export default function ReceivingTaskList() {
         </div>
     );
 }
-

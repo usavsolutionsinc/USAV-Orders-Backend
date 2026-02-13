@@ -131,23 +131,31 @@ Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not 
     };
 
     // Handle search
-        const handleSearch = async (query: string) => {
-        if (!query.trim()) {
+    const handleSearch = async (query: string) => {
+        const trimmedQuery = query.trim();
+        if (!trimmedQuery) {
             setResults([]);
             setHasSearched(false);
             return;
         }
 
-        const normalizedQuery = normalizeTrackingQuery(query);
+        const normalizedQuery = normalizeTrackingQuery(trimmedQuery);
         setIsSearching(true);
         setHasSearched(true);
         try {
-            const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(normalizedQuery)}`);
-            const data = await res.json();
+            // First pass: use exact input so full order IDs are matched as stored in orders.order_id.
+            let res = await fetch(`/api/shipped/search?q=${encodeURIComponent(trimmedQuery)}`);
+            let data = await res.json();
+
+            // Fallback for tracking searches: retry with normalized last-8 if no results.
+            if ((!data?.results || data.results.length === 0) && normalizedQuery !== trimmedQuery) {
+                res = await fetch(`/api/shipped/search?q=${encodeURIComponent(normalizedQuery)}`);
+                data = await res.json();
+            }
             
             if (data.results) {
                 setResults(data.results);
-                saveSearchHistory(query, data.count);
+                saveSearchHistory(trimmedQuery, data.count);
                 // If only one result, open it directly using the shared event system
                 if (data.results.length === 1) {
                     openDetails(data.results[0]);

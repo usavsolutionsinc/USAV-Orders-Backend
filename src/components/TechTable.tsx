@@ -72,6 +72,10 @@ export function TechTable({ testedBy }: TechTableProps) {
   };
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
+  const getLast4 = (value: string | null | undefined) => {
+    const raw = String(value || '');
+    return raw.length > 4 ? raw.slice(-4) : raw || '---';
+  };
 
   const formatHeaderDate = () => {
     const now = new Date();
@@ -222,31 +226,16 @@ export function TechTable({ testedBy }: TechTableProps) {
                       <p className="text-[11px] font-black text-gray-400 uppercase">Total: {dateRecords.length} Units</p>
                     </div>
                     {sortedRecords.map((record, index) => {
-                      const ts = record.test_date_time;
                       return (
                         <motion.div 
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           key={record.id}
-                          className={`grid grid-cols-[60px_1fr_94px_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 ${
+                          className={`grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 ${
                             index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
-                          {/* 1. Time */}
-                          <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left flex items-center gap-2">
-                            {ts ? (
-                              (() => {
-                                try {
-                                  const dateObj = new Date(ts);
-                                  return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                                } catch {
-                                  return '--:--';
-                                }
-                              })()
-                            ) : '--:--'}
-                          </div>
-                          
-                          {/* 2. Product Title & Condition */}
+                          {/* 1. Product Title & Condition */}
                           <div className="flex flex-col min-w-0">
                             <div className="text-[11px] font-bold text-gray-900 truncate">
                               {record.product_title || 'Unknown Product'}
@@ -256,27 +245,31 @@ export function TechTable({ testedBy }: TechTableProps) {
                             </div>
                           </div>
                           
-                          {/* 3. Order ID */}
-                          <div className="flex flex-col w-[94px]">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
-                            <CopyableText 
-                              text={record.order_id || 'N/A'} 
-                              className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
-                              variant="order"
-                            />
+                          <div className="flex items-start justify-end gap-1.5">
+                            {/* 2. Order ID */}
+                            <div className="flex flex-col w-[94px]">
+                              <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
+                              <CopyableText 
+                                text={record.order_id || 'N/A'}
+                                displayText={getLast4(record.order_id)}
+                                className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
+                                variant="order"
+                              />
+                            </div>
+                            
+                            {/* 3. Tracking Number */}
+                            <div className="flex flex-col w-[94px]">
+                              <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
+                              <CopyableText 
+                                text={record.shipping_tracking_number || ''}
+                                displayText={getLast4(record.shipping_tracking_number)}
+                                className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
+                                variant="tracking"
+                              />
+                            </div>
                           </div>
                           
-                          {/* 4. Tracking Number */}
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
-                            <CopyableText 
-                              text={record.shipping_tracking_number || ''} 
-                              className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
-                              variant="tracking"
-                            />
-                          </div>
-                          
-                          {/* 5. Serial Number */}
+                          {/* 4. Serial Number */}
                           <div className="flex flex-col w-[70px]">
                             <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
                             <CopyableText 

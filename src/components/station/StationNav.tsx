@@ -28,9 +28,9 @@ interface StationNavProps {
 }
 
 const mainNavItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Dashboard/Orders', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Shipped Orders', href: '/shipped', icon: PackageCheck },
     { name: 'Receiving', href: '/receiving', icon: ClipboardList },
-    { name: 'Orders', href: '/shipped', icon: PackageCheck },
     { name: 'Repair', href: '/repair', icon: Tool },
     { name: 'Sku Stock', href: '/sku-stock', icon: Box },
 ];

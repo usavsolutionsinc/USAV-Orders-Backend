@@ -5,6 +5,7 @@ import { Copy, Check } from '../Icons';
 
 interface CopyableTextProps {
     text: string;
+    displayText?: string;
     className?: string;
     disabled?: boolean;
     variant?: 'serial' | 'order' | 'tracking' | 'default';
@@ -14,7 +15,7 @@ interface CopyableTextProps {
  * A text component that can be copied to clipboard on click
  * Supports different display lengths for various IDs
  */
-export function CopyableText({ text, className = '', disabled = false, variant = 'default' }: CopyableTextProps) {
+export function CopyableText({ text, displayText, className = '', disabled = false, variant = 'default' }: CopyableTextProps) {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = (e: React.MouseEvent) => {
@@ -41,7 +42,7 @@ export function CopyableText({ text, className = '', disabled = false, variant =
         }
     };
 
-    const displayText = getDisplayText();
+    const resolvedDisplayText = displayText ?? getDisplayText();
     const isEmpty = !text || text === '---' || disabled;
 
     if (isEmpty) {
@@ -58,7 +59,7 @@ export function CopyableText({ text, className = '', disabled = false, variant =
             className={`${className} group relative flex items-center justify-start gap-2 hover:brightness-95 active:scale-95 transition-all w-fit`}
             title={`Click to copy: ${text}`}
         >
-            <span className="truncate text-left">{displayText}</span>
+            <span className="truncate text-left">{resolvedDisplayText}</span>
             {copied ? (
                 <Check className="w-2.5 h-2.5 text-emerald-600" />
             ) : (

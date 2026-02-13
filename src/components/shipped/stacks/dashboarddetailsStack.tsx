@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Check } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
@@ -18,7 +18,10 @@ export function DashboardDetailsStack({
   const [isSavingOutOfStock, setIsSavingOutOfStock] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isSavingShipByDate, setIsSavingShipByDate] = useState(false);
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+  const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
+  const deleteArmTimeoutRef = useRef<number | null>(null);
 
   const isValidShipByDate = (value: any) => {
     if (!value) return false;
@@ -45,7 +48,16 @@ export function DashboardDetailsStack({
       : shipped.created_at;
     setShipByDate(toMonthDayYearCurrent(preferredDate));
     setActiveInput('none');
+    setIsDeleteArmed(false);
   }, [shipped.id, (shipped as any).out_of_stock, shipped.notes]);
+
+  useEffect(() => {
+    return () => {
+      if (deleteArmTimeoutRef.current) {
+        window.clearTimeout(deleteArmTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const saveShipByDate = async () => {
     setIsSavingShipByDate(true);
@@ -122,6 +134,49 @@ export function DashboardDetailsStack({
       console.error(error);
     } finally {
       setIsSavingNotes(false);
+    }
+  };
+
+  const cancelOrder = async () => {
+    if (!isDeleteArmed) {
+      setIsDeleteArmed(true);
+      if (deleteArmTimeoutRef.current) {
+        window.clearTimeout(deleteArmTimeoutRef.current);
+      }
+      deleteArmTimeoutRef.current = window.setTimeout(() => {
+        setIsDeleteArmed(false);
+      }, 3000);
+      return;
+    }
+
+    if (deleteArmTimeoutRef.current) {
+      window.clearTimeout(deleteArmTimeoutRef.current);
+      deleteArmTimeoutRef.current = null;
+    }
+    setIsDeleteArmed(false);
+
+    setIsDeletingOrder(true);
+    try {
+      const response = await fetch('/api/orders/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: shipped.id })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to delete order');
+      }
+
+      onUpdate?.();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      window.dispatchEvent(new CustomEvent('close-shipped-details'));
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+      window.alert('Failed to cancel order. Please try again.');
+    } finally {
+      setIsDeletingOrder(false);
     }
   };
 
@@ -248,6 +303,17 @@ export function DashboardDetailsStack({
         showPackingInformation={false}
         showTestingInformation={false}
       />
+
+      <section className="mx-8 pt-2">
+        <button
+          type="button"
+          onClick={cancelOrder}
+          disabled={isDeletingOrder}
+          className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+        >
+          {isDeletingOrder ? 'Cancelling...' : isDeleteArmed ? 'Click Again To Confirm' : 'Cancel/Delete Order'}
+        </button>
+      </section>
     </div>
   );
 }

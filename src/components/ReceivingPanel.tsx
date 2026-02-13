@@ -244,7 +244,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Tracking</span>
                                     <div className="flex items-center gap-2">
                                         <span className="text-[11px] font-black font-mono text-blue-600">
-                                            {lastFound.tracking.slice(-8)}
+                                            {lastFound.tracking.slice(-4)}
                                         </span>
                                         <button
                                             onClick={() => copyToClipboard(lastFound.tracking, 'found-tracking')}
@@ -293,7 +293,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
                                 >
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="text-[10px] font-mono font-bold text-blue-600 flex-1">
-                                            {result.tracking}
+                                            {result.tracking.slice(-4)}
                                         </span>
                                         <button
                                             onClick={() => copyToClipboard(result.tracking, `tracking-${result.id}`)}
