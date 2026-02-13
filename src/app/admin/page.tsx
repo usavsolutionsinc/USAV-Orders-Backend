@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, RefreshCw } from '@/components/Icons';
+import { Plus, RefreshCw, AlertCircle, ExternalLink } from '@/components/Icons';
 import { motion } from 'framer-motion';
-import { useSearchParams } from 'next/navigation';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { AdminDetailsStack } from '@/components/shipped/stacks/adminDetailsStack';
+import { getOrderPlatformLabel } from '@/utils/order-platform';
+import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 
 interface Staff {
     id: number;
@@ -22,6 +23,8 @@ interface Order {
     ship_by_date: string | null;
     order_id: string;
     product_title: string;
+    item_number?: string | null;
+    account_source?: string | null;
     sku: string;
     shipping_tracking_number: string | null;
     tester_id: number | null;
@@ -232,7 +235,6 @@ export default function AdminPage() {
 // Orders Management Component
 function OrdersManagement() {
     const queryClient = useQueryClient();
-    const searchParams = useSearchParams();
     const [filterTab, setFilterTab] = useState<'out of stock' | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
@@ -241,6 +243,7 @@ function OrdersManagement() {
     const [bulkTesterId, setBulkTesterId] = useState<number | null>(null);
     const [bulkPackerId, setBulkPackerId] = useState<number | null>(null);
     const appliedOrderParamRef = useRef(false);
+    const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
 
     // Fetch eBay accounts
     const { data: accountsData } = useQuery({
@@ -374,7 +377,8 @@ function OrdersManagement() {
 
     useEffect(() => {
         if (appliedOrderParamRef.current) return;
-        const orderParam = Number(searchParams.get('orderId'));
+        if (typeof window === 'undefined') return;
+        const orderParam = Number(new URLSearchParams(window.location.search).get('orderId'));
         if (!orderParam || Number.isNaN(orderParam) || allOrders.length === 0) return;
 
         const match = allOrders.find((order) => order.id === orderParam);
@@ -384,7 +388,7 @@ function OrdersManagement() {
         setFocusedOrderId(match.id);
         setSelectedOrderIds((current) => (current.includes(match.id) ? current : [...current, match.id]));
         setIsDetailsPanelOpen(true);
-    }, [searchParams, allOrders]);
+    }, [allOrders]);
 
     const selectedOrder = allOrders.find((order) => order.id === focusedOrderId) || null;
     const allVisibleSelected = orders.length > 0 && orders.every((order) => selectedOrderIds.includes(order.id));
@@ -414,6 +418,23 @@ function OrdersManagement() {
             testerId: bulkTesterId,
             packerId: bulkPackerId,
         });
+    };
+
+    const getOrderIdLast4 = (orderId: string) => {
+        const digits = String(orderId || '').replace(/\D/g, '');
+        if (digits.length >= 4) return digits.slice(-4);
+        return String(orderId || '').slice(-4);
+    };
+
+    const getDisplayShipByDate = (order: Order) => {
+        const shipByRaw = String(order.ship_by_date || '').trim();
+        const createdAtRaw = String(order.created_at || '').trim();
+        const isInvalidShipBy =
+            !shipByRaw ||
+            /^\d+$/.test(shipByRaw) ||
+            Number.isNaN(new Date(shipByRaw).getTime());
+        if (isInvalidShipBy) return createdAtRaw || null;
+        return shipByRaw;
     };
 
     return (
@@ -607,14 +628,35 @@ function OrdersManagement() {
 
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between mb-2 gap-2">
-                                                <ShipByDate date={order.ship_by_date} />
+                                                <ShipByDate date={getDisplayShipByDate(order) || ''} />
                                                 <div className="flex items-center gap-2">
-                                                    {order.out_of_stock && (
-                                                        <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-orange-100 text-orange-700">
-                                                            Out of Stock
+                                                    {order.out_of_stock && filterTab === 'out of stock' && (
+                                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm">
+                                                            <AlertCircle className="w-3 h-3" />
+                                                            <span className="text-[8px] font-black uppercase tracking-wider">Out of Stock</span>
+                                                        </div>
+                                                    )}
+                                                    {getOrderPlatformLabel(order.order_id, order.account_source) && (
+                                                        <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                                                            {getOrderPlatformLabel(order.order_id, order.account_source)}
                                                         </span>
                                                     )}
-                                                    <span className="text-[9px] font-mono font-black text-gray-700">#{order.order_id}</span>
+                                                    <span className="text-[9px] font-mono font-black text-gray-700">
+                                                        #{getOrderIdLast4(order.order_id)}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openExternalByItemNumber(order.item_number || null);
+                                                        }}
+                                                        disabled={!getExternalUrlByItemNumber(order.item_number || null)}
+                                                        className="inline-flex items-center justify-center p-1.5 rounded-md bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        title="Open external page"
+                                                        aria-label="Open external page"
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                    </button>
                                                 </div>
                                             </div>
 
@@ -622,15 +664,7 @@ function OrdersManagement() {
                                                 <h3 className="text-base font-black text-gray-900 leading-tight">{order.product_title}</h3>
                                             </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                                                <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
-                                                        Order ID
-                                                    </p>
-                                                    <p className="text-xs font-mono font-bold text-gray-800">
-                                                        {order.order_id}
-                                                    </p>
-                                                </div>
+                                            <div className="grid grid-cols-2 gap-3">
                                                 <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
                                                         Tracking #
@@ -639,26 +673,11 @@ function OrdersManagement() {
                                                         {order.shipping_tracking_number ? order.shipping_tracking_number.slice(-4) : '—'}
                                                     </p>
                                                 </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                 <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
                                                         SKU
                                                     </p>
                                                     <p className="text-xs font-mono font-bold text-gray-800">{order.sku}</p>
-                                                </div>
-                                                <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
-                                                        Tester
-                                                    </p>
-                                                    <p className="text-xs font-bold text-gray-800">{getStaffNameById(order.tester_id) || 'Unassigned'}</p>
-                                                </div>
-                                                <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
-                                                        Packer
-                                                    </p>
-                                                    <p className="text-xs font-bold text-gray-800">{getStaffNameById(order.packer_id) || 'Unassigned'}</p>
                                                 </div>
                                             </div>
                                         </div>
