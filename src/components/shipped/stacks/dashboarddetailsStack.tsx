@@ -15,9 +15,11 @@ export function DashboardDetailsStack({
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
   const [notes, setNotes] = useState(shipped.notes || '');
   const [shipByDate, setShipByDate] = useState(''); // MM-DD-YY
+  const [shippingTrackingNumber, setShippingTrackingNumber] = useState(shipped.shipping_tracking_number || '');
   const [isSavingOutOfStock, setIsSavingOutOfStock] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isSavingShipByDate, setIsSavingShipByDate] = useState(false);
+  const [isSavingTrackingNumber, setIsSavingTrackingNumber] = useState(false);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
@@ -47,9 +49,10 @@ export function DashboardDetailsStack({
       ? (shipped.ship_by_date as any)
       : shipped.created_at;
     setShipByDate(toMonthDayYearCurrent(preferredDate));
+    setShippingTrackingNumber(shipped.shipping_tracking_number || '');
     setActiveInput('none');
     setIsDeleteArmed(false);
-  }, [shipped.id, (shipped as any).out_of_stock, shipped.notes]);
+  }, [shipped.id, (shipped as any).out_of_stock, shipped.notes, shipped.shipping_tracking_number]);
 
   useEffect(() => {
     return () => {
@@ -134,6 +137,27 @@ export function DashboardDetailsStack({
       console.error(error);
     } finally {
       setIsSavingNotes(false);
+    }
+  };
+
+  const saveShippingTrackingNumber = async () => {
+    setIsSavingTrackingNumber(true);
+    try {
+      await fetch('/api/orders/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: shipped.id,
+          shippingTrackingNumber: shippingTrackingNumber.trim()
+        })
+      });
+      onUpdate?.();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSavingTrackingNumber(false);
     }
   };
 
@@ -305,6 +329,28 @@ export function DashboardDetailsStack({
       />
 
       <section className="mx-8 pt-2">
+        <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 mb-3">
+          <label className="block text-[9px] font-black uppercase tracking-widest text-blue-700">
+            Update Shipping Tracking Number
+          </label>
+          <input
+            type="text"
+            value={shippingTrackingNumber}
+            onChange={(e) => setShippingTrackingNumber(e.target.value)}
+            placeholder="Enter new tracking number..."
+            className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+          />
+          <button
+            type="button"
+            onClick={saveShippingTrackingNumber}
+            disabled={isSavingTrackingNumber}
+            className="w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+          >
+            <Check className="w-3 h-3" />
+            {isSavingTrackingNumber ? 'Updating...' : 'Update Shipping Tracking Number'}
+          </button>
+        </div>
+
         <button
           type="button"
           onClick={cancelOrder}

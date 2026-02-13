@@ -137,7 +137,7 @@ export function ShippedDetailsPanelContent({
       <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100">
         <div>
           <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-2">Product Title</span>
-          <p className="font-bold text-sm text-gray-900 leading-relaxed truncate" title={shipped.product_title}>
+          <p className="font-bold text-sm text-gray-900 leading-relaxed break-words whitespace-normal" title={shipped.product_title}>
             {shipped.product_title || 'Not provided'}
           </p>
         </div>
