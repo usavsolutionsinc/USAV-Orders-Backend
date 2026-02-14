@@ -420,7 +420,7 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
                           
                           <div className="flex items-start justify-end gap-1.5">
                             {/* 3. Order ID */}
-                            <div className="flex flex-col w-[94px]">
+                            <div className="flex flex-col w-[60px]">
                               <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
                               <CopyableText 
                                 text={record.order_id || ''}
@@ -431,7 +431,7 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
                             </div>
                             
                             {/* 4. Tracking Number */}
-                            <div className="flex flex-col w-[94px]">
+                            <div className="flex flex-col w-[60px]">
                               <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
                               <CopyableText 
                                 text={record.shipping_tracking_number || ''}

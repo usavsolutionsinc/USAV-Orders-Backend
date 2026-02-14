@@ -118,6 +118,9 @@ function RepairSidebar({ activeTab, setActiveTab }: RepairSidebarProps) {
                                         </button>
                                     }
                                 />
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">
+                                    Repairs sorted by most urgent
+                                </p>
 
                                 {/* Active / Done Tabs */}
                                 <TabSwitch

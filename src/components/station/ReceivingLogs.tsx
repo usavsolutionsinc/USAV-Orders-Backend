@@ -33,7 +33,7 @@ const CopyableText = ({ text, className, disabled = false }: { text: string; cla
 
     if (isEmpty) {
         return (
-            <div className={`${className} flex items-center justify-center w-full opacity-40`}>
+            <div className={`${className} flex items-center justify-center w-[60px] opacity-40`}>
                 <span className="text-left w-full">---</span>
             </div>
         );
@@ -42,7 +42,7 @@ const CopyableText = ({ text, className, disabled = false }: { text: string; cla
     return (
         <button 
             onClick={handleCopy}
-            className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-full`}
+            className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-[60px]`}
             title={`Click to copy: ${text}`}
         >
             <span className="truncate flex-1 text-left">{displayText}</span>
@@ -262,7 +262,7 @@ export default function ReceivingLogs({
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             key={log.id} 
-                                            className={`grid grid-cols-[55px_110px_1fr] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
+                                            className={`grid grid-cols-[45px_65px_120px] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
                                                 {ts ? (

@@ -219,7 +219,7 @@ export function RepairTable({ filter }: RepairTableProps) {
           ) : (
             <div className="flex flex-col w-full">
               {Object.entries(groupedRepairs)
-                .sort((a, b) => b[0].localeCompare(a[0]))
+                .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([date, records]) => (
                   <div key={date} className="flex flex-col">
                     <div 
