@@ -33,11 +33,25 @@ export default function WeekHeader({
   formatDate,
   rightSlot,
 }: WeekHeaderProps) {
+  const getTodayPSTDisplay = () => {
+    try {
+      const pstNow = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+      const date = new Date(pstNow);
+      if (Number.isNaN(date.getTime())) return fallbackDate;
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return formatDate(`${year}-${month}-${day}`);
+    } catch {
+      return fallbackDate;
+    }
+  };
+
   return (
     <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-2">
         <p className="text-[11px] font-black text-gray-900 tracking-tight">
-          {stickyDate || fallbackDate}
+          {stickyDate || getTodayPSTDisplay()}
         </p>
         <div className="h-2 w-px bg-gray-200" />
         <p className={`text-[11px] font-black uppercase tracking-widest ${countClassName}`}>
