@@ -7,6 +7,7 @@ import { CopyableText } from './ui/CopyableText';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { ShippedOrder } from '@/lib/neon/orders-queries';
 
 // Hard-coded staff ID to name mapping
 const STAFF_NAMES: { [key: number]: string } = {
@@ -25,14 +26,23 @@ function getStaffName(staffId: number | null | undefined): string {
 
 interface TechRecord {
   id: number;
+  order_db_id?: number | null;
   test_date_time: string;
   shipping_tracking_number: string;
   serial_number: string;
   tested_by: number;
+  ship_by_date?: string | null;
+  created_at?: string | null;
   order_id: string | null;
+  item_number?: string | null;
   product_title: string | null;
+  quantity?: string | null;
   condition: string | null;
   sku: string | null;
+  account_source?: string | null;
+  notes?: string | null;
+  out_of_stock?: string | null;
+  is_shipped?: boolean;
 }
 
 interface TechTableProps {
@@ -73,6 +83,34 @@ export function TechTable({ testedBy }: TechTableProps) {
   };
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
+  const openDetails = (record: TechRecord) => {
+    const detail: ShippedOrder = {
+      id: record.order_db_id ?? record.id,
+      ship_by_date: record.ship_by_date || '',
+      order_id: record.order_id || '',
+      product_title: record.product_title || '',
+      item_number: record.item_number || null,
+      condition: record.condition || '',
+      shipping_tracking_number: record.shipping_tracking_number || '',
+      serial_number: record.serial_number || '',
+      sku: record.sku || '',
+      tester_id: null,
+      tested_by: record.tested_by || null,
+      test_date_time: record.test_date_time || null,
+      packer_id: null,
+      packed_by: null,
+      pack_date_time: null,
+      packer_photos_url: [],
+      tracking_type: null,
+      account_source: record.account_source || null,
+      notes: record.notes || '',
+      status_history: [],
+      is_shipped: !!record.is_shipped,
+      created_at: record.created_at || null,
+      quantity: record.quantity || '1',
+    };
+    window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
+  };
   const getLast4 = (value: string | null | undefined) => {
     const raw = String(value || '');
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
@@ -226,7 +264,8 @@ export function TechTable({ testedBy }: TechTableProps) {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           key={record.id}
-                          className={`grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 ${
+                          onClick={() => openDetails(record)}
+                          className={`grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
                             index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >

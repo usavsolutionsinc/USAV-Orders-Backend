@@ -11,16 +11,21 @@ export function DashboardDetailsStack({
   durationData,
   copiedAll,
   onCopyAll,
-  onUpdate
+  onUpdate,
+  mode = 'dashboard'
 }: DetailsStackProps) {
+  const quantity = Math.max(1, parseInt(String((shipped as any).quantity || '1'), 10) || 1);
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
   const [notes, setNotes] = useState(shipped.notes || '');
   const [shipByDate, setShipByDate] = useState(''); // MM-DD-YY
+  const [itemNumber, setItemNumber] = useState(shipped.item_number || '');
   const [shippingTrackingNumber, setShippingTrackingNumber] = useState(shipped.shipping_tracking_number || '');
   const [isSavingOutOfStock, setIsSavingOutOfStock] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isSavingShipByDate, setIsSavingShipByDate] = useState(false);
+  const [isSavingItemNumber, setIsSavingItemNumber] = useState(false);
   const [isSavingTrackingNumber, setIsSavingTrackingNumber] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
@@ -48,10 +53,11 @@ export function DashboardDetailsStack({
       ? (shipped.ship_by_date as any)
       : shipped.created_at;
     setShipByDate(toMonthDayYearCurrent(preferredDate));
+    setItemNumber(shipped.item_number || '');
     setShippingTrackingNumber(shipped.shipping_tracking_number || '');
     setActiveInput('none');
     setIsDeleteArmed(false);
-  }, [shipped.id, (shipped as any).out_of_stock, shipped.notes, shipped.shipping_tracking_number]);
+  }, [shipped.id, (shipped as any).out_of_stock, shipped.notes, shipped.shipping_tracking_number, shipped.item_number]);
 
   useEffect(() => {
     return () => {
@@ -160,6 +166,27 @@ export function DashboardDetailsStack({
     }
   };
 
+  const saveItemNumber = async () => {
+    setIsSavingItemNumber(true);
+    try {
+      await fetch('/api/orders/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: shipped.id,
+          itemNumber: itemNumber.trim()
+        })
+      });
+      onUpdate?.();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSavingItemNumber(false);
+    }
+  };
+
   const cancelOrder = async () => {
     if (!isDeleteArmed) {
       setIsDeleteArmed(true);
@@ -203,28 +230,85 @@ export function DashboardDetailsStack({
     }
   };
 
+  const handleUndo = async () => {
+    setIsUndoing(true);
+    try {
+      const res = await fetch('/api/tech/undo-last', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tracking: shipped.shipping_tracking_number,
+          techId: shipped.tested_by ?? shipped.tester_id ?? null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        window.alert(data?.error || 'Failed to undo latest scan.');
+        return;
+      }
+
+      onUpdate?.();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      window.dispatchEvent(new CustomEvent('tech-undo-applied', {
+        detail: {
+          tracking: shipped.shipping_tracking_number,
+          removedSerial: data.removedSerial || null,
+          serialNumbers: data.serialNumbers || [],
+        },
+      }));
+      window.dispatchEvent(new CustomEvent('close-shipped-details'));
+    } catch (error) {
+      console.error(error);
+      window.alert('Failed to undo latest scan.');
+    } finally {
+      setIsUndoing(false);
+    }
+  };
+
   return (
     <div className="pb-8 pt-4 space-y-4">
       <section className="mx-8 space-y-2">
         <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
-          <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Ship By Date</span>
-          <input
-            type="text"
-            value={shipByDate}
-            onChange={(e) => setShipByDate(e.target.value)}
-            placeholder="MM-DD-YY"
-            maxLength={8}
-            className="flex-1 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[10px] font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-          />
-          <button
-            type="button"
-            onClick={saveShipByDate}
-            disabled={isSavingShipByDate}
-            className="h-8 px-2.5 inline-flex items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
-          >
-            <Check className="w-3 h-3" />
-            {isSavingShipByDate ? 'Saving' : 'Save'}
-          </button>
+          {mode === 'tech' ? (
+            <>
+              <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={isUndoing}
+                className="flex-1 h-8 inline-flex items-center justify-center rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
+              >
+                {isUndoing ? 'Undoing...' : 'Undo Last Scan'}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Ship By Date</span>
+              <input
+                type="text"
+                value={shipByDate}
+                onChange={(e) => setShipByDate(e.target.value)}
+                placeholder="MM-DD-YY"
+                maxLength={8}
+                className="flex-1 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[10px] font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              />
+              <button
+                type="button"
+                onClick={saveShipByDate}
+                disabled={isSavingShipByDate}
+                className="h-8 px-2.5 inline-flex items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
+              >
+                <Check className="w-3 h-3" />
+                {isSavingShipByDate ? 'Saving' : 'Save'}
+              </button>
+            </>
+          )}
+          {quantity > 1 && (
+            <span className="h-8 px-2.5 inline-flex items-center justify-center rounded-lg bg-yellow-300 text-yellow-900 text-[9px] font-black uppercase tracking-wider border border-yellow-400">
+              Qty: {quantity}
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -325,29 +409,58 @@ export function DashboardDetailsStack({
         showPackingPhotos={false}
         showPackingInformation={false}
         showTestingInformation={false}
+        showSerialNumber={false}
       />
 
       <section className="mx-8 pt-2">
         <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 mb-3">
           <label className="block text-[9px] font-black uppercase tracking-widest text-blue-700">
+            Update Item Number
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={itemNumber}
+              onChange={(e) => setItemNumber(e.target.value)}
+              placeholder="Enter item number..."
+              className="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+            />
+            <button
+              type="button"
+              onClick={saveItemNumber}
+              disabled={isSavingItemNumber}
+              className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+              aria-label="Update item number"
+              title="Update item number"
+            >
+              <Check className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 mb-3">
+          <label className="block text-[9px] font-black uppercase tracking-widest text-blue-700">
             Update Shipping Tracking Number
           </label>
-          <input
-            type="text"
-            value={shippingTrackingNumber}
-            onChange={(e) => setShippingTrackingNumber(e.target.value)}
-            placeholder="Enter new tracking number..."
-            className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-          />
-          <button
-            type="button"
-            onClick={saveShippingTrackingNumber}
-            disabled={isSavingTrackingNumber}
-            className="w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
-          >
-            <Check className="w-3 h-3" />
-            {isSavingTrackingNumber ? 'Updating...' : 'Update Shipping Tracking Number'}
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={shippingTrackingNumber}
+              onChange={(e) => setShippingTrackingNumber(e.target.value)}
+              placeholder="Enter new tracking number..."
+              className="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+            />
+            <button
+              type="button"
+              onClick={saveShippingTrackingNumber}
+              disabled={isSavingTrackingNumber}
+              className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+              aria-label="Update shipping tracking number"
+              title="Update shipping tracking number"
+            >
+              <Check className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
         <button

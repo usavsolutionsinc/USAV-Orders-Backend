@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
+import { ShipByDate } from '../ui/ShipByDate';
 import confetti from 'canvas-confetti';
 import {
   Search, 
@@ -58,6 +59,9 @@ export default function StationTesting({
         serialNumbers: string[];
         testDateTime: string | null;
         testedBy: number | null;
+        quantity?: number;
+        shipByDate?: string | null;
+        createdAt?: string | null;
     } | null>(null);
     
     // UI feedback messages
@@ -81,6 +85,28 @@ export default function StationTesting({
             return () => clearTimeout(timer);
         }
     }, [errorMessage, successMessage]);
+
+    useEffect(() => {
+        const handleUndoApplied = (e: any) => {
+            const tracking = String(e?.detail?.tracking || '');
+            const serialNumbers = Array.isArray(e?.detail?.serialNumbers) ? e.detail.serialNumbers : [];
+            const removedSerial = e?.detail?.removedSerial;
+            if (!activeOrder) return;
+            if (String(activeOrder.tracking || '') !== tracking) return;
+            setActiveOrder({
+                ...activeOrder,
+                serialNumbers,
+            });
+            if (removedSerial) {
+                setSuccessMessage(`Undo successful: removed ${removedSerial}`);
+            } else {
+                setSuccessMessage('Undo successful');
+            }
+        };
+
+        window.addEventListener('tech-undo-applied' as any, handleUndoApplied as any);
+        return () => window.removeEventListener('tech-undo-applied' as any, handleUndoApplied as any);
+    }, [activeOrder]);
 
     // Color definitions
     const colors = {
@@ -166,7 +192,10 @@ export default function StationTesting({
                 tracking: data.order.tracking,
                 serialNumbers: data.order.serialNumbers || [],
                 testDateTime: data.order.testDateTime,
-                testedBy: data.order.testedBy
+                testedBy: data.order.testedBy,
+                quantity: parseInt(String(data.order.quantity || 1), 10) || 1,
+                shipByDate: data.order.shipByDate || null,
+                createdAt: data.order.createdAt || null,
             });
 
             const serialCount = data.order.serialNumbers?.length || 0;
@@ -224,7 +253,10 @@ export default function StationTesting({
                     tracking: data.order.tracking,
                     serialNumbers: data.order.serialNumbers || [],
                     testDateTime: data.order.testDateTime,
-                    testedBy: data.order.testedBy
+                    testedBy: data.order.testedBy,
+                    quantity: parseInt(String(data.order.quantity || 1), 10) || 1,
+                    shipByDate: data.order.shipByDate || null,
+                    createdAt: data.order.createdAt || null,
                 });
                 
                 const serialCount = data.order.serialNumbers?.length || 0;
@@ -362,7 +394,10 @@ export default function StationTesting({
                     tracking: 'TEST-TRK-123',
                     serialNumbers: [],
                     testDateTime: null,
-                    testedBy: null
+                    testedBy: null,
+                    quantity: 1,
+                    shipByDate: null,
+                    createdAt: null
                 });
                 setSuccessMessage('Test order loaded');
             } else if (command === 'YES' && activeOrder) {
@@ -499,29 +534,36 @@ export default function StationTesting({
                                 exit={{ opacity: 0, y: 10 }}
                                 className="space-y-4"
                             >
-                                <div className={`${activeColor.light} rounded-[2rem] p-6 border ${activeColor.border} space-y-6`}>
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className={`w-1.5 h-1.5 rounded-full ${activeColor.bg} animate-pulse`} />
-                                            <p className={`text-[10px] font-black ${activeColor.text} uppercase tracking-widest`}>Active Order</p>
-                                        </div>
-                                        <h3 className="text-lg font-black text-gray-900 leading-tight tracking-tighter">{activeOrder.productTitle}</h3>
+                                <div className="rounded-2xl p-4 border transition-all relative shadow-sm bg-white border-gray-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <ShipByDate date={String(activeOrder.shipByDate || activeOrder.createdAt || '')} />
+                                        <span className="text-[9px] font-mono font-black text-gray-700">
+                                            #{getOrderIdLast4(activeOrder.orderId)}
+                                        </span>
+                                    </div>
+
+                                    <div className="mb-4">
+                                        <h3 className="text-base font-black text-gray-900 leading-tight">
+                                            {activeOrder.productTitle}
+                                        </h3>
                                     </div>
 
                                     <div className="grid grid-cols-3 gap-3">
-                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Tracking</p>
-                                            <p className="text-xs font-mono font-bold text-gray-900 truncate">
-                                                {String(activeOrder.tracking || '').slice(-4) || 'N/A'}
+                                        <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Tracking #</p>
+                                            <p className="text-xs font-mono font-bold text-gray-800">
+                                                {String(activeOrder.tracking || '').slice(-4) || '—'}
                                             </p>
                                         </div>
-                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">SKU</p>
-                                            <p className="text-xs font-bold text-gray-900 truncate">{activeOrder.sku}</p>
+                                        <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">SKU</p>
+                                            <p className="text-xs font-mono font-bold text-gray-800">{activeOrder.sku}</p>
                                         </div>
-                                        <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-white shadow-sm">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Order ID</p>
-                                            <p className="text-xs font-mono font-bold text-gray-900 truncate">{getOrderIdLast4(activeOrder.orderId)}</p>
+                                        <div className={`rounded-xl px-3 py-2 border ${((activeOrder.quantity || 1) > 1) ? 'bg-yellow-300 border-yellow-400' : 'bg-gray-50 border-gray-100'}`}>
+                                            <p className={`text-[9px] font-black uppercase tracking-wider mb-1 ${((activeOrder.quantity || 1) > 1) ? 'text-yellow-900' : 'text-gray-400'}`}>Qty</p>
+                                            <p className={`text-xs font-mono font-black ${((activeOrder.quantity || 1) > 1) ? 'text-yellow-900' : 'text-gray-800'}`}>
+                                                {activeOrder.quantity || 1}
+                                            </p>
                                         </div>
                                     </div>
 

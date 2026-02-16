@@ -259,7 +259,14 @@ function OrdersManagement() {
     const ebaySyncMutation = useMutation({
         mutationFn: async () => {
             const res = await fetch('/api/ebay/sync', { method: 'POST' });
-            if (!res.ok) throw new Error('Failed to sync');
+            if (!res.ok) {
+                let details = '';
+                try {
+                    const data = await res.json();
+                    details = data?.error || data?.message || '';
+                } catch {}
+                throw new Error(details || `Failed to sync (HTTP ${res.status})`);
+            }
             return res.json();
         },
         onSuccess: () => {
@@ -480,7 +487,7 @@ function OrdersManagement() {
                             className="p-4 bg-red-50 border border-red-200 rounded-2xl"
                         >
                             <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">
-                                Sync failed - check console for details
+                                {(ebaySyncMutation.error as any)?.message || 'Sync failed'}
                             </div>
                         </motion.div>
                     )}

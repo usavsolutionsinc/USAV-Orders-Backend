@@ -33,7 +33,13 @@ export async function GET(req: NextRequest) {
       `SELECT COUNT(*) as count
        FROM orders o
        WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
-         AND o.tester_id = $1`,
+         AND o.tester_id = $1
+         AND NOT EXISTS (
+           SELECT 1
+           FROM tech_serial_numbers tsn
+           WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
+                 RIGHT(regexp_replace(COALESCE(o.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
+         )`,
       [techIdNum]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
@@ -49,6 +55,7 @@ export async function GET(req: NextRequest) {
         item_number,
         sku,
         account_source,
+        quantity,
         status,
         condition,
         shipping_tracking_number,
@@ -57,6 +64,12 @@ export async function GET(req: NextRequest) {
       WHERE 
         (is_shipped = false OR is_shipped IS NULL)
         AND tester_id = $1
+        AND NOT EXISTS (
+          SELECT 1
+          FROM tech_serial_numbers tsn
+          WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
+                RIGHT(regexp_replace(COALESCE(orders.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
+        )
     `;
     const params: any[] = [techIdNum];
 

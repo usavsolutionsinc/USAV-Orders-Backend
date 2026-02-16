@@ -39,17 +39,47 @@ export async function GET(req: NextRequest) {
                 tsn.serial_number,
                 tsn.tested_by,
                 (
+                    SELECT o.id
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as order_db_id,
+                (
                     SELECT o.order_id 
                     FROM orders o 
                     WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
                     LIMIT 1
                 ) as order_id,
                 (
+                    SELECT o.ship_by_date
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as ship_by_date,
+                (
+                    SELECT o.created_at
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as created_at,
+                (
+                    SELECT o.item_number
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as item_number,
+                (
                     SELECT o.product_title 
                     FROM orders o 
                     WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
                     LIMIT 1
                 ) as product_title,
+                (
+                    SELECT o.quantity
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as quantity,
                 (
                     SELECT o.condition 
                     FROM orders o 
@@ -61,7 +91,31 @@ export async function GET(req: NextRequest) {
                     FROM orders o 
                     WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
                     LIMIT 1
-                ) as sku
+                ) as sku,
+                (
+                    SELECT o.account_source
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as account_source,
+                (
+                    SELECT o.notes
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as notes,
+                (
+                    SELECT o.out_of_stock
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as out_of_stock,
+                (
+                    SELECT o.is_shipped
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as is_shipped
             FROM tech_serial_numbers tsn
             WHERE tsn.tested_by = $1
             ORDER BY tsn.test_date_time DESC NULLS LAST

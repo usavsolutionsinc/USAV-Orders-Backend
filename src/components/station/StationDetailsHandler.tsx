@@ -38,6 +38,7 @@ export function StationDetailsHandler() {
                 <ShippedDetailsPanel 
                     key="station-details-panel"
                     shipped={selectedShipped}
+                    context="station"
                     onClose={() => {
                         setSelectedShipped(null);
                         window.dispatchEvent(new CustomEvent('close-shipped-details'));

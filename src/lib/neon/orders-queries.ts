@@ -6,6 +6,7 @@ export interface ShippedOrder {
   ship_by_date: string;
   order_id: string;
   product_title: string;
+  quantity?: string | null;
   item_number?: string | null;
   condition: string;
   shipping_tracking_number: string;
@@ -41,6 +42,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
           o.order_id,
           o.product_title,
+          o.quantity,
           o.item_number,
           o.condition,
           o.shipping_tracking_number,
@@ -72,7 +74,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
              RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
         WHERE COALESCE(o.is_shipped, false) = true
-        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
+        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
                  o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
@@ -111,6 +113,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
           o.order_id,
           o.product_title,
+          o.quantity,
           o.item_number,
           o.condition,
           o.shipping_tracking_number,
@@ -139,7 +142,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
-        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
+        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
                  o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
@@ -178,6 +181,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
           o.order_id,
           o.product_title,
+          o.quantity,
           o.item_number,
           o.condition,
           o.shipping_tracking_number,
@@ -209,7 +213,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
              RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
         WHERE COALESCE(o.is_shipped, false) = true
-        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
+        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
                  o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
@@ -301,6 +305,7 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
           to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
           o.order_id,
           o.product_title,
+          o.quantity,
           o.condition,
           o.shipping_tracking_number,
           o.sku,
@@ -328,7 +333,7 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE COALESCE(o.is_shipped, false) = true
           AND RIGHT(o.shipping_tracking_number, 8) = $1
-        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.condition,
+        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
                  o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type

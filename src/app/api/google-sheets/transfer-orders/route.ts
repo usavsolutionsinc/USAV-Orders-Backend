@@ -16,9 +16,9 @@ function getLastEightDigits(str: any) {
     return String(str).trim().slice(-8).toLowerCase();
 }
 
-function hasNumbers(str: any) {
-    if (!str) return false;
-    return /\d/.test(String(str));
+function normalizeTracking(str: any) {
+    if (!str) return '';
+    return String(str).trim();
 }
 
 export async function POST(req: NextRequest) {
@@ -144,12 +144,10 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // 5. Process rows (only with tracking that contains numbers and NOT already in NEON DB or Sheets)
+        // 5. Process rows (only with non-empty tracking and NOT already in NEON DB or Sheets)
         const filteredSourceRows = sourceRows.slice(1).filter(row => {
-            const tracking = row[colIndices.tracking];
-            if (!tracking || tracking.trim() === '') return false;
-            // Only include tracking numbers that contain at least one digit (ignore pure letter entries)
-            if (!hasNumbers(tracking)) return false;
+            const tracking = normalizeTracking(row[colIndices.tracking]);
+            if (!tracking) return false;
             return !existingTracking.has(getLastEightDigits(tracking));
         });
 
@@ -171,7 +169,7 @@ export async function POST(req: NextRequest) {
             destRow[3] = row[colIndices.quantity] || '';
             destRow[4] = row[colIndices.usavSku] || '';
             destRow[5] = row[colIndices.condition] || '';
-            destRow[6] = row[colIndices.tracking] || '';
+            destRow[6] = normalizeTracking(row[colIndices.tracking]) || '';
             // I (index 8) is blank
             destRow[9] = row[colIndices.note] || ''; // J (index 9)
             destRow[10] = row[colIndices.itemNumber] || ''; // K (index 10) = Item Number
@@ -185,7 +183,7 @@ export async function POST(req: NextRequest) {
             destRow[2] = row[colIndices.itemTitle] || ''; // C = Product Title
             destRow[3] = row[colIndices.quantity] || ''; // D = Quantity
             destRow[4] = row[colIndices.condition] || ''; // E = Condition
-            destRow[5] = row[colIndices.tracking] || ''; // F = Shipping TRK #
+            destRow[5] = normalizeTracking(row[colIndices.tracking]) || ''; // F = Shipping TRK #
             // G, H, I remain empty (Serial Number, Packed By, Tested By - filled later)
             destRow[9] = row[colIndices.shipByDate] || ''; // J = Ship By Date
             destRow[10] = row[colIndices.usavSku] || ''; // K = SKU
@@ -203,9 +201,10 @@ export async function POST(req: NextRequest) {
             const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
             const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
             const orderId = row[colIndices.orderNumber] || '';
-            const trackingNumber = row[colIndices.tracking] || '';
+            const trackingNumber = normalizeTracking(row[colIndices.tracking]);
+            const quantity = String(row[colIndices.quantity] || '').trim() || '1';
             
-            if (!orderId) continue;
+            if (!orderId || !trackingNumber) continue;
             
             // Check if order_id exists in database
             const existingOrder = await db
@@ -225,6 +224,7 @@ export async function POST(req: NextRequest) {
                         orderId: orderId,
                         itemNumber: row[colIndices.itemNumber] || '',
                         productTitle: row[colIndices.itemTitle] || '',
+                        quantity,
                         sku: row[colIndices.usavSku] || '',
                         condition: row[colIndices.condition] || '',
                         shippingTrackingNumber: trackingNumber,
@@ -245,6 +245,7 @@ export async function POST(req: NextRequest) {
                     orderId: orderId,
                     itemNumber: row[colIndices.itemNumber] || '',
                     productTitle: row[colIndices.itemTitle] || '',
+                    quantity,
                     sku: row[colIndices.usavSku] || '',
                     condition: row[colIndices.condition] || '',
                     shippingTrackingNumber: trackingNumber,

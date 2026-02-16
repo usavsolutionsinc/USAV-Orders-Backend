@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 
 // Import refactored sub-components
 import { ModeSelector, BarcodeMode } from './barcode/ModeSelector';
@@ -306,20 +305,10 @@ export default function MultiSkuSnBarcode() {
             {/* Mode Selector - Using Refactored Component */}
             <ModeSelector mode={mode} onModeChange={handleModeChange} />
 
-            <div className="flex-1 overflow-hidden p-8 relative">
-                <motion.div 
-                    animate={{ y: step === 1 ? 0 : step === 2 ? -280 : -600 }}
-                    transition={{ type: 'spring', damping: 30, stiffness: 200 }}
-                    className="space-y-12 pb-40"
-                >
+            <div className="flex-1 overflow-y-auto p-8">
+                <div className="space-y-12 pb-16">
                     {/* Step 1: SKU - Using Refactored Component */}
-                    <motion.div
-                        animate={{ 
-                            opacity: step === 1 ? 1 : 0.4,
-                            scale: step === 1 ? 1 : 0.95,
-                            filter: step === 1 ? 'blur(0px)' : 'blur(2px)'
-                        }}
-                    >
+                    <div>
                         <SkuInput
                             sku={sku}
                             uniqueSku={uniqueSku}
@@ -329,17 +318,11 @@ export default function MultiSkuSnBarcode() {
                             onChange={handleSkuChange}
                             onNext={handleNextStepSku}
                         />
-                    </motion.div>
+                    </div>
 
                     {/* Step 2: Serial Numbers & Details - Using Refactored Component */}
-                    {mode !== 'reprint' && (
-                        <motion.div
-                            animate={{ 
-                                opacity: step === 2 ? 1 : 0.4,
-                                scale: step === 2 ? 1 : 0.95,
-                                filter: step === 2 ? 'blur(0px)' : 'blur(2px)'
-                            }}
-                        >
+                    {mode !== 'reprint' && step >= 2 && (
+                        <div>
                             <SerialNumberInput
                                 sku={sku}
                                 mode={mode}
@@ -359,18 +342,12 @@ export default function MultiSkuSnBarcode() {
                                 isPosting={isPosting}
                                 onChangeSku={handleChangeSku}
                             />
-                        </motion.div>
+                        </div>
                     )}
 
                     {/* Step 3: Preview & Print - Using Refactored Component */}
-                    {mode !== 'change-location' && (
-                        <motion.div
-                            animate={{ 
-                                opacity: step === 3 ? 1 : 0.4,
-                                scale: step === 3 ? 1 : 0.95,
-                                filter: step === 3 ? 'blur(0px)' : 'blur(2px)'
-                            }}
-                        >
+                    {mode !== 'change-location' && step >= 3 && (
+                        <div>
                             <BarcodePreview
                                 mode={mode}
                                 uniqueSku={uniqueSku}
@@ -388,9 +365,9 @@ export default function MultiSkuSnBarcode() {
                                 onNotesChange={setNotes}
                                 onPrint={handleFinalAction}
                             />
-                        </motion.div>
+                        </div>
                     )}
-                </motion.div>
+                </div>
             </div>
 
             {error && (

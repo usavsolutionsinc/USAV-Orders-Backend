@@ -1,10 +1,31 @@
 import { NextResponse } from 'next/server';
 import { syncAllAccounts, getSyncStatus } from '@/lib/ebay/sync';
 
-const ALLOWED_SYNC_ORIGINS = [
-  'http://localhost:3000',
-  'https://usav-orders-backend.vercel.app',
-];
+function isAllowedSyncRequest(req: Request): boolean {
+  const origin = req.headers.get('origin');
+  if (!origin) return true;
+
+  try {
+    const originUrl = new URL(origin);
+    const forwardedHost = req.headers.get('x-forwarded-host');
+    const host = req.headers.get('host');
+    const requestHost = (forwardedHost || host || '').toLowerCase();
+    const originHost = originUrl.host.toLowerCase();
+
+    // Allow exact same-origin requests (covers production custom domains and previews).
+    if (requestHost && requestHost === originHost) return true;
+
+    // Keep localhost for local development flexibility.
+    if (originHost === 'localhost:3000' || originHost === '127.0.0.1:3000') return true;
+
+    // Allow Vercel preview/prod subdomains.
+    if (originUrl.hostname.endsWith('.vercel.app')) return true;
+  } catch {
+    return false;
+  }
+
+  return false;
+}
 
 /**
  * POST /api/ebay/sync
@@ -13,7 +34,7 @@ const ALLOWED_SYNC_ORIGINS = [
 export async function POST(req: Request) {
   try {
     const origin = req.headers.get('origin');
-    if (origin && !ALLOWED_SYNC_ORIGINS.includes(origin)) {
+    if (!isAllowedSyncRequest(req)) {
       return NextResponse.json(
         { success: false, error: `Origin not allowed: ${origin}` },
         { status: 403 }

@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
         order_id,
         product_title,
         item_number,
+        quantity,
         sku,
         condition,
         shipping_tracking_number,

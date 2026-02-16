@@ -23,6 +23,7 @@ interface ShippedDetailsPanelContentProps {
   showPackingInformation?: boolean;
   showTestingInformation?: boolean;
   showShippingTimestamp?: boolean;
+  showSerialNumber?: boolean;
   productDetailsFirst?: boolean;
 }
 
@@ -110,6 +111,7 @@ export function ShippedDetailsPanelContent({
   showPackingInformation = true,
   showTestingInformation = true,
   showShippingTimestamp = false,
+  showSerialNumber = true,
   productDetailsFirst = false
 }: ShippedDetailsPanelContentProps) {
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
@@ -254,7 +256,9 @@ export function ShippedDetailsPanelContent({
             </div>
           </div>
 
-          <CopyableField label="Serial Number" value={shipped.serial_number || 'N/A'} />
+          {showSerialNumber && (
+            <CopyableField label="Serial Number" value={shipped.serial_number || 'N/A'} />
+          )}
 
           {showShippingTimestamp && (
             <div>

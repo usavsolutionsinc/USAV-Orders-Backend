@@ -8,6 +8,7 @@ import { TabSwitch } from './ui/TabSwitch';
 import { ShipByDate } from './ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { getOrderPlatformLabel } from '@/utils/order-platform';
+import { ShippedOrder } from '@/lib/neon/orders-queries';
 
 interface Order {
   id: number;
@@ -18,6 +19,8 @@ interface Order {
   item_number: string | null;
   account_source: string | null;
   sku: string;
+  condition?: string | null;
+  quantity?: string | null;
   status: string;
   shipping_tracking_number: string;
   out_of_stock: string | null;
@@ -162,13 +165,44 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     }
   };
 
-  const renderOrderCard = (order: Order) => (
+  const renderOrderCard = (order: Order) => {
+    const quantity = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
+    const openDetails = () => {
+      const detail: ShippedOrder = {
+        id: order.id,
+        ship_by_date: order.ship_by_date || '',
+        order_id: order.order_id || '',
+        product_title: order.product_title || '',
+        item_number: order.item_number || null,
+        condition: order.condition || '',
+        shipping_tracking_number: order.shipping_tracking_number || '',
+        serial_number: '',
+        sku: order.sku || '',
+        tester_id: Number.isFinite(Number(techId)) ? Number(techId) : null,
+        tested_by: null,
+        test_date_time: null,
+        packer_id: null,
+        packed_by: null,
+        pack_date_time: null,
+        packer_photos_url: [],
+        tracking_type: null,
+        account_source: order.account_source || null,
+        notes: '',
+        status_history: [],
+        is_shipped: !!order.is_shipped,
+        created_at: order.created_at || null,
+        quantity: order.quantity || '1',
+      };
+      window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
+    };
+    return (
     <motion.div
       key={order.id}
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      className="rounded-2xl p-4 border transition-all relative shadow-sm hover:shadow-md mb-2 bg-white border-gray-200 hover:border-blue-300"
+      onClick={openDetails}
+      className="rounded-2xl p-4 border transition-all relative shadow-sm hover:shadow-md mb-2 bg-white border-gray-200 hover:border-blue-300 cursor-pointer"
     >
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-2">
@@ -190,7 +224,10 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           </span>
           <button
             type="button"
-            onClick={() => openExternalByItemNumber(order.item_number)}
+            onClick={(e) => {
+              e.stopPropagation();
+              openExternalByItemNumber(order.item_number);
+            }}
             disabled={!getExternalUrlByItemNumber(order.item_number)}
             className="inline-flex items-center justify-center p-1.5 rounded-md bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Open external page"
@@ -206,17 +243,28 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         <div className="flex flex-col gap-2 mb-5">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setShowMissingPartsInput(showMissingPartsInput === order.id ? null : order.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMissingPartsInput(showMissingPartsInput === order.id ? null : order.id);
+              }}
               className="flex-1 py-3 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all"
             >
               Out of Stock
             </button>
             <button
-              onClick={() => handleStart(order)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleStart(order);
+              }}
               className="flex items-center justify-center gap-2 px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
             >
               <Play className="w-4 h-4" />
               Start
+              {quantity > 1 && (
+                <span className="px-1.5 py-0.5 rounded-md bg-yellow-300 text-yellow-900 text-[10px] font-black">
+                  x{quantity}
+                </span>
+              )}
             </button>
           </div>
 
@@ -239,13 +287,19 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                   />
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setShowMissingPartsInput(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMissingPartsInput(null);
+                      }}
                       className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
                     >
                       Cancel
                     </button>
                     <button
-                      onClick={() => handleMissingParts(order.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMissingParts(order.id);
+                      }}
                       disabled={!missingPartsReason.trim()}
                       className="flex-1 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-[9px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
@@ -267,17 +321,15 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       </div>
 
       {/* Info Grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {order.shipping_tracking_number && (
-          <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
-              Tracking #
-            </p>
-            <p className="text-xs font-mono font-bold text-gray-800">
-              {order.shipping_tracking_number.slice(-4)}
-            </p>
-          </div>
-        )}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+          <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
+            Tracking #
+          </p>
+          <p className="text-xs font-mono font-bold text-gray-800">
+            {order.shipping_tracking_number ? order.shipping_tracking_number.slice(-4) : '—'}
+          </p>
+        </div>
         <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
           <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
             SKU
@@ -286,9 +338,18 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
             {order.sku}
           </p>
         </div>
+        <div className={`rounded-xl px-3 py-2 border ${quantity > 1 ? 'bg-yellow-300 border-yellow-400' : 'bg-gray-50 border-gray-100'}`}>
+          <p className={`text-[9px] font-black uppercase tracking-wider mb-1 ${quantity > 1 ? 'text-yellow-900' : 'text-gray-400'}`}>
+            Qty
+          </p>
+          <p className={`text-xs font-mono font-black ${quantity > 1 ? 'text-yellow-900' : 'text-gray-800'}`}>
+            {quantity}
+          </p>
+        </div>
       </div>
     </motion.div>
-  );
+    );
+  };
 
   if (loading) {
     return (
