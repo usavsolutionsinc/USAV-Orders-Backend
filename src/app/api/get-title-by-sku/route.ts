@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
         const normalizedInputSku = normalizeSku(String(sku).trim());
         const result = await pool.query(
-            `SELECT stock, sku, location, product_title
+            `SELECT stock, sku, product_title
              FROM sku_stock`
         );
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
                 sku,
                 title: row.product_title || '',
                 stock: row.stock ? String(row.stock).trim() : '0',
-                location: row.location || ''
+                location: ''
             });
         }
 

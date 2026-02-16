@@ -118,7 +118,6 @@ export const skuStock = pgTable('sku_stock', {
   id: serial('id').primaryKey(),
   stock: text('stock'),
   sku: text('sku'),
-  location: text('location'),
   productTitle: text('product_title'),
 });
 export const sku = pgTable('sku', {

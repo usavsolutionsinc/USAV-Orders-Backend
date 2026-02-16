@@ -231,13 +231,12 @@ export async function POST() {
         `);
         tables.push('shipped');
 
-        // SKU Stock (5 columns)
+        // SKU Stock (4 columns)
         await client.query(`
             CREATE TABLE IF NOT EXISTS sku_stock (
                 id SERIAL PRIMARY KEY,
                 stock TEXT,
                 sku TEXT,
-                size TEXT,
                 product_title TEXT
             )
         `);

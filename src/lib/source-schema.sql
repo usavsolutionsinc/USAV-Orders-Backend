@@ -127,12 +127,11 @@ CREATE TABLE IF NOT EXISTS shipped (
     test_date_time TEXT
 );
 
--- 11. SKU_STOCK TABLE (5 columns)
+-- 11. SKU_STOCK TABLE (4 columns)
 CREATE TABLE IF NOT EXISTS sku_stock (
     id SERIAL PRIMARY KEY,
     stock TEXT,
     sku TEXT,
-    size TEXT,
     product_title TEXT
 );
 

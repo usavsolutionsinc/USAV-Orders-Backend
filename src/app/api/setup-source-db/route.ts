@@ -112,7 +112,6 @@ export async function POST() {
                 id SERIAL PRIMARY KEY,
                 stock TEXT,
                 sku TEXT,
-                size TEXT,
                 product_title TEXT
             )
         `);
