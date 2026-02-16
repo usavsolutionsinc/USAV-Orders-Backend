@@ -27,6 +27,7 @@ export function ShippedDetailsPanel({
   const [shipped, setShipped] = useState<ShippedOrder>(initialShipped);
   const [durationData, setDurationData] = useState<DetailsStackDurationData>({});
   const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedOrderId, setCopiedOrderId] = useState(false);
 
   useEffect(() => {
     setShipped(initialShipped);
@@ -56,6 +57,14 @@ export function ShippedDetailsPanel({
     setTimeout(() => setCopiedAll(false), 2000);
   };
 
+  const handleCopyOrderId = () => {
+    const value = String(shipped.order_id || '').trim();
+    if (!value) return;
+    navigator.clipboard.writeText(value);
+    setCopiedOrderId(true);
+    setTimeout(() => setCopiedOrderId(false), 1500);
+  };
+
   return (
     <motion.div
       initial={{ x: '100%' }}
@@ -64,15 +73,26 @@ export function ShippedDetailsPanel({
       transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
       className="fixed right-0 top-0 h-screen w-[420px] bg-white border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)] z-[100] overflow-y-auto no-scrollbar"
     >
-      <div className="sticky top-0 bg-white/90 backdrop-blur-xl border-b border-gray-100 p-8 flex items-center justify-between z-10">
+      <div className="sticky top-0 bg-white/90 backdrop-blur-xl border-b border-gray-100 px-8 py-5 flex items-center justify-between z-10">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
               <Package className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-[22px] font-black text-gray-900 tracking-tighter leading-none">{shipped.order_id}</h2>
-              <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={handleCopyOrderId}
+                className="text-[20px] font-black text-gray-900 tracking-tight leading-none hover:text-blue-700 transition-colors"
+                title="Click to copy order ID"
+                aria-label={`Copy order ID ${shipped.order_id}`}
+              >
+                {shipped.order_id}
+              </button>
+              {copiedOrderId && (
+                <p className="text-[9px] font-black uppercase tracking-wider text-emerald-600 mt-0.5">Copied</p>
+              )}
+              <div className="flex items-center gap-2 mt-1">
                 <QtyBadge quantity={(shipped as any).quantity} />
               </div>
             </div>

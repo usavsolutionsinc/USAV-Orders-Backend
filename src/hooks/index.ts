@@ -16,3 +16,4 @@ export type { HistoryLog, StationHistoryResult, StationHistoryOptions } from './
 
 export { useRepairs, useRepair, useUpdateRepairStatus, useUpdateRepairNotes, useUpdateRepairField } from './useRepairQueries';
 export { useShipped, useShippedRecord, useUpdateShippedStatus, useUpdateShippedField } from './useShippedQueries';
+export { useStaffNameMap } from './useStaffNameMap';

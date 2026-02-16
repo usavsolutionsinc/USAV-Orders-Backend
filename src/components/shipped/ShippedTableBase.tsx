@@ -9,22 +9,8 @@ import { CopyableText } from '../ui/CopyableText';
 import WeekHeader from '../ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
+import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
-
-// Hard-coded staff ID to name mapping
-const STAFF_NAMES: { [key: number]: string } = {
-  1: 'Michael',
-  2: 'Thuc',
-  3: 'Sang',
-  4: 'Tuan',
-  5: 'Thuy',
-  6: 'Cuong'
-};
-
-function getStaffName(staffId: number | null | undefined): string {
-  if (!staffId) return '---';
-  return STAFF_NAMES[staffId] || `#${staffId}`;
-}
 
 export interface ShippedTableBaseProps {
   packedBy?: number; // Filter by packer ID
@@ -33,6 +19,7 @@ export interface ShippedTableBaseProps {
 }
 
 export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: ShippedTableBaseProps = {}) {
+  const { getStaffName } = useStaffNameMap();
   const searchParams = useSearchParams();
   const search = searchParams.get('search') || '';
   const [shipped, setShipped] = useState<ShippedOrder[]>([]);

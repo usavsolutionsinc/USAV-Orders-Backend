@@ -237,19 +237,28 @@ export function RepairTable({ filter }: RepairTableProps) {
                         animate={{ opacity: 1 }}
                         key={repair.id}
                         onClick={() => handleRowClick(repair)}
-                        className={`grid grid-cols-[2fr_1fr_180px] items-center gap-1 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                        className={`grid grid-cols-[1fr_180px] items-center gap-1 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                           selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                         }`}
                       >
-                        {/* 1. Product Title, Name, Phone, Email & Price */}
+                        {/* 1. Product Title, Issue, Name, Phone, Email & Price */}
                         <div className="flex flex-col min-w-0 gap-1">
                           {/* Product Title - Large */}
                           <div className="text-[13px] font-black text-gray-900 truncate leading-tight">
                             {repair.product_title || 'Unknown Product'}
                           </div>
+
+                          {/* Issue - second line under product title */}
+                          <div className="text-[11px] font-black text-gray-700 truncate leading-tight">
+                            {repair.issue || 'No issue specified'}
+                          </div>
                           
                           {/* Customer Name, Phone, Email & Price - All on one line */}
                           <div className="flex items-center gap-3 mt-0.5">
+                            {/* Price - Green value only */}
+                            <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                              {repair.price ? `$${repair.price}` : '---'}
+                            </div>
                             <div className="text-[10px] font-black text-gray-700 truncate uppercase tracking-tight">
                               {(() => {
                                 if (!repair.contact_info) return 'No Name';
@@ -271,21 +280,10 @@ export function RepairTable({ filter }: RepairTableProps) {
                                 return parts[2] || '';
                               })()}
                             </div>
-                            {/* Price - Green value only */}
-                            <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                              {repair.price ? `$${repair.price}` : '---'}
-                            </div>
                           </div>
                         </div>
-                        
-                        {/* 2. Issue */}
-                        <div className="flex flex-col min-w-0 justify-start">
-                          <div className="text-[13px] font-black text-gray-900 truncate leading-tight text-left">
-                            {repair.issue || 'No issue specified'}
-                          </div>
-                        </div>
-                        
-                        {/* 3. Ticket # and Actions */}
+
+                        {/* 2. Ticket # and Actions */}
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-col">
                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
