@@ -6,8 +6,8 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { PhotoGallery } from './PhotoGallery';
 import { getStaffName } from '@/utils/staff';
 import { getTrackingUrl, getOrderIdUrl, getAccountSourceLabel } from '@/utils/order-links';
-import { parseShippedDate } from '@/utils/copyallshipped';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
+import { formatDateTimePST } from '@/lib/timezone';
 
 interface DurationData {
   boxingDuration?: string;
@@ -261,7 +261,7 @@ export function ShippedDetailsPanelContent({
               <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1.5">Shipped Date & Time</span>
               <p className="text-sm font-bold text-gray-900 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100">
                 {shipped.pack_date_time && shipped.pack_date_time !== '1'
-                  ? parseShippedDate(shipped.pack_date_time).toLocaleString()
+                  ? formatDateTimePST(shipped.pack_date_time)
                   : 'N/A'}
               </p>
             </div>
@@ -295,7 +295,7 @@ export function ShippedDetailsPanelContent({
               <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
                 {shipped.pack_date_time && shipped.pack_date_time !== '1'
-                  ? parseShippedDate(shipped.pack_date_time).toLocaleString()
+                  ? formatDateTimePST(shipped.pack_date_time)
                   : 'N/A'}
               </p>
             </div>
@@ -327,7 +327,7 @@ export function ShippedDetailsPanelContent({
               <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
                 {shipped.test_date_time && shipped.test_date_time !== ''
-                  ? parseShippedDate(shipped.test_date_time).toLocaleString()
+                  ? formatDateTimePST(shipped.test_date_time)
                   : 'N/A'}
               </p>
             </div>

@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Package, Loader2, Copy, Check } from '../Icons';
 import { motion } from 'framer-motion';
+import { formatTimePST, toPSTDateKey } from '@/lib/timezone';
+import { formatDateWithOrdinal } from '@/lib/date-format';
 
 interface ReceivingLog {
     id: string;
@@ -94,53 +96,8 @@ export default function ReceivingLogs({
         }
     }, [offset, hasMore, isLoadingMore]);
 
-    const getOrdinal = (n: number) => {
-        const s = ["th", "st", "nd", "rd"];
-        const v = n % 100;
-        return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    };
-
     const formatDate = (dateStr: string) => {
-        try {
-            if (!dateStr) return 'Unknown';
-            
-            let date: Date;
-            if (dateStr.includes('-')) {
-                const parts = dateStr.split('-');
-                if (parts.length === 3) {
-                    const y = parseInt(parts[0]);
-                    const m = parseInt(parts[1]);
-                    const d = parseInt(parts[2]);
-                    date = new Date(y, m - 1, d);
-                } else {
-                    date = new Date(dateStr);
-                }
-            } else if (dateStr.includes('/')) {
-                const datePart = dateStr.split(' ')[0];
-                const parts = datePart.split('/');
-                if (parts.length === 3) {
-                    const m = parseInt(parts[0]);
-                    const d = parseInt(parts[1]);
-                    const y = parseInt(parts[2]);
-                    date = new Date(y, m - 1, d);
-                } else {
-                    date = new Date(dateStr);
-                }
-            } else {
-                date = new Date(dateStr);
-            }
-
-            if (isNaN(date.getTime())) return dateStr;
-
-            const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-            const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
-            
-            const dayName = days[date.getDay()];
-            const monthName = months[date.getMonth()];
-            const dayNum = date.getDate();
-            
-            return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
-        } catch (e) { return dateStr; }
+        return formatDateWithOrdinal(dateStr);
     };
 
     const handleScroll = useCallback(() => {
@@ -185,21 +142,11 @@ export default function ReceivingLogs({
         
         let date = '';
         try {
-            if (timestamp.includes(' ')) {
-                date = timestamp.split(' ')[0];
-                const parts = date.split('/');
-                if (parts.length === 3) {
-                    const m = parts[0].padStart(2, '0');
-                    const d = parts[1].padStart(2, '0');
-                    const y = parts[2];
-                    date = `${y}-${m}-${d}`;
-                }
-            } else {
-                date = timestamp.split('T')[0];
-            }
+            date = toPSTDateKey(timestamp) || '';
         } catch (e) {
-            date = timestamp.split('T')[0] || 'Unknown';
+            date = '';
         }
+        if (!date) date = 'Unknown';
         
         if (!groupedHistory[date]) groupedHistory[date] = [];
         
@@ -266,9 +213,7 @@ export default function ReceivingLogs({
                                         >
                                             <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
                                                 {ts ? (
-                                                    ts.includes(' ') 
-                                                        ? ts.split(' ')[1].split(':').slice(0, 2).join(':') 
-                                                        : new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+                                                    formatTimePST(ts)
                                                 ) : '--:--'}
                                             </div>
                                             <div className="flex justify-start">

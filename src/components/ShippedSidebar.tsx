@@ -8,6 +8,7 @@ import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
+import { formatDateTimePST } from '@/lib/timezone';
 
 interface SearchHistory {
     query: string;
@@ -76,24 +77,6 @@ export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, on
     const handleCopyAll = (e: React.MouseEvent, result: ShippedOrder) => {
         e.stopPropagation();
         
-        const formatDateTime = (dateStr: string) => {
-            if (!dateStr || dateStr === '1') return 'N/A';
-            try {
-                const date = new Date(dateStr);
-                return date.toLocaleString('en-US', {
-                    month: '2-digit',
-                    day: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                }).replace(',', '');
-            } catch (e) {
-                return dateStr;
-            }
-        };
-
         const text = `Serial: ${result.serial_number || 'N/A'}
 Order ID: ${result.order_id || 'N/A'}
 Tracking: ${result.shipping_tracking_number || 'N/A'}
@@ -101,7 +84,7 @@ Product: ${result.product_title || 'N/A'}
 Condition: ${result.condition || 'N/A'}
 Tested By: ${getStaffName(result.tested_by)}
 Packed By: ${getStaffName(result.packed_by)}
-Shipped: ${result.pack_date_time ? formatDateTime(result.pack_date_time) : 'Not Shipped'}`;
+Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'Not Shipped'}`;
         
         navigator.clipboard.writeText(text);
         setCopiedId(result.id);

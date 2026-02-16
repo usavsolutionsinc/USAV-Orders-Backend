@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Check, X } from '@/components/Icons';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 interface StaffOption {
   id: number;
@@ -66,11 +67,10 @@ export function AdminDetailsStack({
 
   const toMonthDayYearCurrent = (value: string | null | undefined) => {
     if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const year = (date.getFullYear() % 100).toString().padStart(2, '0');
-    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${year}`;
+    const pstDateKey = toPSTDateKey(value);
+    if (!pstDateKey) return '';
+    const [year, month, day] = pstDateKey.split('-').map(Number);
+    return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${String(year % 100).padStart(2, '0')}`;
   };
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export function AdminDetailsStack({
           const month = Number(mdMatch[1]);
           const day = Number(mdMatch[2]);
           if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-            const year = new Date().getFullYear();
+            const year = Number(getCurrentPSTDateKey().slice(0, 4));
             payload.shipByDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           }
         }

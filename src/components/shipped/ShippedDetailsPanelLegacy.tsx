@@ -7,7 +7,8 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { PhotoGallery } from './PhotoGallery';
 import { getStaffName } from '@/utils/staff';
 import { getTrackingUrl, getOrderIdUrl, getAccountSourceLabel } from '@/utils/order-links';
-import { buildShippedCopyInfo, parseShippedDate } from '@/utils/copyallshipped';
+import { buildShippedCopyInfo } from '@/utils/copyallshipped';
+import { formatDateTimePST } from '@/lib/timezone';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -327,7 +328,7 @@ export function ShippedDetailsPanel({
             <div className="pt-4 border-t border-orange-100/50">
               <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
-                {shipped.pack_date_time && shipped.pack_date_time !== '1' ? parseShippedDate(shipped.pack_date_time).toLocaleString() : 'N/A'}
+                {shipped.pack_date_time && shipped.pack_date_time !== '1' ? formatDateTimePST(shipped.pack_date_time) : 'N/A'}
               </p>
             </div>
           </div>
@@ -358,7 +359,7 @@ export function ShippedDetailsPanel({
             <div className="pt-4 border-t border-purple-100/50">
               <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
-                {shipped.test_date_time && shipped.test_date_time !== '' ? parseShippedDate(shipped.test_date_time).toLocaleString() : 'N/A'}
+                {shipped.test_date_time && shipped.test_date_time !== '' ? formatDateTimePST(shipped.test_date_time) : 'N/A'}
               </p>
             </div>
           </div>

@@ -8,6 +8,7 @@ import { PackerTable } from './PackerTable';
 import { Package, TrendingUp, Clock, AlertCircle } from './Icons';
 import StaffSelector from './StaffSelector';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 interface PackerDashboardProps {
     packerId: string;
@@ -51,20 +52,18 @@ export default function PackerDashboard({ packerId, showStaffSelector = true }: 
 
     const getTodayCount = () => {
         if (history.length === 0) return 0;
-        const today = new Date().toDateString();
+        const today = getCurrentPSTDateKey();
         return history.filter(h => {
-            const date = new Date(h.timestamp || h.packedAt || '');
-            return date.toDateString() === today;
+            return toPSTDateKey(h.timestamp || h.packedAt || '') === today;
         }).length;
     };
 
     const getAverageTime = () => {
         if (history.length === 0) return '0m';
         
-        const today = new Date().toDateString();
+        const today = getCurrentPSTDateKey();
         const todayLogs = history.filter(h => {
-            const date = new Date(h.timestamp || h.packedAt || '');
-            return date.toDateString() === today;
+            return toPSTDateKey(h.timestamp || h.packedAt || '') === today;
         }).sort((a, b) => {
             const dateA = new Date(a.timestamp || a.packedAt);
             const dateB = new Date(b.timestamp || b.packedAt);

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, X, Trash2, AlertTriangle } from './Icons';
+import { formatDateTimePST } from '@/lib/timezone';
 
 interface ReceivingTask {
     id: number;
@@ -65,12 +66,7 @@ export default function ReceivingTaskList() {
 
     const formatDate = (dateStr: string | null) => {
         if (!dateStr) return null;
-        return new Date(dateStr).toLocaleString([], { 
-            month: 'short', 
-            day: 'numeric', 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        });
+        return formatDateTimePST(dateStr);
     };
 
     if (isLoading) {

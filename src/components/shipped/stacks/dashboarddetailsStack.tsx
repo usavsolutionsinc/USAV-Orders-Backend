@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Check } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 export function DashboardDetailsStack({
   shipped,
@@ -29,17 +30,15 @@ export function DashboardDetailsStack({
     if (!value) return false;
     const raw = String(value).trim();
     if (!raw || /^\d+$/.test(raw)) return false;
-    const parsed = new Date(raw);
-    return !Number.isNaN(parsed.getTime());
+    return !!toPSTDateKey(raw);
   };
 
   const toMonthDayYearCurrent = (value: string | null | undefined) => {
     if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const year = (date.getFullYear() % 100).toString().padStart(2, '0');
-    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${year}`;
+    const pstDateKey = toPSTDateKey(value);
+    if (!pstDateKey) return '';
+    const [year, month, day] = pstDateKey.split('-').map(Number);
+    return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${String(year % 100).padStart(2, '0')}`;
   };
 
   useEffect(() => {
@@ -77,7 +76,7 @@ export function DashboardDetailsStack({
         setIsSavingShipByDate(false);
         return;
       }
-      const year = new Date().getFullYear();
+      const year = Number(getCurrentPSTDateKey().slice(0, 4));
       const shipByDateValue = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
       await fetch('/api/orders/assign', {

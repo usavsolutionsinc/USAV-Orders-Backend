@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Search } from '@/components/Icons';
 import { useState } from 'react';
+import { formatDatePST, formatDateTimePST } from '@/lib/timezone';
 
 interface EbayAccount {
   id: number;
@@ -150,7 +151,7 @@ export default function EbayManagement() {
                 <div className="space-y-2">
                   <div className="text-[9px] text-gray-500">
                     {lastSyncDate
-                      ? `Last sync: ${lastSyncDate.toLocaleString()}`
+                      ? `Last sync: ${formatDateTimePST(lastSyncDate)}`
                       : 'Never synced'}
                   </div>
                   
@@ -248,7 +249,7 @@ export default function EbayManagement() {
                       </div>
                       <div>
                         <span className="text-gray-400">Date:</span>{' '}
-                        {order.order_date ? new Date(order.order_date).toLocaleDateString() : 'N/A'}
+                        {order.order_date ? formatDatePST(order.order_date) : 'N/A'}
                       </div>
                       {order.shipping_tracking_number && (
                         <div>

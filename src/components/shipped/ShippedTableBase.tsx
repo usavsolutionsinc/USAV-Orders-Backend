@@ -9,6 +9,7 @@ import { CopyableText } from '../ui/CopyableText';
 import WeekHeader from '../ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 // Hard-coded staff ID to name mapping
 const STAFF_NAMES: { [key: number]: string } = {
@@ -121,11 +122,8 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
   };
 
   const formatHeaderDate = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return formatDate(`${year}-${month}-${day}`);
+    const todayPst = getCurrentPSTDateKey();
+    return formatDate(todayPst);
   };
 
   const handleScroll = useCallback(() => {
@@ -237,12 +235,8 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
     
     let date = '';
     try {
-      const dateObj = new Date(dateSource);
-      // Use local date to avoid timezone issues
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      date = `${year}-${month}-${day}`;
+      date = toPSTDateKey(String(dateSource));
+      if (!date) date = 'Unknown';
     } catch (e) {
       date = 'Unknown';
     }
@@ -253,17 +247,15 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
 
   // Get today's count for initial display
   const getTodayCount = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
+    const today = getCurrentPSTDateKey();
     return groupedShipped[today]?.length || 0;
   };
 
   // Calculate week date range based on weekOffset (Monday-Friday only)
   const getWeekRange = () => {
-    const now = new Date();
+    const todayPst = getCurrentPSTDateKey();
+    const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
+    const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
     
     // Calculate the Monday of the current week
     const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.

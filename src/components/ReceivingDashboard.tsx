@@ -7,6 +7,7 @@ import ReceivingLogs from './station/ReceivingLogs';
 import ReceivingPanel from './ReceivingPanel';
 import { Package, TrendingUp, Clock, AlertCircle, Search, Loader2 } from './Icons';
 import { SearchBar } from './ui/SearchBar';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 export default function ReceivingDashboard() {
     const [history, setHistory] = useState<any[]>([]);
@@ -61,10 +62,9 @@ export default function ReceivingDashboard() {
 
     const getTodayCount = () => {
         if (history.length === 0) return 0;
-        const today = new Date().toDateString();
+        const today = getCurrentPSTDateKey();
         return history.filter(h => {
-            const date = new Date(h.timestamp || '');
-            return date.toDateString() === today;
+            return toPSTDateKey(h.timestamp || '') === today;
         }).length;
     };
 
@@ -80,10 +80,9 @@ export default function ReceivingDashboard() {
     const getAverageTime = () => {
         if (history.length === 0) return '0m';
         
-        const today = new Date().toDateString();
+        const today = getCurrentPSTDateKey();
         const todayLogs = history.filter(h => {
-            const date = new Date(h.timestamp || '');
-            return date.toDateString() === today;
+            return toPSTDateKey(h.timestamp || '') === today;
         }).sort((a, b) => {
             const dateA = new Date(a.timestamp);
             const dateB = new Date(b.timestamp);

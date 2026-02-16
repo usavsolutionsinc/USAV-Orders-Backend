@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Search, Copy, Check, Loader2 } from './Icons';
+import { formatDatePST } from '@/lib/timezone';
 
 interface SearchResult {
     id: string;
@@ -118,7 +119,7 @@ export default function ReceivingSearch() {
                                     {result.status || 'Unknown Carrier'}
                                 </span>
                                 <span className="text-gray-400 font-medium">
-                                    {new Date(result.timestamp).toLocaleDateString()}
+                                    {formatDatePST(result.timestamp)}
                                 </span>
                             </div>
                         </div>

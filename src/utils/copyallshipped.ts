@@ -1,5 +1,6 @@
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getStaffName } from './staff';
+import { formatDateTimePST } from '@/lib/timezone';
 
 export function parseShippedDate(dateStr: string): Date {
   if (dateStr.includes('/')) {
@@ -13,17 +14,7 @@ export function parseShippedDate(dateStr: string): Date {
 
 export function formatShippedDateTime(dateStr: string | null | undefined): string {
   if (!dateStr || dateStr === '1') return 'N/A';
-  return parseShippedDate(dateStr)
-    .toLocaleString('en-US', {
-      month: '2-digit',
-      day: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    })
-    .replace(',', '');
+  return formatDateTimePST(dateStr);
 }
 
 export function buildShippedCopyInfo(shipped: ShippedOrder): string {

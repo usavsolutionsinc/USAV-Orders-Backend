@@ -6,6 +6,7 @@ import { Loader2 } from './Icons';
 import { CopyableText } from './ui/CopyableText';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 // Hard-coded staff ID to name mapping
 const STAFF_NAMES: { [key: number]: string } = {
@@ -72,11 +73,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
   };
 
   const formatHeaderDate = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return formatDate(`${year}-${month}-${day}`);
+    return formatDate(getCurrentPSTDateKey());
   };
 
   const handleScroll = useCallback(() => {
@@ -117,11 +114,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     
     let date = '';
     try {
-      const dateObj = new Date(record.pack_date_time);
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      date = `${year}-${month}-${day}`;
+      date = toPSTDateKey(record.pack_date_time) || 'Unknown';
     } catch (e) {
       date = 'Unknown';
     }
@@ -132,7 +125,9 @@ export function PackerTable({ packedBy }: PackerTableProps) {
 
   // Calculate week date range based on weekOffset (Monday-Friday only)
   const getWeekRange = () => {
-    const now = new Date();
+    const todayPst = getCurrentPSTDateKey();
+    const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
+    const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
     const currentDay = now.getDay();
     const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
     const monday = new Date(now);

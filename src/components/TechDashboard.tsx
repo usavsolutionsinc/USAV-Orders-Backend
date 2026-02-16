@@ -7,6 +7,7 @@ import { TechTable } from './TechTable';
 import StationTesting from './station/StationTesting';
 import StaffSelector from './StaffSelector';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 interface TechDashboardProps {
     techId: string;
@@ -51,10 +52,9 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
 
     const getTodayCount = () => {
         if (history.length === 0) return 0;
-        const todayDate = new Date().toDateString();
+        const todayDate = getCurrentPSTDateKey();
         return history.filter(h => {
-            const date = new Date(h.timestamp);
-            return date.toDateString() === todayDate;
+            return toPSTDateKey(h.timestamp) === todayDate;
         }).length;
     };
 

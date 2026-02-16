@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Package, AlertTriangle, X, Search, Copy, Check, Loader2, Plus, ExternalLink } from './Icons';
 import { SearchBar } from './ui/SearchBar';
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatDatePST, formatTimePST } from '@/lib/timezone';
 
 interface SearchResult {
     id: string;
@@ -262,7 +263,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
                                 <div className="flex justify-between items-center">
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Arrived</span>
                                     <span className="text-[10px] font-black text-gray-900 uppercase">
-                                        {new Date(lastFound.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} — {new Date(lastFound.timestamp).toLocaleDateString()}
+                                        {formatTimePST(lastFound.timestamp)} — {formatDatePST(lastFound.timestamp)}
                                     </span>
                                 </div>
                             </div>
@@ -312,7 +313,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
                                             {result.status || 'Unknown'}
                                         </span>
                                         <span className="text-gray-400 font-medium">
-                                            {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} — {new Date(result.timestamp).toLocaleDateString()}
+                                            {formatTimePST(result.timestamp)} — {formatDatePST(result.timestamp)}
                                         </span>
                                     </div>
                                 </div>

@@ -1,3 +1,5 @@
+import { toPSTDateKey } from './timezone';
+
 export function formatDateWithOrdinal(dateStr: string): string {
   try {
     if (!dateStr) return 'Unknown';
@@ -9,9 +11,11 @@ export function formatDateWithOrdinal(dateStr: string): string {
     };
 
     let date: Date;
-
-    // Handle YYYY-MM-DD as local date to avoid timezone shifts
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const pstDateKey = toPSTDateKey(dateStr);
+    if (pstDateKey) {
+      const [year, month, day] = pstDateKey.split('-').map(Number);
+      date = new Date(year, month - 1, day);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       const [year, month, day] = dateStr.split('-').map(Number);
       date = new Date(year, month - 1, day);
     } else {

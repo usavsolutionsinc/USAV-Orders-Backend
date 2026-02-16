@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from '../Icons';
+import { getCurrentPSTDateKey } from '@/lib/timezone';
 
 interface WeekRange {
   startStr: string;
@@ -35,13 +36,8 @@ export default function WeekHeader({
 }: WeekHeaderProps) {
   const getTodayPSTDisplay = () => {
     try {
-      const pstNow = new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
-      const date = new Date(pstNow);
-      if (Number.isNaN(date.getTime())) return fallbackDate;
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return formatDate(`${year}-${month}-${day}`);
+      const today = getCurrentPSTDateKey();
+      return today ? formatDate(today) : fallbackDate;
     } catch {
       return fallbackDate;
     }

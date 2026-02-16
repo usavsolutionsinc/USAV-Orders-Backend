@@ -38,7 +38,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
       `WITH order_serials AS (
         SELECT 
           o.id,
-          o.ship_by_date,
+          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
           o.order_id,
           o.product_title,
           o.item_number,
@@ -51,9 +51,9 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           o.notes,
           o.status_history,
           o.is_shipped,
-          o.created_at,
+          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at,
           pl.packed_by,
-          pl.pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
@@ -86,7 +86,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
       LEFT JOIN staff s3 ON os.tester_id = s3.id
-      ORDER BY COALESCE(os.pack_date_time, os.created_at) DESC NULLS LAST, os.id DESC
+      ORDER BY COALESCE(os.pack_date_time::timestamp, os.created_at::timestamp) DESC NULLS LAST, os.id DESC
       LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
@@ -108,7 +108,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
       `WITH order_serials AS (
         SELECT 
           o.id,
-          o.ship_by_date,
+          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
           o.order_id,
           o.product_title,
           o.item_number,
@@ -121,9 +121,9 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.notes,
           o.status_history,
           o.is_shipped,
-          o.created_at,
+          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at,
           pl.packed_by,
-          pl.pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
@@ -175,7 +175,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
       `WITH order_serials AS (
         SELECT 
           o.id,
-          o.ship_by_date,
+          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
           o.order_id,
           o.product_title,
           o.item_number,
@@ -188,9 +188,9 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           o.notes,
           o.status_history,
           o.is_shipped,
-          o.created_at,
+          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at,
           pl.packed_by,
-          pl.pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
@@ -298,7 +298,7 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
       `WITH order_serials AS (
         SELECT 
           o.id,
-          o.ship_by_date,
+          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
           o.order_id,
           o.product_title,
           o.condition,
@@ -311,7 +311,7 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
           o.status_history,
           o.is_shipped,
           pl.packed_by,
-          pl.pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
