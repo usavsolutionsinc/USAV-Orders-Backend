@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
 /**
- * GET /api/orders/next - Get next order for a technician (assigned or unassigned)
+ * GET /api/orders/next - Get next unassigned order(s) for technicians
  */
 export async function GET(req: NextRequest) {
   try {
@@ -27,20 +27,43 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 1. Check if there are ANY pending orders left for today (not completed, not shipped)
-    // Note: tester_id removed - now checking all unshipped orders
+    // Resolve station techId (1/2/3/4) to actual staff.id when available.
+    // Some environments store orders.tester_id as staff.id, others as station id.
+    const techEmployeeIds: Record<string, string> = {
+      '1': 'TECH001',
+      '2': 'TECH002',
+      '3': 'TECH003',
+      '4': 'TECH004',
+    };
+    const employeeId = techEmployeeIds[techId];
+    let resolvedStaffId: number | null = null;
+    if (employeeId) {
+      const staffResult = await pool.query(
+        'SELECT id FROM staff WHERE employee_id = $1 LIMIT 1',
+        [employeeId]
+      );
+      if (staffResult.rows.length > 0) {
+        resolvedStaffId = Number(staffResult.rows[0].id);
+      }
+    }
+    const testerIdScope = Array.from(
+      new Set([techIdNum, resolvedStaffId].filter((v): v is number => Number.isFinite(v as number)))
+    );
+
+    // 1. Check if there are ANY pending orders left for this tech scope:
+    //    assigned to this tech OR unassigned
     const totalPendingResult = await pool.query(
       `SELECT COUNT(*) as count
        FROM orders o
        WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
-         AND o.tester_id = $1
+         AND (o.tester_id = ANY($1::int[]) OR COALESCE(o.tester_id::text, '') = '')
          AND NOT EXISTS (
            SELECT 1
            FROM tech_serial_numbers tsn
            WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
                  RIGHT(regexp_replace(COALESCE(o.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
          )`,
-      [techIdNum]
+      [testerIdScope]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
@@ -63,7 +86,7 @@ export async function GET(req: NextRequest) {
       FROM orders
       WHERE 
         (is_shipped = false OR is_shipped IS NULL)
-        AND tester_id = $1
+        AND (tester_id = ANY($1::int[]) OR COALESCE(tester_id::text, '') = '')
         AND NOT EXISTS (
           SELECT 1
           FROM tech_serial_numbers tsn
@@ -71,7 +94,7 @@ export async function GET(req: NextRequest) {
                 RIGHT(regexp_replace(COALESCE(orders.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
         )
     `;
-    const params: any[] = [techIdNum];
+    const params: any[] = [testerIdScope];
 
     // Filter based on out_of_stock parameter
     if (outOfStock === 'true') {

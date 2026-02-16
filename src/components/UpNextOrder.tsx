@@ -44,12 +44,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
   const hasCelebratedRef = useRef(false);
 
-  const getOrderIdLast4 = (orderId: string) => {
-    const digits = String(orderId || '').replace(/\D/g, '');
-    if (digits.length >= 4) return digits.slice(-4);
-    return String(orderId || '').slice(-4);
-  };
-
   const getDisplayShipByDate = (order: Order) => {
     const shipByRaw = String(order.ship_by_date || '').trim();
     const createdAtRaw = String(order.created_at || '').trim();
@@ -166,7 +160,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   };
 
   const renderOrderCard = (order: Order) => {
-    const quantity = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
     const openDetails = () => {
       const detail: ShippedOrder = {
         id: order.id,
@@ -205,23 +198,20 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       className="rounded-2xl p-4 border transition-all relative shadow-sm hover:shadow-md mb-2 bg-white border-gray-200 hover:border-blue-300 cursor-pointer"
     >
       {/* Ship By Date & Order ID Header */}
-      <div className="flex items-center justify-between mb-2">
-        <ShipByDate date={getDisplayShipByDate(order) || ''} />
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mb-4">
+        <ShipByDate date={getDisplayShipByDate(order) || ''} className="[&>span]:text-[12px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4" />
+        <div className="flex items-center gap-3">
           {order.out_of_stock && activeTab === 'stock' && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm">
-              <AlertCircle className="w-3 h-3" />
-              <span className="text-[8px] font-black uppercase tracking-wider">Out of Stock</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-md shadow-sm">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span className="text-[9px] font-black uppercase tracking-wider">Out of Stock</span>
             </div>
           )}
           {getOrderPlatformLabel(order.order_id, order.account_source) && (
-            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
               {getOrderPlatformLabel(order.order_id, order.account_source)}
             </span>
           )}
-          <span className="text-[9px] font-mono font-black text-gray-700">
-            #{getOrderIdLast4(order.order_id)}
-          </span>
           <button
             type="button"
             onClick={(e) => {
@@ -229,18 +219,25 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               openExternalByItemNumber(order.item_number);
             }}
             disabled={!getExternalUrlByItemNumber(order.item_number)}
-            className="inline-flex items-center justify-center p-1.5 rounded-md bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center p-2.5 rounded-md bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Open external page"
             aria-label="Open external page"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Action Buttons Row - Only show for Current tab */}
+      {/* Product Title */}
+      <div className="mb-5">
+        <h4 className="text-base font-black text-gray-900 leading-tight">
+          {order.product_title}
+        </h4>
+      </div>
+
+      {/* Action Buttons Row - bottom for safer tapping */}
       {activeTab === 'current' && (
-        <div className="flex flex-col gap-2 mb-5">
+        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-gray-100">
           <div className="flex items-center gap-3">
             <button
               onClick={(e) => {
@@ -260,11 +257,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
             >
               <Play className="w-4 h-4" />
               Start
-              {quantity > 1 && (
-                <span className="px-1.5 py-0.5 rounded-md bg-yellow-300 text-yellow-900 text-[10px] font-black">
-                  x{quantity}
-                </span>
-              )}
             </button>
           </div>
 
@@ -312,41 +304,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           </AnimatePresence>
         </div>
       )}
-
-      {/* Product Title */}
-      <div className="mb-4">
-        <h4 className="text-base font-black text-gray-900 leading-tight">
-          {order.product_title}
-        </h4>
-      </div>
-
-      {/* Info Grid */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-          <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
-            Tracking #
-          </p>
-          <p className="text-xs font-mono font-bold text-gray-800">
-            {order.shipping_tracking_number ? order.shipping_tracking_number.slice(-4) : '—'}
-          </p>
-        </div>
-        <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-          <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">
-            SKU
-          </p>
-          <p className="text-xs font-mono font-bold text-gray-800">
-            {order.sku}
-          </p>
-        </div>
-        <div className={`rounded-xl px-3 py-2 border ${quantity > 1 ? 'bg-yellow-300 border-yellow-400' : 'bg-gray-50 border-gray-100'}`}>
-          <p className={`text-[9px] font-black uppercase tracking-wider mb-1 ${quantity > 1 ? 'text-yellow-900' : 'text-gray-400'}`}>
-            Qty
-          </p>
-          <p className={`text-xs font-mono font-black ${quantity > 1 ? 'text-yellow-900' : 'text-gray-800'}`}>
-            {quantity}
-          </p>
-        </div>
-      </div>
     </motion.div>
     );
   };
