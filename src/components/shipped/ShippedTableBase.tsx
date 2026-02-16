@@ -55,7 +55,7 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
             ? `/api/shipped/search?q=${encodeURIComponent(search)}`
             : `/api/shipped?limit=5000`
         );
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json();
       
       let records = data.results || data.shipped || [];

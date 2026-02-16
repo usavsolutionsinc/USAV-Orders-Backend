@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     let query = `
       SELECT 
         id,
-        ship_by_date,
+        to_char(ship_by_date, 'YYYY-MM-DD') as ship_by_date,
         order_id,
         product_title,
         item_number,
