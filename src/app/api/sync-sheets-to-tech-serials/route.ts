@@ -8,7 +8,7 @@ export const maxDuration = 60;
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
 /**
- * Sync tech sheet data (test_date_time and tester_id) to tech_serial_numbers table
+ * Sync tech sheet data (test_date_time and tested_by) to tech_serial_numbers table
  * This replaces the old sync logic that updated orders.test_date_time and orders.tested_by
  */
 export async function POST(req: NextRequest) {
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
 
                         // Check if this serial already exists for this tracking number
                         const existingSerial = await client.query(
-                            `SELECT id, test_date_time, tester_id FROM tech_serial_numbers 
+                            `SELECT id, test_date_time, tested_by FROM tech_serial_numbers 
                              WHERE shipping_tracking_number = $1 AND serial_number = $2`,
                             [tracking, upperSerial]
                         );
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
                             await client.query(
                                 `UPDATE tech_serial_numbers
                                  SET test_date_time = $1,
-                                     tester_id = $2
+                                     tested_by = $2
                                  WHERE shipping_tracking_number = $3 AND serial_number = $4`,
                                 [parsedDateTime, staffId, tracking, upperSerial]
                             );
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
                             // Insert new serial from sheet
                             await client.query(
                                 `INSERT INTO tech_serial_numbers 
-                                 (shipping_tracking_number, serial_number, serial_type, test_date_time, tester_id)
+                                 (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
                                  VALUES ($1, $2, $3, $4, $5)`,
                                 [tracking, upperSerial, serialType, parsedDateTime, staffId]
                             );

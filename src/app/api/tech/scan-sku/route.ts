@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
       if (dupCheck.rows.length === 0) {
         await pool.query(
           `INSERT INTO tech_serial_numbers 
-           (shipping_tracking_number, serial_number, serial_type, test_date_time, tester_id)
+           (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
            VALUES ($1, $2, 'SKU_STATIC', NOW(), $3)`,
           [order.shipping_tracking_number, upperSerial, staffId]
         );
