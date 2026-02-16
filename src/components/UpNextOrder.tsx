@@ -44,6 +44,12 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
   const hasCelebratedRef = useRef(false);
 
+  const getOrderIdLast4 = (orderId: string) => {
+    const digits = String(orderId || '').replace(/\D/g, '');
+    if (digits.length >= 4) return digits.slice(-4);
+    return String(orderId || '').slice(-4);
+  };
+
   const getDisplayShipByDate = (order: Order) => {
     const shipByRaw = String(order.ship_by_date || '').trim();
     const createdAtRaw = String(order.created_at || '').trim();
@@ -160,6 +166,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   };
 
   const renderOrderCard = (order: Order) => {
+    const quantity = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
     const openDetails = () => {
       const detail: ShippedOrder = {
         id: order.id,
@@ -233,6 +240,22 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         <h4 className="text-base font-black text-gray-900 leading-tight">
           {order.product_title}
         </h4>
+        <div className={`mt-2 flex items-center justify-between rounded-lg px-2.5 py-1.5 border ${quantity > 1 ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-50 border-gray-200'}`}>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`text-[11px] font-black ${quantity > 1 ? 'text-yellow-900' : 'text-gray-800'}`}>
+              {quantity}
+            </span>
+            <span className={`text-[10px] font-black uppercase tracking-wider ${quantity > 1 ? 'text-yellow-900' : 'text-gray-600'}`}>
+              -
+            </span>
+            <span className={`text-[11px] font-black uppercase truncate ${quantity > 1 ? 'text-yellow-900' : 'text-gray-800'}`}>
+              {order.condition || 'No Condition'}
+            </span>
+          </div>
+          <span className={`text-[11px] font-mono font-black ml-3 ${quantity > 1 ? 'text-yellow-900' : 'text-gray-700'}`}>
+            #{getOrderIdLast4(order.order_id)}
+          </span>
+        </div>
       </div>
 
       {/* Action Buttons Row - bottom for safer tapping */}
