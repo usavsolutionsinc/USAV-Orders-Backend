@@ -275,7 +275,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                               {record.product_title || 'Unknown Product'}
                             </div>
                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
-                              {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                              {parseInt(String(record.quantity || '1'), 10) || 1} • {getStaffName(record.tested_by)} • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
                             </div>
                           </div>
                           

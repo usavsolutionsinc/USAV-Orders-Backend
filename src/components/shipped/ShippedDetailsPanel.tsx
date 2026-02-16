@@ -9,6 +9,7 @@ import { DashboardDetailsStack } from './stacks/dashboarddetailsStack';
 import { TechDetailsStack } from './stacks/TechDetailsStack';
 import { DetailsStackDurationData } from './stacks/types';
 import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
+import { QtyBadge } from '@/components/ui/QtyBadge';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -26,7 +27,6 @@ export function ShippedDetailsPanel({
   const [shipped, setShipped] = useState<ShippedOrder>(initialShipped);
   const [durationData, setDurationData] = useState<DetailsStackDurationData>({});
   const [copiedAll, setCopiedAll] = useState(false);
-  const quantity = Math.max(1, parseInt(String((shipped as any).quantity || '1'), 10) || 1);
 
   useEffect(() => {
     setShipped(initialShipped);
@@ -73,13 +73,7 @@ export function ShippedDetailsPanel({
             <div>
               <h2 className="text-[22px] font-black text-gray-900 tracking-tighter leading-none">{shipped.order_id}</h2>
               <div className="flex items-center gap-2 mt-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Verified Shipment</p>
-                {quantity > 1 && (
-                  <span className="px-2 py-0.5 rounded-md bg-yellow-300 text-yellow-900 text-[10px] font-black uppercase tracking-wider">
-                    Qty: {quantity}
-                  </span>
-                )}
+                <QtyBadge quantity={(shipped as any).quantity} />
               </div>
             </div>
           </div>

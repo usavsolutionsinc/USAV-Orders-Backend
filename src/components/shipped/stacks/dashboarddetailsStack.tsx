@@ -14,7 +14,6 @@ export function DashboardDetailsStack({
   onUpdate,
   mode = 'dashboard'
 }: DetailsStackProps) {
-  const quantity = Math.max(1, parseInt(String((shipped as any).quantity || '1'), 10) || 1);
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
   const [notes, setNotes] = useState(shipped.notes || '');
   const [shipByDate, setShipByDate] = useState(''); // MM-DD-YY
@@ -303,11 +302,6 @@ export function DashboardDetailsStack({
                 {isSavingShipByDate ? 'Saving' : 'Save'}
               </button>
             </>
-          )}
-          {quantity > 1 && (
-            <span className="h-8 px-2.5 inline-flex items-center justify-center rounded-lg bg-yellow-300 text-yellow-900 text-[9px] font-black uppercase tracking-wider border border-yellow-400">
-              Qty: {quantity}
-            </span>
           )}
         </div>
 
