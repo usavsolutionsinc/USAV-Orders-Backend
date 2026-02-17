@@ -31,6 +31,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Tech not found in staff table' }, { status: 404 });
         }
         const testedBy = staffResult.rows[0].id;
+        const parseSerials = (value: string | null | undefined) =>
+            String(value || '')
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
 
         // Query orders table by tracking first so active order always has product info
         const result = await pool.query(`
@@ -65,7 +70,7 @@ export async function GET(req: NextRequest) {
 
         // Check tech_serial_numbers for existing tracking entry
         const existingTracking = await pool.query(
-            `SELECT shipping_tracking_number
+            `SELECT id, shipping_tracking_number, serial_number
              FROM tech_serial_numbers
              WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
              LIMIT 1`,
@@ -91,7 +96,7 @@ export async function GET(req: NextRequest) {
                     condition: 'N/A',
                     notes: '',
                     tracking: trackingValue,
-                    serialNumbers: [],
+                    serialNumbers: parseSerials(existingTracking.rows[0]?.serial_number),
                     testDateTime: null,
                     testedBy,
                     accountSource: null,
@@ -113,15 +118,16 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ found: false, error: 'Tracking number not found in orders' });
         }
 
-        // Insert into tech_serial_numbers only if this tracking hasn't been initialized yet
+        // Create tracking row once if missing. This is the single row that serial scans append to.
         if (existingTracking.rows.length === 0) {
             await pool.query(
                 `INSERT INTO tech_serial_numbers (
                     shipping_tracking_number, serial_number, tested_by
                 ) VALUES ($1, $2, $3)`,
-                [trackingValue, null, testedBy]
+                [trackingValue, '', testedBy]
             );
         }
+        const serialNumbers = parseSerials(existingTracking.rows[0]?.serial_number);
 
         return NextResponse.json({
             found: true,
@@ -135,7 +141,7 @@ export async function GET(req: NextRequest) {
                 condition: row.condition || 'N/A',
                 notes: row.notes || '',
                 tracking: trackingValue,
-                serialNumbers: [],
+                serialNumbers,
                 testDateTime: null,
                 testedBy,
                 accountSource: row.account_source || null,

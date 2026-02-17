@@ -91,28 +91,55 @@ export async function POST(req: NextRequest) {
     }
     
     const order = orderResult.rows[0];
+    const parseSerials = (value: string | null | undefined) =>
+      String(value || '')
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+
+    // One-row-per-tracking model: fetch (or create) a single tech_serial_numbers row.
+    const rowResult = await pool.query(
+      `SELECT id, shipping_tracking_number, serial_number
+       FROM tech_serial_numbers
+       WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
+             RIGHT(regexp_replace(COALESCE($1, ''), '\\D', '', 'g'), 8)
+       ORDER BY id ASC
+       LIMIT 1`,
+      [order.shipping_tracking_number]
+    );
+    const existingRow = rowResult.rows[0] || null;
+    const baseTracking = existingRow?.shipping_tracking_number || order.shipping_tracking_number;
+    const serialList = parseSerials(existingRow?.serial_number);
+    const serialSet = new Set(serialList);
     
-    // Insert each serial as SKU_STATIC type into tech_serial_numbers
+    // Append each serial from SKU_STATIC lookup into the same row.
     const insertedSerials: string[] = [];
     for (const serial of serialNumbers) {
       const upperSerial = serial.toUpperCase();
-      
-      // Check for duplicate
-      const dupCheck = await pool.query(
-        `SELECT id FROM tech_serial_numbers 
-         WHERE shipping_tracking_number = $1 AND serial_number = $2`,
-        [order.shipping_tracking_number, upperSerial]
-      );
-      
-      if (dupCheck.rows.length === 0) {
-        await pool.query(
-          `INSERT INTO tech_serial_numbers 
-           (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
-           VALUES ($1, $2, 'SKU_STATIC', NOW(), $3)`,
-          [order.shipping_tracking_number, upperSerial, staffId]
-        );
+      if (!serialSet.has(upperSerial)) {
+        serialSet.add(upperSerial);
+        serialList.push(upperSerial);
         insertedSerials.push(upperSerial);
       }
+    }
+
+    if (existingRow) {
+      await pool.query(
+        `UPDATE tech_serial_numbers
+         SET serial_number = $1,
+             serial_type = 'SKU_STATIC',
+             test_date_time = NOW(),
+             tested_by = $2
+         WHERE id = $3`,
+        [serialList.join(', '), staffId, existingRow.id]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO tech_serial_numbers
+         (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
+         VALUES ($1, $2, 'SKU_STATIC', NOW(), $3)`,
+        [baseTracking, serialList.join(', '), staffId]
+      );
     }
     
     // Decrease stock in sku_stock table
@@ -131,21 +158,13 @@ export async function POST(req: NextRequest) {
       [tracking, skuRecord.id]
     );
     
-    // Get updated serial list for this order
-    const updatedSerials = await pool.query(
-      `SELECT serial_number FROM tech_serial_numbers 
-       WHERE shipping_tracking_number = $1 
-       ORDER BY test_date_time ASC`,
-      [order.shipping_tracking_number]
-    );
-    
     return NextResponse.json({
       success: true,
       serialNumbers: insertedSerials,
       productTitle: skuRecord.product_title,
       notes: skuRecord.notes,
       quantityDecremented: qtyToDecrement,
-      updatedSerials: updatedSerials.rows.map((r: any) => r.serial_number)
+      updatedSerials: serialList
     });
   } catch (error: any) {
     console.error('SKU scan error:', error);

@@ -70,7 +70,7 @@ export function TechTable({ testedBy }: TechTableProps) {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/tech-logs?techId=${testedBy}&limit=5000`);
+      const res = await fetch(`/api/tech-logs?techId=${testedBy}&limit=5000`, { cache: 'no-store' });
       const data = await res.json();
       
       console.log('Fetched tech records:', data.length || 0);
@@ -84,7 +84,7 @@ export function TechTable({ testedBy }: TechTableProps) {
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
   const openDetails = (record: TechRecord) => {
-    const detail: ShippedOrder = {
+    const detail: ShippedOrder & { tech_serial_id?: number } = {
       id: record.order_db_id ?? record.id,
       ship_by_date: record.ship_by_date || '',
       order_id: record.order_id || '',
@@ -108,6 +108,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       is_shipped: !!record.is_shipped,
       created_at: record.created_at || null,
       quantity: record.quantity || '1',
+      tech_serial_id: record.id,
     };
     window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
   };

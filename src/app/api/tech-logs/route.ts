@@ -118,6 +118,8 @@ export async function GET(req: NextRequest) {
                 ) as is_shipped
             FROM tech_serial_numbers tsn
             WHERE tsn.tested_by = $1
+              AND tsn.serial_number IS NOT NULL
+              AND tsn.serial_number != ''
             ORDER BY tsn.test_date_time DESC NULLS LAST
             LIMIT $2 OFFSET $3
         `, [staffId, limit, offset]);

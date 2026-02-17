@@ -44,11 +44,16 @@ export function TechDetailsStack({
 
     setIsDeleting(true);
     try {
+      const rowId = Number((shipped as any).tech_serial_id);
+      if (!Number.isFinite(rowId) || rowId <= 0) {
+        throw new Error('Missing tech row id for delete');
+      }
+
       const response = await fetch('/api/tech/delete-tracking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tracking: shipped.shipping_tracking_number,
+          rowId,
         }),
       });
 

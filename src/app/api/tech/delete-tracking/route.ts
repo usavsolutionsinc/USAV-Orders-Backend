@@ -4,17 +4,16 @@ import pool from '@/lib/db';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const tracking = String(body?.tracking || '').trim();
+    const rowId = Number(body?.rowId);
 
-    if (!tracking) {
-      return NextResponse.json({ success: false, error: 'Tracking is required' }, { status: 400 });
+    if (!Number.isFinite(rowId) || rowId <= 0) {
+      return NextResponse.json({ success: false, error: 'Valid rowId is required' }, { status: 400 });
     }
 
     const result = await pool.query(
       `DELETE FROM tech_serial_numbers
-       WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(COALESCE($1, ''), '\\D', '', 'g'), 8)`,
-      [tracking]
+       WHERE id = $1`,
+      [rowId]
     );
 
     return NextResponse.json({

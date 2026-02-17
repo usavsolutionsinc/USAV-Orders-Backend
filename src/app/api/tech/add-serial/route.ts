@@ -69,28 +69,53 @@ export async function POST(req: NextRequest) {
         const staffName = staffResult.rows[0].name;
 
         const upperSerial = serial.toUpperCase();
+        const parseSerials = (value: string | null | undefined) =>
+            String(value || '')
+                .split(',')
+                .map((s) => s.trim().toUpperCase())
+                .filter(Boolean);
 
-        // Check for duplicate in tech_serial_numbers table
-        const duplicateCheck = await pool.query(
-            `SELECT id FROM tech_serial_numbers 
-             WHERE shipping_tracking_number = $1 AND serial_number = $2`,
-            [order.shipping_tracking_number, upperSerial]
+        // One-row-per-tracking model: append serial to existing row by tracking last-8.
+        const existingRowResult = await pool.query(
+            `SELECT id, shipping_tracking_number, serial_number
+             FROM tech_serial_numbers
+             WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
+                   RIGHT(regexp_replace(COALESCE($1, ''), '\\D', '', 'g'), 8)
+             ORDER BY id ASC
+             LIMIT 1`,
+            [order.shipping_tracking_number]
         );
 
-        if (duplicateCheck.rows.length > 0) {
-            return NextResponse.json({ 
-                success: false,
-                error: `Serial ${upperSerial} already scanned for this order`
-            });
+        let updatedSerialList: string[] = [];
+        if (existingRowResult.rows.length > 0) {
+            const row = existingRowResult.rows[0];
+            const existingSerials = parseSerials(row.serial_number);
+
+            if (existingSerials.includes(upperSerial)) {
+                return NextResponse.json({ 
+                    success: false,
+                    error: `Serial ${upperSerial} already scanned for this order`
+                });
+            }
+
+            updatedSerialList = [...existingSerials, upperSerial];
+            await pool.query(
+                `UPDATE tech_serial_numbers
+                 SET serial_number = $1,
+                     test_date_time = NOW(),
+                     tested_by = $2
+                 WHERE id = $3`,
+                [updatedSerialList.join(', '), staffId, row.id]
+            );
+        } else {
+            updatedSerialList = [upperSerial];
+            await pool.query(
+                `INSERT INTO tech_serial_numbers 
+                 (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
+                 VALUES ($1, $2, $3, NOW(), $4)`,
+                [order.shipping_tracking_number, updatedSerialList.join(', '), serialType, staffId]
+            );
         }
-
-        // Insert into tech_serial_numbers table
-        await pool.query(
-            `INSERT INTO tech_serial_numbers 
-             (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
-             VALUES ($1, $2, $3, NOW(), $4)`,
-            [order.shipping_tracking_number, upperSerial, serialType, staffId]
-        );
 
         // Update order status_history
         const isoTimestamp = toISOStringPST(new Date().toISOString());
@@ -116,17 +141,9 @@ export async function POST(req: NextRequest) {
             WHERE id = $5
         `, [isoTimestamp, staffName, upperSerial, serialType, order.id]);
 
-        // Get updated serial list from tech_serial_numbers
-        const updatedSerials = await pool.query(
-            `SELECT serial_number FROM tech_serial_numbers 
-             WHERE shipping_tracking_number = $1 
-             ORDER BY test_date_time ASC`,
-            [order.shipping_tracking_number]
-        );
-
         return NextResponse.json({
             success: true,
-            serialNumbers: updatedSerials.rows.map((r: any) => r.serial_number),
+            serialNumbers: updatedSerialList,
             serialType,
             isComplete: false
         });
