@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
       `SELECT id, shipping_tracking_number, serial_number
        FROM tech_serial_numbers
        WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(COALESCE($1, ''), '\\D', '', 'g'), 8)
+             RIGHT(regexp_replace(COALESCE($1::text, ''), '\\D', '', 'g'), 8)
        ORDER BY id ASC
        LIMIT 1`,
       [order.shipping_tracking_number]

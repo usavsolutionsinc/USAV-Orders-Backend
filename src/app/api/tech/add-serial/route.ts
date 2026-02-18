@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
             `SELECT id, shipping_tracking_number, serial_number
              FROM tech_serial_numbers
              WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-                   RIGHT(regexp_replace(COALESCE($1, ''), '\\D', '', 'g'), 8)
+                   RIGHT(regexp_replace(COALESCE($1::text, ''), '\\D', '', 'g'), 8)
              ORDER BY id ASC
              LIMIT 1`,
             [order.shipping_tracking_number]
@@ -117,29 +117,32 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Update order status_history
-        const isoTimestamp = toISOStringPST(new Date().toISOString());
-
-        await pool.query(`
-            UPDATE orders
-            SET status_history = COALESCE(status_history, '[]'::jsonb) || 
-                jsonb_build_object(
-                    'status', 'serial_added',
-                    'timestamp', $1,
-                    'user', $2,
-                    'serial', $3,
-                    'serial_type', $4,
-                    'previous_status', (
-                        SELECT COALESCE(
-                            (status_history->-1->>'status')::text,
-                            null
+        // Best-effort status history update. Do not fail serial posting if this metadata write fails.
+        try {
+            const isoTimestamp = toISOStringPST(new Date().toISOString());
+            await pool.query(`
+                UPDATE orders
+                SET status_history = COALESCE(status_history, '[]'::jsonb) || 
+                    jsonb_build_object(
+                        'status', 'serial_added',
+                        'timestamp', $1,
+                        'user', $2,
+                        'serial', $3,
+                        'serial_type', $4,
+                        'previous_status', (
+                            SELECT COALESCE(
+                                (status_history->-1->>'status')::text,
+                                null
+                            )
+                            FROM orders 
+                            WHERE id = $5
                         )
-                        FROM orders 
-                        WHERE id = $5
-                    )
-                )::jsonb
-            WHERE id = $5
-        `, [isoTimestamp, staffName, upperSerial, serialType, order.id]);
+                    )::jsonb
+                WHERE id = $5
+            `, [isoTimestamp, staffName, upperSerial, serialType, order.id]);
+        } catch (statusError) {
+            console.warn('Status history update failed (serial was still saved):', statusError);
+        }
 
         return NextResponse.json({
             success: true,

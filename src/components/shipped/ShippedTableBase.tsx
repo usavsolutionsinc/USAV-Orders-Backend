@@ -381,7 +381,7 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
-                          className={`grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                          className={`grid ${unshippedOnly ? 'grid-cols-[1fr_auto]' : 'grid-cols-[1fr_auto_70px]'} items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
@@ -421,15 +421,16 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
                             </div>
                           </div>
                           
-                          {/* 5. Serial Number */}
-                          <div className="flex flex-col w-[70px]">
-                            <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
-                            <CopyableText 
-                              text={record.serial_number || ''} 
-                              className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
-                              variant="serial"
-                            />
-                          </div>
+                          {!unshippedOnly && (
+                            <div className="flex flex-col w-[70px]">
+                              <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
+                              <CopyableText 
+                                text={record.serial_number || ''} 
+                                className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
+                                variant="serial"
+                              />
+                            </div>
+                          )}
                         </motion.div>
                       );
                     })}
