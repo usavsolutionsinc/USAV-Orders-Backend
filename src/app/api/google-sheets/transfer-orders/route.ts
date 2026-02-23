@@ -3,7 +3,7 @@ import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
 import { orders as ordersTable, packerLogs } from '@/lib/drizzle/schema';
-import { desc, inArray } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
 const DEST_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
@@ -19,6 +19,10 @@ function getLastEightDigits(str: any) {
 function normalizeTracking(str: any) {
     if (!str) return '';
     return String(str).trim();
+}
+
+function isBlank(value: unknown) {
+    return value === null || value === undefined || String(value).trim() === '';
 }
 
 function formatPackDateTimeForSheet(dateValue: Date | string | null) {
@@ -162,6 +166,13 @@ export async function POST(req: NextRequest) {
                 .select({
                     orderId: ordersTable.orderId,
                     id: ordersTable.id,
+                    shipByDate: ordersTable.shipByDate,
+                    itemNumber: ordersTable.itemNumber,
+                    productTitle: ordersTable.productTitle,
+                    quantity: ordersTable.quantity,
+                    sku: ordersTable.sku,
+                    condition: ordersTable.condition,
+                    notes: ordersTable.notes,
                     shippingTrackingNumber: ordersTable.shippingTrackingNumber,
                     createdAt: ordersTable.createdAt,
                 })
@@ -170,13 +181,33 @@ export async function POST(req: NextRequest) {
                 .orderBy(desc(ordersTable.createdAt))
             : [];
 
-        const latestOrderById = new Map<string, { id: number; tracking: string }>();
+        const latestOrderById = new Map<string, {
+            id: number;
+            tracking: string;
+            shipByDate: Date | null;
+            itemNumber: string | null;
+            productTitle: string | null;
+            quantity: string | null;
+            sku: string | null;
+            condition: string | null;
+            notes: string | null;
+        }>();
         sourceOrders.forEach(order => {
             const orderId = String(order.orderId || '').trim();
             const tracking = normalizeTracking(order.shippingTrackingNumber);
             const id = Number(order.id);
             if (!orderId || Number.isNaN(id) || latestOrderById.has(orderId)) return;
-            latestOrderById.set(orderId, { id, tracking });
+            latestOrderById.set(orderId, {
+                id,
+                tracking,
+                shipByDate: order.shipByDate,
+                itemNumber: order.itemNumber,
+                productTitle: order.productTitle,
+                quantity: order.quantity,
+                sku: order.sku,
+                condition: order.condition,
+                notes: order.notes,
+            });
         });
 
         // Keep one latest source row per order_id (later rows override earlier rows).
@@ -194,12 +225,22 @@ export async function POST(req: NextRequest) {
         const transferRows: Array<{ row: any[]; orderId: string; tracking: string }> = [];
         const ordersToInsert: any[] = [];
         const orderIdsToUpdateTracking: string[] = [];
+        const ordersToBackfill: Array<{ orderId: string; values: Record<string, any> }> = [];
 
         latestSourceRowByOrderId.forEach((row, orderId) => {
             const existingOrder = latestOrderById.get(orderId);
             const dbTracking = normalizeTracking(existingOrder?.tracking);
             const sheetTracking = normalizeTracking(row[colIndices.tracking]);
             const resolvedTracking = dbTracking || sheetTracking;
+            const rawShipByDate = row[colIndices.shipByDate] || '';
+            const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
+            const sheetShipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
+            const sheetItemNumber = String(row[colIndices.itemNumber] || '').trim();
+            const sheetProductTitle = String(row[colIndices.itemTitle] || '').trim();
+            const sheetQuantity = String(row[colIndices.quantity] || '').trim() || '1';
+            const sheetSku = String(row[colIndices.usavSku] || '').trim();
+            const sheetCondition = String(row[colIndices.condition] || '').trim();
+            const sheetNotes = String(row[colIndices.note] || '').trim();
 
             // Keep skip behavior for rows without tracking
             if (!resolvedTracking) return;
@@ -209,23 +250,34 @@ export async function POST(req: NextRequest) {
                 orderIdsToUpdateTracking.push(orderId);
             }
 
+            // Backfill any missing mapped fields for existing order rows.
+            if (existingOrder) {
+                const updateValues: Record<string, any> = {};
+                if (isBlank(existingOrder.itemNumber) && sheetItemNumber) updateValues.itemNumber = sheetItemNumber;
+                if (isBlank(existingOrder.productTitle) && sheetProductTitle) updateValues.productTitle = sheetProductTitle;
+                if (isBlank(existingOrder.quantity) && sheetQuantity) updateValues.quantity = sheetQuantity;
+                if (isBlank(existingOrder.sku) && sheetSku) updateValues.sku = sheetSku;
+                if (isBlank(existingOrder.condition) && sheetCondition) updateValues.condition = sheetCondition;
+                if (isBlank(existingOrder.notes) && sheetNotes) updateValues.notes = sheetNotes;
+                if (!existingOrder.shipByDate && sheetShipByDate) updateValues.shipByDate = sheetShipByDate;
+                if (Object.keys(updateValues).length > 0) {
+                    ordersToBackfill.push({ orderId, values: updateValues });
+                }
+            }
+
             // If order doesn't exist, insert into orders only when sheet tracking exists.
             if (!existingOrder && sheetTracking) {
-                const rawShipByDate = row[colIndices.shipByDate] || '';
-                const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
-                const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
-
                 ordersToInsert.push({
-                    shipByDate,
+                    shipByDate: sheetShipByDate,
                     orderId,
-                    itemNumber: row[colIndices.itemNumber] || '',
-                    productTitle: row[colIndices.itemTitle] || '',
-                    quantity: String(row[colIndices.quantity] || '').trim() || '1',
-                    sku: row[colIndices.usavSku] || '',
-                    condition: row[colIndices.condition] || '',
+                    itemNumber: sheetItemNumber || '',
+                    productTitle: sheetProductTitle || '',
+                    quantity: sheetQuantity || '1',
+                    sku: sheetSku || '',
+                    condition: sheetCondition || '',
                     shippingTrackingNumber: sheetTracking,
                     outOfStock: '',
-                    notes: row[colIndices.note] || '',
+                    notes: sheetNotes || '',
                     status: 'unassigned',
                     statusHistory: [],
                     isShipped: false,
@@ -250,6 +302,15 @@ export async function POST(req: NextRequest) {
                 }
             }
 
+            if (ordersToBackfill.length > 0) {
+                for (const entry of ordersToBackfill) {
+                    await db
+                        .update(ordersTable)
+                        .set(entry.values)
+                        .where(eq(ordersTable.orderId, entry.orderId));
+                }
+            }
+
             if (ordersToInsert.length > 0) {
                 await db.insert(ordersTable).values(ordersToInsert);
             }
@@ -260,6 +321,7 @@ export async function POST(req: NextRequest) {
                 rowCount: 0, 
                 insertedOrders: ordersToInsert.length,
                 updatedOrdersTracking: orderIdsToUpdateTracking.length,
+                updatedOrdersFields: ordersToBackfill.length,
                 tabName: targetTabName 
             });
         }
@@ -274,6 +336,15 @@ export async function POST(req: NextRequest) {
                     .update(ordersTable)
                     .set({ shippingTrackingNumber: sheetTracking })
                     .where(inArray(ordersTable.orderId, [orderId]));
+            }
+        }
+
+        if (ordersToBackfill.length > 0) {
+            for (const entry of ordersToBackfill) {
+                await db
+                    .update(ordersTable)
+                    .set(entry.values)
+                    .where(eq(ordersTable.orderId, entry.orderId));
             }
         }
 
@@ -366,6 +437,7 @@ export async function POST(req: NextRequest) {
             skipped: latestSourceRowByOrderId.size - transferRows.length,
             insertedOrders: ordersToInsert.length,
             updatedOrdersTracking: orderIdsToUpdateTracking.length,
+            updatedOrdersFields: ordersToBackfill.length,
             tabName: targetTabName 
         });
 
