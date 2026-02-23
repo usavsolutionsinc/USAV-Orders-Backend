@@ -119,13 +119,13 @@ export async function POST(req: NextRequest) {
     const orderNumberIdx = getHeaderIndex(headers, ['Order - Number', 'Order Number']);
     const trackingIdx = getHeaderIndex(headers, ['Shipment - Tracking Number', 'Tracking']);
     const orderDateIdx = getHeaderIndex(headers, ['Date - Order date', 'Order date', 'Order Date']);
-    const shipDateIdx = getHeaderIndex(headers, ['Date - Ship date', 'Ship date', 'Ship Date']);
+    const shipDateIdx = getHeaderIndex(headers, ['Date - Shipped Date', 'Date - Ship date', 'Ship date', 'Ship Date']);
 
     const missingCols: string[] = [];
     if (orderNumberIdx === -1) missingCols.push('Order - Number');
     if (trackingIdx === -1) missingCols.push('Shipment - Tracking Number');
     if (orderDateIdx === -1) missingCols.push('Date - Order date');
-    if (shipDateIdx === -1) missingCols.push('Date - Ship date');
+    if (shipDateIdx === -1) missingCols.push('Date - Shipped Date');
 
     if (missingCols.length > 0) {
       return NextResponse.json(

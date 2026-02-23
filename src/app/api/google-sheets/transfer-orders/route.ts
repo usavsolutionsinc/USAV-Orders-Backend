@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
             quantity: headerRow.indexOf('Quantity'),
             usavSku: headerRow.indexOf('USAV SKU'),
             condition: headerRow.indexOf('Condition'),
+            tracking: headerRow.indexOf('Tracking'),
             note: headerRow.indexOf('Note'),
         };
 
@@ -146,7 +147,7 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // 4. Preload orders by order_id from database (tracking comes from orders table)
+        // 4. Preload orders by order_id from database.
         const orderIds = Array.from(
             new Set(
                 sourceRows
@@ -160,6 +161,7 @@ export async function POST(req: NextRequest) {
             ? await db
                 .select({
                     orderId: ordersTable.orderId,
+                    id: ordersTable.id,
                     shippingTrackingNumber: ordersTable.shippingTrackingNumber,
                     createdAt: ordersTable.createdAt,
                 })
@@ -168,35 +170,115 @@ export async function POST(req: NextRequest) {
                 .orderBy(desc(ordersTable.createdAt))
             : [];
 
-        const orderToTracking = new Map<string, string>();
+        const latestOrderById = new Map<string, { id: number; tracking: string }>();
         sourceOrders.forEach(order => {
             const orderId = String(order.orderId || '').trim();
             const tracking = normalizeTracking(order.shippingTrackingNumber);
-            if (!orderId || !tracking || orderToTracking.has(orderId)) return;
-            orderToTracking.set(orderId, tracking);
+            const id = Number(order.id);
+            if (!orderId || Number.isNaN(id) || latestOrderById.has(orderId)) return;
+            latestOrderById.set(orderId, { id, tracking });
         });
 
-        // 5. Keep only rows with matching order_id in orders table + non-empty tracking
-        // and not already transferred to shipped sheet.
-        const transferRows = sourceRows.slice(1)
-            .map(row => {
-                const orderId = String(row[colIndices.orderNumber] || '').trim();
-                const tracking = normalizeTracking(orderToTracking.get(orderId));
-                return { row, orderId, tracking };
-            })
-            .filter(entry => {
-                if (!entry.orderId) return false;
-                if (!entry.tracking) return false; // Keep skip behavior for rows without tracking
-                return !existingTrackingInSheets.has(getLastEightDigits(entry.tracking));
-            });
+        // Keep one latest source row per order_id (later rows override earlier rows).
+        const latestSourceRowByOrderId = new Map<string, any[]>();
+        sourceRows.slice(1).forEach(row => {
+            const orderId = String(row[colIndices.orderNumber] || '').trim();
+            if (!orderId) return;
+            latestSourceRowByOrderId.set(orderId, row);
+        });
+
+        // 5. Build transfer list and insertion/update list:
+        // - If order_id exists: use DB tracking when present, otherwise fallback to sheet tracking.
+        // - If order_id does not exist: require non-empty sheet tracking, then insert into orders.
+        // This guarantees inserted rows never have empty shipping_tracking_number.
+        const transferRows: Array<{ row: any[]; orderId: string; tracking: string }> = [];
+        const ordersToInsert: any[] = [];
+        const orderIdsToUpdateTracking: string[] = [];
+
+        latestSourceRowByOrderId.forEach((row, orderId) => {
+            const existingOrder = latestOrderById.get(orderId);
+            const dbTracking = normalizeTracking(existingOrder?.tracking);
+            const sheetTracking = normalizeTracking(row[colIndices.tracking]);
+            const resolvedTracking = dbTracking || sheetTracking;
+
+            // Keep skip behavior for rows without tracking
+            if (!resolvedTracking) return;
+
+            // If order exists but tracking is empty in DB and present in sheet, backfill DB tracking.
+            if (existingOrder && !dbTracking && sheetTracking) {
+                orderIdsToUpdateTracking.push(orderId);
+            }
+
+            // If order doesn't exist, insert into orders only when sheet tracking exists.
+            if (!existingOrder && sheetTracking) {
+                const rawShipByDate = row[colIndices.shipByDate] || '';
+                const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
+                const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
+
+                ordersToInsert.push({
+                    shipByDate,
+                    orderId,
+                    itemNumber: row[colIndices.itemNumber] || '',
+                    productTitle: row[colIndices.itemTitle] || '',
+                    quantity: String(row[colIndices.quantity] || '').trim() || '1',
+                    sku: row[colIndices.usavSku] || '',
+                    condition: row[colIndices.condition] || '',
+                    shippingTrackingNumber: sheetTracking,
+                    outOfStock: '',
+                    notes: row[colIndices.note] || '',
+                    status: 'unassigned',
+                    statusHistory: [],
+                    isShipped: false,
+                });
+            }
+
+            if (!existingTrackingInSheets.has(getLastEightDigits(resolvedTracking))) {
+                transferRows.push({ row, orderId, tracking: resolvedTracking });
+            }
+        });
 
         if (transferRows.length === 0) {
+            if (orderIdsToUpdateTracking.length > 0) {
+                for (const orderId of orderIdsToUpdateTracking) {
+                    const row = latestSourceRowByOrderId.get(orderId);
+                    const sheetTracking = normalizeTracking(row?.[colIndices.tracking]);
+                    if (!sheetTracking) continue;
+                    await db
+                        .update(ordersTable)
+                        .set({ shippingTrackingNumber: sheetTracking })
+                        .where(inArray(ordersTable.orderId, [orderId]));
+                }
+            }
+
+            if (ordersToInsert.length > 0) {
+                await db.insert(ordersTable).values(ordersToInsert);
+            }
+
             return NextResponse.json({ 
                 success: true, 
-                message: 'No new rows with matching order_id + tracking found',
+                message: 'No new rows to transfer. Orders table synced.',
                 rowCount: 0, 
+                insertedOrders: ordersToInsert.length,
+                updatedOrdersTracking: orderIdsToUpdateTracking.length,
                 tabName: targetTabName 
             });
+        }
+
+        // Apply DB sync before sheet append
+        if (orderIdsToUpdateTracking.length > 0) {
+            for (const orderId of orderIdsToUpdateTracking) {
+                const row = latestSourceRowByOrderId.get(orderId);
+                const sheetTracking = normalizeTracking(row?.[colIndices.tracking]);
+                if (!sheetTracking) continue;
+                await db
+                    .update(ordersTable)
+                    .set({ shippingTrackingNumber: sheetTracking })
+                    .where(inArray(ordersTable.orderId, [orderId]));
+            }
+        }
+
+        if (ordersToInsert.length > 0) {
+            await db.insert(ordersTable).values(ordersToInsert);
         }
 
         // 6. Get latest pack_date_time from packer_logs by tracking number
@@ -281,7 +363,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ 
             success: true, 
             rowCount: transferRows.length,
-            skipped: sourceRows.length - 1 - transferRows.length,
+            skipped: latestSourceRowByOrderId.size - transferRows.length,
+            insertedOrders: ordersToInsert.length,
+            updatedOrdersTracking: orderIdsToUpdateTracking.length,
             tabName: targetTabName 
         });
 
