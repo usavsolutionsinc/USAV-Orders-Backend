@@ -21,8 +21,7 @@ export async function GET(req: NextRequest) {
              WHERE
                (RIGHT(receiving_tracking_number::text, 8) = $1 OR receiving_tracking_number::text ILIKE $2)
                AND receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
-             ORDER BY id DESC
-             LIMIT 20`,
+             ORDER BY id DESC`,
             [last8, `%${query}%`]
         );
 

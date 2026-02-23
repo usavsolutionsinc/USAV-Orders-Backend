@@ -160,6 +160,20 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Orders exceptions table - unmatched tracking scans from tech/packer
+export const ordersExceptions = pgTable('orders_exceptions', {
+  id: serial('id').primaryKey(),
+  shippingTrackingNumber: text('shipping_tracking_number').notNull(),
+  sourceStation: varchar('source_station', { length: 20 }).notNull(),
+  staffId: integer('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  staffName: text('staff_name'),
+  exceptionReason: varchar('exception_reason', { length: 50 }).notNull().default('not_found'),
+  notes: text('notes'),
+  status: varchar('status', { length: 20 }).notNull().default('open'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Type exports
 export type EbayAccount = typeof ebayAccounts.$inferSelect;
 export type NewEbayAccount = typeof ebayAccounts.$inferInsert;
@@ -177,3 +191,5 @@ export type RepairService = typeof repairService.$inferSelect;
 export type NewRepairService = typeof repairService.$inferInsert;
 export type TechSerialNumber = typeof techSerialNumbers.$inferSelect;
 export type NewTechSerialNumber = typeof techSerialNumbers.$inferInsert;
+export type OrdersException = typeof ordersExceptions.$inferSelect;
+export type NewOrdersException = typeof ordersExceptions.$inferInsert;

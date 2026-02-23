@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
-import { orders as ordersTable } from '@/lib/drizzle/schema';
-import { sql } from 'drizzle-orm';
+import { orders as ordersTable, packerLogs } from '@/lib/drizzle/schema';
+import { desc, inArray } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
 const DEST_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
@@ -19,6 +19,23 @@ function getLastEightDigits(str: any) {
 function normalizeTracking(str: any) {
     if (!str) return '';
     return String(str).trim();
+}
+
+function formatPackDateTimeForSheet(dateValue: Date | string | null) {
+    if (!dateValue) return '';
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '';
+
+    return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+    }).format(date);
 }
 
 export async function POST(req: NextRequest) {
@@ -79,16 +96,7 @@ export async function POST(req: NextRequest) {
         const ordersSheetName = destSheets.find(s => s.properties?.sheetId === ORDERS_GID)?.properties?.title || 'orders';
         const shippedSheetName = destSheets.find(s => s.properties?.sheetId === SHIPPED_GID)?.properties?.title || 'shipped';
 
-        // 2. Check NEON DB for existing tracking numbers (primary check)
-        const existingOrdersInDb = await db.select({ tracking: ordersTable.shippingTrackingNumber }).from(ordersTable);
-        
-        const existingTrackingInNeon = new Set<string>();
-        existingOrdersInDb.forEach(o => {
-            const last8 = getLastEightDigits(o.tracking);
-            if (last8) existingTrackingInNeon.add(last8);
-        });
-
-        // 3. Also check Google Sheets as fallback
+        // 2. Check existing destination shipped sheet tracking for dedupe
         const shippedTrackingResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: DEST_SPREADSHEET_ID,
             range: `${shippedSheetName}!F2:F`, // Column F is tracking in Shipped sheet
@@ -103,12 +111,7 @@ export async function POST(req: NextRequest) {
                 if (last8) existingTrackingInSheets.add(last8);
             });
 
-        // Combine both sets for deduplication
-        const existingTracking = new Set<string>();
-        existingTrackingInNeon.forEach(t => existingTracking.add(t));
-        existingTrackingInSheets.forEach(t => existingTracking.add(t));
-
-        // 4. Read the source tab from Master Sheet
+        // 3. Read the source tab from Master Sheet
         const sourceDataResponse = await sheets.spreadsheets.values.get({
             spreadsheetId: SOURCE_SPREADSHEET_ID,
             range: `${targetTabName}!A1:Z`,
@@ -128,7 +131,6 @@ export async function POST(req: NextRequest) {
             quantity: headerRow.indexOf('Quantity'),
             usavSku: headerRow.indexOf('USAV SKU'),
             condition: headerRow.indexOf('Condition'),
-            tracking: headerRow.indexOf('Tracking'),
             note: headerRow.indexOf('Note'),
         };
 
@@ -144,24 +146,82 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // 5. Process rows (only with non-empty tracking and NOT already in NEON DB or Sheets)
-        const filteredSourceRows = sourceRows.slice(1).filter(row => {
-            const tracking = normalizeTracking(row[colIndices.tracking]);
-            if (!tracking) return false;
-            return !existingTracking.has(getLastEightDigits(tracking));
+        // 4. Preload orders by order_id from database (tracking comes from orders table)
+        const orderIds = Array.from(
+            new Set(
+                sourceRows
+                    .slice(1)
+                    .map(row => String(row[colIndices.orderNumber] || '').trim())
+                    .filter(Boolean)
+            )
+        );
+
+        const sourceOrders = orderIds.length > 0
+            ? await db
+                .select({
+                    orderId: ordersTable.orderId,
+                    shippingTrackingNumber: ordersTable.shippingTrackingNumber,
+                    createdAt: ordersTable.createdAt,
+                })
+                .from(ordersTable)
+                .where(inArray(ordersTable.orderId, orderIds))
+                .orderBy(desc(ordersTable.createdAt))
+            : [];
+
+        const orderToTracking = new Map<string, string>();
+        sourceOrders.forEach(order => {
+            const orderId = String(order.orderId || '').trim();
+            const tracking = normalizeTracking(order.shippingTrackingNumber);
+            if (!orderId || !tracking || orderToTracking.has(orderId)) return;
+            orderToTracking.set(orderId, tracking);
         });
 
-        if (filteredSourceRows.length === 0) {
+        // 5. Keep only rows with matching order_id in orders table + non-empty tracking
+        // and not already transferred to shipped sheet.
+        const transferRows = sourceRows.slice(1)
+            .map(row => {
+                const orderId = String(row[colIndices.orderNumber] || '').trim();
+                const tracking = normalizeTracking(orderToTracking.get(orderId));
+                return { row, orderId, tracking };
+            })
+            .filter(entry => {
+                if (!entry.orderId) return false;
+                if (!entry.tracking) return false; // Keep skip behavior for rows without tracking
+                return !existingTrackingInSheets.has(getLastEightDigits(entry.tracking));
+            });
+
+        if (transferRows.length === 0) {
             return NextResponse.json({ 
                 success: true, 
-                message: 'No new rows (not in NEON DB or Shipped) found', 
+                message: 'No new rows with matching order_id + tracking found',
                 rowCount: 0, 
                 tabName: targetTabName 
             });
         }
 
-        // Prepare data for Google Sheets (legacy support)
-        const processedOrdersRows = filteredSourceRows.map(row => {
+        // 6. Get latest pack_date_time from packer_logs by tracking number
+        const trackingNumbers = Array.from(new Set(transferRows.map(entry => entry.tracking)));
+        const packerLogRows = trackingNumbers.length > 0
+            ? await db
+                .select({
+                    tracking: packerLogs.shippingTrackingNumber,
+                    packDateTime: packerLogs.packDateTime,
+                    id: packerLogs.id,
+                })
+                .from(packerLogs)
+                .where(inArray(packerLogs.shippingTrackingNumber, trackingNumbers))
+                .orderBy(desc(packerLogs.packDateTime), desc(packerLogs.id))
+            : [];
+
+        const latestPackDateByTracking = new Map<string, string>();
+        packerLogRows.forEach(log => {
+            const tracking = normalizeTracking(log.tracking);
+            if (!tracking || latestPackDateByTracking.has(tracking)) return;
+            latestPackDateByTracking.set(tracking, formatPackDateTimeForSheet(log.packDateTime));
+        });
+
+        // Prepare data for Google Sheets
+        const processedOrdersRows = transferRows.map(({ row, tracking }) => {
             const destRow = new Array(11).fill(''); // A to K
             destRow[0] = row[colIndices.shipByDate] || '';
             destRow[1] = row[colIndices.orderNumber] || '';
@@ -169,21 +229,21 @@ export async function POST(req: NextRequest) {
             destRow[3] = row[colIndices.quantity] || '';
             destRow[4] = row[colIndices.usavSku] || '';
             destRow[5] = row[colIndices.condition] || '';
-            destRow[6] = normalizeTracking(row[colIndices.tracking]) || '';
+            destRow[6] = tracking || '';
             // I (index 8) is blank
             destRow[9] = row[colIndices.note] || ''; // J (index 9)
             destRow[10] = row[colIndices.itemNumber] || ''; // K (index 10) = Item Number
             return destRow;
         });
 
-        const processedShippedRows = filteredSourceRows.map(row => {
+        const processedShippedRows = transferRows.map(({ row, tracking }) => {
             const destRow = new Array(12).fill(''); // A to L (12 columns)
-            destRow[0] = ''; // A = Pack Date/Time (empty, filled by packer)
+            destRow[0] = latestPackDateByTracking.get(tracking) || ''; // A = Pack Date/Time
             destRow[1] = row[colIndices.orderNumber] || ''; // B = Order ID
             destRow[2] = row[colIndices.itemTitle] || ''; // C = Product Title
             destRow[3] = row[colIndices.quantity] || ''; // D = Quantity
             destRow[4] = row[colIndices.condition] || ''; // E = Condition
-            destRow[5] = normalizeTracking(row[colIndices.tracking]) || ''; // F = Shipping TRK #
+            destRow[5] = tracking || ''; // F = Shipping TRK #
             // G, H, I remain empty (Serial Number, Packed By, Tested By - filled later)
             destRow[9] = row[colIndices.shipByDate] || ''; // J = Ship By Date
             destRow[10] = row[colIndices.usavSku] || ''; // K = SKU
@@ -191,102 +251,25 @@ export async function POST(req: NextRequest) {
             return destRow;
         });
 
-        // 6. Smart import: Check if order_id exists and match tracking number
-        const ordersToInsert = [];
-        const sheetsOnlyRows = [];
-        
-        for (let i = 0; i < filteredSourceRows.length; i++) {
-            const row = filteredSourceRows[i];
-            const rawShipByDate = row[colIndices.shipByDate] || '';
-            const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
-            const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
-            const orderId = row[colIndices.orderNumber] || '';
-            const trackingNumber = normalizeTracking(row[colIndices.tracking]);
-            const quantity = String(row[colIndices.quantity] || '').trim() || '1';
-            
-            if (!orderId || !trackingNumber) continue;
-            
-            // Check if order_id exists in database
-            const existingOrder = await db
-                .select({ id: ordersTable.id, tracking: ordersTable.shippingTrackingNumber })
-                .from(ordersTable)
-                .where(sql`${ordersTable.orderId} = ${orderId}`)
-                .limit(1);
-            
-            if (existingOrder.length > 0) {
-                // Order exists - check if tracking matches
-                const existingTracking = existingOrder[0].tracking || '';
-                
-                if (existingTracking !== trackingNumber) {
-                    // Tracking doesn't match - this is a different order, import it
-                    ordersToInsert.push({
-                        shipByDate,
-                        orderId: orderId,
-                        itemNumber: row[colIndices.itemNumber] || '',
-                        productTitle: row[colIndices.itemTitle] || '',
-                        quantity,
-                        sku: row[colIndices.usavSku] || '',
-                        condition: row[colIndices.condition] || '',
-                        shippingTrackingNumber: trackingNumber,
-                        outOfStock: '',
-                        notes: row[colIndices.note] || '',
-                        status: 'unassigned',
-                        statusHistory: [],
-                        isShipped: false,
-                    });
-                    sheetsOnlyRows.push(i); // Track for Google Sheets import
-                } else {
-                    console.log(`Skipping duplicate: order_id=${orderId}, tracking=${trackingNumber}`);
-                }
-            } else {
-                // Order doesn't exist - import it
-                ordersToInsert.push({
-                    shipByDate,
-                    orderId: orderId,
-                    itemNumber: row[colIndices.itemNumber] || '',
-                    productTitle: row[colIndices.itemTitle] || '',
-                    quantity,
-                    sku: row[colIndices.usavSku] || '',
-                    condition: row[colIndices.condition] || '',
-                    shippingTrackingNumber: trackingNumber,
-                    outOfStock: '',
-                    notes: row[colIndices.note] || '',
-                    status: 'unassigned',
-                    statusHistory: [],
-                    isShipped: false,
-                });
-                sheetsOnlyRows.push(i); // Track for Google Sheets import
-            }
-        }
-
-        // Only insert non-duplicate orders
-        if (ordersToInsert.length > 0) {
-            await db.insert(ordersTable).values(ordersToInsert);
-        }
-
-        // Only append non-duplicate rows to Google Sheets
-        const processedOrdersRowsFiltered = sheetsOnlyRows.map(i => processedOrdersRows[i]);
-        const processedShippedRowsFiltered = sheetsOnlyRows.map(i => processedShippedRows[i]);
-
         const appendPromises = [];
-        if (processedOrdersRowsFiltered.length > 0) {
+        if (processedOrdersRows.length > 0) {
             appendPromises.push(
                 sheets.spreadsheets.values.append({
                     spreadsheetId: DEST_SPREADSHEET_ID,
                     range: `${ordersSheetName}!A:A`, 
                     valueInputOption: 'USER_ENTERED',
-                    requestBody: { values: processedOrdersRowsFiltered },
+                    requestBody: { values: processedOrdersRows },
                 })
             );
         }
         
-        if (processedShippedRowsFiltered.length > 0) {
+        if (processedShippedRows.length > 0) {
             appendPromises.push(
                 sheets.spreadsheets.values.append({
                     spreadsheetId: DEST_SPREADSHEET_ID,
                     range: `${shippedSheetName}!A:A`, 
                     valueInputOption: 'USER_ENTERED',
-                    requestBody: { values: processedShippedRowsFiltered },
+                    requestBody: { values: processedShippedRows },
                 })
             );
         }
@@ -297,8 +280,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ 
             success: true, 
-            rowCount: ordersToInsert.length,
-            skipped: filteredSourceRows.length - ordersToInsert.length,
+            rowCount: transferRows.length,
+            skipped: sourceRows.length - 1 - transferRows.length,
             tabName: targetTabName 
         });
 

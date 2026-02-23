@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, History, Search } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SearchBar } from './ui/SearchBar';
@@ -15,11 +15,13 @@ interface DashboardSidebarProps {
 export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit }: DashboardSidebarProps) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
+    const [isShipStationSyncing, setIsShipStationSyncing] = useState(false);
     const [manualSheetName, setManualSheetName] = useState('');
     const [activeScript, setActiveScript] = useState<string | null>(null);
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const shipStationFileInputRef = useRef<HTMLInputElement>(null);
 
     const handleSearch = (query: string) => {
         const trimmedQuery = query.trim();
@@ -76,6 +78,43 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
             setStatus({ type: 'error', message: 'Network error occurred' });
         } finally {
             setIsTransferring(false);
+        }
+    };
+
+    const handleShipStationSync = () => {
+        shipStationFileInputRef.current?.click();
+    };
+
+    const handleShipStationFileChange = async (file: File | null) => {
+        if (!file) return;
+
+        setIsShipStationSyncing(true);
+        setStatus(null);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const res = await fetch('/api/google-sheets/sync-shipstation-orders', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+            if (data.success) {
+                setStatus({
+                    type: 'success',
+                    message: data.message || 'ShipStation sync completed successfully'
+                });
+                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+            } else {
+                setStatus({ type: 'error', message: data.error || 'ShipStation sync failed' });
+            }
+        } catch (error) {
+            setStatus({ type: 'error', message: 'Network error occurred' });
+        } finally {
+            if (shipStationFileInputRef.current) {
+                shipStationFileInputRef.current.value = '';
+            }
+            setIsShipStationSyncing(false);
         }
     };
 
@@ -183,6 +222,13 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                         {/* Order Management Tools */}
                         <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                             <div className="space-y-3">
+                                <input
+                                    ref={shipStationFileInputRef}
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    className="hidden"
+                                    onChange={(e) => handleShipStationFileChange(e.target.files?.[0] || null)}
+                                />
                                 <div className="space-y-1.5">
                                     <label className="text-[9px] font-black text-gray-500 uppercase px-1 tracking-widest">Manual Sheet Name</label>
                                     <input
@@ -191,13 +237,13 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                                         onChange={(e) => setManualSheetName(e.target.value)}
                                         placeholder="e.g., Sheet_01_14_2026"
                                         className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
-                                        disabled={isTransferring}
+                                        disabled={isTransferring || isShipStationSyncing}
                                     />
                                 </div>
 
                                 <button
                                     onClick={handleTransfer}
-                                    disabled={isTransferring}
+                                    disabled={isTransferring || isShipStationSyncing}
                                     className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
                                 >
                                     {isTransferring ? (
@@ -206,6 +252,19 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                                         <Database className="w-3.5 h-3.5" />
                                     )}
                                     Import Latest Orders
+                                </button>
+
+                                <button
+                                    onClick={handleShipStationSync}
+                                    disabled={isShipStationSyncing || isTransferring}
+                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    {isShipStationSyncing ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                        <TrendingUp className="w-3.5 h-3.5" />
+                                    )}
+                                    Sync ShipStation Orders
                                 </button>
                             </div>
                         </div>

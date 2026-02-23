@@ -80,9 +80,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
             
             if (data.results && data.results.length > 0) {
                 setResults(data.results);
-                // If we found an exact or close match, show it as the last found
-                const match = data.results.find((r: any) => r.tracking.includes(trackingNumber) || trackingNumber.includes(r.tracking));
-                if (match) setLastFound(match);
+                setLastFound(null);
             } else {
                 setResults([]);
             }
@@ -275,7 +273,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
             {/* Results Section */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {results.length > 0 && !lastFound && (
+                    {results.length > 0 && (
                         <div className="space-y-2">
                             <div className="flex items-center justify-between mb-2 px-1">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Search Results</p>

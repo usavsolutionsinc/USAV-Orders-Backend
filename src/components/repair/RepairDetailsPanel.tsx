@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Check, Clock } from '../Icons';
+import { X, Check, Clock, Pencil } from '../Icons';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { formatStatusTimestamp } from '@/lib/neon/status-history';
 
@@ -30,10 +30,22 @@ export function RepairDetailsPanel({
   const [ticketNumber, setTicketNumber] = useState(repair.ticket_number || '');
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingTicket, setIsSavingTicket] = useState(false);
+  const [isEditingTicket, setIsEditingTicket] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const ticketInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditingTicket && ticketInputRef.current) {
+      ticketInputRef.current.focus();
+      ticketInputRef.current.select();
+    }
+  }, [isEditingTicket]);
 
   const handleSaveTicket = async () => {
-    if (ticketNumber === repair.ticket_number) return;
+    if (ticketNumber === repair.ticket_number) {
+      setIsEditingTicket(false);
+      return;
+    }
     
     setIsSavingTicket(true);
     try {
@@ -58,8 +70,13 @@ export function RepairDetailsPanel({
       setTicketNumber(repair.ticket_number || '');
     } finally {
       setIsSavingTicket(false);
+      setIsEditingTicket(false);
     }
   };
+
+  const zendeskTicketUrl = ticketNumber.trim()
+    ? `https://usav.zendesk.com/agent/tickets/${encodeURIComponent(ticketNumber.trim())}`
+    : null;
 
   const handleSaveNotes = async () => {
     if (notes === repair.notes) return;
@@ -117,20 +134,54 @@ export function RepairDetailsPanel({
             <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
                 <Clock className="w-5 h-5 text-orange-600" />
             </div>
-            <div className="flex-1">
-              <input
-                type="text"
-                value={ticketNumber}
-                onChange={(e) => setTicketNumber(e.target.value)}
-                onBlur={handleSaveTicket}
-                className="text-xl font-black text-gray-900 tracking-tight leading-none w-full border-none focus:ring-0 p-0 bg-transparent uppercase"
-                placeholder="TK Number"
-                disabled={isSavingTicket}
-              />
+            <div className="flex-1 min-w-0">
+              {isEditingTicket ? (
+                <input
+                  ref={ticketInputRef}
+                  type="text"
+                  value={ticketNumber}
+                  onChange={(e) => setTicketNumber(e.target.value)}
+                  onBlur={handleSaveTicket}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === 'Escape') {
+                      setTicketNumber(repair.ticket_number || '');
+                      setIsEditingTicket(false);
+                    }
+                  }}
+                  className="text-xl font-black text-gray-900 tracking-tight leading-none w-full border-none focus:ring-0 p-0 bg-transparent uppercase"
+                  placeholder="TK Number"
+                  disabled={isSavingTicket}
+                />
+              ) : zendeskTicketUrl ? (
+                <a
+                  href={zendeskTicketUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-xl font-black text-gray-900 tracking-tight leading-none uppercase hover:text-blue-600 transition-colors truncate"
+                  title={`Open Zendesk ticket ${ticketNumber}`}
+                >
+                  {ticketNumber}
+                </a>
+              ) : (
+                <p className="text-xl font-black text-gray-400 tracking-tight leading-none uppercase">
+                  TK Number
+                </p>
+              )}
               <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-1">
                 {isSavingTicket ? 'Saving...' : 'Repair In-Progress'}
               </p>
             </div>
+            <button
+              onClick={() => setIsEditingTicket(true)}
+              className="p-2 hover:bg-gray-100 rounded-xl transition-all"
+              aria-label="Edit ticket number"
+              disabled={isSavingTicket}
+            >
+              <Pencil className="w-4 h-4 text-gray-600" />
+            </button>
         </div>
         <button 
           onClick={onClose} 

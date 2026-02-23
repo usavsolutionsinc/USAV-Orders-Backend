@@ -67,6 +67,7 @@ export default function StationTesting({
     // UI feedback messages
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [trackingNotFoundAlert, setTrackingNotFoundAlert] = useState<string | null>(null);
     
     // Search functionality
     const [searchQuery, setSearchQuery] = useState('');
@@ -85,6 +86,12 @@ export default function StationTesting({
             return () => clearTimeout(timer);
         }
     }, [errorMessage, successMessage]);
+
+    useEffect(() => {
+        if (!trackingNotFoundAlert) return;
+        const timer = setTimeout(() => setTrackingNotFoundAlert(null), 2500);
+        return () => clearTimeout(timer);
+    }, [trackingNotFoundAlert]);
 
     useEffect(() => {
         const handleUndoApplied = (e: any) => {
@@ -224,6 +231,7 @@ export default function StationTesting({
         // Clear previous messages
         setErrorMessage(null);
         setSuccessMessage(null);
+        setTrackingNotFoundAlert(null);
         
         const type = detectType(input);
         
@@ -236,7 +244,7 @@ export default function StationTesting({
                 const data = await res.json();
                 
                 if (!data.found) {
-                    setErrorMessage('Tracking number not found in orders');
+                    setTrackingNotFoundAlert('Tracking number not found in the system');
                     setActiveOrder(null);
                     return;
                 }
@@ -494,6 +502,20 @@ export default function StationTesting({
                         </div>
                     </form>
 
+                    <AnimatePresence>
+                        {trackingNotFoundAlert && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -6 }}
+                                className="mt-2 p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-2"
+                            >
+                                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                <p className="text-xs font-bold">{trackingNotFoundAlert}</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
                 </div>
 
                 {/* Content Area - Vertical Stack */}
@@ -567,29 +589,6 @@ export default function StationTesting({
                                         </div>
                                     </div>
 
-                                    {/* Serial Numbers List */}
-                                    {activeOrder.serialNumbers.length > 0 && (
-                                        <div className="space-y-2">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase">
-                                                Scanned Serials ({activeOrder.serialNumbers.length})
-                                            </p>
-                                            <div className="space-y-1 max-h-40 overflow-y-auto">
-                                                {activeOrder.serialNumbers.map((sn, idx) => (
-                                                    <motion.div 
-                                                        key={idx}
-                                                        initial={{ opacity: 0, x: -10 }}
-                                                        animate={{ opacity: 1, x: 0 }}
-                                                        transition={{ delay: idx * 0.05 }}
-                                                        className="flex items-center gap-2 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100"
-                                                    >
-                                                        <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
-                                                        <span className="text-xs font-mono font-bold text-emerald-700">{sn}</span>
-                                                    </motion.div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
                                     {activeOrder.notes && (
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-2">
@@ -602,6 +601,29 @@ export default function StationTesting({
 
                                     {/* Removed serial scan / YES hint */}
                                 </div>
+
+                                {/* Serial Numbers List (kept below active order card) */}
+                                {activeOrder.serialNumbers.length > 0 && (
+                                    <div className="rounded-2xl p-4 border border-emerald-100 bg-emerald-50/60 space-y-2">
+                                        <p className="text-[9px] font-black text-emerald-700 uppercase tracking-wider">
+                                            Scanned Serials ({activeOrder.serialNumbers.length})
+                                        </p>
+                                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                                            {activeOrder.serialNumbers.map((sn, idx) => (
+                                                <motion.div
+                                                    key={idx}
+                                                    initial={{ opacity: 0, y: 4 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: idx * 0.04 }}
+                                                    className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-emerald-100"
+                                                >
+                                                    <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
+                                                    <span className="text-xs font-mono font-bold text-emerald-700">{sn}</span>
+                                                </motion.div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </motion.div>
                         ) : null}
                     </AnimatePresence>

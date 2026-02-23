@@ -92,8 +92,22 @@ export default function StationNav() {
         }
     };
 
+    const getFirstPathSegment = (path: string) => {
+        const [segment = ''] = path.split('/').filter(Boolean);
+        return segment === 'packers' ? 'packer' : segment;
+    };
+
     const isPathActive = (href: string) => {
         if (!pathname) return false;
+
+        const hrefSegment = getFirstPathSegment(href);
+        const pathnameSegment = getFirstPathSegment(pathname);
+
+        // Station links should stay active for any user id within that station section.
+        if (hrefSegment === 'tech' || hrefSegment === 'packer') {
+            return pathnameSegment === hrefSegment;
+        }
+
         return pathname === href || pathname.startsWith(`${href}/`);
     };
 

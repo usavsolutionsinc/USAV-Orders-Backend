@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { classifyScan } from '@/utils/packer';
 import { normalizeSku } from '@/utils/sku';
+import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -112,6 +113,12 @@ export async function POST(req: NextRequest) {
         
         const classification = classifyScan(scanInput);
 
+        const staffNameResult = await pool.query(
+            `SELECT name FROM staff WHERE id = $1 LIMIT 1`,
+            [staffId]
+        );
+        const staffName = staffNameResult.rows[0]?.name || null;
+
         if (classification.trackingType === 'ORDERS') {
             const orderLookup = await pool.query(
                 `SELECT id, order_id, shipping_tracking_number
@@ -125,10 +132,34 @@ export async function POST(req: NextRequest) {
             );
 
             if (orderLookup.rows.length === 0) {
+                await upsertOpenOrderException({
+                    shippingTrackingNumber: scanInput,
+                    sourceStation: 'packer',
+                    staffId,
+                    staffName,
+                    reason: 'not_found',
+                    notes: 'Packer scan: tracking not found in orders',
+                });
+
+                await pool.query(`
+                    INSERT INTO packer_logs (
+                        shipping_tracking_number,
+                        tracking_type,
+                        pack_date_time,
+                        packed_by,
+                        packer_photos_url
+                    ) VALUES ($1, $2, $3, $4, $5::jsonb)
+                `, [scanInput, classification.trackingType, packDateTime, staffId, photosJsonb]);
+
                 return NextResponse.json({
-                    error: 'Order not found',
-                    details: `No order found with tracking number: ${scanInput}`
-                }, { status: 404 });
+                    success: true,
+                    warning: 'Order not found in orders. Added to exceptions queue.',
+                    trackingType: classification.trackingType,
+                    shippingTrackingNumber: scanInput,
+                    packedBy: staffId,
+                    packDateTime,
+                    photosCount: Array.isArray(photos) ? photos.length : 0
+                });
             }
 
             const order = orderLookup.rows[0];

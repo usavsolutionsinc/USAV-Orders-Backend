@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingLast8 } from '@/lib/tracking-format';
+import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -24,13 +25,14 @@ export async function GET(req: NextRequest) {
         }
 
         const staffResult = await pool.query(
-            `SELECT id FROM staff WHERE id = $1 LIMIT 1`,
+            `SELECT id, name FROM staff WHERE id = $1 LIMIT 1`,
             [techIdNum]
         );
         if (staffResult.rows.length === 0) {
             return NextResponse.json({ error: 'Tech not found in staff table' }, { status: 404 });
         }
         const testedBy = staffResult.rows[0].id;
+        const testedByName = staffResult.rows[0].name || null;
         const parseSerials = (value: string | null | undefined) =>
             String(value || '')
                 .split(',')
@@ -115,7 +117,53 @@ export async function GET(req: NextRequest) {
         }
 
         if (!row) {
-            return NextResponse.json({ found: false, error: 'Tracking number not found in orders' });
+            await upsertOpenOrderException({
+                shippingTrackingNumber: trackingValue,
+                sourceStation: 'tech',
+                staffId: testedBy,
+                staffName: testedByName,
+                reason: 'not_found',
+                notes: 'Tech scan: tracking not found in orders',
+            });
+
+            if (existingTracking.rows.length === 0) {
+                await pool.query(
+                    `INSERT INTO tech_serial_numbers (
+                        shipping_tracking_number, serial_number, tested_by
+                    ) VALUES ($1, $2, $3)`,
+                    [trackingValue, '', testedBy]
+                );
+            }
+
+            return NextResponse.json({
+                found: true,
+                orderFound: false,
+                warning: 'Tracking number not found in orders. Added to exceptions.',
+                order: {
+                    id: null,
+                    orderId: 'N/A',
+                    productTitle: 'Unknown Product',
+                    itemNumber: null,
+                    sku: 'N/A',
+                    condition: 'N/A',
+                    notes: 'Tracking recorded in orders_exceptions for reconciliation',
+                    tracking: trackingValue,
+                    serialNumbers: parseSerials(existingTracking.rows[0]?.serial_number),
+                    testDateTime: null,
+                    testedBy,
+                    accountSource: null,
+                    quantity: 1,
+                    status: null,
+                    statusHistory: [],
+                    isShipped: false,
+                    packerId: null,
+                    testerId: null,
+                    outOfStock: null,
+                    shipByDate: null,
+                    orderDate: null,
+                    createdAt: null
+                }
+            });
         }
 
         // Create tracking row once if missing. This is the single row that serial scans append to.

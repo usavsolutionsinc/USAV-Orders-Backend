@@ -9,6 +9,7 @@ import { ShipByDate } from '@/components/ui/ShipByDate';
 import { AdminDetailsStack } from '@/components/shipped/stacks/adminDetailsStack';
 import { getOrderPlatformLabel } from '@/utils/order-platform';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
+import EbayManagement from '@/components/EbayManagement';
 
 interface Staff {
     id: number;
@@ -35,17 +36,9 @@ interface Order {
     created_at: string | null;
 }
 
-interface EbayAccount {
-    id: number;
-    account_name: string;
-    last_sync_date: string | null;
-    is_active: boolean;
-    token_expires_at: string;
-}
-
 export default function AdminPage() {
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState<'staff' | 'orders'>('orders');
+    const [activeTab, setActiveTab] = useState<'staff' | 'orders' | 'connections'>('orders');
     
     // Staff state
     const [isAddingStaff, setIsAddingStaff] = useState(false);
@@ -121,6 +114,14 @@ export default function AdminPage() {
                             }`}
                         >
                             Staff
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('connections')}
+                            className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all ${
+                                activeTab === 'connections' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            Connections
                         </button>
                     </div>
                 </header>
@@ -223,11 +224,165 @@ export default function AdminPage() {
                                 ))}
                             </div>
                         </div>
+                    ) : activeTab === 'connections' ? (
+                        <ConnectionsManagement />
                     ) : (
                         <OrdersManagement />
                     )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+function ConnectionsManagement() {
+    const ecwidSquareSyncMutation = useMutation({
+        mutationFn: async ({ dryRun = false, batchSize }: { dryRun?: boolean; batchSize?: number }) => {
+            const res = await fetch('/api/ecwid-square/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dryRun, batchSize }),
+            });
+
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data?.error || data?.message || `Sync failed (HTTP ${res.status})`);
+            }
+
+            return data;
+        },
+    });
+    const exceptionsSyncMutation = useMutation({
+        mutationFn: async () => {
+            const res = await fetch('/api/orders-exceptions/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data?.error || data?.message || `Sync failed (HTTP ${res.status})`);
+            }
+            return data;
+        },
+    });
+
+    const counts = ecwidSquareSyncMutation.data?.counts;
+
+    return (
+        <div className="space-y-6">
+            <div className="space-y-4 p-5 bg-white rounded-3xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">
+                            Ecwid → Square Catalog
+                        </h2>
+                        <p className="text-[9px] font-bold text-gray-500 mt-1">
+                            One-way sync for enabled Ecwid products only
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => ecwidSquareSyncMutation.mutate({ dryRun: true })}
+                            disabled={ecwidSquareSyncMutation.isPending}
+                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-gray-700 disabled:opacity-50"
+                        >
+                            Dry Run
+                        </button>
+                        <button
+                            onClick={() => ecwidSquareSyncMutation.mutate({ dryRun: false, batchSize: 200 })}
+                            disabled={ecwidSquareSyncMutation.isPending}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${ecwidSquareSyncMutation.isPending ? 'animate-spin' : ''}`} />
+                            {ecwidSquareSyncMutation.isPending ? 'Syncing...' : 'Sync Now'}
+                        </button>
+                    </div>
+                </div>
+
+                {ecwidSquareSyncMutation.isSuccess && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 bg-green-50 border border-green-200 rounded-2xl space-y-2"
+                    >
+                        <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
+                            {ecwidSquareSyncMutation.data?.dryRun ? 'Dry run completed' : 'Sync completed'}
+                        </div>
+                        {counts && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[9px] font-bold text-green-800 uppercase tracking-wide">
+                                <div>Ecwid total: {counts.ecwidTotal}</div>
+                                <div>Enabled: {counts.ecwidEnabled}</div>
+                                <div>Skipped disabled: {counts.skippedDisabled}</div>
+                                <div>Square upserts: {counts.upsertedObjectCount}</div>
+                            </div>
+                        )}
+                        {typeof ecwidSquareSyncMutation.data?.batchSizeUsed === 'number' && (
+                            <div className="text-[9px] font-bold text-green-800 uppercase tracking-wide">
+                                Batch size used: {ecwidSquareSyncMutation.data.batchSizeUsed}
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+
+                {ecwidSquareSyncMutation.isError && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 bg-red-50 border border-red-200 rounded-2xl"
+                    >
+                        <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">
+                            {(ecwidSquareSyncMutation.error as Error)?.message || 'Sync failed'}
+                        </div>
+                    </motion.div>
+                )}
+            </div>
+
+            <div className="space-y-4 p-5 bg-white rounded-3xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">
+                            Orders Exceptions Integrity
+                        </h2>
+                        <p className="text-[9px] font-bold text-gray-500 mt-1">
+                            Match exceptions to orders by shipping tracking and clear resolved exceptions
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => exceptionsSyncMutation.mutate()}
+                        disabled={exceptionsSyncMutation.isPending}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+                    >
+                        <RefreshCw className={`w-3.5 h-3.5 ${exceptionsSyncMutation.isPending ? 'animate-spin' : ''}`} />
+                        {exceptionsSyncMutation.isPending ? 'Checking...' : 'Sync Exceptions'}
+                    </button>
+                </div>
+
+                {exceptionsSyncMutation.isSuccess && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 bg-green-50 border border-green-200 rounded-2xl"
+                    >
+                        <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
+                            Scanned: {exceptionsSyncMutation.data?.scanned || 0} • Matched: {exceptionsSyncMutation.data?.matched || 0} • Cleared: {exceptionsSyncMutation.data?.deleted || 0}
+                        </div>
+                    </motion.div>
+                )}
+
+                {exceptionsSyncMutation.isError && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 bg-red-50 border border-red-200 rounded-2xl"
+                    >
+                        <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">
+                            {(exceptionsSyncMutation.error as Error)?.message || 'Exceptions sync failed'}
+                        </div>
+                    </motion.div>
+                )}
+            </div>
+
+            <EbayManagement />
         </div>
     );
 }
@@ -244,54 +399,6 @@ function OrdersManagement() {
     const [bulkPackerId, setBulkPackerId] = useState<number | null>(null);
     const appliedOrderParamRef = useRef(false);
     const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
-
-    // Fetch eBay accounts
-    const { data: accountsData } = useQuery({
-        queryKey: ['ebay-accounts'],
-        queryFn: async () => {
-            const res = await fetch('/api/ebay/accounts');
-            if (!res.ok) throw new Error('Failed to fetch accounts');
-            return res.json();
-        },
-    });
-
-    // eBay sync mutation
-    const ebaySyncMutation = useMutation({
-        mutationFn: async () => {
-            const res = await fetch('/api/ebay/sync', { method: 'POST' });
-            if (!res.ok) {
-                let details = '';
-                try {
-                    const data = await res.json();
-                    details = data?.error || data?.message || '';
-                } catch {}
-                throw new Error(details || `Failed to sync (HTTP ${res.status})`);
-            }
-            return res.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['orders'] });
-            queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
-        },
-    });
-
-    // Token refresh mutation
-    const refreshTokenMutation = useMutation({
-        mutationFn: async (accountName: string) => {
-            const res = await fetch('/api/ebay/refresh-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ accountName }),
-            });
-            if (!res.ok) throw new Error('Failed to refresh token');
-            return res.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
-        },
-    });
-
-    const accounts: EbayAccount[] = accountsData?.accounts || [];
 
     // Fetch orders
     const { data: ordersData } = useQuery<{ orders: Order[] }>({
@@ -317,6 +424,7 @@ function OrdersManagement() {
     // Apply filtering
     const orders = allOrders.filter(order => {
         if (order.is_shipped) return false;
+        const normalizedSearchTerm = searchTerm.toLowerCase();
         // Filter by tab
         const matchesTab = (() => {
             if (filterTab === 'out of stock') return order.out_of_stock && (order.is_shipped === false || !order.is_shipped);
@@ -324,9 +432,9 @@ function OrdersManagement() {
         })();
 
         // Filter by search (fuzzy search on product_title)
-        const matchesSearch = order.product_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             order.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             order.order_id.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = String(order.product_title || '').toLowerCase().includes(normalizedSearchTerm) ||
+                             String(order.sku || '').toLowerCase().includes(normalizedSearchTerm) ||
+                             String(order.order_id || '').toLowerCase().includes(normalizedSearchTerm);
 
         return matchesTab && matchesSearch;
     });
@@ -447,107 +555,6 @@ function OrdersManagement() {
     return (
         <div className="flex flex-col lg:flex-row items-start gap-4">
             <div className="flex-1 space-y-4 min-w-0">
-                {/* eBay Management Section */}
-                <div className="space-y-4 p-5 bg-white rounded-3xl border border-gray-200 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">
-                                eBay Integration
-                            </h2>
-                            <p className="text-[9px] font-bold text-gray-500 mt-1">
-                                Multi-account order synchronization
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => ebaySyncMutation.mutate()}
-                            disabled={ebaySyncMutation.isPending}
-                            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
-                        >
-                            <RefreshCw className={`w-3.5 h-3.5 ${ebaySyncMutation.isPending ? 'animate-spin' : ''}`} />
-                            {ebaySyncMutation.isPending ? 'Syncing...' : 'Sync eBay'}
-                        </button>
-                    </div>
-
-                    {ebaySyncMutation.isSuccess && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="p-4 bg-green-50 border border-green-200 rounded-2xl"
-                        >
-                            <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
-                                {ebaySyncMutation.data?.message || 'Sync completed successfully'}
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {ebaySyncMutation.isError && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="p-4 bg-red-50 border border-red-200 rounded-2xl"
-                        >
-                            <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">
-                                {(ebaySyncMutation.error as any)?.message || 'Sync failed'}
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {accounts.length > 0 && (
-                        <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-                            {accounts.map((account) => {
-                                const lastSyncDate = account.last_sync_date
-                                    ? new Date(account.last_sync_date)
-                                    : null;
-                                const tokenExpiry = new Date(account.token_expires_at);
-                                const now = new Date();
-                                const isTokenExpired = tokenExpiry < now;
-                                const tokenExpiresInMinutes = Math.floor((tokenExpiry.getTime() - now.getTime()) / 1000 / 60);
-
-                                return (
-                                    <div key={account.id} className="p-3 bg-gray-50 rounded-xl border border-gray-200 min-w-[260px] flex-shrink-0">
-                                        <div className="flex items-start justify-between mb-2">
-                                            <div className="text-xs font-black text-gray-900">{account.account_name}</div>
-                                            <div className={`px-2 py-0.5 rounded text-[8px] font-bold ${
-                                                account.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                                            }`}>
-                                                {account.is_active ? 'ACTIVE' : 'INACTIVE'}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                            <div className="text-[9px] text-gray-500">
-                                                {lastSyncDate
-                                                    ? `Last: ${lastSyncDate.toLocaleString()}`
-                                                    : 'Never synced'}
-                                            </div>
-
-                                            <div className="text-[9px] text-gray-500">
-                                                Token: {isTokenExpired ? (
-                                                    <span className="text-red-600 font-bold">Expired</span>
-                                                ) : (
-                                                    <span className={tokenExpiresInMinutes < 30 ? 'text-orange-600 font-bold' : ''}>
-                                                        {tokenExpiresInMinutes < 60 ? `${tokenExpiresInMinutes}m` : `${Math.floor(tokenExpiresInMinutes / 60)}h`}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {(isTokenExpired || tokenExpiresInMinutes < 30) && (
-                                                <button
-                                                    onClick={() => refreshTokenMutation.mutate(account.account_name)}
-                                                    disabled={refreshTokenMutation.isPending}
-                                                    className="w-full text-[9px] font-bold px-2 py-1 rounded bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors disabled:opacity-50"
-                                                >
-                                                    {refreshTokenMutation.isPending ? '⟳ Refreshing...' : '🔄 Refresh'}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <SearchBar
                         value={searchTerm}
