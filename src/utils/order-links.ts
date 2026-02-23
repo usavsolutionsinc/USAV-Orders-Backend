@@ -1,10 +1,11 @@
 import { getOrderPlatformLabel } from './order-platform';
 
 function getCarrier(tracking: string): 'USPS' | 'UPS' | 'FedEx' | 'Unknown' {
-  const t = tracking.toUpperCase();
+  const t = tracking.trim().toUpperCase();
   if (t.startsWith('1Z')) return 'UPS';
-  if (t.startsWith('94') || t.startsWith('93') || t.startsWith('92')) return 'USPS';
-  if (t.startsWith('96')) return 'FedEx';
+  if (t.startsWith('94') || t.startsWith('93') || t.startsWith('92') || t.startsWith('42')) return 'USPS';
+  if (t.startsWith('96') || t.startsWith('39')) return 'FedEx';
+  if (/^\d{12}$|^\d{15}$/.test(t)) return 'FedEx';
   return 'Unknown';
 }
 

@@ -16,9 +16,15 @@ export interface ShippedTableBaseProps {
   packedBy?: number; // Filter by packer ID
   testedBy?: number; // Filter by tester ID
   unshippedOnly?: boolean;
+  showWeekNavigation?: boolean;
 }
 
-export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: ShippedTableBaseProps = {}) {
+export function ShippedTableBase({
+  packedBy,
+  testedBy,
+  unshippedOnly = false,
+  showWeekNavigation = true,
+}: ShippedTableBaseProps = {}) {
   const { getStaffName } = useStaffNameMap();
   const searchParams = useSearchParams();
   const search = searchParams.get('search') || '';
@@ -106,6 +112,21 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
   const getLast4 = (value: string | null | undefined) => {
     const raw = String(value || '');
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
+  };
+  const getDaysLateNumber = (shipByDate: string | null | undefined, fallbackDate?: string | null | undefined) => {
+    const shipByKey = toPSTDateKey(shipByDate) || toPSTDateKey(fallbackDate);
+    const todayKey = getCurrentPSTDateKey();
+    if (!shipByKey || !todayKey) return 0;
+    const [sy, sm, sd] = shipByKey.split('-').map(Number);
+    const [ty, tm, td] = todayKey.split('-').map(Number);
+    const shipByIndex = Math.floor(Date.UTC(sy, sm - 1, sd) / 86400000);
+    const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
+    return Math.max(0, todayIndex - shipByIndex);
+  };
+  const getDaysLateTone = (daysLate: number) => {
+    if (daysLate > 1) return 'text-red-600';
+    if (daysLate === 1) return 'text-yellow-600';
+    return 'text-emerald-600';
   };
 
   const formatHeaderDate = () => {
@@ -308,6 +329,11 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
           onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
           formatDate={formatDate}
+          rightSlot={
+            showWeekNavigation
+              ? undefined
+              : <div />
+          }
         />
         
         {/* Logs List */}
@@ -393,7 +419,16 @@ export function ShippedTableBase({ packedBy, testedBy, unshippedOnly = false }: 
                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
                               {((record as any).out_of_stock && String((record as any).out_of_stock).trim() !== '')
                                 ? `OOS: ${(record as any).out_of_stock} • `
-                                : ''}{parseInt(String((record as any).quantity || '1'), 10) || 1} • {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)} • {(record as any).packed_by_name || getStaffName((record as any).packed_by)} • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                                : ''}
+                              {unshippedOnly && (
+                                <>
+                                  <span className={getDaysLateTone(getDaysLateNumber(record.ship_by_date as any, record.created_at as any))}>
+                                    {getDaysLateNumber(record.ship_by_date as any, record.created_at as any)}
+                                  </span>
+                                  {' • '}
+                                </>
+                              )}
+                              {parseInt(String((record as any).quantity || '1'), 10) || 1} • {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)} • {(record as any).packed_by_name || getStaffName((record as any).packed_by)} • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
                             </div>
                           </div>
                           

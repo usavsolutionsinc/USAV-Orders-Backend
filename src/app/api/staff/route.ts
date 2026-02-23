@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { name, role, employee_id } = body;
+        const { name, role, employee_id, source_table, active } = body;
 
         if (!name || !role) {
             return NextResponse.json({ error: 'name and role are required' }, { status: 400 });
@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
             name,
             role,
             employeeId: employee_id || null,
-            active: true,
+            sourceTable: source_table || null,
+            active: typeof active === 'boolean' ? active : true,
         }).returning();
 
         return NextResponse.json(result, { status: 201 });
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
-        const { id, name, role, employee_id, active } = body;
+        const { id, name, role, employee_id, source_table, active } = body;
 
         if (!id) {
             return NextResponse.json({ error: 'id is required' }, { status: 400 });
@@ -81,6 +82,7 @@ export async function PUT(request: NextRequest) {
             updateData.role = role;
         }
         if (employee_id !== undefined) updateData.employeeId = employee_id || null;
+        if (source_table !== undefined) updateData.sourceTable = source_table || null;
         if (active !== undefined) updateData.active = active;
 
         const [result] = await db

@@ -5,6 +5,7 @@ import { ExternalLink, Check } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
 
 export function DashboardDetailsStack({
   shipped,
@@ -12,7 +13,8 @@ export function DashboardDetailsStack({
   copiedAll,
   onCopyAll,
   onUpdate,
-  mode = 'dashboard'
+  mode = 'dashboard',
+  showAssignmentButton = true,
 }: DetailsStackProps) {
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
   const [notes, setNotes] = useState(shipped.notes || '');
@@ -268,21 +270,26 @@ export function DashboardDetailsStack({
   return (
     <div className="pb-8 pt-4 space-y-4">
       <section className="mx-8 space-y-2">
-        <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
-          {mode === 'tech' ? (
-            <>
-              <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
-              <button
-                type="button"
-                onClick={handleUndo}
-                disabled={isUndoing}
-                className="flex-1 h-8 inline-flex items-center justify-center rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
-              >
-                {isUndoing ? 'Undoing...' : 'Undo Last Scan'}
-              </button>
-            </>
-          ) : (
-            <>
+        {mode === 'tech' ? (
+          <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
+            <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={isUndoing}
+              className="flex-1 h-8 inline-flex items-center justify-center rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
+            >
+              {isUndoing ? 'Undoing...' : 'Undo Last Scan'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex w-full items-stretch gap-2">
+            <div className="flex-1 min-w-0 h-12 flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
+              <DaysLateBadge
+                shipByDate={shipped.ship_by_date}
+                fallbackDate={shipped.created_at}
+                variant="number"
+              />
               <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Ship By Date</span>
               <input
                 type="text"
@@ -301,21 +308,23 @@ export function DashboardDetailsStack({
                 <Check className="w-3 h-3" />
                 {isSavingShipByDate ? 'Saving' : 'Save'}
               </button>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
 
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              window.location.href = `/admin?orderId=${shipped.id}`;
-            }}
-            className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black uppercase tracking-wider"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Assignment
-          </button>
+        <div className={`grid gap-2 ${showAssignmentButton ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          {showAssignmentButton && (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = `/admin?orderId=${shipped.id}`;
+              }}
+              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black uppercase tracking-wider"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Assignment
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setActiveInput(activeInput === 'out_of_stock' ? 'none' : 'out_of_stock')}

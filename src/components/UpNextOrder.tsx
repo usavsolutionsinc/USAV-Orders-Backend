@@ -9,6 +9,7 @@ import { ShipByDate } from './ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { getOrderPlatformLabel } from '@/utils/order-platform';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 interface Order {
   id: number;
@@ -61,6 +62,22 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
     if (isInvalidShipBy) return createdAtRaw || null;
     return shipByRaw;
+  };
+
+  const getDaysLateNumber = (shipByDate: string | null | undefined, fallbackDate?: string | null | undefined) => {
+    const shipByKey = toPSTDateKey(shipByDate) || toPSTDateKey(fallbackDate);
+    const todayKey = getCurrentPSTDateKey();
+    if (!shipByKey || !todayKey) return 0;
+    const [sy, sm, sd] = shipByKey.split('-').map(Number);
+    const [ty, tm, td] = todayKey.split('-').map(Number);
+    const shipByIndex = Math.floor(Date.UTC(sy, sm - 1, sd) / 86400000);
+    const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
+    return Math.max(0, todayIndex - shipByIndex);
+  };
+  const getDaysLateTone = (daysLate: number) => {
+    if (daysLate > 1) return 'text-red-600';
+    if (daysLate === 1) return 'text-yellow-600';
+    return 'text-emerald-600';
   };
 
   useEffect(() => {
@@ -206,7 +223,9 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     >
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-4">
-        <ShipByDate date={getDisplayShipByDate(order) || ''} className="[&>span]:text-[12px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4" />
+        <div className="flex items-center gap-2">
+          <ShipByDate date={getDisplayShipByDate(order) || ''} className="[&>span]:text-[12px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4" />
+        </div>
         <div className="flex items-center gap-3">
           {order.out_of_stock && activeTab === 'stock' && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-md shadow-sm">
@@ -242,6 +261,12 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </h4>
         <div className={`mt-2 flex items-center justify-between rounded-lg px-2.5 py-1.5 border ${quantity > 1 ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-50 border-gray-200'}`}>
           <div className="flex items-center gap-2 min-w-0">
+            <span className={`text-[11px] font-black ${getDaysLateTone(getDaysLateNumber(order.ship_by_date, order.created_at))}`}>
+              {getDaysLateNumber(order.ship_by_date, order.created_at)}
+            </span>
+            <span className={`text-[10px] font-black uppercase tracking-wider ${quantity > 1 ? 'text-yellow-900' : 'text-gray-600'}`}>
+              -
+            </span>
             <span className={`text-[11px] font-black ${quantity > 1 ? 'text-yellow-900' : 'text-gray-800'}`}>
               {quantity}
             </span>

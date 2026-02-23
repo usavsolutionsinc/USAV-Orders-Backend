@@ -10,5 +10,5 @@ export function DashboardShippedTable({
   unshippedOnly = true,
   ...props
 }: DashboardShippedTableProps = {}) {
-  return <ShippedTableBase unshippedOnly={unshippedOnly} {...props} />;
+  return <ShippedTableBase unshippedOnly={unshippedOnly} showWeekNavigation={false} {...props} />;
 }

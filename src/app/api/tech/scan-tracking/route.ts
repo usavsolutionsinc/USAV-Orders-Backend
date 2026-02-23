@@ -62,9 +62,11 @@ export async function GET(req: NextRequest) {
                 created_at,
                 quantity
             FROM orders
-            WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
+            WHERE (
+                  RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
                OR RIGHT(shipping_tracking_number, 8) = $1
                OR shipping_tracking_number ILIKE '%' || $1
+            )
               AND shipping_tracking_number IS NOT NULL
               AND shipping_tracking_number != ''
             LIMIT 1

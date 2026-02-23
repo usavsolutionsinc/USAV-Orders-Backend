@@ -13,4 +13,5 @@ export interface DetailsStackProps {
   onUpdate?: () => void;
   showShippingTimestamp?: boolean;
   mode?: 'dashboard' | 'tech';
+  showAssignmentButton?: boolean;
 }
