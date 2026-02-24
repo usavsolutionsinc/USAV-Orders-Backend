@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { upsertOpenOrderException, type ExceptionSourceStation } from '@/lib/orders-exceptions';
 
 type ScanTrackingRequest = {
@@ -45,9 +45,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Tracking number is too short' }, { status: 400 });
     }
 
-    // Match by normalized tracking key (rightmost 18 chars).
-    const trackingKey18 = normalizeTrackingKey18(rawTracking);
-    if (!trackingKey18) {
+    // Match by last 8 digits.
+    const trackingLast8 = normalizeTrackingLast8(rawTracking);
+    if (!trackingLast8 || trackingLast8.length < 8) {
       return NextResponse.json({ error: 'Invalid tracking number key' }, { status: 400 });
     }
 
@@ -62,10 +62,10 @@ export async function POST(req: NextRequest) {
        FROM orders
        WHERE shipping_tracking_number IS NOT NULL
          AND shipping_tracking_number != ''
-         AND RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
+         AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
        ORDER BY id DESC
        LIMIT 1`,
-      [trackingKey18]
+      [trackingLast8]
     );
 
     if (key18MatchResult.rows.length > 0) {

@@ -1,5 +1,5 @@
 import pool from '@/lib/db';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { normalizeTrackingLast8 } from '@/lib/tracking-format';
 
 export type ExceptionSourceStation = 'tech' | 'packer' | 'verify' | 'mobile';
 
@@ -47,18 +47,18 @@ export async function findOrderByTrackingKey(shippingTrackingNumber: string): Pr
   await ensureOrdersExceptionsTable();
 
   const rawTracking = String(shippingTrackingNumber || '').trim();
-  const trackingKey18 = normalizeTrackingKey18(rawTracking);
-  if (!trackingKey18) return null;
+  const trackingLast8 = normalizeTrackingLast8(rawTracking);
+  if (!trackingLast8 || trackingLast8.length < 8) return null;
 
   const result = await pool.query(
     `SELECT id, shipping_tracking_number
      FROM orders
      WHERE shipping_tracking_number IS NOT NULL
        AND shipping_tracking_number != ''
-       AND RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
+       AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
      ORDER BY id DESC
      LIMIT 1`,
-    [trackingKey18]
+    [trackingLast8]
   );
 
   return result.rows[0] || null;
@@ -75,9 +75,9 @@ export async function upsertOpenOrderException(params: {
   await ensureOrdersExceptionsTable();
 
   const tracking = String(params.shippingTrackingNumber || '').trim();
-  const normalizedFull = tracking.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const trackingKey18 = normalizeTrackingKey18(tracking);
-  if (!tracking || !trackingKey18 || normalizedFull.length < 8) {
+  const normalizedDigits = tracking.replace(/\D/g, '');
+  const trackingLast8 = normalizeTrackingLast8(tracking);
+  if (!tracking || !trackingLast8 || normalizedDigits.length < 8) {
     return { exception: null, matchedOrderId: null };
   }
 
@@ -90,10 +90,10 @@ export async function upsertOpenOrderException(params: {
     `SELECT *
      FROM orders_exceptions
      WHERE status = 'open'
-       AND RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
+       AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
      ORDER BY id DESC
      LIMIT 1`,
-    [trackingKey18]
+    [trackingLast8]
   );
 
   if (existing.rows.length > 0) {
@@ -167,18 +167,18 @@ export async function syncOrderExceptionsToOrders(): Promise<{
   let deleted = 0;
 
   for (const row of openExceptions.rows) {
-    const trackingKey18 = normalizeTrackingKey18(String(row.shipping_tracking_number || ''));
-    if (!trackingKey18) continue;
+    const trackingLast8 = normalizeTrackingLast8(String(row.shipping_tracking_number || ''));
+    if (!trackingLast8 || trackingLast8.length < 8) continue;
 
     const orderMatch = await pool.query(
       `SELECT id, shipping_tracking_number, is_shipped
        FROM orders
        WHERE shipping_tracking_number IS NOT NULL
          AND shipping_tracking_number != ''
-         AND RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
+         AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
        ORDER BY id DESC
        LIMIT 1`,
-      [trackingKey18]
+      [trackingLast8]
     );
 
     if (orderMatch.rows.length === 0) continue;
@@ -192,7 +192,7 @@ export async function syncOrderExceptionsToOrders(): Promise<{
            is_shipped = CASE
              WHEN EXISTS (
                SELECT 1 FROM packer_logs pl
-               WHERE RIGHT(regexp_replace(UPPER(pl.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $2
+               WHERE RIGHT(regexp_replace(COALESCE(pl.shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $2
                  AND pl.tracking_type = 'ORDERS'
              ) THEN true
              ELSE is_shipped
@@ -200,13 +200,13 @@ export async function syncOrderExceptionsToOrders(): Promise<{
            status = CASE
              WHEN EXISTS (
                SELECT 1 FROM packer_logs pl
-               WHERE RIGHT(regexp_replace(UPPER(pl.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $2
+               WHERE RIGHT(regexp_replace(COALESCE(pl.shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $2
                  AND pl.tracking_type = 'ORDERS'
              ) THEN 'shipped'
              ELSE status
            END
        WHERE id = $3`,
-      [String(row.shipping_tracking_number || ''), trackingKey18, order.id]
+      [String(row.shipping_tracking_number || ''), trackingLast8, order.id]
     );
 
     const deletedResult = await pool.query(

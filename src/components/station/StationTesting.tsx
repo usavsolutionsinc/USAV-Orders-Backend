@@ -238,9 +238,8 @@ export default function StationTesting({
         if (type === 'TRACKING') {
             setIsLoading(true);
             try {
-                // Call NEW scan-tracking API (use shared last-8 normalization)
-                const normalizedTracking = normalizeTrackingQuery(input);
-                const res = await fetch(`/api/tech/scan-tracking?tracking=${encodeURIComponent(normalizedTracking)}&techId=${userId}`);
+                // Send full scanned tracking; API does last-8 lookup internally.
+                const res = await fetch(`/api/tech/scan-tracking?tracking=${encodeURIComponent(input)}&techId=${userId}`);
                 const data = await res.json();
                 
                 if (!data.found) {

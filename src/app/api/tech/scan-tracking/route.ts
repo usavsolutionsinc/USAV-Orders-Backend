@@ -17,8 +17,9 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+        const scannedTracking = String(tracking || '').trim();
         // Match by last 8 digits of tracking number (digits-only)
-        const last8 = normalizeTrackingLast8(tracking).toLowerCase();
+        const last8 = normalizeTrackingLast8(scannedTracking).toLowerCase();
         const techIdNum = parseInt(techId, 10);
         if (!techIdNum) {
             return NextResponse.json({ error: 'Invalid Tech ID' }, { status: 400 });
@@ -85,42 +86,11 @@ export async function GET(req: NextRequest) {
         const trackingValue =
             row?.shipping_tracking_number ||
             existingTracking.rows[0]?.shipping_tracking_number ||
-            tracking;
-
-        if (!row && existingTracking.rows.length > 0) {
-            return NextResponse.json({
-                found: true,
-                orderFound: false,
-                order: {
-                    id: null,
-                    orderId: 'N/A',
-                    productTitle: 'Unknown Product',
-                    itemNumber: null,
-                    sku: 'N/A',
-                    condition: 'N/A',
-                    notes: '',
-                    tracking: trackingValue,
-                    serialNumbers: parseSerials(existingTracking.rows[0]?.serial_number),
-                    testDateTime: null,
-                    testedBy,
-                    accountSource: null,
-                    quantity: 1,
-                    status: null,
-                    statusHistory: [],
-                    isShipped: false,
-                    packerId: null,
-                    testerId: null,
-                    outOfStock: null,
-                    shipByDate: null,
-                    orderDate: null,
-                    createdAt: null
-                }
-            });
-        }
+            scannedTracking;
 
         if (!row) {
             await upsertOpenOrderException({
-                shippingTrackingNumber: trackingValue,
+                shippingTrackingNumber: scannedTracking,
                 sourceStation: 'tech',
                 staffId: testedBy,
                 staffName: testedByName,
@@ -128,14 +98,27 @@ export async function GET(req: NextRequest) {
                 notes: 'Tech scan: tracking not found in orders',
             });
 
-            if (existingTracking.rows.length === 0) {
+            const exactTrackingRow = await pool.query(
+                `SELECT id, serial_number
+                 FROM tech_serial_numbers
+                 WHERE shipping_tracking_number = $1
+                 ORDER BY id ASC
+                 LIMIT 1`,
+                [scannedTracking]
+            );
+
+            if (exactTrackingRow.rows.length === 0) {
                 await pool.query(
                     `INSERT INTO tech_serial_numbers (
                         shipping_tracking_number, serial_number, test_date_time, tested_by
                     ) VALUES ($1, $2, date_trunc('second', NOW()), $3)`,
-                    [trackingValue, '', testedBy]
+                    [scannedTracking, '', testedBy]
                 );
             }
+            const serialSource =
+                exactTrackingRow.rows[0]?.serial_number ??
+                existingTracking.rows[0]?.serial_number ??
+                '';
 
             return NextResponse.json({
                 found: true,
@@ -149,8 +132,8 @@ export async function GET(req: NextRequest) {
                     sku: 'N/A',
                     condition: 'N/A',
                     notes: 'Tracking recorded in orders_exceptions for reconciliation',
-                    tracking: trackingValue,
-                    serialNumbers: parseSerials(existingTracking.rows[0]?.serial_number),
+                    tracking: scannedTracking,
+                    serialNumbers: parseSerials(serialSource),
                     testDateTime: null,
                     testedBy,
                     accountSource: null,
