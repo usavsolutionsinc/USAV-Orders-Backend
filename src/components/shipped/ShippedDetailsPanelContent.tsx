@@ -31,12 +31,14 @@ const CopyableField = ({
   label,
   value,
   externalUrl,
-  externalLabel
+  externalLabel,
+  twoLineValue = false,
 }: {
   label: string;
   value: string;
   externalUrl?: string | null;
   externalLabel?: string;
+  twoLineValue?: boolean;
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -72,7 +74,21 @@ const CopyableField = ({
         aria-label={`Copy ${label}: ${value}`}
         className={`flex items-center justify-between gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 group/field transition-all ${!isEmpty ? 'cursor-pointer hover:bg-gray-100 active:scale-[0.98]' : 'cursor-default'}`}
       >
-        <p className="font-mono text-sm text-gray-900 font-bold flex-1 truncate">{value}</p>
+        <p
+          className={`font-mono text-sm text-gray-900 font-bold flex-1 ${twoLineValue ? 'break-all leading-4' : 'truncate'}`}
+          style={
+            twoLineValue
+              ? {
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }
+              : undefined
+          }
+        >
+          {value}
+        </p>
         <div className="flex items-center gap-1.5">
           {!isEmpty && (
             <div className={`p-1.5 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover/field:opacity-100'}`}>
@@ -257,7 +273,7 @@ export function ShippedDetailsPanelContent({
           </div>
 
           {showSerialNumber && (
-            <CopyableField label="Serial Number" value={shipped.serial_number || 'N/A'} />
+            <CopyableField label="Serial Number" value={shipped.serial_number || 'N/A'} twoLineValue />
           )}
 
           {showShippingTimestamp && (

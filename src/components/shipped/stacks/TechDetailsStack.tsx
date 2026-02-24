@@ -81,11 +81,11 @@ export function TechDetailsStack({
         durationData={durationData}
         copiedAll={copiedAll}
         onCopyAll={onCopyAll}
-        productDetailsFirst
+        productDetailsFirst={false}
         showPackingPhotos={false}
         showPackingInformation={false}
         showTestingInformation={false}
-        showSerialNumber={false}
+        showSerialNumber
       />
 
       <section className="mx-8 pt-2">

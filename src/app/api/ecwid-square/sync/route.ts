@@ -1,26 +1,6 @@
 import { NextResponse } from 'next/server';
 import { syncEcwidToSquare } from '@/lib/ecwid-square/sync';
-
-function isAllowedSyncRequest(req: Request): boolean {
-  const origin = req.headers.get('origin');
-  if (!origin) return true;
-
-  try {
-    const originUrl = new URL(origin);
-    const forwardedHost = req.headers.get('x-forwarded-host');
-    const host = req.headers.get('host');
-    const requestHost = (forwardedHost || host || '').toLowerCase();
-    const originHost = originUrl.host.toLowerCase();
-
-    if (requestHost && requestHost === originHost) return true;
-    if (originHost === 'localhost:3000' || originHost === '127.0.0.1:3000') return true;
-    if (originUrl.hostname.endsWith('.vercel.app')) return true;
-  } catch {
-    return false;
-  }
-
-  return false;
-}
+import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 
 /**
  * POST /api/ecwid-square/sync
@@ -34,7 +14,7 @@ function isAllowedSyncRequest(req: Request): boolean {
  */
 export async function POST(req: Request) {
   try {
-    if (!isAllowedSyncRequest(req)) {
+    if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json(
         {
           success: false,

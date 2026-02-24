@@ -51,6 +51,7 @@ export default function StationNav() {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
     const [isCollapsed, setIsCollapsed] = useState(true); // Default to collapsed
+    const [lastTechStationHref, setLastTechStationHref] = useState('/tech/1');
 
     // Persist collapsed state
     useEffect(() => {
@@ -61,6 +62,20 @@ export default function StationNav() {
             setIsCollapsed(true); // Default to collapsed if not set
         }
     }, []);
+
+    useEffect(() => {
+        const savedTechHref = localStorage.getItem('last-tech-station-href');
+        if (savedTechHref && /^\/tech\/\d+$/.test(savedTechHref)) {
+            setLastTechStationHref(savedTechHref);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!pathname) return;
+        if (!/^\/tech\/\d+$/.test(pathname)) return;
+        localStorage.setItem('last-tech-station-href', pathname);
+        setLastTechStationHref(pathname);
+    }, [pathname]);
 
     const toggleCollapsed = () => {
         const newState = !isCollapsed;
@@ -112,13 +127,14 @@ export default function StationNav() {
     };
 
     const renderNavItem = (item: any, isQuickAccess = false) => {
-        const isActive = isPathActive(item.href);
+        const href = item.name === 'Technicians' ? lastTechStationHref : item.href;
+        const isActive = isPathActive(href);
         const Icon = item.icon;
         
         return (
             <Link
                 key={item.href}
-                href={item.href}
+                href={href}
                 title={isCollapsed ? item.name : undefined}
                 className={`group flex items-center transition-all duration-300 relative ${
                     isCollapsed ? 'justify-center py-2.5 rounded-l-xl' : 'gap-5 px-6 py-3 rounded-2xl'

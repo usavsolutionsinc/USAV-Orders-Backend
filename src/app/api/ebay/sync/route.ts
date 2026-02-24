@@ -1,31 +1,6 @@
 import { NextResponse } from 'next/server';
 import { syncAllAccounts, getSyncStatus } from '@/lib/ebay/sync';
-
-function isAllowedSyncRequest(req: Request): boolean {
-  const origin = req.headers.get('origin');
-  if (!origin) return true;
-
-  try {
-    const originUrl = new URL(origin);
-    const forwardedHost = req.headers.get('x-forwarded-host');
-    const host = req.headers.get('host');
-    const requestHost = (forwardedHost || host || '').toLowerCase();
-    const originHost = originUrl.host.toLowerCase();
-
-    // Allow exact same-origin requests (covers production custom domains and previews).
-    if (requestHost && requestHost === originHost) return true;
-
-    // Keep localhost for local development flexibility.
-    if (originHost === 'localhost:3000' || originHost === '127.0.0.1:3000') return true;
-
-    // Allow Vercel preview/prod subdomains.
-    if (originUrl.hostname.endsWith('.vercel.app')) return true;
-  } catch {
-    return false;
-  }
-
-  return false;
-}
+import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 
 /**
  * POST /api/ebay/sync
@@ -34,7 +9,7 @@ function isAllowedSyncRequest(req: Request): boolean {
 export async function POST(req: Request) {
   try {
     const origin = req.headers.get('origin');
-    if (!isAllowedSyncRequest(req)) {
+    if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json(
         { success: false, error: `Origin not allowed: ${origin}` },
         { status: 403 }
