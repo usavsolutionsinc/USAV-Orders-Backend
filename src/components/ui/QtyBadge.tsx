@@ -15,7 +15,7 @@ export function QtyBadge({ quantity, className = '' }: QtyBadgeProps) {
       className={[
         'px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border',
         isMulti
-          ? 'bg-yellow-300 text-yellow-900 border-yellow-400'
+          ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
           : 'bg-gray-100 text-gray-600 border-gray-200',
         className
       ].join(' ')}

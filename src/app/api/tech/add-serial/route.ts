@@ -44,19 +44,33 @@ export async function POST(req: NextRequest) {
             serialType = 'FNSKU';
         }
 
-        // Get staff ID from techId
-        const techEmployeeIds: { [key: string]: string } = {
-            '1': 'TECH001',
-            '2': 'TECH002',
-            '3': 'TECH003',
-            '4': 'TECH004'
-        };
-        const employeeId = techEmployeeIds[techId] || 'TECH001';
+        // Resolve staff primarily by numeric staff.id (current flow), with legacy employee_id fallback.
+        const techIdNum = parseInt(String(techId), 10);
+        let staffResult = { rows: [] as Array<{ id: number; name: string }> };
+        if (!Number.isNaN(techIdNum) && techIdNum > 0) {
+            const byId = await pool.query(
+                'SELECT id, name FROM staff WHERE id = $1 LIMIT 1',
+                [techIdNum]
+            );
+            if (byId.rows.length > 0) {
+                staffResult = byId;
+            }
+        }
 
-        const staffResult = await pool.query(
-            'SELECT id, name FROM staff WHERE employee_id = $1',
-            [employeeId]
-        );
+        if (staffResult.rows.length === 0) {
+            const techEmployeeIds: { [key: string]: string } = {
+                '1': 'TECH001',
+                '2': 'TECH002',
+                '3': 'TECH003',
+                '4': 'TECH004'
+            };
+            const employeeId = techEmployeeIds[String(techId)] || String(techId);
+            const byEmployeeId = await pool.query(
+                'SELECT id, name FROM staff WHERE employee_id = $1 LIMIT 1',
+                [employeeId]
+            );
+            staffResult = byEmployeeId;
+        }
 
         if (staffResult.rows.length === 0) {
             return NextResponse.json({ 
@@ -102,7 +116,7 @@ export async function POST(req: NextRequest) {
             await pool.query(
                 `UPDATE tech_serial_numbers
                  SET serial_number = $1,
-                     test_date_time = NOW(),
+                     test_date_time = date_trunc('second', NOW()),
                      tested_by = $2
                  WHERE id = $3`,
                 [updatedSerialList.join(', '), staffId, row.id]
@@ -112,7 +126,7 @@ export async function POST(req: NextRequest) {
             await pool.query(
                 `INSERT INTO tech_serial_numbers 
                  (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
-                 VALUES ($1, $2, $3, NOW(), $4)`,
+                 VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)`,
                 [order.shipping_tracking_number, updatedSerialList.join(', '), serialType, staffId]
             );
         }

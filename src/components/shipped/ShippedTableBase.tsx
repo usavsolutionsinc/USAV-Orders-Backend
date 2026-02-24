@@ -428,7 +428,17 @@ export function ShippedTableBase({
                                   {' • '}
                                 </>
                               )}
-                              {parseInt(String((record as any).quantity || '1'), 10) || 1} • {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)} • {(record as any).packed_by_name || getStaffName((record as any).packed_by)} • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                              {(() => {
+                                const qty = parseInt(String((record as any).quantity || '1'), 10) || 1;
+                                const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-400';
+                                return (
+                                  <>
+                                    <span className={qtyClass}>{qty}</span>
+                                    {' • '}
+                                  </>
+                                );
+                              })()}
+                              {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)} • {(record as any).packed_by_name || getStaffName((record as any).packed_by)} • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
                             </div>
                           </div>
                           

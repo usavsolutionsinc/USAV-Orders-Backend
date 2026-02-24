@@ -131,8 +131,8 @@ export async function GET(req: NextRequest) {
             if (existingTracking.rows.length === 0) {
                 await pool.query(
                     `INSERT INTO tech_serial_numbers (
-                        shipping_tracking_number, serial_number, tested_by
-                    ) VALUES ($1, $2, $3)`,
+                        shipping_tracking_number, serial_number, test_date_time, tested_by
+                    ) VALUES ($1, $2, date_trunc('second', NOW()), $3)`,
                     [trackingValue, '', testedBy]
                 );
             }
@@ -172,8 +172,8 @@ export async function GET(req: NextRequest) {
         if (existingTracking.rows.length === 0) {
             await pool.query(
                 `INSERT INTO tech_serial_numbers (
-                    shipping_tracking_number, serial_number, tested_by
-                ) VALUES ($1, $2, $3)`,
+                    shipping_tracking_number, serial_number, test_date_time, tested_by
+                ) VALUES ($1, $2, date_trunc('second', NOW()), $3)`,
                 [trackingValue, '', testedBy]
             );
         }

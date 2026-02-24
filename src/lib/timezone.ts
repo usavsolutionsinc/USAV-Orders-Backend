@@ -5,6 +5,7 @@ const PST_TIME_ZONE = 'America/Los_Angeles';
 
 const ISO_DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_NAIVE_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/;
+const ISO_NAIVE_FRACTION_RE = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}\.\d+$/;
 const SLASH_DATE_RE = /^\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/;
 const TZ_SUFFIX_RE = /(Z|[+-]\d{2}:\d{2})$/i;
 
@@ -130,6 +131,9 @@ export function toPSTDateKey(input: string | Date | null | undefined): string {
   if (ISO_NAIVE_RE.test(raw) && !TZ_SUFFIX_RE.test(raw)) {
     return raw.slice(0, 10);
   }
+  if (ISO_NAIVE_FRACTION_RE.test(raw) && !TZ_SUFFIX_RE.test(raw)) {
+    return raw.slice(0, 10);
+  }
 
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return '';
@@ -181,6 +185,14 @@ export function formatDateTimePST(input: string | Date | null | undefined): stri
     const [datePart, timePartRaw] = normalized.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hh = '00', mm = '00', ss = '00'] = (timePartRaw || '00:00:00').split(':');
+    return `${pad2(month)}/${pad2(day)}/${year} ${pad2(Number(hh))}:${pad2(Number(mm))}:${pad2(Number(ss))}`;
+  }
+  if (ISO_NAIVE_FRACTION_RE.test(raw) && !TZ_SUFFIX_RE.test(raw)) {
+    const normalized = raw.replace(' ', 'T');
+    const [datePart, timePartRaw] = normalized.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const timePart = (timePartRaw || '00:00:00').split('.')[0];
+    const [hh = '00', mm = '00', ss = '00'] = timePart.split(':');
     return `${pad2(month)}/${pad2(day)}/${year} ${pad2(Number(hh))}:${pad2(Number(mm))}:${pad2(Number(ss))}`;
   }
 

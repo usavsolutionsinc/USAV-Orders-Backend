@@ -70,8 +70,8 @@ export async function GET(req: NextRequest) {
     if (existingTracking.rows.length === 0) {
       await pool.query(
         `INSERT INTO tech_serial_numbers (
-          shipping_tracking_number, serial_number, serial_type, tested_by
-        ) VALUES ($1, $2, $3, $4)`,
+          shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by
+        ) VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)`,
         [fnsku, null, 'FNSKU', testedBy]
       );
     }

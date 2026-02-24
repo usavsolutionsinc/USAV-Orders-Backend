@@ -7,7 +7,7 @@ import { AlertCircle, Play, Package, Calendar, X, Check, ExternalLink } from './
 import { TabSwitch } from './ui/TabSwitch';
 import { ShipByDate } from './ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
-import { getOrderPlatformLabel } from '@/utils/order-platform';
+import { PlatformExternalChip } from './ui/PlatformExternalChip';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
@@ -224,7 +224,14 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <ShipByDate date={getDisplayShipByDate(order) || ''} className="[&>span]:text-[12px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4" />
+          <ShipByDate
+            date={getDisplayShipByDate(order) || ''}
+            showPrefix={false}
+            className="[&>span]:text-[12px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4"
+          />
+          <span className={`text-[12px] font-black ${getDaysLateTone(getDaysLateNumber(order.ship_by_date, order.created_at))}`}>
+            {getDaysLateNumber(order.ship_by_date, order.created_at)}
+          </span>
         </div>
         <div className="flex items-center gap-3">
           {order.out_of_stock && activeTab === 'stock' && (
@@ -233,24 +240,12 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               <span className="text-[9px] font-black uppercase tracking-wider">Out of Stock</span>
             </div>
           )}
-          {getOrderPlatformLabel(order.order_id, order.account_source) && (
-            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
-              {getOrderPlatformLabel(order.order_id, order.account_source)}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              openExternalByItemNumber(order.item_number);
-            }}
-            disabled={!getExternalUrlByItemNumber(order.item_number)}
-            className="inline-flex items-center justify-center p-2.5 rounded-md bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Open external page"
-            aria-label="Open external page"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </button>
+          <PlatformExternalChip
+            orderId={order.order_id}
+            accountSource={order.account_source}
+            canOpen={!!getExternalUrlByItemNumber(order.item_number)}
+            onOpen={() => openExternalByItemNumber(order.item_number)}
+          />
         </div>
       </div>
 
@@ -261,12 +256,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </h4>
         <div className={`mt-2 flex items-center justify-between rounded-lg px-2.5 py-1.5 border ${quantity > 1 ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-50 border-gray-200'}`}>
           <div className="flex items-center gap-2 min-w-0">
-            <span className={`text-[11px] font-black ${getDaysLateTone(getDaysLateNumber(order.ship_by_date, order.created_at))}`}>
-              {getDaysLateNumber(order.ship_by_date, order.created_at)}
-            </span>
-            <span className={`text-[10px] font-black uppercase tracking-wider ${quantity > 1 ? 'text-yellow-900' : 'text-gray-600'}`}>
-              -
-            </span>
             <span className={`text-[11px] font-black ${quantity > 1 ? 'text-yellow-900' : 'text-gray-800'}`}>
               {quantity}
             </span>
@@ -277,9 +266,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               {order.condition || 'No Condition'}
             </span>
           </div>
-          <span className={`text-[11px] font-mono font-black ml-3 ${quantity > 1 ? 'text-yellow-900' : 'text-gray-700'}`}>
-            #{getOrderIdLast4(order.order_id)}
-          </span>
+          <div className="flex items-center gap-2 ml-3">
+            <span className={`text-[11px] font-mono font-black ${quantity > 1 ? 'text-yellow-900' : 'text-gray-700'}`}>
+              #{getOrderIdLast4(order.order_id)}
+            </span>
+          </div>
         </div>
       </div>
 

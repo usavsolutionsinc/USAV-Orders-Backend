@@ -6,6 +6,7 @@ import { Plus, RefreshCw, AlertCircle, ExternalLink } from '@/components/Icons';
 import { motion } from 'framer-motion';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ShipByDate } from '@/components/ui/ShipByDate';
+import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import { AdminDetailsStack } from '@/components/shipped/stacks/adminDetailsStack';
 import { getOrderPlatformLabel } from '@/utils/order-platform';
 import { getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
@@ -916,21 +917,12 @@ function OrdersManagement() {
                                             </div>
 
                                             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                <div className="inline-flex w-fit items-center h-9 pl-3 pr-2 rounded-lg bg-blue-50 border border-blue-100 text-[10px] font-black text-blue-700">
-                                                    <span className="font-mono uppercase">
-                                                        {platformLabel}
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openExternalByItemNumber(order.item_number || null)}
-                                                        disabled={!productPageUrl}
-                                                        className="ml-1 inline-flex items-center justify-center text-blue-700 disabled:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        title="Open external page"
-                                                        aria-label="Open external page"
-                                                    >
-                                                        <ExternalLink className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
+                                                <PlatformExternalChip
+                                                    orderId={order.order_id}
+                                                    accountSource={order.account_source}
+                                                    canOpen={!!productPageUrl}
+                                                    onOpen={() => openExternalByItemNumber(order.item_number || null)}
+                                                />
 
                                                 <button
                                                     type="button"

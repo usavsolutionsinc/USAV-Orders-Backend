@@ -31,19 +31,33 @@ export async function POST(req: NextRequest) {
       qtyToDecrement = parseInt(xMatch[2], 10) || 1;
     }
     
-    // Get staff ID
-    const techEmployeeIds: { [key: string]: string } = {
-      '1': 'TECH001',
-      '2': 'TECH002',
-      '3': 'TECH003',
-      '4': 'TECH004'
-    };
-    const employeeId = techEmployeeIds[techId] || 'TECH001';
-    
-    const staffResult = await pool.query(
-      'SELECT id FROM staff WHERE employee_id = $1',
-      [employeeId]
-    );
+    // Resolve staff primarily by numeric staff.id (current flow), with legacy employee_id fallback.
+    const techIdNum = parseInt(String(techId), 10);
+    let staffResult = { rows: [] as Array<{ id: number }> };
+    if (!Number.isNaN(techIdNum) && techIdNum > 0) {
+      const byId = await pool.query(
+        'SELECT id FROM staff WHERE id = $1 LIMIT 1',
+        [techIdNum]
+      );
+      if (byId.rows.length > 0) {
+        staffResult = byId;
+      }
+    }
+
+    if (staffResult.rows.length === 0) {
+      const techEmployeeIds: { [key: string]: string } = {
+        '1': 'TECH001',
+        '2': 'TECH002',
+        '3': 'TECH003',
+        '4': 'TECH004'
+      };
+      const employeeId = techEmployeeIds[String(techId)] || String(techId);
+      const byEmployeeId = await pool.query(
+        'SELECT id FROM staff WHERE employee_id = $1 LIMIT 1',
+        [employeeId]
+      );
+      staffResult = byEmployeeId;
+    }
     
     if (staffResult.rows.length === 0) {
       return NextResponse.json({ 
@@ -128,7 +142,7 @@ export async function POST(req: NextRequest) {
         `UPDATE tech_serial_numbers
          SET serial_number = $1,
              serial_type = 'SKU_STATIC',
-             test_date_time = NOW(),
+             test_date_time = date_trunc('second', NOW()),
              tested_by = $2
          WHERE id = $3`,
         [serialList.join(', '), staffId, existingRow.id]
@@ -137,7 +151,7 @@ export async function POST(req: NextRequest) {
       await pool.query(
         `INSERT INTO tech_serial_numbers
          (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
-         VALUES ($1, $2, 'SKU_STATIC', NOW(), $3)`,
+         VALUES ($1, $2, 'SKU_STATIC', date_trunc('second', NOW()), $3)`,
         [baseTracking, serialList.join(', '), staffId]
       );
     }

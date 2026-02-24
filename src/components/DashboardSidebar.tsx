@@ -220,7 +220,7 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                         </div>
 
                         {/* Order Management Tools */}
-                        <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                        <div className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">
                             <div className="space-y-3">
                                 <input
                                     ref={shipStationFileInputRef}

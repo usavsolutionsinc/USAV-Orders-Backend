@@ -8,20 +8,33 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     try {
-        // Map techId to employee_id
-        const techEmployeeIds: { [key: string]: string } = {
-            '1': 'TECH001',
-            '2': 'TECH002',
-            '3': 'TECH003',
-            '4': 'TECH004'
-        };
-        const employeeId = techEmployeeIds[techId] || 'TECH001';
+        // Resolve staff by numeric id first (current UI flow), with employee_id fallback.
+        const techIdNum = parseInt(String(techId), 10);
+        let staffResult = { rows: [] as Array<{ id: number }> };
+        if (!Number.isNaN(techIdNum) && techIdNum > 0) {
+            const byId = await pool.query(
+                'SELECT id FROM staff WHERE id = $1 LIMIT 1',
+                [techIdNum]
+            );
+            if (byId.rows.length > 0) {
+                staffResult = byId;
+            }
+        }
 
-        // Get staff ID
-        const staffResult = await pool.query(
-            'SELECT id FROM staff WHERE employee_id = $1',
-            [employeeId]
-        );
+        if (staffResult.rows.length === 0) {
+            const techEmployeeIds: { [key: string]: string } = {
+                '1': 'TECH001',
+                '2': 'TECH002',
+                '3': 'TECH003',
+                '4': 'TECH004'
+            };
+            const employeeId = techEmployeeIds[String(techId)] || String(techId);
+            const byEmployeeId = await pool.query(
+                'SELECT id FROM staff WHERE employee_id = $1 LIMIT 1',
+                [employeeId]
+            );
+            staffResult = byEmployeeId;
+        }
 
         if (staffResult.rows.length === 0) {
             return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
@@ -29,8 +42,7 @@ export async function GET(req: NextRequest) {
 
         const staffId = staffResult.rows[0].id;
 
-        // Query ALL individual records from tech_serial_numbers
-        // Use scalar subqueries to ensure exactly one row per tech_serial_numbers record
+        // Query tech serial logs and join matching order info by normalized tracking last-8.
         const result = await pool.query(`
             SELECT 
                 tsn.id,
@@ -38,88 +50,42 @@ export async function GET(req: NextRequest) {
                 tsn.shipping_tracking_number,
                 tsn.serial_number,
                 tsn.tested_by,
-                (
-                    SELECT o.id
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as order_db_id,
-                (
-                    SELECT o.order_id 
-                    FROM orders o 
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as order_id,
-                (
-                    SELECT o.ship_by_date
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as ship_by_date,
-                (
-                    SELECT o.created_at
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as created_at,
-                (
-                    SELECT o.item_number
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as item_number,
-                (
-                    SELECT o.product_title 
-                    FROM orders o 
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as product_title,
-                (
-                    SELECT o.quantity
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as quantity,
-                (
-                    SELECT o.condition 
-                    FROM orders o 
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as condition,
-                (
-                    SELECT o.sku 
-                    FROM orders o 
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as sku,
-                (
-                    SELECT o.account_source
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as account_source,
-                (
-                    SELECT o.notes
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as notes,
-                (
-                    SELECT o.out_of_stock
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as out_of_stock,
-                (
-                    SELECT o.is_shipped
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(tsn.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as is_shipped
+                o.id as order_db_id,
+                o.order_id,
+                o.ship_by_date,
+                o.created_at,
+                o.item_number,
+                o.product_title,
+                o.quantity,
+                o.condition,
+                o.sku,
+                o.account_source,
+                o.notes,
+                o.out_of_stock,
+                o.is_shipped
             FROM tech_serial_numbers tsn
+            LEFT JOIN LATERAL (
+                SELECT
+                    id,
+                    order_id,
+                    ship_by_date,
+                    created_at,
+                    item_number,
+                    product_title,
+                    quantity,
+                    condition,
+                    sku,
+                    account_source,
+                    notes,
+                    out_of_stock,
+                    is_shipped
+                FROM orders
+                WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
+                      RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
+                LIMIT 1
+            ) o ON true
             WHERE tsn.tested_by = $1
-              AND tsn.serial_number IS NOT NULL
-              AND tsn.serial_number != ''
+              AND tsn.test_date_time IS NOT NULL
             ORDER BY tsn.test_date_time DESC NULLS LAST
             LIMIT $2 OFFSET $3
         `, [staffId, limit, offset]);
