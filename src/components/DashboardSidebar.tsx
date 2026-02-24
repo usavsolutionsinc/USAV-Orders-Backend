@@ -202,6 +202,7 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                             value={searchQuery}
                             onChange={setSearchQuery}
                             onSearch={handleSearch}
+                            onClear={() => handleSearch('')}
                             placeholder="Search orders, serials..."
                             variant="blue"
                             rightElement={

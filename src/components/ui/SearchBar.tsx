@@ -7,6 +7,7 @@ interface SearchBarProps {
     onChange: (value: string) => void;
     onSearch?: (value: string) => void;
     onClear?: () => void;
+    inputRef?: React.Ref<HTMLInputElement>;
     placeholder?: string;
     isSearching?: boolean;
     className?: string;
@@ -19,6 +20,7 @@ export function SearchBar({
     onChange,
     onSearch,
     onClear,
+    inputRef,
     placeholder = "Search...",
     isSearching = false,
     className = "",
@@ -66,6 +68,7 @@ export function SearchBar({
                     <Search className="w-4 h-4" />
                 </div>
                 <input 
+                    ref={inputRef}
                     type="text"
                     value={value}
                     onChange={(e) => onChange(e.target.value)}

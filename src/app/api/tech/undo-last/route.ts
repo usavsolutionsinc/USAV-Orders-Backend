@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,8 +12,12 @@ export async function POST(req: NextRequest) {
     if (!tracking) {
       return NextResponse.json({ success: false, error: 'Tracking is required' }, { status: 400 });
     }
+    const key18 = normalizeTrackingKey18(tracking);
+    if (!key18 || key18.length < 8) {
+      return NextResponse.json({ success: false, error: 'Invalid tracking number' }, { status: 400 });
+    }
 
-    const params: any[] = [tracking];
+    const params: any[] = [key18];
     let techFilter = '';
     if (techId) {
       params.push(techId);
@@ -22,8 +27,7 @@ export async function POST(req: NextRequest) {
     const latestResult = await pool.query(
       `SELECT id, serial_number
        FROM tech_serial_numbers
-       WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(COALESCE($1, ''), '\\D', '', 'g'), 8)
+       WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
          AND serial_number IS NOT NULL
          AND serial_number != ''
          ${techFilter}
@@ -42,12 +46,11 @@ export async function POST(req: NextRequest) {
     const remainingResult = await pool.query(
       `SELECT serial_number
        FROM tech_serial_numbers
-       WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(COALESCE($1, ''), '\\D', '', 'g'), 8)
+       WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
          AND serial_number IS NOT NULL
          AND serial_number != ''
        ORDER BY test_date_time ASC NULLS LAST, id ASC`,
-      [tracking]
+      [key18]
     );
 
     return NextResponse.json({
@@ -63,4 +66,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

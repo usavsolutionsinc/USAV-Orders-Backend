@@ -1,19 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import StationLayout from './station/StationLayout';
-import StationNav from './station/StationNav';
 import ReceivingLogs from './station/ReceivingLogs';
 import ReceivingPanel from './ReceivingPanel';
-import { Package, TrendingUp, Clock, AlertCircle, Search, Loader2 } from './Icons';
-import { SearchBar } from './ui/SearchBar';
+import { AnimatePresence } from 'framer-motion';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { ReceivingDetailsStack, ReceivingDetailsLog } from './station/ReceivingDetailsStack';
 
 export default function ReceivingDashboard() {
     const [history, setHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isSearching, setIsSearching] = useState(false);
+    const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);
 
     useEffect(() => {
         fetchHistory();
@@ -24,20 +21,6 @@ export default function ReceivingDashboard() {
         window.addEventListener('usav-refresh-data', handleRefresh as any);
         return () => window.removeEventListener('usav-refresh-data', handleRefresh as any);
     }, []);
-
-    const handleSearch = async (query: string) => {
-        if (!query.trim()) return;
-        setIsSearching(true);
-        try {
-            // Re-use logic or redirect to search results
-            // For now, let's just simulate or use it as a filter if appropriate
-            // Actually, the panel has the search results, so maybe this search should be for something else
-            // or we could just filter the history.
-            console.log("Searching for:", query);
-        } finally {
-            setIsSearching(false);
-        }
-    };
 
     const handleEntryAdded = () => {
         fetchHistory();
@@ -123,9 +106,30 @@ export default function ReceivingDashboard() {
                     <ReceivingLogs 
                         history={history} 
                         isLoading={isLoadingHistory}
+                        onSelectLog={(log) => setSelectedLog(log)}
+                        selectedLogId={selectedLog?.id || null}
                     />
                 </div>
             </div>
+
+            <AnimatePresence>
+                {selectedLog && (
+                    <ReceivingDetailsStack
+                        log={selectedLog}
+                        onClose={() => setSelectedLog(null)}
+                        onUpdated={() => {
+                            setSelectedLog(null);
+                            fetchHistory();
+                            window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
+                        }}
+                        onDeleted={(id) => {
+                            setSelectedLog(null);
+                            setHistory((prev: any[]) => prev.filter((row) => String(row.id) !== String(id)));
+                            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { toISOStringPST } from '@/lib/timezone';
-import { normalizeTrackingLast8 } from '@/lib/tracking-format';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 export async function POST(req: NextRequest) {
     try {
@@ -15,10 +15,10 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // Match by last 8 digits (digits-only)
+        // Match by normalized rightmost 18 chars
         const scannedTracking = String(tracking || '').trim();
-        const last8 = normalizeTrackingLast8(scannedTracking);
-        if (!last8 || last8.length < 8) {
+        const key18 = normalizeTrackingKey18(scannedTracking);
+        if (!key18 || key18.length < 8) {
             return NextResponse.json({
                 success: false,
                 error: 'Invalid tracking number'
@@ -34,10 +34,10 @@ export async function POST(req: NextRequest) {
             FROM orders
             WHERE shipping_tracking_number IS NOT NULL
               AND shipping_tracking_number != ''
-              AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+              AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
             ORDER BY id DESC
             LIMIT 1
-        `, [last8]);
+        `, [key18]);
         const order = orderResult.rows[0] || null;
 
         if (!order) {
@@ -45,10 +45,10 @@ export async function POST(req: NextRequest) {
                 `SELECT id
                  FROM orders_exceptions
                  WHERE status = 'open'
-                   AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+                   AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
                  ORDER BY id DESC
                  LIMIT 1`,
-                [last8]
+                [key18]
             );
             if (exceptionResult.rows.length === 0) {
                 return NextResponse.json({
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
                 .map((s) => s.trim().toUpperCase())
                 .filter(Boolean);
 
-        // One-row-per-tracking model: append serial to existing row by tracking last-8.
+        // One-row-per-tracking model: append serial to existing row by key-18.
         const existingExactRowResult = await pool.query(
             `SELECT id, shipping_tracking_number, serial_number
              FROM tech_serial_numbers
@@ -125,10 +125,10 @@ export async function POST(req: NextRequest) {
             : await pool.query(
                 `SELECT id, shipping_tracking_number, serial_number
                  FROM tech_serial_numbers
-                 WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+                 WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
                  ORDER BY id ASC
                  LIMIT 1`,
-                [last8]
+                [key18]
             );
 
         let updatedSerialList: string[] = [];

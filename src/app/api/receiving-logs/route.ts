@@ -47,3 +47,86 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const idRaw = searchParams.get('id');
+        const id = Number(idRaw);
+
+        if (!idRaw || !Number.isFinite(id) || id <= 0) {
+            return NextResponse.json(
+                { error: 'Valid id is required' },
+                { status: 400 }
+            );
+        }
+
+        const result = await pool.query(
+            `DELETE FROM receiving WHERE id = $1 RETURNING id`,
+            [id]
+        );
+
+        if (result.rowCount === 0) {
+            return NextResponse.json(
+                { error: 'Receiving log not found' },
+                { status: 404 }
+            );
+        }
+
+        return NextResponse.json({ success: true, id });
+    } catch (error: any) {
+        console.error('Error deleting receiving log:', error);
+        return NextResponse.json(
+            { error: 'Failed to delete receiving log', details: error.message },
+            { status: 500 }
+        );
+    }
+}
+
+export async function PATCH(request: NextRequest) {
+    try {
+        const body = await request.json();
+        const id = Number(body?.id);
+        const tracking = String(body?.tracking ?? '').trim();
+        const status = String(body?.status ?? '').trim();
+        const countRaw = body?.count;
+
+        if (!Number.isFinite(id) || id <= 0) {
+            return NextResponse.json({ error: 'Valid id is required' }, { status: 400 });
+        }
+        if (!tracking) {
+            return NextResponse.json({ error: 'tracking is required' }, { status: 400 });
+        }
+
+        const { hasQuantity } = await resolveReceivingSchema();
+        const updates: string[] = ['receiving_tracking_number = $1', 'carrier = $2'];
+        const values: any[] = [tracking, status || 'Unknown'];
+        let idx = 3;
+
+        if (hasQuantity && countRaw !== undefined && countRaw !== null && String(countRaw).trim() !== '') {
+            updates.push(`quantity = $${idx++}`);
+            values.push(String(countRaw).trim());
+        }
+
+        values.push(id);
+        const result = await pool.query(
+            `UPDATE receiving
+             SET ${updates.join(', ')}
+             WHERE id = $${idx}
+             RETURNING id`,
+            values
+        );
+
+        if (result.rowCount === 0) {
+            return NextResponse.json({ error: 'Receiving log not found' }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, id });
+    } catch (error: any) {
+        console.error('Error updating receiving log:', error);
+        return NextResponse.json(
+            { error: 'Failed to update receiving log', details: error.message },
+            { status: 500 }
+        );
+    }
+}

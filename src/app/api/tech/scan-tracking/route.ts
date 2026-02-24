@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { normalizeTrackingLast8 } from '@/lib/tracking-format';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 
 export async function GET(req: NextRequest) {
@@ -18,8 +18,10 @@ export async function GET(req: NextRequest) {
 
     try {
         const scannedTracking = String(tracking || '').trim();
-        // Match by last 8 digits of tracking number (digits-only)
-        const last8 = normalizeTrackingLast8(scannedTracking).toLowerCase();
+        const key18 = normalizeTrackingKey18(scannedTracking);
+        if (!key18) {
+            return NextResponse.json({ error: 'Invalid tracking number' }, { status: 400 });
+        }
         const techIdNum = parseInt(techId, 10);
         if (!techIdNum) {
             return NextResponse.json({ error: 'Invalid Tech ID' }, { status: 400 });
@@ -63,23 +65,19 @@ export async function GET(req: NextRequest) {
                 created_at,
                 quantity
             FROM orders
-            WHERE (
-                  RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
-               OR RIGHT(shipping_tracking_number, 8) = $1
-               OR shipping_tracking_number ILIKE '%' || $1
-            )
+            WHERE RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
               AND shipping_tracking_number IS NOT NULL
               AND shipping_tracking_number != ''
             LIMIT 1
-        `, [last8]);
+        `, [key18]);
 
         // Check tech_serial_numbers for existing tracking entry
         const existingTracking = await pool.query(
             `SELECT id, shipping_tracking_number, serial_number
              FROM tech_serial_numbers
-             WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
+             WHERE RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
              LIMIT 1`,
-            [last8]
+            [key18]
         );
 
         const row = result.rows[0] || null;

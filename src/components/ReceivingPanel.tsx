@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Package, AlertTriangle, X, Search, Copy, Check, Loader2, Plus, ExternalLink } from './Icons';
 import { SearchBar } from './ui/SearchBar';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,6 +31,20 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
     const [mode, setMode] = useState<'entry' | 'search'>('entry');
     const [lastFound, setLastFound] = useState<SearchResult | null>(null);
     const [isManualMode, setIsManualMode] = useState(false);
+    const scanInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        const handleFocusScan = () => {
+            setMode('entry');
+            requestAnimationFrame(() => {
+                scanInputRef.current?.focus();
+            });
+        };
+        window.addEventListener('receiving-focus-scan', handleFocusScan as EventListener);
+        return () => {
+            window.removeEventListener('receiving-focus-scan', handleFocusScan as EventListener);
+        };
+    }, []);
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -129,6 +143,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
             {/* Unified Scan & Search Section */}
             <div className="p-4 border-b border-gray-200 space-y-3">
                 <SearchBar 
+                    inputRef={scanInputRef}
                     value={trackingNumber}
                     onChange={(val) => {
                         setTrackingNumber(val);

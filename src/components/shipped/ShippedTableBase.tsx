@@ -11,6 +11,7 @@ import { formatDateWithOrdinal } from '@/lib/date-format';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { DateGroupHeader } from './DateGroupHeader';
 
 export interface ShippedTableBaseProps {
   packedBy?: number; // Filter by packer ID
@@ -391,15 +392,7 @@ export function ShippedTableBase({
                   
                   return (
                   <div key={date} className="flex flex-col">
-                    <div 
-                      data-day-header
-                      data-date={date}
-                      data-count={records.length}
-                      className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
-                    >
-                      <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                      <p className="text-[11px] font-black text-gray-400 uppercase">Total: {records.length} Units</p>
-                    </div>
+                    <DateGroupHeader date={date} total={records.length} formatDate={formatDate} />
                     {sortedRecords.map((record, index) => {
                       return (
                         <motion.div 

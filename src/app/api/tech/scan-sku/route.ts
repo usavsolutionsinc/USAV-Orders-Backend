@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 export async function POST(req: NextRequest) {
   try {
@@ -89,12 +90,18 @@ export async function POST(req: NextRequest) {
       ? skuRecord.serial_number.split(',').map((s: string) => s.trim()).filter(Boolean)
       : [];
     
-    // Get order by tracking number
-    const last8 = tracking.slice(-8).toLowerCase();
+    // Get order by tracking key-18
+    const key18 = normalizeTrackingKey18(String(tracking || ''));
+    if (!key18 || key18.length < 8) {
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid tracking number'
+      }, { status: 400 });
+    }
     const orderResult = await pool.query(
       `SELECT id, shipping_tracking_number FROM orders 
-       WHERE RIGHT(LOWER(shipping_tracking_number), 8) = $1`,
-      [last8]
+       WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1`,
+      [key18]
     );
     
     if (orderResult.rows.length === 0) {
@@ -115,8 +122,8 @@ export async function POST(req: NextRequest) {
     const rowResult = await pool.query(
       `SELECT id, shipping_tracking_number, serial_number
        FROM tech_serial_numbers
-       WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(COALESCE($1::text, ''), '\\D', '', 'g'), 8)
+       WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) =
+             RIGHT(regexp_replace(UPPER(COALESCE($1::text, '')), '[^A-Z0-9]', '', 'g'), 18)
        ORDER BY id ASC
        LIMIT 1`,
       [order.shipping_tracking_number]
