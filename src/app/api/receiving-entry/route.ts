@@ -8,7 +8,7 @@ import { resolveReceivingSchema } from '@/utils/receiving-schema';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { trackingNumber, carrier: providedCarrier, timestamp } = body;
+        const { trackingNumber, carrier: providedCarrier } = body;
 
         if (!trackingNumber) {
             return NextResponse.json({ 
@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
             ? providedCarrier 
             : getCarrier(trackingNumber);
 
-        const now = timestamp || formatPSTTimestamp();
+        // Always stamp on the server in PST/PDT to avoid client timezone drift.
+        const now = formatPSTTimestamp();
         
         const { dateColumn } = await resolveReceivingSchema();
         await pool.query(
