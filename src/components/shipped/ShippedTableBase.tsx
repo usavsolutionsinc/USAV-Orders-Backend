@@ -11,6 +11,7 @@ import { formatDateWithOrdinal } from '@/lib/date-format';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { dmSans } from '@/lib/fonts';
 import { DateGroupHeader } from './DateGroupHeader';
 
 export interface ShippedTableBaseProps {
@@ -410,12 +411,12 @@ export function ShippedTableBase({
                               {String((record as any).out_of_stock || '').trim() !== '' && (
                                 <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
                               )}
-                              <div className="text-[11px] font-bold text-gray-900 truncate">
+                              <div className="text-[12px] font-bold text-gray-900 truncate">
                                 {record.product_title || 'Unknown Product'}
                               </div>
                             </div>
                             <div className="mt-0.5 flex items-center gap-2">
-                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate min-w-0 flex-1">
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate min-w-0 flex-1">
                                 {(() => {
                                   const qty = parseInt(String((record as any).quantity || '1'), 10) || 1;
                                   const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-400';
