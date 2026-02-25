@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Copy, Package, ExternalLink, Box, Wrench } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { PhotoGallery } from './PhotoGallery';
@@ -130,6 +130,34 @@ export function ShippedDetailsPanelContent({
   showSerialNumber = true,
   productDetailsFirst = false
 }: ShippedDetailsPanelContentProps) {
+  const [conditionValue, setConditionValue] = useState(shipped.condition || 'Parts Used');
+  const [isSavingCondition, setIsSavingCondition] = useState(false);
+
+  useEffect(() => {
+    setConditionValue(shipped.condition || 'Parts Used');
+  }, [shipped.id, shipped.condition]);
+
+  const handleConditionChange = async (nextCondition: string) => {
+    setConditionValue(nextCondition);
+    setIsSavingCondition(true);
+    try {
+      await fetch('/api/orders/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: shipped.id,
+          condition: nextCondition,
+        }),
+      });
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (error) {
+      console.error('Failed to update condition:', error);
+    } finally {
+      setIsSavingCondition(false);
+    }
+  };
+
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
   const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
   const productDetailsSection = (
@@ -162,7 +190,25 @@ export function ShippedDetailsPanelContent({
         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
           <div>
             <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Condition</span>
-            <p className="font-black text-xs text-blue-600 uppercase">{shipped.condition || 'Not set'}</p>
+            <div className="relative">
+              <select
+                value={conditionValue}
+                onChange={(e) => handleConditionChange(e.target.value)}
+                disabled={isSavingCondition}
+                className="w-full rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-black text-blue-600 uppercase outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
+              >
+                {conditionValue !== 'Parts Used' && conditionValue !== 'New' && (
+                  <option value={conditionValue}>{conditionValue}</option>
+                )}
+                <option value="Parts Used">Parts Used</option>
+                <option value="New">New</option>
+              </select>
+              {isSavingCondition && (
+                <span className="absolute -bottom-4 left-0 text-[9px] font-bold text-gray-400 normal-case tracking-normal">
+                  Saving...
+                </span>
+              )}
+            </div>
           </div>
           <div>
             <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">SKU</span>

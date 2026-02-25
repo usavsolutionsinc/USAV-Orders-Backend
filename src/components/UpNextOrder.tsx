@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti';
 import { AlertCircle, Play, Package, Calendar, X, Check, ExternalLink } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
 import { ShipByDate } from './ui/ShipByDate';
+import { OutOfStockField } from './ui/OutOfStockField';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { PlatformExternalChip } from './ui/PlatformExternalChip';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -273,6 +274,13 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           </div>
         </div>
       </div>
+
+      {String(order.out_of_stock || '').trim() !== '' && (
+        <OutOfStockField
+          value={String(order.out_of_stock || '')}
+          className="mb-4"
+        />
+      )}
 
       {/* Action Buttons Row - bottom for safer tapping */}
       {activeTab === 'current' && (

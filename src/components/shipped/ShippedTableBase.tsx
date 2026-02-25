@@ -406,32 +406,43 @@ export function ShippedTableBase({
                         >
                           {/* 2. Product Title, Tested By, Packed By, Condition & SKU */}
                           <div className="flex flex-col min-w-0">
-                            <div className="text-[11px] font-bold text-gray-900 truncate">
-                              {record.product_title || 'Unknown Product'}
-                            </div>
-                            <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
-                              {((record as any).out_of_stock && String((record as any).out_of_stock).trim() !== '')
-                                ? `OOS: ${(record as any).out_of_stock} • `
-                                : ''}
-                              {unshippedOnly && (
-                                <>
-                                  <span className={getDaysLateTone(getDaysLateNumber(record.ship_by_date as any, record.created_at as any))}>
-                                    {getDaysLateNumber(record.ship_by_date as any, record.created_at as any)}
-                                  </span>
-                                  {' • '}
-                                </>
+                            <div className="flex items-center gap-2 min-w-0">
+                              {String((record as any).out_of_stock || '').trim() !== '' && (
+                                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
                               )}
-                              {(() => {
-                                const qty = parseInt(String((record as any).quantity || '1'), 10) || 1;
-                                const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-400';
-                                return (
+                              <div className="text-[11px] font-bold text-gray-900 truncate">
+                                {record.product_title || 'Unknown Product'}
+                              </div>
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-2">
+                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate min-w-0 flex-1">
+                                {(() => {
+                                  const qty = parseInt(String((record as any).quantity || '1'), 10) || 1;
+                                  const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-400';
+                                  return (
+                                    <>
+                                      <span className={qtyClass}>{qty}</span>
+                                      {' • '}
+                                    </>
+                                  );
+                                })()}
+                                {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)} • {(record as any).packed_by_name || getStaffName((record as any).packed_by)} • <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{record.condition || 'No Condition'}</span>{unshippedOnly && (
                                   <>
-                                    <span className={qtyClass}>{qty}</span>
                                     {' • '}
+                                    <span className={getDaysLateTone(getDaysLateNumber(record.ship_by_date as any, record.created_at as any))}>
+                                      {getDaysLateNumber(record.ship_by_date as any, record.created_at as any)}
+                                    </span>
+                                    {String((record as any).out_of_stock || '').trim() !== '' && (
+                                      <>
+                                        {' • '}
+                                        <span className="text-red-600">
+                                          {String((record as any).out_of_stock || '').trim()}
+                                        </span>
+                                      </>
+                                    )}
                                   </>
-                                );
-                              })()}
-                              {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)} • {(record as any).packed_by_name || getStaffName((record as any).packed_by)} • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                                )}
+                              </div>
                             </div>
                           </div>
                           
@@ -469,6 +480,7 @@ export function ShippedTableBase({
                               />
                             </div>
                           )}
+
                         </motion.div>
                       );
                     })}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, History, Search } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SearchBar } from './ui/SearchBar';
@@ -12,6 +12,11 @@ interface DashboardSidebarProps {
     onFormSubmit?: (data: ShippedFormData) => void;
 }
 
+interface SearchHistory {
+    query: string;
+    timestamp: Date;
+}
+
 export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit }: DashboardSidebarProps) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
@@ -21,10 +26,41 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
     const shipStationFileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('dashboard_search_history');
+            if (!saved) return;
+            const parsed = JSON.parse(saved);
+            setSearchHistory(
+                parsed.map((item: any) => ({
+                    ...item,
+                    timestamp: new Date(item.timestamp),
+                }))
+            );
+        } catch (_error) {
+            setSearchHistory([]);
+        }
+    }, []);
+
+    const saveSearchHistory = (query: string) => {
+        const trimmedQuery = query.trim();
+        if (!trimmedQuery) return;
+        const newHistory = [
+            { query: trimmedQuery, timestamp: new Date() },
+            ...searchHistory.filter((h) => h.query !== trimmedQuery).slice(0, 4),
+        ];
+        setSearchHistory(newHistory);
+        localStorage.setItem('dashboard_search_history', JSON.stringify(newHistory));
+    };
 
     const handleSearch = (query: string) => {
         const trimmedQuery = query.trim();
+        if (trimmedQuery) {
+            saveSearchHistory(trimmedQuery);
+        }
         window.dispatchEvent(new CustomEvent('dashboard-search', {
             detail: { query: trimmedQuery }
         }));
@@ -215,6 +251,31 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                                 </button>
                             }
                         />
+                        {searchHistory.length > 0 && (
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 -mt-1">
+                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">
+                                    Recent Searches
+                                </p>
+                                <div className="space-y-2">
+                                    {searchHistory.slice(0, 5).map((item, index) => (
+                                        <button
+                                            key={`${item.query}-${index}`}
+                                            onClick={() => {
+                                                setSearchQuery(item.query);
+                                                handleSearch(item.query);
+                                            }}
+                                            className="w-full text-left p-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600 truncate">
+                                                    {item.query}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="-mt-1 text-left">
                             <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">Click an order for more details</p>
                             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Orders are sorted by ship-by date</p>

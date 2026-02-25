@@ -8,6 +8,117 @@ import pool from '@/lib/db';
 
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
+function getTrackingLast8(value: string): string {
+    return String(value || '').replace(/\D/g, '').slice(-8);
+}
+
+async function ensureOrdersExceptionsTable(client: any): Promise<void> {
+    await client.query(`
+        CREATE TABLE IF NOT EXISTS orders_exceptions (
+          id SERIAL PRIMARY KEY,
+          shipping_tracking_number TEXT NOT NULL,
+          source_station VARCHAR(20) NOT NULL,
+          staff_id INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+          staff_name TEXT,
+          exception_reason VARCHAR(50) NOT NULL DEFAULT 'not_found',
+          notes TEXT,
+          status VARCHAR(20) NOT NULL DEFAULT 'open',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+}
+
+async function hasOrderByTracking(client: any, shippingTrackingNumber: string): Promise<boolean> {
+    const tracking = String(shippingTrackingNumber || '').trim();
+    if (!tracking) return false;
+
+    const trackingLast8 = getTrackingLast8(tracking);
+    if (trackingLast8.length === 8) {
+        const result = await client.query(
+            `SELECT id
+             FROM orders
+             WHERE shipping_tracking_number IS NOT NULL
+               AND shipping_tracking_number != ''
+               AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+             LIMIT 1`,
+            [trackingLast8]
+        );
+        return result.rows.length > 0;
+    }
+
+    const fallback = await client.query(
+        `SELECT id
+         FROM orders
+         WHERE UPPER(TRIM(COALESCE(shipping_tracking_number, ''))) = UPPER(TRIM($1))
+         LIMIT 1`,
+        [tracking]
+    );
+    return fallback.rows.length > 0;
+}
+
+async function upsertOpenOrdersException(params: {
+    client: any;
+    shippingTrackingNumber: string;
+    sourceStation: 'tech' | 'packer';
+    staffId: number;
+}): Promise<void> {
+    const tracking = String(params.shippingTrackingNumber || '').trim();
+    if (!tracking) return;
+
+    const trackingLast8 = getTrackingLast8(tracking);
+
+    let existing;
+    if (trackingLast8.length === 8) {
+        existing = await params.client.query(
+            `SELECT id
+             FROM orders_exceptions
+             WHERE status = 'open'
+               AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+             ORDER BY id DESC
+             LIMIT 1`,
+            [trackingLast8]
+        );
+    } else {
+        existing = await params.client.query(
+            `SELECT id
+             FROM orders_exceptions
+             WHERE status = 'open'
+               AND UPPER(TRIM(COALESCE(shipping_tracking_number, ''))) = UPPER(TRIM($1))
+             ORDER BY id DESC
+             LIMIT 1`,
+            [tracking]
+        );
+    }
+
+    if (existing.rows.length > 0) {
+        await params.client.query(
+            `UPDATE orders_exceptions
+             SET shipping_tracking_number = $1,
+                 source_station = $2,
+                 staff_id = COALESCE($3, staff_id),
+                 exception_reason = 'not_found',
+                 updated_at = NOW()
+             WHERE id = $4`,
+            [tracking, params.sourceStation, params.staffId, existing.rows[0].id]
+        );
+        return;
+    }
+
+    await params.client.query(
+        `INSERT INTO orders_exceptions (
+            shipping_tracking_number,
+            source_station,
+            staff_id,
+            exception_reason,
+            status,
+            created_at,
+            updated_at
+         ) VALUES ($1, $2, $3, 'not_found', 'open', NOW(), NOW())`,
+        [tracking, params.sourceStation, params.staffId]
+    );
+}
+
 export async function POST(req: NextRequest) {
     try {
         const { scriptName } = await req.json();
@@ -230,18 +341,20 @@ async function executeSyncTechSerialNumbers() {
     const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
 
     const client = await pool.connect();
-    const summary: Array<{ sheet: string; inserted: number; skippedExisting: number; skippedMissingTracking: number }> = [];
+    const summary: Array<{ sheet: string; inserted: number; skippedExisting: number; skippedMissingTracking: number; exceptionsLogged: number }> = [];
     let totalInserted = 0;
     let totalSkippedExisting = 0;
     let totalSkippedMissingTracking = 0;
+    let totalExceptionsLogged = 0;
 
     try {
         await client.query('BEGIN');
+        await ensureOrdersExceptionsTable(client);
 
         for (const techSheet of techSheets) {
             const sheetName = existingSheetNames.find(name => name.toLowerCase() === techSheet.name);
             if (!sheetName) {
-                summary.push({ sheet: techSheet.name, inserted: 0, skippedExisting: 0, skippedMissingTracking: 0 });
+                summary.push({ sheet: techSheet.name, inserted: 0, skippedExisting: 0, skippedMissingTracking: 0, exceptionsLogged: 0 });
                 continue;
             }
 
@@ -254,6 +367,8 @@ async function executeSyncTechSerialNumbers() {
             let insertedForSheet = 0;
             let skippedExistingForSheet = 0;
             let skippedMissingTrackingForSheet = 0;
+            let exceptionsLoggedForSheet = 0;
+            const orderMatchCache = new Map<string, boolean>();
 
             for (const row of rows) {
                 const rawTestDateTime = String(row[0] || '').trim(); // A
@@ -263,6 +378,23 @@ async function executeSyncTechSerialNumbers() {
                 if (!shippingTrackingNumber) {
                     skippedMissingTrackingForSheet++;
                     continue;
+                }
+
+                const cacheKey = getTrackingLast8(shippingTrackingNumber) || shippingTrackingNumber.toUpperCase();
+                const hasMatchingOrder = orderMatchCache.has(cacheKey)
+                    ? !!orderMatchCache.get(cacheKey)
+                    : await hasOrderByTracking(client, shippingTrackingNumber);
+                if (!orderMatchCache.has(cacheKey)) {
+                    orderMatchCache.set(cacheKey, hasMatchingOrder);
+                }
+                if (!hasMatchingOrder) {
+                    await upsertOpenOrdersException({
+                        client,
+                        shippingTrackingNumber,
+                        sourceStation: 'tech',
+                        staffId: techSheet.testedBy,
+                    });
+                    exceptionsLoggedForSheet++;
                 }
 
                 const testDateTime = rawTestDateTime || null;
@@ -292,11 +424,13 @@ async function executeSyncTechSerialNumbers() {
             totalInserted += insertedForSheet;
             totalSkippedExisting += skippedExistingForSheet;
             totalSkippedMissingTracking += skippedMissingTrackingForSheet;
+            totalExceptionsLogged += exceptionsLoggedForSheet;
             summary.push({
                 sheet: sheetName,
                 inserted: insertedForSheet,
                 skippedExisting: skippedExistingForSheet,
-                skippedMissingTracking: skippedMissingTrackingForSheet
+                skippedMissingTracking: skippedMissingTrackingForSheet,
+                exceptionsLogged: exceptionsLoggedForSheet
             });
         }
 
@@ -310,7 +444,7 @@ async function executeSyncTechSerialNumbers() {
 
     return NextResponse.json({
         success: true,
-        message: `Synced technician sheets to tech_serial_numbers. Inserted ${totalInserted} row(s), skipped ${totalSkippedExisting} existing tracking row(s), skipped ${totalSkippedMissingTracking} row(s) missing tracking.`,
+        message: `Synced technician sheets to tech_serial_numbers. Inserted ${totalInserted} row(s), skipped ${totalSkippedExisting} existing tracking row(s), skipped ${totalSkippedMissingTracking} row(s) missing tracking, logged ${totalExceptionsLogged} row(s) to orders_exceptions.`,
         details: summary,
     });
 }
@@ -329,18 +463,20 @@ async function executeSyncPackerLogs() {
     const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
 
     const client = await pool.connect();
-    const summary: Array<{ sheet: string; inserted: number; skippedExisting: number; skippedMissingTracking: number }> = [];
+    const summary: Array<{ sheet: string; inserted: number; skippedExisting: number; skippedMissingTracking: number; exceptionsLogged: number }> = [];
     let totalInserted = 0;
     let totalSkippedExisting = 0;
     let totalSkippedMissingTracking = 0;
+    let totalExceptionsLogged = 0;
 
     try {
         await client.query('BEGIN');
+        await ensureOrdersExceptionsTable(client);
 
         for (const packerSheet of packerSheets) {
             const sheetName = existingSheetNames.find(name => name.toLowerCase() === packerSheet.name);
             if (!sheetName) {
-                summary.push({ sheet: packerSheet.name, inserted: 0, skippedExisting: 0, skippedMissingTracking: 0 });
+                summary.push({ sheet: packerSheet.name, inserted: 0, skippedExisting: 0, skippedMissingTracking: 0, exceptionsLogged: 0 });
                 continue;
             }
 
@@ -353,6 +489,8 @@ async function executeSyncPackerLogs() {
             let insertedForSheet = 0;
             let skippedExistingForSheet = 0;
             let skippedMissingTrackingForSheet = 0;
+            let exceptionsLoggedForSheet = 0;
+            const orderMatchCache = new Map<string, boolean>();
 
             for (const row of rows) {
                 const packDateTime = String(row[0] || '').trim(); // A
@@ -361,6 +499,23 @@ async function executeSyncPackerLogs() {
                 if (!shippingTrackingNumber) {
                     skippedMissingTrackingForSheet++;
                     continue;
+                }
+
+                const cacheKey = getTrackingLast8(shippingTrackingNumber) || shippingTrackingNumber.toUpperCase();
+                const hasMatchingOrder = orderMatchCache.has(cacheKey)
+                    ? !!orderMatchCache.get(cacheKey)
+                    : await hasOrderByTracking(client, shippingTrackingNumber);
+                if (!orderMatchCache.has(cacheKey)) {
+                    orderMatchCache.set(cacheKey, hasMatchingOrder);
+                }
+                if (!hasMatchingOrder) {
+                    await upsertOpenOrdersException({
+                        client,
+                        shippingTrackingNumber,
+                        sourceStation: 'packer',
+                        staffId: packerSheet.packedBy,
+                    });
+                    exceptionsLoggedForSheet++;
                 }
 
                 const existingTrackingResult = await client.query(
@@ -388,11 +543,13 @@ async function executeSyncPackerLogs() {
             totalInserted += insertedForSheet;
             totalSkippedExisting += skippedExistingForSheet;
             totalSkippedMissingTracking += skippedMissingTrackingForSheet;
+            totalExceptionsLogged += exceptionsLoggedForSheet;
             summary.push({
                 sheet: sheetName,
                 inserted: insertedForSheet,
                 skippedExisting: skippedExistingForSheet,
-                skippedMissingTracking: skippedMissingTrackingForSheet
+                skippedMissingTracking: skippedMissingTrackingForSheet,
+                exceptionsLogged: exceptionsLoggedForSheet
             });
         }
 
@@ -406,7 +563,7 @@ async function executeSyncPackerLogs() {
 
     return NextResponse.json({
         success: true,
-        message: `Synced packer sheets to packer_logs. Inserted ${totalInserted} row(s), skipped ${totalSkippedExisting} existing tracking row(s), skipped ${totalSkippedMissingTracking} row(s) missing tracking.`,
+        message: `Synced packer sheets to packer_logs. Inserted ${totalInserted} row(s), skipped ${totalSkippedExisting} existing tracking row(s), skipped ${totalSkippedMissingTracking} row(s) missing tracking, logged ${totalExceptionsLogged} row(s) to orders_exceptions.`,
         details: summary,
     });
 }

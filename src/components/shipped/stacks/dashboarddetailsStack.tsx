@@ -6,6 +6,7 @@ import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
+import { OutOfStockField } from '@/components/ui/OutOfStockField';
 
 export function DashboardDetailsStack({
   shipped,
@@ -31,6 +32,7 @@ export function DashboardDetailsStack({
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
   const deleteArmTimeoutRef = useRef<number | null>(null);
+  const hasOutOfStockValue = outOfStock.trim().length > 0;
 
   const isValidShipByDate = (value: any) => {
     if (!value) return false;
@@ -341,34 +343,16 @@ export function DashboardDetailsStack({
           </button>
         </div>
 
-        {activeInput === 'out_of_stock' && (
-          <div className="space-y-2 rounded-xl border border-orange-200 bg-orange-50/40 p-3">
-            <input
-              value={outOfStock}
-              onChange={(e) => setOutOfStock(e.target.value)}
-              placeholder="What is out of stock?"
-              className="w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-200"
-              autoFocus
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveInput('none')}
-                className="h-8 rounded-lg bg-white border border-orange-200 text-orange-700 text-[9px] font-black uppercase tracking-wider"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={saveOutOfStock}
-                disabled={isSavingOutOfStock}
-                className="h-8 inline-flex items-center justify-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
-              >
-                <Check className="w-3 h-3" />
-                {isSavingOutOfStock ? 'Saving' : 'Submit'}
-              </button>
-            </div>
-          </div>
+        {(activeInput === 'out_of_stock' || hasOutOfStockValue) && (
+          <OutOfStockField
+            value={outOfStock}
+            editable
+            onChange={setOutOfStock}
+            onCancel={() => setActiveInput('none')}
+            onSubmit={saveOutOfStock}
+            isSaving={isSavingOutOfStock}
+            autoFocus={activeInput === 'out_of_stock'}
+          />
         )}
 
         {activeInput === 'notes' && (
