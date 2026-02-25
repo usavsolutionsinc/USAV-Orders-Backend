@@ -426,7 +426,7 @@ export function ShippedTableBase({
                                     </>
                                   );
                                 })()}
-                                {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)} • {(record as any).packed_by_name || getStaffName((record as any).packed_by)} • <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{record.condition || 'No Condition'}</span>{unshippedOnly && (
+                                <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{record.condition || 'No Condition'}</span> • {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)}{unshippedOnly && (
                                   <>
                                     {' • '}
                                     <span className={getDaysLateTone(getDaysLateNumber(record.ship_by_date as any, record.created_at as any))}>

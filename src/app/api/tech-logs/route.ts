@@ -51,11 +51,20 @@ export async function GET(req: NextRequest) {
                 tsn.serial_number,
                 tsn.tested_by,
                 o.id as order_db_id,
-                o.order_id,
+                CASE
+                    WHEN UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, ''))) LIKE 'X00%' THEN 'FBA'
+                    ELSE o.order_id
+                END as order_id,
                 o.ship_by_date,
                 o.created_at,
                 o.item_number,
-                o.product_title,
+                COALESCE(
+                    CASE
+                        WHEN UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, ''))) LIKE 'X00%' THEN fba.product_title
+                        ELSE NULL
+                    END,
+                    o.product_title
+                ) as product_title,
                 o.quantity,
                 o.condition,
                 o.sku,
@@ -64,6 +73,12 @@ export async function GET(req: NextRequest) {
                 o.out_of_stock,
                 o.is_shipped
             FROM tech_serial_numbers tsn
+            LEFT JOIN LATERAL (
+                SELECT product_title
+                FROM fba_fnskus
+                WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, '')))
+                LIMIT 1
+            ) fba ON true
             LEFT JOIN LATERAL (
                 SELECT
                     id,

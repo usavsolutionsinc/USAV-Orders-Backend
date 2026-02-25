@@ -656,16 +656,25 @@ async function syncScanFbaInSheet(params: {
                     fnsku TEXT
                 )
             `);
+            await client.query(`
+                CREATE INDEX IF NOT EXISTS idx_fba_fnskus_fnsku_normalized
+                ON fba_fnskus (UPPER(TRIM(COALESCE(fnsku, ''))))
+            `);
             await client.query('TRUNCATE TABLE fba_fnskus');
 
             let inserted = 0;
+            const seenFnsku = new Set<string>();
             for (const row of rows) {
                 const productTitle = String(row[0] || '').trim() || null; // B
                 const asin = String(row[1] || '').trim() || null; // C
                 const sku = String(row[2] || '').trim() || null; // D
-                const fnsku = String(row[3] || '').trim() || null; // E
+                const fnskuRaw = String(row[3] || '').trim(); // E
+                const fnsku = fnskuRaw ? fnskuRaw.toUpperCase() : null;
 
-                if (!productTitle && !asin && !sku && !fnsku) continue;
+                // GAS X0 lookup is based on Scan FBA In column E; rows without FNSKU are not useful for matching.
+                if (!fnsku) continue;
+                if (seenFnsku.has(fnsku)) continue;
+                seenFnsku.add(fnsku);
 
                 await client.query(
                     `INSERT INTO fba_fnskus (product_title, asin, sku, fnsku) VALUES ($1, $2, $3, $4)`,

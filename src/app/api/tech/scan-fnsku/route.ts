@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     let fnskuResult;
     try {
       fnskuResult = await pool.query(
-        `SELECT product_title
+        `SELECT product_title, asin, sku
          FROM fba_fnskus
          WHERE UPPER(TRIM(fnsku)) = $1
          LIMIT 1`,
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       }
       // Fallback for singular table naming
       fnskuResult = await pool.query(
-        `SELECT product_title
+        `SELECT product_title, asin, sku
          FROM fba_fnsku
          WHERE UPPER(TRIM(fnsku)) = $1
          LIMIT 1`,
@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
     }
 
     const productTitle = fnskuResult.rows[0].product_title || 'Unknown Product';
+    const sku = fnskuResult.rows[0].sku || 'N/A';
+    const asin = fnskuResult.rows[0].asin || null;
 
     const existingTracking = await pool.query(
       `SELECT id
@@ -94,7 +96,7 @@ export async function GET(req: NextRequest) {
         orderId: 'FNSKU',
         productTitle,
         itemNumber: null,
-        sku: 'N/A',
+        sku,
         condition: 'N/A',
         notes: '',
         tracking: fnsku,
@@ -109,6 +111,7 @@ export async function GET(req: NextRequest) {
         packerId: null,
         testerId: null,
         outOfStock: null,
+        asin,
         shipByDate: null,
         orderDate: null,
         createdAt: null
