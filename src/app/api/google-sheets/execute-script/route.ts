@@ -5,11 +5,31 @@ import { eq, inArray } from 'drizzle-orm';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
+const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
 function getTrackingLast8(value: string): string {
     return String(value || '').replace(/\D/g, '').slice(-8);
+}
+
+function parseSheetDateTime(rawValue: string): Date | null {
+    const value = String(rawValue || '').trim();
+    if (!value) return null;
+
+    // Supports common sheet format: M/D/YYYY HH:mm:ss
+    if (value.includes('/')) {
+        const [datePart, timePartRaw] = value.split(' ');
+        const [m, d, y] = String(datePart || '').split('/');
+        const timePart = timePartRaw || '00:00:00';
+        const asIsoLike = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${timePart}`;
+        const parsed = new Date(asIsoLike);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 async function ensureOrdersExceptionsTable(client: any): Promise<void> {
@@ -57,6 +77,38 @@ async function hasOrderByTracking(client: any, shippingTrackingNumber: string): 
     return fallback.rows.length > 0;
 }
 
+async function hasFbaFnsku(client: any, tracking: string): Promise<boolean> {
+    const normalized = String(tracking || '').trim().toUpperCase();
+    if (!normalized) return false;
+
+    try {
+        const primary = await client.query(
+            `SELECT 1
+             FROM fba_fnskus
+             WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = $1
+             LIMIT 1`,
+            [normalized]
+        );
+        if (primary.rows.length > 0) return true;
+    } catch (err: any) {
+        if (err?.code !== '42P01') throw err;
+    }
+
+    try {
+        const fallback = await client.query(
+            `SELECT 1
+             FROM fba_fnsku
+             WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = $1
+             LIMIT 1`,
+            [normalized]
+        );
+        return fallback.rows.length > 0;
+    } catch (err: any) {
+        if (err?.code === '42P01') return false;
+        throw err;
+    }
+}
+
 async function upsertOpenOrdersException(params: {
     client: any;
     shippingTrackingNumber: string;
@@ -65,6 +117,7 @@ async function upsertOpenOrdersException(params: {
 }): Promise<void> {
     const tracking = String(params.shippingTrackingNumber || '').trim();
     if (!tracking) return;
+    if (tracking.includes(':')) return;
 
     const trackingLast8 = getTrackingLast8(tracking);
 
@@ -369,13 +422,20 @@ async function executeSyncTechSerialNumbers() {
             let skippedMissingTrackingForSheet = 0;
             let exceptionsLoggedForSheet = 0;
             const orderMatchCache = new Map<string, boolean>();
+            const fnskuMatchCache = new Map<string, boolean>();
 
             for (const row of rows) {
                 const rawTestDateTime = String(row[0] || '').trim(); // A
                 const shippingTrackingNumber = String(row[2] || '').trim(); // C
                 const serialNumber = String(row[3] || '').trim(); // D
 
-                if (!shippingTrackingNumber) {
+                if (!shippingTrackingNumber || !rawTestDateTime) {
+                    skippedMissingTrackingForSheet++;
+                    continue;
+                }
+
+                const parsedTestDateTime = parseSheetDateTime(rawTestDateTime);
+                if (!parsedTestDateTime) {
                     skippedMissingTrackingForSheet++;
                     continue;
                 }
@@ -388,19 +448,55 @@ async function executeSyncTechSerialNumbers() {
                     orderMatchCache.set(cacheKey, hasMatchingOrder);
                 }
                 if (!hasMatchingOrder) {
-                    await upsertOpenOrdersException({
-                        client,
-                        shippingTrackingNumber,
-                        sourceStation: 'tech',
-                        staffId: techSheet.testedBy,
-                    });
-                    exceptionsLoggedForSheet++;
+                    const isFbaLikeTracking = FBA_LIKE_RE.test(shippingTrackingNumber);
+                    if (isFbaLikeTracking) {
+                        const fnskuKey = shippingTrackingNumber.trim().toUpperCase();
+                        const fnskuExists = fnskuMatchCache.has(fnskuKey)
+                            ? !!fnskuMatchCache.get(fnskuKey)
+                            : await hasFbaFnsku(client, shippingTrackingNumber);
+                        if (!fnskuMatchCache.has(fnskuKey)) {
+                            fnskuMatchCache.set(fnskuKey, fnskuExists);
+                        }
+                        if (!fnskuExists) {
+                            await upsertOpenOrdersException({
+                                client,
+                                shippingTrackingNumber,
+                                sourceStation: 'tech',
+                                staffId: techSheet.testedBy,
+                            });
+                            exceptionsLoggedForSheet++;
+                        }
+                    } else {
+                        await upsertOpenOrdersException({
+                            client,
+                            shippingTrackingNumber,
+                            sourceStation: 'tech',
+                            staffId: techSheet.testedBy,
+                        });
+                        exceptionsLoggedForSheet++;
+                    }
                 }
 
-                const testDateTime = rawTestDateTime || null;
+                const testDateTime = parsedTestDateTime.toISOString();
+                const existingByTestDateTime = await client.query(
+                    `SELECT id FROM tech_serial_numbers WHERE test_date_time = $1::timestamp LIMIT 1`,
+                    [testDateTime]
+                );
+                if (existingByTestDateTime.rows.length > 0) {
+                    skippedExistingForSheet++;
+                    continue;
+                }
+                const trackingKey18 = normalizeTrackingKey18(shippingTrackingNumber);
+                if (!trackingKey18 || trackingKey18.length < 8) {
+                    skippedMissingTrackingForSheet++;
+                    continue;
+                }
                 const existingTrackingResult = await client.query(
-                    `SELECT id FROM tech_serial_numbers WHERE shipping_tracking_number = $1 LIMIT 1`,
-                    [shippingTrackingNumber]
+                    `SELECT id
+                     FROM tech_serial_numbers
+                     WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+                     LIMIT 1`,
+                    [trackingKey18]
                 );
                 if (existingTrackingResult.rows.length > 0) {
                     skippedExistingForSheet++;

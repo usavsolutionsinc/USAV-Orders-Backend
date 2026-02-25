@@ -90,7 +90,11 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           (-oe.id) as id,
           NULL::text as ship_by_date,
           COALESCE(o.order_id, 'EXC-' || oe.id::text) as order_id,
-          COALESCE(o.product_title, 'Unknown Product (Exception)') as product_title,
+          CASE
+            WHEN POSITION(':' IN oe.shipping_tracking_number) > 0
+              THEN COALESCE(ss.product_title, o.product_title, 'Unknown Product (Exception)')
+            ELSE COALESCE(o.product_title, 'Unknown Product (Exception)')
+          END as product_title,
           COALESCE(o.quantity, '1') as quantity,
           o.item_number,
           COALESCE(o.condition, 'Unknown') as condition,
@@ -124,6 +128,15 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           LIMIT 1
         ) o ON true
         LEFT JOIN LATERAL (
+          SELECT sk.product_title
+          FROM sku_stock sk
+          WHERE POSITION(':' IN oe.shipping_tracking_number) > 0
+            AND regexp_replace(UPPER(TRIM(COALESCE(sk.sku, ''))), '^0+', '') =
+                regexp_replace(UPPER(TRIM(split_part(oe.shipping_tracking_number, ':', 1))), '^0+', '')
+          ORDER BY sk.id DESC
+          LIMIT 1
+        ) ss ON true
+        LEFT JOIN LATERAL (
           SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs pl
           WHERE RIGHT(pl.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
@@ -135,6 +148,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
         GROUP BY
           oe.id, oe.shipping_tracking_number, oe.exception_reason, oe.status, oe.notes, oe.created_at,
           o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku, o.packer_id, o.tester_id,
+          ss.product_title,
           o.account_source, o.status_history, o.is_shipped,
           pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       ),
@@ -290,7 +304,11 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           (-oe.id) as id,
           NULL::text as ship_by_date,
           COALESCE(o.order_id, 'EXC-' || oe.id::text) as order_id,
-          COALESCE(o.product_title, 'Unknown Product (Exception)') as product_title,
+          CASE
+            WHEN POSITION(':' IN oe.shipping_tracking_number) > 0
+              THEN COALESCE(ss.product_title, o.product_title, 'Unknown Product (Exception)')
+            ELSE COALESCE(o.product_title, 'Unknown Product (Exception)')
+          END as product_title,
           COALESCE(o.quantity, '1') as quantity,
           o.item_number,
           COALESCE(o.condition, 'Unknown') as condition,
@@ -324,6 +342,15 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           LIMIT 1
         ) o ON true
         LEFT JOIN LATERAL (
+          SELECT sk.product_title
+          FROM sku_stock sk
+          WHERE POSITION(':' IN oe.shipping_tracking_number) > 0
+            AND regexp_replace(UPPER(TRIM(COALESCE(sk.sku, ''))), '^0+', '') =
+                regexp_replace(UPPER(TRIM(split_part(oe.shipping_tracking_number, ':', 1))), '^0+', '')
+          ORDER BY sk.id DESC
+          LIMIT 1
+        ) ss ON true
+        LEFT JOIN LATERAL (
           SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs pl
           WHERE RIGHT(pl.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
@@ -335,6 +362,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
         GROUP BY
           oe.id, oe.shipping_tracking_number, oe.exception_reason, oe.status, oe.notes, oe.created_at,
           o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku, o.packer_id, o.tester_id,
+          ss.product_title,
           o.account_source, o.status_history, o.is_shipped,
           pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       ),

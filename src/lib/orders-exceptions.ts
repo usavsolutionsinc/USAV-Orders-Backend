@@ -75,6 +75,9 @@ export async function upsertOpenOrderException(params: {
   await ensureOrdersExceptionsTable();
 
   const tracking = String(params.shippingTrackingNumber || '').trim();
+  if (tracking.includes(':')) {
+    return { exception: null, matchedOrderId: null };
+  }
   const normalizedDigits = tracking.replace(/\D/g, '');
   const trackingLast8 = normalizeTrackingLast8(tracking);
   if (!tracking || !trackingLast8 || normalizedDigits.length < 8) {

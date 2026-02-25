@@ -6,7 +6,7 @@ import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { tracking, serial, techId } = body;
+        const { tracking, serial, techId, allowFbaDuplicates } = body;
 
         if (!tracking || !serial || !techId) {
             return NextResponse.json({ 
@@ -131,12 +131,16 @@ export async function POST(req: NextRequest) {
                 [key18]
             );
 
+        const isFbaLikeTracking = /^(X0|B0|FBA)/i.test(scannedTracking);
+        const shouldAllowDuplicateSerial =
+            Boolean(allowFbaDuplicates) || isFbaLikeTracking || order?.account_source === 'fba';
+
         let updatedSerialList: string[] = [];
         if (existingRowResult.rows.length > 0) {
             const row = existingRowResult.rows[0];
             const existingSerials = parseSerials(row.serial_number);
 
-            if (existingSerials.includes(upperSerial)) {
+            if (existingSerials.includes(upperSerial) && !shouldAllowDuplicateSerial) {
                 return NextResponse.json({ 
                     success: false,
                     error: `Serial ${upperSerial} already scanned for this order`

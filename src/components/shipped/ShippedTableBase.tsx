@@ -91,22 +91,30 @@ export function ShippedTableBase({
   }, [fetchShipped]);
 
   useEffect(() => {
+    const handleRefresh = () => {
+      fetchShipped();
+    };
+
+    window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
+    window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
+
+    return () => {
+      window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
+      window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
+    };
+  }, [fetchShipped]);
+
+  useEffect(() => {
     if (!unshippedOnly) return;
 
     const handleDashboardSearch = (e: any) => {
       setDashboardSearch(String(e?.detail?.query || '').trim());
     };
 
-    const handleDashboardRefresh = () => {
-      fetchShipped();
-    };
-
     window.addEventListener('dashboard-search' as any, handleDashboardSearch as any);
-    window.addEventListener('dashboard-refresh' as any, handleDashboardRefresh as any);
 
     return () => {
       window.removeEventListener('dashboard-search' as any, handleDashboardSearch as any);
-      window.removeEventListener('dashboard-refresh' as any, handleDashboardRefresh as any);
     };
   }, [unshippedOnly, fetchShipped]);
 

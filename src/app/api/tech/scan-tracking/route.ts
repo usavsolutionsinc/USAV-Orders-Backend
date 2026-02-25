@@ -3,6 +3,42 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 
+const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
+
+async function hasMatchingFbaFnsku(fnsku: string): Promise<boolean> {
+    const normalized = String(fnsku || '').trim().toUpperCase();
+    if (!normalized) return false;
+
+    try {
+        const primary = await pool.query(
+            `SELECT 1
+             FROM fba_fnskus
+             WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = $1
+             LIMIT 1`,
+            [normalized]
+        );
+        if (primary.rows.length > 0) return true;
+    } catch (err: any) {
+        if (err?.code !== '42P01') {
+            throw err;
+        }
+    }
+
+    try {
+        const fallback = await pool.query(
+            `SELECT 1
+             FROM fba_fnsku
+             WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = $1
+             LIMIT 1`,
+            [normalized]
+        );
+        return fallback.rows.length > 0;
+    } catch (err: any) {
+        if (err?.code === '42P01') return false;
+        throw err;
+    }
+}
+
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const tracking = searchParams.get('tracking');
@@ -87,14 +123,23 @@ export async function GET(req: NextRequest) {
             scannedTracking;
 
         if (!row) {
-            await upsertOpenOrderException({
-                shippingTrackingNumber: scannedTracking,
-                sourceStation: 'tech',
-                staffId: testedBy,
-                staffName: testedByName,
-                reason: 'not_found',
-                notes: 'Tech scan: tracking not found in orders',
-            });
+            const isFbaLikeTracking = FBA_LIKE_RE.test(scannedTracking);
+            const fnskuFound = isFbaLikeTracking
+                ? await hasMatchingFbaFnsku(scannedTracking)
+                : false;
+
+            if (!isFbaLikeTracking || !fnskuFound) {
+                await upsertOpenOrderException({
+                    shippingTrackingNumber: scannedTracking,
+                    sourceStation: 'tech',
+                    staffId: testedBy,
+                    staffName: testedByName,
+                    reason: 'not_found',
+                    notes: isFbaLikeTracking
+                        ? 'Tech scan: FNSKU not found in fba_fnskus'
+                        : 'Tech scan: tracking not found in orders',
+                });
+            }
 
             const exactTrackingRow = await pool.query(
                 `SELECT id, serial_number
@@ -121,7 +166,9 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({
                 found: true,
                 orderFound: false,
-                warning: 'Tracking number not found in orders. Added to exceptions.',
+                warning: (!isFbaLikeTracking || !fnskuFound)
+                    ? 'Tracking number not found in orders. Added to exceptions.'
+                    : 'FBA/FNSKU processed without exception.',
                 order: {
                     id: null,
                     orderId: 'N/A',

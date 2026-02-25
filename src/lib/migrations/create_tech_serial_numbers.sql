@@ -13,10 +13,7 @@ CREATE TABLE IF NOT EXISTS tech_serial_numbers (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Create unique constraint to prevent duplicate serials on same tracking number
-ALTER TABLE tech_serial_numbers 
-  ADD CONSTRAINT tech_serial_numbers_unique 
-  UNIQUE (shipping_tracking_number, serial_number);
+-- Duplicate rows are allowed to preserve one-row-per-sheet-entry sync behavior.
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_tech_serial_shipping_tracking 

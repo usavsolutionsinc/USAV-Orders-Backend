@@ -339,6 +339,7 @@ export default function StationTesting({
         } else if (type === 'SERIAL' && activeOrder) {
             // Scan serial number and add to order
             const finalSerial = input.toUpperCase();
+            const isFbaDuplicateAllowedTracking = /^(X0|B0|FBA)/i.test(String(activeOrder.tracking || '').trim());
             
             setIsLoading(true);
             try {
@@ -348,7 +349,8 @@ export default function StationTesting({
                     body: JSON.stringify({
                         tracking: activeOrder.tracking,
                         serial: finalSerial,
-                        techId: userId
+                        techId: userId,
+                        allowFbaDuplicates: isFbaDuplicateAllowedTracking,
                     })
                 });
                 

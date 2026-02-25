@@ -9,6 +9,7 @@ export interface ScanClassification {
   normalizedInput: string;
   skuBase?: string;
   skuQty?: number;
+  skuStatic?: string;
   cleanSize?: 'BIG' | 'MEDIUM' | 'SMALL';
 }
 
@@ -26,8 +27,18 @@ export function classifyScan(input: string): ScanClassification {
   const carrier = getCarrier(normalizedInput);
 
   if (SKU_COLON_RE.test(normalizedInput)) {
-    const skuBase = normalizeSku(normalizedInput.split(':')[0].trim());
-    return { trackingType: 'SKU', carrier, normalizedInput, skuBase, skuQty: 1 };
+    const [leftPart, ...restParts] = normalizedInput.split(':');
+    const rightPart = restParts.join(':').trim();
+    let skuLeft = String(leftPart || '').trim();
+    let qty = 1;
+    const xMatch = skuLeft.match(/^(.+?)\s*[xX]\s*(\d+)$/);
+    if (xMatch) {
+      skuLeft = String(xMatch[1] || '').trim();
+      qty = parseInt(String(xMatch[2] || '1'), 10) || 1;
+    }
+    const skuBase = normalizeSku(skuLeft);
+    const skuStatic = rightPart ? `${skuBase}:${rightPart}` : undefined;
+    return { trackingType: 'SKU', carrier, normalizedInput, skuBase, skuQty: qty, skuStatic };
   }
 
   const cleanMatch = normalizedInput.match(CLEAN_RE);

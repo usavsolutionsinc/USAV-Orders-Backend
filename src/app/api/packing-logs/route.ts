@@ -208,14 +208,56 @@ export async function POST(req: NextRequest) {
 
         let skuUpdated = false;
         if (classification.trackingType === 'SKU' && classification.skuBase) {
-            const skuRows = await pool.query('SELECT id, stock, sku FROM sku_stock');
-            const target = skuRows.rows.find((r: any) => normalizeSku(String(r.sku || '')) === normalizeSku(classification.skuBase || ''));
+            const addQty = classification.skuQty || 1;
+            const normalizedBase = normalizeSku(classification.skuBase || '');
+
+            const skuRows = await pool.query('SELECT id, stock, sku, product_title FROM sku_stock');
+            const target = skuRows.rows.find(
+                (r: any) => normalizeSku(String(r.sku || '')) === normalizedBase
+            );
+
+            let resolvedTitle: string | null = target?.product_title || null;
+            if (!resolvedTitle) {
+                const staticCandidates = Array.from(new Set([
+                    String(classification.skuStatic || '').trim(),
+                    String(scanInput || '').trim(),
+                    String(classification.normalizedInput || '').trim(),
+                ])).filter(Boolean);
+
+                for (const staticSku of staticCandidates) {
+                    const skuTitleResult = await pool.query(
+                        `SELECT product_title
+                         FROM sku
+                         WHERE TRIM(static_sku) = $1
+                         ORDER BY id DESC
+                         LIMIT 1`,
+                        [staticSku]
+                    );
+                    if (skuTitleResult.rows.length > 0) {
+                        resolvedTitle = skuTitleResult.rows[0]?.product_title || null;
+                        break;
+                    }
+                }
+            }
+
             if (target) {
                 const currentQty = parseInt(target.stock || '0', 10) || 0;
-                const addQty = classification.skuQty || 1;
-                await pool.query('UPDATE sku_stock SET stock = $1 WHERE id = $2', [String(currentQty + addQty), target.id]);
-                skuUpdated = true;
+                const nextQty = Math.max(0, currentQty + addQty);
+                await pool.query(
+                    `UPDATE sku_stock
+                     SET stock = $1,
+                         product_title = COALESCE(product_title, $2)
+                     WHERE id = $3`,
+                    [String(nextQty), resolvedTitle, target.id]
+                );
+            } else {
+                await pool.query(
+                    `INSERT INTO sku_stock (stock, sku, product_title)
+                     VALUES ($1, $2, $3)`,
+                    [String(Math.max(0, addQty)), normalizedBase, resolvedTitle]
+                );
             }
+            skuUpdated = true;
         }
 
         return NextResponse.json({

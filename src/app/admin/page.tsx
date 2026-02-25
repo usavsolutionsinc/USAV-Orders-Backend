@@ -684,12 +684,36 @@ function OrdersManagement() {
         return matchesTab && matchesSearch;
     });
 
-    const testerOptions = activeStaff
-        .filter((member) => member.role === 'technician')
+    const technicianNameOrder = ['michael', 'sang', 'thuc', 'cuong'];
+    const packerNameOrder = ['tuan', 'thuy'];
+    const testerOptions = technicianNameOrder
+        .map((name) =>
+            activeStaff.find(
+                (member) => member.role === 'technician' && member.name.trim().toLowerCase() === name
+            )
+        )
+        .filter((member): member is Staff => Boolean(member))
         .map((member) => ({ id: member.id, name: member.name }));
-    const packerOptions = activeStaff
-        .filter((member) => member.role === 'packer')
+    const packerOptions = packerNameOrder
+        .map((name) =>
+            activeStaff.find(
+                (member) => member.role === 'packer' && member.name.trim().toLowerCase() === name
+            )
+        )
+        .filter((member): member is Staff => Boolean(member))
         .map((member) => ({ id: member.id, name: member.name }));
+    const cuongTesterId =
+        activeStaff.find(
+            (member) =>
+                member.role === 'technician' && member.name.trim().toLowerCase() === 'cuong'
+        )?.id ?? null;
+    const thuyPackerId =
+        activeStaff.find(
+            (member) => member.role === 'packer' && member.name.trim().toLowerCase() === 'thuy'
+        )?.id ?? null;
+    const unassignedRemainingOrderIds = allOrders
+        .filter((order) => !order.is_shipped && order.tester_id == null && order.packer_id == null)
+        .map((order) => order.id);
 
     const getStaffNameById = (id: number | null | undefined) => {
         if (!id) return null;
@@ -766,10 +790,26 @@ function OrdersManagement() {
 
     const selectedOrder = allOrders.find((order) => order.id === focusedOrderId) || null;
 
-    const toggleSelectOrder = (orderId: number) => {
+    const openDetailsForOrder = (orderId: number) => {
+        setFocusedOrderId(orderId);
+        setIsDetailsPanelOpen(true);
+    };
+
+    const selectOrder = (orderId: number, openDetailsOnSelect = false) => {
+        setSelectedOrderIds((current) => (current.includes(orderId) ? current : [...current, orderId]));
+        if (openDetailsOnSelect) {
+            openDetailsForOrder(orderId);
+        }
+    };
+
+    const toggleSelectOrder = (orderId: number, openDetailsOnSelect = false) => {
+        const isSelected = selectedOrderIds.includes(orderId);
         setSelectedOrderIds((current) =>
-            current.includes(orderId) ? current.filter((id) => id !== orderId) : [...current, orderId]
+            isSelected ? current.filter((id) => id !== orderId) : [...current, orderId]
         );
+        if (!isSelected && openDetailsOnSelect) {
+            openDetailsForOrder(orderId);
+        }
     };
 
     const handleApplyBulk = async () => {
@@ -783,6 +823,16 @@ function OrdersManagement() {
         setSelectedOrderIds([]);
         setFocusedOrderId(null);
         setIsDetailsPanelOpen(false);
+    };
+
+    const handleAssignLeftUnassignedToCuongThuy = async () => {
+        if (!cuongTesterId || !thuyPackerId) return;
+        if (unassignedRemainingOrderIds.length === 0) return;
+        await bulkAssignMutation.mutateAsync({
+            orderIds: unassignedRemainingOrderIds,
+            testerId: cuongTesterId,
+            packerId: thuyPackerId,
+        });
     };
 
     const getOrderIdLast4 = (orderId: string) => {
@@ -809,7 +859,7 @@ function OrdersManagement() {
 
     return (
         <div className="flex flex-col lg:flex-row items-start gap-4">
-            <div className="flex-1 space-y-4 min-w-0">
+            <div className={`flex-1 space-y-4 min-w-0 transition-all duration-300 ${isDetailsPanelOpen ? 'lg:pr-[430px]' : ''}`}>
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                     <SearchBar
                         value={searchTerm}
@@ -843,20 +893,38 @@ function OrdersManagement() {
 
                 <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-3xl border border-gray-200 shadow-sm">
                     <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Order Management</h2>
-                    <div className="flex items-center gap-2">
+                    <div className="ml-auto flex items-center justify-end gap-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
                             {orders.length} shown • {selectedOrderIds.length} selected
                         </span>
                         <button
                             type="button"
+                            onClick={handleAssignLeftUnassignedToCuongThuy}
+                            disabled={
+                                bulkAssignMutation.isPending ||
+                                !cuongTesterId ||
+                                !thuyPackerId ||
+                                unassignedRemainingOrderIds.length === 0
+                            }
+                            className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-[9px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                            Assign Left Unassigned: Cuong + Thuy
+                        </button>
+                        <button
+                            type="button"
                             onClick={() => {
-                                setSelectedOrderIds([]);
-                                setFocusedOrderId(null);
+                                const isAllSelected = orders.length > 0 && selectedOrderIds.length === orders.length;
+                                if (isAllSelected) {
+                                    setSelectedOrderIds([]);
+                                    setFocusedOrderId(null);
+                                    return;
+                                }
+                                setSelectedOrderIds(orders.map((order) => order.id));
                             }}
-                            disabled={selectedOrderIds.length === 0}
+                            disabled={orders.length === 0}
                             className="px-3 py-1.5 rounded-xl border border-gray-200 text-[9px] font-black uppercase tracking-widest text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                         >
-                            Unselect All
+                            {orders.length > 0 && selectedOrderIds.length === orders.length ? 'Unselect All' : 'Select All'}
                         </button>
                     </div>
                 </div>
@@ -878,13 +946,8 @@ function OrdersManagement() {
                             const productPageUrl = getExternalUrlByItemNumber(order.item_number || null);
 
                             return (
-                                <button
+                                <div
                                     key={order.id}
-                                    type="button"
-                                    onClick={() => {
-                                        setFocusedOrderId(order.id);
-                                        setIsDetailsPanelOpen(true);
-                                    }}
                                     className={`text-left bg-white border hover:shadow-sm p-5 rounded-3xl transition-all ${
                                         isSelected
                                             ? 'border-blue-300 ring-2 ring-blue-100'
@@ -897,7 +960,7 @@ function OrdersManagement() {
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
-                                                    onChange={() => toggleSelectOrder(order.id)}
+                                                    onChange={() => toggleSelectOrder(order.id, true)}
                                                     onClick={(e) => e.stopPropagation()}
                                                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                                 />
@@ -1000,54 +1063,64 @@ function OrdersManagement() {
 
                                         <div className="grid grid-cols-2 gap-3" onClick={(e) => e.stopPropagation()}>
                                             <div className="bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2">
-                                                <p className="text-[9px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap pl-3">
-                                                    Tester
-                                                </p>
-                                                <select
-                                                    value={order.tester_id ?? ''}
-                                                    onChange={(e) => {
-                                                        const value = e.target.value;
-                                                        rowAssignMutation.mutate({
-                                                            orderId: order.id,
-                                                            testerId: value === '' ? null : Number(value),
-                                                        });
-                                                    }}
-                                                    className="flex-1 h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-800 outline-none focus:border-blue-500"
-                                                >
-                                                    <option value="">Unassigned</option>
-                                                    {testerOptions.map((member) => (
-                                                        <option key={member.id} value={member.id}>
-                                                            {member.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                <div className="flex-1 flex flex-wrap gap-1.5">
+                                                    {testerOptions.map((member) => {
+                                                        const isActiveTester = order.tester_id === member.id;
+                                                        return (
+                                                            <button
+                                                                key={member.id}
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    rowAssignMutation.mutate({
+                                                                        orderId: order.id,
+                                                                        testerId: member.id,
+                                                                    });
+                                                                    selectOrder(order.id, false);
+                                                                }}
+                                                                className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors ${
+                                                                    isActiveTester
+                                                                        ? 'bg-blue-600 text-white border-blue-600'
+                                                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                                                                }`}
+                                                            >
+                                                                {member.name}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                             <div className="bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2">
-                                                <p className="text-[9px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap pl-3">
-                                                    Packer
-                                                </p>
-                                                <select
-                                                    value={order.packer_id ?? ''}
-                                                    onChange={(e) => {
-                                                        const value = e.target.value;
-                                                        rowAssignMutation.mutate({
-                                                            orderId: order.id,
-                                                            packerId: value === '' ? null : Number(value),
-                                                        });
-                                                    }}
-                                                    className="flex-1 h-9 rounded-lg border border-gray-200 bg-white px-3 text-xs font-black text-gray-800 outline-none focus:border-blue-500"
-                                                >
-                                                    <option value="">Unassigned</option>
-                                                    {packerOptions.map((member) => (
-                                                        <option key={member.id} value={member.id}>
-                                                            {member.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                <div className="flex-1 flex flex-wrap gap-1.5">
+                                                    {packerOptions.map((member) => {
+                                                        const isActivePacker = order.packer_id === member.id;
+                                                        return (
+                                                            <button
+                                                                key={member.id}
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    rowAssignMutation.mutate({
+                                                                        orderId: order.id,
+                                                                        packerId: member.id,
+                                                                    });
+                                                                    selectOrder(order.id, false);
+                                                                }}
+                                                                className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors ${
+                                                                    isActivePacker
+                                                                        ? 'bg-blue-600 text-white border-blue-600'
+                                                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                                                                }`}
+                                                            >
+                                                                {member.name}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </button>
+                                </div>
                             );
                         })
                     )}

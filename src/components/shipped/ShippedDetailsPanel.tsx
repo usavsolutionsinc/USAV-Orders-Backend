@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Package } from '../Icons';
+import { X, Package, Trash2 } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { DashboardDetailsStack } from './stacks/dashboarddetailsStack';
@@ -28,6 +28,8 @@ export function ShippedDetailsPanel({
   const [durationData, setDurationData] = useState<DetailsStackDurationData>({});
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState(false);
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+  const [isDeleteArmed, setIsDeleteArmed] = useState(false);
 
   useEffect(() => {
     setShipped(initialShipped);
@@ -63,6 +65,46 @@ export function ShippedDetailsPanel({
     navigator.clipboard.writeText(value);
     setCopiedOrderId(true);
     setTimeout(() => setCopiedOrderId(false), 1500);
+  };
+
+  const handleDeleteOrder = async () => {
+    const rowId = Number(shipped.id);
+    const isExceptionRow = (shipped as any).row_source === 'exception' || rowId < 0;
+    const targetId = isExceptionRow ? Math.abs(rowId) : rowId;
+    if (!Number.isFinite(targetId) || targetId <= 0) return;
+
+    if (!isDeleteArmed) {
+      setIsDeleteArmed(true);
+      window.setTimeout(() => setIsDeleteArmed(false), 3000);
+      return;
+    }
+
+    setIsDeleteArmed(false);
+    setIsDeletingOrder(true);
+    try {
+      const endpoint = isExceptionRow ? '/api/orders-exceptions/delete' : '/api/orders/delete';
+      const payload = isExceptionRow ? { exceptionId: targetId } : { orderId: targetId };
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to delete row');
+      }
+
+      _onUpdate();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      window.dispatchEvent(new CustomEvent('close-shipped-details'));
+    } catch (error) {
+      console.error('Failed to delete shipped order:', error);
+      window.alert('Failed to delete shipped order. Please try again.');
+    } finally {
+      setIsDeletingOrder(false);
+    }
   };
 
   return (
@@ -107,33 +149,53 @@ export function ShippedDetailsPanel({
         </button>
       </div>
 
-      {context === 'dashboard' ? (
-        <DashboardDetailsStack
-          shipped={shipped}
-          durationData={durationData}
-          copiedAll={copiedAll}
-          onCopyAll={handleCopyAll}
-          onUpdate={_onUpdate}
-          showShippingTimestamp={false}
-        />
-      ) : context === 'station' ? (
-        <TechDetailsStack
-          shipped={shipped}
-          durationData={durationData}
-          copiedAll={copiedAll}
-          onCopyAll={handleCopyAll}
-          onUpdate={_onUpdate}
-          showShippingTimestamp={false}
-        />
-      ) : (
-        <ShippedDetailsPanelContent
-          shipped={shipped}
-          durationData={durationData}
-          copiedAll={copiedAll}
-          onCopyAll={handleCopyAll}
-          showShippingTimestamp={context === 'shipped'}
-        />
-      )}
+      <div className="pb-8 pt-4 space-y-4">
+        {context === 'dashboard' ? (
+          <DashboardDetailsStack
+            shipped={shipped}
+            durationData={durationData}
+            copiedAll={copiedAll}
+            onCopyAll={handleCopyAll}
+            onUpdate={_onUpdate}
+            showShippingTimestamp={false}
+          />
+        ) : context === 'station' ? (
+          <TechDetailsStack
+            shipped={shipped}
+            durationData={durationData}
+            copiedAll={copiedAll}
+            onCopyAll={handleCopyAll}
+            onUpdate={_onUpdate}
+            showShippingTimestamp={false}
+          />
+        ) : (
+          <ShippedDetailsPanelContent
+            shipped={shipped}
+            durationData={durationData}
+            copiedAll={copiedAll}
+            onCopyAll={handleCopyAll}
+            showShippingTimestamp={context === 'shipped'}
+          />
+        )}
+
+        {context === 'shipped' && (
+          <section className="mx-8 pt-2">
+            <button
+              type="button"
+              onClick={handleDeleteOrder}
+              disabled={isDeletingOrder}
+              className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {isDeletingOrder
+                ? 'Deleting...'
+                : isDeleteArmed
+                  ? 'Click Again To Confirm'
+                  : 'Delete Shipped Order'}
+            </button>
+          </section>
+        )}
+      </div>
     </motion.div>
   );
 }

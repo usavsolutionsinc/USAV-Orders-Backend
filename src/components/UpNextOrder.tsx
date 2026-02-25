@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { AlertCircle, Play, Package, Calendar, X, Check, ExternalLink } from './Icons';
+import { Play, Package, Calendar, X, Check, ExternalLink } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
 import { ShipByDate } from './ui/ShipByDate';
 import { OutOfStockField } from './ui/OutOfStockField';
@@ -39,6 +39,7 @@ interface UpNextOrderProps {
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<'current' | 'stock'>('current');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [globalOutOfStockOrders, setGlobalOutOfStockOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [allCompletedToday, setAllCompletedToday] = useState(false);
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
@@ -116,6 +117,18 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         const data = await res.json();
         const unshippedOrders = (data.orders || []).filter((order: Order) => !order.is_shipped);
         setOrders(unshippedOrders);
+        if (activeTab === 'current') {
+          const stockRes = await fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=true`);
+          if (stockRes.ok) {
+            const stockData = await stockRes.json();
+            const stockOrders = (stockData.orders || []).filter((order: Order) => !order.is_shipped);
+            setGlobalOutOfStockOrders(stockOrders);
+          } else {
+            setGlobalOutOfStockOrders([]);
+          }
+        } else {
+          setGlobalOutOfStockOrders([]);
+        }
         setAllCompletedToday(data.all_completed || false);
         if (data.all_completed && onAllCompleted && activeTab === 'current') {
           onAllCompleted();
@@ -184,6 +197,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   };
 
   const renderOrderCard = (order: Order) => {
+    const showActions = activeTab === 'current';
+    const hasOutOfStock = String(order.out_of_stock || '').trim() !== '';
     const quantity = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
     const openDetails = () => {
       const detail: ShippedOrder = {
@@ -228,19 +243,13 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           <ShipByDate
             date={getDisplayShipByDate(order) || ''}
             showPrefix={false}
-            className="[&>span]:text-[12px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4"
+            className="[&>span]:text-[14px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4"
           />
-          <span className={`text-[12px] font-black ${getDaysLateTone(getDaysLateNumber(order.ship_by_date, order.created_at))}`}>
+          <span className={`text-[14px] font-black ${getDaysLateTone(getDaysLateNumber(order.ship_by_date, order.created_at))}`}>
             {getDaysLateNumber(order.ship_by_date, order.created_at)}
           </span>
         </div>
         <div className="flex items-center gap-3">
-          {order.out_of_stock && activeTab === 'stock' && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-md shadow-sm">
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span className="text-[9px] font-black uppercase tracking-wider">Out of Stock</span>
-            </div>
-          )}
           <PlatformExternalChip
             orderId={order.order_id}
             accountSource={order.account_source}
@@ -250,40 +259,52 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </div>
       </div>
 
-      {/* Product Title */}
       <div className="mb-5">
-        <h4 className="text-base font-black text-gray-900 leading-tight">
-          {order.product_title}
-        </h4>
-        <div className={`mt-2 flex items-center justify-between rounded-lg px-2.5 py-1.5 border ${quantity > 1 ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-50 border-gray-200'}`}>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span className={`text-[11px] font-black ${quantity > 1 ? 'text-yellow-900' : 'text-gray-800'}`}>
+            <span className={`text-[13px] font-black ${quantity > 1 ? 'text-yellow-700' : 'text-gray-800'}`}>
               {quantity}
             </span>
-            <span className={`text-[10px] font-black uppercase tracking-wider ${quantity > 1 ? 'text-yellow-900' : 'text-gray-600'}`}>
+            <span className="text-[13px] font-black uppercase tracking-wider text-gray-500">
               -
             </span>
-            <span className={`text-[11px] font-black uppercase truncate ${quantity > 1 ? 'text-yellow-900' : 'text-gray-800'}`}>
+            <span className={`text-[13px] font-black uppercase truncate ${String(order.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-700' : 'text-gray-800'}`}>
               {order.condition || 'No Condition'}
             </span>
           </div>
-          <div className="flex items-center gap-2 ml-3">
-            <span className={`text-[11px] font-mono font-black ${quantity > 1 ? 'text-yellow-900' : 'text-gray-700'}`}>
-              #{getOrderIdLast4(order.order_id)}
-            </span>
-          </div>
+          <span className="text-[13px] font-mono font-black text-gray-700 px-1.5 py-0.5 rounded border border-gray-300">
+            #{getOrderIdLast4(order.order_id)}
+          </span>
         </div>
+        <h4 className="text-base font-black text-gray-900 leading-tight">
+          {order.product_title}
+        </h4>
       </div>
 
-      {String(order.out_of_stock || '').trim() !== '' && (
+      {hasOutOfStock && (
         <OutOfStockField
           value={String(order.out_of_stock || '')}
           className="mb-4"
         />
       )}
 
+      {hasOutOfStock && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStart(order);
+            }}
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
+          >
+            <Play className="w-4 h-4" />
+            Start
+          </button>
+        </div>
+      )}
+
       {/* Action Buttons Row - bottom for safer tapping */}
-      {activeTab === 'current' && (
+      {showActions && !hasOutOfStock && (
         <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-gray-100">
           <div className="flex items-center gap-3">
             <button
@@ -394,17 +415,32 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           </p>
         </motion.div>
       ) : orders.length === 0 ? (
-        <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center">
-          <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-            {activeTab === 'stock' ? 'No out-of-stock orders' : 'No current orders'}
-          </p>
+        <div className="space-y-3">
+          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center">
+            <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+              {activeTab === 'stock' ? 'No out-of-stock orders' : 'No current orders'}
+            </p>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col">
           <AnimatePresence mode="popLayout">
             {orders.map((order) => renderOrderCard(order))}
           </AnimatePresence>
+        </div>
+      )}
+
+      {activeTab === 'current' && globalOutOfStockOrders.length > 0 && (
+        <div>
+          <p className="text-[14px] font-black text-amber-700 uppercase tracking-widest mb-2">
+            Out of Stock Orders
+          </p>
+          <div className="space-y-2">
+            <AnimatePresence mode="popLayout">
+              {globalOutOfStockOrders.map((order) => renderOrderCard(order))}
+            </AnimatePresence>
+          </div>
         </div>
       )}
     </div>

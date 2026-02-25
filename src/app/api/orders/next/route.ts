@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
     const getAll = searchParams.get('all') === 'true';
     const filterStatus = searchParams.get('status');
     const outOfStock = searchParams.get('outOfStock');
+    const includeAllTechForOutOfStock = outOfStock === 'true';
 
     if (!techId) {
       return NextResponse.json(
@@ -68,6 +69,11 @@ export async function GET(req: NextRequest) {
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
     // 2. Build Query
+    const params: any[] = [];
+    const testerScopeFilter = includeAllTechForOutOfStock
+      ? ''
+      : `AND (tester_id = ANY($1::int[]) OR COALESCE(tester_id::text, '') = '')`;
+
     let query = `
       SELECT 
         id,
@@ -86,7 +92,7 @@ export async function GET(req: NextRequest) {
       FROM orders
       WHERE 
         (is_shipped = false OR is_shipped IS NULL)
-        AND (tester_id = ANY($1::int[]) OR COALESCE(tester_id::text, '') = '')
+        ${testerScopeFilter}
         AND NOT EXISTS (
           SELECT 1
           FROM tech_serial_numbers tsn
@@ -94,7 +100,9 @@ export async function GET(req: NextRequest) {
                 RIGHT(regexp_replace(COALESCE(orders.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
         )
     `;
-    const params: any[] = [testerIdScope];
+    if (!includeAllTechForOutOfStock) {
+      params.push(testerIdScope);
+    }
 
     // Filter based on out_of_stock parameter
     if (outOfStock === 'true') {
