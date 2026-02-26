@@ -33,15 +33,21 @@ export function ShippedTableBase({
   const [shipped, setShipped] = useState<ShippedOrder[]>([]);
   const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = previous week, etc.
   const [dashboardSearch, setDashboardSearch] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasLoadedRef = useRef(false);
   const { normalizeTrackingQuery } = useLast8TrackingSearch();
 
   const fetchShipped = useCallback(async () => {
-    setLoading(true);
+    if (hasLoadedRef.current) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const url = unshippedOnly
         ? '/api/orders'
@@ -82,6 +88,8 @@ export function ShippedTableBase({
     } catch (error) {
       console.error('Error fetching shipped records:', error);
     } finally {
+      hasLoadedRef.current = true;
+      setIsRefreshing(false);
       setLoading(false);
     }
   }, [search, packedBy, testedBy, unshippedOnly]);
@@ -103,6 +111,40 @@ export function ShippedTableBase({
       window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
     };
   }, [fetchShipped]);
+
+  useEffect(() => {
+    const applyRowPatch = (row: any, detail: any) => {
+      if (!row) return row;
+      const next = { ...row };
+      if (detail.testerId !== undefined) {
+        next.tester_id = detail.testerId;
+        next.tested_by = detail.testerId;
+      }
+      if (detail.packerId !== undefined) {
+        next.packer_id = detail.packerId;
+        next.packed_by = detail.packerId;
+      }
+      if (detail.shipByDate !== undefined) next.ship_by_date = detail.shipByDate;
+      if (detail.outOfStock !== undefined) next.out_of_stock = detail.outOfStock;
+      if (detail.notes !== undefined) next.notes = detail.notes;
+      if (detail.shippingTrackingNumber !== undefined) next.shipping_tracking_number = detail.shippingTrackingNumber;
+      if (detail.itemNumber !== undefined) next.item_number = detail.itemNumber;
+      if (detail.condition !== undefined) next.condition = detail.condition;
+      return next;
+    };
+
+    const handleAssignmentUpdate = (e: any) => {
+      const detail = e?.detail || {};
+      const ids = new Set<number>((detail.orderIds || []).map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id)));
+      if (ids.size === 0) return;
+
+      setShipped((current) => current.map((row) => (ids.has(Number(row.id)) ? applyRowPatch(row, detail) : row)));
+      setSelectedShipped((current) => (current && ids.has(Number(current.id)) ? applyRowPatch(current, detail) : current));
+    };
+
+    window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdate as any);
+    return () => window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdate as any);
+  }, []);
 
   useEffect(() => {
     if (!unshippedOnly) return;
@@ -196,11 +238,11 @@ export function ShippedTableBase({
     };
   }, []);
 
-  const handleRowClick = (record: ShippedOrder) => {
+  const handleRowClick = useCallback((record: ShippedOrder) => {
     const event = new CustomEvent('open-shipped-details', { detail: record });
     window.dispatchEvent(event);
     setSelectedShipped(record);
-  };
+  }, []);
 
   const activeSearch = unshippedOnly ? dashboardSearch : search;
   const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
@@ -308,6 +350,72 @@ export function ShippedTableBase({
         })
       );
 
+  const displayedRecords = Object.entries(filteredGroupedShipped)
+    .sort((a, b) => (unshippedOnly ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])))
+    .flatMap(([_, records]) => {
+      const sortedRecords = [...records].sort((a, b) => {
+        const timeA = new Date(a.pack_date_time || 0).getTime();
+        const timeB = new Date(b.pack_date_time || 0).getTime();
+        return unshippedOnly ? timeA - timeB : timeB - timeA;
+      });
+      return sortedRecords;
+    });
+
+  useEffect(() => {
+    if (!unshippedOnly) return;
+
+    const isUnassignedRecord = (record: ShippedOrder) => {
+      return (record as any).tester_id == null && (record as any).packer_id == null;
+    };
+
+    const handleNavigate = (e: any) => {
+      const direction = e?.detail?.direction === 'up' ? 'up' : e?.detail?.direction === 'down' ? 'down' : null;
+      if (!direction || displayedRecords.length === 0) return;
+
+      const currentIndex = displayedRecords.findIndex((record) => record.id === selectedShipped?.id);
+      const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+      const nextIndex =
+        direction === 'up'
+          ? Math.max(0, safeCurrentIndex - 1)
+          : Math.min(displayedRecords.length - 1, safeCurrentIndex + 1);
+
+      const nextRecord = displayedRecords[nextIndex];
+      if (!nextRecord || nextRecord.id === selectedShipped?.id) return;
+
+      handleRowClick(nextRecord);
+      window.setTimeout(() => {
+        const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(nextRecord.id)}"]`) as HTMLElement | null;
+        targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 0);
+    };
+
+    const handleNavigateNextUnassigned = () => {
+      if (displayedRecords.length === 0) return;
+
+      const currentIndex = displayedRecords.findIndex((record) => record.id === selectedShipped?.id);
+      const safeCurrentIndex = currentIndex >= 0 ? currentIndex : -1;
+
+      const nextRecord =
+        displayedRecords.find((record, index) => index > safeCurrentIndex && isUnassignedRecord(record)) ||
+        displayedRecords.find((record) => isUnassignedRecord(record));
+
+      if (!nextRecord || nextRecord.id === selectedShipped?.id) return;
+
+      handleRowClick(nextRecord);
+      window.setTimeout(() => {
+        const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(nextRecord.id)}"]`) as HTMLElement | null;
+        targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 0);
+    };
+
+    window.addEventListener('navigate-dashboard-order' as any, handleNavigate as any);
+    window.addEventListener('navigate-dashboard-next-unassigned' as any, handleNavigateNextUnassigned as any);
+    return () => {
+      window.removeEventListener('navigate-dashboard-order' as any, handleNavigate as any);
+      window.removeEventListener('navigate-dashboard-next-unassigned' as any, handleNavigateNextUnassigned as any);
+    };
+  }, [displayedRecords, handleRowClick, selectedShipped?.id, unshippedOnly]);
+
   // Get total count for current week
   const getWeekCount = () => {
     return Object.values(filteredGroupedShipped).reduce((sum, records) => sum + records.length, 0);
@@ -342,7 +450,11 @@ export function ShippedTableBase({
           rightSlot={
             showWeekNavigation
               ? undefined
-              : <div />
+              : (
+                <div className="min-w-[18px] flex items-center justify-end">
+                  {isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}
+                </div>
+              )
           }
         />
         
@@ -403,12 +515,24 @@ export function ShippedTableBase({
                   <div key={date} className="flex flex-col">
                     <DateGroupHeader date={date} total={records.length} formatDate={formatDate} />
                     {sortedRecords.map((record, index) => {
+                      const testerName =
+                        (record as any).tested_by_name ||
+                        (record as any).tester_name ||
+                        getStaffName((record as any).tested_by) ||
+                        getStaffName((record as any).tester_id);
+                      const packerName =
+                        (record as any).packed_by_name ||
+                        (record as any).packer_name ||
+                        getStaffName((record as any).packed_by) ||
+                        getStaffName((record as any).packer_id);
+
                       return (
                         <motion.div 
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           key={record.id}
                           onClick={() => handleRowClick(record)}
+                          data-order-row-id={String(record.id)}
                           className={`grid ${unshippedOnly ? 'grid-cols-[1fr_auto]' : 'grid-cols-[1fr_auto_70px]'} items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
@@ -435,7 +559,7 @@ export function ShippedTableBase({
                                     </>
                                   );
                                 })()}
-                                <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{record.condition || 'No Condition'}</span> • {(record as any).tested_by_name || (record as any).tester_name || getStaffName((record as any).tested_by) || getStaffName((record as any).tester_id)}{unshippedOnly && (
+                                <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{record.condition || 'No Condition'}</span> • {testerName} • {packerName}{unshippedOnly && (
                                   <>
                                     {' • '}
                                     <span className={getDaysLateTone(getDaysLateNumber(record.ship_by_date as any, record.created_at as any))}>

@@ -93,7 +93,7 @@ export default function StaffSelector({ role, selectedStaffId, onSelect }: Staff
                                         }}
                                         className="w-full flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all group text-left"
                                     >
-                                        <span className={`text-[11px] font-bold ${isSelected ? textClass : 'text-gray-700'}`}>
+                                        <span className={`text-[11px] font-bold ${textClass}`}>
                                             {member.name}
                                         </span>
                                         {isSelected && (

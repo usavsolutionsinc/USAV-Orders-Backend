@@ -39,10 +39,12 @@ export function TechTable({ testedBy }: TechTableProps) {
   const { getStaffName } = useStaffNameMap();
   const [records, setRecords] = useState<TechRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     fetchRecords();
@@ -55,7 +57,11 @@ export function TechTable({ testedBy }: TechTableProps) {
   }, [testedBy]);
 
   const fetchRecords = async () => {
-    setLoading(true);
+    if (hasLoadedRef.current) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const res = await fetch(`/api/tech-logs?techId=${testedBy}&limit=5000`, { cache: 'no-store' });
       const data = await res.json();
@@ -65,6 +71,8 @@ export function TechTable({ testedBy }: TechTableProps) {
     } catch (error) {
       console.error('Error fetching tech records:', error);
     } finally {
+      hasLoadedRef.current = true;
+      setIsRefreshing(false);
       setLoading(false);
     }
   };
@@ -189,7 +197,7 @@ export function TechTable({ testedBy }: TechTableProps) {
     return Object.values(filteredGroupedRecords).reduce((sum, records) => sum + records.length, 0);
   };
 
-  if (loading) {
+  if (loading && records.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -202,6 +210,11 @@ export function TechTable({ testedBy }: TechTableProps) {
 
   return (
     <div className="flex h-full w-full bg-white relative">
+      {isRefreshing && (
+        <div className="absolute right-2 top-2 z-30">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+        </div>
+      )}
       {/* Main table container */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Sticky header */}

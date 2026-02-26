@@ -11,7 +11,7 @@ import { getOrderPlatformLabel } from '@/utils/order-platform';
 import { getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
-import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
+import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
 import { useOrderAssignment } from '@/hooks';
 import type { Order, Staff } from './types';
 
@@ -381,64 +381,28 @@ export function OrdersManagementTab() {
 
                     <h3 className="text-base font-black text-gray-900 leading-tight">{order.product_title}</h3>
 
-                    <div className="grid grid-cols-2 gap-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2">
-                        <div className="flex-1 flex flex-wrap gap-1.5">
-                          {testerOptions.map((member) => {
-                            const isActiveTester = order.tester_id === member.id;
-                            const testerTheme = getStaffThemeById(member.id, 'technician');
-                            const testerThemeClasses = stationThemeClasses[testerTheme];
-                            return (
-                              <button
-                                key={member.id}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  rowAssignMutation.mutate({
-                                    orderId: order.id,
-                                    testerId: member.id,
-                                  });
-                                  selectOrder(order.id, false);
-                                }}
-                                className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors ${
-                                  isActiveTester ? testerThemeClasses.active : testerThemeClasses.inactive
-                                }`}
-                              >
-                                {member.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className="bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2">
-                        <div className="flex-1 flex flex-wrap gap-1.5">
-                          {packerOptions.map((member) => {
-                            const isActivePacker = order.packer_id === member.id;
-                            const packerTheme = getStaffThemeById(member.id, 'packer');
-                            const packerThemeClasses = stationThemeClasses[packerTheme];
-                            return (
-                              <button
-                                key={member.id}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  rowAssignMutation.mutate({
-                                    orderId: order.id,
-                                    packerId: member.id,
-                                  });
-                                  selectOrder(order.id, false);
-                                }}
-                                className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors ${
-                                  isActivePacker ? packerThemeClasses.active : packerThemeClasses.inactive
-                                }`}
-                              >
-                                {member.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
+                    <OrderStaffAssignmentButtons
+                      testerOptions={testerOptions}
+                      packerOptions={packerOptions}
+                      testerId={order.tester_id}
+                      packerId={order.packer_id}
+                      onAssignTester={(staffId) => {
+                        rowAssignMutation.mutate({
+                          orderId: order.id,
+                          testerId: staffId,
+                        });
+                        selectOrder(order.id, false);
+                      }}
+                      onAssignPacker={(staffId) => {
+                        rowAssignMutation.mutate({
+                          orderId: order.id,
+                          packerId: staffId,
+                        });
+                        selectOrder(order.id, false);
+                      }}
+                      onContainerClick={(e) => e.stopPropagation()}
+                      disabled={rowAssignMutation.isPending}
+                    />
                   </div>
                 </div>
               );

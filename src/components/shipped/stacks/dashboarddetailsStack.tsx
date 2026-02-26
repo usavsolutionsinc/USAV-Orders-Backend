@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, Check } from '@/components/Icons';
+import { ExternalLink, Check, ChevronUp, ChevronDown } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
@@ -9,6 +9,7 @@ import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { useDeleteOrderRow, useOrderAssignment } from '@/hooks';
 import { dispatchCloseShippedDetails } from '@/utils/events';
+import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
 
 export function DashboardDetailsStack({
   shipped,
@@ -19,6 +20,7 @@ export function DashboardDetailsStack({
   mode = 'dashboard',
   showAssignmentButton = true,
 }: DetailsStackProps) {
+  const [staffOptions, setStaffOptions] = useState<Array<{ id: number; name: string; role: string }>>([]);
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
   const [notes, setNotes] = useState(shipped.notes || '');
   const [shipByDate, setShipByDate] = useState(''); // MM-DD-YY
@@ -32,11 +34,25 @@ export function DashboardDetailsStack({
   const [isUndoing, setIsUndoing] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
+  const [assignedTesterId, setAssignedTesterId] = useState<number | null>((shipped as any).tester_id ?? null);
+  const [assignedPackerId, setAssignedPackerId] = useState<number | null>((shipped as any).packer_id ?? null);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const deleteArmTimeoutRef = useRef<number | null>(null);
   const hasOutOfStockValue = outOfStock.trim().length > 0;
   const orderAssignmentMutation = useOrderAssignment();
   const deleteOrderMutation = useDeleteOrderRow();
   const isDeletingOrder = deleteOrderMutation.isPending;
+  const testerIdOrder = [1, 2, 3, 6];
+  const packerIdOrder = [4, 5];
+
+  const testerOptions = testerIdOrder
+    .map((id) => staffOptions.find((member) => member.role === 'technician' && member.id === id))
+    .filter((member): member is { id: number; name: string; role: string } => Boolean(member))
+    .map((member) => ({ id: member.id, name: member.name }));
+  const packerOptions = packerIdOrder
+    .map((id) => staffOptions.find((member) => member.role === 'packer' && member.id === id))
+    .filter((member): member is { id: number; name: string; role: string } => Boolean(member))
+    .map((member) => ({ id: member.id, name: member.name }));
 
   const isValidShipByDate = (value: any) => {
     if (!value) return false;
@@ -62,6 +78,9 @@ export function DashboardDetailsStack({
     setShipByDate(toMonthDayYearCurrent(preferredDate));
     setItemNumber(shipped.item_number || '');
     setShippingTrackingNumber(shipped.shipping_tracking_number || '');
+    setAssignedTesterId((shipped as any).tester_id ?? null);
+    setAssignedPackerId((shipped as any).packer_id ?? null);
+    setAssignmentError(null);
     setActiveInput('none');
     setIsDeleteArmed(false);
   }, [shipped.id, (shipped as any).out_of_stock, shipped.notes, shipped.shipping_tracking_number, shipped.item_number]);
@@ -71,6 +90,31 @@ export function DashboardDetailsStack({
       if (deleteArmTimeoutRef.current) {
         window.clearTimeout(deleteArmTimeoutRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const fetchStaff = async () => {
+      try {
+        const res = await fetch('/api/staff?active=true', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!active || !Array.isArray(data)) return;
+        setStaffOptions(
+          data.map((member: any) => ({
+            id: Number(member.id),
+            name: String(member.name || ''),
+            role: String(member.role || ''),
+          }))
+        );
+      } catch (error) {
+        console.error('Failed to load staff options:', error);
+      }
+    };
+    fetchStaff();
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -226,6 +270,13 @@ export function DashboardDetailsStack({
     }
   };
 
+  const navigateToNextIfFullyAssigned = (nextTesterId: number | null, nextPackerId: number | null) => {
+    if (nextTesterId == null || nextPackerId == null) return;
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('navigate-dashboard-next-unassigned'));
+    }, 80);
+  };
+
   return (
     <div className="pb-8 pt-4 space-y-4">
       <section className="mx-8 space-y-2">
@@ -299,6 +350,79 @@ export function DashboardDetailsStack({
             Notes
           </button>
         </div>
+        <div className="flex items-stretch gap-2">
+          <div className="flex-1">
+            <OrderStaffAssignmentButtons
+              layout="rows"
+              testerOptions={testerOptions}
+              packerOptions={packerOptions}
+              testerId={assignedTesterId}
+              packerId={assignedPackerId}
+              onAssignTester={async (staffId) => {
+                if (orderAssignmentMutation.isPending) return;
+                const previousTesterId = assignedTesterId;
+                const nextTesterId = staffId;
+                const nextPackerId = assignedPackerId;
+                setAssignmentError(null);
+                setAssignedTesterId(staffId);
+                try {
+                  await orderAssignmentMutation.mutateAsync({
+                    orderId: shipped.id,
+                    testerId: staffId,
+                  });
+                  navigateToNextIfFullyAssigned(nextTesterId, nextPackerId);
+                } catch (error) {
+                  setAssignedTesterId(previousTesterId);
+                  setAssignmentError('Failed to update tester assignment. Please try again.');
+                  console.error(error);
+                }
+              }}
+              onAssignPacker={async (staffId) => {
+                if (orderAssignmentMutation.isPending) return;
+                const previousPackerId = assignedPackerId;
+                const nextTesterId = assignedTesterId;
+                const nextPackerId = staffId;
+                setAssignmentError(null);
+                setAssignedPackerId(staffId);
+                try {
+                  await orderAssignmentMutation.mutateAsync({
+                    orderId: shipped.id,
+                    packerId: staffId,
+                  });
+                  navigateToNextIfFullyAssigned(nextTesterId, nextPackerId);
+                } catch (error) {
+                  setAssignedPackerId(previousPackerId);
+                  setAssignmentError('Failed to update packer assignment. Please try again.');
+                  console.error(error);
+                }
+              }}
+              disabled={false}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-order', { detail: { direction: 'up' } }))}
+              className="h-8 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              aria-label="Previous order"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-order', { detail: { direction: 'down' } }))}
+              className="h-8 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              aria-label="Next order"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        {assignmentError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[10px] font-bold text-red-700">
+            {assignmentError}
+          </div>
+        )}
 
         {(activeInput === 'out_of_stock' || hasOutOfStockValue) && (
           <OutOfStockField

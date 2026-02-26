@@ -97,7 +97,7 @@ export function ConnectionsManagementTab() {
         {ebayBackfillMutation.isSuccess && (
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-green-50 border border-green-200 rounded-2xl">
             <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
-              eBay: Updated {ebayBackfillMutation.data?.totals?.updated || 0} • Matched {ebayBackfillMutation.data?.totals?.matched || 0} • Unmatched {ebayBackfillMutation.data?.totals?.unmatched || 0}
+              eBay: Updated {ebayBackfillMutation.data?.totals?.updated || 0} • Matched {ebayBackfillMutation.data?.totals?.matched || 0} • Resolved {ebayBackfillMutation.data?.totals?.resolvedExceptions || 0} • Unmatched {ebayBackfillMutation.data?.totals?.unmatched || 0}
             </div>
           </motion.div>
         )}

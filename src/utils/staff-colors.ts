@@ -1,5 +1,5 @@
-export type StationTheme = 'green' | 'blue' | 'purple' | 'yellow' | 'black' | 'red';
-export type TechStationTheme = 'green' | 'blue' | 'purple' | 'yellow';
+export type StationTheme = 'green' | 'purple' | 'blue' | 'yellow' | 'black' | 'red';
+export type TechStationTheme = 'green' | 'purple' | 'blue' | 'yellow';
 export type PackerStationTheme = 'black' | 'red';
 
 export interface StationThemeColors {
@@ -87,7 +87,7 @@ export const stationThemeClasses: Record<
   },
   black: {
     active: 'bg-slate-900 text-white border-slate-900',
-    inactive: 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50',
+    inactive: 'bg-slate-100 text-slate-900 border-slate-300 hover:bg-slate-200',
   },
   red: {
     active: 'bg-red-600 text-white border-red-600',
@@ -115,8 +115,8 @@ const PACKER_THEME_BY_STAFF_ID: Record<number, PackerStationTheme> = {
 
 const TECH_THEME_BY_NAME: Record<string, StationTheme> = {
   michael: 'green',
-  sang: 'blue',
-  thuc: 'purple',
+  sang: 'purple',
+  thuc: 'blue',
   cuong: 'yellow',
 };
 

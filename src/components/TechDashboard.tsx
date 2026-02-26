@@ -22,6 +22,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
     const [history, setHistory] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [rightViewMode, setRightViewMode] = useState<'history' | 'pending'>('history');
+    const [dailyGoal, setDailyGoal] = useState(50);
 
     // Color mapping based on technician ID
     const getTechInfo = (id: string) => {
@@ -37,6 +38,23 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
 
     useEffect(() => {
         fetchHistory();
+    }, [techId]);
+
+    useEffect(() => {
+        const fetchGoal = async () => {
+            try {
+                const res = await fetch(`/api/staff-goals?staffId=${encodeURIComponent(techId)}`, { cache: 'no-store' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const goalValue = Number(data?.daily_goal);
+                if (Number.isFinite(goalValue) && goalValue > 0) {
+                    setDailyGoal(goalValue);
+                }
+            } catch (err) {
+                console.error('Failed to fetch staff goal:', err);
+            }
+        };
+        fetchGoal();
     }, [techId]);
 
     const fetchHistory = async () => {
@@ -100,6 +118,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
                         themeColor={techInfo.color}
                         onTrackingScan={() => setRightViewMode('history')}
                         todayCount={getTodayCount()}
+                        goal={dailyGoal}
                         onComplete={fetchHistory}
                     />
                 </div>

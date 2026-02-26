@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { EbayClient } from '@/lib/ebay/client';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 export const maxDuration = 60;
 
 function isBlank(value: unknown): boolean {
   return value === null || value === undefined || String(value).trim() === '';
-}
-
-function getLastEightDigits(value: unknown): string {
-  if (!value) return '';
-  return String(value).replace(/\D/g, '').slice(-8);
 }
 
 function extractTrackingNumbers(ebayOrder: any): string[] {
@@ -51,6 +47,7 @@ export async function POST(req: NextRequest) {
     let updated = 0;
     let unchanged = 0;
     let unmatched = 0;
+    let resolvedExceptions = 0;
     let errors = 0;
 
     for (const accountName of accounts) {
@@ -113,38 +110,25 @@ export async function POST(req: NextRequest) {
               accountStats.scanned++;
               scanned++;
 
-              let existingRows: any[] = [];
-              if (trackingNumber) {
-                const last8 = getLastEightDigits(trackingNumber);
-                if (last8) {
-                  const byTracking = await pool.query(
-                    `SELECT id, order_id, account_source, order_date, sku, item_number, shipping_tracking_number, product_title, condition, quantity
-                     FROM orders
-                     WHERE shipping_tracking_number IS NOT NULL
-                       AND shipping_tracking_number != ''
-                       AND RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
-                     ORDER BY created_at DESC NULLS LAST, id DESC
-                     LIMIT 1`,
-                    [last8]
-                  );
-                  existingRows = byTracking.rows;
-                }
+              const trackingKey18 = normalizeTrackingKey18(trackingNumber);
+              if (!trackingKey18) {
+                accountStats.unmatched++;
+                unmatched++;
+                continue;
               }
 
-              // Fallback only if no tracking rows were found (or no tracking on eBay order).
-              if (existingRows.length === 0 && orderId) {
-                const byOrderId = await pool.query(
-                  `SELECT id, order_id, account_source, order_date, sku, item_number, shipping_tracking_number, product_title, condition, quantity
-                   FROM orders
-                   WHERE order_id = $1
-                   ORDER BY created_at DESC NULLS LAST, id DESC
-                   LIMIT 1`,
-                  [orderId]
-                );
-                existingRows = byOrderId.rows;
-              }
+              const existingRows = await pool.query(
+                `SELECT id, order_id, account_source, order_date, sku, item_number, shipping_tracking_number, product_title, condition, quantity
+                 FROM orders
+                 WHERE shipping_tracking_number IS NOT NULL
+                   AND shipping_tracking_number != ''
+                   AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+                 ORDER BY created_at DESC NULLS LAST, id DESC
+                 LIMIT 1`,
+                [trackingKey18]
+              );
 
-              if (existingRows.length === 0) {
+              if (existingRows.rows.length === 0) {
                 accountStats.unmatched++;
                 unmatched++;
                 continue;
@@ -153,7 +137,7 @@ export async function POST(req: NextRequest) {
               accountStats.matched++;
               matched++;
 
-              const current = existingRows[0];
+              const current = existingRows.rows[0];
               const updates: string[] = [];
               const values: any[] = [];
               let idx = 1;
@@ -198,17 +182,26 @@ export async function POST(req: NextRequest) {
               if (updates.length === 0) {
                 accountStats.unchanged++;
                 unchanged++;
-                continue;
+              } else {
+                values.push(current.id);
+                await pool.query(
+                  `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idx}`,
+                  values
+                );
+
+                accountStats.updated++;
+                updated++;
               }
 
-              values.push(current.id);
-              await pool.query(
-                `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idx}`,
-                values
+              const resolveResult = await pool.query(
+                `UPDATE orders_exceptions
+                 SET status = 'resolved',
+                     updated_at = NOW()
+                 WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+                   AND COALESCE(status, '') != 'resolved'`,
+                [trackingKey18]
               );
-
-              accountStats.updated++;
-              updated++;
+              resolvedExceptions += resolveResult.rowCount || 0;
             }
           } catch (error: any) {
             accountStats.errors.push(error?.message || 'Unknown order error');
@@ -226,7 +219,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `eBay backfill completed: updated ${updated} order(s).`,
-      totals: { scanned, matched, updated, unchanged, unmatched, errors },
+      totals: { scanned, matched, updated, unchanged, unmatched, resolvedExceptions, errors },
       results,
       accountsProcessed: accounts,
       pagination: { limitPerPage, maxPages },

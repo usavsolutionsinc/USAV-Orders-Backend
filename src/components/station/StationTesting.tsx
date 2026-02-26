@@ -30,6 +30,10 @@ export default function StationTesting({
   goal = 50,
   onComplete,
 }: StationTestingProps) {
+  const safeGoal = Math.max(1, Number(goal) || 1);
+  const goalProgressPercent = Math.min((todayCount / safeGoal) * 100, 100);
+  const remainingToGoal = Math.max(safeGoal - todayCount, 0);
+
   const {
     inputValue,
     setInputValue,
@@ -64,13 +68,13 @@ export default function StationTesting({
 
           <div className="space-y-2 px-1">
             <div className="flex items-center justify-between">
-              <p className={`text-[9px] font-black ${activeColor.text} tabular-nums`}>{todayCount} SHIPPED</p>
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Goal: {goal}</p>
+              <p className={`text-[9px] font-black ${activeColor.text} tabular-nums`}>{todayCount}/{safeGoal} SHIPPED</p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{remainingToGoal} Left</p>
             </div>
             <div className="h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${Math.min((todayCount / goal) * 100, 100)}%` }}
+                animate={{ width: `${goalProgressPercent}%` }}
                 className={`h-full ${activeColor.bg} rounded-full shadow-sm`}
               />
             </div>
