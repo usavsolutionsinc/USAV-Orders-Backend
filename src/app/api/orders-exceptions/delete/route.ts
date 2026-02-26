@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * POST /api/orders-exceptions/delete - Delete one or more exception rows
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
       idsToDelete
     );
 
+    await invalidateCacheTags(['orders', 'shipped']);
     return NextResponse.json({ success: true, deleted: result.rowCount || 0 });
   } catch (error: any) {
     console.error('Error deleting orders_exceptions row(s):', error);
@@ -34,4 +36,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

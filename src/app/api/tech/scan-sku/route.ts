@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { normalizeSku } from '@/utils/sku';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 export async function POST(req: NextRequest) {
   try {
@@ -187,6 +188,7 @@ export async function POST(req: NextRequest) {
       [tracking, skuRecord.id]
     );
     
+    await invalidateCacheTags(['tech-logs', 'orders-next']);
     return NextResponse.json({
       success: true,
       serialNumbers: insertedSerials,

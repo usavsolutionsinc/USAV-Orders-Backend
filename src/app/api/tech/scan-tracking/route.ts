@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
@@ -194,6 +195,7 @@ export async function POST(req: NextRequest) {
                     '';
 
                 await client.query('COMMIT');
+                await invalidateCacheTags(['tech-logs', 'orders-next']);
                 return NextResponse.json({
                     success: true,
                     found: true,
@@ -240,6 +242,7 @@ export async function POST(req: NextRequest) {
             const serialNumbers = parseSerials(existingTracking.rows[0]?.serial_number);
 
             await client.query('COMMIT');
+            await invalidateCacheTags(['tech-logs', 'orders-next']);
             return NextResponse.json({
                 success: true,
                 found: true,

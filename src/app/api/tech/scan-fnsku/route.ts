@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -76,6 +77,7 @@ export async function GET(req: NextRequest) {
         ) VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)`,
         [fnsku, null, 'FNSKU', testedBy]
       );
+      await invalidateCacheTags(['tech-logs', 'orders-next']);
     }
 
     const serialsResult = await pool.query(

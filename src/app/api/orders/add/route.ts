@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * POST /api/orders/add - Add a new order to the system
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    await invalidateCacheTags(['orders', 'shipped']);
     return NextResponse.json({
       success: true,
       message: 'Order added successfully',

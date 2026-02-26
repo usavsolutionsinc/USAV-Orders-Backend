@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
 import { staff } from '@/lib/drizzle/schema';
 import { eq, and, asc } from 'drizzle-orm';
+import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const role = searchParams.get('role');
         const activeOnly = searchParams.get('active') !== 'false';
+        const cacheLookup = createCacheLookupKey({
+            role: role || '',
+            activeOnly,
+        });
+
+        const cached = await getCachedJson<any[]>('api:staff', cacheLookup);
+        if (cached) {
+            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+        }
 
         const conditions = [];
         if (role) {
@@ -23,7 +33,8 @@ export async function GET(request: NextRequest) {
             .where(conditions.length > 0 ? and(...conditions) : undefined)
             .orderBy(asc(staff.role), asc(staff.name));
 
-        return NextResponse.json(results);
+        await setCachedJson('api:staff', cacheLookup, results, 60, ['staff']);
+        return NextResponse.json(results, { headers: { 'x-cache': 'MISS' } });
     } catch (error) {
         console.error('Error fetching staff:', error);
         return NextResponse.json({ 
@@ -54,6 +65,7 @@ export async function POST(request: NextRequest) {
             active: typeof active === 'boolean' ? active : true,
         }).returning();
 
+        await invalidateCacheTags(['staff']);
         return NextResponse.json(result, { status: 201 });
     } catch (error) {
         console.error('Error creating staff:', error);
@@ -95,6 +107,7 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
         }
 
+        await invalidateCacheTags(['staff']);
         return NextResponse.json(result);
     } catch (error) {
         console.error('Error updating staff:', error);
@@ -125,6 +138,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
         }
 
+        await invalidateCacheTags(['staff']);
         return NextResponse.json({ success: true, staff: result });
     } catch (error) {
         console.error('Error deleting staff:', error);

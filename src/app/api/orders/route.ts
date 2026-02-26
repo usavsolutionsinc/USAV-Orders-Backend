@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
 /**
  * GET /api/orders - Fetch all orders with optional filters
@@ -9,6 +10,12 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
     const assignedTo = searchParams.get('assignedTo');
+    const cacheLookup = createCacheLookupKey({ status: status || '', assignedTo: assignedTo || '' });
+
+    const cached = await getCachedJson<any>('api:orders', cacheLookup);
+    if (cached) {
+      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+    }
 
     let query = `
       SELECT 
@@ -49,10 +56,12 @@ export async function GET(req: NextRequest) {
 
     const result = await pool.query(query, params);
 
-    return NextResponse.json({
+    const payload = {
       orders: result.rows,
       count: result.rows.length,
-    });
+    };
+    await setCachedJson('api:orders', cacheLookup, payload, 20, ['orders']);
+    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
     console.error('Error in GET /api/orders:', error);
     return NextResponse.json(

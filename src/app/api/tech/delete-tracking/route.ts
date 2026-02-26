@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,6 +16,8 @@ export async function POST(req: NextRequest) {
        WHERE id = $1`,
       [rowId]
     );
+
+    await invalidateCacheTags(['tech-logs', 'orders-next']);
 
     return NextResponse.json({
       success: true,

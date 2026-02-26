@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/lib/timezone';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 export interface ShippedFormData {
   order_id: string;
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
     );
     const insertedId = insertResult.rows[0]?.id ?? null;
 
+    await invalidateCacheTags(['shipped', 'orders']);
     return NextResponse.json({
       success: true,
       message: 'Shipped entry created successfully',

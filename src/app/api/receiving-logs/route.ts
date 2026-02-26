@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
+import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const limit = parseInt(searchParams.get('limit') || '50');
         const offset = parseInt(searchParams.get('offset') || '0');
+        const cacheLookup = createCacheLookupKey({ limit, offset });
+
+        const cached = await getCachedJson<any[]>('api:receiving-logs', cacheLookup);
+        if (cached) {
+            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+        }
 
         const tableCheck = await pool.query(
             `SELECT EXISTS (
@@ -15,7 +22,7 @@ export async function GET(request: NextRequest) {
             ) AS exists`
         );
         if (!tableCheck.rows[0]?.exists) {
-            return NextResponse.json([]);
+            return NextResponse.json([], { headers: { 'x-cache': 'MISS' } });
         }
 
         const { dateColumn, hasQuantity } = await resolveReceivingSchema();
@@ -38,7 +45,8 @@ export async function GET(request: NextRequest) {
             count: parseInt(String(log.count || '1'), 10) || 1,
         }));
 
-        return NextResponse.json(formattedLogs);
+        await setCachedJson('api:receiving-logs', cacheLookup, formattedLogs, 30, ['receiving-logs']);
+        return NextResponse.json(formattedLogs, { headers: { 'x-cache': 'MISS' } });
     } catch (error: any) {
         console.error('Error fetching receiving logs:', error);
         return NextResponse.json(
@@ -73,6 +81,7 @@ export async function DELETE(request: NextRequest) {
             );
         }
 
+        await invalidateCacheTags(['receiving-logs']);
         return NextResponse.json({ success: true, id });
     } catch (error: any) {
         console.error('Error deleting receiving log:', error);
@@ -121,6 +130,7 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'Receiving log not found' }, { status: 404 });
         }
 
+        await invalidateCacheTags(['receiving-logs']);
         return NextResponse.json({ success: true, id });
     } catch (error: any) {
         console.error('Error updating receiving log:', error);

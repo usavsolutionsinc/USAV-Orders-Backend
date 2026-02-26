@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * POST /api/orders/assign - Assign order to tester and/or packer
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
       values
     );
 
+    await invalidateCacheTags(['orders', 'shipped']);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error assigning order:', error);

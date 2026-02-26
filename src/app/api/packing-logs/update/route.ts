@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * Update packer_logs table and set orders.is_shipped to true
@@ -155,6 +156,7 @@ export async function POST(req: NextRequest) {
 
       await client.query('COMMIT');
 
+      await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
       return NextResponse.json({
         success: true,
         message: 'Packer logs updated and order marked as shipped',

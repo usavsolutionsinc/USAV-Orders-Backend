@@ -3,14 +3,21 @@ import pool from '@/lib/db';
 import { db } from '@/lib/drizzle/db';
 import { packerLogs } from '@/lib/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const packerId = searchParams.get('packerId');
     const limit = parseInt(searchParams.get('limit') || '5000');
     const offset = parseInt(searchParams.get('offset') || '0');
+    const cacheLookup = createCacheLookupKey({ packerId: packerId || '', limit, offset });
 
     try {
+        const cached = await getCachedJson<any[]>('api:packerlogs', cacheLookup);
+        if (cached) {
+            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+        }
+
         // Build query with proper filtering
         const params: any[] = [];
         let whereClause = '';
@@ -65,7 +72,8 @@ export async function GET(req: NextRequest) {
 
         const result = await pool.query(query, params);
 
-        return NextResponse.json(result.rows);
+        await setCachedJson('api:packerlogs', cacheLookup, result.rows, 30, ['packerlogs']);
+        return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS' } });
     } catch (error: any) {
         console.error('Error fetching packer logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });
@@ -84,6 +92,7 @@ export async function POST(req: NextRequest) {
             packerPhotosUrl: body.packerPhotosUrl || [],
         }).returning();
 
+        await invalidateCacheTags(['packerlogs']);
         return NextResponse.json(newLog[0]);
     } catch (error: any) {
         console.error('Error creating packer log:', error);
@@ -110,6 +119,7 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'Log not found' }, { status: 404 });
         }
 
+        await invalidateCacheTags(['packerlogs']);
         return NextResponse.json(updatedLog[0]);
     } catch (error: any) {
         console.error('Error updating packer log:', error);
@@ -135,6 +145,7 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: 'Log not found' }, { status: 404 });
         }
 
+        await invalidateCacheTags(['packerlogs']);
         return NextResponse.json({ success: true, deletedLog: deletedLog[0] });
     } catch (error: any) {
         console.error('Error deleting packer log:', error);

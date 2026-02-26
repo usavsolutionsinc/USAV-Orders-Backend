@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllShippedOrders, updateShippedOrderField, searchShippedOrders } from '@/lib/neon/orders-queries';
+import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
 /**
  * GET /api/shipped - Fetch all shipped records (paginated) or search
@@ -8,29 +9,38 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('q');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const cacheLookup = createCacheLookupKey({ query: query || '', page, limit });
+
+    const cached = await getCachedJson<any>('api:shipped', cacheLookup);
+    if (cached) {
+      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+    }
 
     if (query) {
       const results = await searchShippedOrders(query);
-      return NextResponse.json({
+      const payload = {
         shipped: results,
         results,
         count: results.length,
         query
-      });
+      };
+      await setCachedJson('api:shipped', cacheLookup, payload, 25, ['shipped']);
+      return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
     const shipped = await getAllShippedOrders(limit, offset);
-    
-    return NextResponse.json({
+    const payload = {
       shipped,
       page,
       limit,
       count: shipped.length,
-    });
+    };
+    await setCachedJson('api:shipped', cacheLookup, payload, 25, ['shipped']);
+    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
     console.error('Error in GET /api/shipped:', error);
     return NextResponse.json(
@@ -60,6 +70,7 @@ export async function PATCH(req: NextRequest) {
       await updateShippedOrderField(id, field, value);
     }
 
+    await invalidateCacheTags(['shipped', 'orders']);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error in PATCH /api/shipped:', error);

@@ -4,14 +4,21 @@ import { classifyScan } from '@/utils/packer';
 import { normalizeSku } from '@/utils/sku';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const packerId = searchParams.get('packerId') || '1';
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
+    const cacheLookup = createCacheLookupKey({ packerId, limit, offset });
 
     try {
+        const cached = await getCachedJson<any[]>('api:packing-logs', cacheLookup);
+        if (cached) {
+            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+        }
+
         // Map packerId directly to staff ID
         // packer_1 (from mobile) -> staff id 4 (Tuan)
         // packer_2 (from mobile) -> staff id 5 (Thuy)
@@ -52,7 +59,8 @@ export async function GET(req: NextRequest) {
             trackingType: log.tracking_type || '',
         }));
 
-        return NextResponse.json(formattedLogs);
+        await setCachedJson('api:packing-logs', cacheLookup, formattedLogs, 30, ['packing-logs', 'packerlogs']);
+        return NextResponse.json(formattedLogs, { headers: { 'x-cache': 'MISS' } });
     } catch (error: any) {
         console.error('Error fetching packing logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });
@@ -156,6 +164,7 @@ export async function POST(req: NextRequest) {
                     ) VALUES ($1, $2, $3, $4, $5::jsonb)
                 `, [scanInput, classification.trackingType, packDateTime, staffId, photosJsonb]);
 
+                await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
                 return NextResponse.json({
                     success: true,
                     warning: 'Order not found in orders. Added to exceptions queue.',
@@ -188,6 +197,7 @@ export async function POST(req: NextRequest) {
                 ) VALUES ($1, $2, $3, $4, $5::jsonb)
             `, [order.shipping_tracking_number, classification.trackingType, packDateTime, staffId, photosJsonb]);
 
+            await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
             return NextResponse.json({
                 success: true,
                 trackingType: classification.trackingType,
@@ -265,6 +275,7 @@ export async function POST(req: NextRequest) {
             skuUpdated = true;
         }
 
+        await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
         return NextResponse.json({
             success: true,
             trackingType: classification.trackingType,

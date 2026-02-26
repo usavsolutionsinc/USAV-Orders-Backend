@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
 
     const row = latestResult.rows[0];
     await pool.query('DELETE FROM tech_serial_numbers WHERE id = $1', [row.id]);
+    await invalidateCacheTags(['tech-logs', 'orders-next']);
 
     const remainingResult = await pool.query(
       `SELECT serial_number

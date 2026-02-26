@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const techId = searchParams.get('techId') || '1';
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
+    const cacheLookup = createCacheLookupKey({ techId, limit, offset });
 
     try {
+        const cached = await getCachedJson<any[]>('api:tech-logs', cacheLookup);
+        if (cached) {
+            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+        }
+
         // Resolve staff by numeric id first (current UI flow), with employee_id fallback.
         const techIdNum = parseInt(String(techId), 10);
         let staffResult = { rows: [] as Array<{ id: number }> };
@@ -105,7 +112,8 @@ export async function GET(req: NextRequest) {
             LIMIT $2 OFFSET $3
         `, [staffId, limit, offset]);
 
-        return NextResponse.json(result.rows);
+        await setCachedJson('api:tech-logs', cacheLookup, result.rows, 20, ['tech-logs']);
+        return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS' } });
     } catch (error: any) {
         console.error('Error fetching tech logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });

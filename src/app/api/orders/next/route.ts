@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
 /**
  * GET /api/orders/next - Get next unassigned order(s) for technicians
@@ -12,6 +13,17 @@ export async function GET(req: NextRequest) {
     const filterStatus = searchParams.get('status');
     const outOfStock = searchParams.get('outOfStock');
     const includeAllTechForOutOfStock = outOfStock === 'true';
+    const cacheLookup = createCacheLookupKey({
+      techId: techId || '',
+      all: getAll,
+      status: filterStatus || '',
+      outOfStock: outOfStock || '',
+    });
+
+    const cached = await getCachedJson<any>('api:orders-next', cacheLookup);
+    if (cached) {
+      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+    }
 
     if (!techId) {
       return NextResponse.json(
@@ -134,24 +146,30 @@ export async function GET(req: NextRequest) {
     const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
-      return NextResponse.json({ 
+      const payload = { 
         order: null, 
         orders: [],
         all_completed: totalPending === 0 
-      });
+      };
+      await setCachedJson('api:orders-next', cacheLookup, payload, 12, ['orders', 'orders-next']);
+      return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
     if (getAll) {
-      return NextResponse.json({ 
+      const payload = { 
         orders: result.rows,
         all_completed: false
-      });
+      };
+      await setCachedJson('api:orders-next', cacheLookup, payload, 12, ['orders', 'orders-next']);
+      return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
-    return NextResponse.json({ 
+    const payload = { 
       order: result.rows[0],
       all_completed: false
-    });
+    };
+    await setCachedJson('api:orders-next', cacheLookup, payload, 12, ['orders', 'orders-next']);
+    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
     console.error('Error fetching next order:', error);
     return NextResponse.json(
