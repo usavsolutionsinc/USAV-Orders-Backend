@@ -8,21 +8,6 @@ import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
-// Hard-coded staff ID to name mapping
-const STAFF_NAMES: { [key: number]: string } = {
-  1: 'Michael',
-  2: 'Thuc',
-  3: 'Sang',
-  4: 'Tuan',
-  5: 'Thuy',
-  6: 'Cuong'
-};
-
-function getStaffName(staffId: number | null | undefined): string {
-  if (!staffId) return '---';
-  return STAFF_NAMES[staffId] || `#${staffId}`;
-}
-
 interface PackerRecord {
   id: number;
   pack_date_time: string;

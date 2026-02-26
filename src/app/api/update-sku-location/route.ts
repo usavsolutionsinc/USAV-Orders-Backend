@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { normalizeSku } from '@/utils/sku';
+import { formatPSTTimestamp } from '@/lib/timezone';
 
 export async function POST(request: NextRequest) {
     try {
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
         // 2. Also log this location change in the 'sku' database table
         // This creates a history of where this SKU has been
-        const timestamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+        const timestamp = formatPSTTimestamp(new Date());
         try {
             await pool.query(
                 `INSERT INTO sku (date_time, static_sku, location, notes)

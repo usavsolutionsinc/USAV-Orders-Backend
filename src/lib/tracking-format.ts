@@ -16,19 +16,20 @@ export function last8FromStoredTracking(input: string): string {
 }
 
 export function normalizeTrackingKey18(input: string): string {
-  const normalized = String(input || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
+  const normalized = normalizeTrackingCanonical(input);
   if (!normalized) return '';
   return normalized.length > 18 ? normalized.slice(-18) : normalized;
 }
 
 export function key18FromStoredTracking(input: string): string {
-  const normalized = String(input || '')
+  const normalized = normalizeTrackingCanonical(input);
+  if (!normalized) return '';
+  return normalized.length > 18 ? normalized.slice(-18) : normalized;
+}
+
+export function normalizeTrackingCanonical(input: string): string {
+  return String(input || '')
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
-  if (!normalized) return '';
-  return normalized.length > 18 ? normalized.slice(-18) : normalized;
 }

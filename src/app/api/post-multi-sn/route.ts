@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
+import { formatPSTTimestamp } from '@/lib/timezone';
 
 async function findEmptyRow(sheets: any, spreadsheetId: string, range: string) {
     const { data } = await sheets.spreadsheets.values.get({
@@ -34,8 +35,7 @@ export async function POST(request: NextRequest) {
         const range = "'Sku'!A:G";
 
         const rowIndex = await findEmptyRow(sheets, spreadsheetId, range);
-        const now = new Date();
-        const timestamp = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+        const timestamp = formatPSTTimestamp(new Date());
 
         const values = [[timestamp, sku, serialNumbers.join(', '), '', productTitle || '', notes || '', location || '']];
 
@@ -65,4 +65,3 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
     }
 }
-

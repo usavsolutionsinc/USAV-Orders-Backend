@@ -35,7 +35,7 @@ export default function CurrentWorkOrder({ trackingNumber, capturedSerialNumber,
     try {
       // Search for the order in the shipped table using the last 8 digits
       const last8 = trackingNumber.slice(-8).toLowerCase();
-      const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(last8)}`);
+      const res = await fetch(`/api/shipped?q=${encodeURIComponent(last8)}`);
       
       if (!res.ok) {
         throw new Error('Failed to fetch order');

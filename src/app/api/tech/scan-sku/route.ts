@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { normalizeSku } from '@/utils/sku';
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
       skuToMatch = xMatch[1];
       qtyToDecrement = parseInt(xMatch[2], 10) || 1;
     }
+    const normalizedSkuToMatch = normalizeSku(skuToMatch);
     
     // Resolve staff primarily by numeric staff.id (current flow), with legacy employee_id fallback.
     const techIdNum = parseInt(String(techId), 10);
@@ -163,13 +165,19 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // Decrease stock in sku_stock table
-    await pool.query(
-      `UPDATE sku_stock 
-       SET stock = GREATEST(0, CAST(stock AS INTEGER) - $1)::TEXT
-       WHERE sku = $2`,
-      [qtyToDecrement, skuToMatch]
-    );
+    // Decrease stock in sku_stock table using normalized SKU comparison.
+    const stockRows = await pool.query(`SELECT id, stock, sku FROM sku_stock`);
+    const stockTarget = stockRows.rows.find((r: any) => normalizeSku(String(r.sku || '')) === normalizedSkuToMatch);
+    if (stockTarget) {
+      const currentQty = parseInt(String(stockTarget.stock || '0'), 10) || 0;
+      const nextQty = Math.max(0, currentQty - qtyToDecrement);
+      await pool.query(
+        `UPDATE sku_stock 
+         SET stock = $1
+         WHERE id = $2`,
+        [String(nextQty), stockTarget.id]
+      );
+    }
     
     // Update sku table with tracking number
     await pool.query(

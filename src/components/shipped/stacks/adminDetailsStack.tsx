@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Check, Package, X } from '@/components/Icons';
 import { DashboardDetailsStack } from './dashboarddetailsStack';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
+import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
 
 interface StaffOption {
   id: number;
@@ -111,20 +112,22 @@ export function AdminDetailsStack({
               >
                 No Change
               </button>
-              {testerOptions.map((member) => (
-                <button
-                  key={member.id}
-                  type="button"
-                  onClick={() => onBulkTesterChange(member.id)}
-                  className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-                    bulkTesterId === member.id
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                  }`}
-                >
-                  {member.name}
-                </button>
-              ))}
+              {testerOptions.map((member) => {
+                const theme = getStaffThemeById(member.id, 'technician');
+                const themeClasses = stationThemeClasses[theme];
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => onBulkTesterChange(member.id)}
+                    className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                      bulkTesterId === member.id ? themeClasses.active : themeClasses.inactive
+                    }`}
+                  >
+                    {member.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -142,20 +145,22 @@ export function AdminDetailsStack({
               >
                 No Change
               </button>
-              {packerOptions.map((member) => (
-                <button
-                  key={member.id}
-                  type="button"
-                  onClick={() => onBulkPackerChange(member.id)}
-                  className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-                    bulkPackerId === member.id
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                  }`}
-                >
-                  {member.name}
-                </button>
-              ))}
+              {packerOptions.map((member) => {
+                const theme = getStaffThemeById(member.id, 'packer');
+                const themeClasses = stationThemeClasses[theme];
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => onBulkPackerChange(member.id)}
+                    className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
+                      bulkPackerId === member.id ? themeClasses.active : themeClasses.inactive
+                    }`}
+                  >
+                    {member.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

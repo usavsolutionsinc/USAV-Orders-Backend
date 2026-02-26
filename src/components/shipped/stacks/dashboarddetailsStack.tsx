@@ -7,6 +7,8 @@ import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
+import { useDeleteOrderRow, useOrderAssignment } from '@/hooks';
+import { dispatchCloseShippedDetails } from '@/utils/events';
 
 export function DashboardDetailsStack({
   shipped,
@@ -28,11 +30,13 @@ export function DashboardDetailsStack({
   const [isSavingItemNumber, setIsSavingItemNumber] = useState(false);
   const [isSavingTrackingNumber, setIsSavingTrackingNumber] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
-  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
   const deleteArmTimeoutRef = useRef<number | null>(null);
   const hasOutOfStockValue = outOfStock.trim().length > 0;
+  const orderAssignmentMutation = useOrderAssignment();
+  const deleteOrderMutation = useDeleteOrderRow();
+  const isDeletingOrder = deleteOrderMutation.isPending;
 
   const isValidShipByDate = (value: any) => {
     if (!value) return false;
@@ -88,17 +92,11 @@ export function DashboardDetailsStack({
       const year = Number(getCurrentPSTDateKey().slice(0, 4));
       const shipByDateValue = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-      await fetch('/api/orders/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: shipped.id,
-          shipByDate: shipByDateValue
-        })
+      await orderAssignmentMutation.mutateAsync({
+        orderId: shipped.id,
+        shipByDate: shipByDateValue,
       });
       onUpdate?.();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error) {
       console.error(error);
     } finally {
@@ -109,17 +107,11 @@ export function DashboardDetailsStack({
   const saveOutOfStock = async () => {
     setIsSavingOutOfStock(true);
     try {
-      await fetch('/api/orders/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: shipped.id,
-          outOfStock: outOfStock.trim()
-        })
+      await orderAssignmentMutation.mutateAsync({
+        orderId: shipped.id,
+        outOfStock: outOfStock.trim(),
       });
       onUpdate?.();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error) {
       console.error(error);
     } finally {
@@ -130,17 +122,11 @@ export function DashboardDetailsStack({
   const saveNotes = async () => {
     setIsSavingNotes(true);
     try {
-      await fetch('/api/orders/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: shipped.id,
-          notes: notes.trim()
-        })
+      await orderAssignmentMutation.mutateAsync({
+        orderId: shipped.id,
+        notes: notes.trim(),
       });
       onUpdate?.();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error) {
       console.error(error);
     } finally {
@@ -151,17 +137,11 @@ export function DashboardDetailsStack({
   const saveShippingTrackingNumber = async () => {
     setIsSavingTrackingNumber(true);
     try {
-      await fetch('/api/orders/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: shipped.id,
-          shippingTrackingNumber: shippingTrackingNumber.trim()
-        })
+      await orderAssignmentMutation.mutateAsync({
+        orderId: shipped.id,
+        shippingTrackingNumber: shippingTrackingNumber.trim(),
       });
       onUpdate?.();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error) {
       console.error(error);
     } finally {
@@ -172,17 +152,11 @@ export function DashboardDetailsStack({
   const saveItemNumber = async () => {
     setIsSavingItemNumber(true);
     try {
-      await fetch('/api/orders/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: shipped.id,
-          itemNumber: itemNumber.trim()
-        })
+      await orderAssignmentMutation.mutateAsync({
+        orderId: shipped.id,
+        itemNumber: itemNumber.trim(),
       });
       onUpdate?.();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error) {
       console.error(error);
     } finally {
@@ -208,28 +182,13 @@ export function DashboardDetailsStack({
     }
     setIsDeleteArmed(false);
 
-    setIsDeletingOrder(true);
     try {
-      const response = await fetch('/api/orders/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: shipped.id })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error || 'Failed to delete order');
-      }
+      await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderId: shipped.id });
 
       onUpdate?.();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-      window.dispatchEvent(new CustomEvent('close-shipped-details'));
     } catch (error) {
       console.error('Failed to cancel order:', error);
       window.alert('Failed to cancel order. Please try again.');
-    } finally {
-      setIsDeletingOrder(false);
     }
   };
 
@@ -251,8 +210,6 @@ export function DashboardDetailsStack({
       }
 
       onUpdate?.();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
       window.dispatchEvent(new CustomEvent('tech-undo-applied', {
         detail: {
           tracking: shipped.shipping_tracking_number,
@@ -260,7 +217,7 @@ export function DashboardDetailsStack({
           serialNumbers: data.serialNumbers || [],
         },
       }));
-      window.dispatchEvent(new CustomEvent('close-shipped-details'));
+      dispatchCloseShippedDetails();
     } catch (error) {
       console.error(error);
       window.alert('Failed to undo latest scan.');

@@ -9,7 +9,7 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
  * Component that listens for shipped details events and displays the details panel
  * Used in tech and packer station pages
  */
-export function StationDetailsHandler() {
+export function StationDetailsHandler({ viewMode = 'history' }: { viewMode?: 'history' | 'pending' }) {
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
 
     // Listen for custom events to coordinate details panel
@@ -38,7 +38,7 @@ export function StationDetailsHandler() {
                 <ShippedDetailsPanel 
                     key="station-details-panel"
                     shipped={selectedShipped}
-                    context="station"
+                    context={viewMode === 'pending' ? 'dashboard' : 'station'}
                     onClose={() => {
                         setSelectedShipped(null);
                         window.dispatchEvent(new CustomEvent('close-shipped-details'));

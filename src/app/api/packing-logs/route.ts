@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { classifyScan } from '@/utils/packer';
 import { normalizeSku } from '@/utils/sku';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -120,15 +121,19 @@ export async function POST(req: NextRequest) {
         const staffName = staffNameResult.rows[0]?.name || null;
 
         if (classification.trackingType === 'ORDERS') {
+            const trackingKey18 = normalizeTrackingKey18(scanInput);
+            if (!trackingKey18) {
+                return NextResponse.json({ error: 'Invalid tracking number' }, { status: 400 });
+            }
             const orderLookup = await pool.query(
                 `SELECT id, order_id, shipping_tracking_number
                  FROM orders
-                 WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
-                 AND shipping_tracking_number IS NOT NULL
-                 AND shipping_tracking_number != ''
+                 WHERE shipping_tracking_number IS NOT NULL
+                   AND shipping_tracking_number != ''
+                   AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
                  ORDER BY id DESC
                  LIMIT 1`,
-                [scanInput]
+                [trackingKey18]
             );
 
             if (orderLookup.rows.length === 0) {

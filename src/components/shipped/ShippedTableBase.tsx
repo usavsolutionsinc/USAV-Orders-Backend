@@ -47,7 +47,7 @@ export function ShippedTableBase({
         ? '/api/orders'
         : (
           search
-            ? `/api/shipped/search?q=${encodeURIComponent(search)}`
+            ? `/api/shipped?q=${encodeURIComponent(search)}`
             : `/api/shipped?limit=5000`
         );
       const res = await fetch(url, { cache: 'no-store' });

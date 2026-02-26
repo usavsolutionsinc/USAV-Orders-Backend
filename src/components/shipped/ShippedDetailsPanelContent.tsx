@@ -8,6 +8,7 @@ import { getStaffName } from '@/utils/staff';
 import { getTrackingUrl, getOrderIdUrl, getAccountSourceLabel } from '@/utils/order-links';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { formatDateTimePST } from '@/lib/timezone';
+import { useOrderAssignment } from '@/hooks';
 
 interface DurationData {
   boxingDuration?: string;
@@ -132,6 +133,7 @@ export function ShippedDetailsPanelContent({
 }: ShippedDetailsPanelContentProps) {
   const [conditionValue, setConditionValue] = useState(shipped.condition || 'Parts Used');
   const [isSavingCondition, setIsSavingCondition] = useState(false);
+  const orderAssignmentMutation = useOrderAssignment();
 
   useEffect(() => {
     setConditionValue(shipped.condition || 'Parts Used');
@@ -141,16 +143,10 @@ export function ShippedDetailsPanelContent({
     setConditionValue(nextCondition);
     setIsSavingCondition(true);
     try {
-      await fetch('/api/orders/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: shipped.id,
-          condition: nextCondition,
-        }),
+      await orderAssignmentMutation.mutateAsync({
+        orderId: shipped.id,
+        condition: nextCondition,
       });
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error) {
       console.error('Failed to update condition:', error);
     } finally {

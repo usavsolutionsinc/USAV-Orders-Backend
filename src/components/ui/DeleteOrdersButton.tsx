@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useDeleteOrderRow } from '@/hooks';
 
 interface DeleteOrdersButtonProps {
   orderId?: number;
@@ -24,8 +25,9 @@ export default function DeleteOrdersButton({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const armTimeoutRef = useRef<number | null>(null);
+  const deleteOrderMutation = useDeleteOrderRow();
   const ids = orderId ? [orderId] : (orderIds || []);
-  const isDisabled = disabled || ids.length === 0 || isDeleting;
+  const isDisabled = disabled || ids.length === 0 || isDeleting || deleteOrderMutation.isPending;
 
   useEffect(() => {
     return () => {
@@ -56,15 +58,8 @@ export default function DeleteOrdersButton({
 
     setIsDeleting(true);
     try {
-      const res = await fetch('/api/orders/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds: ids }),
-      });
-
-      if (res.ok) {
-        onDeleted?.();
-      }
+      await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderIds: ids });
+      onDeleted?.();
     } finally {
       setIsDeleting(false);
     }

@@ -20,17 +20,43 @@ interface ReceivingDetailsStackProps {
   onDeleted: (id: string) => void;
 }
 
+const CARRIER_OPTIONS = ['Unknown', 'UPS', 'FedEx', 'USPS', 'AMAZON', 'DHL', 'AliExpress', 'GoFo', 'UniUni'] as const;
+
+function normalizeCarrierValue(value: string | null | undefined): string {
+  const raw = String(value || '').trim();
+  if (!raw) return 'Unknown';
+
+  const normalized = raw.toUpperCase();
+  if (normalized === 'FEDEX') return 'FedEx';
+  if (normalized === 'UPS') return 'UPS';
+  if (normalized === 'USPS') return 'USPS';
+  if (normalized === 'AMAZON') return 'AMAZON';
+  if (normalized === 'DHL') return 'DHL';
+  if (normalized === 'ALIEXPRESS') return 'AliExpress';
+  if (normalized === 'GOFO') return 'GoFo';
+  if (normalized === 'UNIUNI') return 'UniUni';
+  if (normalized === 'UNKNOWN') return 'Unknown';
+
+  // Preserve unexpected values from DB so they remain viewable/editable.
+  return raw;
+}
+
 export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: ReceivingDetailsStackProps) {
   const [tracking, setTracking] = useState(log.tracking || '');
-  const [carrier, setCarrier] = useState(log.status || '');
+  const [carrier, setCarrier] = useState(normalizeCarrierValue(log.status));
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const deleteArmTimeoutRef = useRef<number | null>(null);
+  const saveDebounceRef = useRef<number | null>(null);
+  const initialSyncRef = useRef(true);
 
   useEffect(() => {
     setTracking(log.tracking || '');
-    setCarrier(log.status || '');
+    setCarrier(normalizeCarrierValue(log.status));
+    setSaveMessage('idle');
+    initialSyncRef.current = true;
   }, [log]);
 
   useEffect(() => {
@@ -38,12 +64,16 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
       if (deleteArmTimeoutRef.current) {
         window.clearTimeout(deleteArmTimeoutRef.current);
       }
+      if (saveDebounceRef.current) {
+        window.clearTimeout(saveDebounceRef.current);
+      }
     };
   }, []);
 
   const handleSave = async () => {
     if (!tracking.trim()) return;
     setIsSaving(true);
+    setSaveMessage('saving');
     try {
       const res = await fetch('/api/receiving-logs', {
         method: 'PATCH',
@@ -51,21 +81,38 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         body: JSON.stringify({
           id: Number(log.id),
           tracking: tracking.trim(),
-          status: carrier.trim() || 'Unknown',
+          status: normalizeCarrierValue(carrier),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || 'Failed to update receiving log');
       }
+      setSaveMessage('saved');
       onUpdated();
     } catch (error) {
       console.error('Failed to update receiving log:', error);
-      window.alert('Failed to save receiving log.');
+      setSaveMessage('error');
     } finally {
       setIsSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (initialSyncRef.current) {
+      initialSyncRef.current = false;
+      return;
+    }
+    if (!tracking.trim()) return;
+
+    if (saveDebounceRef.current) {
+      window.clearTimeout(saveDebounceRef.current);
+    }
+    saveDebounceRef.current = window.setTimeout(() => {
+      handleSave();
+    }, 450);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracking, carrier]);
 
   const handleDelete = async () => {
     if (!isDeleteArmed) {
@@ -146,31 +193,33 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
             <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Carrier</label>
             <select
               value={carrier}
-              onChange={(e) => setCarrier(e.target.value)}
+              onChange={(e) => setCarrier(normalizeCarrierValue(e.target.value))}
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
             >
-              <option value="Unknown">Unknown</option>
-              <option value="UPS">UPS</option>
-              <option value="FEDEX">FedEx</option>
-              <option value="USPS">USPS</option>
-              <option value="AMAZON">Amazon</option>
-              <option value="DHL">DHL</option>
-              <option value="ALIEXPRESS">AliExpress</option>
-              <option value="GOFO">GoFo</option>
-              <option value="UNIUNI">UniUni</option>
+              {!CARRIER_OPTIONS.includes(carrier as any) && (
+                <option value={carrier}>{carrier}</option>
+              )}
+              {CARRIER_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
         <div className="mt-auto pt-8 space-y-2">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving || !tracking.trim()}
-            className="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </button>
+          <div className="h-5 text-center">
+            {saveMessage === 'saving' && (
+              <p className="text-[10px] font-black uppercase tracking-wider text-blue-600">Saving...</p>
+            )}
+            {saveMessage === 'saved' && !isSaving && (
+              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Saved</p>
+            )}
+            {saveMessage === 'error' && !isSaving && (
+              <p className="text-[10px] font-black uppercase tracking-wider text-red-600">Save Failed</p>
+            )}
+          </div>
           <button
             type="button"
             onClick={handleDelete}

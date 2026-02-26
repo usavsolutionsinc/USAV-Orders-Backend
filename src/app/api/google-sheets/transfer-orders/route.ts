@@ -42,14 +42,10 @@ function formatPackDateTimeForSheet(dateValue: Date | string | null) {
     }).format(date);
 }
 
-export async function POST(req: NextRequest) {
+async function runTransferOrders(manualSheetName?: string) {
     try {
         const auth = getGoogleAuth();
         const sheets = google.sheets({ version: 'v4', auth });
-
-        // Parse request body for manual sheet name
-        const body = await req.json().catch(() => ({}));
-        const manualSheetName = body.manualSheetName;
 
         // 1. Find the most relevant sheet tabs
         const [sourceSpreadsheet, destSpreadsheet] = await Promise.all([
@@ -448,4 +444,14 @@ export async function POST(req: NextRequest) {
             error: error.message || 'Internal Server Error' 
         }, { status: 500 });
     }
+}
+
+export async function GET() {
+    return runTransferOrders();
+}
+
+export async function POST(req: NextRequest) {
+    const body = await req.json().catch(() => ({}));
+    const manualSheetName = body?.manualSheetName;
+    return runTransferOrders(manualSheetName);
 }

@@ -127,12 +127,12 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
         setHasSearched(true);
         try {
             // First pass: use exact input so full order IDs are matched as stored in orders.order_id.
-            let res = await fetch(`/api/shipped/search?q=${encodeURIComponent(trimmedQuery)}`);
+            let res = await fetch(`/api/shipped?q=${encodeURIComponent(trimmedQuery)}`);
             let data = await res.json();
 
             // Fallback for tracking searches: retry with normalized last-8 if no results.
             if ((!data?.results || data.results.length === 0) && normalizedQuery !== trimmedQuery) {
-                res = await fetch(`/api/shipped/search?q=${encodeURIComponent(normalizedQuery)}`);
+                res = await fetch(`/api/shipped?q=${encodeURIComponent(normalizedQuery)}`);
                 data = await res.json();
             }
             

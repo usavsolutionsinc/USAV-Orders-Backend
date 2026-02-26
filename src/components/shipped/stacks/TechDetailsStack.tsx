@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Trash2 } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
+import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
 
 export function TechDetailsStack({
   shipped,
@@ -63,9 +64,8 @@ export function TechDetailsStack({
       }
 
       onUpdate?.();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-      window.dispatchEvent(new CustomEvent('close-shipped-details'));
+      dispatchDashboardAndStationRefresh();
+      dispatchCloseShippedDetails();
     } catch (error) {
       console.error('Failed to delete tech records:', error);
       window.alert('Failed to delete tech records. Please try again.');

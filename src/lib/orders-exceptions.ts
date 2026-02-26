@@ -1,5 +1,5 @@
 import pool from '@/lib/db';
-import { normalizeTrackingLast8 } from '@/lib/tracking-format';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 export type ExceptionSourceStation = 'tech' | 'packer' | 'verify' | 'mobile';
 
@@ -17,48 +17,31 @@ export interface OrdersExceptionRecord {
 }
 
 let tableEnsured = false;
+type DbClient = {
+  query: (text: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>;
+};
 
-async function ensureOrdersExceptionsTable(): Promise<void> {
-  if (tableEnsured) return;
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS orders_exceptions (
-      id SERIAL PRIMARY KEY,
-      shipping_tracking_number TEXT NOT NULL,
-      source_station VARCHAR(20) NOT NULL,
-      staff_id INTEGER REFERENCES staff(id) ON DELETE SET NULL,
-      staff_name TEXT,
-      exception_reason VARCHAR(50) NOT NULL DEFAULT 'not_found',
-      notes TEXT,
-      status VARCHAR(20) NOT NULL DEFAULT 'open',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_exceptions_status ON orders_exceptions(status)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_exceptions_tracking ON orders_exceptions(shipping_tracking_number)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_exceptions_source_status ON orders_exceptions(source_station, status)`);
-
+export async function findOrderByTrackingKey(
+  shippingTrackingNumber: string,
+  dbClient: DbClient = pool
+): Promise<{ id: number; shipping_tracking_number: string } | null> {
+  // Keep tableEnsured variable for backwards compatibility with existing imports/tests.
+  // Table creation is handled by migrations, not request-time DDL.
   tableEnsured = true;
-}
-
-export async function findOrderByTrackingKey(shippingTrackingNumber: string): Promise<{ id: number; shipping_tracking_number: string } | null> {
-  await ensureOrdersExceptionsTable();
 
   const rawTracking = String(shippingTrackingNumber || '').trim();
-  const trackingLast8 = normalizeTrackingLast8(rawTracking);
-  if (!trackingLast8 || trackingLast8.length < 8) return null;
+  const trackingKey18 = normalizeTrackingKey18(rawTracking);
+  if (!trackingKey18) return null;
 
-  const result = await pool.query(
+  const result = await dbClient.query(
     `SELECT id, shipping_tracking_number
      FROM orders
      WHERE shipping_tracking_number IS NOT NULL
        AND shipping_tracking_number != ''
-       AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+       AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
      ORDER BY id DESC
      LIMIT 1`,
-    [trackingLast8]
+    [trackingKey18]
   );
 
   return result.rows[0] || null;
@@ -71,37 +54,37 @@ export async function upsertOpenOrderException(params: {
   staffName?: string | null;
   reason?: string;
   notes?: string | null;
-}): Promise<{ exception: OrdersExceptionRecord | null; matchedOrderId: number | null }> {
-  await ensureOrdersExceptionsTable();
+}, dbClient: DbClient = pool): Promise<{ exception: OrdersExceptionRecord | null; matchedOrderId: number | null }> {
+  tableEnsured = true;
 
   const tracking = String(params.shippingTrackingNumber || '').trim();
   if (tracking.includes(':')) {
     return { exception: null, matchedOrderId: null };
   }
-  const normalizedDigits = tracking.replace(/\D/g, '');
-  const trackingLast8 = normalizeTrackingLast8(tracking);
-  if (!tracking || !trackingLast8 || normalizedDigits.length < 8) {
+  const trackingKey18 = normalizeTrackingKey18(tracking);
+  if (!tracking || !trackingKey18) {
     return { exception: null, matchedOrderId: null };
   }
 
-  const matchedOrder = await findOrderByTrackingKey(tracking);
+  const matchedOrder = await findOrderByTrackingKey(tracking, dbClient);
   if (matchedOrder) {
     return { exception: null, matchedOrderId: matchedOrder.id };
   }
 
-  const existing = await pool.query(
+  const existing = await dbClient.query(
     `SELECT *
      FROM orders_exceptions
      WHERE status = 'open'
-       AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+       AND source_station = $2
+       AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
      ORDER BY id DESC
      LIMIT 1`,
-    [trackingLast8]
+    [trackingKey18, params.sourceStation]
   );
 
   if (existing.rows.length > 0) {
     const existingRow = existing.rows[0];
-    const updated = await pool.query(
+    const updated = await dbClient.query(
       `UPDATE orders_exceptions
        SET shipping_tracking_number = $1,
            source_station = $2,
@@ -126,7 +109,7 @@ export async function upsertOpenOrderException(params: {
     return { exception: updated.rows[0], matchedOrderId: null };
   }
 
-  const inserted = await pool.query(
+  const inserted = await dbClient.query(
     `INSERT INTO orders_exceptions (
       shipping_tracking_number,
       source_station,
@@ -157,7 +140,7 @@ export async function syncOrderExceptionsToOrders(): Promise<{
   matched: number;
   deleted: number;
 }> {
-  await ensureOrdersExceptionsTable();
+  tableEnsured = true;
 
   const openExceptions = await pool.query(
     `SELECT id, shipping_tracking_number
@@ -170,18 +153,18 @@ export async function syncOrderExceptionsToOrders(): Promise<{
   let deleted = 0;
 
   for (const row of openExceptions.rows) {
-    const trackingLast8 = normalizeTrackingLast8(String(row.shipping_tracking_number || ''));
-    if (!trackingLast8 || trackingLast8.length < 8) continue;
+    const trackingKey18 = normalizeTrackingKey18(String(row.shipping_tracking_number || ''));
+    if (!trackingKey18) continue;
 
     const orderMatch = await pool.query(
       `SELECT id, shipping_tracking_number, is_shipped
        FROM orders
        WHERE shipping_tracking_number IS NOT NULL
          AND shipping_tracking_number != ''
-         AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+         AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
        ORDER BY id DESC
        LIMIT 1`,
-      [trackingLast8]
+      [trackingKey18]
     );
 
     if (orderMatch.rows.length === 0) continue;
@@ -195,7 +178,7 @@ export async function syncOrderExceptionsToOrders(): Promise<{
            is_shipped = CASE
              WHEN EXISTS (
                SELECT 1 FROM packer_logs pl
-               WHERE RIGHT(regexp_replace(COALESCE(pl.shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $2
+               WHERE RIGHT(regexp_replace(UPPER(COALESCE(pl.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $2
                  AND pl.tracking_type = 'ORDERS'
              ) THEN true
              ELSE is_shipped
@@ -203,13 +186,13 @@ export async function syncOrderExceptionsToOrders(): Promise<{
            status = CASE
              WHEN EXISTS (
                SELECT 1 FROM packer_logs pl
-               WHERE RIGHT(regexp_replace(COALESCE(pl.shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $2
+               WHERE RIGHT(regexp_replace(UPPER(COALESCE(pl.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $2
                  AND pl.tracking_type = 'ORDERS'
              ) THEN 'shipped'
              ELSE status
            END
        WHERE id = $3`,
-      [String(row.shipping_tracking_number || ''), trackingLast8, order.id]
+      [String(row.shipping_tracking_number || ''), trackingKey18, order.id]
     );
 
     const deletedResult = await pool.query(

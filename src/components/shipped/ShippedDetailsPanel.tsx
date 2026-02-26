@@ -10,6 +10,7 @@ import { TechDetailsStack } from './stacks/TechDetailsStack';
 import { DetailsStackDurationData } from './stacks/types';
 import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
 import { QtyBadge } from '@/components/ui/QtyBadge';
+import { useDeleteOrderRow } from '@/hooks';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -28,8 +29,9 @@ export function ShippedDetailsPanel({
   const [durationData, setDurationData] = useState<DetailsStackDurationData>({});
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState(false);
-  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
+  const deleteOrderMutation = useDeleteOrderRow();
+  const isDeletingOrder = deleteOrderMutation.isPending;
 
   useEffect(() => {
     setShipped(initialShipped);
@@ -80,30 +82,17 @@ export function ShippedDetailsPanel({
     }
 
     setIsDeleteArmed(false);
-    setIsDeletingOrder(true);
     try {
-      const endpoint = isExceptionRow ? '/api/orders-exceptions/delete' : '/api/orders/delete';
-      const payload = isExceptionRow ? { exceptionId: targetId } : { orderId: targetId };
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.success) {
-        throw new Error(data?.error || 'Failed to delete row');
+      if (isExceptionRow) {
+        await deleteOrderMutation.mutateAsync({ rowSource: 'exception', exceptionId: targetId });
+      } else {
+        await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderId: targetId });
       }
 
       _onUpdate();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-      window.dispatchEvent(new CustomEvent('close-shipped-details'));
     } catch (error) {
       console.error('Failed to delete shipped order:', error);
       window.alert('Failed to delete shipped order. Please try again.');
-    } finally {
-      setIsDeletingOrder(false);
     }
   };
 

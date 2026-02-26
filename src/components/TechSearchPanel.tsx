@@ -30,7 +30,7 @@ export default function TechSearchPanel() {
 
         setIsSearching(true);
         try {
-            const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(searchQuery)}`);
+            const res = await fetch(`/api/shipped?q=${encodeURIComponent(searchQuery)}`);
             const data = await res.json();
             
             if (data.results) {

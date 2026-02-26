@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
 export interface HistoryLog {
     id: string;
@@ -61,10 +62,11 @@ export function useStationHistory({
                 setHistory(normalizedData);
 
                 // Calculate today's count
-                const today = new Date().toISOString().split('T')[0];
+                const today = getCurrentPSTDateKey();
                 const count = normalizedData.filter((log: HistoryLog) => {
                     try {
-                        return log.timestamp && log.timestamp.split('T')[0] === today;
+                        const logDateKey = toPSTDateKey(log.timestamp);
+                        return !!logDateKey && logDateKey === today;
                     } catch (e) {
                         return false;
                     }

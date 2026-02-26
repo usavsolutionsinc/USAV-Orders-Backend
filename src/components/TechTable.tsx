@@ -8,21 +8,7 @@ import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-
-// Hard-coded staff ID to name mapping
-const STAFF_NAMES: { [key: number]: string } = {
-  1: 'Michael',
-  2: 'Thuc',
-  3: 'Sang',
-  4: 'Tuan',
-  5: 'Thuy',
-  6: 'Cuong'
-};
-
-function getStaffName(staffId: number | null | undefined): string {
-  if (!staffId) return '---';
-  return STAFF_NAMES[staffId] || `#${staffId}`;
-}
+import { useStaffNameMap } from '@/hooks';
 
 interface TechRecord {
   id: number;
@@ -50,6 +36,7 @@ interface TechTableProps {
 }
 
 export function TechTable({ testedBy }: TechTableProps) {
+  const { getStaffName } = useStaffNameMap();
   const [records, setRecords] = useState<TechRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [stickyDate, setStickyDate] = useState<string>('');

@@ -17,3 +17,9 @@ export type { HistoryLog, StationHistoryResult, StationHistoryOptions } from './
 export { useRepairs, useRepair, useUpdateRepairStatus, useUpdateRepairNotes, useUpdateRepairField } from './useRepairQueries';
 export { useShipped, useShippedRecord, useUpdateShippedStatus, useUpdateShippedField } from './useShippedQueries';
 export { useStaffNameMap } from './useStaffNameMap';
+export { useOrderAssignment } from './useOrderAssignment';
+export type { OrderAssignPayload } from './useOrderAssignment';
+export { useDeleteOrderRow } from './useDeleteOrderRow';
+export type { DeleteOrderRowPayload } from './useDeleteOrderRow';
+export { useStationTestingController, getOrderIdLast4 } from './useStationTestingController';
+export type { ActiveStationOrder, StationThemeColor } from './useStationTestingController';

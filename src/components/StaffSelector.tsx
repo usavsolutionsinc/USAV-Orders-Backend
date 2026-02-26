@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check } from './Icons';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 
 interface Staff {
     id: number;
@@ -31,6 +32,20 @@ export default function StaffSelector({ role, selectedStaffId, onSelect }: Staff
     });
 
     const selectedStaff = staff.find(s => s.id === selectedStaffId);
+    const techOrder = ['michael', 'thuc', 'sang', 'cuong'];
+    const orderMap = new Map(techOrder.map((name, index) => [name, index]));
+    const sortedStaff = [...staff].sort((a, b) => {
+        if (role === 'packer') {
+            return a.id - b.id;
+        }
+        const aName = a.name.trim().toLowerCase();
+        const bName = b.name.trim().toLowerCase();
+        const aRank = orderMap.has(aName) ? (orderMap.get(aName) as number) : Number.MAX_SAFE_INTEGER;
+        const bRank = orderMap.has(bName) ? (orderMap.get(bName) as number) : Number.MAX_SAFE_INTEGER;
+        if (aRank !== bRank) return aRank - bRank;
+        return a.name.localeCompare(b.name);
+    });
+    const selectedTheme = selectedStaff ? getStaffThemeById(selectedStaff.id, role) : null;
 
     if (isLoading) {
         return (
@@ -44,7 +59,7 @@ export default function StaffSelector({ role, selectedStaffId, onSelect }: Staff
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
             >
-                <span className="text-xs font-black text-gray-900 tracking-tight">
+                <span className={`text-xs font-black tracking-tight ${selectedTheme ? stationThemeColors[selectedTheme].text : 'text-gray-900'}`}>
                     {selectedStaff ? selectedStaff.name : 'Select Staff'}
                 </span>
                 <svg 
@@ -65,23 +80,28 @@ export default function StaffSelector({ role, selectedStaffId, onSelect }: Staff
                     />
                     <div className="absolute top-full left-0 mt-1 min-w-[160px] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-[70] animate-in fade-in slide-in-from-top-1 duration-200">
                         <div className="p-1 space-y-1">
-                            {staff.map((member) => (
-                                <button
-                                    key={member.id}
-                                    onClick={() => {
-                                        onSelect(member.id, member.name);
-                                        setIsOpen(false);
-                                    }}
-                                    className="w-full flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all group text-left"
-                                >
-                                    <span className={`text-[11px] font-bold ${selectedStaffId === member.id ? 'text-blue-600' : 'text-gray-700'}`}>
-                                        {member.name}
-                                    </span>
-                                    {selectedStaffId === member.id && (
-                                        <Check className="w-3 h-3 text-blue-600" />
-                                    )}
-                                </button>
-                            ))}
+                            {sortedStaff.map((member) => {
+                                const isSelected = selectedStaffId === member.id;
+                                const theme = getStaffThemeById(member.id, role);
+                                const textClass = stationThemeColors[theme].text;
+                                return (
+                                    <button
+                                        key={member.id}
+                                        onClick={() => {
+                                            onSelect(member.id, member.name);
+                                            setIsOpen(false);
+                                        }}
+                                        className="w-full flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all group text-left"
+                                    >
+                                        <span className={`text-[11px] font-bold ${isSelected ? textClass : 'text-gray-700'}`}>
+                                            {member.name}
+                                        </span>
+                                        {isSelected && (
+                                            <Check className={`w-3 h-3 ${textClass}`} />
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </>

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/google-sheets/transfer-orders",
+      "schedule": "30 16 * * 1-5"
+    }
+  ]
+}
