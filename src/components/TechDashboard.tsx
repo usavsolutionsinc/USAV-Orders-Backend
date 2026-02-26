@@ -106,7 +106,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
             </div>
             <div className="flex-1 overflow-hidden">
                 {rightViewMode === 'pending' ? (
-                    <DashboardShippedTable testedBy={parseInt(techId)} unshippedOnly />
+                    <DashboardShippedTable unshippedOnly />
                 ) : (
                     <TechTable testedBy={parseInt(techId)} />
                 )}
