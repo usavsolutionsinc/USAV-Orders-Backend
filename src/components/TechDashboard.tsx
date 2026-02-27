@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import StationLayout from './station/StationLayout';
 import { TechTable } from './TechTable';
-import { DashboardShippedTable } from './shipped/DashboardShippedTable';
+import { ShippedTable } from './shipped/ShippedTable';
 import StationTesting from './station/StationTesting';
 import StaffSelector from './StaffSelector';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
@@ -125,7 +125,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
             </div>
             <div className="flex-1 overflow-hidden">
                 {rightViewMode === 'pending' ? (
-                    <DashboardShippedTable unshippedOnly />
+                    <ShippedTable ordersOnly />
                 ) : (
                     <TechTable testedBy={parseInt(techId)} />
                 )}

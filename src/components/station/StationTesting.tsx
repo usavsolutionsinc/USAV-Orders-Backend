@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
-import { Barcode, AlertCircle, Loader2, Check } from '../Icons';
+import { Barcode, AlertCircle, Loader2, Check, Search } from '../Icons';
 import ActiveStationOrderCard from './ActiveStationOrderCard';
 import { useStationTestingController } from '@/hooks/useStationTestingController';
 
@@ -30,6 +31,7 @@ export default function StationTesting({
   goal = 50,
   onComplete,
 }: StationTestingProps) {
+  const router = useRouter();
   const safeGoal = Math.max(1, Number(goal) || 1);
   const goalProgressPercent = Math.min((todayCount / safeGoal) * 100, 100);
   const remainingToGoal = Math.max(safeGoal - todayCount, 0);
@@ -65,7 +67,21 @@ export default function StationTesting({
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 pb-2 space-y-4">
           <div className="space-y-0.5">
-            <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.setItem('dashboard-focus-search', '1');
+                  router.push('/dashboard?pending');
+                }}
+                className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
+                title="Go to Dashboard"
+                aria-label="Go to Dashboard"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2 px-1">

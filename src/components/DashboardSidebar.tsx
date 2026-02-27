@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, History, Search } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SearchBar } from './ui/SearchBar';
@@ -10,6 +10,7 @@ interface DashboardSidebarProps {
     showIntakeForm?: boolean;
     onCloseForm?: () => void;
     onFormSubmit?: (data: ShippedFormData) => void;
+    filterControl?: ReactNode;
 }
 
 interface SearchHistory {
@@ -17,7 +18,7 @@ interface SearchHistory {
     timestamp: Date;
 }
 
-export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit }: DashboardSidebarProps) {
+export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit, filterControl }: DashboardSidebarProps) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isTransferring, setIsTransferring] = useState(false);
     const [manualSheetName, setManualSheetName] = useState('');
@@ -26,6 +27,35 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
     const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        const focusSearchInput = () => {
+            window.setTimeout(() => {
+                searchInputRef.current?.focus();
+            }, 50);
+        };
+
+        const handleFocusSearch = () => {
+            focusSearchInput();
+        };
+
+        window.addEventListener('dashboard-focus-search' as any, handleFocusSearch as any);
+
+        try {
+            const shouldFocus = sessionStorage.getItem('dashboard-focus-search') === '1';
+            if (shouldFocus) {
+                sessionStorage.removeItem('dashboard-focus-search');
+                focusSearchInput();
+            }
+        } catch (_error) {
+            // no-op for environments where sessionStorage is unavailable
+        }
+
+        return () => {
+            window.removeEventListener('dashboard-focus-search' as any, handleFocusSearch as any);
+        };
+    }, []);
 
     useEffect(() => {
         try {
@@ -209,8 +239,14 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                     initial="hidden"
                     animate="visible"
                     variants={containerVariants}
-                    className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide"
+                    className="h-full flex flex-col overflow-hidden"
                 >
+                    {filterControl ? (
+                        <motion.div variants={itemVariants} className="relative z-20">
+                            {filterControl}
+                        </motion.div>
+                    ) : null}
+                    <div className={`h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
                     <motion.header variants={itemVariants}>
                         <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                             Management
@@ -227,6 +263,7 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                                 onChange={setSearchQuery}
                                 onSearch={handleSearch}
                                 onClear={() => handleSearch('')}
+                                inputRef={searchInputRef}
                                 placeholder="Search orders, serials..."
                                 variant="blue"
                                 rightElement={
@@ -384,6 +421,7 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                     <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
                         <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
                     </motion.footer>
+                    </div>
                 </motion.div>
                 )}
             </aside>

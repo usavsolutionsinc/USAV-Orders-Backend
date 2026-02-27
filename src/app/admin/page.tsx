@@ -4,9 +4,10 @@ import { useState } from 'react';
 import { StaffManagementTab } from '@/components/admin/StaffManagementTab';
 import { ConnectionsManagementTab } from '@/components/admin/ConnectionsManagementTab';
 import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
+import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'staff' | 'goals' | 'connections'>('goals');
+  const [activeTab, setActiveTab] = useState<'staff' | 'goals' | 'connections' | 'fba'>('goals');
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50 relative">
@@ -48,6 +49,16 @@ export default function AdminPage() {
               >
                 Connections
               </button>
+              <button
+                onClick={() => setActiveTab('fba')}
+                className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all ${
+                  activeTab === 'fba'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                FBA
+              </button>
             </div>
           </div>
         </header>
@@ -57,6 +68,8 @@ export default function AdminPage() {
             <StaffManagementTab />
           ) : activeTab === 'connections' ? (
             <ConnectionsManagementTab />
+          ) : activeTab === 'fba' ? (
+            <FBAManagementTab />
           ) : (
             <GoalsAnalyticsTab />
           )}

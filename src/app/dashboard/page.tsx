@@ -3,14 +3,46 @@
 import { Suspense, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import DashboardSidebar from '@/components/DashboardSidebar';
-import { DashboardShippedTable, ShippedDetailsPanel, type ShippedFormData } from '@/components/shipped';
+import ShippedSidebar from '@/components/ShippedSidebar';
+import { ShippedDetailsPanel, ShippedTable, type ShippedFormData } from '@/components/shipped';
+import { ShippedTableBase } from '@/components/shipped/ShippedTableBase';
+import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
+import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
 import { Loader2 } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { dmSans } from '@/lib/fonts';
+
+type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
+
+const ORDER_VIEW_OPTIONS: Array<{ value: DashboardOrderView; label: string }> = [
+    { value: 'unshipped', label: 'Unshipped Orders' },
+    { value: 'pending', label: 'Pending Orders' },
+    { value: 'shipped', label: 'Shipped Orders' },
+];
+
+const getOrderViewFromSearch = (search: string): DashboardOrderView => {
+    const params = new URLSearchParams(search);
+    if (params.has('unshipped')) return 'unshipped';
+    if (params.has('pending')) return 'pending';
+    if (params.has('shipped')) return 'shipped';
+    return 'pending';
+};
+
+const normalizeOrderViewParams = (params: URLSearchParams, preferredView?: DashboardOrderView): DashboardOrderView => {
+    const nextView = preferredView ?? getOrderViewFromSearch(params.toString());
+    params.delete('unshipped');
+    params.delete('pending');
+    params.delete('shipped');
+    params.set(nextView, '');
+    return nextView;
+};
 
 export default function DashboardPage() {
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [showIntakeForm, setShowIntakeForm] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [orderView, setOrderView] = useState<DashboardOrderView>('pending');
+    const [isOrderViewOpen, setIsOrderViewOpen] = useState(false);
 
     useEffect(() => {
         const handleOpen = (e: CustomEvent<ShippedOrder>) => {
@@ -29,10 +61,15 @@ export default function DashboardPage() {
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const isNew = new URLSearchParams(window.location.search).get('new') === 'true';
+        const params = new URLSearchParams(window.location.search);
+        const isNew = params.get('new') === 'true';
         if (isNew) {
             setShowIntakeForm(true);
-            window.history.replaceState({}, '', '/dashboard');
+            params.delete('new');
+            if (!params.has('shipped') && !params.has('pending') && !params.has('unshipped')) {
+                params.set('pending', '');
+            }
+            window.history.replaceState({}, '', `/dashboard?${params.toString()}`);
         }
     }, []);
 
@@ -44,8 +81,43 @@ export default function DashboardPage() {
         };
     }, []);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const syncFromUrl = () => {
+            const params = new URLSearchParams(window.location.search);
+            const nextView = normalizeOrderViewParams(params);
+            window.history.replaceState({}, '', `/dashboard?${params.toString()}`);
+            setOrderView(nextView);
+        };
+
+        const params = new URLSearchParams(window.location.search);
+        normalizeOrderViewParams(params);
+        window.history.replaceState({}, '', `/dashboard?${params.toString()}`);
+
+        syncFromUrl();
+        window.addEventListener('popstate', syncFromUrl);
+        return () => {
+            window.removeEventListener('popstate', syncFromUrl);
+        };
+    }, []);
+
     const handleCloseForm = () => {
         setShowIntakeForm(false);
+    };
+
+    const handleOrderViewChange = (nextView: DashboardOrderView) => {
+        const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+        normalizeOrderViewParams(params, nextView);
+        if (nextView !== 'shipped') {
+            params.delete('search');
+        }
+        if (typeof window !== 'undefined') {
+            window.history.replaceState({}, '', `/dashboard?${params.toString()}`);
+        }
+        setOrderView(nextView);
+        setIsOrderViewOpen(false);
+        setSelectedShipped(null);
+        window.dispatchEvent(new CustomEvent('close-shipped-details'));
     };
 
     const handleSubmitForm = async (data: ShippedFormData) => {
@@ -85,6 +157,45 @@ export default function DashboardPage() {
         }
     };
 
+    const filterControl = (
+        <section className="relative w-full">
+            <button
+                type="button"
+                onClick={() => setIsOrderViewOpen((prev) => !prev)}
+                className={`flex h-14 w-full items-center justify-between border-b border-gray-200 bg-white px-4 text-left text-[13px] uppercase tracking-wide text-gray-900 hover:bg-gray-50 transition-colors ${dmSans.className} font-bold`}
+            >
+                <span>{ORDER_VIEW_OPTIONS.find((option) => option.value === orderView)?.label}</span>
+                <svg
+                    className={`h-4 w-4 text-gray-500 transition-transform ${isOrderViewOpen ? 'rotate-180' : ''}`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+                </svg>
+            </button>
+            {isOrderViewOpen ? (
+                <div className="absolute left-0 right-0 top-full z-50 border-b border-gray-200 bg-white shadow-xl">
+                    {ORDER_VIEW_OPTIONS.map((option) => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => handleOrderViewChange(option.value)}
+                            className={`w-full border-t border-gray-100 px-4 py-4 text-left text-[13px] uppercase tracking-wide transition-colors ${dmSans.className} ${
+                                orderView === option.value
+                                    ? 'bg-blue-600 text-white font-bold'
+                                    : 'bg-white text-gray-700 font-semibold hover:bg-blue-50 hover:text-blue-700'
+                            }`}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+        </section>
+    );
+
     return (
         <div className="flex h-full w-full">
             <motion.div
@@ -115,11 +226,29 @@ export default function DashboardPage() {
                     }}
                     className="h-full w-[300px]"
                 >
-                    <DashboardSidebar
-                        showIntakeForm={showIntakeForm}
-                        onCloseForm={handleCloseForm}
-                        onFormSubmit={handleSubmitForm}
-                    />
+                    {orderView === 'shipped' ? (
+                        <ShippedSidebar
+                            showIntakeForm={showIntakeForm}
+                            onCloseForm={handleCloseForm}
+                            onFormSubmit={handleSubmitForm}
+                            filterControl={filterControl}
+                            showDetailsPanel={false}
+                        />
+                    ) : orderView === 'unshipped' ? (
+                        <UnshippedSidebar
+                            showIntakeForm={showIntakeForm}
+                            onCloseForm={handleCloseForm}
+                            onFormSubmit={handleSubmitForm}
+                            filterControl={filterControl}
+                        />
+                    ) : (
+                        <DashboardSidebar
+                            showIntakeForm={showIntakeForm}
+                            onCloseForm={handleCloseForm}
+                            onFormSubmit={handleSubmitForm}
+                            filterControl={filterControl}
+                        />
+                    )}
                 </motion.div>
             </motion.div>
             <Suspense fallback={
@@ -127,21 +256,41 @@ export default function DashboardPage() {
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                 </div>
             }>
-                <DashboardShippedTable key={refreshKey} />
+                {orderView === 'shipped' ? (
+                    <ShippedTable key={`shipped-${refreshKey}`} showWeekNavigation={false} />
+                ) : orderView === 'unshipped' ? (
+                    <ShippedTableBase key={`unshipped-${refreshKey}`} ordersOnly missingTrackingOnly showWeekNavigation={false} />
+                ) : (
+                    <ShippedTableBase key={`pending-${refreshKey}`} ordersOnly showWeekNavigation={false} />
+                )}
             </Suspense>
 
             <AnimatePresence>
                 {selectedShipped && (
-                    <ShippedDetailsPanel
-                        shipped={selectedShipped}
-                        onClose={() => {
-                            window.dispatchEvent(new CustomEvent('close-shipped-details'));
-                            setSelectedShipped(null);
-                        }}
-                        onUpdate={() => {
-                            window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-                        }}
-                    />
+                    orderView === 'unshipped' ? (
+                        <UnshippedDetailsPanel
+                            shipped={selectedShipped}
+                            onClose={() => {
+                                window.dispatchEvent(new CustomEvent('close-shipped-details'));
+                                setSelectedShipped(null);
+                            }}
+                            onUpdate={() => {
+                                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+                            }}
+                        />
+                    ) : (
+                        <ShippedDetailsPanel
+                            shipped={selectedShipped}
+                            context={orderView === 'shipped' ? 'shipped' : 'dashboard'}
+                            onClose={() => {
+                                window.dispatchEvent(new CustomEvent('close-shipped-details'));
+                                setSelectedShipped(null);
+                            }}
+                            onUpdate={() => {
+                                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+                            }}
+                        />
+                    )
                 )}
             </AnimatePresence>
         </div>

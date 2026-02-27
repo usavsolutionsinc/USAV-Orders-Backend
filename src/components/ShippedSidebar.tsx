@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
@@ -20,6 +20,8 @@ interface ShippedSidebarProps {
     showIntakeForm?: boolean;
     onCloseForm?: () => void;
     onFormSubmit?: (data: ShippedFormData) => void;
+    filterControl?: ReactNode;
+    showDetailsPanel?: boolean;
 }
 
 // Hard-coded staff ID to name mapping
@@ -37,7 +39,7 @@ function getStaffName(staffId: number | null | undefined): string {
     return STAFF_NAMES[staffId] || `Staff #${staffId}`;
 }
 
-export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit }: ShippedSidebarProps) {
+export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit, filterControl, showDetailsPanel = true }: ShippedSidebarProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<ShippedOrder[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -165,7 +167,9 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                         onSubmit={onFormSubmit || (() => {})}
                     />
                 ) : (
-                <div className="p-6 h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide">
+                <div className="h-full flex flex-col overflow-hidden">
+                    {filterControl ? <div className="relative z-20">{filterControl}</div> : null}
+                    <div className={`h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
                     <header>
                         <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                             Shipped Orders
@@ -325,13 +329,14 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                     <footer className="mt-auto pt-4 border-t border-gray-200 opacity-30 text-center">
                         <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV SHIPPED</p>
                     </footer>
+                    </div>
                 </div>
                 )}
             </aside>
 
             {/* Details Panel Overlay - Reused Instance coordinated by shared state/events */}
             <AnimatePresence>
-                {selectedShipped && (
+                {showDetailsPanel && selectedShipped && (
                     <ShippedDetailsPanel 
                         key="shipped-details-panel-shared-instance"
                         shipped={selectedShipped}

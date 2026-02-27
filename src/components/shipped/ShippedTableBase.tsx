@@ -17,14 +17,16 @@ import { DateGroupHeader } from './DateGroupHeader';
 export interface ShippedTableBaseProps {
   packedBy?: number; // Filter by packer ID
   testedBy?: number; // Filter by tester ID
-  unshippedOnly?: boolean;
+  ordersOnly?: boolean;
+  missingTrackingOnly?: boolean;
   showWeekNavigation?: boolean;
 }
 
 export function ShippedTableBase({
   packedBy,
   testedBy,
-  unshippedOnly = false,
+  ordersOnly = false,
+  missingTrackingOnly = false,
   showWeekNavigation = true,
 }: ShippedTableBaseProps = {}) {
   const { getStaffName } = useStaffNameMap();
@@ -49,7 +51,7 @@ export function ShippedTableBase({
       setLoading(true);
     }
     try {
-      const url = unshippedOnly
+      const url = ordersOnly
         ? '/api/orders'
         : (
           search
@@ -60,7 +62,7 @@ export function ShippedTableBase({
       const data = await res.json();
       
       let records = data.results || data.shipped || [];
-      if (unshippedOnly) {
+      if (ordersOnly) {
         records = (data.orders || []).map((order: any) => ({
           ...order,
           pack_date_time: order.ship_by_date || null,
@@ -70,7 +72,14 @@ export function ShippedTableBase({
           condition: order.condition || '',
         }));
       }
-      
+
+      if (missingTrackingOnly) {
+        records = records.filter((record: any) => {
+          const tracking = String(record.shipping_tracking_number || '').trim();
+          return tracking.length === 0;
+        });
+      }
+
       // Apply client-side filters if provided
       if (packedBy !== undefined) {
         records = records.filter((record: ShippedOrder) => record.packed_by === packedBy);
@@ -92,7 +101,7 @@ export function ShippedTableBase({
       setIsRefreshing(false);
       setLoading(false);
     }
-  }, [search, packedBy, testedBy, unshippedOnly]);
+  }, [search, packedBy, testedBy, ordersOnly, missingTrackingOnly]);
 
   useEffect(() => {
     fetchShipped();
@@ -147,7 +156,7 @@ export function ShippedTableBase({
   }, []);
 
   useEffect(() => {
-    if (!unshippedOnly) return;
+    if (!ordersOnly) return;
 
     const handleDashboardSearch = (e: any) => {
       setDashboardSearch(String(e?.detail?.query || '').trim());
@@ -158,7 +167,7 @@ export function ShippedTableBase({
     return () => {
       window.removeEventListener('dashboard-search' as any, handleDashboardSearch as any);
     };
-  }, [unshippedOnly, fetchShipped]);
+  }, [ordersOnly, fetchShipped]);
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
   const getLast4 = (value: string | null | undefined) => {
@@ -244,12 +253,12 @@ export function ShippedTableBase({
     setSelectedShipped(record);
   }, []);
 
-  const activeSearch = unshippedOnly ? dashboardSearch : search;
+  const activeSearch = ordersOnly ? dashboardSearch : search;
   const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
   const searchDigits = normalizedSearch.replace(/\D/g, '');
   const last8 = searchDigits.slice(-8);
 
-  const filteredRecords = (unshippedOnly && normalizedSearch)
+  const filteredRecords = (ordersOnly && normalizedSearch)
     ? shipped.filter((record) => {
         const productTitle = String(record.product_title || '').toLowerCase();
         const orderId = String(record.order_id || '').toLowerCase();
@@ -278,17 +287,17 @@ export function ShippedTableBase({
     : shipped;
 
   useEffect(() => {
-    if (!unshippedOnly || !normalizedSearch) return;
+    if (!ordersOnly || !normalizedSearch) return;
     if (filteredRecords.length === 1) {
       handleRowClick(filteredRecords[0]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unshippedOnly, normalizedSearch, filteredRecords.length]);
+  }, [ordersOnly, normalizedSearch, filteredRecords.length]);
 
-  // Group records by date (using ship_by_date for unshipped view, pack_date_time otherwise)
+  // Group records by date (using ship_by_date for orders view, pack_date_time otherwise)
   const groupedShipped: { [key: string]: ShippedOrder[] } = {};
   filteredRecords.forEach(record => {
-    const dateSource = unshippedOnly
+    const dateSource = ordersOnly
       ? (record.ship_by_date || record.created_at)
       : record.pack_date_time;
     if (!dateSource || dateSource === '1') return;
@@ -341,7 +350,7 @@ export function ShippedTableBase({
 
   // Filter grouped data by current week (all data is weekdays, so no need to filter by day of week)
   const weekRange = getWeekRange();
-  const filteredGroupedShipped = activeSearch || unshippedOnly
+  const filteredGroupedShipped = activeSearch || ordersOnly
     ? groupedShipped
     : Object.fromEntries(
         Object.entries(groupedShipped).filter(([date]) => {
@@ -351,18 +360,18 @@ export function ShippedTableBase({
       );
 
   const displayedRecords = Object.entries(filteredGroupedShipped)
-    .sort((a, b) => (unshippedOnly ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])))
+    .sort((a, b) => (ordersOnly ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])))
     .flatMap(([_, records]) => {
       const sortedRecords = [...records].sort((a, b) => {
         const timeA = new Date(a.pack_date_time || 0).getTime();
         const timeB = new Date(b.pack_date_time || 0).getTime();
-        return unshippedOnly ? timeA - timeB : timeB - timeA;
+        return ordersOnly ? timeA - timeB : timeB - timeA;
       });
       return sortedRecords;
     });
 
   useEffect(() => {
-    if (!unshippedOnly) return;
+    if (!ordersOnly) return;
 
     const isUnassignedRecord = (record: ShippedOrder) => {
       return (record as any).tester_id == null && (record as any).packer_id == null;
@@ -414,7 +423,7 @@ export function ShippedTableBase({
       window.removeEventListener('navigate-dashboard-order' as any, handleNavigate as any);
       window.removeEventListener('navigate-dashboard-next-unassigned' as any, handleNavigateNextUnassigned as any);
     };
-  }, [displayedRecords, handleRowClick, selectedShipped?.id, unshippedOnly]);
+  }, [displayedRecords, handleRowClick, selectedShipped?.id, ordersOnly]);
 
   // Get total count for current week
   const getWeekCount = () => {
@@ -426,7 +435,9 @@ export function ShippedTableBase({
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Loading shipped records...</p>
+          <p className="text-sm font-semibold text-gray-600">
+            {ordersOnly ? 'Loading order records...' : 'Loading shipped records...'}
+          </p>
         </div>
       </div>
     );
@@ -473,7 +484,7 @@ export function ShippedTableBase({
                   </p>
                   <button 
                     onClick={() => {
-                      if (unshippedOnly) {
+                      if (ordersOnly) {
                         setDashboardSearch('');
                         window.dispatchEvent(new CustomEvent('dashboard-search', { detail: { query: '' } }));
                       } else {
@@ -487,7 +498,9 @@ export function ShippedTableBase({
                 </div>
               ) : (
                 <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                  <p className="text-gray-500 font-medium italic opacity-20">No shipped records for this week</p>
+                  <p className="text-gray-500 font-medium italic opacity-20">
+                    {ordersOnly ? 'No order records found' : 'No shipped records for this week'}
+                  </p>
                   {weekOffset > 0 && (
                     <button 
                       onClick={() => setWeekOffset(0)}
@@ -502,13 +515,13 @@ export function ShippedTableBase({
           ) : (
             <div className="flex flex-col w-full">
               {Object.entries(filteredGroupedShipped)
-                .sort((a, b) => unshippedOnly ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0]))
+                .sort((a, b) => ordersOnly ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0]))
                 .map(([date, records]) => {
                   // Sort records within each day by pack_date_time (latest first)
                   const sortedRecords = [...records].sort((a, b) => {
                     const timeA = new Date(a.pack_date_time || 0).getTime();
                     const timeB = new Date(b.pack_date_time || 0).getTime();
-                    return unshippedOnly ? timeA - timeB : timeB - timeA;
+                    return ordersOnly ? timeA - timeB : timeB - timeA;
                   });
                   
                   return (
@@ -533,7 +546,7 @@ export function ShippedTableBase({
                           key={record.id}
                           onClick={() => handleRowClick(record)}
                           data-order-row-id={String(record.id)}
-                          className={`grid ${unshippedOnly ? 'grid-cols-[1fr_auto]' : 'grid-cols-[1fr_auto_70px]'} items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                          className={`grid ${ordersOnly ? 'grid-cols-[1fr_auto]' : 'grid-cols-[1fr_auto_70px]'} items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                             selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
@@ -559,7 +572,7 @@ export function ShippedTableBase({
                                     </>
                                   );
                                 })()}
-                                <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{record.condition || 'No Condition'}</span> • {testerName} • {packerName}{unshippedOnly && (
+                                <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{record.condition || 'No Condition'}</span> • {testerName} • {packerName}{ordersOnly && (
                                   <>
                                     {' • '}
                                     <span className={getDaysLateTone(getDaysLateNumber(record.ship_by_date as any, record.created_at as any))}>
@@ -603,7 +616,7 @@ export function ShippedTableBase({
                             </div>
                           </div>
                           
-                          {!unshippedOnly && (
+                          {!ordersOnly && (
                             <div className="flex flex-col w-[70px]">
                               <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
                               <CopyableText 

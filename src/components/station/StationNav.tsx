@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
-  PackageCheck, 
   Wrench, 
   User, 
   Settings,
@@ -29,7 +28,6 @@ interface StationNavProps {
 
 const mainNavItems = [
     { name: 'Dashboard/Orders', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Shipped Orders', href: '/shipped', icon: PackageCheck },
     { name: 'Receiving', href: '/receiving', icon: ClipboardList },
     { name: 'Repair', href: '/repair', icon: Tool },
     { name: 'Sku Stock', href: '/sku-stock', icon: Box },
@@ -95,7 +93,7 @@ export default function StationNav() {
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         if (searchQuery.trim()) {
-            router.push(`/shipped?search=${encodeURIComponent(searchQuery.trim())}`);
+            router.push(`/dashboard?shipped&search=${encodeURIComponent(searchQuery.trim())}`);
             setSearchQuery('');
         }
     };

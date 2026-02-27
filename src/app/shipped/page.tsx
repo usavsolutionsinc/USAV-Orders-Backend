@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import { ShippedTable, type ShippedFormData } from '@/components/shipped';
 import { Loader2 } from '@/components/Icons';
@@ -11,7 +11,6 @@ function ShippedPageContent() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const searchParams = useSearchParams();
-    const router = useRouter();
     const isNew = searchParams.get('new') === 'true';
 
     useEffect(() => {

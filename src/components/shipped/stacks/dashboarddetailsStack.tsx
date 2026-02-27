@@ -378,6 +378,24 @@ export function DashboardDetailsStack({
           </button>
         </div>
         <div className="flex items-stretch gap-2">
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-order', { detail: { direction: 'up' } }))}
+              className="h-8 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              aria-label="Previous order"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-order', { detail: { direction: 'down' } }))}
+              className="h-8 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              aria-label="Next order"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
           <div className="flex-1">
             <OrderStaffAssignmentButtons
               layout="rows"
@@ -425,24 +443,6 @@ export function DashboardDetailsStack({
               }}
               disabled={false}
             />
-          </div>
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-order', { detail: { direction: 'up' } }))}
-              className="h-8 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              aria-label="Previous order"
-            >
-              <ChevronUp className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-order', { detail: { direction: 'down' } }))}
-              className="h-8 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              aria-label="Next order"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
           </div>
         </div>
         {assignmentError && (
