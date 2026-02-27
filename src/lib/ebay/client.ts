@@ -9,11 +9,13 @@ import { refreshEbayAccessToken } from './token-refresh';
 export class EbayClient {
   private api: eBayApi;
   private accountName: string;
+  private sandbox: boolean;
 
   constructor(accountName: string) {
     this.accountName = accountName;
     
     const sandbox = process.env.EBAY_ENVIRONMENT !== 'PRODUCTION';
+    this.sandbox = sandbox;
     
     this.api = new eBayApi({
       appId: process.env.EBAY_APP_ID!,
@@ -167,6 +169,37 @@ export class EbayClient {
     } catch (error: any) {
       console.error(`[${this.accountName}] Error fetching order ${orderId}:`, error.message);
       throw new Error(`Failed to fetch order ${orderId} for ${this.accountName}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get all shipping fulfillments for an order.
+   * Tracking is returned in fulfillments[].shipmentTrackingNumber when available.
+   */
+  async getOrderShippingFulfillments(orderId: string): Promise<any[]> {
+    try {
+      const { accessToken } = await this.getValidAccessToken();
+      const apiBase = this.sandbox ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
+      const url = `${apiBase}/sell/fulfillment/v1/order/${encodeURIComponent(orderId)}/shipping_fulfillment`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Failed to fetch shipping fulfillments (${response.status}): ${text}`);
+      }
+
+      const data = await response.json().catch(() => ({}));
+      return Array.isArray(data?.fulfillments) ? data.fulfillments : [];
+    } catch (error: any) {
+      console.error(`[${this.accountName}] Error fetching shipping fulfillments for order ${orderId}:`, error.message);
+      throw new Error(`Failed to fetch shipping fulfillments for ${orderId}: ${error.message}`);
     }
   }
 }

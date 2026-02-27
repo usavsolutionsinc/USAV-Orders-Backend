@@ -173,10 +173,31 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
         }
     ];
 
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.05,
+                delayChildren: 0.05,
+            },
+        },
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
+        visible: { 
+            opacity: 1, 
+            x: 0, 
+            filter: 'blur(0px)',
+            transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 } 
+        },
+    };
+
     return (
         <div className="relative flex-shrink-0 z-40 h-full">
             <aside
-                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[340px]"
+                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[300px]"
             >
                 {showIntakeForm ? (
                     <ShippedIntakeForm
@@ -184,36 +205,43 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                         onSubmit={onFormSubmit || (() => {})}
                     />
                 ) : (
-                <div className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide">
-                    <header>
+                <motion.div 
+                    initial="hidden"
+                    animate="visible"
+                    variants={containerVariants}
+                    className="p-6 h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide"
+                >
+                    <motion.header variants={itemVariants}>
                         <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                             Management
                         </h2>
                             <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
                             Database & Metrics
                         </p>
-                    </header>
+                    </motion.header>
                     
                     <div className="space-y-4">
-                        <SearchBar 
-                            value={searchQuery}
-                            onChange={setSearchQuery}
-                            onSearch={handleSearch}
-                            onClear={() => handleSearch('')}
-                            placeholder="Search orders, serials..."
-                            variant="blue"
-                            rightElement={
-                                <button
-                                    onClick={() => handleSearch(searchQuery)}
-                                    className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
-                                    title="Search"
-                                >
-                                    <Search className="w-4 h-4" />
-                                </button>
-                            }
-                        />
+                        <motion.div variants={itemVariants}>
+                            <SearchBar 
+                                value={searchQuery}
+                                onChange={setSearchQuery}
+                                onSearch={handleSearch}
+                                onClear={() => handleSearch('')}
+                                placeholder="Search orders, serials..."
+                                variant="blue"
+                                rightElement={
+                                    <button
+                                        onClick={() => handleSearch(searchQuery)}
+                                        className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
+                                        title="Search"
+                                    >
+                                        <Search className="w-4 h-4" />
+                                    </button>
+                                }
+                            />
+                        </motion.div>
                         {searchHistory.length > 0 && (
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 -mt-1">
+                            <motion.div variants={itemVariants} className="bg-gray-50 p-4 rounded-xl border border-gray-200 -mt-1">
                                 <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">
                                     Recent Searches
                                 </p>
@@ -235,15 +263,15 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                                         </button>
                                     ))}
                                 </div>
-                            </div>
+                            </motion.div>
                         )}
-                        <div className="-mt-1 text-left">
+                        <motion.div variants={itemVariants} className="-mt-1 text-left">
                             <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">Click an order for more details</p>
                             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Orders are sorted by ship-by date</p>
-                        </div>
+                        </motion.div>
 
                         {/* Order Management Tools */}
-                        <div className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">
+                        <motion.div variants={itemVariants} className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">
                             <div className="space-y-3">
                                 <div className="space-y-1.5">
                                     <label className="text-[9px] font-black text-gray-500 uppercase px-1 tracking-widest">Manual Sheet Name</label>
@@ -270,9 +298,10 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                                     Import Latest Orders
                                 </button>
                             </div>
-                        </div>
+                        </motion.div>
 
-                        <button
+                        <motion.button
+                            variants={itemVariants}
                             onClick={handleSync}
                             disabled={isSyncing}
                             className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group active:scale-95 shadow-lg shadow-emerald-600/10"
@@ -283,25 +312,25 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                                 <Database className="w-6 h-6 group-hover:scale-110 transition-transform" />
                             )}
                             <div className="text-center">
-                                <p className="text-[10px] font-black uppercase tracking-widest">Sync All to Neon DB</p>
-                                <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">Full Database Sync</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest">Sync Sheets to Neon DB</p>
+                                <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">Shipped, Tech, Packer</p>
                             </div>
-                        </button>
+                        </motion.button>
 
                         {status && (
-                            <div className={`p-4 rounded-2xl border ${status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'} flex items-start gap-3`}>
+                            <motion.div variants={itemVariants} className={`p-4 rounded-2xl border ${status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'} flex items-start gap-3`}>
                                 {status.type === 'success' ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <X className="w-4 h-4 mt-0.5 shrink-0" />}
                                 <div className="space-y-1">
                                     <p className="text-[10px] font-black uppercase tracking-widest">{status.type === 'success' ? 'Success' : 'Error'}</p>
                                     <p className="text-[9px] font-medium leading-relaxed">{status.message}</p>
                                 </div>
-                            </div>
+                            </motion.div>
                         )}
 
                         <div className="space-y-2">
-                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] ml-2 mb-4">Automation Scripts</p>
+                            <motion.p variants={itemVariants} className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] ml-2 mb-4">Automation Scripts</motion.p>
                             {menuItems.map((menu) => (
-                                <motion.div key={menu.id} layout className="space-y-1">
+                                <motion.div key={menu.id} layout variants={itemVariants} className="space-y-1">
                                     <button
                                         onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
                                         className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${expandedMenu === menu.id ? 'bg-blue-50 text-blue-600 shadow-sm border border-blue-100' : 'bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100 hover:text-gray-900'}`}
@@ -352,10 +381,10 @@ export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, 
                         </div>
                     </div>
 
-                    <footer className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
+                    <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
                         <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
-                    </footer>
-                </div>
+                    </motion.footer>
+                </motion.div>
                 )}
             </aside>
         </div>

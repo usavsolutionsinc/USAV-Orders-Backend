@@ -44,6 +44,8 @@ export default function StationTesting({
     errorMessage,
     successMessage,
     trackingNotFoundAlert,
+    resolvedManual,
+    isManualLoading,
     handleSubmit,
     triggerGlobalRefresh,
     activeColor,
@@ -147,7 +149,14 @@ export default function StationTesting({
           </AnimatePresence>
 
           <AnimatePresence mode="wait">
-            {activeOrder ? <ActiveStationOrderCard activeOrder={activeOrder} activeColorTextClass={activeColor.text} /> : null}
+            {activeOrder ? (
+              <ActiveStationOrderCard
+                activeOrder={activeOrder}
+                activeColorTextClass={activeColor.text}
+                resolvedManual={resolvedManual}
+                isManualLoading={isManualLoading}
+              />
+            ) : null}
           </AnimatePresence>
 
           <div className="space-y-3 mt-8">

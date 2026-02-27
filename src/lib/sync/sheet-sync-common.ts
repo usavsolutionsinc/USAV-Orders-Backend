@@ -101,7 +101,7 @@ export async function upsertOpenOrdersException(params: {
   client: any;
   shippingTrackingNumber: string;
   sourceStation: 'tech' | 'packer';
-  staffId: number;
+  staffId?: number | null;
 }): Promise<void> {
   const tracking = String(params.shippingTrackingNumber || '').trim();
   if (!tracking || tracking.includes(':')) return;

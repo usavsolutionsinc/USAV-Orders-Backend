@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 function normalizeHeader(value: unknown) {
   return String(value || '')
@@ -175,11 +176,37 @@ export async function POST(req: NextRequest) {
     let inserted = 0;
     let updated = 0;
     let unchanged = 0;
+    let matchedExceptions = 0;
+    let clearedExceptions = 0;
+    let skippedNoExceptionMatch = 0;
+    let skippedInvalidTracking = 0;
 
     try {
       for (const [orderId, payload] of entries) {
+        const trackingKey18 = normalizeTrackingKey18(payload.tracking);
+        if (!trackingKey18) {
+          skippedInvalidTracking++;
+          continue;
+        }
+
+        const openExceptions = await client.query(
+          `SELECT id
+           FROM orders_exceptions
+           WHERE status = 'open'
+             AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+           ORDER BY id ASC`,
+          [trackingKey18]
+        );
+
+        if (openExceptions.rows.length === 0) {
+          skippedNoExceptionMatch++;
+          continue;
+        }
+
+        matchedExceptions += openExceptions.rows.length;
+
         const existing = await client.query(
-          `SELECT id, shipping_tracking_number, order_date, ship_by_date
+          `SELECT id, shipping_tracking_number, order_date, ship_by_date, is_shipped, status
            FROM orders
            WHERE order_id = $1
            ORDER BY created_at DESC NULLS LAST, id DESC`,
@@ -196,48 +223,65 @@ export async function POST(req: NextRequest) {
               status,
               status_history,
               is_shipped,
+              account_source,
               created_at
-            ) VALUES ($1, $2, $3, $4::date, $5, $6::jsonb, $7, timezone('America/Los_Angeles', now()))`,
+            ) VALUES ($1, $2, $3, $4::date, $5, $6::jsonb, $7, $8, timezone('America/Los_Angeles', now()))`,
             [
               orderId,
               payload.tracking,
               payload.orderDate,
               payload.shipByDate,
-              'unassigned',
+              'shipped',
               JSON.stringify([]),
-              false,
+              true,
+              'shipstation',
             ]
           );
           inserted++;
-          continue;
+        } else {
+          const needsUpdate = existing.rows.some((row: any) => {
+            const currentTracking = String(row.shipping_tracking_number || '').trim();
+            const hasOrderDate = !!row.order_date;
+            const hasShipByDate = !!row.ship_by_date;
+            const isShipped = !!row.is_shipped;
+            const status = String(row.status || '').trim().toLowerCase();
+            return (
+              currentTracking !== payload.tracking ||
+              (!hasOrderDate && payload.orderDate) ||
+              (!hasShipByDate && payload.shipByDate) ||
+              !isShipped ||
+              status === '' ||
+              status === 'unassigned'
+            );
+          });
+
+          if (!needsUpdate) {
+            unchanged++;
+          } else {
+            await client.query(
+              `UPDATE orders
+               SET shipping_tracking_number = $2,
+                   order_date = COALESCE($3, order_date),
+                   ship_by_date = COALESCE($4::date, ship_by_date),
+                   is_shipped = true,
+                   status = CASE
+                     WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
+                     ELSE status
+                   END
+               WHERE order_id = $1`,
+              [orderId, payload.tracking, payload.orderDate, payload.shipByDate]
+            );
+            updated++;
+          }
         }
 
-        const needsUpdate = existing.rows.some((row: any) => {
-          const currentTracking = String(row.shipping_tracking_number || '').trim();
-          const hasOrderDate = !!row.order_date;
-          const hasShipByDate = !!row.ship_by_date;
-          return (
-            currentTracking !== payload.tracking ||
-            (!hasOrderDate && payload.orderDate) ||
-            (!hasShipByDate && payload.shipByDate)
-          );
-        });
-
-        if (!needsUpdate) {
-          unchanged++;
-          continue;
-        }
-
-        await client.query(
-          `UPDATE orders
-           SET shipping_tracking_number = $2,
-               order_date = COALESCE($3, order_date),
-               ship_by_date = COALESCE($4::date, ship_by_date)
-           WHERE order_id = $1`,
-          [orderId, payload.tracking, payload.orderDate, payload.shipByDate]
+        const exceptionIds = openExceptions.rows.map((row: any) => row.id);
+        const placeholders = exceptionIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
+        const deleted = await client.query(
+          `DELETE FROM orders_exceptions WHERE id IN (${placeholders})`,
+          exceptionIds
         );
-
-        updated++;
+        clearedExceptions += deleted.rowCount || 0;
       }
     } finally {
       client.release();
@@ -245,11 +289,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `ShipStation sync complete: inserted ${inserted}, updated ${updated}, unchanged ${unchanged}.`,
+      message: `ShipStation upload complete: inserted ${inserted}, updated ${updated}, unchanged ${unchanged}, cleared exceptions ${clearedExceptions}.`,
       fileName,
       inserted,
       updated,
       unchanged,
+      matchedExceptions,
+      clearedExceptions,
+      skippedNoExceptionMatch,
+      skippedInvalidTracking,
       skippedMissingOrderId,
       skippedMissingTracking,
     });

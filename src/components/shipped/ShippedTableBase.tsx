@@ -433,7 +433,7 @@ export function ShippedTableBase({
   }
 
   return (
-    <div className="flex h-full w-full bg-white relative">
+    <div className="flex h-full min-w-0 flex-1 bg-white relative">
       {/* Main table container */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Sticky header */}

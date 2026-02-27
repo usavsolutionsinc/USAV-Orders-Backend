@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Check, ChevronUp, ChevronDown } from '@/components/Icons';
+import { motion } from 'framer-motion';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
@@ -277,9 +278,35 @@ export function DashboardDetailsStack({
     }, 80);
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05,
+        delayChildren: 0.05,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15, filter: 'blur(4px)' },
+    visible: { 
+      opacity: 1, 
+      y: 0, 
+      filter: 'blur(0px)',
+      transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 } 
+    },
+  };
+
   return (
-    <div className="pb-8 pt-4 space-y-4">
-      <section className="mx-8 space-y-2">
+    <motion.div 
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+      className="pb-8 pt-4 space-y-4"
+    >
+      <motion.section variants={itemVariants} className="mx-8 space-y-2">
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
             <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
@@ -332,7 +359,7 @@ export function DashboardDetailsStack({
               className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black uppercase tracking-wider"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              Assignment
+              Goals
             </button>
           )}
           <button
@@ -466,21 +493,23 @@ export function DashboardDetailsStack({
             </div>
           </div>
         )}
-      </section>
+      </motion.section>
 
-      <ShippedDetailsPanelContent
-        shipped={shipped}
-        durationData={durationData}
-        copiedAll={copiedAll}
-        onCopyAll={onCopyAll}
-        productDetailsFirst
-        showPackingPhotos={false}
-        showPackingInformation={false}
-        showTestingInformation={false}
-        showSerialNumber={false}
-      />
+      <motion.div variants={itemVariants}>
+        <ShippedDetailsPanelContent
+          shipped={shipped}
+          durationData={durationData}
+          copiedAll={copiedAll}
+          onCopyAll={onCopyAll}
+          productDetailsFirst
+          showPackingPhotos={false}
+          showPackingInformation={false}
+          showTestingInformation={false}
+          showSerialNumber={false}
+        />
+      </motion.div>
 
-      <section className="mx-8 pt-2">
+      <motion.section variants={itemVariants} className="mx-8 pt-2">
         <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 mb-3">
           <label className="block text-[9px] font-black uppercase tracking-widest text-blue-700">
             Update Item Number
@@ -539,7 +568,7 @@ export function DashboardDetailsStack({
         >
           {isDeletingOrder ? 'Cancelling...' : isDeleteArmed ? 'Click Again To Confirm' : 'Cancel/Delete Order'}
         </button>
-      </section>
-    </div>
+      </motion.section>
+    </motion.div>
   );
 }

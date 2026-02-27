@@ -45,10 +45,22 @@ export async function GET(req: NextRequest) {
                     LIMIT 1
                 ) as order_id,
                 (
-                    SELECT o.product_title 
-                    FROM orders o 
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
-                    LIMIT 1
+                    SELECT COALESCE(
+                        (
+                            SELECT ss.product_title
+                            FROM sku_stock ss
+                            WHERE POSITION(':' IN COALESCE(pl.shipping_tracking_number, '')) > 0
+                              AND regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
+                                  regexp_replace(UPPER(TRIM(split_part(pl.shipping_tracking_number, ':', 1))), '^0+', '')
+                            LIMIT 1
+                        ),
+                        (
+                            SELECT o.product_title
+                            FROM orders o
+                            WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
+                            LIMIT 1
+                        )
+                    )
                 ) as product_title,
                 (
                     SELECT o.condition 

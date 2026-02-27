@@ -1,21 +1,17 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from '@/components/Icons';
-import { formatDateTimePST } from '@/lib/timezone';
 
 interface EbayAccount {
   id: number;
   account_name: string;
-  last_sync_date: string | null;
-  is_active: boolean;
   token_expires_at: string;
 }
 
 export default function EbayManagement() {
   const queryClient = useQueryClient();
-
-  const { data: accountsData, isLoading: accountsLoading } = useQuery({
+  const { data: accountsData } = useQuery({
     queryKey: ['ebay-accounts'],
     queryFn: async () => {
       const res = await fetch('/api/ebay/accounts');
@@ -34,7 +30,6 @@ export default function EbayManagement() {
       queryClient.invalidateQueries({ queryKey: ['ebay-accounts'] });
     },
   });
-
   const refreshTokenMutation = useMutation({
     mutationFn: async (accountName: string) => {
       const res = await fetch('/api/ebay/refresh-token', {
@@ -51,13 +46,19 @@ export default function EbayManagement() {
   });
 
   const accounts: EbayAccount[] = accountsData?.accounts || [];
+  const now = new Date();
+  const tokenAccounts = accounts.filter((account) => {
+    const expiresAt = new Date(account.token_expires_at);
+    const minutesLeft = Math.floor((expiresAt.getTime() - now.getTime()) / 1000 / 60);
+    return minutesLeft < 30;
+  });
+  const activeRefreshAccount = refreshTokenMutation.isPending ? (refreshTokenMutation.variables as string | undefined) : undefined;
 
   return (
     <div className="space-y-4 p-5 bg-white rounded-3xl border border-gray-200 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">eBay Integration</h2>
-          <p className="text-[9px] font-bold text-gray-500 mt-1">Manual sync and account token health</p>
         </div>
         <button
           onClick={() => syncMutation.mutate()}
@@ -67,6 +68,35 @@ export default function EbayManagement() {
           <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
           {syncMutation.isPending ? 'Syncing...' : 'Sync eBay'}
         </button>
+      </div>
+
+      <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+        <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Token Refresh</div>
+        {tokenAccounts.length === 0 ? (
+          <div className="text-[9px] font-bold uppercase tracking-widest text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
+            All Tokens Healthy
+          </div>
+        ) : (
+          tokenAccounts.map((account) => {
+            const expiresAt = new Date(account.token_expires_at);
+            const minutesLeft = Math.floor((expiresAt.getTime() - now.getTime()) / 1000 / 60);
+            const isExpired = minutesLeft <= 0;
+            const isRefreshing = activeRefreshAccount === account.account_name;
+
+            return (
+              <button
+                key={account.id}
+                onClick={() => refreshTokenMutation.mutate(account.account_name)}
+                disabled={refreshTokenMutation.isPending}
+                className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {account.account_name}
+                <span className="opacity-80">{isExpired ? 'Expired' : `${minutesLeft}m`}</span>
+              </button>
+            );
+          })
+        )}
       </div>
 
       {syncMutation.isSuccess && (
@@ -83,59 +113,17 @@ export default function EbayManagement() {
         </div>
       )}
 
-      {accountsLoading ? (
-        <div className="text-sm text-gray-400">Loading accounts...</div>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {accounts.map((account) => {
-            const lastSyncDate = account.last_sync_date ? new Date(account.last_sync_date) : null;
-            const tokenExpiry = new Date(account.token_expires_at);
-            const now = new Date();
-            const isTokenExpired = tokenExpiry < now;
-            const tokenExpiresInMinutes = Math.floor((tokenExpiry.getTime() - now.getTime()) / 1000 / 60);
+      {refreshTokenMutation.isSuccess && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-2xl">
+          <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
+            {refreshTokenMutation.data?.message || 'Token refreshed'}
+          </div>
+        </div>
+      )}
 
-            return (
-              <div key={account.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-200">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="text-sm font-black text-gray-900">{account.account_name}</div>
-                  <div
-                    className={`px-2 py-1 rounded text-[8px] font-bold ${
-                      account.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {account.is_active ? 'ACTIVE' : 'INACTIVE'}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-[9px] text-gray-500">
-                    {lastSyncDate ? `Last sync: ${formatDateTimePST(lastSyncDate)}` : 'Never synced'}
-                  </div>
-
-                  <div className="text-[9px] text-gray-500">
-                    Token expires:{' '}
-                    {isTokenExpired ? (
-                      <span className="text-red-600 font-bold">Expired</span>
-                    ) : (
-                      <span className={tokenExpiresInMinutes < 30 ? 'text-orange-600 font-bold' : ''}>
-                        {tokenExpiresInMinutes < 60 ? `${tokenExpiresInMinutes}m` : `${Math.floor(tokenExpiresInMinutes / 60)}h`}
-                      </span>
-                    )}
-                  </div>
-
-                  {(isTokenExpired || tokenExpiresInMinutes < 30) && (
-                    <button
-                      onClick={() => refreshTokenMutation.mutate(account.account_name)}
-                      disabled={refreshTokenMutation.isPending}
-                      className="w-full text-[9px] font-bold px-2 py-1 rounded bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors disabled:opacity-50"
-                    >
-                      {refreshTokenMutation.isPending ? 'Refreshing...' : 'Refresh Token'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      {refreshTokenMutation.isError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl">
+          <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">Token refresh failed</div>
         </div>
       )}
     </div>

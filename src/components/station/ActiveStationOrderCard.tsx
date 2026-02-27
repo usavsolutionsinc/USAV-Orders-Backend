@@ -3,19 +3,33 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ShipByDate } from '../ui/ShipByDate';
-import { Check, ClipboardList } from '../Icons';
-import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
+import { Check, ClipboardList, ExternalLink, Loader2, Printer } from '../Icons';
+import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
 
 interface ActiveStationOrderCardProps {
   activeOrder: ActiveStationOrder;
   activeColorTextClass: string;
+  resolvedManual: ResolvedProductManual | null;
+  isManualLoading: boolean;
 }
 
 export default function ActiveStationOrderCard({
   activeOrder,
   activeColorTextClass,
+  resolvedManual,
+  isManualLoading,
 }: ActiveStationOrderCardProps) {
+  const handleOpenManual = () => {
+    if (!resolvedManual?.viewUrl) return;
+    window.open(resolvedManual.viewUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handlePrintManual = () => {
+    if (!resolvedManual?.downloadUrl) return;
+    window.open(resolvedManual.downloadUrl, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -90,6 +104,58 @@ export default function ActiveStationOrderCard({
           </div>
         </div>
       )}
+
+      <div className="rounded-2xl p-4 border border-blue-100 bg-blue-50/40 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">Product Manual</p>
+            {resolvedManual ? (
+              <p className="text-[10px] font-bold text-blue-900">
+                Matched by {resolvedManual.matchedBy === 'sku' ? 'SKU' : 'Item #'}
+                {resolvedManual.manualVersion ? ` • v${resolvedManual.manualVersion}` : ''}
+              </p>
+            ) : (
+              <p className="text-[10px] font-bold text-gray-500">
+                {isManualLoading ? 'Resolving manual...' : 'No manual linked for this product'}
+              </p>
+            )}
+          </div>
+          {isManualLoading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
+        </div>
+
+        {resolvedManual && (
+          <>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleOpenManual}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open
+              </button>
+              <button
+                type="button"
+                onClick={handlePrintManual}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 text-[10px] font-black uppercase tracking-wider"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print
+              </button>
+            </div>
+
+            <div className="h-64 rounded-xl overflow-hidden border border-blue-100 bg-white">
+              <iframe
+                src={resolvedManual.previewUrl}
+                title="Product manual preview"
+                className="w-full h-full"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </>
+        )}
+      </div>
     </motion.div>
   );
 }

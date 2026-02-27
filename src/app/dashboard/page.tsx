@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { DashboardShippedTable, ShippedDetailsPanel, type ShippedFormData } from '@/components/shipped';
 import { Loader2 } from '@/components/Icons';
@@ -87,11 +87,41 @@ export default function DashboardPage() {
 
     return (
         <div className="flex h-full w-full">
-            <DashboardSidebar
-                showIntakeForm={showIntakeForm}
-                onCloseForm={handleCloseForm}
-                onFormSubmit={handleSubmitForm}
-            />
+            <motion.div
+                initial={false}
+                animate={{
+                    width: selectedShipped ? 0 : 300,
+                    marginRight: selectedShipped ? 0 : 0,
+                }}
+                transition={{
+                    type: 'spring',
+                    damping: 25,
+                    stiffness: 350,
+                    mass: 0.5
+                }}
+                className="overflow-hidden flex-shrink-0 z-40 h-full"
+            >
+                <motion.div
+                    animate={{
+                        x: selectedShipped ? -300 : 0,
+                        opacity: selectedShipped ? 0 : 1,
+                        scale: selectedShipped ? 0.95 : 1,
+                    }}
+                    transition={{
+                        type: 'spring',
+                        damping: 25,
+                        stiffness: 350,
+                        mass: 0.5
+                    }}
+                    className="h-full w-[300px]"
+                >
+                    <DashboardSidebar
+                        showIntakeForm={showIntakeForm}
+                        onCloseForm={handleCloseForm}
+                        onFormSubmit={handleSubmitForm}
+                    />
+                </motion.div>
+            </motion.div>
             <Suspense fallback={
                 <div className="flex-1 flex items-center justify-center bg-gray-50">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />

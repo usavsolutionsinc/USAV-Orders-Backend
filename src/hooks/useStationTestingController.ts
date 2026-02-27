@@ -24,6 +24,19 @@ export interface ActiveStationOrder {
   createdAt?: string | null;
 }
 
+export interface ResolvedProductManual {
+  id: number;
+  skuNormalized: string | null;
+  itemNumberNormalized: string | null;
+  googleFileId: string;
+  manualVersion: string | null;
+  matchedBy: 'sku' | 'item_number';
+  updatedAt: string;
+  previewUrl: string;
+  viewUrl: string;
+  downloadUrl: string;
+}
+
 function detectType(val: string) {
   const input = val.trim();
 
@@ -59,6 +72,9 @@ export function useStationTestingController({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [trackingNotFoundAlert, setTrackingNotFoundAlert] = useState<string | null>(null);
+  const [resolvedManual, setResolvedManual] = useState<ResolvedProductManual | null>(null);
+  const [isManualLoading, setIsManualLoading] = useState(false);
+  const manualRequestIdRef = useRef(0);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -79,6 +95,41 @@ export function useStationTestingController({
     setTrackingNotFoundAlert(null);
   };
 
+  const resolveManual = async (sku?: string | null, itemNumber?: string | null) => {
+    const requestId = ++manualRequestIdRef.current;
+    const skuValue = String(sku || '').trim();
+    const itemNumberValue = String(itemNumber || '').trim();
+
+    if (!skuValue && !itemNumberValue) {
+      setResolvedManual(null);
+      return;
+    }
+
+    setIsManualLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (skuValue) params.set('sku', skuValue);
+      if (itemNumberValue) params.set('itemNumber', itemNumberValue);
+
+      const res = await fetch(`/api/manuals/resolve?${params.toString()}`);
+      const data = await res.json();
+      if (requestId !== manualRequestIdRef.current) return;
+
+      if (res.ok && data?.found && data?.manual) {
+        setResolvedManual(data.manual as ResolvedProductManual);
+      } else {
+        setResolvedManual(null);
+      }
+    } catch (error) {
+      console.error('Manual resolve failed:', error);
+      if (requestId !== manualRequestIdRef.current) return;
+      setResolvedManual(null);
+    } finally {
+      if (requestId !== manualRequestIdRef.current) return;
+      setIsManualLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (errorMessage || successMessage) {
       const timer = setTimeout(() => {
@@ -94,6 +145,14 @@ export function useStationTestingController({
     const timer = setTimeout(() => setTrackingNotFoundAlert(null), 2500);
     return () => clearTimeout(timer);
   }, [trackingNotFoundAlert]);
+
+  useEffect(() => {
+    if (!activeOrder) {
+      manualRequestIdRef.current += 1;
+      setResolvedManual(null);
+      setIsManualLoading(false);
+    }
+  }, [activeOrder]);
 
   useEffect(() => {
     const handleUndoApplied = (e: any) => {
@@ -127,6 +186,7 @@ export function useStationTestingController({
       if (!data.found) {
         setErrorMessage(data.error || 'FNSKU not found');
         setActiveOrder(null);
+        setResolvedManual(null);
         return;
       }
 
@@ -154,6 +214,7 @@ export function useStationTestingController({
         setSuccessMessage('FNSKU loaded - ready to scan serials');
       }
 
+      void resolveManual(data.order.sku, data.order.itemNumber ?? null);
       triggerGlobalRefresh();
     } catch (err) {
       console.error('FNSKU scan failed:', err);
@@ -190,6 +251,7 @@ export function useStationTestingController({
         if (!data.found) {
           setTrackingNotFoundAlert('Tracking number not found in the system');
           setActiveOrder(null);
+          setResolvedManual(null);
           return;
         }
 
@@ -217,6 +279,7 @@ export function useStationTestingController({
           setSuccessMessage('Order loaded - ready to scan serials');
         }
 
+        void resolveManual(data.order.sku, data.order.itemNumber ?? null);
         triggerGlobalRefresh();
       } catch (err) {
         console.error('Tracking scan failed:', err);
@@ -339,9 +402,11 @@ export function useStationTestingController({
           shipByDate: null,
           createdAt: null,
         });
+        setResolvedManual(null);
         setSuccessMessage('Test order loaded');
       } else if (command === 'YES' && activeOrder) {
         setActiveOrder(null);
+        setResolvedManual(null);
         setSuccessMessage('Order completed!');
         triggerGlobalRefresh();
       } else if (command === 'YES' && !activeOrder) {
@@ -394,6 +459,8 @@ export function useStationTestingController({
     errorMessage,
     successMessage,
     trackingNotFoundAlert,
+    resolvedManual,
+    isManualLoading,
     searchQuery,
     setSearchQuery,
     searchResults,

@@ -1,194 +1,155 @@
 /**
- * DRY RUN VERSION - Preview what would be synced without inserting into database
- * 
- * This script shows you what data would be synced from packer_1 and packer_2 sheets
- * without actually inserting anything into the database.
- * 
- * Run this first to verify your data before running the actual sync.
+ * Dry-run preview for packer_* sheet routing.
+ *
+ * Routing rules previewed:
+ * - includes ':' -> packer_logs (SKU)
+ * - starts with X0 -> packer_logs (FNSKU)
+ * - otherwise tracking:
+ *   - match orders -> packer_logs (ORDERS)
+ *   - no match -> orders_exceptions
  */
 
 require('dotenv').config({ path: '.env' });
 const { google } = require('googleapis');
+const { Pool } = require('pg');
 
-const SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+});
+
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 
 function getGoogleAuth() {
-    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-    const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-
-    if (!clientEmail || !privateKey) {
-        throw new Error('Missing GOOGLE_CLIENT_EMAIL or GOOGLE_PRIVATE_KEY');
-    }
-
-    const normalizedPrivateKey = privateKey.replace(/\\n/g, '\n');
-
-    return new google.auth.JWT({
-        email: clientEmail,
-        key: normalizedPrivateKey,
-        scopes: [
-            'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive.readonly',
-        ],
-    });
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  if (!clientEmail || !privateKey) throw new Error('Missing GOOGLE_CLIENT_EMAIL or GOOGLE_PRIVATE_KEY');
+  return new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly'],
+  });
 }
 
-function determineTrackingType(columnCValue) {
-    if (!columnCValue) {
-        return 'ORDERS';
-    }
-
-    const value = columnCValue.trim().toUpperCase();
-    
-    if (value.includes('UPS') || value.includes('USPS') || value.includes('FEDEX')) {
-        return 'ORDERS';
-    }
-    
-    if (value === 'SKU') {
-        return 'SKU';
-    }
-    
-    if (value === 'FNSKU') {
-        return 'FNSKU';
-    }
-    
-    return 'ORDERS';
+function normalizeTrackingKey18(value) {
+  const normalized = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return normalized ? normalized.slice(-18) : '';
 }
 
-async function previewPackerSheet(sheets, sheetName, packerId) {
-    console.log(`\n📋 Previewing ${sheetName} sheet (packed_by = ${packerId})...`);
-    
-    try {
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${sheetName}!A2:C`,
-        });
-        
-        const rows = response.data.values || [];
-        console.log(`  Found ${rows.length} rows in ${sheetName}\n`);
-        
-        if (rows.length === 0) {
-            console.log(`  ⚠️  No data in ${sheetName}`);
-            return { previewCount: 0, skipped: 0 };
-        }
-        
-        let previewCount = 0;
-        let skippedNoTracking = 0;
-        let skippedNoDateTime = 0;
-        const trackingTypeStats = {};
-        const sampleRecords = [];
-        
-        for (const row of rows) {
-            const packDateTime = row[0]?.trim();
-            const shippingTracking = row[1]?.trim();
-            const typeIndicator = row[2]?.trim();
-            
-            if (!shippingTracking) {
-                skippedNoTracking++;
-                continue;
-            }
-            
-            if (!packDateTime) {
-                skippedNoDateTime++;
-                continue;
-            }
-            
-            const trackingType = determineTrackingType(typeIndicator);
-            trackingTypeStats[trackingType] = (trackingTypeStats[trackingType] || 0) + 1;
-            
-            // Collect first 5 records as samples
-            if (sampleRecords.length < 5) {
-                sampleRecords.push({
-                    packDateTime,
-                    shippingTracking,
-                    typeIndicator: typeIndicator || '(empty)',
-                    trackingType,
-                    packerId
-                });
-            }
-            
-            previewCount++;
-        }
-        
-        // Show sample records
-        if (sampleRecords.length > 0) {
-            console.log(`  📄 Sample Records (first ${sampleRecords.length}):`);
-            sampleRecords.forEach((record, idx) => {
-                console.log(`\n    ${idx + 1}. ${record.shippingTracking}`);
-                console.log(`       Date/Time: ${record.packDateTime}`);
-                console.log(`       Column C: ${record.typeIndicator}`);
-                console.log(`       → Would insert as: tracking_type="${record.trackingType}", packed_by=${record.packerId}`);
-            });
-            console.log('');
-        }
-        
-        console.log(`  ✅ Would insert ${previewCount} records`);
-        console.log(`  ⏭️  Would skip ${skippedNoTracking} rows (no tracking number)`);
-        console.log(`  ⏭️  Would skip ${skippedNoDateTime} rows (no date/time)`);
-        
-        if (Object.keys(trackingTypeStats).length > 0) {
-            console.log('\n  📊 Records by Tracking Type:');
-            Object.entries(trackingTypeStats)
-                .sort((a, b) => b[1] - a[1])
-                .forEach(([type, count]) => {
-                    console.log(`    ${type}: ${count} records`);
-                });
-        }
-        
-        return {
-            previewCount,
-            skipped: skippedNoTracking + skippedNoDateTime
-        };
-        
-    } catch (err) {
-        console.error(`  ❌ Error previewing ${sheetName}:`, err.message);
-        throw err;
-    }
+async function hasOrderByTracking(client, tracking) {
+  const key18 = normalizeTrackingKey18(tracking);
+  if (!key18) return false;
+  const res = await client.query(
+    `SELECT id
+     FROM orders
+     WHERE shipping_tracking_number IS NOT NULL
+       AND shipping_tracking_number != ''
+       AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+     LIMIT 1`,
+    [key18]
+  );
+  return res.rows.length > 0;
 }
 
-async function dryRun() {
-    console.log('🔍 DRY RUN - Preview packer_logs sync (no database changes)');
-    console.log('⚠️  NOTE: The actual sync will DELETE ALL existing packer_logs records first!\n');
-    console.log('=' .repeat(60));
-    
-    const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
-    
-    try {
-        const results = {
-            packer_1: { previewCount: 0, skipped: 0 },
-            packer_2: { previewCount: 0, skipped: 0 }
-        };
-        
-        results.packer_1 = await previewPackerSheet(sheets, 'packer_1', 4);
-        results.packer_2 = await previewPackerSheet(sheets, 'packer_2', 5);
-        
-        console.log('\n' + '='.repeat(60));
-        console.log('📊 DRY RUN SUMMARY');
-        console.log('='.repeat(60));
-        console.log(`\npacker_1 (Tuan - ID: 4):`);
-        console.log(`  ✅ Would insert: ${results.packer_1.previewCount}`);
-        console.log(`  ⏭️  Would skip: ${results.packer_1.skipped}`);
-        console.log(`\npacker_2 (Thuy - ID: 5):`);
-        console.log(`  ✅ Would insert: ${results.packer_2.previewCount}`);
-        console.log(`  ⏭️  Would skip: ${results.packer_2.skipped}`);
-        
-        const totalPreview = results.packer_1.previewCount + results.packer_2.previewCount;
-        const totalSkipped = results.packer_1.skipped + results.packer_2.skipped;
-        
-        console.log(`\n🔍 TOTAL: ${totalPreview} records would be inserted, ${totalSkipped} would be skipped`);
-        console.log('\n💡 Note: This was a dry run. No database changes were made.');
-        console.log('⚠️  WARNING: The actual sync will DELETE ALL existing packer_logs records first!');
-        console.log('   To perform the actual sync, run: npm run sync:packer-logs');
-        console.log('='.repeat(60) + '\n');
-        
-    } catch (err) {
-        console.error('❌ Fatal error:', err);
-        throw err;
+async function previewSheet(sheets, client, sheetName) {
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A2:B`,
+  });
+  const rows = response.data.values || [];
+
+  let processed = 0;
+  let skippedMissingTracking = 0;
+  let directSku = 0;
+  let directX0 = 0;
+  let orderMatched = 0;
+  let orderToExceptions = 0;
+
+  for (const row of rows) {
+    const scanInput = String(row[1] || '').trim();
+    if (!scanInput) {
+      skippedMissingTracking++;
+      continue;
     }
+
+    processed++;
+    if (scanInput.includes(':')) {
+      directSku++;
+      continue;
+    }
+    if (/^X0/i.test(scanInput)) {
+      directX0++;
+      continue;
+    }
+
+    const matched = await hasOrderByTracking(client, scanInput);
+    if (matched) orderMatched++;
+    else orderToExceptions++;
+  }
+
+  return {
+    sheetName,
+    totalRows: rows.length,
+    processed,
+    skippedMissingTracking,
+    directSku,
+    directX0,
+    orderMatched,
+    orderToExceptions,
+  };
 }
 
-// Run the dry run
-dryRun().catch(err => {
-    console.error('Fatal error:', err);
-    process.exit(1);
+async function runDryRun() {
+  const auth = getGoogleAuth();
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const metadata = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const allSheetNames = (metadata.data.sheets || []).map((s) => s.properties?.title || '').filter(Boolean);
+  const packerSheets = allSheetNames
+    .filter((name) => /^packer_/i.test(String(name || '').trim()))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+  if (packerSheets.length === 0) throw new Error('No packer_* sheets found');
+
+  const client = await pool.connect();
+  try {
+    const summaries = [];
+    for (const name of packerSheets) {
+      const summary = await previewSheet(sheets, client, name);
+      summaries.push(summary);
+      console.log(`[${name}] rows=${summary.totalRows} processed=${summary.processed} skuColon=${summary.directSku} x0=${summary.directX0} orderMatched=${summary.orderMatched} toExceptions=${summary.orderToExceptions}`);
+    }
+
+    const totals = summaries.reduce(
+      (acc, s) => {
+        acc.totalRows += s.totalRows;
+        acc.processed += s.processed;
+        acc.skippedMissingTracking += s.skippedMissingTracking;
+        acc.directSku += s.directSku;
+        acc.directX0 += s.directX0;
+        acc.orderMatched += s.orderMatched;
+        acc.orderToExceptions += s.orderToExceptions;
+        return acc;
+      },
+      { totalRows: 0, processed: 0, skippedMissingTracking: 0, directSku: 0, directX0: 0, orderMatched: 0, orderToExceptions: 0 }
+    );
+
+    console.log('\n==== DRY RUN SUMMARY ====');
+    console.log(`packer sheets: ${packerSheets.length}`);
+    console.log(`sheet rows: ${totals.totalRows}`);
+    console.log(`processed: ${totals.processed}`);
+    console.log(`to packer_logs (SKU colon): ${totals.directSku}`);
+    console.log(`to packer_logs (X0): ${totals.directX0}`);
+    console.log(`to packer_logs (orders matched): ${totals.orderMatched}`);
+    console.log(`to orders_exceptions: ${totals.orderToExceptions}`);
+    console.log(`skipped missing tracking: ${totals.skippedMissingTracking}`);
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+runDryRun().catch((err) => {
+  console.error('Dry run failed:', err.message || err);
+  process.exit(1);
 });

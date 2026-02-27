@@ -22,6 +22,9 @@ type SyncResult = {
     table: string;
     status: 'synced' | 'error' | 'missing';
     inserted?: number;
+    processed?: number;
+    directLogs?: number;
+    orderLogs?: number;
     skippedExisting?: number;
     skippedMissingTracking?: number;
     exceptionsLogged?: number;
@@ -74,21 +77,6 @@ export async function POST(req: NextRequest) {
             });
             results.push(...packerResults);
 
-            const receivingResult = await syncReceivingSheet({
-                client,
-                sheets,
-                spreadsheetId: targetSpreadsheetId,
-                existingSheetNames,
-            });
-            results.push(receivingResult);
-
-            const fbaFnskuResult = await syncScanFbaInSheet({
-                client,
-                sheets,
-                spreadsheetId: targetSpreadsheetId,
-                existingSheetNames,
-            });
-            results.push(fbaFnskuResult);
         } finally {
             client.release();
         }
@@ -99,7 +87,7 @@ export async function POST(req: NextRequest) {
             success: !hasErrors,
             message: hasErrors
                 ? 'Sync completed with errors'
-                : 'Synced shipped, tech, packer, receiving, and scan fba in sheets to Neon DB',
+                : 'Synced shipped, tech, and packer sheets to Neon DB',
             results,
             timestamp: new Date().toISOString(),
         }, { status: hasErrors ? 500 : 200 });
@@ -387,26 +375,40 @@ async function syncPackerSheets(params: {
     existingSheetNames: string[];
 }): Promise<SyncResult[]> {
     const { client, sheets, spreadsheetId, existingSheetNames } = params;
-    const packerSheets = [
-        { name: 'packer_1', packedBy: 4 },
-        { name: 'packer_2', packedBy: 5 },
-    ];
+    const packerSheetNames = existingSheetNames
+        .filter((name) => /^packer_/i.test(String(name || '').trim()))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
     const results: SyncResult[] = [];
+    if (packerSheetNames.length === 0) {
+        return [{
+            sheet: 'packer_*',
+            table: 'packer_logs',
+            status: 'missing',
+        }];
+    }
 
-    for (const packerSheet of packerSheets) {
-        const sheetName = existingSheetNames.find(s => s.toLowerCase() === packerSheet.name);
-        if (!sheetName) {
-            results.push({
-                sheet: packerSheet.name,
-                table: 'packer_logs',
-                status: 'missing',
-            });
-            continue;
-        }
+    for (const sheetName of packerSheetNames) {
+        const normalizedSheetName = String(sheetName || '').trim().toLowerCase();
+        const fallbackByName: Record<string, number> = {
+            packer_1: 4,
+            packer_2: 5,
+            packer_3: 6,
+        };
 
         try {
             await ensureOrdersExceptionsTable(client);
+
+            const staffLookup = await client.query(
+                `SELECT id
+                 FROM staff
+                 WHERE LOWER(COALESCE(source_table, '')) = $1
+                 ORDER BY active DESC, id ASC
+                 LIMIT 1`,
+                [normalizedSheetName]
+            );
+            const packedBy = staffLookup.rows[0]?.id ?? fallbackByName[normalizedSheetName] ?? null;
+
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,
                 range: `${sheetName}!A2:B`,
@@ -417,37 +419,53 @@ async function syncPackerSheets(params: {
             let skippedExisting = 0;
             let skippedMissingTracking = 0;
             let exceptionsLogged = 0;
+            let processed = 0;
+            let directLogs = 0;
+            let orderLogs = 0;
             const orderMatchCache = new Map<string, boolean>();
 
             for (const row of rows) {
                 const packDateTime = String(row[0] || '').trim() || null; // A
-                const shippingTracking = String(row[1] || '').trim(); // B
+                const scanInput = String(row[1] || '').trim(); // B
 
-                if (!shippingTracking) {
+                if (!scanInput) {
                     skippedMissingTracking++;
                     continue;
                 }
+                processed++;
 
-                const cacheKey = getTrackingLast8(shippingTracking) || shippingTracking.toUpperCase();
-                const hasMatchingOrder = orderMatchCache.has(cacheKey)
-                    ? !!orderMatchCache.get(cacheKey)
-                    : await hasOrderByTracking(client, shippingTracking);
-                if (!orderMatchCache.has(cacheKey)) {
-                    orderMatchCache.set(cacheKey, hasMatchingOrder);
-                }
-                if (!hasMatchingOrder) {
-                    await upsertOpenOrdersException({
-                        client,
-                        shippingTrackingNumber: shippingTracking,
-                        sourceStation: 'packer',
-                        staffId: packerSheet.packedBy,
-                    });
-                    exceptionsLogged++;
+                const isSkuColon = scanInput.includes(':');
+                const isX0Like = /^X0/i.test(scanInput);
+                const trackingType = isSkuColon ? 'SKU' : isX0Like ? 'FNSKU' : 'ORDERS';
+
+                if (trackingType === 'ORDERS') {
+                    const cacheKey = getTrackingLast8(scanInput) || scanInput.toUpperCase();
+                    const hasMatchingOrder = orderMatchCache.has(cacheKey)
+                        ? !!orderMatchCache.get(cacheKey)
+                        : await hasOrderByTracking(client, scanInput);
+                    if (!orderMatchCache.has(cacheKey)) {
+                        orderMatchCache.set(cacheKey, hasMatchingOrder);
+                    }
+                    if (!hasMatchingOrder) {
+                        await upsertOpenOrdersException({
+                            client,
+                            shippingTrackingNumber: scanInput,
+                            sourceStation: 'packer',
+                            staffId: packedBy,
+                        });
+                        exceptionsLogged++;
+                        continue;
+                    }
                 }
 
                 const existing = await client.query(
-                    `SELECT id FROM packer_logs WHERE shipping_tracking_number = $1 LIMIT 1`,
-                    [shippingTracking]
+                    `SELECT id
+                     FROM packer_logs
+                     WHERE shipping_tracking_number = $1
+                       AND tracking_type = $2
+                       AND packed_by IS NOT DISTINCT FROM $3
+                     LIMIT 1`,
+                    [scanInput, trackingType, packedBy]
                 );
                 if (existing.rows.length > 0) {
                     skippedExisting++;
@@ -461,10 +479,15 @@ async function syncPackerSheets(params: {
                         pack_date_time,
                         packed_by
                     ) VALUES ($1, $2, $3, $4)`,
-                    [shippingTracking, 'ORDERS', packDateTime, packerSheet.packedBy]
+                    [scanInput, trackingType, packDateTime, packedBy]
                 );
 
                 inserted++;
+                if (trackingType === 'ORDERS') {
+                    orderLogs++;
+                } else {
+                    directLogs++;
+                }
             }
 
             results.push({
@@ -475,9 +498,12 @@ async function syncPackerSheets(params: {
                 skippedExisting,
                 skippedMissingTracking,
                 exceptionsLogged,
+                processed,
+                directLogs,
+                orderLogs,
             });
         } catch (error: any) {
-            console.error(`Error syncing ${packerSheet.name}:`, error);
+            console.error(`Error syncing ${sheetName}:`, error);
             results.push({
                 sheet: sheetName,
                 table: 'packer_logs',
@@ -488,83 +514,6 @@ async function syncPackerSheets(params: {
     }
 
     return results;
-}
-
-async function syncReceivingSheet(params: {
-    client: any;
-    sheets: any;
-    spreadsheetId: string;
-    existingSheetNames: string[];
-}): Promise<SyncResult> {
-    const { client, sheets, spreadsheetId, existingSheetNames } = params;
-    const sheetName = existingSheetNames.find(s => s.toLowerCase() === 'receiving');
-
-    if (!sheetName) {
-        return {
-            sheet: 'receiving',
-            table: 'receiving',
-            status: 'missing',
-        };
-    }
-
-    try {
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId,
-            range: `${sheetName}!A2:C`,
-        });
-
-        const rows = response.data.values || [];
-        let inserted = 0;
-        let skippedExisting = 0;
-        let skippedMissingTracking = 0;
-
-        const dateColumn = await resolveReceivingDateColumn(client);
-
-        for (const row of rows) {
-            const receivingDateTime = String(row[0] || '').trim() || null; // A
-            const receivingTracking = String(row[1] || '').trim(); // B
-            const carrier = String(row[2] || '').trim() || null; // C
-
-            if (!receivingTracking) {
-                skippedMissingTracking++;
-                continue;
-            }
-
-            const existing = await client.query(
-                `SELECT id FROM receiving WHERE receiving_tracking_number = $1 LIMIT 1`,
-                [receivingTracking]
-            );
-            if (existing.rows.length > 0) {
-                skippedExisting++;
-                continue;
-            }
-
-            await client.query(
-                `INSERT INTO receiving (${dateColumn}, receiving_tracking_number, carrier)
-                 VALUES ($1, $2, $3)`,
-                [receivingDateTime, receivingTracking, carrier]
-            );
-
-            inserted++;
-        }
-
-        return {
-            sheet: sheetName,
-            table: 'receiving',
-            status: 'synced',
-            inserted,
-            skippedExisting,
-            skippedMissingTracking,
-        };
-    } catch (error: any) {
-        console.error('Error syncing receiving sheet:', error);
-        return {
-            sheet: sheetName,
-            table: 'receiving',
-            status: 'error',
-            error: error.message || String(error),
-        };
-    }
 }
 
 async function syncScanFbaInSheet(params: {
@@ -649,18 +598,4 @@ async function syncScanFbaInSheet(params: {
             error: error.message || String(error),
         };
     }
-}
-
-async function resolveReceivingDateColumn(client: any): Promise<string> {
-    const result = await client.query(
-        `SELECT column_name
-         FROM information_schema.columns
-         WHERE table_schema = 'public'
-           AND table_name = 'receiving'
-           AND column_name IN ('receiving_date_time', 'date_time')`
-    );
-
-    const columnNames = result.rows.map((row: any) => row.column_name);
-    if (columnNames.includes('receiving_date_time')) return 'receiving_date_time';
-    return 'date_time';
 }
