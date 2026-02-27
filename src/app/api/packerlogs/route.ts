@@ -69,6 +69,12 @@ export async function GET(req: NextRequest) {
                     LIMIT 1
                 ) as condition,
                 (
+                    SELECT o.quantity
+                    FROM orders o
+                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
+                    LIMIT 1
+                ) as quantity,
+                (
                     SELECT o.sku 
                     FROM orders o 
                     WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)

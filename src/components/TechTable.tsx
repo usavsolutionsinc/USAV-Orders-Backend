@@ -8,7 +8,6 @@ import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { useStaffNameMap } from '@/hooks';
 
 interface TechRecord {
   id: number;
@@ -36,7 +35,6 @@ interface TechTableProps {
 }
 
 export function TechTable({ testedBy }: TechTableProps) {
-  const { getStaffName } = useStaffNameMap();
   const [records, setRecords] = useState<TechRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -276,7 +274,9 @@ export function TechTable({ testedBy }: TechTableProps) {
                               {record.product_title || 'Unknown Product'}
                             </div>
                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
-                              {parseInt(String(record.quantity || '1'), 10) || 1} • {getStaffName(record.tested_by)} • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                              <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
+                                {parseInt(String(record.quantity || '1'), 10) || 1}
+                              </span> • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
                             </div>
                           </div>
                           

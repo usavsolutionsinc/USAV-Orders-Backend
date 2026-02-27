@@ -30,12 +30,10 @@ function getPstYmdFromDate(date: Date): string {
 
 /**
  * Get current timestamp in PST/PDT timezone
- * @returns Date object representing current time in PST/PDT
+ * @returns Current absolute time
  */
 export function getCurrentPSTTime(): Date {
-  // Create date in PST timezone
-  const pstDate = new Date(new Date().toLocaleString('en-US', { timeZone: PST_TIME_ZONE }));
-  return pstDate;
+  return new Date();
 }
 
 /**
@@ -44,10 +42,8 @@ export function getCurrentPSTTime(): Date {
  * @returns Formatted date string in PST
  */
 export function formatPSTTimestamp(date?: Date): string {
-  const pstDate = date || getCurrentPSTTime();
-  
-  // Ensure the date is interpreted in PST
-  const pstString = pstDate.toLocaleString('en-US', { 
+  const base = date ?? new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: PST_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
@@ -56,13 +52,21 @@ export function formatPSTTimestamp(date?: Date): string {
     minute: '2-digit',
     second: '2-digit',
     hour12: false
-  });
-  
-  // Parse the localized string to get individual components
-  const [datePart, timePart] = pstString.split(', ');
-  const [month, day, year] = datePart.split('/');
-  
-  return `${month}/${day}/${year} ${timePart}`;
+  }).formatToParts(base);
+
+  const year = parts.find((p) => p.type === 'year')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
+  const day = parts.find((p) => p.type === 'day')?.value;
+  const hour = parts.find((p) => p.type === 'hour')?.value;
+  const minute = parts.find((p) => p.type === 'minute')?.value;
+  const second = parts.find((p) => p.type === 'second')?.value;
+
+  if (!year || !month || !day || !hour || !minute || !second) {
+    // Fallback should be extremely rare, but keeps writes resilient.
+    return base.toISOString().replace('T', ' ').slice(0, 19);
+  }
+
+  return `${month}/${day}/${year} ${hour}:${minute}:${second}`;
 }
 
 /**

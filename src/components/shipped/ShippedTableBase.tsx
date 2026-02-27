@@ -40,6 +40,7 @@ export function ShippedTableBase({
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = previous week, etc.
   const [dashboardSearch, setDashboardSearch] = useState('');
+  const [relaxedSearchMatches, setRelaxedSearchMatches] = useState<ShippedOrder[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasLoadedRef = useRef(false);
   const { normalizeTrackingQuery } = useLast8TrackingSearch();
@@ -169,6 +170,49 @@ export function ShippedTableBase({
     };
   }, [ordersOnly, fetchShipped]);
 
+  const activeSearch = ordersOnly ? dashboardSearch : search;
+  const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
+  const searchDigits = normalizedSearch.replace(/\D/g, '');
+  const last8 = searchDigits.slice(-8);
+
+  useEffect(() => {
+    if (!ordersOnly || missingTrackingOnly || !normalizedSearch) {
+      setRelaxedSearchMatches([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchRelaxedMatches = async () => {
+      try {
+        const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(activeSearch)}`, { cache: 'no-store' });
+        if (!res.ok) {
+          if (!cancelled) setRelaxedSearchMatches([]);
+          return;
+        }
+        const data = await res.json();
+        const results = Array.isArray(data?.results) ? data.results : [];
+        if (cancelled) return;
+        setRelaxedSearchMatches(
+          results
+            .filter((record: any) => record?.is_shipped === true || record?.is_shipped == null)
+            .map((record: any) => ({
+              ...record,
+              ship_by_date: record.ship_by_date || record.created_at || null,
+            }))
+        );
+      } catch (error) {
+        if (!cancelled) setRelaxedSearchMatches([]);
+      }
+    };
+
+    fetchRelaxedMatches();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ordersOnly, missingTrackingOnly, normalizedSearch, activeSearch]);
+
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
   const getLast4 = (value: string | null | undefined) => {
     const raw = String(value || '');
@@ -253,12 +297,7 @@ export function ShippedTableBase({
     setSelectedShipped(record);
   }, []);
 
-  const activeSearch = ordersOnly ? dashboardSearch : search;
-  const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
-  const searchDigits = normalizedSearch.replace(/\D/g, '');
-  const last8 = searchDigits.slice(-8);
-
-  const filteredRecords = (ordersOnly && normalizedSearch)
+  const strictFilteredRecords = (ordersOnly && normalizedSearch)
     ? shipped.filter((record) => {
         const productTitle = String(record.product_title || '').toLowerCase();
         const orderId = String(record.order_id || '').toLowerCase();
@@ -285,6 +324,25 @@ export function ShippedTableBase({
         return directMatch || last8Match;
       })
     : shipped;
+
+  const filteredRecords = (() => {
+    if (!(ordersOnly && normalizedSearch) || missingTrackingOnly) return strictFilteredRecords;
+    if (relaxedSearchMatches.length === 0) return strictFilteredRecords;
+
+    const merged = [...strictFilteredRecords];
+    const seen = new Set(
+      strictFilteredRecords.map((record) => `${String((record as any).row_source || 'order')}:${String(record.id)}`)
+    );
+
+    for (const record of relaxedSearchMatches) {
+      const key = `${String((record as any).row_source || 'order')}:${String(record.id)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(record);
+    }
+
+    return merged;
+  })();
 
   useEffect(() => {
     if (!ordersOnly || !normalizedSearch) return;

@@ -75,6 +75,7 @@ export default function StationPacking({
           trackingNumber: scan,
           photos: [],
           packerId: mapStaffIdToPackingStation(userId),
+          packerName: userName,
           timestamp: new Date().toISOString(),
         }),
       });

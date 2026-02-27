@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { trackingNumber, photos, packerId, timestamp } = body;
+        const { trackingNumber, photos, packerId, timestamp, packerName } = body;
         const scanInput = String(trackingNumber || '').trim();
         if (!scanInput) {
             return NextResponse.json({ error: 'trackingNumber is required' }, { status: 400 });
@@ -126,7 +126,8 @@ export async function POST(req: NextRequest) {
             `SELECT name FROM staff WHERE id = $1 LIMIT 1`,
             [staffId]
         );
-        const staffName = staffNameResult.rows[0]?.name || null;
+        const fallbackPackerName = String(packerName || '').trim() || null;
+        const staffName = staffNameResult.rows[0]?.name || fallbackPackerName;
 
         if (classification.trackingType === 'ORDERS') {
             const trackingKey18 = normalizeTrackingKey18(scanInput);

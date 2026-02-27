@@ -77,7 +77,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
         if (history.length === 0) return 0;
         const todayDate = getCurrentPSTDateKey();
         return history.filter(h => {
-            return toPSTDateKey(h.timestamp) === todayDate;
+            return toPSTDateKey(h.test_date_time || h.timestamp || '') === todayDate;
         }).length;
     };
 

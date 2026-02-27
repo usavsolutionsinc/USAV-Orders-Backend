@@ -7,6 +7,7 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { DashboardDetailsStack } from './stacks/dashboarddetailsStack';
 import { TechDetailsStack } from './stacks/TechDetailsStack';
+import { PackerDetailsStack } from './stacks/PackerDetailsStack';
 import { DetailsStackDurationData } from './stacks/types';
 import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
 import { QtyBadge } from '@/components/ui/QtyBadge';
@@ -16,7 +17,7 @@ interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
   onClose: () => void;
   onUpdate: () => void;
-  context?: 'dashboard' | 'shipped' | 'station';
+  context?: 'dashboard' | 'shipped' | 'station' | 'packer';
 }
 
 export function ShippedDetailsPanel({
@@ -150,6 +151,15 @@ export function ShippedDetailsPanel({
           />
         ) : context === 'station' ? (
           <TechDetailsStack
+            shipped={shipped}
+            durationData={durationData}
+            copiedAll={copiedAll}
+            onCopyAll={handleCopyAll}
+            onUpdate={_onUpdate}
+            showShippingTimestamp={false}
+          />
+        ) : context === 'packer' ? (
+          <PackerDetailsStack
             shipped={shipped}
             durationData={durationData}
             copiedAll={copiedAll}

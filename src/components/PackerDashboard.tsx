@@ -102,7 +102,7 @@ export default function PackerDashboard({ packerId, showStaffSelector = true }: 
                 <PackerTable key={`${packerId}-${refreshNonce}`} packedBy={parseInt(packerId)} />
             </div>
         </div>
-        <StationDetailsHandler />
+        <StationDetailsHandler stationRole="packer" />
         </>
     );
 }

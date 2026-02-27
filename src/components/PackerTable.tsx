@@ -7,6 +7,7 @@ import { CopyableText } from './ui/CopyableText';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { ShippedOrder } from '@/lib/neon/orders-queries';
 
 interface PackerRecord {
   id: number;
@@ -15,6 +16,7 @@ interface PackerRecord {
   packed_by: number;
   order_id: string | null;
   product_title: string | null;
+  quantity?: string | null;
   condition: string | null;
   sku: string | null;
   packer_photos_url: any;
@@ -27,19 +29,31 @@ interface PackerTableProps {
 export function PackerTable({ packedBy }: PackerTableProps) {
   const [records, setRecords] = useState<PackerRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     fetchRecords();
   }, [packedBy]);
 
+  useEffect(() => {
+    const handleRefresh = () => fetchRecords();
+    window.addEventListener('usav-refresh-data', handleRefresh as any);
+    return () => window.removeEventListener('usav-refresh-data', handleRefresh as any);
+  }, [packedBy]);
+
   const fetchRecords = async () => {
-    setLoading(true);
+    if (hasLoadedRef.current) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
-      const res = await fetch(`/api/packerlogs?packerId=${packedBy}&limit=5000`);
+      const res = await fetch(`/api/packerlogs?packerId=${packedBy}&limit=5000`, { cache: 'no-store' });
       const data = await res.json();
       
       console.log('Fetched packer records:', data.length || 0);
@@ -47,11 +61,42 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     } catch (error) {
       console.error('Error fetching packer records:', error);
     } finally {
+      hasLoadedRef.current = true;
+      setIsRefreshing(false);
       setLoading(false);
     }
   };
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
+  const openDetails = (record: PackerRecord) => {
+    const detail: ShippedOrder & { packer_log_id?: number } = {
+      id: record.id,
+      ship_by_date: '',
+      order_id: record.order_id || '',
+      product_title: record.product_title || '',
+      item_number: null,
+      condition: record.condition || '',
+      shipping_tracking_number: record.shipping_tracking_number || '',
+      serial_number: '',
+      sku: record.sku || '',
+      tester_id: null,
+      tested_by: null,
+      test_date_time: null,
+      packer_id: record.packed_by || null,
+      packed_by: record.packed_by || null,
+      pack_date_time: record.pack_date_time || null,
+      packer_photos_url: record.packer_photos_url || [],
+      tracking_type: null,
+      account_source: null,
+      notes: '',
+      status_history: [],
+      is_shipped: true,
+      created_at: record.pack_date_time || null,
+      quantity: record.quantity || '1',
+      packer_log_id: record.id,
+    };
+    window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
+  };
   const getLast4 = (value: string | null | undefined) => {
     const raw = String(value || '');
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
@@ -142,7 +187,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     return Object.values(filteredGroupedRecords).reduce((sum, records) => sum + records.length, 0);
   };
 
-  if (loading) {
+  if (loading && records.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -155,6 +200,11 @@ export function PackerTable({ packedBy }: PackerTableProps) {
 
   return (
     <div className="flex h-full w-full bg-white relative">
+      {isRefreshing && (
+        <div className="absolute right-2 top-2 z-30">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+        </div>
+      )}
       {/* Main table container */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Sticky header */}
@@ -205,7 +255,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           key={record.id}
-                          className={`grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 ${
+                          onClick={() => openDetails(record)}
+                          className={`grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
                             index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                           }`}
                         >
@@ -215,7 +266,9 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                               {record.product_title || 'Unknown Product'}
                             </div>
                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
-                              {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                              <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
+                                {parseInt(String(record.quantity || '1'), 10) || 1}
+                              </span> • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
                             </div>
                           </div>
                           
