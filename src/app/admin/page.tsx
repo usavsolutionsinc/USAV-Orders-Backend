@@ -1,17 +1,21 @@
-'use client';
-
-import { useSearchParams } from 'next/navigation';
 import { StaffManagementTab } from '@/components/admin/StaffManagementTab';
 import { ConnectionsManagementTab } from '@/components/admin/ConnectionsManagementTab';
 import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
 import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/AdminSidebar';
 
-export default function AdminPage() {
-  const searchParams = useSearchParams();
-  const requestedSection = (searchParams.get('section') as AdminSection) || 'goals';
+interface AdminPageProps {
+  searchParams: Promise<{
+    section?: string;
+    search?: string;
+  }>;
+}
+
+export default async function AdminPage({ searchParams }: AdminPageProps) {
+  const params = await searchParams;
+  const requestedSection = (params.section as AdminSection) || 'goals';
   const activeTab = ADMIN_SECTION_OPTIONS.some((item) => item.value === requestedSection) ? requestedSection : 'goals';
-  const sidebarSearch = searchParams.get('search') || '';
+  const sidebarSearch = params.search || '';
 
   return (
     <div className="flex h-full w-full bg-gray-50">
