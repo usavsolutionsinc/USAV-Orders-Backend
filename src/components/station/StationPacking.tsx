@@ -11,6 +11,7 @@ interface StationPackingProps {
   todayCount: number;
   goal?: number;
   onComplete?: () => void;
+  embedded?: boolean;
 }
 
 function mapStaffIdToPackingStation(staffId: string): string {
@@ -29,6 +30,7 @@ export default function StationPacking({
   todayCount = 0,
   goal = 50,
   onComplete,
+  embedded = false,
 }: StationPackingProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -105,7 +107,7 @@ export default function StationPacking({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden border-r border-gray-100">
+    <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 pb-2 space-y-4">
           <div className="space-y-0.5">

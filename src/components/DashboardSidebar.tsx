@@ -1,430 +1,698 @@
 'use client';
 
-import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Database, Loader2, Check, X, BarChart3, TrendingUp, Package, AlertCircle, ChevronLeft, ChevronRight, Tool, History, Search } from './Icons';
-import { motion, AnimatePresence } from 'framer-motion';
-import { SearchBar } from './ui/SearchBar';
-import { ShippedIntakeForm, type ShippedFormData } from './shipped';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import {
+  ChevronLeft,
+  LayoutDashboard,
+  Menu,
+  Plus,
+  Search,
+  X,
+} from '@/components/Icons';
+import { AdminSidebar, ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/AdminSidebar';
+import BarcodeSidebar from '@/components/BarcodeSidebar';
+import { QuarterSidebar } from '@/components/QuarterSelector';
+import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
+import { RepairSidebar } from '@/components/repair';
+import ShippedSidebar from '@/components/ShippedSidebar';
+import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
+import ReceivingSidebar from '@/components/ReceivingSidebar';
+import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import StationTesting from '@/components/station/StationTesting';
+import StationPacking from '@/components/station/StationPacking';
+import StaffSelector from '@/components/StaffSelector';
+import {
+  APP_SIDEBAR_NAV,
+  getSidebarRouteKey,
+  isSidebarNavActive,
+  type SidebarNavItem,
+} from '@/lib/sidebar-navigation';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { getPackerThemeById, getTechThemeById } from '@/utils/staff-colors';
+import type { ShippedFormData } from '@/components/shipped';
 
-interface DashboardSidebarProps {
-    showIntakeForm?: boolean;
-    onCloseForm?: () => void;
-    onFormSubmit?: (data: ShippedFormData) => void;
-    filterControl?: ReactNode;
+type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
+
+const ORDER_VIEW_OPTIONS: Array<{ value: DashboardOrderView; label: string }> = [
+  { value: 'unshipped', label: 'Unshipped Orders' },
+  { value: 'pending', label: 'Pending Orders' },
+  { value: 'shipped', label: 'Shipped Orders' },
+];
+
+const TECH_NAMES: Record<string, string> = {
+  '1': 'Michael',
+  '2': 'Thuc',
+  '3': 'Sang',
+  '4': 'Cuong',
+  '6': 'Cuong',
+};
+
+const PACKER_NAMES: Record<string, string> = {
+  '4': 'Tuan',
+  '5': 'Thuy',
+  '6': 'Packer',
+};
+
+function getOrderViewFromSearch(searchParams: { has: (key: string) => boolean }): DashboardOrderView {
+  if (searchParams.has('unshipped')) return 'unshipped';
+  if (searchParams.has('pending')) return 'pending';
+  if (searchParams.has('shipped')) return 'shipped';
+  return 'pending';
 }
 
-interface SearchHistory {
-    query: string;
-    timestamp: Date;
+function normalizeOrderViewParams(params: URLSearchParams, preferredView?: DashboardOrderView): DashboardOrderView {
+  const nextView = preferredView ?? getOrderViewFromSearch(params);
+  params.delete('unshipped');
+  params.delete('pending');
+  params.delete('shipped');
+  params.set(nextView, '');
+  return nextView;
 }
 
-export default function DashboardSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit, filterControl }: DashboardSidebarProps) {
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [isTransferring, setIsTransferring] = useState(false);
-    const [manualSheetName, setManualSheetName] = useState('');
-    const [activeScript, setActiveScript] = useState<string | null>(null);
-    const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
-    const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
-    const searchInputRef = useRef<HTMLInputElement | null>(null);
+function getTechName(id: string) {
+  return TECH_NAMES[id] || 'Technician';
+}
 
-    useEffect(() => {
-        const focusSearchInput = () => {
-            window.setTimeout(() => {
-                searchInputRef.current?.focus();
-            }, 50);
-        };
+function getPackerName(id: string) {
+  return PACKER_NAMES[id] || 'Packer';
+}
 
-        const handleFocusSearch = () => {
-            focusSearchInput();
-        };
+function TechStationContext({ techId }: { techId: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [history, setHistory] = useState<any[]>([]);
+  const [dailyGoal, setDailyGoal] = useState(50);
 
-        window.addEventListener('dashboard-focus-search' as any, handleFocusSearch as any);
+  const techName = getTechName(techId);
+  const techTheme = getTechThemeById(techId);
+  const viewMode = searchParams.get('view') === 'pending' ? 'pending' : 'history';
 
-        try {
-            const shouldFocus = sessionStorage.getItem('dashboard-focus-search') === '1';
-            if (shouldFocus) {
-                sessionStorage.removeItem('dashboard-focus-search');
-                focusSearchInput();
-            }
-        } catch (_error) {
-            // no-op for environments where sessionStorage is unavailable
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch(`/api/tech-logs?techId=${techId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setHistory(data);
         }
-
-        return () => {
-            window.removeEventListener('dashboard-focus-search' as any, handleFocusSearch as any);
-        };
-    }, []);
-
-    useEffect(() => {
-        try {
-            const saved = localStorage.getItem('dashboard_search_history');
-            if (!saved) return;
-            const parsed = JSON.parse(saved);
-            setSearchHistory(
-                parsed.map((item: any) => ({
-                    ...item,
-                    timestamp: new Date(item.timestamp),
-                }))
-            );
-        } catch (_error) {
-            setSearchHistory([]);
-        }
-    }, []);
-
-    const saveSearchHistory = (query: string) => {
-        const trimmedQuery = query.trim();
-        if (!trimmedQuery) return;
-        const newHistory = [
-            { query: trimmedQuery, timestamp: new Date() },
-            ...searchHistory.filter((h) => h.query !== trimmedQuery).slice(0, 4),
-        ];
-        setSearchHistory(newHistory);
-        localStorage.setItem('dashboard_search_history', JSON.stringify(newHistory));
+      } catch (_error) {
+        // no-op
+      }
     };
 
-    const handleSearch = (query: string) => {
-        const trimmedQuery = query.trim();
-        if (trimmedQuery) {
-            saveSearchHistory(trimmedQuery);
+    const fetchGoal = async () => {
+      try {
+        const res = await fetch(`/api/staff-goals?staffId=${encodeURIComponent(techId)}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const goalValue = Number(data?.daily_goal);
+        if (Number.isFinite(goalValue) && goalValue > 0) {
+          setDailyGoal(goalValue);
         }
-        window.dispatchEvent(new CustomEvent('dashboard-search', {
-            detail: { query: trimmedQuery }
-        }));
+      } catch (_error) {
+        // no-op
+      }
     };
 
-    const handleSync = async () => {
-        setIsSyncing(true);
-        setStatus(null);
-        try {
-            const res = await fetch('/api/sync-sheets', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'sync_all' }),
+    fetchHistory();
+    fetchGoal();
+  }, [techId]);
+
+  const todayCount = useMemo(() => {
+    if (history.length === 0) return 0;
+    const todayDate = getCurrentPSTDateKey();
+    return history.filter((item) => toPSTDateKey(item.test_date_time || item.timestamp || '') === todayDate).length;
+  }, [history]);
+
+  const updateViewMode = (nextView: 'history' | 'pending') => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (nextView === 'history') {
+      nextParams.delete('view');
+    } else {
+      nextParams.set('view', 'pending');
+    }
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `/tech/${techId}?${nextSearch}` : `/tech/${techId}`);
+  };
+
+  const refreshHistory = async () => {
+    try {
+      const res = await fetch(`/api/tech-logs?techId=${techId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setHistory(data);
+      }
+    } catch (_error) {
+      // no-op
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="border-b border-gray-200 bg-white">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
+          <div className="min-w-0">
+            <StaffSelector
+              role="technician"
+              variant="boxy"
+              selectedStaffId={parseInt(techId, 10)}
+              onSelect={(id) => router.push(`/tech/${id}`)}
+            />
+          </div>
+          <div className="relative min-w-0">
+            <select
+              value={viewMode}
+              onChange={(e) => updateViewMode(e.target.value as 'history' | 'pending')}
+              className="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none"
+            >
+              <option value="history">Tech History</option>
+              <option value="pending">Pending Orders</option>
+            </select>
+            <svg
+              className="w-3 h-3 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <StationTesting
+          embedded
+          userId={techId}
+          userName={techName}
+          sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
+          themeColor={techTheme}
+          onTrackingScan={() => updateViewMode('history')}
+          todayCount={todayCount}
+          goal={dailyGoal}
+          onComplete={refreshHistory}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PackerStationContext({ packerId }: { packerId: string }) {
+  const router = useRouter();
+  const [history, setHistory] = useState<any[]>([]);
+  const [dailyGoal, setDailyGoal] = useState(50);
+  const packerName = getPackerName(packerId);
+  const packerTheme = getPackerThemeById(packerId);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=5000`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setHistory(data);
+        }
+      } catch (_error) {
+        // no-op
+      }
+    };
+
+    const fetchGoal = async () => {
+      try {
+        const res = await fetch(`/api/staff-goals?staffId=${encodeURIComponent(packerId)}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const goalValue = Number(data?.daily_goal);
+        if (Number.isFinite(goalValue) && goalValue > 0) {
+          setDailyGoal(goalValue);
+        }
+      } catch (_error) {
+        // no-op
+      }
+    };
+
+    fetchHistory();
+    fetchGoal();
+  }, [packerId]);
+
+  const todayCount = useMemo(() => {
+    if (history.length === 0) return 0;
+    const todayDate = getCurrentPSTDateKey();
+    return history.filter((item) => toPSTDateKey(item.pack_date_time || item.timestamp || item.packedAt || '') === todayDate).length;
+  }, [history]);
+
+  const refreshHistory = async () => {
+    try {
+      const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=5000`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setHistory(data);
+      }
+    } catch (_error) {
+      // no-op
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="border-b border-gray-200 bg-white">
+        <div className="grid grid-cols-1">
+          <StaffSelector
+            role="packer"
+            variant="boxy"
+            selectedStaffId={parseInt(packerId, 10)}
+            onSelect={(id) => router.push(`/packer/${id}`)}
+          />
+        </div>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <StationPacking
+          embedded
+          userId={packerId}
+          userName={packerName}
+          themeColor={packerTheme}
+          todayCount={todayCount}
+          goal={dailyGoal}
+          onComplete={refreshHistory}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SidebarContextPanel() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const routeKey = getSidebarRouteKey(pathname);
+
+  const updateSearch = (mutate: (params: URLSearchParams) => void, nextPathname?: string) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    mutate(nextParams);
+    const targetPath = nextPathname || pathname || '/dashboard';
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `${targetPath}?${nextSearch}` : targetPath);
+  };
+
+  const closeIntakeForm = () => {
+    updateSearch((params) => {
+      params.delete('new');
+    });
+  };
+
+  const submitShippedForm = async (data: ShippedFormData) => {
+    try {
+      const response =
+        data.mode === 'add_order'
+          ? await fetch('/api/orders/add', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                orderId: data.order_id,
+                productTitle: data.product_title,
+                shippingTrackingNumber: data.shipping_tracking_number,
+                sku: data.sku || null,
+                accountSource: 'Manual',
+                condition: data.condition,
+              }),
+            })
+          : await fetch('/api/shipped/submit', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
             });
-            const data = await res.json();
-            if (data.success) {
-                setStatus({ type: 'success', message: data.message || 'Sync completed successfully' });
-                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-            } else {
-                setStatus({ type: 'error', message: data.error || data.message || 'Sync failed' });
+
+      const result = await response.json();
+      if (!result.success) {
+        alert(result.error || 'Failed to submit form. Please try again.');
+        return;
+      }
+
+      closeIntakeForm();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (_error) {
+      alert('Error submitting form. Please try again.');
+    }
+  };
+
+  if (routeKey === 'dashboard') {
+    const orderView = getOrderViewFromSearch(searchParams);
+    const filterControl = (
+      <ViewDropdown
+        options={ORDER_VIEW_OPTIONS}
+        value={orderView}
+        onChange={(nextView) =>
+          updateSearch((params) => {
+            normalizeOrderViewParams(params, nextView);
+            if (nextView !== 'shipped') {
+              params.delete('search');
             }
-        } catch (error) {
-            setStatus({ type: 'error', message: 'Network error occurred' });
-        } finally {
-            setIsSyncing(false);
+          }, '/dashboard')
         }
-    };
+      />
+    );
 
-    const handleTransfer = async () => {
-        setIsTransferring(true);
-        setStatus(null);
-        try {
-            const res = await fetch('/api/google-sheets/transfer-orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    manualSheetName: manualSheetName.trim() || undefined
-                }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                const message = data.rowCount > 0 
-                    ? `Successfully transferred ${data.rowCount} order${data.rowCount === 1 ? '' : 's'}` 
-                    : 'Orders are already transferred';
-                setStatus({ type: 'success', message });
-                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-            } else {
-                setStatus({ type: 'error', message: data.error || 'Transfer failed' });
-            }
-        } catch (error) {
-            setStatus({ type: 'error', message: 'Network error occurred' });
-        } finally {
-            setIsTransferring(false);
-        }
-    };
+    if (orderView === 'shipped') {
+      return (
+        <ShippedSidebar
+          embedded
+          hideSectionHeader
+          showIntakeForm={searchParams.get('new') === 'true'}
+          onCloseForm={closeIntakeForm}
+          onFormSubmit={submitShippedForm}
+          filterControl={filterControl}
+          showDetailsPanel={false}
+        />
+      );
+    }
 
-    const runScript = async (scriptName: string) => {
-        setActiveScript(scriptName);
-        setStatus(null);
-        try {
-            const res = await fetch('/api/google-sheets/execute-script', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ scriptName }),
-            });
-            const data = await res.json();
-            if (data.success) {
-                setStatus({ type: 'success', message: data.message });
-                window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-            } else {
-                setStatus({ type: 'error', message: data.error || 'Script execution failed' });
-            }
-        } catch (error) {
-            setStatus({ type: 'error', message: 'Network error occurred' });
-        } finally {
-            setActiveScript(null);
-        }
-    };
-
-    const menuItems = [
-        {
-            id: 'orders',
-            name: 'Orders',
-            icon: <Database className="w-4 h-4" />,
-            scripts: [
-                { id: 'updateNonshippedOrders', name: 'Check Unshipped Orders' }
-            ]
-        },
-        {
-            id: 'shipping',
-            name: 'Shipping',
-            icon: <TrendingUp className="w-4 h-4" />,
-            scripts: [
-                { id: 'checkShippedOrders', name: 'Check Shipped Orders' }
-            ]
-        },
-        {
-            id: 'technicians',
-            name: 'Technicians',
-            icon: <Tool className="w-4 h-4" />,
-            scripts: [
-                { id: 'syncTechSerialNumbers', name: 'Sync Tech Serial Numbers' }
-            ]
-        },
-        {
-            id: 'packers',
-            name: 'Packers',
-            icon: <Package className="w-4 h-4" />,
-            scripts: [
-                { id: 'syncPackerLogs', name: 'Sync Packer Logs' }
-            ]
-        }
-    ];
-
-    const containerVariants = {
-        hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.05,
-                delayChildren: 0.05,
-            },
-        },
-    };
-
-    const itemVariants = {
-        hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
-        visible: { 
-            opacity: 1, 
-            x: 0, 
-            filter: 'blur(0px)',
-            transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 } 
-        },
-    };
+    if (orderView === 'unshipped') {
+      return (
+        <UnshippedSidebar
+          embedded
+          hideSectionHeader
+          showIntakeForm={searchParams.get('new') === 'true'}
+          onCloseForm={closeIntakeForm}
+          onFormSubmit={submitShippedForm}
+          filterControl={filterControl}
+        />
+      );
+    }
 
     return (
-        <div className="relative flex-shrink-0 z-40 h-full">
-            <aside
-                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[300px]"
-            >
-                {showIntakeForm ? (
-                    <ShippedIntakeForm
-                        onClose={onCloseForm || (() => {})}
-                        onSubmit={onFormSubmit || (() => {})}
-                    />
-                ) : (
-                <motion.div 
-                    initial="hidden"
-                    animate="visible"
-                    variants={containerVariants}
-                    className="h-full flex flex-col overflow-hidden"
-                >
-                    {filterControl ? (
-                        <motion.div variants={itemVariants} className="relative z-20">
-                            {filterControl}
-                        </motion.div>
-                    ) : null}
-                    <div className={`h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
-                    <motion.header variants={itemVariants}>
-                        <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-                            Management
-                        </h2>
-                            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
-                            Database & Metrics
-                        </p>
-                    </motion.header>
-                    
-                    <div className="space-y-4">
-                        <motion.div variants={itemVariants}>
-                            <SearchBar 
-                                value={searchQuery}
-                                onChange={setSearchQuery}
-                                onSearch={handleSearch}
-                                onClear={() => handleSearch('')}
-                                inputRef={searchInputRef}
-                                placeholder="Search orders, serials..."
-                                variant="blue"
-                                rightElement={
-                                    <button
-                                        onClick={() => handleSearch(searchQuery)}
-                                        className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
-                                        title="Search"
-                                    >
-                                        <Search className="w-4 h-4" />
-                                    </button>
-                                }
-                            />
-                        </motion.div>
-                        {searchHistory.length > 0 && (
-                            <motion.div variants={itemVariants} className="bg-gray-50 p-4 rounded-xl border border-gray-200 -mt-1">
-                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-                                    Recent Searches
-                                </p>
-                                <div className="space-y-2">
-                                    {searchHistory.slice(0, 5).map((item, index) => (
-                                        <button
-                                            key={`${item.query}-${index}`}
-                                            onClick={() => {
-                                                setSearchQuery(item.query);
-                                                handleSearch(item.query);
-                                            }}
-                                            className="w-full text-left p-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600 truncate">
-                                                    {item.query}
-                                                </span>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </motion.div>
-                        )}
-                        <motion.div variants={itemVariants} className="-mt-1 text-left">
-                            <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">Click an order for more details</p>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Orders are sorted by ship-by date</p>
-                        </motion.div>
-
-                        {/* Order Management Tools */}
-                        <motion.div variants={itemVariants} className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">
-                            <div className="space-y-3">
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-gray-500 uppercase px-1 tracking-widest">Manual Sheet Name</label>
-                                    <input
-                                        type="text"
-                                        value={manualSheetName}
-                                        onChange={(e) => setManualSheetName(e.target.value)}
-                                        placeholder="e.g., Sheet_01_14_2026"
-                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-mono text-gray-900 outline-none focus:border-blue-500 transition-all"
-                                        disabled={isTransferring}
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={handleTransfer}
-                                    disabled={isTransferring}
-                                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                >
-                                    {isTransferring ? (
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                        <Database className="w-3.5 h-3.5" />
-                                    )}
-                                    Import Latest Orders
-                                </button>
-                            </div>
-                        </motion.div>
-
-                        <motion.button
-                            variants={itemVariants}
-                            onClick={handleSync}
-                            disabled={isSyncing}
-                            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group active:scale-95 shadow-lg shadow-emerald-600/10"
-                        >
-                            {isSyncing ? (
-                                <Loader2 className="w-6 h-6 animate-spin" />
-                            ) : (
-                                <Database className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                            )}
-                            <div className="text-center">
-                                <p className="text-[10px] font-black uppercase tracking-widest">Sync Sheets to Neon DB</p>
-                                <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">Shipped, Tech, Packer</p>
-                            </div>
-                        </motion.button>
-
-                        {status && (
-                            <motion.div variants={itemVariants} className={`p-4 rounded-2xl border ${status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'} flex items-start gap-3`}>
-                                {status.type === 'success' ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <X className="w-4 h-4 mt-0.5 shrink-0" />}
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black uppercase tracking-widest">{status.type === 'success' ? 'Success' : 'Error'}</p>
-                                    <p className="text-[9px] font-medium leading-relaxed">{status.message}</p>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        <div className="space-y-2">
-                            <motion.p variants={itemVariants} className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] ml-2 mb-4">Automation Scripts</motion.p>
-                            {menuItems.map((menu) => (
-                                <motion.div key={menu.id} layout variants={itemVariants} className="space-y-1">
-                                    <button
-                                        onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
-                                        className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${expandedMenu === menu.id ? 'bg-blue-50 text-blue-600 shadow-sm border border-blue-100' : 'bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100 hover:text-gray-900'}`}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className={`p-2.5 rounded-xl transition-colors duration-300 ${expandedMenu === menu.id ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
-                                                {menu.icon}
-                                            </div>
-                                            <span className="text-[11px] font-black uppercase tracking-wider">{menu.name}</span>
-                                        </div>
-                                        {expandedMenu === menu.id ? <ChevronLeft className="w-3.5 h-3.5 -rotate-90 transition-transform duration-300" /> : <ChevronRight className="w-3.5 h-3.5 transition-transform duration-300" />}
-                                    </button>
-                                    <AnimatePresence initial={false}>
-                                        {expandedMenu === menu.id && (
-                                            <motion.div
-                                                initial={{ gridTemplateRows: '0fr', opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                                                animate={{ gridTemplateRows: '1fr', opacity: 1, paddingTop: 8, paddingBottom: 8 }}
-                                                exit={{ gridTemplateRows: '0fr', opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                                                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                                                className="grid px-3 overflow-hidden"
-                                            >
-                                                <div className="overflow-hidden">
-                                                    <div className="space-y-1.5">
-                                                        {menu.scripts.length > 0 ? (
-                                                            menu.scripts.map((script) => (
-                                                                <button
-                                                                    key={script.id}
-                                                                    onClick={() => runScript(script.id)}
-                                                                    disabled={!!activeScript}
-                                                                    className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${activeScript === script.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-900 group'} flex items-center justify-between group`}
-                                                                >
-                                                                    <span className="group-hover:translate-x-1 transition-transform duration-200">{script.name}</span>
-                                                                    {activeScript === script.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                                                </button>
-                                                            ))
-                                                        ) : (
-                                                            <div className="p-3.5 rounded-xl bg-gray-50 text-gray-400 text-[10px] font-bold uppercase tracking-widest">
-                                                                No scripts configured yet
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">
-                        <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
-                    </motion.footer>
-                    </div>
-                </motion.div>
-                )}
-            </aside>
-        </div>
+      <DashboardManagementPanel
+        showIntakeForm={searchParams.get('new') === 'true'}
+        onCloseForm={closeIntakeForm}
+        onFormSubmit={submitShippedForm}
+        filterControl={filterControl}
+      />
     );
+  }
+
+  if (routeKey === 'shipped') {
+    return (
+      <ShippedSidebar
+        embedded
+        hideSectionHeader
+        showIntakeForm={searchParams.get('new') === 'true'}
+        onCloseForm={closeIntakeForm}
+        onFormSubmit={submitShippedForm}
+      />
+    );
+  }
+
+  if (routeKey === 'admin') {
+    const activeSection = (searchParams.get('section') as AdminSection) || 'goals';
+    const validSection = ADMIN_SECTION_OPTIONS.some((item) => item.value === activeSection) ? activeSection : 'goals';
+    const sidebarSearch = searchParams.get('search') || '';
+
+    return (
+      <div className="h-full overflow-hidden">
+        <AdminSidebar
+          activeSection={validSection}
+          onSectionChange={(nextSection) =>
+            updateSearch((params) => {
+              params.set('section', nextSection);
+            }, '/admin')
+          }
+          searchValue={sidebarSearch}
+          onSearchChange={(nextValue) =>
+            updateSearch((params) => {
+              if (nextValue.trim()) {
+                params.set('search', nextValue);
+              } else {
+                params.delete('search');
+              }
+            }, '/admin')
+          }
+        />
+      </div>
+    );
+  }
+
+  if (routeKey === 'receiving') {
+    return <ReceivingSidebar embedded hideSectionHeader />;
+  }
+
+  if (routeKey === 'sku-stock') {
+    return <BarcodeSidebar embedded />;
+  }
+
+  if (routeKey === 'repair') {
+    return <RepairSidebar embedded hideSectionHeader />;
+  }
+
+  if (routeKey === 'previous-quarters') {
+    return <QuarterSidebar hideSectionHeader />;
+  }
+
+  if (routeKey === 'tech') {
+    const techId = pathname?.split('/').filter(Boolean)[1] || '1';
+    return <TechStationContext techId={techId} />;
+  }
+
+  if (routeKey === 'packer') {
+    const packerId = pathname?.split('/').filter(Boolean)[1] || '4';
+    return <PackerStationContext packerId={packerId} />;
+  }
+
+  return (
+    <div className="h-full flex flex-col px-6 py-6">
+      <div className="rounded-3xl border border-gray-200 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-5 text-white">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">
+            <LayoutDashboard className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[18px] font-black uppercase tracking-tight">Workspace</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.35em] text-blue-200">Unified Sidebar</p>
+          </div>
+        </div>
+        <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-200">
+          Navigation and contextual controls now live in one persistent sidebar. Pick a route to load its tools here.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function getSidebarTitle(pathname: string | null) {
+  const routeKey = getSidebarRouteKey(pathname);
+
+  if (routeKey === 'dashboard') {
+    return 'Dashboard';
+  }
+
+  if (routeKey === 'shipped') return 'Shipped Orders';
+  if (routeKey === 'receiving') return 'Receiving';
+  if (routeKey === 'repair') return 'Repair';
+  if (routeKey === 'sku-stock') return 'Sku Stock';
+  if (routeKey === 'tech') return 'Technicians';
+  if (routeKey === 'packer') return 'Packers';
+  if (routeKey === 'sku') return 'Sku Manager';
+  if (routeKey === 'previous-quarters') return 'Quarters';
+  if (routeKey === 'admin') return 'Admin';
+
+  return 'Home';
+}
+
+function NavSection({
+  items,
+  pathname,
+  resolveHref,
+  onNavigate,
+}: {
+  items: SidebarNavItem[];
+  pathname: string | null;
+  resolveHref: (item: SidebarNavItem) => string;
+  onNavigate: () => void;
+}) {
+  return (
+    <div className="space-y-1">
+      {items.map((item) => {
+        const href = resolveHref(item);
+        const isActive = isSidebarNavActive(pathname, href);
+        const Icon = item.icon;
+
+        return (
+          <Link
+            key={item.id}
+            href={href}
+            onClick={onNavigate}
+            className={`group flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-200 ${
+              isActive
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
+            <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
+            <span className="text-[11px] font-black uppercase tracking-wider">{item.label}</span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function DashboardSidebar() {
+  const pathname = usePathname();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [showHomeNavigation, setShowHomeNavigation] = useState(false);
+  const [lastTechHref, setLastTechHref] = useState('/tech/1');
+  const [lastPackerHref, setLastPackerHref] = useState('/packer/4');
+
+  useEffect(() => {
+    const savedTechHref = localStorage.getItem('last-tech-station-href');
+    if (savedTechHref && /^\/tech\/\d+$/.test(savedTechHref)) {
+      setLastTechHref(savedTechHref);
+    }
+
+    const savedPackerHref = localStorage.getItem('last-packer-station-href');
+    if (savedPackerHref && /^\/packer\/\d+$/.test(savedPackerHref)) {
+      setLastPackerHref(savedPackerHref);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pathname) return;
+    if (/^\/tech\/\d+$/.test(pathname)) {
+      localStorage.setItem('last-tech-station-href', pathname);
+      setLastTechHref(pathname);
+    }
+    if (/^\/packer\/\d+$/.test(pathname)) {
+      localStorage.setItem('last-packer-station-href', pathname);
+      setLastPackerHref(pathname);
+    }
+    setShowHomeNavigation(false);
+    setIsMobileOpen(false);
+  }, [pathname]);
+
+  const resolveHref = (item: SidebarNavItem) => {
+    if (item.id === 'tech') return lastTechHref;
+    if (item.id === 'packer') return lastPackerHref;
+    return item.href;
+  };
+  const routeKey = getSidebarRouteKey(pathname);
+  const sidebarTitle = getSidebarTitle(pathname);
+
+  const groupedNav = {
+    main: APP_SIDEBAR_NAV.filter((item) => item.kind === 'main'),
+    station: APP_SIDEBAR_NAV.filter((item) => item.kind === 'station'),
+    bottom: APP_SIDEBAR_NAV.filter((item) => item.kind === 'bottom'),
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05,
+        delayChildren: 0.05,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
+    visible: {
+      opacity: 1,
+      x: 0,
+      filter: 'blur(0px)',
+      transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 },
+    },
+  };
+
+  const homePanel = (
+    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full overflow-y-auto bg-white">
+      <motion.div variants={itemVariants} className="flex items-center justify-between px-4 pt-1 pb-1.5 border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <div>
+            <p className="text-sm font-black tracking-tight text-gray-900">Home</p>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="px-3 py-3 space-y-6">
+        <motion.div variants={itemVariants}>
+          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
+          <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
+        </motion.div>
+
+        <motion.div variants={itemVariants}>
+          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">Stations</p>
+          <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
+        </motion.div>
+
+        <motion.div variants={itemVariants}>
+          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">More</p>
+          <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+
+  const contextPanel = (
+    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden bg-white">
+      <motion.button
+        variants={itemVariants}
+        type="button"
+        onClick={() => setShowHomeNavigation(true)}
+        className="w-full flex items-center gap-2 pl-1.5 pr-3 pt-1 pb-1 border-b border-gray-100 text-left hover:bg-gray-50 transition-colors"
+        aria-label="Back to navigation"
+      >
+        <div className="h-9 w-7 flex items-center justify-start text-gray-500">
+          <ChevronLeft className="w-5 h-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-black tracking-tight text-gray-900 truncate">{sidebarTitle}</p>
+        </div>
+      </motion.button>
+      <motion.div variants={itemVariants} className="flex-1 overflow-hidden">
+        <SidebarContextPanel />
+      </motion.div>
+    </motion.div>
+  );
+
+  const shell = (
+    <aside className="h-full w-[320px] xl:w-[360px] bg-white border-r border-gray-200 overflow-hidden shadow-xl shadow-slate-900/5">
+      {showHomeNavigation || routeKey === 'unknown' ? homePanel : contextPanel}
+    </aside>
+  );
+
+  return (
+    <>
+      <div className="hidden md:block h-full flex-shrink-0">{shell}</div>
+
+      <button
+        type="button"
+        onClick={() => setIsMobileOpen(true)}
+        className="md:hidden fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-slate-900/10 flex items-center justify-center"
+        aria-label="Open sidebar"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {isMobileOpen ? (
+        <div className="md:hidden fixed inset-0 z-[100]">
+          <button type="button" className="absolute inset-0 bg-slate-900/35" onClick={() => setIsMobileOpen(false)} aria-label="Close sidebar overlay" />
+          <div className="relative h-full max-w-[94vw]">{shell}</div>
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(false)}
+            className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-slate-900/10 flex items-center justify-center"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
 }

@@ -2,7 +2,7 @@
 
 import "./globals.css";
 import Providers from "../components/Providers";
-import StationNav from "../components/station/StationNav";
+import DashboardSidebar from "../components/DashboardSidebar";
 import { HeaderProvider } from "../contexts/HeaderContext";
 
 export default function RootLayout({
@@ -22,7 +22,7 @@ export default function RootLayout({
                     <HeaderProvider>
                         <div className="flex h-full w-full overflow-hidden">
                             {/* Global Sidebar - Now permanent on the left */}
-                            <StationNav />
+                            <DashboardSidebar />
 
                             {/* Main Content Area */}
                             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">

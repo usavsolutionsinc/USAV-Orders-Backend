@@ -18,9 +18,17 @@ interface ReceivingPanelProps {
     onEntryAdded?: () => void;
     todayCount: number;
     averageTime: string;
+    embedded?: boolean;
+    hideSectionHeader?: boolean;
 }
 
-export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }: ReceivingPanelProps) {
+export default function ReceivingPanel({
+    onEntryAdded,
+    todayCount,
+    averageTime,
+    embedded = false,
+    hideSectionHeader = false,
+}: ReceivingPanelProps) {
     const [trackingNumber, setTrackingNumber] = useState('');
     const [carrier, setCarrier] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -122,26 +130,61 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
         return `https://www.google.com/search?q=${tracking}`;
     };
 
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.05,
+                delayChildren: 0.05,
+            },
+        },
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
+        visible: {
+            opacity: 1,
+            x: 0,
+            filter: 'blur(0px)',
+            transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 },
+        },
+    };
+
     return (
-        <div className="flex flex-col h-full bg-white border-r border-gray-200">
-            {/* Header with Metrics */}
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                <div>
-                    <h2 className="text-xl font-black tracking-tighter text-gray-900 uppercase leading-none">
-                        Receiving
-                    </h2>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl">
+        <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={containerVariants}
+            className={`flex flex-col h-full bg-white ${embedded ? '' : 'border-r border-gray-200'}`}
+        >
+            {!hideSectionHeader ? (
+                <motion.div variants={itemVariants} className="p-6 border-b border-gray-200 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-xl font-black tracking-tighter text-gray-900 uppercase leading-none">
+                            Receiving
+                        </h2>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl">
+                            <span className="text-[10px] font-black text-black-400 uppercase tracking-widest">Today</span>
+                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">-</span>
+                            <span className="text-sm font-black text-blue-600 leading-none">{todayCount}</span>
+                        </div>
+                    </div>
+                </motion.div>
+            ) : (
+                <motion.div variants={itemVariants} className="px-6 pt-3 pb-2">
+                    <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-black text-black-400 uppercase tracking-widest">Today</span>
-                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">—</span>
+                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">-</span>
                         <span className="text-sm font-black text-blue-600 leading-none">{todayCount}</span>
                     </div>
-                </div>
-            </div>
+                </motion.div>
+            )}
 
             {/* Unified Scan & Search Section */}
-            <div className="p-4 border-b border-gray-200 space-y-3">
+            <motion.div variants={itemVariants} className="p-4 border-b border-gray-200 space-y-3">
                 <SearchBar 
                     inputRef={scanInputRef}
                     value={trackingNumber}
@@ -216,7 +259,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
                         )}
                     </AnimatePresence>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Found Record Component */}
             <AnimatePresence>
@@ -286,7 +329,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
             </AnimatePresence>
 
             {/* Results Section */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <motion.div variants={itemVariants} className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                     {results.length > 0 && (
                         <div className="space-y-2">
@@ -334,7 +377,7 @@ export default function ReceivingPanel({ onEntryAdded, todayCount, averageTime }
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            </motion.div>
+        </motion.div>
     );
 }

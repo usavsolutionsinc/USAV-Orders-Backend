@@ -18,6 +18,7 @@ interface StationTestingProps {
   todayCount: number;
   goal?: number;
   onComplete?: () => void;
+  embedded?: boolean;
 }
 
 export default function StationTesting({
@@ -30,6 +31,7 @@ export default function StationTesting({
   todayCount = 0,
   goal = 50,
   onComplete,
+  embedded = false,
 }: StationTestingProps) {
   const router = useRouter();
   const safeGoal = Math.max(1, Number(goal) || 1);
@@ -63,7 +65,7 @@ export default function StationTesting({
   void gid;
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden border-r border-gray-100">
+    <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 pb-2 space-y-4">
           <div className="space-y-0.5">
@@ -137,7 +139,7 @@ export default function StationTesting({
           </AnimatePresence>
         </div>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-6 space-y-3">
+        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6 space-y-3">
           <AnimatePresence mode="wait">
             {errorMessage && (
               <motion.div

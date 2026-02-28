@@ -235,7 +235,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
       onClick={openDetails}
-      className="rounded-2xl p-4 border transition-all relative shadow-sm hover:shadow-md mb-2 bg-white border-gray-200 hover:border-blue-300 cursor-pointer"
+      className="rounded-2xl p-3 border transition-all relative shadow-sm hover:shadow-md mb-2 bg-white border-gray-200 hover:border-blue-300 cursor-pointer"
     >
       {/* Ship By Date & Order ID Header */}
       <div className="flex items-center justify-between mb-4">
@@ -259,7 +259,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </div>
       </div>
 
-      <div className="mb-5">
+      <div className="mb-4">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className={`text-[13px] font-black ${quantity > 1 ? 'text-yellow-700' : 'text-gray-800'}`}>
@@ -295,7 +295,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               e.stopPropagation();
               handleStart(order);
             }}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
+            className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
           >
             <Play className="w-4 h-4" />
             Start
@@ -321,7 +321,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                 e.stopPropagation();
                 handleStart(order);
               }}
-              className="flex items-center justify-center gap-2 px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
             >
               <Play className="w-4 h-4" />
               Start
@@ -378,7 +378,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   if (loading) {
     return (
-      <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200 animate-pulse">
+      <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200 animate-pulse">
         <div className="h-4 bg-gray-200 rounded w-20 mb-3"></div>
         <div className="h-20 bg-gray-200 rounded"></div>
       </div>
@@ -386,7 +386,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   }
 
   return (
-    <div className="flex flex-col space-y-2">
+    <div className="flex flex-col space-y-1.5">
       {/* Tab Switcher */}
       <TabSwitch
         tabs={[
@@ -402,7 +402,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-emerald-50 rounded-2xl p-8 border-2 border-emerald-200 text-center space-y-4"
+          className="bg-emerald-50 rounded-2xl p-5 border-2 border-emerald-200 text-center space-y-3"
         >
           <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2">
             <Check className="w-8 h-8 text-emerald-600" />
@@ -416,7 +416,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </motion.div>
       ) : orders.length === 0 ? (
         <div className="space-y-3">
-          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200 text-center">
+          <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200 text-center">
             <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
               {activeTab === 'stock' ? 'No out-of-stock orders' : 'No current orders'}
@@ -433,7 +433,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
       {activeTab === 'current' && globalOutOfStockOrders.length > 0 && (
         <div>
-          <p className="text-[14px] font-black text-amber-700 uppercase tracking-widest mb-2">
+          <p className="text-[13px] font-black text-amber-700 uppercase tracking-widest mb-2">
             Out of Stock Orders
           </p>
           <div className="space-y-2">

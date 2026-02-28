@@ -17,9 +17,10 @@ interface StaffSelectorProps {
     role: 'technician' | 'packer';
     selectedStaffId: number | null;
     onSelect: (staffId: number, staffName: string) => void;
+    variant?: 'default' | 'boxy';
 }
 
-export default function StaffSelector({ role, selectedStaffId, onSelect }: StaffSelectorProps) {
+export default function StaffSelector({ role, selectedStaffId, onSelect, variant = 'default' }: StaffSelectorProps) {
     const [isOpen, setIsOpen] = useState(false);
 
     const { data: staff = [], isLoading } = useQuery<Staff[]>({
@@ -46,6 +47,7 @@ export default function StaffSelector({ role, selectedStaffId, onSelect }: Staff
         return a.name.localeCompare(b.name);
     });
     const selectedTheme = selectedStaff ? getStaffThemeById(selectedStaff.id, role) : null;
+    const isBoxy = variant === 'boxy';
 
     if (isLoading) {
         return (
@@ -57,7 +59,9 @@ export default function StaffSelector({ role, selectedStaffId, onSelect }: Staff
         <div className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                className={`flex items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm ${
+                    isBoxy ? 'px-3 py-3 rounded-none h-full w-full justify-between' : 'px-3 py-1.5 rounded-xl'
+                }`}
             >
                 <span className={`text-xs font-black tracking-tight ${selectedTheme ? stationThemeColors[selectedTheme].text : 'text-gray-900'}`}>
                     {selectedStaff ? selectedStaff.name : 'Select Staff'}
@@ -78,7 +82,9 @@ export default function StaffSelector({ role, selectedStaffId, onSelect }: Staff
                         className="fixed inset-0 z-[60]" 
                         onClick={() => setIsOpen(false)}
                     />
-                    <div className="absolute top-full left-0 mt-1 min-w-[160px] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-[70] animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className={`absolute top-full left-0 mt-1 min-w-[160px] bg-white border border-gray-200 shadow-xl overflow-hidden z-[70] animate-in fade-in slide-in-from-top-1 duration-200 ${
+                        isBoxy ? 'rounded-none' : 'rounded-xl'
+                    }`}>
                         <div className="p-1 space-y-1">
                             {sortedStaff.map((member) => {
                                 const isSelected = selectedStaffId === member.id;
@@ -91,7 +97,9 @@ export default function StaffSelector({ role, selectedStaffId, onSelect }: Staff
                                             onSelect(member.id, member.name);
                                             setIsOpen(false);
                                         }}
-                                        className="w-full flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all group text-left"
+                                        className={`w-full flex items-center justify-between gap-3 px-3 py-1.5 hover:bg-gray-50 transition-all group text-left ${
+                                            isBoxy ? 'rounded-none' : 'rounded-lg'
+                                        }`}
                                     >
                                         <span className={`text-[11px] font-bold ${textClass}`}>
                                             {member.name}

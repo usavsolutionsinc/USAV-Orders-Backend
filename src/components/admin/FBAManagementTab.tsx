@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Plus } from '@/components/Icons';
-import { SearchBar } from '@/components/ui/SearchBar';
 
 interface FbaFnskuRow {
   product_title: string | null;
@@ -12,10 +11,13 @@ interface FbaFnskuRow {
   fnsku: string | null;
 }
 
-export function FBAManagementTab() {
+interface FBAManagementTabProps {
+  searchTerm?: string;
+}
+
+export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isUploadInfoOpen, setIsUploadInfoOpen] = useState(false);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
@@ -103,13 +105,6 @@ export function FBAManagementTab() {
         }}
       />
       <div className="flex items-center gap-3">
-        <SearchBar
-          value={searchTerm}
-          onChange={setSearchTerm}
-          placeholder="Search product title, ASIN, SKU, or FNSKU..."
-          className="w-full max-w-[420px]"
-          variant="blue"
-        />
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <button
             type="button"

@@ -22,6 +22,8 @@ interface ShippedSidebarProps {
     onFormSubmit?: (data: ShippedFormData) => void;
     filterControl?: ReactNode;
     showDetailsPanel?: boolean;
+    embedded?: boolean;
+    hideSectionHeader?: boolean;
 }
 
 // Hard-coded staff ID to name mapping
@@ -39,7 +41,15 @@ function getStaffName(staffId: number | null | undefined): string {
     return STAFF_NAMES[staffId] || `Staff #${staffId}`;
 }
 
-export default function ShippedSidebar({ showIntakeForm = false, onCloseForm, onFormSubmit, filterControl, showDetailsPanel = true }: ShippedSidebarProps) {
+export default function ShippedSidebar({
+    showIntakeForm = false,
+    onCloseForm,
+    onFormSubmit,
+    filterControl,
+    showDetailsPanel = true,
+    embedded = false,
+    hideSectionHeader = false,
+}: ShippedSidebarProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<ShippedOrder[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -156,30 +166,48 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
         }
     };
 
-    return (
-        <div className="relative flex-shrink-0 z-40 h-full">
-            <aside
-                className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[300px]"
-            >
-                {showIntakeForm ? (
-                    <ShippedIntakeForm 
-                        onClose={onCloseForm || (() => {})}
-                        onSubmit={onFormSubmit || (() => {})}
-                    />
-                ) : (
-                <div className="h-full flex flex-col overflow-hidden">
-                    {filterControl ? <div className="relative z-20">{filterControl}</div> : null}
-                    <div className={`h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
-                    <header>
-                        <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-                            Shipped Orders
-                        </h2>
-                        <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
-                            Search Database
-                        </p>
-                    </header>
-                    
-                    <div className="space-y-4">
+    const containerVariants = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: {
+                staggerChildren: 0.05,
+                delayChildren: 0.05,
+            },
+        },
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
+        visible: {
+            opacity: 1,
+            x: 0,
+            filter: 'blur(0px)',
+            transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 },
+        },
+    };
+
+    const panelContent = showIntakeForm ? (
+        <ShippedIntakeForm 
+            onClose={onCloseForm || (() => {})}
+            onSubmit={onFormSubmit || (() => {})}
+        />
+    ) : (
+        <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
+            {filterControl ? <motion.div variants={itemVariants} className="relative z-20">{filterControl}</motion.div> : null}
+            <div className={`h-full flex flex-col space-y-4 overflow-y-auto scrollbar-hide px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
+                    {!hideSectionHeader ? (
+                        <motion.header variants={itemVariants}>
+                            <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
+                                Shipped Orders
+                            </h2>
+                            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
+                                Search Database
+                            </p>
+                        </motion.header>
+                    ) : null}
+
+                    <motion.div variants={itemVariants} className="space-y-4">
                         {/* Search Bar */}
                         <SearchBar
                             value={searchQuery}
@@ -324,15 +352,26 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </motion.div>
 
-                    <footer className="mt-auto pt-4 border-t border-gray-200 opacity-30 text-center">
+                    <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-200 opacity-30 text-center">
                         <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV SHIPPED</p>
-                    </footer>
-                    </div>
-                </div>
-                )}
-            </aside>
+                    </motion.footer>
+            </div>
+        </motion.div>
+    );
+
+    const sidebarShell = embedded ? (
+        panelContent
+    ) : (
+        <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative group w-[300px]">
+            {panelContent}
+        </aside>
+    );
+
+    return (
+        <div className={`relative z-40 h-full ${embedded ? '' : 'flex-shrink-0'}`}>
+            {sidebarShell}
 
             {/* Details Panel Overlay - Reused Instance coordinated by shared state/events */}
             <AnimatePresence>

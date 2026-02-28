@@ -1,7 +1,5 @@
 'use client';
 
-import BarcodeSidebar from '@/components/BarcodeSidebar';
-
 export default function SkuStockPage() {
     const sheetId = "1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE";
     const gid = "527136135";
@@ -9,7 +7,6 @@ export default function SkuStockPage() {
 
     return (
         <div className="flex h-full w-full">
-            <BarcodeSidebar />
             <div className="flex-1 overflow-hidden w-full">
                 <iframe
                     src={iframeUrl}

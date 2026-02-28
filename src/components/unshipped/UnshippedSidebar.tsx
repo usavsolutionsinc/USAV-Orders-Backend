@@ -11,6 +11,8 @@ interface UnshippedSidebarProps {
   onCloseForm?: () => void;
   onFormSubmit?: (data: ShippedFormData) => void;
   filterControl?: ReactNode;
+  embedded?: boolean;
+  hideSectionHeader?: boolean;
 }
 
 export default function UnshippedSidebar(props: UnshippedSidebarProps) {
@@ -19,6 +21,8 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     onCloseForm,
     onFormSubmit,
     filterControl,
+    embedded = false,
+    hideSectionHeader = false,
   } = props;
 
   if (showIntakeForm) {
@@ -30,28 +34,52 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     );
   }
 
-  return (
-    <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative w-[300px]">
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05,
+        delayChildren: 0.05,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
+    visible: {
+      opacity: 1,
+      x: 0,
+      filter: 'blur(0px)',
+      transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 },
+    },
+  };
+
+  const content = (
+    <>
       {filterControl ? (
-        <div className="relative z-20">
+        <motion.div initial="hidden" animate="visible" variants={containerVariants} className="relative z-20">
           {filterControl}
-        </div>
+        </motion.div>
       ) : null}
       <motion.div
-        initial={{ opacity: 0, x: -10 }}
-        animate={{ opacity: 1, x: 0 }}
+        initial="hidden"
+        animate="visible"
+        variants={containerVariants}
         className={`h-full flex flex-col overflow-y-auto no-scrollbar px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}
       >
-        <header>
-          <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-            Unshipped
-          </h2>
-          <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
-            Shipping Queue
-          </p>
-        </header>
+        {!hideSectionHeader ? (
+          <motion.header variants={itemVariants}>
+            <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
+              Unshipped
+            </h2>
+            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
+              Shipping Queue
+            </p>
+          </motion.header>
+        ) : null}
 
-        <section className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+        <motion.section variants={itemVariants} className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-start gap-3">
             <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center">
               <Package className="w-5 h-5" />
@@ -75,9 +103,9 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
             <RotateCcw className="w-3.5 h-3.5" />
             Run Mock Import
           </button>
-        </section>
+        </motion.section>
 
-        <section className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-2">
+        <motion.section variants={itemVariants} className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-2">
           <p className="text-[10px] font-black uppercase tracking-wider text-gray-700">Shipping Mock Details</p>
           <div className="flex items-center justify-between text-[10px] font-bold text-gray-600">
             <span>Carrier Mix</span>
@@ -95,8 +123,18 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
             <span>Batch Grouping</span>
             <span>By Ship-By Date</span>
           </div>
-        </section>
+        </motion.section>
       </motion.div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="h-full overflow-hidden bg-white">{content}</div>;
+  }
+
+  return (
+    <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative w-[300px]">
+      {content}
     </aside>
   );
 }
