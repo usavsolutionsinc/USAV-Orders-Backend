@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { ShippedDetailsPanel, ShippedTable } from '@/components/shipped';
 import { ShippedTableBase } from '@/components/shipped/ShippedTableBase';
 import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
@@ -19,7 +19,7 @@ const getOrderViewFromSearch = (search: string): DashboardOrderView => {
     return 'pending';
 };
 
-export default function DashboardPage() {
+function DashboardPageContent() {
     const searchParams = useSearchParams();
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -95,5 +95,17 @@ export default function DashboardPage() {
                 )}
             </AnimatePresence>
         </div>
+    );
+}
+
+export default function DashboardPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-full w-full items-center justify-center bg-gray-50">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+        }>
+            <DashboardPageContent />
+        </Suspense>
     );
 }

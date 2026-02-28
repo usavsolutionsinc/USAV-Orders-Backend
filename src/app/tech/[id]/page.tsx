@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import TechDashboard from '@/components/TechDashboard';
 
 const techGids: Record<string, string> = {
@@ -9,10 +10,12 @@ const techGids: Record<string, string> = {
 export default async function TechPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     return (
-        <TechDashboard
-            techId={id}
-            sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
-            gid={techGids[id]}
-        />
+        <Suspense fallback={null}>
+            <TechDashboard
+                techId={id}
+                sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
+                gid={techGids[id]}
+            />
+        </Suspense>
     );
 }
