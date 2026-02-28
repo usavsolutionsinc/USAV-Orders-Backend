@@ -2,7 +2,7 @@ import { StaffManagementTab } from '@/components/admin/StaffManagementTab';
 import { ConnectionsManagementTab } from '@/components/admin/ConnectionsManagementTab';
 import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
 import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
-import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/AdminSidebar';
+import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 
 interface AdminPageProps {
   searchParams: Promise<{

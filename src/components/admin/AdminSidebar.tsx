@@ -1,16 +1,8 @@
 'use client';
 
 import { SearchBar } from '@/components/ui/SearchBar';
-import { ViewDropdown, type ViewDropdownOption } from '@/components/ui/ViewDropdown';
-
-export type AdminSection = 'goals' | 'staff' | 'connections' | 'fba';
-
-export const ADMIN_SECTION_OPTIONS: Array<ViewDropdownOption<AdminSection> & { description: string }> = [
-  { value: 'goals', label: 'Goals', description: 'Goal targets and performance tracking' },
-  { value: 'staff', label: 'Staff', description: 'Active personnel and access setup' },
-  { value: 'connections', label: 'Connections', description: 'Source connections and credentials' },
-  { value: 'fba', label: 'FBA', description: 'FBA SKU and fulfillment management' },
-];
+import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { ADMIN_SECTION_OPTIONS, type AdminSection } from './admin-sections';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;

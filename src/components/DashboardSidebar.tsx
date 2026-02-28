@@ -12,7 +12,8 @@ import {
   Search,
   X,
 } from '@/components/Icons';
-import { AdminSidebar, ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/AdminSidebar';
+import { AdminSidebar } from '@/components/admin/AdminSidebar';
+import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 import BarcodeSidebar from '@/components/BarcodeSidebar';
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
