@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Invalid tracking number' }, { status: 400 });
             }
             const orderLookup = await pool.query(
-                `SELECT id, order_id, shipping_tracking_number
+                `SELECT id, order_id, shipping_tracking_number, product_title, condition
                  FROM orders
                  WHERE shipping_tracking_number IS NOT NULL
                    AND shipping_tracking_number != ''
@@ -203,6 +203,8 @@ export async function POST(req: NextRequest) {
                 success: true,
                 trackingType: classification.trackingType,
                 orderId: order.order_id,
+                productTitle: order.product_title,
+                condition: order.condition,
                 shippingTrackingNumber: order.shipping_tracking_number,
                 packedBy: staffId,
                 packDateTime,

@@ -11,6 +11,13 @@ export interface StationThemeColors {
   shadow: string;
 }
 
+export interface StationInputThemeClasses {
+  text: string;
+  bg: string;
+  ring: string;
+  border: string;
+}
+
 export const stationThemeColors: Record<StationTheme, StationThemeColors> = {
   green: {
     bg: 'bg-emerald-600',
@@ -95,6 +102,21 @@ export const stationThemeClasses: Record<
   },
 };
 
+export const packerInputThemeClasses: Record<PackerStationTheme, StationInputThemeClasses> = {
+  black: {
+    text: 'text-slate-900',
+    bg: 'bg-slate-900',
+    ring: 'focus:ring-slate-500/10',
+    border: 'focus:border-slate-500',
+  },
+  red: {
+    text: 'text-red-600',
+    bg: 'bg-red-600',
+    ring: 'focus:ring-red-500/10',
+    border: 'focus:border-red-500',
+  },
+};
+
 const TECH_THEME_BY_STATION_ID: Record<number, TechStationTheme> = {
   1: 'green',
   2: 'blue',
@@ -140,6 +162,16 @@ export function getPackerThemeById(packerId: number | string | null | undefined)
   const id = parseStaffId(packerId);
   if (!id) return 'black';
   return PACKER_THEME_BY_STATION_ID[id] || PACKER_THEME_BY_STAFF_ID[id] || 'black';
+}
+
+export function getPackerInputTheme(
+  packerIdOrTheme: number | string | PackerStationTheme | null | undefined
+): StationInputThemeClasses {
+  const theme =
+    packerIdOrTheme === 'black' || packerIdOrTheme === 'red'
+      ? packerIdOrTheme
+      : getPackerThemeById(packerIdOrTheme);
+  return packerInputThemeClasses[theme];
 }
 
 export function getStaffThemeById(

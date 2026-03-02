@@ -1,17 +1,12 @@
 'use client';
 
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Check,
-  ChevronLeft,
-  ChevronRight,
   Database,
   Loader2,
   Search,
-  Tool,
-  TrendingUp,
-  Package,
   X,
 } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
@@ -27,6 +22,7 @@ interface DashboardManagementPanelProps {
 interface SearchHistory {
   query: string;
   timestamp: Date;
+  resultCount?: number;
 }
 
 export function DashboardManagementPanel({
@@ -35,14 +31,13 @@ export function DashboardManagementPanel({
   onFormSubmit,
   filterControl,
 }: DashboardManagementPanelProps) {
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [isCheckingShipped, setIsCheckingShipped] = useState(false);
   const [manualSheetName, setManualSheetName] = useState('');
-  const [activeScript, setActiveScript] = useState<string | null>(null);
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
+  const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -112,29 +107,6 @@ export function DashboardManagementPanel({
     );
   };
 
-  const handleSync = async () => {
-    setIsSyncing(true);
-    setStatus(null);
-    try {
-      const res = await fetch('/api/sync-sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'sync_all' }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStatus({ type: 'success', message: data.message || 'Sync completed successfully' });
-        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      } else {
-        setStatus({ type: 'error', message: data.error || data.message || 'Sync failed' });
-      }
-    } catch (_error) {
-      setStatus({ type: 'error', message: 'Network error occurred' });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   const handleTransfer = async () => {
     setIsTransferring(true);
     setStatus(null);
@@ -148,10 +120,12 @@ export function DashboardManagementPanel({
       });
       const data = await res.json();
       if (data.success) {
-        const message =
-          data.rowCount > 0
-            ? `Successfully transferred ${data.rowCount} order${data.rowCount === 1 ? '' : 's'}`
-            : 'Orders are already transferred';
+        const inserted = Number(data.insertedOrders || 0);
+        const updated = Number(data.updatedOrdersFields || 0);
+        const parts = [];
+        if (inserted > 0) parts.push(`${inserted} inserted`);
+        if (updated > 0) parts.push(`${updated} updated`);
+        const message = parts.length > 0 ? `Orders table synced: ${parts.join(', ')}` : 'Orders table already up to date';
         setStatus({ type: 'success', message });
         window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
@@ -164,55 +138,27 @@ export function DashboardManagementPanel({
     }
   };
 
-  const runScript = async (scriptName: string) => {
-    setActiveScript(scriptName);
+  const handleCheckShipped = async () => {
+    setIsCheckingShipped(true);
     setStatus(null);
     try {
-      const res = await fetch('/api/google-sheets/execute-script', {
+      const res = await fetch('/api/orders/check-shipped', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scriptName }),
       });
       const data = await res.json();
       if (data.success) {
-        setStatus({ type: 'success', message: data.message });
+        setStatus({ type: 'success', message: data.message || 'Shipped orders check completed' });
         window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
-        setStatus({ type: 'error', message: data.error || 'Script execution failed' });
+        setStatus({ type: 'error', message: data.error || 'Shipped orders check failed' });
       }
     } catch (_error) {
       setStatus({ type: 'error', message: 'Network error occurred' });
     } finally {
-      setActiveScript(null);
+      setIsCheckingShipped(false);
     }
   };
-
-  const menuItems = [
-    {
-      id: 'orders',
-      name: 'Orders',
-      icon: <Database className="w-4 h-4" />,
-      scripts: [{ id: 'updateNonshippedOrders', name: 'Check Unshipped Orders' }],
-    },
-    {
-      id: 'shipping',
-      name: 'Shipping',
-      icon: <TrendingUp className="w-4 h-4" />,
-      scripts: [{ id: 'checkShippedOrders', name: 'Check Shipped Orders' }],
-    },
-    {
-      id: 'technicians',
-      name: 'Technicians',
-      icon: <Tool className="w-4 h-4" />,
-      scripts: [{ id: 'syncTechSerialNumbers', name: 'Sync Tech Serial Numbers' }],
-    },
-    {
-      id: 'packers',
-      name: 'Packers',
-      icon: <Package className="w-4 h-4" />,
-      scripts: [{ id: 'syncPackerLogs', name: 'Sync Packer Logs' }],
-    },
-  ];
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -239,6 +185,8 @@ export function DashboardManagementPanel({
     return <ShippedIntakeForm onClose={onCloseForm || (() => {})} onSubmit={onFormSubmit || (() => {})} />;
   }
 
+  const visibleSearchHistory = showAllSearchHistory ? searchHistory : searchHistory.slice(0, 3);
+
   return (
     <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
       {filterControl ? (
@@ -247,11 +195,6 @@ export function DashboardManagementPanel({
         </motion.div>
       ) : null}
       <div className={`h-full flex flex-col space-y-6 overflow-y-auto scrollbar-hide px-6 pb-6 ${filterControl ? 'pt-4' : 'pt-6'}`}>
-        <motion.header variants={itemVariants}>
-          <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">Management</h2>
-          <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">Database & Metrics</p>
-        </motion.header>
-
         <div className="space-y-4">
           <motion.div variants={itemVariants}>
             <SearchBar
@@ -271,13 +214,24 @@ export function DashboardManagementPanel({
                   <Search className="w-4 h-4" />
                 </button>
               }
-            />
+                />
           </motion.div>
           {searchHistory.length > 0 ? (
             <motion.div variants={itemVariants} className="bg-gray-50 p-4 rounded-xl border border-gray-200 -mt-1">
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Recent Searches</p>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Recent Searches</p>
+                {searchHistory.length > 3 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSearchHistory((current) => !current)}
+                    className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
+                  >
+                    {showAllSearchHistory ? 'Show Less' : 'Show All'}
+                  </button>
+                ) : null}
+              </div>
               <div className="space-y-2">
-                {searchHistory.slice(0, 5).map((item, index) => (
+                {visibleSearchHistory.map((item, index) => (
                   <button
                     key={`${item.query}-${index}`}
                     onClick={() => {
@@ -321,21 +275,17 @@ export function DashboardManagementPanel({
                 {isTransferring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
                 Import Latest Orders
               </button>
+
+              <button
+                onClick={handleCheckShipped}
+                disabled={isCheckingShipped}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                {isCheckingShipped ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Check Shipped Orders
+              </button>
             </div>
           </motion.div>
-
-          <motion.button
-            variants={itemVariants}
-            onClick={handleSync}
-            disabled={isSyncing}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-2xl p-4 flex flex-col items-center gap-2 transition-all group active:scale-95 shadow-lg shadow-emerald-600/10"
-          >
-            {isSyncing ? <Loader2 className="w-6 h-6 animate-spin" /> : <Database className="w-6 h-6 group-hover:scale-110 transition-transform" />}
-            <div className="text-center">
-              <p className="text-[10px] font-black uppercase tracking-widest">Sync Sheets to Neon DB</p>
-              <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5">Shipped, Tech, Packer</p>
-            </div>
-          </motion.button>
 
           {status ? (
             <motion.div
@@ -351,67 +301,6 @@ export function DashboardManagementPanel({
               </div>
             </motion.div>
           ) : null}
-
-          <div className="space-y-2">
-            <motion.p variants={itemVariants} className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] ml-2 mb-4">
-              Automation Scripts
-            </motion.p>
-            {menuItems.map((menu) => (
-              <motion.div key={menu.id} layout variants={itemVariants} className="space-y-1">
-                <button
-                  onClick={() => setExpandedMenu(expandedMenu === menu.id ? null : menu.id)}
-                  className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 ${
-                    expandedMenu === menu.id
-                      ? 'bg-blue-50 text-blue-600 shadow-sm border border-blue-100'
-                      : 'bg-gray-50 text-gray-500 border border-gray-100 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2.5 rounded-xl transition-colors duration-300 ${expandedMenu === menu.id ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
-                      {menu.icon}
-                    </div>
-                    <span className="text-[11px] font-black uppercase tracking-wider">{menu.name}</span>
-                  </div>
-                  {expandedMenu === menu.id ? (
-                    <ChevronLeft className="w-3.5 h-3.5 -rotate-90 transition-transform duration-300" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 transition-transform duration-300" />
-                  )}
-                </button>
-                <AnimatePresence initial={false}>
-                  {expandedMenu === menu.id ? (
-                    <motion.div
-                      initial={{ gridTemplateRows: '0fr', opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                      animate={{ gridTemplateRows: '1fr', opacity: 1, paddingTop: 8, paddingBottom: 8 }}
-                      exit={{ gridTemplateRows: '0fr', opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                      transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                      className="grid px-3 overflow-hidden"
-                    >
-                      <div className="overflow-hidden">
-                        <div className="space-y-1.5">
-                          {menu.scripts.map((script) => (
-                            <button
-                              key={script.id}
-                              onClick={() => runScript(script.id)}
-                              disabled={!!activeScript}
-                              className={`w-full text-left p-3.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all duration-200 ${
-                                activeScript === script.id
-                                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                                  : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-900 group'
-                              } flex items-center justify-between`}
-                            >
-                              <span className="group-hover:translate-x-1 transition-transform duration-200">{script.name}</span>
-                              {activeScript === script.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-          </div>
         </div>
 
         <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">

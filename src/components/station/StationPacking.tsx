@@ -1,8 +1,16 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, AlertCircle, Loader2, Check, Package } from '../Icons';
+import { getPackerInputTheme } from '@/utils/staff-colors';
+
+interface ActivePackingOrder {
+  orderId: string;
+  productTitle: string;
+  condition: string;
+  tracking: string;
+}
 
 interface StationPackingProps {
   userId: string;
@@ -37,28 +45,13 @@ export default function StationPacking({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [lastScanType, setLastScanType] = useState<string | null>(null);
+  const [activeOrder, setActiveOrder] = useState<ActivePackingOrder | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const safeGoal = Math.max(1, Number(goal) || 1);
   const goalProgressPercent = Math.min((todayCount / safeGoal) * 100, 100);
   const remainingToGoal = Math.max(safeGoal - todayCount, 0);
-
-  const activeColor = useMemo(() => {
-    if (themeColor === 'red') {
-      return {
-        text: 'text-red-600',
-        bg: 'bg-red-600',
-        ring: 'focus:ring-red-500/10',
-        border: 'focus:border-red-500',
-      };
-    }
-    return {
-      text: 'text-slate-900',
-      bg: 'bg-slate-900',
-      ring: 'focus:ring-slate-500/10',
-      border: 'focus:border-slate-500',
-    };
-  }, [themeColor]);
+  const activeColor = getPackerInputTheme(themeColor);
 
   const handleSubmit = async (event?: React.FormEvent, externalInput?: string) => {
     if (event) event.preventDefault();
@@ -87,7 +80,19 @@ export default function StationPacking({
         throw new Error(data?.error || 'Failed to save packing scan');
       }
 
-      setLastScanType(String(data?.trackingType || '').trim() || 'ORDERS');
+      const resolvedScanType = String(data?.trackingType || '').trim() || 'ORDERS';
+      setLastScanType(resolvedScanType);
+      if (resolvedScanType === 'ORDERS') {
+        setActiveOrder({
+          orderId: String(data?.orderId || '').trim(),
+          productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
+          condition: String(data?.condition || '').trim() || 'N/A',
+          tracking: String(data?.shippingTrackingNumber || scan).trim(),
+        });
+      } else {
+        setActiveOrder(null);
+      }
+
       if (data?.warning) {
         setSuccessMessage(String(data.warning));
       } else if (data?.message) {
@@ -98,6 +103,7 @@ export default function StationPacking({
 
       setInputValue('');
       onComplete?.();
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (err: any) {
       setErrorMessage(err?.message || 'Packing scan failed');
     } finally {
@@ -193,6 +199,34 @@ export default function StationPacking({
               <p className="text-lg font-black tracking-tight text-gray-900">{lastScanType}</p>
             </div>
           ) : null}
+
+          <AnimatePresence mode="wait">
+            {activeOrder ? (
+              <motion.div
+                key={activeOrder.tracking}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="p-4 bg-white rounded-2xl border border-gray-200 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Active Order</p>
+                  <span className="text-[10px] font-mono font-black text-gray-700">{activeOrder.orderId || 'N/A'}</span>
+                </div>
+                <h3 className="text-base font-black text-gray-900 leading-tight">{activeOrder.productTitle}</h3>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Condition</p>
+                    <p className="text-xs font-bold text-gray-800">{activeOrder.condition}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Tracking #</p>
+                    <p className="text-xs font-mono font-bold text-gray-800">{activeOrder.tracking.slice(-4) || '—'}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
 
           <div className="mt-auto pt-6 border-t border-gray-50 text-center">
             <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV PACK v2.6</p>

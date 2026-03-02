@@ -7,13 +7,14 @@ import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
+import { DashboardOrderFilterToolbar } from '@/components/dashboard/DashboardOrderFilters';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { formatDateTimePST } from '@/lib/timezone';
 
 interface SearchHistory {
     query: string;
     timestamp: Date;
-    resultCount: number;
+    resultCount?: number;
 }
 
 interface ShippedSidebarProps {
@@ -24,6 +25,7 @@ interface ShippedSidebarProps {
     showDetailsPanel?: boolean;
     embedded?: boolean;
     hideSectionHeader?: boolean;
+    showWeekFilter?: boolean;
 }
 
 // Hard-coded staff ID to name mapping
@@ -49,15 +51,18 @@ export default function ShippedSidebar({
     showDetailsPanel = true,
     embedded = false,
     hideSectionHeader = false,
+    showWeekFilter = false,
 }: ShippedSidebarProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<ShippedOrder[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
+    const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [copiedId, setCopiedId] = useState<number | null>(null);
     const { normalizeTrackingQuery } = useLast8TrackingSearch();
+    const searchHistoryStorageKey = embedded && hideSectionHeader ? 'dashboard_search_history' : 'shipped_search_history';
 
     // Listen for custom events to coordinate details panel
     useEffect(() => {
@@ -105,7 +110,7 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
 
     // Load search history from localStorage
     useEffect(() => {
-        const saved = localStorage.getItem('shipped_search_history');
+        const saved = localStorage.getItem(searchHistoryStorageKey);
         if (saved) {
             const parsed = JSON.parse(saved);
             setSearchHistory(parsed.map((item: any) => ({
@@ -113,7 +118,7 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                 timestamp: new Date(item.timestamp)
             })));
         }
-    }, []);
+    }, [searchHistoryStorageKey]);
 
     // Save search history to localStorage
     const saveSearchHistory = (query: string, resultCount: number) => {
@@ -122,7 +127,7 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
             ...searchHistory.filter(h => h.query !== query).slice(0, 4)
         ];
         setSearchHistory(newHistory);
-        localStorage.setItem('shipped_search_history', JSON.stringify(newHistory));
+        localStorage.setItem(searchHistoryStorageKey, JSON.stringify(newHistory));
     };
 
     // Handle search
@@ -187,6 +192,8 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
         },
     };
 
+    const visibleSearchHistory = showAllSearchHistory ? searchHistory : searchHistory.slice(0, 3);
+
     const panelContent = showIntakeForm ? (
         <ShippedIntakeForm 
             onClose={onCloseForm || (() => {})}
@@ -231,6 +238,7 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                                 </button>
                             }
                         />
+                        {showWeekFilter ? <DashboardOrderFilterToolbar /> : null}
                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
                             Click a Shipped Row for More Details
                         </p>
@@ -320,11 +328,22 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                         {/* Recent Searches - Only show when no active results */}
                         {searchHistory.length > 0 && results.length === 0 && (
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-                                    Recent Searches
-                                </p>
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                                        Recent Searches
+                                    </p>
+                                    {searchHistory.length > 3 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAllSearchHistory((current) => !current)}
+                                            className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
+                                        >
+                                            {showAllSearchHistory ? 'Show Less' : 'Show All'}
+                                        </button>
+                                    ) : null}
+                                </div>
                                 <div className="space-y-2">
-                                    {searchHistory.slice(0, 5).map((item, index) => {
+                                    {visibleSearchHistory.map((item, index) => {
                                         const displayQuery = item.query.match(/^\d+$/) && item.query.length > 8 
                                             ? item.query.slice(-8) 
                                             : item.query;
@@ -342,9 +361,11 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                                                     <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600">
                                                         {displayQuery}
                                                     </span>
-                                                    <span className="text-[8px] text-gray-400 font-medium">
-                                                        {item.resultCount} result{item.resultCount !== 1 ? 's' : ''}
-                                                    </span>
+                                                    {typeof item.resultCount === 'number' ? (
+                                                        <span className="text-[8px] text-gray-400 font-medium">
+                                                            {item.resultCount} result{item.resultCount !== 1 ? 's' : ''}
+                                                        </span>
+                                                    ) : null}
                                                 </div>
                                             </button>
                                         );

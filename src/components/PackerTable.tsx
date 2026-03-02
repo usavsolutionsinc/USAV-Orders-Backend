@@ -8,6 +8,8 @@ import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { getOrderDisplayValues } from '@/utils/order-display';
+import { getPackerThemeById, stationThemeColors } from '@/utils/staff-colors';
 
 interface PackerRecord {
   id: number;
@@ -35,6 +37,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasLoadedRef = useRef(false);
+  const packerTheme = getPackerThemeById(packedBy);
+  const counterColorClass = stationThemeColors[packerTheme].text;
 
   useEffect(() => {
     fetchRecords();
@@ -212,7 +216,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
           stickyDate={stickyDate}
           fallbackDate={formatHeaderDate()}
           count={currentCount || getWeekCount()}
-          countClassName="text-purple-600"
+          countClassName={counterColorClass}
           weekRange={weekRange}
           weekOffset={weekOffset}
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
@@ -250,6 +254,12 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                       <p className="text-[11px] font-black text-gray-400 uppercase">Total: {dateRecords.length} Units</p>
                     </div>
                     {sortedRecords.map((record, index) => {
+                      const displayValues = getOrderDisplayValues({
+                        sku: record.sku,
+                        condition: record.condition,
+                        trackingNumber: record.shipping_tracking_number,
+                      });
+
                       return (
                         <motion.div 
                           initial={{ opacity: 0 }}
@@ -268,7 +278,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
                               <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                 {parseInt(String(record.quantity || '1'), 10) || 1}
-                              </span> • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                              </span> • {displayValues.condition || 'No Condition'} • {displayValues.sku || 'No SKU'}
                             </div>
                           </div>
                           

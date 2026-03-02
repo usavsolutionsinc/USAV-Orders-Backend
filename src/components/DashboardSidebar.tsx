@@ -370,6 +370,7 @@ function SidebarContextPanel() {
           onFormSubmit={submitShippedForm}
           filterControl={filterControl}
           showDetailsPanel={false}
+          showWeekFilter
         />
       );
     }
@@ -612,14 +613,6 @@ export default function DashboardSidebar() {
 
   const homePanel = (
     <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full overflow-y-auto bg-white">
-      <motion.div variants={itemVariants} className="flex items-center justify-between px-4 pt-1 pb-1.5 border-b border-gray-100">
-        <div className="flex items-center gap-3">
-          <div>
-            <p className="text-sm font-black tracking-tight text-gray-900">Home</p>
-          </div>
-        </div>
-      </motion.div>
-
       <div className="px-3 py-3 space-y-6">
         <motion.div variants={itemVariants}>
           <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
@@ -662,7 +655,7 @@ export default function DashboardSidebar() {
   );
 
   const shell = (
-    <aside className="h-full w-[320px] xl:w-[360px] bg-white border-r border-gray-200 overflow-hidden shadow-xl shadow-slate-900/5">
+    <aside className="h-full w-[360px] bg-white border-r border-gray-200 overflow-hidden shadow-xl shadow-slate-900/5">
       {showHomeNavigation || routeKey === 'unknown' ? homePanel : contextPanel}
     </aside>
   );

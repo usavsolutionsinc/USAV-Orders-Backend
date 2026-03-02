@@ -8,6 +8,7 @@ import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { getOrderDisplayValues } from '@/utils/order-display';
 
 interface TechRecord {
   id: number;
@@ -258,6 +259,12 @@ export function TechTable({ testedBy }: TechTableProps) {
                       <p className="text-[11px] font-black text-gray-400 uppercase">Total: {dateRecords.length} Units</p>
                     </div>
                     {sortedRecords.map((record, index) => {
+                      const displayValues = getOrderDisplayValues({
+                        sku: record.sku,
+                        condition: record.condition,
+                        trackingNumber: record.shipping_tracking_number,
+                      });
+
                       return (
                         <motion.div 
                           initial={{ opacity: 0 }}
@@ -276,7 +283,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                             <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
                               <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                 {parseInt(String(record.quantity || '1'), 10) || 1}
-                              </span> • {record.condition || 'No Condition'} • {record.sku || 'No SKU'}
+                              </span> • {displayValues.condition || 'No Condition'} • {displayValues.sku || 'No SKU'}
                             </div>
                           </div>
                           

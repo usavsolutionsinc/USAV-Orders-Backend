@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Search } from '../Icons';
+import {
+  DASHBOARD_ORDER_FILTERS_EVENT,
+  DEFAULT_DASHBOARD_ORDER_FILTERS,
+  type DashboardOrderFiltersState,
+} from '@/components/dashboard/DashboardOrderFilters';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { CopyableText } from '../ui/CopyableText';
 import WeekHeader from '../ui/WeekHeader';
@@ -11,7 +16,6 @@ import { formatDateWithOrdinal } from '@/lib/date-format';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
-import { dmSans } from '@/lib/fonts';
 import { DateGroupHeader } from './DateGroupHeader';
 
 export interface ShippedTableBaseProps {
@@ -20,6 +24,45 @@ export interface ShippedTableBaseProps {
   ordersOnly?: boolean;
   missingTrackingOnly?: boolean;
   showWeekNavigation?: boolean;
+}
+
+function getWeekRangeForOffset(weekOffset: number, anchorDateKey?: string) {
+  const baseDateKey = anchorDateKey || getCurrentPSTDateKey();
+  const [pstYear, pstMonth, pstDay] = baseDateKey.split('-').map(Number);
+  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
+  const currentDay = now.getDay();
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday - (weekOffset * 7));
+  monday.setHours(0, 0, 0, 0);
+
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  friday.setHours(23, 59, 59, 999);
+
+  return {
+    start: monday,
+    end: friday,
+    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
+    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
+  };
+}
+
+function getDateKeyFromWeekValue(weekValue: string | null | undefined) {
+  const raw = String(weekValue || '').trim();
+  const match = raw.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return '';
+
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(week) || week < 1 || week > 53) return '';
+
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - jan4Day + 1 + ((week - 1) * 7));
+
+  return `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, '0')}-${String(monday.getUTCDate()).padStart(2, '0')}`;
 }
 
 export function ShippedTableBase({
@@ -40,10 +83,11 @@ export function ShippedTableBase({
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = previous week, etc.
   const [dashboardSearch, setDashboardSearch] = useState('');
-  const [relaxedSearchMatches, setRelaxedSearchMatches] = useState<ShippedOrder[]>([]);
+  const [dashboardFilters, setDashboardFilters] = useState<DashboardOrderFiltersState>(DEFAULT_DASHBOARD_ORDER_FILTERS);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasLoadedRef = useRef(false);
   const { normalizeTrackingQuery } = useLast8TrackingSearch();
+  const activeSearch = ordersOnly ? dashboardSearch : search;
 
   const fetchShipped = useCallback(async () => {
     if (hasLoadedRef.current) {
@@ -52,13 +96,25 @@ export function ShippedTableBase({
       setLoading(true);
     }
     try {
-      const url = ordersOnly
-        ? '/api/orders'
-        : (
-          search
+      const url = (() => {
+        if (!ordersOnly) {
+          return search
             ? `/api/shipped?q=${encodeURIComponent(search)}`
-            : `/api/shipped?limit=5000`
-        );
+            : '/api/shipped?limit=5000';
+        }
+
+        const params = new URLSearchParams();
+        const anchorDateKey = getDateKeyFromWeekValue(dashboardFilters.shipByDate);
+        const weekRange = getWeekRangeForOffset(weekOffset, anchorDateKey || undefined);
+        params.set('weekStart', weekRange.startStr);
+        params.set('weekEnd', weekRange.endStr);
+
+        if (activeSearch.trim()) params.set('q', activeSearch.trim());
+        if (missingTrackingOnly) params.set('missingTrackingOnly', 'true');
+        if (packedBy !== undefined) params.set('packedBy', String(packedBy));
+        if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+        return `/api/orders?${params.toString()}`;
+      })();
       const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json();
       
@@ -102,7 +158,16 @@ export function ShippedTableBase({
       setIsRefreshing(false);
       setLoading(false);
     }
-  }, [search, packedBy, testedBy, ordersOnly, missingTrackingOnly]);
+  }, [
+    search,
+    packedBy,
+    testedBy,
+    ordersOnly,
+    missingTrackingOnly,
+    activeSearch,
+    weekOffset,
+    dashboardFilters.shipByDate,
+  ]);
 
   useEffect(() => {
     fetchShipped();
@@ -170,48 +235,22 @@ export function ShippedTableBase({
     };
   }, [ordersOnly, fetchShipped]);
 
-  const activeSearch = ordersOnly ? dashboardSearch : search;
-  const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
-  const searchDigits = normalizedSearch.replace(/\D/g, '');
-  const last8 = searchDigits.slice(-8);
-
   useEffect(() => {
-    if (!ordersOnly || missingTrackingOnly || !normalizedSearch) {
-      setRelaxedSearchMatches([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchRelaxedMatches = async () => {
-      try {
-        const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(activeSearch)}`, { cache: 'no-store' });
-        if (!res.ok) {
-          if (!cancelled) setRelaxedSearchMatches([]);
-          return;
-        }
-        const data = await res.json();
-        const results = Array.isArray(data?.results) ? data.results : [];
-        if (cancelled) return;
-        setRelaxedSearchMatches(
-          results
-            .filter((record: any) => record?.is_shipped === true || record?.is_shipped == null)
-            .map((record: any) => ({
-              ...record,
-              ship_by_date: record.ship_by_date || record.created_at || null,
-            }))
-        );
-      } catch (error) {
-        if (!cancelled) setRelaxedSearchMatches([]);
-      }
+    const handleDashboardFilters = (e: any) => {
+      const detail = e?.detail || {};
+      setDashboardFilters({
+        shipByDate: detail.shipByDate || DEFAULT_DASHBOARD_ORDER_FILTERS.shipByDate,
+      });
     };
 
-    fetchRelaxedMatches();
+    window.addEventListener(DASHBOARD_ORDER_FILTERS_EVENT as any, handleDashboardFilters as any);
 
     return () => {
-      cancelled = true;
+      window.removeEventListener(DASHBOARD_ORDER_FILTERS_EVENT as any, handleDashboardFilters as any);
     };
-  }, [ordersOnly, missingTrackingOnly, normalizedSearch, activeSearch]);
+  }, []);
+
+  const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
   const getLast4 = (value: string | null | undefined) => {
@@ -297,52 +336,8 @@ export function ShippedTableBase({
     setSelectedShipped(record);
   }, []);
 
-  const strictFilteredRecords = (ordersOnly && normalizedSearch)
-    ? shipped.filter((record) => {
-        const productTitle = String(record.product_title || '').toLowerCase();
-        const orderId = String(record.order_id || '').toLowerCase();
-        const sku = String(record.sku || '').toLowerCase();
-        const tracking = String(record.shipping_tracking_number || '').toLowerCase();
-        const serial = String(record.serial_number || '').toLowerCase();
-        const queryLower = normalizedSearch.toLowerCase();
-
-        const directMatch =
-          orderId === queryLower ||
-          tracking === queryLower ||
-          productTitle.includes(queryLower) ||
-          orderId.includes(queryLower) ||
-          sku.includes(queryLower) ||
-          tracking.includes(queryLower) ||
-          serial.includes(queryLower);
-
-        const last8Match =
-          !!last8 &&
-          last8.length >= 8 &&
-          (tracking.replace(/\D/g, '').slice(-8) === last8 ||
-           orderId.replace(/\D/g, '').slice(-8) === last8);
-
-        return directMatch || last8Match;
-      })
-    : shipped;
-
-  const filteredRecords = (() => {
-    if (!(ordersOnly && normalizedSearch) || missingTrackingOnly) return strictFilteredRecords;
-    if (relaxedSearchMatches.length === 0) return strictFilteredRecords;
-
-    const merged = [...strictFilteredRecords];
-    const seen = new Set(
-      strictFilteredRecords.map((record) => `${String((record as any).row_source || 'order')}:${String(record.id)}`)
-    );
-
-    for (const record of relaxedSearchMatches) {
-      const key = `${String((record as any).row_source || 'order')}:${String(record.id)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(record);
-    }
-
-    return merged;
-  })();
+  const strictFilteredRecords = shipped;
+  const filteredRecords = strictFilteredRecords;
 
   useEffect(() => {
     if (!ordersOnly || !normalizedSearch) return;
@@ -378,37 +373,11 @@ export function ShippedTableBase({
     return groupedShipped[today]?.length || 0;
   };
 
-  // Calculate week date range based on weekOffset (Monday-Friday only)
-  const getWeekRange = () => {
-    const todayPst = getCurrentPSTDateKey();
-    const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
-    const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-    
-    // Calculate the Monday of the current week
-    const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1; // If Sunday, go back 6 days, else go back to Monday
-    
-    // Get Monday of the target week (accounting for weekOffset)
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - daysFromMonday - (weekOffset * 7));
-    monday.setHours(0, 0, 0, 0);
-    
-    // Get Friday of the same week (4 days after Monday)
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    friday.setHours(23, 59, 59, 999);
-
-    return {
-      start: monday,
-      end: friday,
-      startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
-      endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`
-    };
-  };
-
   // Filter grouped data by current week (all data is weekdays, so no need to filter by day of week)
-  const weekRange = getWeekRange();
-  const filteredGroupedShipped = activeSearch || ordersOnly
+  const anchorDateKey = getDateKeyFromWeekValue(dashboardFilters.shipByDate);
+  const weekRange = getWeekRangeForOffset(weekOffset, anchorDateKey || undefined);
+  const shouldBypassWeekFilter = ordersOnly || (activeSearch && !anchorDateKey);
+  const filteredGroupedShipped = shouldBypassWeekFilter
     ? groupedShipped
     : Object.fromEntries(
         Object.entries(groupedShipped).filter(([date]) => {

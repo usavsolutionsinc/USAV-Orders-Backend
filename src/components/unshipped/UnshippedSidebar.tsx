@@ -1,10 +1,11 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
-import { Package, RotateCcw } from '@/components/Icons';
+import { Package, RotateCcw, Search } from '@/components/Icons';
 import { motion } from 'framer-motion';
+import { SearchBar } from '@/components/ui/SearchBar';
 
 interface UnshippedSidebarProps {
   showIntakeForm?: boolean;
@@ -13,6 +14,12 @@ interface UnshippedSidebarProps {
   filterControl?: ReactNode;
   embedded?: boolean;
   hideSectionHeader?: boolean;
+}
+
+interface SearchHistory {
+  query: string;
+  timestamp: Date;
+  resultCount?: number;
 }
 
 export default function UnshippedSidebar(props: UnshippedSidebarProps) {
@@ -24,6 +31,49 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     embedded = false,
     hideSectionHeader = false,
   } = props;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
+  const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('dashboard_search_history');
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      setSearchHistory(
+        parsed.map((item: any) => ({
+          ...item,
+          timestamp: new Date(item.timestamp),
+        }))
+      );
+    } catch (_error) {
+      setSearchHistory([]);
+    }
+  }, []);
+
+  const saveSearchHistory = (query: string) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return;
+    const newHistory = [
+      { query: trimmedQuery, timestamp: new Date() },
+      ...searchHistory.filter((item) => item.query !== trimmedQuery).slice(0, 4),
+    ];
+    setSearchHistory(newHistory);
+    localStorage.setItem('dashboard_search_history', JSON.stringify(newHistory));
+  };
+
+  const handleSearch = (query: string) => {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery) {
+      saveSearchHistory(trimmedQuery);
+    }
+    window.dispatchEvent(
+      new CustomEvent('dashboard-search', {
+        detail: { query: trimmedQuery },
+      })
+    );
+  };
 
   if (showIntakeForm) {
     return (
@@ -55,6 +105,8 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     },
   };
 
+  const visibleSearchHistory = showAllSearchHistory ? searchHistory : searchHistory.slice(0, 3);
+
   const content = (
     <>
       {filterControl ? (
@@ -78,6 +130,59 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
             </p>
           </motion.header>
         ) : null}
+
+        <motion.div variants={itemVariants} className={`${hideSectionHeader ? '' : 'mt-4'} space-y-4`}>
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            onSearch={handleSearch}
+            onClear={() => handleSearch('')}
+            inputRef={searchInputRef}
+            placeholder="Search orders, serials..."
+            variant="blue"
+            rightElement={
+              <button
+                onClick={() => handleSearch(searchQuery)}
+                className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
+                title="Search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+              }
+          />
+          {searchHistory.length > 0 ? (
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 -mt-1">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Recent Searches</p>
+                {searchHistory.length > 3 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSearchHistory((current) => !current)}
+                    className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
+                  >
+                    {showAllSearchHistory ? 'Show Less' : 'Show All'}
+                  </button>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                {visibleSearchHistory.map((item, index) => (
+                  <button
+                    key={`${item.query}-${index}`}
+                    onClick={() => {
+                      setSearchQuery(item.query);
+                      handleSearch(item.query);
+                    }}
+                    className="w-full text-left p-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group"
+                  >
+                    <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600 truncate">
+                      {item.query}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </motion.div>
 
         <motion.section variants={itemVariants} className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-start gap-3">
