@@ -5,6 +5,7 @@ import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
 import { Package, RotateCcw, Search } from '@/components/Icons';
 import { motion } from 'framer-motion';
+import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
 
 interface UnshippedSidebarProps {
@@ -73,6 +74,12 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         detail: { query: trimmedQuery },
       })
     );
+  };
+
+  const clearSearchHistory = () => {
+    setSearchHistory([]);
+    setShowAllSearchHistory(false);
+    localStorage.removeItem('dashboard_search_history');
   };
 
   if (showIntakeForm) {
@@ -150,38 +157,17 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
               </button>
               }
           />
-          {searchHistory.length > 0 ? (
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 -mt-1">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Recent Searches</p>
-                {searchHistory.length > 3 ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllSearchHistory((current) => !current)}
-                    className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
-                  >
-                    {showAllSearchHistory ? 'Show Less' : 'Show All'}
-                  </button>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                {visibleSearchHistory.map((item, index) => (
-                  <button
-                    key={`${item.query}-${index}`}
-                    onClick={() => {
-                      setSearchQuery(item.query);
-                      handleSearch(item.query);
-                    }}
-                    className="w-full text-left p-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group"
-                  >
-                    <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600 truncate">
-                      {item.query}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          <RecentSearchesList
+            items={visibleSearchHistory}
+            totalCount={searchHistory.length}
+            expanded={showAllSearchHistory}
+            onToggleExpanded={() => setShowAllSearchHistory((current) => !current)}
+            onClear={clearSearchHistory}
+            onSelect={(query) => {
+              setSearchQuery(query);
+              handleSearch(query);
+            }}
+          />
         </motion.div>
 
         <motion.section variants={itemVariants} className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">

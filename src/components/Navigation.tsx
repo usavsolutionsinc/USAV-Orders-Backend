@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 
 const navItems = [
     { name: 'Dashboard', href: '/dashboard' },
-    { name: 'Shipped', href: '/shipped' },
+    { name: 'Shipped', href: '/dashboard?shipped=' },
     { name: 'Repair', href: '/repair' },
     { name: 'Michael', href: '/tech/1' },
     { name: 'Thuc', href: '/tech/2' },
@@ -42,7 +42,10 @@ export default function Navigation() {
                         
                         <div className="hidden lg:flex items-center space-x-1">
                             {navItems.map((item) => {
-                                const isActive = pathname === item.href;
+                                const isActive =
+                                    item.name === 'Shipped'
+                                        ? pathname === '/dashboard'
+                                        : pathname === item.href;
                                 // We'll render Admin separately if we want it on the far right, 
                                 // but for now let's just use the items and filter/map them.
                                 if (item.name === 'Admin') return null;

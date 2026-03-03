@@ -14,6 +14,128 @@ interface RepairTicketData {
     notes: string; // Additional notes
 }
 
+interface ZendeskAuthConfig {
+    subdomain: string;
+    user: string;
+    apiToken: string;
+}
+
+export interface ZendeskSupportTicket {
+    id: string;
+    subject: string;
+    status: string;
+    priority: string;
+    requesterName: string;
+    updatedAt: string;
+    url: string;
+}
+
+export interface ZendeskSupportOverview {
+    configured: boolean;
+    healthy: boolean;
+    count: number;
+    urgentCount: number;
+    tickets: ZendeskSupportTicket[];
+    agentUrl: string | null;
+    error: string | null;
+}
+
+function getZendeskAuthConfig(): ZendeskAuthConfig | null {
+    const subdomain = process.env.ZENDESK_SUBDOMAIN;
+    const user = process.env.ZENDESK_EMAIL || process.env.ZENDESK_API_USER;
+    const apiToken = process.env.ZENDESK_API_TOKEN;
+
+    if (!subdomain || !user || !apiToken) {
+        return null;
+    }
+
+    return { subdomain, user, apiToken };
+}
+
+async function zendeskRequest(config: ZendeskAuthConfig, path: string): Promise<any> {
+    const auth = Buffer.from(`${config.user}/token:${config.apiToken}`).toString('base64');
+    const response = await fetch(`https://${config.subdomain}.zendesk.com${path}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${auth}`,
+        },
+        cache: 'no-store',
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Zendesk request failed (${response.status})${errorText ? `: ${errorText}` : ''}`);
+    }
+
+    return response.json().catch(() => ({}));
+}
+
+export async function getZendeskSupportOverview(limit = 10): Promise<ZendeskSupportOverview> {
+    const config = getZendeskAuthConfig();
+    const fallbackSubdomain = process.env.ZENDESK_SUBDOMAIN || 'usav';
+    const agentUrl = `https://${fallbackSubdomain}.zendesk.com/agent/filters`;
+
+    if (!config) {
+        return {
+            configured: false,
+            healthy: false,
+            count: 0,
+            urgentCount: 0,
+            tickets: [],
+            agentUrl,
+            error: 'Zendesk API credentials are not configured',
+        };
+    }
+
+    try {
+        const encodedQuery = encodeURIComponent('type:ticket status<solved');
+        const data = await zendeskRequest(
+            config,
+            `/api/v2/search.json?query=${encodedQuery}&sort_by=updated_at&sort_order=desc`
+        );
+
+        const results = Array.isArray(data?.results) ? data.results : [];
+        const tickets = results
+            .filter((entry: any) => String(entry?.result_type || 'ticket') === 'ticket')
+            .slice(0, limit)
+            .map((entry: any) => ({
+                id: String(entry?.id || ''),
+                subject: String(entry?.subject || 'Zendesk ticket'),
+                status: String(entry?.status || 'open'),
+                priority: String(entry?.priority || 'normal'),
+                requesterName: String(entry?.requester?.name || entry?.via?.source?.from?.name || 'Customer'),
+                updatedAt: String(entry?.updated_at || ''),
+                url: `https://${config.subdomain}.zendesk.com/agent/tickets/${encodeURIComponent(String(entry?.id || ''))}`,
+            }));
+
+        const urgentCount = tickets.filter((ticket: ZendeskSupportTicket) => ['urgent', 'high'].includes(ticket.priority.toLowerCase())).length;
+        const count = Number.isFinite(Number(data?.count)) ? Number(data.count) : tickets.length;
+
+        return {
+            configured: true,
+            healthy: true,
+            count,
+            urgentCount,
+            tickets,
+            agentUrl,
+            error: null,
+        };
+    } catch (error: any) {
+        console.error('Zendesk support overview failed:', error);
+
+        return {
+            configured: true,
+            healthy: false,
+            count: 0,
+            urgentCount: 0,
+            tickets: [],
+            agentUrl,
+            error: error?.message || 'Failed to load Zendesk tickets',
+        };
+    }
+}
+
 /**
  * Calculates a date that is 5 business days (Mon-Fri) from the current date.
  */

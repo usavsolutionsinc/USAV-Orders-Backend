@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
         condition,
         shipping_tracking_number,
         out_of_stock,
+        status,
         notes,
         packer_id,
         tester_id,

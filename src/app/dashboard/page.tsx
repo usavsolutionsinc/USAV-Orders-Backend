@@ -1,13 +1,20 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
-import { ShippedDetailsPanel, ShippedTable } from '@/components/shipped';
-import { ShippedTableBase } from '@/components/shipped/ShippedTableBase';
+import { DashboardShippedTable, ShippedDetailsPanel } from '@/components/shipped';
+import PendingOrdersTable from '@/components/PendingOrdersTable';
 import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
+import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
 import { Loader2 } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import {
+  fetchDashboardShippedData,
+  fetchPendingOrdersData,
+  fetchUnshippedOrdersData,
+} from '@/lib/dashboard-table-data';
 
 type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
 
@@ -21,6 +28,7 @@ const getOrderViewFromSearch = (search: string): DashboardOrderView => {
 
 function DashboardPageContent() {
     const searchParams = useSearchParams();
+    const queryClient = useQueryClient();
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const orderView = getOrderViewFromSearch(searchParams.toString());
@@ -41,6 +49,24 @@ function DashboardPageContent() {
     }, []);
 
     useEffect(() => {
+        queryClient.prefetchQuery({
+            queryKey: ['dashboard-table', 'pending', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
+            queryFn: () => fetchPendingOrdersData({}),
+            staleTime: 60000,
+        });
+        queryClient.prefetchQuery({
+            queryKey: ['dashboard-table', 'unshipped', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
+            queryFn: () => fetchUnshippedOrdersData({}),
+            staleTime: 60000,
+        });
+        queryClient.prefetchQuery({
+            queryKey: ['dashboard-table', 'shipped', { search: '', packedBy: undefined, testedBy: undefined }],
+            queryFn: () => fetchDashboardShippedData({}),
+            staleTime: 60000,
+        });
+    }, [queryClient]);
+
+    useEffect(() => {
         const handleRefresh = () => setRefreshKey((prev) => prev + 1);
         window.addEventListener('dashboard-refresh', handleRefresh as any);
         window.addEventListener('usav-refresh-data', handleRefresh as any);
@@ -58,11 +84,11 @@ function DashboardPageContent() {
                 </div>
             }>
                 {orderView === 'shipped' ? (
-                    <ShippedTable key={`shipped-${refreshKey}`} showWeekNavigation={false} />
+                    <DashboardShippedTable key={`shipped-${refreshKey}`} />
                 ) : orderView === 'unshipped' ? (
-                    <ShippedTableBase key={`unshipped-${refreshKey}`} ordersOnly missingTrackingOnly showWeekNavigation={false} />
+                    <UnshippedTable key={`unshipped-${refreshKey}`} />
                 ) : (
-                    <ShippedTableBase key={`pending-${refreshKey}`} ordersOnly showWeekNavigation={false} />
+                    <PendingOrdersTable key={`pending-${refreshKey}`} />
                 )}
             </Suspense>
 

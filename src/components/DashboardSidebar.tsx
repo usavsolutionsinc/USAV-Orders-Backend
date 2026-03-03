@@ -34,6 +34,7 @@ import {
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { getPackerThemeById, getTechThemeById } from '@/utils/staff-colors';
 import type { ShippedFormData } from '@/components/shipped';
+import { dispatchCloseShippedDetails } from '@/utils/events';
 
 type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
 
@@ -370,7 +371,6 @@ function SidebarContextPanel() {
           onFormSubmit={submitShippedForm}
           filterControl={filterControl}
           showDetailsPanel={false}
-          showWeekFilter
         />
       );
     }
@@ -394,18 +394,6 @@ function SidebarContextPanel() {
         onCloseForm={closeIntakeForm}
         onFormSubmit={submitShippedForm}
         filterControl={filterControl}
-      />
-    );
-  }
-
-  if (routeKey === 'shipped') {
-    return (
-      <ShippedSidebar
-        embedded
-        hideSectionHeader
-        showIntakeForm={searchParams.get('new') === 'true'}
-        onCloseForm={closeIntakeForm}
-        onFormSubmit={submitShippedForm}
       />
     );
   }
@@ -435,6 +423,36 @@ function SidebarContextPanel() {
             }, '/admin')
           }
         />
+      </div>
+    );
+  }
+
+  if (routeKey === 'support') {
+    return (
+      <div className="h-full overflow-y-auto px-4 py-4">
+        <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-rose-600">Customer Support</p>
+          <h3 className="mt-2 text-lg font-black tracking-tight text-gray-900">Operational queue</h3>
+          <p className="mt-2 text-[11px] font-medium leading-relaxed text-gray-600">
+            This page centralizes eBay unread conversations, eBay return requests, and Zendesk open tickets so support work
+            is triaged from one queue.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('support-refresh'))}
+            className="mt-4 inline-flex items-center justify-center rounded-2xl bg-gray-900 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white transition-colors hover:bg-black"
+          >
+            Refresh Queue
+          </button>
+          <div className="mt-4 space-y-2 text-[10px] font-bold uppercase tracking-[0.18em]">
+            <Link href="/admin?section=connections" className="block rounded-2xl border border-gray-200 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900">
+              Check Connections
+            </Link>
+            <Link href="/repair" className="block rounded-2xl border border-gray-200 px-3 py-2 text-gray-600 hover:bg-gray-50 hover:text-gray-900">
+              Repair Tickets
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -492,13 +510,12 @@ function getSidebarTitle(pathname: string | null) {
     return 'Dashboard';
   }
 
-  if (routeKey === 'shipped') return 'Shipped Orders';
   if (routeKey === 'receiving') return 'Receiving';
   if (routeKey === 'repair') return 'Repair';
   if (routeKey === 'sku-stock') return 'Sku Stock';
   if (routeKey === 'tech') return 'Technicians';
   if (routeKey === 'packer') return 'Packers';
-  if (routeKey === 'sku') return 'Sku Manager';
+  if (routeKey === 'support') return 'Support';
   if (routeKey === 'previous-quarters') return 'Quarters';
   if (routeKey === 'admin') return 'Admin';
 
@@ -546,6 +563,7 @@ function NavSection({
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(false);
   const [showHomeNavigation, setShowHomeNavigation] = useState(false);
   const [lastTechHref, setLastTechHref] = useState('/tech/1');
   const [lastPackerHref, setLastPackerHref] = useState('/packer/4');
@@ -574,7 +592,26 @@ export default function DashboardSidebar() {
     }
     setShowHomeNavigation(false);
     setIsMobileOpen(false);
+    setIsDetailsPanelOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const handleOpenDetails = () => {
+      setIsDetailsPanelOpen(true);
+      setIsMobileOpen(false);
+    };
+    const handleCloseDetails = () => {
+      setIsDetailsPanelOpen(false);
+    };
+
+    window.addEventListener('open-shipped-details' as any, handleOpenDetails as any);
+    window.addEventListener('close-shipped-details' as any, handleCloseDetails as any);
+
+    return () => {
+      window.removeEventListener('open-shipped-details' as any, handleOpenDetails as any);
+      window.removeEventListener('close-shipped-details' as any, handleCloseDetails as any);
+    };
+  }, []);
 
   const resolveHref = (item: SidebarNavItem) => {
     if (item.id === 'tech') return lastTechHref;
@@ -655,14 +692,34 @@ export default function DashboardSidebar() {
   );
 
   const shell = (
-    <aside className="h-full w-[360px] bg-white border-r border-gray-200 overflow-hidden shadow-xl shadow-slate-900/5">
+    <aside className="h-full w-full bg-white border-r border-gray-200 overflow-hidden shadow-xl shadow-slate-900/5">
       {showHomeNavigation || routeKey === 'unknown' ? homePanel : contextPanel}
     </aside>
   );
 
   return (
     <>
-      <div className="hidden md:block h-full flex-shrink-0">{shell}</div>
+      <div
+        className={`hidden md:block h-full flex-shrink-0 overflow-hidden transition-[width] duration-300 ${
+          isDetailsPanelOpen ? 'w-0' : 'w-[360px]'
+        }`}
+      >
+        {shell}
+      </div>
+
+      {isDetailsPanelOpen ? (
+        <button
+          type="button"
+          onClick={() => {
+            dispatchCloseShippedDetails();
+            setIsDetailsPanelOpen(false);
+          }}
+          className="hidden md:flex fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-slate-900/10 items-center justify-center"
+          aria-label="Open station navigation"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      ) : null}
 
       <button
         type="button"

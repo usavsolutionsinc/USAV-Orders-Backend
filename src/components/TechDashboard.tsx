@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { TechTable } from './TechTable';
-import { ShippedTable } from './shipped/ShippedTable';
+import PendingOrdersTable from './PendingOrdersTable';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
 
 interface TechDashboardProps {
@@ -25,7 +25,7 @@ export default function TechDashboard({ techId, sheetId, gid }: TechDashboardPro
         <div className="flex h-full w-full relative">
             <div className="flex-1 overflow-hidden">
                 {rightViewMode === 'pending' ? (
-                    <ShippedTable ordersOnly />
+                    <PendingOrdersTable />
                 ) : (
                     <TechTable testedBy={parseInt(techId)} />
                 )}

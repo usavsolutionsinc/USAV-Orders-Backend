@@ -271,11 +271,17 @@ export function DashboardDetailsStack({
     }
   };
 
-  const navigateToNextIfFullyAssigned = (nextTesterId: number | null, nextPackerId: number | null) => {
-    if (nextTesterId == null || nextPackerId == null) return;
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('navigate-dashboard-next-unassigned'));
-    }, 80);
+  const handleLastAssignmentComplete = (
+    previousTesterId: number | null,
+    previousPackerId: number | null,
+    nextTesterId: number | null,
+    nextPackerId: number | null
+  ) => {
+    const wasFullyAssigned = previousTesterId != null && previousPackerId != null;
+    const isFullyAssigned = nextTesterId != null && nextPackerId != null;
+    if (wasFullyAssigned || !isFullyAssigned) return;
+
+    window.dispatchEvent(new CustomEvent('navigate-dashboard-next-unassigned'));
   };
 
   const containerVariants = {
@@ -406,6 +412,7 @@ export function DashboardDetailsStack({
               onAssignTester={async (staffId) => {
                 if (orderAssignmentMutation.isPending) return;
                 const previousTesterId = assignedTesterId;
+                const previousPackerId = assignedPackerId;
                 const nextTesterId = staffId;
                 const nextPackerId = assignedPackerId;
                 setAssignmentError(null);
@@ -415,7 +422,7 @@ export function DashboardDetailsStack({
                     orderId: shipped.id,
                     testerId: staffId,
                   });
-                  navigateToNextIfFullyAssigned(nextTesterId, nextPackerId);
+                  handleLastAssignmentComplete(previousTesterId, previousPackerId, nextTesterId, nextPackerId);
                 } catch (error) {
                   setAssignedTesterId(previousTesterId);
                   setAssignmentError('Failed to update tester assignment. Please try again.');
@@ -424,6 +431,7 @@ export function DashboardDetailsStack({
               }}
               onAssignPacker={async (staffId) => {
                 if (orderAssignmentMutation.isPending) return;
+                const previousTesterId = assignedTesterId;
                 const previousPackerId = assignedPackerId;
                 const nextTesterId = assignedTesterId;
                 const nextPackerId = staffId;
@@ -434,7 +442,7 @@ export function DashboardDetailsStack({
                     orderId: shipped.id,
                     packerId: staffId,
                   });
-                  navigateToNextIfFullyAssigned(nextTesterId, nextPackerId);
+                  handleLastAssignmentComplete(previousTesterId, previousPackerId, nextTesterId, nextPackerId);
                 } catch (error) {
                   setAssignedPackerId(previousPackerId);
                   setAssignmentError('Failed to update packer assignment. Please try again.');

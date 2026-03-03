@@ -250,9 +250,10 @@ export async function POST() {
                 static_sku TEXT,
                 serial_number TEXT,
                 shipping_tracking_number TEXT,
-                product_title TEXT,
                 notes TEXT,
-                location TEXT
+                location TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
             )
         `);
         tables.push('sku');

@@ -14,12 +14,13 @@ interface WeekHeaderProps {
   fallbackDate: string;
   count: number;
   countClassName: string;
-  weekRange: WeekRange;
-  weekOffset: number;
-  onPrevWeek: () => void;
-  onNextWeek: () => void;
+  weekRange?: WeekRange;
+  weekOffset?: number;
+  onPrevWeek?: () => void;
+  onNextWeek?: () => void;
   formatDate: (dateStr: string) => string;
   rightSlot?: ReactNode;
+  showWeekControls?: boolean;
 }
 
 export default function WeekHeader({
@@ -28,11 +29,12 @@ export default function WeekHeader({
   count,
   countClassName,
   weekRange,
-  weekOffset,
+  weekOffset = 0,
   onPrevWeek,
   onNextWeek,
   formatDate,
   rightSlot,
+  showWeekControls = true,
 }: WeekHeaderProps) {
   const getTodayPSTDisplay = () => {
     try {
@@ -57,7 +59,7 @@ export default function WeekHeader({
       <div className="flex items-center gap-2">
         {rightSlot ? (
           rightSlot
-        ) : (
+        ) : showWeekControls && weekRange && onPrevWeek && onNextWeek ? (
           <div className="flex items-center gap-1">
             <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest mr-1">
               {formatDate(weekRange.startStr)} - {formatDate(weekRange.endStr)}
@@ -78,7 +80,7 @@ export default function WeekHeader({
               <ChevronRight className="w-4 h-4 text-gray-600" />
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

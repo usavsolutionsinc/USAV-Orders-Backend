@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, Copy, Package, ExternalLink, Box, Wrench } from '../Icons';
+import { Check, Copy, Package, ExternalLink, Wrench } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { PhotoGallery } from './PhotoGallery';
 import { getStaffName } from '@/utils/staff';
@@ -158,27 +158,20 @@ export function ShippedDetailsPanelContent({
   const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
   const productDetailsSection = (
     <section className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
-            <Box className="w-4 h-4" />
-          </div>
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Product Details</h3>
-        </div>
-        <button
-          type="button"
-          onClick={() => openExternalByItemNumber(shipped.item_number)}
-          disabled={!getExternalUrlByItemNumber(shipped.item_number)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-wider"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          Product Page
-        </button>
-      </div>
-
       <div className="space-y-4 bg-gray-50/50 rounded-[2rem] p-6 border border-gray-100">
         <div>
-          <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-2">Product Title</span>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block">Product Title</span>
+            <button
+              type="button"
+              onClick={() => openExternalByItemNumber(shipped.item_number)}
+              disabled={!getExternalUrlByItemNumber(shipped.item_number)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 border border-blue-100 text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-[9px] font-black uppercase tracking-[0.14em] shrink-0"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Product Page
+            </button>
+          </div>
           <p className="font-bold text-sm text-gray-900 leading-relaxed break-words whitespace-normal" title={shipped.product_title}>
             {shipped.product_title || 'Not provided'}
           </p>
@@ -337,7 +330,7 @@ export function ShippedDetailsPanelContent({
         <section className="space-y-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
-              <Box className="w-4 h-4" />
+              <Package className="w-4 h-4" />
             </div>
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Packing Information</h3>
           </div>

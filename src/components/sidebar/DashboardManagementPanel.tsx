@@ -9,6 +9,7 @@ import {
   Search,
   X,
 } from '@/components/Icons';
+import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 
@@ -105,6 +106,12 @@ export function DashboardManagementPanel({
         detail: { query: trimmedQuery },
       })
     );
+  };
+
+  const clearSearchHistory = () => {
+    setSearchHistory([]);
+    setShowAllSearchHistory(false);
+    localStorage.removeItem('dashboard_search_history');
   };
 
   const handleTransfer = async () => {
@@ -216,38 +223,19 @@ export function DashboardManagementPanel({
               }
                 />
           </motion.div>
-          {searchHistory.length > 0 ? (
-            <motion.div variants={itemVariants} className="bg-gray-50 p-4 rounded-xl border border-gray-200 -mt-1">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Recent Searches</p>
-                {searchHistory.length > 3 ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllSearchHistory((current) => !current)}
-                    className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
-                  >
-                    {showAllSearchHistory ? 'Show Less' : 'Show All'}
-                  </button>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                {visibleSearchHistory.map((item, index) => (
-                  <button
-                    key={`${item.query}-${index}`}
-                    onClick={() => {
-                      setSearchQuery(item.query);
-                      handleSearch(item.query);
-                    }}
-                    className="w-full text-left p-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group"
-                  >
-                    <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600 truncate">
-                      {item.query}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          ) : null}
+          <motion.div variants={itemVariants} className="-mt-1">
+            <RecentSearchesList
+              items={visibleSearchHistory}
+              totalCount={searchHistory.length}
+              expanded={showAllSearchHistory}
+              onToggleExpanded={() => setShowAllSearchHistory((current) => !current)}
+              onClear={clearSearchHistory}
+              onSelect={(query) => {
+                setSearchQuery(query);
+                handleSearch(query);
+              }}
+            />
+          </motion.div>
           <motion.div variants={itemVariants} className="-mt-1 text-left">
             <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">Click an order for more details</p>
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Orders are sorted by ship-by date</p>

@@ -3,23 +3,23 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { OrderRecordsTable } from '@/components/shipped/OrderRecordsTable';
-import { fetchUnshippedOrdersData } from '@/lib/dashboard-table-data';
+import { fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 
-export interface UnshippedTableProps {
+export interface PendingOrdersTableProps {
   packedBy?: number;
   testedBy?: number;
 }
 
-export function UnshippedTable({
+export default function PendingOrdersTable({
   packedBy,
   testedBy,
-}: UnshippedTableProps = {}) {
+}: PendingOrdersTableProps = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const queryClient = useQueryClient();
-  const queryKey = ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy }] as const;
+  const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy }] as const;
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy }),
+    queryFn: () => fetchPendingOrdersData({ searchQuery, packedBy, testedBy }),
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
     placeholderData: (previousData) => previousData,
@@ -28,7 +28,7 @@ export function UnshippedTable({
 
   useEffect(() => {
     const handleRefresh = () => {
-      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
     };
     const handleDashboardSearch = (e: any) => {
       setSearchQuery(String(e?.detail?.query || '').trim());
@@ -58,7 +58,7 @@ export function UnshippedTable({
       searchValue={searchQuery}
       ordersOnly
       onClearSearch={clearSearch}
-      emptyMessage="No unshipped order records found"
+      emptyMessage="No pending order records found"
     />
   );
 }

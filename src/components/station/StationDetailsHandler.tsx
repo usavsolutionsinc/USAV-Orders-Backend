@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { ShippedDetailsPanel } from '../shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { dispatchCloseShippedDetails } from '@/utils/events';
 
 /**
  * Component that listens for shipped details events and displays the details panel
@@ -47,11 +48,11 @@ export function StationDetailsHandler({
                     context={viewMode === 'pending' ? 'dashboard' : (stationRole === 'packer' ? 'packer' : 'station')}
                     onClose={() => {
                         setSelectedShipped(null);
-                        window.dispatchEvent(new CustomEvent('close-shipped-details'));
+                        dispatchCloseShippedDetails();
                     }}
                     onUpdate={() => {
-                        // Optionally refresh data
                         setSelectedShipped(null);
+                        dispatchCloseShippedDetails();
                     }}
                 />
             )}

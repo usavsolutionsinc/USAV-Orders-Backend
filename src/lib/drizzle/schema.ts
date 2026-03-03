@@ -126,9 +126,10 @@ export const sku = pgTable('sku', {
   staticSku: text('static_sku'),
   serialNumber: text('serial_number'),
   shippingTrackingNumber: text('shipping_tracking_number'),
-  productTitle: text('product_title'),
   notes: text('notes'),
   location: text('location'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Repair Service table - Updated schema with JSON date_time

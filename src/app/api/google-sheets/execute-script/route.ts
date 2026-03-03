@@ -26,7 +26,10 @@ export async function POST(req: NextRequest) {
             case 'checkShippedOrders':
                 return await executeCheckShippedOrders();
             case 'updateNonshippedOrders':
-                return await executeUpdateNonshippedOrders();
+                return NextResponse.json({
+                    success: false,
+                    error: 'Google Sheets mutation support has been removed. Update non-shipped state directly in the database.',
+                }, { status: 410 });
             case 'syncTechSerialNumbers':
                 return await executeSyncTechSerialNumbers();
             case 'syncPackerLogs':
@@ -78,151 +81,10 @@ async function executeCheckShippedOrders() {
 }
 
 async function executeUpdateNonshippedOrders() {
-    const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
-
-    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
-    const sheetInfos = spreadsheet.data.sheets || [];
-    const sheetNames = sheetInfos.map(s => s.properties?.title || '');
-    const ordersSheetName = sheetNames.find(s => s.toLowerCase() === 'orders');
-    const shippedSheetName = sheetNames.find(s => s.toLowerCase() === 'shipped');
-
-    if (!ordersSheetName) {
-        return NextResponse.json({ success: false, error: 'Orders sheet not found' }, { status: 404 });
-    }
-    if (!shippedSheetName) {
-        return NextResponse.json({ success: false, error: 'Shipped sheet not found' }, { status: 404 });
-    }
-
-    const getLastEightDigits = (value: any) => {
-        const digits = String(value || '').replace(/\D/g, '');
-        return digits.slice(-8);
-    };
-
-    // Step 1: GAS-equivalent transferExistingOrdersToRestock:
-    // Delete Orders rows where Shipped has timestamp + matching tracking/order id.
-    let deletedFromOrdersSheet = 0;
-    const ordersSheetId = sheetInfos.find(s => s.properties?.title === ordersSheetName)?.properties?.sheetId;
-    if (ordersSheetId !== undefined) {
-        const [shippedResponse, ordersIdsResponse, ordersTrackingResponse] = await Promise.all([
-            sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `${shippedSheetName}!A2:F`,
-            }),
-            sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `${ordersSheetName}!B2:B`,
-            }),
-            sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: `${ordersSheetName}!G2:G`,
-            }),
-        ]);
-
-        const shippedRows = shippedResponse.data.values || [];
-        const ordersIdRows = ordersIdsResponse.data.values || [];
-        const ordersTrackingRows = ordersTrackingResponse.data.values || [];
-
-        const shippedTrackings = new Set<string>();
-        const shippedOrderIds = new Set<string>();
-
-        for (const row of shippedRows) {
-            const timestamp = String(row[0] || '').trim(); // A
-            const orderId = String(row[1] || '').trim(); // B
-            const tracking = String(row[5] || '').trim(); // F
-            if (!timestamp) continue;
-            if (tracking) shippedTrackings.add(getLastEightDigits(tracking));
-            if (orderId) shippedOrderIds.add(orderId);
-        }
-
-        const rowsToDelete = new Set<number>();
-
-        for (let i = 0; i < ordersTrackingRows.length; i++) {
-            const tracking = String(ordersTrackingRows[i]?.[0] || '').trim();
-            if (!tracking) continue;
-            if (shippedTrackings.has(getLastEightDigits(tracking))) {
-                rowsToDelete.add(i + 2); // A1 header offset
-            }
-        }
-
-        for (let i = 0; i < ordersIdRows.length; i++) {
-            const orderId = String(ordersIdRows[i]?.[0] || '').trim();
-            if (!orderId) continue;
-            if (shippedOrderIds.has(orderId)) {
-                rowsToDelete.add(i + 2); // A1 header offset
-            }
-        }
-
-        const sortedRowsToDelete = Array.from(rowsToDelete).sort((a, b) => b - a);
-        if (sortedRowsToDelete.length > 0) {
-            await sheets.spreadsheets.batchUpdate({
-                spreadsheetId,
-                requestBody: {
-                    requests: sortedRowsToDelete.map((rowNumber) => ({
-                        deleteDimension: {
-                            range: {
-                                sheetId: ordersSheetId,
-                                dimension: 'ROWS',
-                                startIndex: rowNumber - 1, // 0-based inclusive
-                                endIndex: rowNumber, // 0-based exclusive
-                            },
-                        },
-                    })),
-                },
-            });
-            deletedFromOrdersSheet = sortedRowsToDelete.length;
-        }
-    }
-
-    // Step 2: Re-read remaining Orders G column and sync DB shipped state.
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `${ordersSheetName}!G2:G`,
-    });
-
-    const rows = response.data.values || [];
-    const trackingSet = new Set<string>();
-    for (const row of rows) {
-        const tracking = String(row[0] || '').trim();
-        if (tracking) trackingSet.add(tracking);
-    }
-
-    const trackingList = Array.from(trackingSet);
-
-    // Default: mark all orders shipped
-    await db.update(orders).set({ isShipped: true });
-
-    if (trackingList.length === 0) {
-        return NextResponse.json({
-            success: true,
-            message: 'No tracking numbers found in Orders sheet column G. Marked all orders as shipped.',
-        });
-    }
-
-    let updatedCount = 0;
-    const batchSize = 1000;
-    for (let i = 0; i < trackingList.length; i += batchSize) {
-        const batch = trackingList.slice(i, i + batchSize);
-        const matchingOrders = await db
-            .select({ id: orders.id })
-            .from(orders)
-            .where(inArray(orders.shippingTrackingNumber, batch));
-
-        const idsToUpdate = matchingOrders.map(o => o.id);
-        if (idsToUpdate.length > 0) {
-            await db
-                .update(orders)
-                .set({ isShipped: false })
-                .where(inArray(orders.id, idsToUpdate));
-            updatedCount += idsToUpdate.length;
-        }
-    }
-
     return NextResponse.json({
-        success: true,
-        message: `Processed Orders sheet cleanup (deleted ${deletedFromOrdersSheet} row(s)), then marked all DB orders shipped and set ${updatedCount} matching Orders sheet column G tracking row(s) to non-shipped.`,
-    });
+        success: false,
+        error: 'Google Sheets mutation support has been removed. Update non-shipped state directly in the database.',
+    }, { status: 410 });
 }
 
 async function executeSyncTechSerialNumbers() {

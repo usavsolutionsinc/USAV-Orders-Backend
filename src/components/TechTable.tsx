@@ -8,6 +8,7 @@ import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 
 interface TechRecord {
@@ -42,6 +43,7 @@ export function TechTable({ testedBy }: TechTableProps) {
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasLoadedRef = useRef(false);
 
@@ -54,6 +56,24 @@ export function TechTable({ testedBy }: TechTableProps) {
     window.addEventListener('usav-refresh-data', handleRefresh as any);
     return () => window.removeEventListener('usav-refresh-data', handleRefresh as any);
   }, [testedBy]);
+
+  useEffect(() => {
+    const handleOpenDetails = (e: any) => {
+      const nextId = Number(e?.detail?.id);
+      setSelectedDetailId(Number.isFinite(nextId) ? nextId : null);
+    };
+    const handleCloseDetails = () => {
+      setSelectedDetailId(null);
+    };
+
+    window.addEventListener('open-shipped-details' as any, handleOpenDetails as any);
+    window.addEventListener('close-shipped-details' as any, handleCloseDetails as any);
+
+    return () => {
+      window.removeEventListener('open-shipped-details' as any, handleOpenDetails as any);
+      window.removeEventListener('close-shipped-details' as any, handleCloseDetails as any);
+    };
+  }, []);
 
   const fetchRecords = async () => {
     if (hasLoadedRef.current) {
@@ -104,7 +124,16 @@ export function TechTable({ testedBy }: TechTableProps) {
       quantity: record.quantity || '1',
       tech_serial_id: record.id,
     };
+
+    const detailId = Number(detail.id);
+    if (selectedDetailId !== null && detailId === selectedDetailId) {
+      dispatchCloseShippedDetails();
+      setSelectedDetailId(null);
+      return;
+    }
+
     window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
+    setSelectedDetailId(detailId);
   };
   const getLast4 = (value: string | null | undefined) => {
     const raw = String(value || '');

@@ -234,29 +234,7 @@ export async function POST(req: NextRequest) {
                 (r: any) => normalizeSku(String(r.sku || '')) === normalizedBase
             );
 
-            let resolvedTitle: string | null = target?.product_title || null;
-            if (!resolvedTitle) {
-                const staticCandidates = Array.from(new Set([
-                    String(classification.skuStatic || '').trim(),
-                    String(scanInput || '').trim(),
-                    String(classification.normalizedInput || '').trim(),
-                ])).filter(Boolean);
-
-                for (const staticSku of staticCandidates) {
-                    const skuTitleResult = await pool.query(
-                        `SELECT product_title
-                         FROM sku
-                         WHERE TRIM(static_sku) = $1
-                         ORDER BY id DESC
-                         LIMIT 1`,
-                        [staticSku]
-                    );
-                    if (skuTitleResult.rows.length > 0) {
-                        resolvedTitle = skuTitleResult.rows[0]?.product_title || null;
-                        break;
-                    }
-                }
-            }
+            const resolvedTitle: string | null = target?.product_title || null;
 
             if (target) {
                 const currentQty = parseInt(target.stock || '0', 10) || 0;

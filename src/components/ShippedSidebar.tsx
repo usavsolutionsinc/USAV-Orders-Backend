@@ -7,9 +7,10 @@ import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
-import { DashboardOrderFilterToolbar } from '@/components/dashboard/DashboardOrderFilters';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { formatDateTimePST } from '@/lib/timezone';
+import { dispatchCloseShippedDetails } from '@/utils/events';
+import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 
 interface SearchHistory {
     query: string;
@@ -25,7 +26,6 @@ interface ShippedSidebarProps {
     showDetailsPanel?: boolean;
     embedded?: boolean;
     hideSectionHeader?: boolean;
-    showWeekFilter?: boolean;
 }
 
 // Hard-coded staff ID to name mapping
@@ -51,7 +51,6 @@ export default function ShippedSidebar({
     showDetailsPanel = true,
     embedded = false,
     hideSectionHeader = false,
-    showWeekFilter = false,
 }: ShippedSidebarProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<ShippedOrder[]>([]);
@@ -85,6 +84,12 @@ export default function ShippedSidebar({
     }, []);
 
     const openDetails = (result: ShippedOrder) => {
+        if (selectedShipped && Number(selectedShipped.id) === Number(result.id)) {
+            dispatchCloseShippedDetails();
+            setSelectedShipped(null);
+            return;
+        }
+
         // Use custom event to coordinate single instance behavior
         const event = new CustomEvent('open-shipped-details', { detail: result });
         window.dispatchEvent(event);
@@ -171,6 +176,12 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
         }
     };
 
+    const clearSearchHistory = () => {
+        setSearchHistory([]);
+        setShowAllSearchHistory(false);
+        localStorage.removeItem(searchHistoryStorageKey);
+    };
+
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: {
@@ -238,7 +249,6 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                                 </button>
                             }
                         />
-                        {showWeekFilter ? <DashboardOrderFilterToolbar /> : null}
                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
                             Click a Shipped Row for More Details
                         </p>
@@ -327,51 +337,27 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
 
                         {/* Recent Searches - Only show when no active results */}
                         {searchHistory.length > 0 && results.length === 0 && (
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                <div className="mb-3 flex items-center justify-between gap-3">
-                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
-                                        Recent Searches
-                                    </p>
-                                    {searchHistory.length > 3 ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowAllSearchHistory((current) => !current)}
-                                            className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
-                                        >
-                                            {showAllSearchHistory ? 'Show Less' : 'Show All'}
-                                        </button>
-                                    ) : null}
-                                </div>
-                                <div className="space-y-2">
-                                    {visibleSearchHistory.map((item, index) => {
-                                        const displayQuery = item.query.match(/^\d+$/) && item.query.length > 8 
-                                            ? item.query.slice(-8) 
-                                            : item.query;
-                                        
-                                        return (
-                                            <button
-                                                key={index}
-                                                onClick={() => {
-                                                    setSearchQuery(item.query);
-                                                    handleSearch(item.query);
-                                                }}
-                                                className="w-full text-left p-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all group"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[10px] font-semibold text-gray-900 group-hover:text-blue-600">
-                                                        {displayQuery}
-                                                    </span>
-                                                    {typeof item.resultCount === 'number' ? (
-                                                        <span className="text-[8px] text-gray-400 font-medium">
-                                                            {item.resultCount} result{item.resultCount !== 1 ? 's' : ''}
-                                                        </span>
-                                                    ) : null}
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                            <RecentSearchesList
+                                items={visibleSearchHistory}
+                                totalCount={searchHistory.length}
+                                expanded={showAllSearchHistory}
+                                onToggleExpanded={() => setShowAllSearchHistory((current) => !current)}
+                                onClear={clearSearchHistory}
+                                onSelect={(query) => {
+                                    setSearchQuery(query);
+                                    handleSearch(query);
+                                }}
+                                getDisplayQuery={(item) =>
+                                    item.query.match(/^\d+$/) && item.query.length > 8
+                                        ? item.query.slice(-8)
+                                        : item.query
+                                }
+                                getMetaLabel={(item) =>
+                                    typeof item.resultCount === 'number'
+                                        ? `${item.resultCount} result${item.resultCount !== 1 ? 's' : ''}`
+                                        : 'Reuse'
+                                }
+                            />
                         )}
                     </motion.div>
 

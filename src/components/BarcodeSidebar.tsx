@@ -1,13 +1,48 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useRouter, useSearchParams } from 'next/navigation';
 import MultiSkuSnBarcode from './MultiSkuSnBarcode';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { useEffect, useState } from 'react';
+import type { SkuView } from '@/components/sku/SkuBrowser';
 
 interface BarcodeSidebarProps {
     embedded?: boolean;
 }
 
 export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps) {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const currentSearch = searchParams.get('search') || '';
+    const [searchInput, setSearchInput] = useState(currentSearch);
+    const view = (searchParams.get('view') === 'sku_history' ? 'sku_history' : 'sku_stock') as SkuView;
+
+    useEffect(() => {
+        setSearchInput(currentSearch);
+    }, [currentSearch]);
+
+    useEffect(() => {
+        const trimmed = searchInput.trim();
+        if (trimmed === currentSearch) {
+            return;
+        }
+
+        const handle = window.setTimeout(() => {
+            const nextParams = new URLSearchParams(searchParams.toString());
+            if (trimmed) {
+                nextParams.set('search', trimmed);
+            } else {
+                nextParams.delete('search');
+            }
+            const nextSearch = nextParams.toString();
+            router.replace(nextSearch ? `/sku-stock?${nextSearch}` : '/sku-stock');
+        }, 250);
+
+        return () => window.clearTimeout(handle);
+    }, [currentSearch, router, searchInput, searchParams]);
+
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: {
@@ -31,6 +66,48 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
 
     const content = (
         <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
+            <motion.div variants={itemVariants} className="border-b border-gray-200 bg-white">
+                <ViewDropdown
+                    options={[
+                        { value: 'sku_stock', label: 'SKU STOCK' },
+                        { value: 'sku_history', label: 'SKU HISTORY' },
+                    ]}
+                    value={view}
+                    onChange={(nextView) => {
+                        const nextParams = new URLSearchParams(searchParams.toString());
+                        nextParams.set('view', nextView);
+                        const nextSearch = nextParams.toString();
+                        router.replace(nextSearch ? `/sku-stock?${nextSearch}` : '/sku-stock');
+                    }}
+                />
+            </motion.div>
+            <motion.div variants={itemVariants} className="border-b border-gray-100 p-4 bg-white">
+                <SearchBar
+                    value={searchInput}
+                    onChange={setSearchInput}
+                    onSearch={(value) => {
+                        const nextParams = new URLSearchParams(searchParams.toString());
+                        const trimmed = value.trim();
+                        if (trimmed) {
+                            nextParams.set('search', trimmed);
+                        } else {
+                            nextParams.delete('search');
+                        }
+                        const nextSearch = nextParams.toString();
+                        router.replace(nextSearch ? `/sku-stock?${nextSearch}` : '/sku-stock');
+                    }}
+                    onClear={() => {
+                        setSearchInput('');
+                        const nextParams = new URLSearchParams(searchParams.toString());
+                        nextParams.delete('search');
+                        const nextSearch = nextParams.toString();
+                        router.replace(nextSearch ? `/sku-stock?${nextSearch}` : '/sku-stock');
+                    }}
+                    placeholder={view === 'sku_stock' ? 'Search stock, sku, or product title...' : 'Search sku, serial, location, tracking, notes...'}
+                    isSearching={false}
+                    variant="blue"
+                />
+            </motion.div>
             <motion.header variants={itemVariants} className="p-6 border-b border-gray-100 bg-gray-50">
                 <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                     SKU Generator

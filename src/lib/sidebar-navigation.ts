@@ -1,9 +1,9 @@
 import {
+  AlertCircle,
   Box,
   Calendar,
   ClipboardList,
   LayoutDashboard,
-  Settings,
   ShieldCheck,
   Tool,
   User,
@@ -12,13 +12,12 @@ import {
 
 export type SidebarRouteKey =
   | 'dashboard'
-  | 'shipped'
   | 'receiving'
   | 'repair'
   | 'sku-stock'
   | 'tech'
   | 'packer'
-  | 'sku'
+  | 'support'
   | 'previous-quarters'
   | 'admin'
   | 'unknown';
@@ -40,7 +39,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'sku-stock', label: 'Sku Stock', href: '/sku-stock', icon: Box, kind: 'main' },
   { id: 'tech', label: 'Technicians', href: '/tech/1', icon: Wrench, kind: 'station' },
   { id: 'packer', label: 'Packers', href: '/packer/4', icon: User, kind: 'station' },
-  { id: 'sku', label: 'Sku Manager', href: '/sku', icon: Settings, kind: 'bottom' },
+  { id: 'support', label: 'Support', href: '/support', icon: AlertCircle, kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters', href: '/previous-quarters', icon: Calendar, kind: 'bottom' },
   { id: 'admin', label: 'Admin', href: '/admin', icon: ShieldCheck, kind: 'bottom' },
 ];
@@ -48,11 +47,10 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
 export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (!pathname) return 'unknown';
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'dashboard';
-  if (pathname === '/shipped' || pathname.startsWith('/shipped/')) return 'shipped';
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
   if (pathname === '/repair' || pathname.startsWith('/repair/')) return 'repair';
   if (pathname === '/sku-stock' || pathname.startsWith('/sku-stock/')) return 'sku-stock';
-  if (pathname === '/sku' || pathname.startsWith('/sku/')) return 'sku';
+  if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
   if (pathname === '/previous-quarters' || pathname.startsWith('/previous-quarters/')) return 'previous-quarters';
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
   if (/^\/tech\/\d+/.test(pathname)) return 'tech';

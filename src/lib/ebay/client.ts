@@ -35,6 +35,46 @@ export class EbayClient {
     });
   }
 
+  private async withOAuthCredentials<T>(callback: () => Promise<T>): Promise<T> {
+    const { accessToken, refreshToken } = await this.getValidAccessToken();
+
+    this.api.oAuth2.setCredentials({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_in: 7200,
+      refresh_token_expires_in: 0,
+      token_type: 'User Access Token'
+    });
+
+    return callback();
+  }
+
+  private getArrayCandidate(payload: any, keys: string[]): any[] {
+    for (const key of keys) {
+      if (Array.isArray(payload?.[key])) {
+        return payload[key];
+      }
+    }
+
+    return [];
+  }
+
+  private isActiveReturnState(state: string): boolean {
+    const normalized = String(state || '').trim().toUpperCase();
+    if (!normalized) return true;
+
+    return ![
+      'CLOSED',
+      'CLOSE',
+      'COMPLETED',
+      'COMPLETE',
+      'RESOLVED',
+      'REFUNDED',
+      'CANCELLED',
+      'CANCELED',
+    ].includes(normalized);
+  }
+
   /**
    * Get a valid access token for the account
    * Automatically refreshes if expired or about to expire
@@ -109,38 +149,29 @@ export class EbayClient {
     offset?: number;
   } = {}): Promise<any[]> {
     try {
-      const { accessToken, refreshToken } = await this.getValidAccessToken();
-      
-      // Set credentials for this API call
-      this.api.oAuth2.setCredentials({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_in: 7200,
-        refresh_token_expires_in: 0,
-        token_type: 'User Access Token'
+      return this.withOAuthCredentials(async () => {
+        const params: any = {
+          limit: options.limit || 100,
+        };
+
+        if (options.offset) {
+          params.offset = options.offset;
+        }
+
+        // Add filter for orders modified since last sync
+        if (options.lastModifiedDate) {
+          params.filter = `lastmodifieddate:[${options.lastModifiedDate}..]`;
+        }
+
+        console.log(`[${this.accountName}] Fetching orders with params:`, params);
+
+        const response = await this.api.sell.fulfillment.getOrders(params);
+
+        const orders = response.orders || [];
+        console.log(`[${this.accountName}] Fetched ${orders.length} orders`);
+
+        return orders;
       });
-      
-      const params: any = {
-        limit: options.limit || 100,
-      };
-
-      if (options.offset) {
-        params.offset = options.offset;
-      }
-
-      // Add filter for orders modified since last sync
-      if (options.lastModifiedDate) {
-        params.filter = `lastmodifieddate:[${options.lastModifiedDate}..]`;
-      }
-
-      console.log(`[${this.accountName}] Fetching orders with params:`, params);
-
-      const response = await this.api.sell.fulfillment.getOrders(params);
-
-      const orders = response.orders || [];
-      console.log(`[${this.accountName}] Fetched ${orders.length} orders`);
-
-      return orders;
     } catch (error: any) {
       console.error(`[${this.accountName}] Error fetching orders:`, error.message);
       throw new Error(`Failed to fetch orders for ${this.accountName}: ${error.message}`);
@@ -152,23 +183,106 @@ export class EbayClient {
    */
   async getOrderDetails(orderId: string): Promise<any> {
     try {
-      const { accessToken, refreshToken } = await this.getValidAccessToken();
-      
-      // Set credentials for this API call
-      this.api.oAuth2.setCredentials({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_in: 7200,
-        refresh_token_expires_in: 0,
-        token_type: 'User Access Token'
-      });
-      
-      const response = await this.api.sell.fulfillment.getOrder(orderId);
-
-      return response;
+      return this.withOAuthCredentials(async () => this.api.sell.fulfillment.getOrder(orderId));
     } catch (error: any) {
       console.error(`[${this.accountName}] Error fetching order ${orderId}:`, error.message);
       throw new Error(`Failed to fetch order ${orderId} for ${this.accountName}: ${error.message}`);
+    }
+  }
+
+  async fetchUnreadMessages(limit = 10): Promise<any[]> {
+    try {
+      return this.withOAuthCredentials(async () => {
+        const response = await this.api.commerce.message.getConversations({
+          limit: Math.max(1, Math.min(limit, 50)),
+          offset: 0,
+        });
+
+        const conversations = Array.isArray(response?.conversations) ? response.conversations : [];
+
+        return conversations
+          .filter((conversation: any) => Number(conversation?.unreadCount || 0) > 0)
+          .sort((a: any, b: any) => {
+            const aTime = new Date(a?.latestMessage?.createdDate || a?.createdDate || 0).getTime();
+            const bTime = new Date(b?.latestMessage?.createdDate || b?.createdDate || 0).getTime();
+            return bTime - aTime;
+          })
+          .slice(0, limit)
+          .map((conversation: any) => ({
+            conversationId: String(conversation?.conversationId || ''),
+            subject: String(
+              conversation?.latestMessage?.subject ||
+                conversation?.conversationTitle ||
+                conversation?.referenceId ||
+                'eBay conversation'
+            ),
+            otherPartyUsername: String(
+              conversation?.latestMessage?.senderUsername ||
+                conversation?.latestMessage?.recipientUsername ||
+                'Buyer'
+            ),
+            unreadCount: Number(conversation?.unreadCount || 0),
+            referenceId: String(conversation?.referenceId || ''),
+            referenceType: String(conversation?.referenceType || ''),
+            createdDate: String(conversation?.latestMessage?.createdDate || conversation?.createdDate || ''),
+            conversationStatus: String(conversation?.conversationStatus || ''),
+            conversationType: String(conversation?.conversationType || ''),
+          }));
+      });
+    } catch (error: any) {
+      console.error(`[${this.accountName}] Error fetching unread messages:`, error.message);
+      throw new Error(`Failed to fetch unread messages for ${this.accountName}: ${error.message}`);
+    }
+  }
+
+  async fetchOpenReturns(limit = 10): Promise<any[]> {
+    try {
+      return this.withOAuthCredentials(async () => {
+        const response = await this.api.postOrder.return.search({
+          limit: Math.max(1, Math.min(limit * 3, 50)),
+          offset: 0,
+          role: 'SELLER',
+        });
+
+        const returns = this.getArrayCandidate(response, ['returns', 'members', 'items', 'returnRequests']);
+
+        return returns
+          .filter((entry: any) =>
+            this.isActiveReturnState(
+              String(
+                entry?.returnState ||
+                  entry?.state ||
+                  entry?.status ||
+                  entry?.returnStatus ||
+                  ''
+              )
+            )
+          )
+          .slice(0, limit)
+          .map((entry: any) => ({
+            returnId: String(entry?.returnId || entry?.id || ''),
+            orderId: String(entry?.orderId || entry?.order?.orderId || ''),
+            itemId: String(entry?.itemId || entry?.item?.itemId || ''),
+            state: String(
+              entry?.returnState ||
+                entry?.state ||
+                entry?.status ||
+                entry?.returnStatus ||
+                'OPEN'
+            ),
+            creationDate: String(
+              entry?.creationDate ||
+                entry?.creationDateValue ||
+                entry?.creationDateTime ||
+                entry?.lastModifiedDate ||
+                ''
+            ),
+            lastModifiedDate: String(entry?.lastModifiedDate || entry?.creationDate || ''),
+          }));
+      });
+    } catch (error: any) {
+      console.error(`[${this.accountName}] Error fetching return requests:`, error.message);
+      throw new Error(`Failed to fetch return requests for ${this.accountName}: ${error.message}`);
     }
   }
 

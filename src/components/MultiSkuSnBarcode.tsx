@@ -305,8 +305,8 @@ export default function MultiSkuSnBarcode() {
             {/* Mode Selector - Using Refactored Component */}
             <ModeSelector mode={mode} onModeChange={handleModeChange} />
 
-            <div className="flex-1 overflow-y-auto p-8">
-                <div className="space-y-12 pb-16">
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+                <div className="space-y-4 pb-4">
                     {/* Step 1: SKU - Using Refactored Component */}
                     <div>
                         <SkuInput

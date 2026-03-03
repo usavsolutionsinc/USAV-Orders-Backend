@@ -4,11 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Search } from '../Icons';
-import {
-  DASHBOARD_ORDER_FILTERS_EVENT,
-  DEFAULT_DASHBOARD_ORDER_FILTERS,
-  type DashboardOrderFiltersState,
-} from '@/components/dashboard/DashboardOrderFilters';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { CopyableText } from '../ui/CopyableText';
 import WeekHeader from '../ui/WeekHeader';
@@ -16,6 +11,7 @@ import { formatDateWithOrdinal } from '@/lib/date-format';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { dispatchCloseShippedDetails } from '@/utils/events';
 import { DateGroupHeader } from './DateGroupHeader';
 
 export interface ShippedTableBaseProps {
@@ -48,23 +44,6 @@ function getWeekRangeForOffset(weekOffset: number, anchorDateKey?: string) {
   };
 }
 
-function getDateKeyFromWeekValue(weekValue: string | null | undefined) {
-  const raw = String(weekValue || '').trim();
-  const match = raw.match(/^(\d{4})-W(\d{2})$/);
-  if (!match) return '';
-
-  const year = Number(match[1]);
-  const week = Number(match[2]);
-  if (!Number.isFinite(year) || !Number.isFinite(week) || week < 1 || week > 53) return '';
-
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const jan4Day = jan4.getUTCDay() || 7;
-  const monday = new Date(jan4);
-  monday.setUTCDate(jan4.getUTCDate() - jan4Day + 1 + ((week - 1) * 7));
-
-  return `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, '0')}-${String(monday.getUTCDate()).padStart(2, '0')}`;
-}
-
 export function ShippedTableBase({
   packedBy,
   testedBy,
@@ -83,7 +62,6 @@ export function ShippedTableBase({
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = previous week, etc.
   const [dashboardSearch, setDashboardSearch] = useState('');
-  const [dashboardFilters, setDashboardFilters] = useState<DashboardOrderFiltersState>(DEFAULT_DASHBOARD_ORDER_FILTERS);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasLoadedRef = useRef(false);
   const { normalizeTrackingQuery } = useLast8TrackingSearch();
@@ -104,8 +82,7 @@ export function ShippedTableBase({
         }
 
         const params = new URLSearchParams();
-        const anchorDateKey = getDateKeyFromWeekValue(dashboardFilters.shipByDate);
-        const weekRange = getWeekRangeForOffset(weekOffset, anchorDateKey || undefined);
+        const weekRange = getWeekRangeForOffset(weekOffset);
         params.set('weekStart', weekRange.startStr);
         params.set('weekEnd', weekRange.endStr);
 
@@ -166,7 +143,6 @@ export function ShippedTableBase({
     missingTrackingOnly,
     activeSearch,
     weekOffset,
-    dashboardFilters.shipByDate,
   ]);
 
   useEffect(() => {
@@ -234,21 +210,6 @@ export function ShippedTableBase({
       window.removeEventListener('dashboard-search' as any, handleDashboardSearch as any);
     };
   }, [ordersOnly, fetchShipped]);
-
-  useEffect(() => {
-    const handleDashboardFilters = (e: any) => {
-      const detail = e?.detail || {};
-      setDashboardFilters({
-        shipByDate: detail.shipByDate || DEFAULT_DASHBOARD_ORDER_FILTERS.shipByDate,
-      });
-    };
-
-    window.addEventListener(DASHBOARD_ORDER_FILTERS_EVENT as any, handleDashboardFilters as any);
-
-    return () => {
-      window.removeEventListener(DASHBOARD_ORDER_FILTERS_EVENT as any, handleDashboardFilters as any);
-    };
-  }, []);
 
   const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
 
@@ -331,10 +292,16 @@ export function ShippedTableBase({
   }, []);
 
   const handleRowClick = useCallback((record: ShippedOrder) => {
+    if (selectedShipped && Number(selectedShipped.id) === Number(record.id)) {
+      dispatchCloseShippedDetails();
+      setSelectedShipped(null);
+      return;
+    }
+
     const event = new CustomEvent('open-shipped-details', { detail: record });
     window.dispatchEvent(event);
     setSelectedShipped(record);
-  }, []);
+  }, [selectedShipped]);
 
   const strictFilteredRecords = shipped;
   const filteredRecords = strictFilteredRecords;
@@ -374,9 +341,8 @@ export function ShippedTableBase({
   };
 
   // Filter grouped data by current week (all data is weekdays, so no need to filter by day of week)
-  const anchorDateKey = getDateKeyFromWeekValue(dashboardFilters.shipByDate);
-  const weekRange = getWeekRangeForOffset(weekOffset, anchorDateKey || undefined);
-  const shouldBypassWeekFilter = ordersOnly || (activeSearch && !anchorDateKey);
+  const weekRange = getWeekRangeForOffset(weekOffset);
+  const shouldBypassWeekFilter = Boolean(activeSearch);
   const filteredGroupedShipped = shouldBypassWeekFilter
     ? groupedShipped
     : Object.fromEntries(
@@ -435,7 +401,11 @@ export function ShippedTableBase({
         displayedRecords.find((record, index) => index > safeCurrentIndex && isUnassignedRecord(record)) ||
         displayedRecords.find((record) => isUnassignedRecord(record));
 
-      if (!nextRecord || nextRecord.id === selectedShipped?.id) return;
+      if (!nextRecord || nextRecord.id === selectedShipped?.id) {
+        dispatchCloseShippedDetails();
+        setSelectedShipped(null);
+        return;
+      }
 
       handleRowClick(nextRecord);
       window.setTimeout(() => {
@@ -515,7 +485,10 @@ export function ShippedTableBase({
                         setDashboardSearch('');
                         window.dispatchEvent(new CustomEvent('dashboard-search', { detail: { query: '' } }));
                       } else {
-                        window.history.pushState({}, '', '/shipped');
+                        const nextParams = new URLSearchParams(window.location.search);
+                        nextParams.delete('search');
+                        const nextSearch = nextParams.toString();
+                        window.history.pushState({}, '', nextSearch ? `${window.location.pathname}?${nextSearch}` : window.location.pathname);
                       }
                     }}
                     className="mt-6 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
@@ -580,6 +553,9 @@ export function ShippedTableBase({
                           {/* 2. Product Title, Tested By, Packed By, Condition & SKU */}
                           <div className="flex flex-col min-w-0">
                             <div className="flex items-center gap-2 min-w-0">
+                              {ordersOnly && String((record as any).out_of_stock || '').trim() === '' && (
+                                <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
+                              )}
                               {String((record as any).out_of_stock || '').trim() !== '' && (
                                 <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
                               )}

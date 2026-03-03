@@ -20,7 +20,6 @@ export function ConnectionsManagementTab() {
   const [shipStationStatus, setShipStationStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const shipStationFileInputRef = useRef<HTMLInputElement>(null);
-  const fullSyncFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: accountsData } = useQuery({
     queryKey: ['ebay-accounts'],
@@ -178,20 +177,18 @@ export function ConnectionsManagementTab() {
     }
   };
 
-  const handleRunFullIntegrity = async (file: File | null) => {
-    if (!file) return;
-
+  const handleRunFullIntegrity = async () => {
     setIsFullSyncRunning(true);
     setIntegrityStatus(null);
 
     try {
       const ebayData = await ebaySyncMutation.mutateAsync();
-      await uploadShipStationFile(file);
+      const ecwidData = await ecwidExceptionTrackingMutation.mutateAsync();
       const exceptionsData = await exceptionsSyncMutation.mutateAsync();
 
       setIntegrityStatus({
         type: 'success',
-        message: `Full integrity sync completed. eBay created ${ebayData?.totals?.createdOrders || 0} order(s), deleted ${ebayData?.totals?.deletedExceptions || 0} exception(s). Exceptions sync cleared ${exceptionsData?.deleted || 0}.`,
+        message: `Full integrity sync completed. eBay created ${ebayData?.totals?.createdOrders || 0} order(s), deleted ${ebayData?.totals?.deletedExceptions || 0} exception(s). Ecwid updated ${ecwidData?.updated || 0} and deleted ${ecwidData?.deleted || 0}. Exceptions sync cleared ${exceptionsData?.deleted || 0}.`,
       });
     } catch (error: any) {
       setIntegrityStatus({
@@ -199,9 +196,6 @@ export function ConnectionsManagementTab() {
         message: error?.message || 'Full integrity sync failed',
       });
     } finally {
-      if (fullSyncFileInputRef.current) {
-        fullSyncFileInputRef.current.value = '';
-      }
       setIsFullSyncRunning(false);
     }
   };
@@ -226,23 +220,15 @@ export function ConnectionsManagementTab() {
           className="hidden"
           onChange={(e) => handleShipStationOnlyFileChange(e.target.files?.[0] || null)}
         />
-        <input
-          ref={fullSyncFileInputRef}
-          type="file"
-          accept=".csv,text/csv"
-          className="hidden"
-          onChange={(e) => handleRunFullIntegrity(e.target.files?.[0] || null)}
-        />
-
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Orders Integrity</h2>
-          <p className="text-[9px] font-bold text-gray-500 mt-1">Primary flow: eBay tracking-match sync, ShipStation import, then exception reconciliation</p>
+          <p className="text-[9px] font-bold text-gray-500 mt-1">Primary flow: eBay tracking-match sync, Ecwid exception sync, then exception reconciliation</p>
         </div>
 
         <div className="overflow-x-auto">
           <div className="flex items-center gap-2 whitespace-nowrap min-w-max w-full">
             <button
-              onClick={() => fullSyncFileInputRef.current?.click()}
+              onClick={() => void handleRunFullIntegrity()}
               disabled={isFullSyncRunning || ebaySyncMutation.isPending || exceptionsSyncMutation.isPending || isShipStationSyncing || ecwidExceptionTrackingMutation.isPending}
               className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
             >
@@ -258,20 +244,20 @@ export function ConnectionsManagementTab() {
               {ebaySyncMutation.isPending ? 'Running...' : 'eBay'}
             </button>
             <button
+              onClick={() => ecwidExceptionTrackingMutation.mutate()}
+              disabled={ecwidExceptionTrackingMutation.isPending || isFullSyncRunning}
+              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${ecwidExceptionTrackingMutation.isPending ? 'animate-spin' : ''}`} />
+              {ecwidExceptionTrackingMutation.isPending ? 'Running...' : 'Ecwid'}
+            </button>
+            <button
               onClick={() => exceptionsSyncMutation.mutate()}
               disabled={exceptionsSyncMutation.isPending || isFullSyncRunning}
               className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${exceptionsSyncMutation.isPending ? 'animate-spin' : ''}`} />
               {exceptionsSyncMutation.isPending ? 'Checking...' : 'Exceptions'}
-            </button>
-            <button
-              onClick={() => ecwidExceptionTrackingMutation.mutate()}
-              disabled={ecwidExceptionTrackingMutation.isPending || isFullSyncRunning}
-              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${ecwidExceptionTrackingMutation.isPending ? 'animate-spin' : ''}`} />
-              {ecwidExceptionTrackingMutation.isPending ? 'Running...' : 'Ecwid Tracking'}
             </button>
             <button
               onClick={() => setIsShipStationInfoOpen(true)}

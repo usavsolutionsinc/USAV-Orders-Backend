@@ -113,32 +113,6 @@ export async function POST(req: NextRequest) {
             finalRSNumber = `RS-${String(dbId).padStart(4, '0')}`;
         }
 
-        // Step 3: Sync to Google Sheets RS tab
-        try {
-            await fetch(`${req.nextUrl.origin}/api/google-sheets/append`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sheetId: '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE',
-                    tabName: 'RS',
-                    values: [[
-                        formattedDateTime, // Date/Time
-                        finalRSNumber, // RS #
-                        contactInfo, // Contact Info
-                        productString, // Product Title
-                        price || '130', // Price
-                        issueString, // Issue (repair reasons)
-                        serialNumber || '', // Serial #
-                        '', // OOS what we need (parts)
-                        'Pending Repair' // Status
-                    ]]
-                })
-            });
-        } catch (error) {
-            console.error('Failed to sync to Google Sheets:', error);
-            // Continue even if sheets sync fails
-        }
-
         // Return success with receipt data
         return NextResponse.json({
             success: true,
