@@ -14,6 +14,7 @@ export default defineSchema('orders', [
   { name: 'packer_id', type: 'INTEGER', default: '5' },
   { name: 'notes', type: 'TEXT' },
   { name: 'quantity', type: 'TEXT', default: '1' },
+  { name: 'customer_id', type: 'INTEGER' },
   { name: 'out_of_stock', type: 'TEXT' },
   { name: 'account_source', type: 'TEXT' },
   { name: 'order_date', type: 'TIMESTAMP' },

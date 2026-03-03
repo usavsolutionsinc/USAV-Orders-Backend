@@ -57,6 +57,7 @@ export function DashboardShippedTable({
   useEffect(() => {
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
     };
 
     window.addEventListener('usav-refresh-data' as any, handleRefresh as any);

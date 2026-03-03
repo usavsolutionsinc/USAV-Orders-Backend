@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
         orders: [],
         all_completed: totalPending === 0 
       };
-      await setCachedJson('api:orders-next', cacheLookup, payload, 12, ['orders', 'orders-next']);
+      await setCachedJson('api:orders-next', cacheLookup, payload, 120, ['orders', 'orders-next']);
       return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
         orders: result.rows,
         all_completed: false
       };
-      await setCachedJson('api:orders-next', cacheLookup, payload, 12, ['orders', 'orders-next']);
+      await setCachedJson('api:orders-next', cacheLookup, payload, 120, ['orders', 'orders-next']);
       return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
@@ -168,7 +168,7 @@ export async function GET(req: NextRequest) {
       order: result.rows[0],
       all_completed: false
     };
-    await setCachedJson('api:orders-next', cacheLookup, payload, 12, ['orders', 'orders-next']);
+    await setCachedJson('api:orders-next', cacheLookup, payload, 120, ['orders', 'orders-next']);
     return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
     console.error('Error fetching next order:', error);

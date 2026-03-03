@@ -193,13 +193,6 @@ export default function StationPacking({
             )}
           </AnimatePresence>
 
-          {lastScanType ? (
-            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200">
-              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Last Type</p>
-              <p className="text-lg font-black tracking-tight text-gray-900">{lastScanType}</p>
-            </div>
-          ) : null}
-
           <AnimatePresence mode="wait">
             {activeOrder ? (
               <motion.div

@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
 
         const result = await pool.query(query, params);
 
-        await setCachedJson('api:packerlogs', cacheLookup, result.rows, 30, ['packerlogs']);
+        await setCachedJson('api:packerlogs', cacheLookup, result.rows, 300, ['packerlogs']);
         return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS' } });
     } catch (error: any) {
         console.error('Error fetching packer logs:', error);

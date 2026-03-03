@@ -27,7 +27,7 @@ export function ShippedDetailsPanel({
   context = 'dashboard'
 }: ShippedDetailsPanelProps) {
   const [shipped, setShipped] = useState<ShippedOrder>(initialShipped);
-  const [durationData, setDurationData] = useState<DetailsStackDurationData>({});
+  const [durationData] = useState<DetailsStackDurationData>({});
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
@@ -37,23 +37,6 @@ export function ShippedDetailsPanel({
   useEffect(() => {
     setShipped(initialShipped);
   }, [initialShipped]);
-
-  useEffect(() => {
-    fetchDurations();
-  }, [shipped.id]);
-
-  const fetchDurations = async () => {
-    setDurationData({});
-    try {
-      const res = await fetch(`/api/shipped/durations?orderId=${encodeURIComponent(shipped.order_id)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDurationData(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch durations:', err);
-    }
-  };
 
   const handleCopyAll = () => {
     const allInfo = buildShippedCopyInfo(shipped);

@@ -8,6 +8,7 @@ import { CopyableText } from '../ui/CopyableText';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { useRepairs } from '@/hooks/useRepairs';
 
 // Format phone number to 000-000-0000
 const formatPhoneNumber = (phone: string): string => {
@@ -26,32 +27,12 @@ interface RepairTableProps {
 export function RepairTable({ filter }: RepairTableProps) {
   const searchParams = useSearchParams();
   const search = searchParams.get('search');
-  const [repairs, setRepairs] = useState<RSRecord[]>([]);
   const [selectedRepair, setSelectedRepair] = useState<RSRecord | null>(null);
-  const [loading, setLoading] = useState(true);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchRepairs();
-  }, [search]);
-
-  const fetchRepairs = async () => {
-    try {
-      setLoading(true);
-      const url = search 
-        ? `/api/repair-service?q=${encodeURIComponent(search)}`
-        : '/api/repair-service';
-      const res = await fetch(url);
-      const data = await res.json();
-      setRepairs(data.repairs || []);
-    } catch (error) {
-      console.error('Error fetching repairs:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: repairs = [], isLoading: loading } = useRepairs(search);
 
   const getOrdinal = (n: number) => {
     const s = ["th", "st", "nd", "rd"];
@@ -64,14 +45,11 @@ export function RepairTable({ filter }: RepairTableProps) {
       if (!dateStr) return 'Unknown';
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return dateStr;
-
       const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
       const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
-      
       const dayName = days[date.getDay()];
       const monthName = months[date.getMonth()];
       const dayNum = date.getDate();
-      
       return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
     } catch (e) { return dateStr; }
   };
@@ -84,11 +62,9 @@ export function RepairTable({ filter }: RepairTableProps) {
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollTop } = scrollRef.current;
-
     const headers = scrollRef.current.querySelectorAll('[data-day-header]');
     let activeDate = '';
     let activeCount = 0;
-
     for (let i = 0; i < headers.length; i++) {
       const header = headers[i] as HTMLElement;
       if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
@@ -98,7 +74,6 @@ export function RepairTable({ filter }: RepairTableProps) {
         break;
       }
     }
-
     if (activeDate) setStickyDate(formatDate(activeDate));
     if (activeCount) setCurrentCount(activeCount);
   }, []);
@@ -112,39 +87,24 @@ export function RepairTable({ filter }: RepairTableProps) {
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, repairs]);
 
-  const handleRowClick = (repair: RSRecord) => {
-    setSelectedRepair(repair);
-  };
+  const handleRowClick = (repair: RSRecord) => setSelectedRepair(repair);
+  const handleCloseDetails = () => setSelectedRepair(null);
 
-  const handleCloseDetails = () => {
-    setSelectedRepair(null);
-  };
-
-  const handleUpdate = () => {
-    fetchRepairs();
-  };
   const getLast4 = (value: string | null | undefined) => {
     const raw = String(value || '');
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
   };
 
-  // Filter repairs based on active/done tab
-  const filteredRepairs = repairs.filter(repair => {
-    if (filter === 'done') {
-      return repair.status === 'Done';
-    } else {
-      return repair.status !== 'Done';
-    }
-  });
+  const filteredRepairs = repairs.filter(repair =>
+    filter === 'done' ? repair.status === 'Done' : repair.status !== 'Done'
+  );
 
-  // Group records by date
   const groupedRepairs: { [key: string]: RSRecord[] } = {};
   filteredRepairs.forEach(record => {
     if (!record.date_time) return;
     let date = '';
     try {
-      const dateObj = new Date(record.date_time);
-      date = dateObj.toISOString().split('T')[0];
+      date = new Date(record.date_time).toISOString().split('T')[0];
     } catch (e) { date = 'Unknown'; }
     if (!groupedRepairs[date]) groupedRepairs[date] = [];
     groupedRepairs[date].push(record);
@@ -174,7 +134,7 @@ export function RepairTable({ filter }: RepairTableProps) {
               <div className="flex items-center gap-2 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
                 <Search className="w-3 h-3" />
                 <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
-                <button 
+                <button
                   onClick={() => window.history.pushState({}, '', '/repair')}
                   className="hover:text-orange-900 transition-colors"
                 >
@@ -183,7 +143,7 @@ export function RepairTable({ filter }: RepairTableProps) {
               </div>
             )}
             {selectedRepair && (
-              <button 
+              <button
                 onClick={() => setSelectedRepair(null)}
                 className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
               >
@@ -192,7 +152,7 @@ export function RepairTable({ filter }: RepairTableProps) {
             )}
           </div>
         </div>
-        
+
         {/* Table Content */}
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {loading ? (
@@ -222,7 +182,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([date, records]) => (
                   <div key={date} className="flex flex-col">
-                    <div 
+                    <div
                       data-day-header
                       data-date={date}
                       data-count={records.length}
@@ -232,7 +192,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                       <p className="text-[11px] font-black text-gray-400 uppercase">Total: {records.length} Units</p>
                     </div>
                     {records.map((repair, index) => (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         key={repair.id}
@@ -241,54 +201,45 @@ export function RepairTable({ filter }: RepairTableProps) {
                           selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                         }`}
                       >
-                        {/* 1. Product Title, Issue, Name, Phone, Email & Price */}
                         <div className="flex flex-col min-w-0 gap-1">
-                          {/* Product Title - Large */}
                           <div className="text-[13px] font-black text-gray-900 truncate leading-tight">
                             {repair.product_title || 'Unknown Product'}
                           </div>
-
-                          {/* Issue - second line under product title */}
                           <div className="text-[11px] font-black text-gray-700 truncate leading-tight">
                             {repair.issue || 'No issue specified'}
                           </div>
-                          
-                          {/* Customer Name, Phone, Email & Price - All on one line */}
                           <div className="flex items-center gap-3 mt-0.5">
-                            {/* Price - Green value only */}
                             <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
                               {repair.price ? `$${repair.price}` : '---'}
                             </div>
                             <div className="text-[10px] font-black text-gray-700 truncate uppercase tracking-tight">
                               {(() => {
                                 if (!repair.contact_info) return 'No Name';
-                                const parts = repair.contact_info.split(',').map(p => p.trim());
+                                const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[0] || 'No Name';
                               })()}
                             </div>
                             <div className="text-[9px] font-bold text-gray-500 truncate">
                               {(() => {
                                 if (!repair.contact_info) return '';
-                                const parts = repair.contact_info.split(',').map(p => p.trim());
+                                const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return formatPhoneNumber(parts[1] || '');
                               })()}
                             </div>
                             <div className="text-[8px] font-bold text-gray-900 lowercase truncate">
                               {(() => {
                                 if (!repair.contact_info) return '';
-                                const parts = repair.contact_info.split(',').map(p => p.trim());
+                                const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[2] || '';
                               })()}
                             </div>
                           </div>
                         </div>
-
-                        {/* 2. Ticket # and Actions */}
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-col">
                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
-                            <CopyableText 
-                              text={repair.ticket_number || ''} 
+                            <CopyableText
+                              text={repair.ticket_number || ''}
                               displayText={getLast4(repair.ticket_number)}
                               className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
                               variant="default"
@@ -310,13 +261,13 @@ export function RepairTable({ filter }: RepairTableProps) {
           )}
         </div>
       </div>
-      
+
       <AnimatePresence>
         {selectedRepair && (
-          <RepairDetailsPanel 
+          <RepairDetailsPanel
             repair={selectedRepair}
             onClose={handleCloseDetails}
-            onUpdate={handleUpdate}
+            onUpdate={handleCloseDetails}
           />
         )}
       </AnimatePresence>

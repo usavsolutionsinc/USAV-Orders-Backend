@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
         notes,
         packer_id,
         tester_id,
+        customer_id,
         is_shipped,
         created_at
       FROM orders
@@ -146,7 +147,7 @@ export async function GET(req: NextRequest) {
       weekStart: weekStart || null,
       weekEnd: weekEnd || null,
     };
-    await setCachedJson('api:orders', cacheLookup, payload, 20, ['orders']);
+    await setCachedJson('api:orders', cacheLookup, payload, 300, ['orders']);
     return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
     console.error('Error in GET /api/orders:', error);

@@ -88,34 +88,13 @@ export function ShippedDetailsPanel({
   onUpdate 
 }: ShippedDetailsPanelProps) {
   const [shipped, setShipped] = useState<ShippedOrder>(initialShipped);
-  const [durationData, setDurationData] = useState<DurationData>({});
-  const [isLoadingDurations, setIsLoadingDurations] = useState(false);
+  const [durationData] = useState<DurationData>({});
   const [copiedAll, setCopiedAll] = useState(false);
 
   // Update content when props change
   useEffect(() => {
     setShipped(initialShipped);
   }, [initialShipped]);
-
-  useEffect(() => {
-    fetchDurations();
-  }, [shipped.id]);
-
-  const fetchDurations = async () => {
-    setIsLoadingDurations(true);
-    setDurationData({}); // Clear old data while loading new
-    try {
-      const res = await fetch(`/api/shipped/durations?orderId=${encodeURIComponent(shipped.order_id)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDurationData(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch durations:", err);
-    } finally {
-      setIsLoadingDurations(false);
-    }
-  };
 
   const handleCopyAll = () => {
     const allInfo = buildShippedCopyInfo(shipped);

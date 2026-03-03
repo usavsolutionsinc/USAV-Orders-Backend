@@ -415,12 +415,14 @@ export function DashboardDetailsStack({
                 const previousPackerId = assignedPackerId;
                 const nextTesterId = staffId;
                 const nextPackerId = assignedPackerId;
+                const testerName = testerOptions.find((member) => member.id === staffId)?.name || null;
                 setAssignmentError(null);
                 setAssignedTesterId(staffId);
                 try {
                   await orderAssignmentMutation.mutateAsync({
                     orderId: shipped.id,
                     testerId: staffId,
+                    testerName,
                   });
                   handleLastAssignmentComplete(previousTesterId, previousPackerId, nextTesterId, nextPackerId);
                 } catch (error) {
@@ -435,12 +437,14 @@ export function DashboardDetailsStack({
                 const previousPackerId = assignedPackerId;
                 const nextTesterId = assignedTesterId;
                 const nextPackerId = staffId;
+                const packerName = packerOptions.find((member) => member.id === staffId)?.name || null;
                 setAssignmentError(null);
                 setAssignedPackerId(staffId);
                 try {
                   await orderAssignmentMutation.mutateAsync({
                     orderId: shipped.id,
                     packerId: staffId,
+                    packerName,
                   });
                   handleLastAssignmentComplete(previousTesterId, previousPackerId, nextTesterId, nextPackerId);
                 } catch (error) {

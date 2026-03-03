@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
         count: results.length,
         query
       };
-      await setCachedJson('api:shipped', cacheLookup, payload, 25, ['shipped']);
+      await setCachedJson('api:shipped', cacheLookup, payload, 300, ['shipped']);
       return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
       limit,
       count: shipped.length,
     };
-    await setCachedJson('api:shipped', cacheLookup, payload, 25, ['shipped']);
+    await setCachedJson('api:shipped', cacheLookup, payload, 300, ['shipped']);
     return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
     console.error('Error in GET /api/shipped:', error);

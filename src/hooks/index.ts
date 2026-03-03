@@ -23,3 +23,5 @@ export { useDeleteOrderRow } from './useDeleteOrderRow';
 export type { DeleteOrderRowPayload } from './useDeleteOrderRow';
 export { useStationTestingController, getOrderIdLast4 } from './useStationTestingController';
 export type { ActiveStationOrder, StationThemeColor } from './useStationTestingController';
+export { useUnifiedKeyboard } from './useUnifiedKeyboard';
+export type { UnifiedKeyboardTarget } from './useUnifiedKeyboard';

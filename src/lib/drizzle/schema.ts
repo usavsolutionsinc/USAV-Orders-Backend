@@ -61,6 +61,20 @@ const genericColumns = {
   col15: text('col_15'),
 };
 
+// Customer records used to pair imported orders by order_id, then link orders.customer_id -> customers.id
+export const customers = pgTable('customers', {
+  id: serial('id').primaryKey(),
+  orderId: text('order_id'),
+  customerName: text('customer_name'),
+  shippingAddress1: text('shipping_address_1'),
+  shippingAddress2: text('shipping_address_2'),
+  shippingCity: text('shipping_city'),
+  shippingState: text('shipping_state'),
+  shippingPostalCode: text('shipping_postal_code'),
+  shippingCountry: text('shipping_country'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // Orders table - Updated schema (serial tracking moved to tech_serial_numbers)
 // Packing completion tracking moved to packer_logs table (packed_by, pack_date_time, packer_photos_url)
 export const orders = pgTable('orders', {
@@ -75,6 +89,7 @@ export const orders = pgTable('orders', {
   outOfStock: text('out_of_stock'),
   notes: text('notes'),
   quantity: text('quantity').default('1'),
+  customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   // Assignment tracking (who is assigned to pack) - FK to staff.id
   packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
   // Assignment tracking (who is assigned to test) - FK to staff.id
@@ -184,6 +199,8 @@ export type ReceivingTask = typeof receivingTasks.$inferSelect;
 export type NewReceivingTask = typeof receivingTasks.$inferInsert;
 export type Receiving = typeof receiving.$inferSelect;
 export type NewReceiving = typeof receiving.$inferInsert;
+export type Customer = typeof customers.$inferSelect;
+export type NewCustomer = typeof customers.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
 export type PackerLog = typeof packerLogs.$inferSelect;

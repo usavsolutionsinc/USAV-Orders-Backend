@@ -21,6 +21,7 @@
  * @field packer_id - INTEGER (FK to staff.id - who is assigned)
  * @field notes - TEXT
  * @field quantity - TEXT DEFAULT 1
+ * @field customer_id - INTEGER (FK to customers.id)
  * @field out_of_stock - TEXT
  * @field account_source - TEXT (eBay account, Amazon, etc.)
  * @field order_date - TIMESTAMP
@@ -43,6 +44,7 @@ export interface OrderRecord {
   packer_id: number | null;
   notes: string | null;
   quantity: string | null;
+  customer_id: number | null;
   out_of_stock: string | null;
   account_source: string | null;
   order_date: Date | null;
@@ -82,6 +84,7 @@ export const ORDER_COLUMNS = {
   PACKER_ID: 'packer_id',
   NOTES: 'notes',
   QUANTITY: 'quantity',
+  CUSTOMER_ID: 'customer_id',
   OUT_OF_STOCK: 'out_of_stock',
   ACCOUNT_SOURCE: 'account_source',
   ORDER_DATE: 'order_date',
@@ -97,6 +100,7 @@ export const UPDATABLE_ORDER_FIELDS = [
   ORDER_COLUMNS.NOTES,
   ORDER_COLUMNS.IS_SHIPPED,
   ORDER_COLUMNS.STATUS_HISTORY,
+  ORDER_COLUMNS.CUSTOMER_ID,
   ORDER_COLUMNS.OUT_OF_STOCK,
   ORDER_COLUMNS.QUANTITY,
   ORDER_COLUMNS.CONDITION,

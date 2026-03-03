@@ -11,87 +11,43 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getPackerThemeById, stationThemeColors } from '@/utils/staff-colors';
-
-interface PackerRecord {
-  id: number;
-  pack_date_time: string;
-  shipping_tracking_number: string;
-  packed_by: number;
-  order_id: string | null;
-  product_title: string | null;
-  quantity?: string | null;
-  condition: string | null;
-  sku: string | null;
-  packer_photos_url: any;
-}
+import { usePackerLogs, PackerRecord } from '@/hooks/usePackerLogs';
 
 interface PackerTableProps {
-  packedBy: number; // Filter by packer ID
+  packedBy: number;
 }
 
 export function PackerTable({ packedBy }: PackerTableProps) {
-  const [records, setRecords] = useState<PackerRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { data: records = [], isLoading, isFetching } = usePackerLogs(packedBy);
+  const loading = isLoading && records.length === 0;
+  const isRefreshing = isFetching && !isLoading;
+
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const hasLoadedRef = useRef(false);
   const packerTheme = getPackerThemeById(packedBy);
   const counterColorClass = stationThemeColors[packerTheme].text;
-
-  useEffect(() => {
-    fetchRecords();
-  }, [packedBy]);
-
-  useEffect(() => {
-    const handleRefresh = () => fetchRecords();
-    window.addEventListener('usav-refresh-data', handleRefresh as any);
-    return () => window.removeEventListener('usav-refresh-data', handleRefresh as any);
-  }, [packedBy]);
 
   useEffect(() => {
     const handleOpenDetails = (e: any) => {
       const nextId = Number(e?.detail?.id);
       setSelectedDetailId(Number.isFinite(nextId) ? nextId : null);
     };
-    const handleCloseDetails = () => {
-      setSelectedDetailId(null);
-    };
+    const handleCloseDetails = () => setSelectedDetailId(null);
 
-    window.addEventListener('open-shipped-details' as any, handleOpenDetails as any);
-    window.addEventListener('close-shipped-details' as any, handleCloseDetails as any);
+    window.addEventListener('open-shipped-details', handleOpenDetails as any);
+    window.addEventListener('close-shipped-details', handleCloseDetails as any);
 
     return () => {
-      window.removeEventListener('open-shipped-details' as any, handleOpenDetails as any);
-      window.removeEventListener('close-shipped-details' as any, handleCloseDetails as any);
+      window.removeEventListener('open-shipped-details', handleOpenDetails as any);
+      window.removeEventListener('close-shipped-details', handleCloseDetails as any);
     };
   }, []);
 
-  const fetchRecords = async () => {
-    if (hasLoadedRef.current) {
-      setIsRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-    try {
-      const res = await fetch(`/api/packerlogs?packerId=${packedBy}&limit=5000`, { cache: 'no-store' });
-      const data = await res.json();
-      
-      console.log('Fetched packer records:', data.length || 0);
-      setRecords(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching packer records:', error);
-    } finally {
-      hasLoadedRef.current = true;
-      setIsRefreshing(false);
-      setLoading(false);
-    }
-  };
-
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
+
   const openDetails = (record: PackerRecord) => {
     const detail: ShippedOrder & { packer_log_id?: number } = {
       id: record.id,
@@ -130,23 +86,20 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
     setSelectedDetailId(detailId);
   };
+
   const getLast4 = (value: string | null | undefined) => {
     const raw = String(value || '');
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
   };
 
-  const formatHeaderDate = () => {
-    return formatDate(getCurrentPSTDateKey());
-  };
+  const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollTop } = scrollRef.current;
-
     const headers = scrollRef.current.querySelectorAll('[data-day-header]');
     let activeDate = '';
     let activeCount = 0;
-
     for (let i = 0; i < headers.length; i++) {
       const header = headers[i] as HTMLElement;
       if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
@@ -156,7 +109,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
         break;
       }
     }
-
     if (activeDate) setStickyDate(formatDate(activeDate));
     if (activeCount) setCurrentCount(activeCount);
   }, []);
@@ -170,23 +122,20 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, records]);
 
-  // Group records by date (using pack_date_time)
+  // Group records by date
   const groupedRecords: { [key: string]: PackerRecord[] } = {};
   records.forEach(record => {
     if (!record.pack_date_time) return;
-    
     let date = '';
     try {
       date = toPSTDateKey(record.pack_date_time) || 'Unknown';
     } catch (e) {
       date = 'Unknown';
     }
-    
     if (!groupedRecords[date]) groupedRecords[date] = [];
     groupedRecords[date].push(record);
   });
 
-  // Calculate week date range based on weekOffset (Monday-Friday only)
   const getWeekRange = () => {
     const todayPst = getCurrentPSTDateKey();
     const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
@@ -196,11 +145,9 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     const monday = new Date(now);
     monday.setDate(now.getDate() - daysFromMonday - (weekOffset * 7));
     monday.setHours(0, 0, 0, 0);
-
     const friday = new Date(monday);
     friday.setDate(monday.getDate() + 4);
     friday.setHours(23, 59, 59, 999);
-
     return {
       start: monday,
       end: friday,
@@ -211,16 +158,13 @@ export function PackerTable({ packedBy }: PackerTableProps) {
 
   const weekRange = getWeekRange();
   const filteredGroupedRecords = Object.fromEntries(
-    Object.entries(groupedRecords).filter(([date]) => {
-      return date >= weekRange.startStr && date <= weekRange.endStr;
-    })
+    Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
   );
 
-  const getWeekCount = () => {
-    return Object.values(filteredGroupedRecords).reduce((sum, records) => sum + records.length, 0);
-  };
+  const getWeekCount = () =>
+    Object.values(filteredGroupedRecords).reduce((sum, recs) => sum + recs.length, 0);
 
-  if (loading && records.length === 0) {
+  if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -238,9 +182,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
           <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
         </div>
       )}
-      {/* Main table container */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Sticky header */}
         <WeekHeader
           stickyDate={stickyDate}
           fallbackDate={formatHeaderDate()}
@@ -252,8 +194,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
           onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
           formatDate={formatDate}
         />
-        
-        {/* Logs List */}
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {Object.keys(filteredGroupedRecords).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
@@ -264,80 +204,72 @@ export function PackerTable({ packedBy }: PackerTableProps) {
               {Object.entries(filteredGroupedRecords)
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, dateRecords]) => {
-                  // Sort records within each day by pack_date_time (latest first)
                   const sortedRecords = [...dateRecords].sort((a, b) => {
                     const timeA = new Date(a.pack_date_time || 0).getTime();
                     const timeB = new Date(b.pack_date_time || 0).getTime();
                     return timeB - timeA;
                   });
-                  
                   return (
-                  <div key={date} className="flex flex-col">
-                    <div 
-                      data-day-header
-                      data-date={date}
-                      data-count={dateRecords.length}
-                      className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
-                    >
-                      <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                      <p className="text-[11px] font-black text-gray-400 uppercase">Total: {dateRecords.length} Units</p>
+                    <div key={date} className="flex flex-col">
+                      <div
+                        data-day-header
+                        data-date={date}
+                        data-count={dateRecords.length}
+                        className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
+                      >
+                        <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
+                        <p className="text-[11px] font-black text-gray-400 uppercase">Total: {dateRecords.length} Units</p>
+                      </div>
+                      {sortedRecords.map((record, index) => {
+                        const displayValues = getOrderDisplayValues({
+                          sku: record.sku,
+                          condition: record.condition,
+                          trackingNumber: record.shipping_tracking_number,
+                        });
+                        return (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            key={record.id}
+                            onClick={() => openDetails(record)}
+                            className={`grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
+                              index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+                            }`}
+                          >
+                            <div className="flex flex-col min-w-0">
+                              <div className="text-[11px] font-bold text-gray-900 truncate">
+                                {record.product_title || 'Unknown Product'}
+                              </div>
+                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
+                                <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
+                                  {parseInt(String(record.quantity || '1'), 10) || 1}
+                                </span> • {displayValues.condition || 'No Condition'} • {displayValues.sku || 'No SKU'}
+                              </div>
+                            </div>
+                            <div className="flex items-start justify-end gap-1.5">
+                              <div className="flex flex-col w-[94px]">
+                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
+                                <CopyableText
+                                  text={record.order_id || 'N/A'}
+                                  displayText={getLast4(record.order_id)}
+                                  className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
+                                  variant="order"
+                                />
+                              </div>
+                              <div className="flex flex-col w-[94px]">
+                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
+                                <CopyableText
+                                  text={record.shipping_tracking_number || ''}
+                                  displayText={getLast4(record.shipping_tracking_number)}
+                                  className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
+                                  variant="tracking"
+                                />
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                     </div>
-                    {sortedRecords.map((record, index) => {
-                      const displayValues = getOrderDisplayValues({
-                        sku: record.sku,
-                        condition: record.condition,
-                        trackingNumber: record.shipping_tracking_number,
-                      });
-
-                      return (
-                        <motion.div 
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          key={record.id}
-                          onClick={() => openDetails(record)}
-                          className={`grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
-                            index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
-                          }`}
-                        >
-                          {/* 1. Product Title & Condition */}
-                          <div className="flex flex-col min-w-0">
-                            <div className="text-[11px] font-bold text-gray-900 truncate">
-                              {record.product_title || 'Unknown Product'}
-                            </div>
-                            <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
-                              <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
-                                {parseInt(String(record.quantity || '1'), 10) || 1}
-                              </span> • {displayValues.condition || 'No Condition'} • {displayValues.sku || 'No SKU'}
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-start justify-end gap-1.5">
-                            {/* 2. Order ID */}
-                            <div className="flex flex-col w-[94px]">
-                              <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
-                              <CopyableText 
-                                text={record.order_id || 'N/A'}
-                                displayText={getLast4(record.order_id)}
-                                className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
-                                variant="order"
-                              />
-                            </div>
-                            
-                            {/* 3. Tracking Number */}
-                            <div className="flex flex-col w-[94px]">
-                              <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
-                              <CopyableText 
-                                text={record.shipping_tracking_number || ''}
-                                displayText={getLast4(record.shipping_tracking_number)}
-                                className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
-                                variant="tracking"
-                              />
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
                   );
                 })}
             </div>

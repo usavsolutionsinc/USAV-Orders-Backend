@@ -1,37 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllRepairs, updateRepairStatus, updateRepairNotes, updateRepairField, searchRepairs } from '@/lib/neon/repair-service-queries';
+import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+
+const REPAIR_CACHE_NS = 'api:repair-service';
+const REPAIR_TTL = 300;
+const REPAIR_TAGS = ['repair-service'];
 
 /**
- * GET /api/rs - Fetch all repairs (paginated) or search
+ * GET /api/repair-service - Fetch all repairs (paginated) or search
  */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('q');
-    
-    if (query) {
-      const repairs = await searchRepairs(query);
-      return NextResponse.json({
-        repairs,
-        count: repairs.length,
-        query
-      });
-    }
-
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = (page - 1) * limit;
+    const cacheLookup = createCacheLookupKey({ query: query || '', page, limit });
 
+    const cached = await getCachedJson<any>(REPAIR_CACHE_NS, cacheLookup);
+    if (cached) {
+      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+    }
+
+    if (query) {
+      const repairs = await searchRepairs(query);
+      const payload = { repairs, count: repairs.length, query };
+      await setCachedJson(REPAIR_CACHE_NS, cacheLookup, payload, REPAIR_TTL, REPAIR_TAGS);
+      return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
+    }
+
+    const offset = (page - 1) * limit;
     const repairs = await getAllRepairs(limit, offset);
-    
-    return NextResponse.json({
-      repairs,
-      page,
-      limit,
-      count: repairs.length,
-    });
+    const payload = { repairs, page, limit, count: repairs.length };
+    await setCachedJson(REPAIR_CACHE_NS, cacheLookup, payload, REPAIR_TTL, REPAIR_TAGS);
+    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
-    console.error('Error in GET /api/rs:', error);
+    console.error('Error in GET /api/repair-service:', error);
     return NextResponse.json(
       { error: 'Failed to fetch repairs', details: error.message },
       { status: 500 }
@@ -40,7 +44,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * PATCH /api/rs - Update status or fields
+ * PATCH /api/repair-service - Update status or fields, then invalidate cache
  */
 export async function PATCH(req: NextRequest) {
   try {
@@ -48,30 +52,23 @@ export async function PATCH(req: NextRequest) {
     const { id, status, notes, field, value } = body;
 
     if (!id) {
-      return NextResponse.json(
-        { error: 'ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
     }
 
-    // Update status if provided
     if (status) {
       await updateRepairStatus(id, status);
     }
-
-    // Update notes if provided
     if (notes !== undefined) {
       await updateRepairNotes(id, notes);
     }
-
-    // Update generic field if provided
     if (field && value !== undefined) {
       await updateRepairField(id, field, value);
     }
 
+    await invalidateCacheTags(REPAIR_TAGS);
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Error in PATCH /api/rs:', error);
+    console.error('Error in PATCH /api/repair-service:', error);
     return NextResponse.json(
       { error: 'Failed to update repair', details: error.message },
       { status: 500 }

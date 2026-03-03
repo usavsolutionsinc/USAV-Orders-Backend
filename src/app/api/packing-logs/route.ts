@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { classifyScan } from '@/utils/packer';
 import { normalizeSku } from '@/utils/sku';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
 export async function GET(req: NextRequest) {
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
             trackingType: log.tracking_type || '',
         }));
 
-        await setCachedJson('api:packing-logs', cacheLookup, formattedLogs, 30, ['packing-logs', 'packerlogs']);
+        await setCachedJson('api:packing-logs', cacheLookup, formattedLogs, 300, ['packing-logs', 'packerlogs']);
         return NextResponse.json(formattedLogs, { headers: { 'x-cache': 'MISS' } });
     } catch (error: any) {
         console.error('Error fetching packing logs:', error);
@@ -130,8 +130,8 @@ export async function POST(req: NextRequest) {
         const staffName = staffNameResult.rows[0]?.name || fallbackPackerName;
 
         if (classification.trackingType === 'ORDERS') {
-            const trackingKey18 = normalizeTrackingKey18(scanInput);
-            if (!trackingKey18) {
+            const trackingLast8 = normalizeTrackingLast8(scanInput);
+            if (!trackingLast8 || trackingLast8.length < 8) {
                 return NextResponse.json({ error: 'Invalid tracking number' }, { status: 400 });
             }
             const orderLookup = await pool.query(
@@ -139,10 +139,10 @@ export async function POST(req: NextRequest) {
                  FROM orders
                  WHERE shipping_tracking_number IS NOT NULL
                    AND shipping_tracking_number != ''
-                   AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+                   AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
                  ORDER BY id DESC
                  LIMIT 1`,
-                [trackingKey18]
+                [trackingLast8]
             );
 
             if (orderLookup.rows.length === 0) {

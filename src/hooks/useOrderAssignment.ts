@@ -7,6 +7,8 @@ export type OrderAssignPayload = {
   orderIds?: number[];
   testerId?: number | null;
   packerId?: number | null;
+  testerName?: string | null;
+  packerName?: string | null;
   shipByDate?: string | null;
   outOfStock?: string | null;
   notes?: string | null;
@@ -34,11 +36,19 @@ export function useOrderAssignment() {
         next.tester_id = payload.testerId;
         next.tested_by = payload.testerId;
         next.testerId = payload.testerId;
+        if (payload.testerName !== undefined) {
+          next.tested_by_name = payload.testerName;
+          next.tester_name = payload.testerName;
+        }
       }
       if (payload.packerId !== undefined) {
         next.packer_id = payload.packerId;
         next.packed_by = payload.packerId;
         next.packerId = payload.packerId;
+        if (payload.packerName !== undefined) {
+          next.packed_by_name = payload.packerName;
+          next.packer_name = payload.packerName;
+        }
       }
       if (payload.shipByDate !== undefined) {
         next.ship_by_date = payload.shipByDate;
@@ -100,7 +110,7 @@ export function useOrderAssignment() {
       return data;
     },
     onMutate: async (payload) => {
-      const keysToPatch = [['orders'], ['shipped']];
+      const keysToPatch = [['orders'], ['shipped'], ['dashboard-table']];
       const snapshots: Array<{ key: readonly unknown[]; data: any }> = [];
 
       keysToPatch.forEach((key) => {
@@ -127,6 +137,8 @@ export function useOrderAssignment() {
             orderIds,
             testerId: payload.testerId,
             packerId: payload.packerId,
+            testerName: payload.testerName,
+            packerName: payload.packerName,
             shipByDate: payload.shipByDate,
             outOfStock: payload.outOfStock,
             notes: payload.notes,

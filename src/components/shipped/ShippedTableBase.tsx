@@ -13,6 +13,7 @@ import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { DateGroupHeader } from './DateGroupHeader';
+import { useShippedTableData } from '@/hooks/useShippedTableData';
 
 export interface ShippedTableBaseProps {
   packedBy?: number; // Filter by packer ID
@@ -54,114 +55,35 @@ export function ShippedTableBase({
   const { getStaffName } = useStaffNameMap();
   const searchParams = useSearchParams();
   const search = searchParams.get('search') || '';
-  const [shipped, setShipped] = useState<ShippedOrder[]>([]);
   const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
-  const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = previous week, etc.
+  const [weekOffset, setWeekOffset] = useState(0);
   const [dashboardSearch, setDashboardSearch] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
-  const hasLoadedRef = useRef(false);
   const { normalizeTrackingQuery } = useLast8TrackingSearch();
   const activeSearch = ordersOnly ? dashboardSearch : search;
 
-  const fetchShipped = useCallback(async () => {
-    if (hasLoadedRef.current) {
-      setIsRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-    try {
-      const url = (() => {
-        if (!ordersOnly) {
-          return search
-            ? `/api/shipped?q=${encodeURIComponent(search)}`
-            : '/api/shipped?limit=5000';
-        }
+  const weekRange = getWeekRangeForOffset(weekOffset);
 
-        const params = new URLSearchParams();
-        const weekRange = getWeekRangeForOffset(weekOffset);
-        params.set('weekStart', weekRange.startStr);
-        params.set('weekEnd', weekRange.endStr);
-
-        if (activeSearch.trim()) params.set('q', activeSearch.trim());
-        if (missingTrackingOnly) params.set('missingTrackingOnly', 'true');
-        if (packedBy !== undefined) params.set('packedBy', String(packedBy));
-        if (testedBy !== undefined) params.set('testedBy', String(testedBy));
-        return `/api/orders?${params.toString()}`;
-      })();
-      const res = await fetch(url, { cache: 'no-store' });
-      const data = await res.json();
-      
-      let records = data.results || data.shipped || [];
-      if (ordersOnly) {
-        records = (data.orders || []).map((order: any) => ({
-          ...order,
-          pack_date_time: order.ship_by_date || null,
-          packed_by: order.packer_id ?? null,
-          tested_by: order.tester_id ?? null,
-          serial_number: '',
-          condition: order.condition || '',
-        }));
-      }
-
-      if (missingTrackingOnly) {
-        records = records.filter((record: any) => {
-          const tracking = String(record.shipping_tracking_number || '').trim();
-          return tracking.length === 0;
-        });
-      }
-
-      // Apply client-side filters if provided
-      if (packedBy !== undefined) {
-        records = records.filter((record: ShippedOrder) => record.packed_by === packedBy);
-      }
-      if (testedBy !== undefined) {
-        records = records.filter((record: ShippedOrder) => record.tested_by === testedBy);
-      }
-      
-      console.log('Fetched shipped records:', records.length);
-      if (records.length > 0) {
-        console.log('First record date:', records[0].pack_date_time);
-        console.log('Last record date:', records[records.length - 1].pack_date_time);
-      }
-      setShipped(records);
-    } catch (error) {
-      console.error('Error fetching shipped records:', error);
-    } finally {
-      hasLoadedRef.current = true;
-      setIsRefreshing(false);
-      setLoading(false);
-    }
-  }, [
-    search,
+  const { data: queryData, isLoading, isFetching } = useShippedTableData({
+    search: activeSearch,
     packedBy,
     testedBy,
     ordersOnly,
     missingTrackingOnly,
-    activeSearch,
     weekOffset,
-  ]);
+    weekRange: ordersOnly ? weekRange : undefined,
+  });
+
+  // Local copy allows optimistic row-level patches without refetching
+  const [shipped, setShipped] = useState<ShippedOrder[]>([]);
+  const loading = isLoading && shipped.length === 0;
+  const isRefreshing = isFetching && !isLoading;
 
   useEffect(() => {
-    fetchShipped();
-  }, [fetchShipped]);
-
-  useEffect(() => {
-    const handleRefresh = () => {
-      fetchShipped();
-    };
-
-    window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
-    window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
-
-    return () => {
-      window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
-      window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
-    };
-  }, [fetchShipped]);
+    if (queryData) setShipped(queryData);
+  }, [queryData]);
 
   useEffect(() => {
     const applyRowPatch = (row: any, detail: any) => {
@@ -209,7 +131,7 @@ export function ShippedTableBase({
     return () => {
       window.removeEventListener('dashboard-search' as any, handleDashboardSearch as any);
     };
-  }, [ordersOnly, fetchShipped]);
+  }, [ordersOnly]);
 
   const normalizedSearch = activeSearch ? normalizeTrackingQuery(activeSearch) : '';
 
@@ -341,7 +263,6 @@ export function ShippedTableBase({
   };
 
   // Filter grouped data by current week (all data is weekdays, so no need to filter by day of week)
-  const weekRange = getWeekRangeForOffset(weekOffset);
   const shouldBypassWeekFilter = Boolean(activeSearch);
   const filteredGroupedShipped = shouldBypassWeekFilter
     ? groupedShipped

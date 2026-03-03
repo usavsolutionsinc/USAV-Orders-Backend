@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
             LIMIT $2 OFFSET $3
         `, [staffId, limit, offset]);
 
-        await setCachedJson('api:tech-logs', cacheLookup, result.rows, 20, ['tech-logs']);
+        await setCachedJson('api:tech-logs', cacheLookup, result.rows, 300, ['tech-logs']);
         return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS' } });
     } catch (error: any) {
         console.error('Error fetching tech logs:', error);
