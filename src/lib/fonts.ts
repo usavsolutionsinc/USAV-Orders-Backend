@@ -1,8 +1,7 @@
-import { DM_Sans } from 'next/font/google';
-
-export const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
-  display: 'swap',
-});
-
+export const dmSans = {
+  className: 'font-sans',
+  variable: '--font-dm-sans',
+  style: {
+    fontFamily: '"DM Sans", ui-sans-serif, system-ui, sans-serif',
+  },
+};
