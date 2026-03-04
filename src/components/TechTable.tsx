@@ -17,7 +17,7 @@ interface TechTableProps {
 }
 
 export function TechTable({ testedBy }: TechTableProps) {
-  const { data: records = [], isLoading, isPreviousData, isFetching } = useTechLogs(testedBy);
+  const { data: records = [], isLoading, isFetching } = useTechLogs(testedBy);
   const loading = isLoading && records.length === 0;
   const isRefreshing = isFetching && !isLoading;
 

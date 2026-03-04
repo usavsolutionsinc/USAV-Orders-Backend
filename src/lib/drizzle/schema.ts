@@ -63,7 +63,7 @@ const genericColumns = {
 
 // Customer records used to pair imported orders by order_id, then link orders.customer_id -> customers.id
 export const customers = pgTable('customers', {
-  id: serial('id').primaryKey(),
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   orderId: text('order_id'),
   customerName: text('customer_name'),
   shippingAddress1: text('shipping_address_1'),
@@ -71,7 +71,6 @@ export const customers = pgTable('customers', {
   shippingCity: text('shipping_city'),
   shippingState: text('shipping_state'),
   shippingPostalCode: text('shipping_postal_code'),
-  shippingCountry: text('shipping_country'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -137,7 +136,7 @@ export const skuStock = pgTable('sku_stock', {
 });
 export const sku = pgTable('sku', {
   id: serial('id').primaryKey(),
-  dateTime: text('date_time'),
+  dateTime: timestamp('date_time'),
   staticSku: text('static_sku'),
   serialNumber: text('serial_number'),
   shippingTrackingNumber: text('shipping_tracking_number'),

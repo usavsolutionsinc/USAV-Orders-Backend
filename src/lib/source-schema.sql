@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS sku_stock (
 -- 12. SKU TABLE
 CREATE TABLE IF NOT EXISTS sku (
     id SERIAL PRIMARY KEY,
-    date_time TEXT,
+    date_time TIMESTAMP,
     static_sku TEXT,
     serial_number TEXT,
     shipping_tracking_number TEXT,

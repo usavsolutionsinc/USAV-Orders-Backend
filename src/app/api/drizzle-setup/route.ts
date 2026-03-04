@@ -132,7 +132,24 @@ export async function POST() {
         `);
         tables.push('receiving_tasks');
 
-        // 7-19. Source of truth tables
+        // 7. Customers table
+        console.log('Creating customers table...');
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS customers (
+                id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                order_id TEXT,
+                customer_name TEXT,
+                shipping_address_1 TEXT,
+                shipping_address_2 TEXT,
+                shipping_city TEXT,
+                shipping_state TEXT,
+                shipping_postal_code TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        tables.push('customers');
+
+        // 8-20. Source of truth tables
         console.log('Creating source of truth tables...');
         
         // Orders
@@ -246,7 +263,7 @@ export async function POST() {
         await client.query(`
             CREATE TABLE IF NOT EXISTS sku (
                 id SERIAL PRIMARY KEY,
-                date_time TEXT,
+                date_time TIMESTAMP,
                 static_sku TEXT,
                 serial_number TEXT,
                 shipping_tracking_number TEXT,
@@ -383,7 +400,7 @@ export async function GET() {
 
         const expectedTables = [
             'staff', 'task_templates', 'daily_task_instances', 
-            'receiving_tasks', 'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
+            'receiving_tasks', 'customers', 'orders', 'tech_1', 'tech_2', 'tech_3', 'tech_4',
             'packer_1', 'packer_2', 'packer_3', 'receiving', 'shipped', 'sku_stock', 
             'sku', 'repair_service', 'packing_logs'
         ];
