@@ -12,6 +12,8 @@ interface ActiveStationOrderCardProps {
   activeColorTextClass: string;
   resolvedManual: ResolvedProductManual | null;
   isManualLoading: boolean;
+  onViewManual?: () => void;
+  onSaveManual: (params: { googleLinkOrFileId: string; type?: string | null }) => Promise<{ success: boolean; error?: string }>;
 }
 
 export default function ActiveStationOrderCard({
@@ -19,7 +21,11 @@ export default function ActiveStationOrderCard({
   activeColorTextClass,
   resolvedManual,
   isManualLoading,
+  onViewManual,
+  onSaveManual,
 }: ActiveStationOrderCardProps) {
+  const [isSavingManual, setIsSavingManual] = React.useState(false);
+
   const handleOpenManual = () => {
     if (!resolvedManual?.viewUrl) return;
     window.open(resolvedManual.viewUrl, '_blank', 'noopener,noreferrer');
@@ -28,6 +34,21 @@ export default function ActiveStationOrderCard({
   const handlePrintManual = () => {
     if (!resolvedManual?.downloadUrl) return;
     window.open(resolvedManual.downloadUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleAddOrChangeManual = async () => {
+    const linkOrId = window.prompt('Paste Google Drive view-only link (or file ID):');
+    if (!linkOrId) return;
+    const type = window.prompt('Type (e.g. Product Manual, Packing List):', resolvedManual?.type || 'Product Manual');
+
+    setIsSavingManual(true);
+    const result = await onSaveManual({ googleLinkOrFileId: linkOrId, type: type || null });
+    setIsSavingManual(false);
+    if (!result.success) {
+      window.alert(result.error || 'Failed to save manual');
+      return;
+    }
+    window.alert('Manual saved.');
   };
 
   return (
@@ -105,6 +126,7 @@ export default function ActiveStationOrderCard({
         </div>
       )}
 
+      {activeOrder.orderFound !== false && (
       <div className="rounded-2xl p-4 border border-blue-100 bg-blue-50/40 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -120,12 +142,29 @@ export default function ActiveStationOrderCard({
               </p>
             )}
           </div>
-          {isManualLoading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
+          <div className="flex items-center gap-2">
+            {isManualLoading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
+            <button
+              type="button"
+              onClick={handleAddOrChangeManual}
+              disabled={isSavingManual}
+              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border border-blue-200 bg-white hover:bg-blue-50 text-[10px] font-black uppercase tracking-wider text-blue-700 disabled:opacity-60"
+            >
+              {isSavingManual ? 'Saving...' : resolvedManual ? 'Change Manual' : 'Add Manual'}
+            </button>
+          </div>
         </div>
 
         {resolvedManual && (
           <>
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onViewManual}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider"
+              >
+                View Panel
+              </button>
               <button
                 type="button"
                 onClick={handleOpenManual}
@@ -156,6 +195,7 @@ export default function ActiveStationOrderCard({
           </>
         )}
       </div>
+      )}
     </motion.div>
   );
 }

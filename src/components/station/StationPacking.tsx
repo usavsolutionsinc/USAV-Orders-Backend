@@ -103,6 +103,12 @@ export default function StationPacking({
 
       setInputValue('');
       onComplete?.();
+
+      // Surgical insert: fire a targeted event so PackerTable can prepend the new
+      // row via setQueryData without invalidating/re-fetching the whole list.
+      if (data.packerRecord?.id) {
+        window.dispatchEvent(new CustomEvent('packer-log-added', { detail: data.packerRecord }));
+      }
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (err: any) {
       setErrorMessage(err?.message || 'Packing scan failed');

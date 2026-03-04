@@ -5,6 +5,49 @@ import { normalizeSku } from '@/utils/sku';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+import { formatPSTTimestamp } from '@/lib/timezone';
+
+/** Compute Mon–Fri PST week range from the current server time. */
+function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
+    const ts = formatPSTTimestamp();
+    const dateKey = ts.substring(0, 10);
+    const [year, month, day] = dateKey.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    const dow = date.getDay();
+    const daysFromMonday = dow === 0 ? 6 : dow - 1;
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - daysFromMonday);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { startStr: fmt(monday), endStr: fmt(friday) };
+}
+
+/**
+ * Prepend a single new PackerRecord to the current week's Redis cache for this
+ * packer (keyed by staffId + week) without invalidating the whole list.
+ */
+async function prependToPackerLogsCache(staffId: number, newRecord: Record<string, unknown>) {
+    const { startStr, endStr } = getCurrentPSTWeekRange();
+    const cacheKey = createCacheLookupKey({
+        packerId: String(staffId),
+        limit: 1000,
+        offset: 0,
+        weekStart: startStr,
+        weekEnd: endStr,
+    });
+    const existing = await getCachedJson<any[]>('api:packerlogs', cacheKey);
+    if (Array.isArray(existing)) {
+        await setCachedJson(
+            'api:packerlogs',
+            cacheKey,
+            [newRecord, ...existing].slice(0, 1000),
+            120,
+            ['packerlogs'],
+        );
+    }
+}
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -135,7 +178,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Invalid tracking number' }, { status: 400 });
             }
             const orderLookup = await pool.query(
-                `SELECT id, order_id, shipping_tracking_number, product_title, condition
+                `SELECT id, order_id, shipping_tracking_number, product_title, condition, quantity, sku
                  FROM orders
                  WHERE shipping_tracking_number IS NOT NULL
                    AND shipping_tracking_number != ''
@@ -155,7 +198,7 @@ export async function POST(req: NextRequest) {
                     notes: 'Packer scan: tracking not found in orders',
                 });
 
-                await pool.query(`
+                const notFoundInsert = await pool.query(`
                     INSERT INTO packer_logs (
                         shipping_tracking_number,
                         tracking_type,
@@ -163,9 +206,25 @@ export async function POST(req: NextRequest) {
                         packed_by,
                         packer_photos_url
                     ) VALUES ($1, $2, $3, $4, $5::jsonb)
+                    RETURNING id, pack_date_time::text
                 `, [scanInput, classification.trackingType, packDateTime, staffId, photosJsonb]);
 
-                await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
+                const notFoundRecord = {
+                    id: notFoundInsert.rows[0]?.id ?? null,
+                    pack_date_time: notFoundInsert.rows[0]?.pack_date_time ?? packDateTime,
+                    shipping_tracking_number: scanInput,
+                    packed_by: staffId,
+                    order_id: null,
+                    product_title: null,
+                    condition: null,
+                    quantity: null,
+                    sku: null,
+                    packer_photos_url: [],
+                };
+
+                await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
+                if (notFoundRecord.id) await prependToPackerLogsCache(staffId, notFoundRecord);
+
                 return NextResponse.json({
                     success: true,
                     warning: 'Order not found in orders. Added to exceptions queue.',
@@ -173,7 +232,8 @@ export async function POST(req: NextRequest) {
                     shippingTrackingNumber: scanInput,
                     packedBy: staffId,
                     packDateTime,
-                    photosCount: Array.isArray(photos) ? photos.length : 0
+                    packerRecord: notFoundRecord,
+                    photosCount: Array.isArray(photos) ? photos.length : 0,
                 });
             }
 
@@ -188,7 +248,7 @@ export async function POST(req: NextRequest) {
                 AND is_shipped = false
             `, [staffId, order.id]);
 
-            await pool.query(`
+            const foundInsert = await pool.query(`
                 INSERT INTO packer_logs (
                     shipping_tracking_number,
                     tracking_type,
@@ -196,9 +256,25 @@ export async function POST(req: NextRequest) {
                     packed_by,
                     packer_photos_url
                 ) VALUES ($1, $2, $3, $4, $5::jsonb)
+                RETURNING id, pack_date_time::text
             `, [order.shipping_tracking_number, classification.trackingType, packDateTime, staffId, photosJsonb]);
 
-            await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
+            const foundRecord = {
+                id: foundInsert.rows[0]?.id ?? null,
+                pack_date_time: foundInsert.rows[0]?.pack_date_time ?? packDateTime,
+                shipping_tracking_number: order.shipping_tracking_number,
+                packed_by: staffId,
+                order_id: order.order_id ?? null,
+                product_title: order.product_title ?? null,
+                condition: order.condition ?? null,
+                quantity: order.quantity ?? null,
+                sku: order.sku ?? null,
+                packer_photos_url: [],
+            };
+
+            await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
+            if (foundRecord.id) await prependToPackerLogsCache(staffId, foundRecord);
+
             return NextResponse.json({
                 success: true,
                 trackingType: classification.trackingType,
@@ -208,13 +284,14 @@ export async function POST(req: NextRequest) {
                 shippingTrackingNumber: order.shipping_tracking_number,
                 packedBy: staffId,
                 packDateTime,
+                packerRecord: foundRecord,
                 photosCount: Array.isArray(photos) ? photos.length : 0,
-                message: 'Order packed successfully'
+                message: 'Order packed successfully',
             });
         }
 
         // Non-order scans: write only to packer_logs
-        await pool.query(`
+        const nonOrderInsert = await pool.query(`
             INSERT INTO packer_logs (
                 shipping_tracking_number,
                 tracking_type,
@@ -222,7 +299,20 @@ export async function POST(req: NextRequest) {
                 packed_by,
                 packer_photos_url
             ) VALUES ($1, $2, $3, $4, $5::jsonb)
+            RETURNING id, pack_date_time::text
         `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId, photosJsonb]);
+        const nonOrderRecord = {
+            id: nonOrderInsert.rows[0]?.id ?? null,
+            pack_date_time: nonOrderInsert.rows[0]?.pack_date_time ?? packDateTime,
+            shipping_tracking_number: classification.normalizedInput,
+            packed_by: staffId,
+            order_id: null,
+            product_title: null,
+            condition: null,
+            quantity: null,
+            sku: null,
+            packer_photos_url: [],
+        };
 
         let skuUpdated = false;
         if (classification.trackingType === 'SKU' && classification.skuBase) {
@@ -256,15 +346,18 @@ export async function POST(req: NextRequest) {
             skuUpdated = true;
         }
 
-        await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
+        await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
+        if (nonOrderRecord.id) await prependToPackerLogsCache(staffId, nonOrderRecord);
+
         return NextResponse.json({
             success: true,
             trackingType: classification.trackingType,
             shippingTrackingNumber: classification.normalizedInput,
             packedBy: staffId,
             packDateTime,
+            packerRecord: nonOrderRecord,
             photosCount: Array.isArray(photos) ? photos.length : 0,
-            skuUpdated
+            skuUpdated,
         });
     } catch (error: any) {
         console.error('Error updating order:', error);

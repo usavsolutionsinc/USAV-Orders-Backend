@@ -416,11 +416,18 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </motion.div>
       ) : orders.length === 0 ? (
         <div className="space-y-3">
-          <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200 text-center">
-            <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-              {activeTab === 'stock' ? 'No out-of-stock orders' : 'No current orders'}
-            </p>
+          <div className="bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200">
+            {activeTab === 'stock' ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No out-of-stock orders</p>
+                <Package className="w-5 h-5 text-gray-300 flex-shrink-0" />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No current orders</p>
+                <Package className="w-5 h-5 text-gray-300 flex-shrink-0" />
+              </div>
+            )}
           </div>
         </div>
       ) : (

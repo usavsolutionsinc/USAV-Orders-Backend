@@ -19,6 +19,7 @@ interface StationTestingProps {
   goal?: number;
   onComplete?: () => void;
   embedded?: boolean;
+  onViewManual?: () => void;
 }
 
 export default function StationTesting({
@@ -32,6 +33,7 @@ export default function StationTesting({
   goal = 50,
   onComplete,
   embedded = false,
+  onViewManual,
 }: StationTestingProps) {
   const router = useRouter();
   const safeGoal = Math.max(1, Number(goal) || 1);
@@ -54,6 +56,7 @@ export default function StationTesting({
     triggerGlobalRefresh,
     activeColor,
     clearFeedback,
+    saveManual,
   } = useStationTestingController({
     userId,
     onComplete,
@@ -67,7 +70,7 @@ export default function StationTesting({
   return (
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 pb-2 space-y-4">
+        <div className="p-4 pb-1 space-y-2">
           <div className="space-y-0.5">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
@@ -86,7 +89,7 @@ export default function StationTesting({
             </div>
           </div>
 
-          <div className="space-y-2 px-1">
+          <div className="space-y-1.5 px-1">
             <div className="flex items-center justify-between">
               <p className={`text-[9px] font-black ${activeColor.text} tabular-nums`}>{todayCount}/{safeGoal} - TODAYS'S GOAL </p>
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{remainingToGoal} Left</p>
@@ -173,11 +176,20 @@ export default function StationTesting({
                 activeColorTextClass={activeColor.text}
                 resolvedManual={resolvedManual}
                 isManualLoading={isManualLoading}
+                onViewManual={onViewManual}
+                onSaveManual={({ googleLinkOrFileId, type }) =>
+                  saveManual({
+                    sku: activeOrder.sku,
+                    itemNumber: activeOrder.itemNumber,
+                    googleLinkOrFileId,
+                    type: type || null,
+                  })
+                }
               />
             ) : null}
           </AnimatePresence>
 
-          <div className="space-y-3 mt-8">
+          <div className="space-y-2 mt-2">
             <UpNextOrder
               techId={userId}
               onStart={(tracking) => {

@@ -5,6 +5,26 @@ import { formatPSTTimestamp } from '@/lib/timezone';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
+/**
+ * Compute Mon–Fri week range (PST date strings) for a given PST timestamp string
+ * such as '2026-03-04T14:30:00'.  Used to target the exact Redis cache key that
+ * ReceivingLogs uses when fetching by week.
+ */
+function getPSTWeekRange(pstTimestamp: string): { startStr: string; endStr: string } {
+    const dateKey = pstTimestamp.substring(0, 10); // 'YYYY-MM-DD'
+    const [year, month, day] = dateKey.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    const dow = date.getDay(); // 0=Sun
+    const daysFromMonday = dow === 0 ? 6 : dow - 1;
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - daysFromMonday);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { startStr: fmt(monday), endStr: fmt(friday) };
+}
+
 // POST - Add entry to receiving table
 export async function POST(request: NextRequest) {
     try {
@@ -17,7 +37,6 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        // Auto-detect carrier if not provided or set to Unknown
         const detectedCarrier = providedCarrier && providedCarrier !== 'Unknown' 
             ? providedCarrier 
             : getCarrier(trackingNumber);
@@ -26,19 +45,43 @@ export async function POST(request: NextRequest) {
         const now = formatPSTTimestamp();
         
         const { dateColumn } = await resolveReceivingSchema();
-        await pool.query(
+        const inserted = await pool.query(
             `INSERT INTO receiving (${dateColumn}, receiving_tracking_number, carrier)
-             VALUES ($1, $2, $3)`,
+             VALUES ($1, $2, $3)
+             RETURNING id`,
             [now, trackingNumber, detectedCarrier]
         );
-        await invalidateCacheTags(['receiving-logs']);
 
-        return NextResponse.json({
-            success: true,
-            message: 'Entry added to receiving table',
-            carrier: detectedCarrier,
-            timestamp: now
-        }, { status: 201 });
+        const newRecord = {
+            id: String(inserted.rows[0].id),
+            timestamp: now,
+            tracking: trackingNumber,
+            status: detectedCarrier,
+            count: 1,
+        };
+
+        // Surgical Redis cache update: prepend the single new record to the
+        // current week's cached array instead of invalidating and re-querying.
+        // If that week isn't cached yet the next regular fetch will populate it.
+        const weekRange = getPSTWeekRange(now);
+        const weekCacheKey = createCacheLookupKey({
+            limit: 500,
+            offset: 0,
+            weekStart: weekRange.startStr,
+            weekEnd: weekRange.endStr,
+        });
+        const existing = await getCachedJson<any[]>('api:receiving-logs', weekCacheKey);
+        if (Array.isArray(existing)) {
+            await setCachedJson(
+                'api:receiving-logs',
+                weekCacheKey,
+                [newRecord, ...existing].slice(0, 500),
+                120,          // current-week TTL: 2 min
+                ['receiving-logs'],
+            );
+        }
+
+        return NextResponse.json({ success: true, record: newRecord }, { status: 201 });
     } catch (error) {
         console.error('Error adding receiving entry:', error);
         return NextResponse.json({ 

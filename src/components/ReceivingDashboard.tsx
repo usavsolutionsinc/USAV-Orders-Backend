@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import ReceivingLogs from './station/ReceivingLogs';
 import { AnimatePresence } from 'framer-motion';
 import { ReceivingDetailsStack, ReceivingDetailsLog } from './station/ReceivingDetailsStack';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function ReceivingDashboard() {
     const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);
+    const queryClient = useQueryClient();
 
     return (
         <div className="flex h-full w-full bg-white overflow-hidden">
@@ -27,12 +29,13 @@ export default function ReceivingDashboard() {
                         onClose={() => setSelectedLog(null)}
                         onUpdated={() => {
                             setSelectedLog(null);
-                            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                            // Targeted invalidation — no global event bus needed.
+                            queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
                             window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
                         }}
                         onDeleted={(_id) => {
                             setSelectedLog(null);
-                            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                            queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
                         }}
                     />
                 )}

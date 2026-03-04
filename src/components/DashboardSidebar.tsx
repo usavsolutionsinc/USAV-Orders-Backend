@@ -186,6 +186,7 @@ function TechStationContext({ techId }: { techId: string }) {
           sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
           themeColor={techTheme}
           onTrackingScan={() => updateViewMode('history')}
+          onViewManual={() => updateViewMode('manual')}
           todayCount={todayCount}
           goal={dailyGoal}
           onComplete={refreshHistory}

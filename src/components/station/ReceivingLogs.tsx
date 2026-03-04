@@ -91,7 +91,9 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                 weekEnd: weekRange.endStr,
                 limit: '500',
             });
-            const res = await fetch(`/api/receiving-logs?${params}`);
+            // Bypass browser HTTP cache so invalidateQueries always gets fresh data
+            // from the server (server-side Upstash Redis handles the DB caching).
+            const res = await fetch(`/api/receiving-logs?${params}`, { cache: 'no-store' });
             if (!res.ok) throw new Error('Failed to fetch receiving logs');
             const json = await res.json();
             return Array.isArray(json) ? json : [];
@@ -104,6 +106,31 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
         refetchOnWindowFocus: false,
     });
 
+    // Surgical insert: prepend the single new record without any network request.
+    // The server already updated its Redis cache entry for this week, so the
+    // TanStack Query cache and server are kept in sync without a full re-fetch.
+    useEffect(() => {
+        const handleNewEntry = (e: any) => {
+            const record = e?.detail as ReceivingLog | null;
+            if (!record?.id) return;
+
+            // Target the current week's cache key (new entries are always "now").
+            const currentWeek = computeWeekRange(0);
+            queryClient.setQueryData<ReceivingLog[]>(
+                ['receiving-logs', { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
+                (prev) => {
+                    if (!prev) return undefined; // cache not yet populated — skip
+                    if (prev.some((r) => r.id === record.id)) return prev; // dedup
+                    return [record, ...prev];
+                },
+            );
+        };
+        window.addEventListener('receiving-entry-added', handleNewEntry);
+        return () => window.removeEventListener('receiving-entry-added', handleNewEntry);
+    }, [queryClient]);
+
+    // Full invalidation for edits, deletes, and any other external data changes.
+    // New entries are handled above via setQueryData so they skip this path.
     useEffect(() => {
         const handleRefresh = () => {
             queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });

@@ -3,7 +3,50 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
-import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { invalidateCacheTags, createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
+import { formatPSTTimestamp } from '@/lib/timezone';
+
+/** Compute Mon–Fri PST week range from the current PST timestamp. */
+function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
+    const ts = formatPSTTimestamp(); // 'YYYY-MM-DDTHH:MM:SS' in PST
+    const dateKey = ts.substring(0, 10);
+    const [year, month, day] = dateKey.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    const dow = date.getDay();
+    const daysFromMonday = dow === 0 ? 6 : dow - 1;
+    const monday = new Date(date);
+    monday.setDate(date.getDate() - daysFromMonday);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { startStr: fmt(monday), endStr: fmt(friday) };
+}
+
+/**
+ * Prepend a single new TechRecord to the current week's Redis cache entry
+ * (keyed by techId + week range) without nuking the whole cache.
+ */
+async function prependToTechLogsCache(techId: number, newRecord: Record<string, unknown>) {
+    const { startStr, endStr } = getCurrentPSTWeekRange();
+    const cacheKey = createCacheLookupKey({
+        techId: String(techId),
+        limit: 1000,
+        offset: 0,
+        weekStart: startStr,
+        weekEnd: endStr,
+    });
+    const existing = await getCachedJson<any[]>('api:tech-logs', cacheKey);
+    if (Array.isArray(existing)) {
+        await setCachedJson(
+            'api:tech-logs',
+            cacheKey,
+            [newRecord, ...existing].slice(0, 1000),
+            120,
+            ['tech-logs'],
+        );
+    }
+}
 
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
@@ -181,13 +224,19 @@ export async function POST(req: NextRequest) {
                     [scannedTracking]
                 );
 
+                let techSerialId: number | null = null;
+                let techTestDateTime: string | null = null;
+
                 if (exactTrackingRow.rows.length === 0) {
-                    await client.query(
+                    const insertResult = await client.query(
                         `INSERT INTO tech_serial_numbers (
                             shipping_tracking_number, serial_number, test_date_time, tested_by
-                        ) VALUES ($1, $2, date_trunc('second', NOW()), $3)`,
+                        ) VALUES ($1, $2, date_trunc('second', NOW()), $3)
+                        RETURNING id, test_date_time::text`,
                         [scannedTracking, '', testedBy]
                     );
+                    techSerialId = insertResult.rows[0]?.id ?? null;
+                    techTestDateTime = insertResult.rows[0]?.test_date_time ?? null;
                 }
                 const serialSource =
                     exactTrackingRow.rows[0]?.serial_number ??
@@ -195,11 +244,37 @@ export async function POST(req: NextRequest) {
                     '';
 
                 await client.query('COMMIT');
-                await invalidateCacheTags(['tech-logs', 'orders-next']);
+                await invalidateCacheTags(['orders-next']); // exceptions upserted above
+
+                // Surgical cache update: only when a new row was actually inserted.
+                if (techSerialId && techTestDateTime) {
+                    await prependToTechLogsCache(testedBy, {
+                        id: techSerialId,
+                        order_db_id: null,
+                        test_date_time: techTestDateTime,
+                        shipping_tracking_number: scannedTracking,
+                        serial_number: '',
+                        tested_by: testedBy,
+                        order_id: null,
+                        product_title: 'Unknown Product',
+                        item_number: null,
+                        sku: null,
+                        condition: null,
+                        notes: null,
+                        account_source: null,
+                        quantity: null,
+                        is_shipped: false,
+                        ship_by_date: null,
+                        created_at: null,
+                        out_of_stock: null,
+                    });
+                }
+
                 return NextResponse.json({
                     success: true,
                     found: true,
                     orderFound: false,
+                    techSerialId,
                     warning: (!isFbaLikeTracking || !fnskuFound)
                         ? 'Tracking number not found in orders. Added to exceptions.'
                         : 'FBA/FNSKU processed without exception.',
@@ -213,7 +288,7 @@ export async function POST(req: NextRequest) {
                         notes: 'Tracking recorded in orders_exceptions for reconciliation',
                         tracking: scannedTracking,
                         serialNumbers: parseSerials(serialSource),
-                        testDateTime: null,
+                        testDateTime: techTestDateTime,
                         testedBy,
                         accountSource: null,
                         quantity: 1,
@@ -231,22 +306,53 @@ export async function POST(req: NextRequest) {
             }
 
             // Create tracking row once if missing. This is the single row that serial scans append to.
+            let techSerialId: number | null = null;
+            let techTestDateTime: string | null = null;
+
             if (existingTracking.rows.length === 0) {
-                await client.query(
+                const insertResult = await client.query(
                     `INSERT INTO tech_serial_numbers (
                         shipping_tracking_number, serial_number, test_date_time, tested_by
-                    ) VALUES ($1, $2, date_trunc('second', NOW()), $3)`,
+                    ) VALUES ($1, $2, date_trunc('second', NOW()), $3)
+                    RETURNING id, test_date_time::text`,
                     [trackingValue, '', testedBy]
                 );
+                techSerialId = insertResult.rows[0]?.id ?? null;
+                techTestDateTime = insertResult.rows[0]?.test_date_time ?? null;
             }
             const serialNumbers = parseSerials(existingTracking.rows[0]?.serial_number);
 
             await client.query('COMMIT');
-            await invalidateCacheTags(['tech-logs', 'orders-next']);
+
+            // Surgical Redis cache update for brand-new rows only.
+            if (techSerialId && techTestDateTime) {
+                await prependToTechLogsCache(testedBy, {
+                    id: techSerialId,
+                    order_db_id: row.id ?? null,
+                    test_date_time: techTestDateTime,
+                    shipping_tracking_number: trackingValue,
+                    serial_number: '',
+                    tested_by: testedBy,
+                    order_id: row.order_id ?? null,
+                    product_title: row.product_title ?? null,
+                    item_number: row.item_number ?? null,
+                    sku: row.sku ?? null,
+                    condition: row.condition ?? null,
+                    notes: row.notes ?? null,
+                    account_source: row.account_source ?? null,
+                    quantity: row.quantity ?? null,
+                    is_shipped: row.is_shipped ?? false,
+                    ship_by_date: row.ship_by_date ?? null,
+                    created_at: row.created_at ?? null,
+                    out_of_stock: row.out_of_stock ?? null,
+                });
+            }
+
             return NextResponse.json({
                 success: true,
                 found: true,
                 orderFound: true,
+                techSerialId,
                 order: {
                     id: row.id,
                     orderId: row.order_id || 'N/A',

@@ -8,7 +8,7 @@ import { stationThemeColors } from '@/utils/staff-colors';
 export type StationThemeColor = 'green' | 'blue' | 'purple' | 'yellow';
 
 export interface ActiveStationOrder {
-  id: number;
+  id: number | null;
   orderId: string;
   productTitle: string;
   itemNumber: string | null;
@@ -22,6 +22,7 @@ export interface ActiveStationOrder {
   quantity?: number;
   shipByDate?: string | null;
   createdAt?: string | null;
+  orderFound?: boolean;
 }
 
 export interface ResolvedProductManual {
@@ -154,6 +155,34 @@ export function useStationTestingController({
     }
   };
 
+  const saveManual = async (params: {
+    sku?: string | null;
+    itemNumber?: string | null;
+    googleLinkOrFileId: string;
+    type?: string | null;
+  }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/manuals/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku: params.sku || null,
+          itemNumber: params.itemNumber || null,
+          googleLinkOrFileId: params.googleLinkOrFileId,
+          type: params.type || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        return { success: false, error: data?.error || 'Failed to save manual' };
+      }
+      await resolveManual(params.sku, params.itemNumber);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error?.message || 'Failed to save manual' };
+    }
+  };
+
   useEffect(() => {
     if (errorMessage || successMessage) {
       const timer = setTimeout(() => {
@@ -230,6 +259,7 @@ export function useStationTestingController({
         quantity: parseInt(String(data.order.quantity || 1), 10) || 1,
         shipByDate: data.order.shipByDate || null,
         createdAt: data.order.createdAt || null,
+        orderFound: data.orderFound !== false,
       });
 
       const serialCount = data.order.serialNumbers?.length || 0;
@@ -239,7 +269,12 @@ export function useStationTestingController({
         setSuccessMessage('FNSKU loaded - ready to scan serials');
       }
 
-      void resolveManual(data.order.sku, data.order.itemNumber ?? null);
+      if (data.orderFound === false) {
+        setResolvedManual(null);
+        publishLastManual(null);
+      } else {
+        void resolveManual(data.order.sku, data.order.itemNumber ?? null);
+      }
       triggerGlobalRefresh();
     } catch (err) {
       console.error('FNSKU scan failed:', err);
@@ -295,6 +330,7 @@ export function useStationTestingController({
           quantity: parseInt(String(data.order.quantity || 1), 10) || 1,
           shipByDate: data.order.shipByDate || null,
           createdAt: data.order.createdAt || null,
+          orderFound: data.orderFound !== false,
         });
 
         const serialCount = data.order.serialNumbers?.length || 0;
@@ -304,7 +340,39 @@ export function useStationTestingController({
           setSuccessMessage('Order loaded - ready to scan serials');
         }
 
-        void resolveManual(data.order.sku, data.order.itemNumber ?? null);
+        if (data.orderFound === false) {
+          setResolvedManual(null);
+          publishLastManual(null);
+        } else {
+          void resolveManual(data.order.sku, data.order.itemNumber ?? null);
+        }
+
+        // Surgical cache insert: fire a targeted event so TechTable can prepend
+        // the new row via setQueryData without invalidating the whole cache.
+        if (data.techSerialId) {
+          window.dispatchEvent(new CustomEvent('tech-log-added', {
+            detail: {
+              id: data.techSerialId,
+              order_db_id: data.order.id ?? null,
+              test_date_time: data.order.testDateTime ?? null,
+              shipping_tracking_number: data.order.tracking ?? '',
+              serial_number: '',
+              tested_by: data.order.testedBy ?? null,
+              order_id: data.order.orderId !== 'N/A' ? data.order.orderId : null,
+              product_title: data.order.productTitle ?? null,
+              item_number: data.order.itemNumber ?? null,
+              sku: data.order.sku !== 'N/A' ? data.order.sku : null,
+              condition: data.order.condition !== 'N/A' ? data.order.condition : null,
+              notes: data.order.notes ?? null,
+              account_source: data.order.accountSource ?? null,
+              quantity: String(data.order.quantity || '1'),
+              is_shipped: data.order.isShipped ?? false,
+              ship_by_date: data.order.shipByDate ?? null,
+              created_at: data.order.createdAt ?? null,
+              out_of_stock: null,
+            },
+          }));
+        }
         triggerGlobalRefresh();
       } catch (err) {
         console.error('Tracking scan failed:', err);
@@ -426,6 +494,7 @@ export function useStationTestingController({
           quantity: 1,
           shipByDate: null,
           createdAt: null,
+          orderFound: true,
         });
         setResolvedManual(null);
         setSuccessMessage('Test order loaded');
@@ -498,5 +567,7 @@ export function useStationTestingController({
     handleSearchKeyPress,
     triggerGlobalRefresh,
     clearFeedback,
+    resolveManual,
+    saveManual,
   };
 }

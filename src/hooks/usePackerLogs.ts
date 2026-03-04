@@ -38,7 +38,7 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
         params.set('weekStart', weekRange.startStr);
         params.set('weekEnd', weekRange.endStr);
       }
-      const res = await fetch(`/api/packerlogs?${params}`);
+      const res = await fetch(`/api/packerlogs?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch packer logs');
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -49,6 +49,39 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
     refetchOnWindowFocus: false,
   });
 
+  // Surgical insert: prepend the brand-new row without a network round-trip.
+  useEffect(() => {
+    const handleNewLog = (e: any) => {
+      const record = e?.detail as PackerRecord | null;
+      if (!record?.id || record.packed_by !== packerId) return;
+
+      const currentWeek = (() => {
+        const d = new Date();
+        const pstMs = d.getTime() - 7 * 60 * 60 * 1000;
+        const pst = new Date(pstMs);
+        const dow = pst.getUTCDay();
+        const daysFromMonday = dow === 0 ? 6 : dow - 1;
+        const mon = new Date(pstMs - daysFromMonday * 86400000);
+        const fri = new Date(pstMs + (4 - daysFromMonday) * 86400000);
+        const fmt = (x: Date) =>
+          `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
+        return { startStr: fmt(mon), endStr: fmt(fri) };
+      })();
+
+      queryClient.setQueryData<PackerRecord[]>(
+        ['packer-logs', packerId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
+        (prev) => {
+          if (!prev) return undefined;
+          if (prev.some((r) => r.id === record.id)) return prev;
+          return [record, ...prev];
+        },
+      );
+    };
+    window.addEventListener('packer-log-added', handleNewLog);
+    return () => window.removeEventListener('packer-log-added', handleNewLog);
+  }, [queryClient, packerId]);
+
+  // Full invalidation for deletes and external data changes.
   useEffect(() => {
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['packer-logs', packerId] });

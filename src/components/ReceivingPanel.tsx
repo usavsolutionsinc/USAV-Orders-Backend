@@ -80,8 +80,16 @@ export default function ReceivingPanel({
 
             if (!res.ok) throw new Error('Failed to add entry');
 
+            const data = await res.json();
             setTrackingNumber('');
             invalidateReceivingCache();
+
+            // Fire a specific event so ReceivingLogs can surgically prepend the
+            // single new record without a full cache invalidation + re-fetch.
+            if (data.record) {
+                window.dispatchEvent(new CustomEvent('receiving-entry-added', { detail: data.record }));
+            }
+            // Still dispatch the generic refresh for ReceivingSidebar count etc.
             window.dispatchEvent(new CustomEvent('usav-refresh-data'));
             if (onEntryAdded) onEntryAdded();
         } catch (error) {
