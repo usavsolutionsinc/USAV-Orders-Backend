@@ -36,20 +36,20 @@ export async function GET(req: NextRequest) {
     const result = await pool.query(
       `SELECT
          id,
-         sku_normalized,
-         item_number_normalized,
+         sku,
+         item_number,
          google_file_id,
-         manual_version,
+         type,
          is_active,
          updated_at
        FROM product_manuals
        WHERE is_active = TRUE
          AND (
-           ($1 <> '' AND sku_normalized = $1)
-           OR ($2 <> '' AND item_number_normalized = $2)
+           ($1 <> '' AND regexp_replace(UPPER(TRIM(COALESCE(sku, ''))), '[^A-Z0-9]', '', 'g') = $1)
+           OR ($2 <> '' AND regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $2)
          )
        ORDER BY
-         CASE WHEN ($1 <> '' AND sku_normalized = $1) THEN 0 ELSE 1 END,
+         CASE WHEN ($1 <> '' AND regexp_replace(UPPER(TRIM(COALESCE(sku, ''))), '[^A-Z0-9]', '', 'g') = $1) THEN 0 ELSE 1 END,
          updated_at DESC
        LIMIT 1`,
       [normalizedSku, normalizedItemNumber]
@@ -65,17 +65,20 @@ export async function GET(req: NextRequest) {
 
     const row = result.rows[0];
     const matchedBy =
-      normalizedSku && row.sku_normalized === normalizedSku ? 'sku' : 'item_number';
+      normalizedSku &&
+      normalizeIdentifier(String(row.sku || '')) === normalizedSku
+        ? 'sku'
+        : 'item_number';
 
     return NextResponse.json({
       success: true,
       found: true,
       manual: {
         id: row.id,
-        skuNormalized: row.sku_normalized,
-        itemNumberNormalized: row.item_number_normalized,
+        sku: row.sku || null,
+        itemNumber: row.item_number || null,
         googleFileId: row.google_file_id,
-        manualVersion: row.manual_version || null,
+        type: row.type || null,
         matchedBy,
         updatedAt: row.updated_at,
         ...buildDriveUrls(row.google_file_id),

@@ -34,9 +34,9 @@ export interface SidebarNavItem {
 
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, kind: 'main' },
-  { id: 'receiving', label: 'Receiving', href: '/receiving', icon: ClipboardList, kind: 'main' },
   { id: 'repair', label: 'Repair', href: '/repair', icon: Tool, kind: 'main' },
   { id: 'sku-stock', label: 'Sku Stock', href: '/sku-stock', icon: Box, kind: 'main' },
+  { id: 'receiving', label: 'Receiving', href: '/receiving', icon: ClipboardList, kind: 'station' },
   { id: 'tech', label: 'Technicians', href: '/tech/1', icon: Wrench, kind: 'station' },
   { id: 'packer', label: 'Packers', href: '/packer/4', icon: User, kind: 'station' },
   { id: 'support', label: 'Support', href: '/support', icon: AlertCircle, kind: 'bottom' },

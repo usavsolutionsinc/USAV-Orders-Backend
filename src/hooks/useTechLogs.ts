@@ -24,20 +24,37 @@ export interface TechRecord {
   is_shipped?: boolean;
 }
 
-export function useTechLogs(techId: number) {
+export interface UseTechLogsOptions {
+  weekOffset?: number;
+  weekRange?: { startStr: string; endStr: string };
+}
+
+export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
+  const { weekOffset = 0, weekRange } = options;
   const queryClient = useQueryClient();
-  const queryKey = ['tech-logs', techId] as const;
+  const queryKey = [
+    'tech-logs',
+    techId,
+    { weekStart: weekRange?.startStr ?? '', weekEnd: weekRange?.endStr ?? '' },
+  ] as const;
 
   const query = useQuery<TechRecord[]>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/tech-logs?techId=${techId}&limit=5000`);
+      const params = new URLSearchParams({ techId: String(techId), limit: '1000' });
+      if (weekRange) {
+        params.set('weekStart', weekRange.startStr);
+        params.set('weekEnd', weekRange.endStr);
+      }
+      const res = await fetch(`/api/tech-logs?${params}`);
       if (!res.ok) throw new Error('Failed to fetch tech logs');
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    // Current week stays fresh for 2 min so new scans appear quickly;
+    // historical weeks are cached for 30 min (Redis holds them for 24 h).
+    staleTime: weekOffset === 0 ? 2 * 60 * 1000 : 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
     refetchOnWindowFocus: false,
   });

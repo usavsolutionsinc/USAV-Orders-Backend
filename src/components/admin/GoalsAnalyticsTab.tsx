@@ -2,16 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SearchBar } from '@/components/ui/SearchBar';
-
-interface GoalRow {
-  staff_id: number;
-  name: string;
-  role: string;
-  daily_goal: number;
-  today_count: number;
-  week_count: number;
-  avg_daily_last_7d: number;
-}
+import { getAllStaffGoals, invalidateStaffGoalsCache, type GoalRow } from '@/lib/staffGoalsCache';
 
 export function GoalsAnalyticsTab() {
   const [rows, setRows] = useState<GoalRow[]>([]);
@@ -23,10 +14,7 @@ export function GoalsAnalyticsTab() {
   const fetchRows = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/staff-goals', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to fetch goals');
-      const data = await res.json();
-      const normalized: GoalRow[] = Array.isArray(data) ? data : [];
+      const normalized = await getAllStaffGoals();
       setRows(normalized);
       setGoalInputs(
         normalized.reduce<Record<number, string>>((acc, row) => {
@@ -61,6 +49,7 @@ export function GoalsAnalyticsTab() {
         body: JSON.stringify({ staffId, dailyGoal: parsedGoal }),
       });
       if (!res.ok) throw new Error('Failed to save goal');
+      invalidateStaffGoalsCache(String(staffId));
       await fetchRows();
     } catch (error) {
       console.error(error);

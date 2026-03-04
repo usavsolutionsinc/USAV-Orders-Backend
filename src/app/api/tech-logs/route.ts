@@ -7,12 +7,20 @@ export async function GET(req: NextRequest) {
     const techId = searchParams.get('techId') || '1';
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
-    const cacheLookup = createCacheLookupKey({ techId, limit, offset });
+    const weekStart = searchParams.get('weekStart') || '';
+    const weekEnd = searchParams.get('weekEnd') || '';
+    const cacheLookup = createCacheLookupKey({ techId, limit, offset, weekStart, weekEnd });
+
+    // Use shorter TTL for the current week so new entries appear quickly;
+    // historical weeks can be cached for 24 hours.
+    const today = new Date().toISOString().substring(0, 10);
+    const cacheTTL = weekEnd && weekEnd < today ? 86400 : 120;
+    const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` };
 
     try {
         const cached = await getCachedJson<any[]>('api:tech-logs', cacheLookup);
         if (cached) {
-            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
         }
 
         // Resolve staff by numeric id first (current UI flow), with employee_id fallback.
@@ -48,6 +56,22 @@ export async function GET(req: NextRequest) {
         }
 
         const staffId = staffResult.rows[0].id;
+
+        // Build parameterized WHERE clause — add optional week pre-filter (UTC ±1 day
+        // buffer so PST day-boundary records are included; client groups by PST date).
+        const queryParams: any[] = [staffId];
+        let idx = 2;
+        let weekClause = '';
+        if (weekStart && weekEnd) {
+            weekClause = `
+              AND tsn.test_date_time >= ($${idx}::date - interval '1 day')
+              AND tsn.test_date_time <  ($${idx + 1}::date + interval '2 days')`;
+            queryParams.push(weekStart, weekEnd);
+            idx += 2;
+        }
+        queryParams.push(limit, offset);
+        const limitIdx = idx;
+        const offsetIdx = idx + 1;
 
         // Query tech serial logs and join matching order info by normalized tracking last-8.
         const result = await pool.query(`
@@ -108,12 +132,13 @@ export async function GET(req: NextRequest) {
             ) o ON true
             WHERE tsn.tested_by = $1
               AND tsn.test_date_time IS NOT NULL
+              ${weekClause}
             ORDER BY tsn.test_date_time DESC NULLS LAST
-            LIMIT $2 OFFSET $3
-        `, [staffId, limit, offset]);
+            LIMIT $${limitIdx} OFFSET $${offsetIdx}
+        `, queryParams);
 
-        await setCachedJson('api:tech-logs', cacheLookup, result.rows, 300, ['tech-logs']);
-        return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS' } });
+        await setCachedJson('api:tech-logs', cacheLookup, result.rows, cacheTTL, ['tech-logs']);
+        return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     } catch (error: any) {
         console.error('Error fetching tech logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });

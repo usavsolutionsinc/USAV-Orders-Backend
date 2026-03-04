@@ -10,27 +10,46 @@ export async function GET(req: NextRequest) {
     const packerId = searchParams.get('packerId');
     const limit = parseInt(searchParams.get('limit') || '5000');
     const offset = parseInt(searchParams.get('offset') || '0');
-    const cacheLookup = createCacheLookupKey({ packerId: packerId || '', limit, offset });
+    const weekStart = searchParams.get('weekStart') || '';
+    const weekEnd = searchParams.get('weekEnd') || '';
+    const cacheLookup = createCacheLookupKey({ packerId: packerId || '', limit, offset, weekStart, weekEnd });
+
+    const today = new Date().toISOString().substring(0, 10);
+    const cacheTTL = weekEnd && weekEnd < today ? 86400 : 120;
+    const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` };
 
     try {
         const cached = await getCachedJson<any[]>('api:packerlogs', cacheLookup);
         if (cached) {
-            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
         }
 
-        // Build query with proper filtering
         const params: any[] = [];
-        let whereClause = '';
-        
+        const conditions: string[] = [];
+
         if (packerId) {
             const packerIdNum = parseInt(packerId);
             if (!isNaN(packerIdNum)) {
-                whereClause = ` WHERE pl.packed_by = $1`;
                 params.push(packerIdNum);
+                conditions.push(`pl.packed_by = $${params.length}`);
             }
         }
-        
-        // Use subquery to get one order per packer_log entry, then order and paginate
+
+        // Week pre-filter with ±1 day UTC buffer so PST boundary records are included;
+        // client groups by PST date for precise display.
+        if (weekStart && weekEnd) {
+            params.push(weekStart, weekEnd);
+            const ws = params.length - 1;
+            const we = params.length;
+            conditions.push(`pl.pack_date_time >= ($${ws}::date - interval '1 day')`);
+            conditions.push(`pl.pack_date_time <  ($${we}::date + interval '2 days')`);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        params.push(limit, offset);
+        const limitIdx = params.length - 1;
+        const offsetIdx = params.length;
+
         const query = `
             SELECT 
                 pl.id,
@@ -83,15 +102,13 @@ export async function GET(req: NextRequest) {
             FROM packer_logs pl
             ${whereClause}
             ORDER BY pl.pack_date_time DESC NULLS LAST
-            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+            LIMIT $${limitIdx} OFFSET $${offsetIdx}
         `;
-        
-        params.push(limit, offset);
 
         const result = await pool.query(query, params);
 
-        await setCachedJson('api:packerlogs', cacheLookup, result.rows, 300, ['packerlogs']);
-        return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS' } });
+        await setCachedJson('api:packerlogs', cacheLookup, result.rows, cacheTTL, ['packerlogs']);
+        return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     } catch (error: any) {
         console.error('Error fetching packer logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });

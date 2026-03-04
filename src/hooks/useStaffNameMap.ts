@@ -1,39 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-
-interface StaffRecord {
-  id: number;
-  name: string;
-}
+import { getActiveStaff } from '@/lib/staffCache';
 
 export function useStaffNameMap() {
   const [staffNameMap, setStaffNameMap] = useState<Record<number, string>>({});
 
   useEffect(() => {
     let active = true;
-
-    const fetchStaff = async () => {
-      try {
-        const res = await fetch('/api/staff?active=true', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!active || !Array.isArray(data)) return;
-
+    getActiveStaff()
+      .then((data) => {
+        if (!active) return;
         const nextMap: Record<number, string> = {};
-        data.forEach((member: StaffRecord) => {
+        data.forEach((member) => {
           if (member?.id && member?.name) {
             nextMap[member.id] = member.name;
           }
         });
         setStaffNameMap(nextMap);
-      } catch (error) {
-        console.error('Failed to fetch staff name map:', error);
-      }
-    };
-
-    fetchStaff();
-
+      })
+      .catch((error) => console.error('Failed to fetch staff name map:', error));
     return () => {
       active = false;
     };

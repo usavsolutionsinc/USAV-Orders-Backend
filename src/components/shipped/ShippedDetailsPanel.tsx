@@ -156,6 +156,7 @@ export function ShippedDetailsPanel({
             durationData={durationData}
             copiedAll={copiedAll}
             onCopyAll={handleCopyAll}
+            onUpdate={_onUpdate}
             showShippingTimestamp={context === 'shipped'}
           />
         )}

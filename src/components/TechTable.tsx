@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, AlertTriangle } from './Icons';
+import { Loader2 } from './Icons';
 import { CopyableText } from './ui/CopyableText';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
@@ -16,16 +16,38 @@ interface TechTableProps {
   testedBy: number;
 }
 
-export function TechTable({ testedBy }: TechTableProps) {
-  const { data: records = [], isLoading, isFetching } = useTechLogs(testedBy);
-  const loading = isLoading && records.length === 0;
-  const isRefreshing = isFetching && !isLoading;
+function computeWeekRange(weekOffset: number) {
+  const todayPst = getCurrentPSTDateKey();
+  const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
+  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
+  const currentDay = now.getDay();
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
+  monday.setHours(0, 0, 0, 0);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  friday.setHours(23, 59, 59, 999);
+  return {
+    start: monday,
+    end: friday,
+    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
+    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
+  };
+}
 
+export function TechTable({ testedBy }: TechTableProps) {
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Compute week range before calling the hook so it can be used in the query key
+  const weekRange = computeWeekRange(weekOffset);
+  const { data: records = [], isLoading, isFetching } = useTechLogs(testedBy, { weekOffset, weekRange });
+  const loading = isLoading && records.length === 0;
+  const isRefreshing = isFetching && !isLoading;
 
   useEffect(() => {
     const handleOpenDetails = (e: any) => {
@@ -119,7 +141,8 @@ export function TechTable({ testedBy }: TechTableProps) {
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, records]);
 
-  // Group records by date
+  // Group records by PST date (server pre-filters by week with ±1 day UTC buffer;
+  // grouping + display filter below gives exact PST-week accuracy).
   const groupedRecords: { [key: string]: TechRecord[] } = {};
   records.forEach(record => {
     if (!record.test_date_time) return;
@@ -133,27 +156,6 @@ export function TechTable({ testedBy }: TechTableProps) {
     groupedRecords[date].push(record);
   });
 
-  const getWeekRange = () => {
-    const todayPst = getCurrentPSTDateKey();
-    const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
-    const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-    const currentDay = now.getDay();
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - daysFromMonday - (weekOffset * 7));
-    monday.setHours(0, 0, 0, 0);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    friday.setHours(23, 59, 59, 999);
-    return {
-      start: monday,
-      end: friday,
-      startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
-      endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
-    };
-  };
-
-  const weekRange = getWeekRange();
   const filteredGroupedRecords = Object.fromEntries(
     Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
   );

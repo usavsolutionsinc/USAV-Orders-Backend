@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import ReceivingPanel from './ReceivingPanel';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { getReceivingLogs, invalidateReceivingCache } from '@/lib/receivingCache';
 
 interface ReceivingLogRow {
   timestamp?: string;
@@ -18,12 +19,8 @@ export default function ReceivingSidebar({ embedded = false, hideSectionHeader =
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch('/api/receiving-logs?limit=500');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setHistory(data);
-      }
+      const data = await getReceivingLogs(500);
+      setHistory(data);
     } catch (_error) {
       // no-op
     }
@@ -32,9 +29,7 @@ export default function ReceivingSidebar({ embedded = false, hideSectionHeader =
   useEffect(() => {
     fetchHistory();
 
-    const handleRefresh = () => {
-      fetchHistory();
-    };
+    const handleRefresh = () => { invalidateReceivingCache(); fetchHistory(); };
 
     window.addEventListener('usav-refresh-data', handleRefresh as any);
     return () => {

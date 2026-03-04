@@ -73,7 +73,7 @@ export function ShippedTableBase({
     ordersOnly,
     missingTrackingOnly,
     weekOffset,
-    weekRange: ordersOnly ? weekRange : undefined,
+    weekRange,
   });
 
   // Local copy allows optimistic row-level patches without refetching

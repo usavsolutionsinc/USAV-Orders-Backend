@@ -17,11 +17,27 @@ interface PackerTableProps {
   packedBy: number;
 }
 
-export function PackerTable({ packedBy }: PackerTableProps) {
-  const { data: records = [], isLoading, isFetching } = usePackerLogs(packedBy);
-  const loading = isLoading && records.length === 0;
-  const isRefreshing = isFetching && !isLoading;
+function computeWeekRange(weekOffset: number) {
+  const todayPst = getCurrentPSTDateKey();
+  const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
+  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
+  const currentDay = now.getDay();
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
+  monday.setHours(0, 0, 0, 0);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  friday.setHours(23, 59, 59, 999);
+  return {
+    start: monday,
+    end: friday,
+    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
+    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
+  };
+}
 
+export function PackerTable({ packedBy }: PackerTableProps) {
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -29,6 +45,12 @@ export function PackerTable({ packedBy }: PackerTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const packerTheme = getPackerThemeById(packedBy);
   const counterColorClass = stationThemeColors[packerTheme].text;
+
+  // Compute week range before calling the hook so it feeds into the query key.
+  const weekRange = computeWeekRange(weekOffset);
+  const { data: records = [], isLoading, isFetching } = usePackerLogs(packedBy, { weekOffset, weekRange });
+  const loading = isLoading && records.length === 0;
+  const isRefreshing = isFetching && !isLoading;
 
   useEffect(() => {
     const handleOpenDetails = (e: any) => {
@@ -136,27 +158,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     groupedRecords[date].push(record);
   });
 
-  const getWeekRange = () => {
-    const todayPst = getCurrentPSTDateKey();
-    const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
-    const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-    const currentDay = now.getDay();
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - daysFromMonday - (weekOffset * 7));
-    monday.setHours(0, 0, 0, 0);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    friday.setHours(23, 59, 59, 999);
-    return {
-      start: monday,
-      end: friday,
-      startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
-      endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
-    };
-  };
-
-  const weekRange = getWeekRange();
   const filteredGroupedRecords = Object.fromEntries(
     Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
   );

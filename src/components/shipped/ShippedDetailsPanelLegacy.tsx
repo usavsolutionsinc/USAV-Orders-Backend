@@ -2,13 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, Clock, Package, Copy, Box, Wrench, ExternalLink } from '../Icons';
+import { X, Check, Clock, Package, Copy, Box, Wrench } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { PhotoGallery } from './PhotoGallery';
 import { getStaffName } from '@/utils/staff';
-import { getTrackingUrl, getOrderIdUrl, getAccountSourceLabel } from '@/utils/order-links';
+import { getTrackingUrl, getAccountSourceLabel } from '@/utils/order-links';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { formatDateTimePST } from '@/lib/timezone';
+import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
+import { OrderIdFieldBlock } from '@/components/shipped/details-panel/blocks/OrderIdFieldBlock';
+import { SerialNumberFieldBlock } from '@/components/shipped/details-panel/blocks/SerialNumberFieldBlock';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -20,67 +23,6 @@ interface DurationData {
   boxingDuration?: string;
   testingDuration?: string;
 }
-
-// Copyable field component
-const CopyableField = ({ label, value, externalUrl, externalLabel }: { label: string; value: string; externalUrl?: string | null; externalLabel?: string }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    if (!value || value === 'Not available' || value === 'N/A') return;
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleExternalClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (externalUrl) {
-      window.open(externalUrl, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  const isEmpty = !value || value === 'Not available' || value === 'N/A';
-
-  return (
-    <div>
-      <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1.5">{label}</span>
-      <div 
-        onClick={handleCopy}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCopy(); } }}
-        tabIndex={isEmpty ? -1 : 0}
-        role="button"
-        aria-label={`Copy ${label}: ${value}`}
-        className={`flex items-center justify-between gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 group/field transition-all ${!isEmpty ? 'cursor-pointer hover:bg-gray-100 active:scale-[0.98]' : 'cursor-default'}`}
-      >
-        <p className="font-mono text-sm text-gray-900 font-bold flex-1 truncate">{value}</p>
-        <div className="flex items-center gap-1.5">
-          {!isEmpty && (
-            <div className={`p-1.5 transition-all ${copied ? 'opacity-100' : 'opacity-0 group-hover/field:opacity-100'}`}>
-              {copied ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] font-black text-emerald-600 uppercase">Copied!</span>
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                </div>
-              ) : (
-                <Copy className="w-3.5 h-3.5 text-gray-400" />
-              )}
-            </div>
-          )}
-          {externalUrl && (
-            <button
-              onClick={handleExternalClick}
-              className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-blue-600"
-              title={externalLabel || "Open in external tab"}
-              aria-label={externalLabel || "Open in external tab"}
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export function ShippedDetailsPanel({ 
   shipped: initialShipped, 
@@ -193,60 +135,27 @@ export function ShippedDetailsPanel({
           </div>
           
           <div className="space-y-4">
-            <CopyableField 
+            <CopyableValueFieldBlock
               label="Tracking Number" 
               value={shipped.shipping_tracking_number || 'Not available'} 
               externalUrl={getTrackingUrl(shipped.shipping_tracking_number)}
               externalLabel="Open shipment tracking in new tab"
             />
-            
-            {/* Order ID with Account Source */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Order ID</span>
-                {accountSourceLabel && (
-                  <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
-                    {accountSourceLabel}
-                  </span>
-                )}
-              </div>
-              <div 
-                onClick={() => {
-                  const value = shipped.order_id || 'Not available';
-                  if (value && value !== 'Not available' && value !== 'N/A') {
-                    navigator.clipboard.writeText(value);
-                  }
-                }}
-                className={`flex items-center justify-between gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 group/field transition-all ${shipped.order_id && shipped.order_id !== 'Not available' && shipped.order_id !== 'N/A' ? 'cursor-pointer hover:bg-gray-100 active:scale-[0.98]' : 'cursor-default'}`}
-              >
-                <p className="font-mono text-sm text-gray-900 font-bold flex-1 truncate">{shipped.order_id || 'Not available'}</p>
-                <div className="flex items-center gap-1.5">
-                  {shipped.order_id && shipped.order_id !== 'Not available' && shipped.order_id !== 'N/A' && (
-                    <div className="p-1.5 transition-all opacity-0 group-hover/field:opacity-100">
-                      <Copy className="w-3.5 h-3.5 text-gray-400" />
-                    </div>
-                  )}
-                  {getOrderIdUrl(shipped.order_id) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const url = getOrderIdUrl(shipped.order_id);
-                        if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                      }}
-                      className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-gray-400 hover:text-blue-600"
-                      title={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? "Open Amazon order in Seller Central in new tab" : "Open Ecwid order in new tab"}
-                      aria-label={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? "Open Amazon order in Seller Central in new tab" : "Open Ecwid order in new tab"}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            <CopyableField 
-              label="Serial Number" 
-              value={shipped.serial_number || 'N/A'} 
+
+            <OrderIdFieldBlock orderId={shipped.order_id} accountSourceLabel={accountSourceLabel} />
+
+            <SerialNumberFieldBlock
+              rowId={shipped.id}
+              trackingNumber={shipped.shipping_tracking_number}
+              serialNumber={shipped.serial_number}
+              techId={shipped.tested_by ?? shipped.tester_id ?? null}
+              onUpdate={onUpdate}
+              onSerialNumberChange={(nextSerialNumber) => {
+                setShipped((current) => ({
+                  ...current,
+                  serial_number: nextSerialNumber,
+                }));
+              }}
             />
           </div>
         </section>

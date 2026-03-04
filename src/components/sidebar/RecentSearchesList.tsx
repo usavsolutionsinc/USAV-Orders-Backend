@@ -31,8 +31,8 @@ export function RecentSearchesList({
   }
 
   return (
-    <section>
-      <div className="flex items-center justify-between gap-3 px-1 py-2">
+    <section className="border-y border-gray-200">
+      <div className="flex items-center justify-between gap-3 px-0 py-2 border-b border-gray-200">
         <p className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-500">Recent Searches</p>
         <div className="flex items-center gap-3">
           <button
@@ -59,11 +59,11 @@ export function RecentSearchesList({
             key={`${item.query}-${index}`}
             type="button"
             onClick={() => onSelect(item.query)}
-            className={`flex w-full items-center justify-between gap-3 px-1 py-3 text-left transition-colors hover:bg-slate-50 ${
-              index < items.length - 1 ? 'border-b border-gray-100' : ''
+            className={`flex w-full items-center justify-between gap-3 px-0 py-2.5 text-left ${
+              index < items.length - 1 ? 'border-b border-gray-200' : ''
             }`}
           >
-            <span className="truncate text-[11px] font-semibold text-gray-900">
+            <span className="truncate text-[11px] font-medium text-gray-900">
               {getDisplayQuery ? getDisplayQuery(item) : item.query}
             </span>
             <span className="shrink-0 text-[9px] font-black uppercase tracking-[0.18em] text-gray-400">

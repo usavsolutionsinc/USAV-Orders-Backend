@@ -14,7 +14,7 @@ export function StationDetailsHandler({
     viewMode = 'history',
     stationRole = 'tech',
 }: {
-    viewMode?: 'history' | 'pending';
+    viewMode?: 'history' | 'pending' | 'manual';
     stationRole?: 'tech' | 'packer';
 }) {
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);

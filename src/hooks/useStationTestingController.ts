@@ -26,16 +26,18 @@ export interface ActiveStationOrder {
 
 export interface ResolvedProductManual {
   id: number;
-  skuNormalized: string | null;
-  itemNumberNormalized: string | null;
+  sku: string | null;
+  itemNumber: string | null;
   googleFileId: string;
-  manualVersion: string | null;
+  type: string | null;
   matchedBy: 'sku' | 'item_number';
   updatedAt: string;
   previewUrl: string;
   viewUrl: string;
   downloadUrl: string;
 }
+
+const LAST_MANUAL_STORAGE_PREFIX = 'usav:last-manual:tech:';
 
 function detectType(val: string) {
   const input = val.trim();
@@ -84,6 +86,23 @@ export function useStationTestingController({
 
   const activeColor = stationThemeColors[themeColor];
 
+  const publishLastManual = (manual: ResolvedProductManual | null) => {
+    if (typeof window === 'undefined') return;
+    const storageKey = `${LAST_MANUAL_STORAGE_PREFIX}${userId}`;
+
+    if (manual) {
+      window.localStorage.setItem(storageKey, JSON.stringify(manual));
+    } else {
+      window.localStorage.removeItem(storageKey);
+    }
+
+    window.dispatchEvent(
+      new CustomEvent('tech-last-manual-updated', {
+        detail: { techId: userId, manual },
+      })
+    );
+  };
+
   const triggerGlobalRefresh = () => {
     if (onComplete) onComplete();
     window.dispatchEvent(new CustomEvent('usav-refresh-data'));
@@ -102,6 +121,7 @@ export function useStationTestingController({
 
     if (!skuValue && !itemNumberValue) {
       setResolvedManual(null);
+      publishLastManual(null);
       return;
     }
 
@@ -116,14 +136,18 @@ export function useStationTestingController({
       if (requestId !== manualRequestIdRef.current) return;
 
       if (res.ok && data?.found && data?.manual) {
-        setResolvedManual(data.manual as ResolvedProductManual);
+        const manual = data.manual as ResolvedProductManual;
+        setResolvedManual(manual);
+        publishLastManual(manual);
       } else {
         setResolvedManual(null);
+        publishLastManual(null);
       }
     } catch (error) {
       console.error('Manual resolve failed:', error);
       if (requestId !== manualRequestIdRef.current) return;
       setResolvedManual(null);
+      publishLastManual(null);
     } finally {
       if (requestId !== manualRequestIdRef.current) return;
       setIsManualLoading(false);
@@ -151,6 +175,7 @@ export function useStationTestingController({
       manualRequestIdRef.current += 1;
       setResolvedManual(null);
       setIsManualLoading(false);
+      publishLastManual(null);
     }
   }, [activeOrder]);
 

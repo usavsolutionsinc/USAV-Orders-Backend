@@ -112,7 +112,7 @@ export default function ActiveStationOrderCard({
             {resolvedManual ? (
               <p className="text-[10px] font-bold text-blue-900">
                 Matched by {resolvedManual.matchedBy === 'sku' ? 'SKU' : 'Item #'}
-                {resolvedManual.manualVersion ? ` • v${resolvedManual.manualVersion}` : ''}
+                {resolvedManual.type ? ` • ${resolvedManual.type}` : ''}
               </p>
             ) : (
               <p className="text-[10px] font-bold text-gray-500">

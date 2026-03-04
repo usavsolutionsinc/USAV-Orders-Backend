@@ -64,3 +64,42 @@ export function getLastEightDigits(str: string): string {
 export function cleanTrackingNumber(tracking: string): string {
     return tracking.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 }
+
+/**
+ * Build a carrier tracking URL when the carrier is already known (e.g. from a
+ * stored "status" field in receiving logs). Falls back to a Google search when
+ * the carrier is unrecognised.
+ *
+ * @param tracking - The full tracking number
+ * @param carrier  - Carrier string as stored in the DB ("UPS", "FedEx", "USPS", etc.)
+ * @returns Tracking URL string
+ */
+export function getTrackingUrlByCarrier(tracking: string, carrier: string): string {
+    const c = String(carrier || '').toUpperCase().trim();
+    if (c.includes('UPS'))    return `https://www.ups.com/track?tracknum=${tracking}`;
+    if (c.includes('FEDEX'))  return `https://www.fedex.com/apps/fedextrack/?tracknumbers=${tracking}`;
+    if (c.includes('USPS'))   return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${tracking}`;
+    if (c.includes('DHL'))    return `https://www.dhl.com/en/express/tracking.html?AWB=${tracking}`;
+    if (c.includes('AMAZON')) return `https://www.amazon.com/progress-tracker/package/ref=pt_redirect_from_gp?trackingId=${tracking}`;
+    return `https://www.google.com/search?q=${encodeURIComponent(tracking)}`;
+}
+
+/**
+ * Build a carrier tracking URL by auto-detecting the carrier from the tracking
+ * number format. Returns null when the tracking number is empty/invalid.
+ *
+ * @param tracking - The full tracking number
+ * @returns Tracking URL string, or null if the tracking number is unusable
+ */
+export function getTrackingUrl(tracking: string): string | null {
+    if (!tracking || tracking === 'Not available' || tracking === 'N/A') return null;
+    const carrier = getCarrier(tracking);
+    switch (carrier) {
+        case 'UPS':    return `https://www.ups.com/track?track=yes&trackNums=${tracking}&loc=en_US&requester=ST/trackdetails`;
+        case 'USPS':   return `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${tracking}`;
+        case 'FedEx':  return `https://www.fedex.com/fedextrack/?trknbr=${tracking}`;
+        case 'DHL':    return `https://www.dhl.com/en/express/tracking.html?AWB=${tracking}`;
+        case 'AMAZON': return `https://www.amazon.com/progress-tracker/package/ref=pt_redirect_from_gp?trackingId=${tracking}`;
+        default:       return null;
+    }
+}

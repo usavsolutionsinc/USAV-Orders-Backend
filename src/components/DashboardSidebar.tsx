@@ -33,6 +33,7 @@ import {
 } from '@/lib/sidebar-navigation';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { getPackerThemeById, getTechThemeById } from '@/utils/staff-colors';
+import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 
@@ -90,7 +91,8 @@ function TechStationContext({ techId }: { techId: string }) {
 
   const techName = getTechName(techId);
   const techTheme = getTechThemeById(techId);
-  const viewMode = searchParams.get('view') === 'pending' ? 'pending' : 'history';
+  const rawView = searchParams.get('view');
+  const viewMode = rawView === 'pending' ? 'pending' : rawView === 'manual' ? 'manual' : 'history';
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -106,22 +108,9 @@ function TechStationContext({ techId }: { techId: string }) {
       }
     };
 
-    const fetchGoal = async () => {
-      try {
-        const res = await fetch(`/api/staff-goals?staffId=${encodeURIComponent(techId)}`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const goalValue = Number(data?.daily_goal);
-        if (Number.isFinite(goalValue) && goalValue > 0) {
-          setDailyGoal(goalValue);
-        }
-      } catch (_error) {
-        // no-op
-      }
-    };
+    getStaffGoalById(techId).then(setDailyGoal).catch(() => {});
 
     fetchHistory();
-    fetchGoal();
   }, [techId]);
 
   const todayCount = useMemo(() => {
@@ -130,12 +119,14 @@ function TechStationContext({ techId }: { techId: string }) {
     return history.filter((item) => toPSTDateKey(item.test_date_time || item.timestamp || '') === todayDate).length;
   }, [history]);
 
-  const updateViewMode = (nextView: 'history' | 'pending') => {
+  const updateViewMode = (nextView: 'history' | 'pending' | 'manual') => {
     const nextParams = new URLSearchParams(searchParams.toString());
     if (nextView === 'history') {
       nextParams.delete('view');
-    } else {
+    } else if (nextView === 'pending') {
       nextParams.set('view', 'pending');
+    } else {
+      nextParams.set('view', 'manual');
     }
     const nextSearch = nextParams.toString();
     router.replace(nextSearch ? `/tech/${techId}?${nextSearch}` : `/tech/${techId}`);
@@ -169,11 +160,12 @@ function TechStationContext({ techId }: { techId: string }) {
           <div className="relative min-w-0">
             <select
               value={viewMode}
-              onChange={(e) => updateViewMode(e.target.value as 'history' | 'pending')}
+              onChange={(e) => updateViewMode(e.target.value as 'history' | 'pending' | 'manual')}
               className="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none"
             >
               <option value="history">Tech History</option>
               <option value="pending">Pending Orders</option>
+              <option value="manual">Last Order Manual</option>
             </select>
             <svg
               className="w-3 h-3 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -224,22 +216,9 @@ function PackerStationContext({ packerId }: { packerId: string }) {
       }
     };
 
-    const fetchGoal = async () => {
-      try {
-        const res = await fetch(`/api/staff-goals?staffId=${encodeURIComponent(packerId)}`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const goalValue = Number(data?.daily_goal);
-        if (Number.isFinite(goalValue) && goalValue > 0) {
-          setDailyGoal(goalValue);
-        }
-      } catch (_error) {
-        // no-op
-      }
-    };
+    getStaffGoalById(packerId).then(setDailyGoal).catch(() => {});
 
     fetchHistory();
-    fetchGoal();
   }, [packerId]);
 
   const todayCount = useMemo(() => {

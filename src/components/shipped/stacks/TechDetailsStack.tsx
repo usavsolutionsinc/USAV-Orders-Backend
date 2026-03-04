@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Trash2 } from '@/components/Icons';
+import { X } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
@@ -81,6 +81,7 @@ export function TechDetailsStack({
         durationData={durationData}
         copiedAll={copiedAll}
         onCopyAll={onCopyAll}
+        onUpdate={onUpdate}
         productDetailsFirst={false}
         showPackingPhotos={false}
         showPackingInformation={false}
@@ -93,9 +94,9 @@ export function TechDetailsStack({
           type="button"
           onClick={deleteTechOrder}
           disabled={isDeleting}
-          className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+          className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <X className="w-3 h-3" />
           {isDeleting
             ? 'Deleting...'
             : isDeleteArmed

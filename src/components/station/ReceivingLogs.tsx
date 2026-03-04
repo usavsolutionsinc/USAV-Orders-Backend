@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Package, Loader2, Copy, Check } from '../Icons';
 import { motion } from 'framer-motion';
-import { formatTimePST, toPSTDateKey } from '@/lib/timezone';
+import { formatTimePST, toPSTDateKey, getCurrentPSTDateKey } from '@/lib/timezone';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
+import WeekHeader from '@/components/ui/WeekHeader';
 
 interface ReceivingLog {
     id: string;
@@ -16,10 +18,25 @@ interface ReceivingLog {
 }
 
 interface ReceivingLogsProps {
-    history: ReceivingLog[];
-    isLoading: boolean;
     onSelectLog?: (log: ReceivingLog) => void;
     selectedLogId?: string | null;
+}
+
+function computeWeekRange(weekOffset: number) {
+    const todayPst = getCurrentPSTDateKey();
+    const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
+    const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
+    const dayOfWeek = now.getDay();
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
+    monday.setHours(0, 0, 0, 0);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    friday.setHours(23, 59, 59, 999);
+    const fmt = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { startStr: fmt(monday), endStr: fmt(friday), start: monday, end: friday };
 }
 
 const CopyableText = ({ text, className, disabled = false }: { text: string; className?: string; disabled?: boolean }) => {
@@ -45,7 +62,7 @@ const CopyableText = ({ text, className, disabled = false }: { text: string; cla
     }
 
     return (
-        <button 
+        <button
             onClick={handleCopy}
             className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-[60px]`}
             title={`Click to copy: ${text}`}
@@ -56,193 +73,158 @@ const CopyableText = ({ text, className, disabled = false }: { text: string; cla
     );
 };
 
-export default function ReceivingLogs({ 
-    history: initialHistory, 
-    isLoading: isInitialLoading,
-    onSelectLog,
-    selectedLogId
-}: ReceivingLogsProps) {
-    const [history, setHistory] = useState<ReceivingLog[]>(initialHistory);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [hasMore, setHasMore] = useState(true);
-    const [offset, setOffset] = useState(0);
-    const [stickyDate, setStickyDate] = useState<string>('');
-    const [currentCount, setCurrentCount] = useState<number>(0);
+export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingLogsProps) {
+    const queryClient = useQueryClient();
+    const [weekOffset, setWeekOffset] = useState(0);
+    const [stickyDate, setStickyDate] = useState('');
+    const [currentCount, setCurrentCount] = useState(0);
     const scrollRef = useRef<HTMLDivElement>(null);
-    const limit = 50;
+
+    const weekRange = computeWeekRange(weekOffset);
+    const queryKey = ['receiving-logs', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr }] as const;
+
+    const { data = [], isLoading, isFetching } = useQuery<ReceivingLog[]>({
+        queryKey,
+        queryFn: async () => {
+            const params = new URLSearchParams({
+                weekStart: weekRange.startStr,
+                weekEnd: weekRange.endStr,
+                limit: '500',
+            });
+            const res = await fetch(`/api/receiving-logs?${params}`);
+            if (!res.ok) throw new Error('Failed to fetch receiving logs');
+            const json = await res.json();
+            return Array.isArray(json) ? json : [];
+        },
+        // Current week: 30 s (same as server TTL so new scans appear fast).
+        // Past weeks: 30 min (server caches for 24 h, navigating back is instant).
+        staleTime: weekOffset === 0 ? 30 * 1000 : 30 * 60 * 1000,
+        gcTime: 24 * 60 * 60 * 1000,
+        placeholderData: (prev) => prev,
+        refetchOnWindowFocus: false,
+    });
 
     useEffect(() => {
-        setHistory(initialHistory);
-        setOffset(0);
-        setHasMore(true);
-    }, [initialHistory]);
+        const handleRefresh = () => {
+            queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
+        };
+        window.addEventListener('usav-refresh-data', handleRefresh);
+        return () => window.removeEventListener('usav-refresh-data', handleRefresh);
+    }, [queryClient]);
 
-    const loadMore = useCallback(async () => {
-        if (isLoadingMore || !hasMore) return;
-        
-        setIsLoadingMore(true);
-        try {
-            const nextOffset = offset + limit;
-            const res = await fetch(`/api/receiving-logs?limit=${limit}&offset=${nextOffset}`);
-            if (!res.ok) throw new Error('Failed to fetch');
-            const data = await res.json();
-            
-            if (data.length < limit) setHasMore(false);
-            if (data.length > 0) {
-                setHistory(prev => [...prev, ...data]);
-                setOffset(nextOffset);
-            } else {
-                setHasMore(false);
-            }
-        } catch (err) {
-            console.error("Failed to load more:", err);
-        } finally {
-            setIsLoadingMore(false);
-        }
-    }, [offset, hasMore, isLoadingMore]);
+    const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
-    const formatDate = (dateStr: string) => {
-        return formatDateWithOrdinal(dateStr);
-    };
+    // Group by PST date and apply precise week filter (server has ±1 day UTC buffer).
+    const grouped: { [key: string]: ReceivingLog[] } = {};
+    data.forEach(log => {
+        if (!log.timestamp) return;
+        let date = '';
+        try { date = toPSTDateKey(log.timestamp) || 'Unknown'; } catch { date = 'Unknown'; }
+        if (!grouped[date]) grouped[date] = [];
+        grouped[date].push({
+            ...log,
+            count: typeof log.count === 'number' ? log.count : parseInt(String(log.count || '1')) || 0,
+        });
+    });
+
+    const weekGrouped = Object.fromEntries(
+        Object.entries(grouped).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
+    );
+
+    const sortedEntries = Object.entries(weekGrouped).sort((a, b) => b[0].localeCompare(a[0]));
+    const groupedTotals: { [key: string]: number } = {};
+    for (const [date, logs] of sortedEntries) {
+        groupedTotals[date] = logs.reduce((s, l) => s + (Number(l.count) || 0), 0);
+    }
+    const getWeekCount = () => Object.values(groupedTotals).reduce((s, c) => s + c, 0);
 
     const handleScroll = useCallback(() => {
         if (!scrollRef.current) return;
-        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-        
-        if (scrollHeight - scrollTop <= clientHeight + 100) {
-            loadMore();
-        }
-
+        const { scrollTop } = scrollRef.current;
         const headers = scrollRef.current.querySelectorAll('[data-day-header]');
         let activeDate = '';
         let activeCount = 0;
-
         for (let i = 0; i < headers.length; i++) {
             const header = headers[i] as HTMLElement;
             if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
                 activeDate = header.getAttribute('data-date') || '';
                 activeCount = parseInt(header.getAttribute('data-count') || '0');
-            } else {
-                break;
-            }
+            } else break;
         }
-
-        if (activeDate) {
-            setStickyDate(formatDate(activeDate));
-            setCurrentCount(activeCount);
-        }
-    }, [loadMore]);
+        if (activeDate) setStickyDate(formatDate(activeDate));
+        if (activeCount) setCurrentCount(activeCount);
+    }, []);
 
     useEffect(() => {
         const container = scrollRef.current;
         if (container) {
             container.addEventListener('scroll', handleScroll);
-            handleScroll();
+            setTimeout(() => handleScroll(), 100);
         }
         return () => container?.removeEventListener('scroll', handleScroll);
-    }, [handleScroll, history]);
-
-    const groupedHistory: { [key: string]: ReceivingLog[] } = {};
-    history.forEach(log => {
-        const timestamp = log.timestamp;
-        if (!timestamp) return;
-        
-        let date = '';
-        try {
-            date = toPSTDateKey(timestamp) || '';
-        } catch (e) {
-            date = '';
-        }
-        if (!date) date = 'Unknown';
-        
-        if (!groupedHistory[date]) groupedHistory[date] = [];
-        
-        const rawCount = log.count; 
-        const normalizedLog = {
-            ...log,
-            timestamp,
-            tracking: log.tracking || '',
-            status: log.status || '', 
-            count: typeof rawCount === 'number' ? rawCount : parseInt(rawCount as any) || 0
-        };
-        
-        groupedHistory[date].push(normalizedLog);
-    });
-
-    const sortedGroupedEntries = Object.entries(groupedHistory).sort((a, b) => b[0].localeCompare(a[0]));
-    const groupedTotals: { [key: string]: number } = {};
-    for (const [date, logs] of sortedGroupedEntries) {
-        groupedTotals[date] = logs.reduce((sum, log) => sum + (Number(log.count) || 0), 0);
-    }
+    }, [handleScroll, data]);
 
     return (
         <div className="flex flex-col h-full w-full bg-white relative overflow-hidden">
-            <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
-                <div className="flex items-center gap-2">
-                    <p className="text-[11px] font-black text-gray-900 tracking-tight">
-                        {stickyDate || (sortedGroupedEntries.length > 0 ? formatDate(sortedGroupedEntries[0][0]) : 'Today')}
-                    </p>
-                    <div className="h-2 w-px bg-gray-200" />
-                    <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
-                        Count: {currentCount || (sortedGroupedEntries.length > 0 ? groupedTotals[sortedGroupedEntries[0][0]] || 0 : 0)}
-                    </p>
-                </div>
-            </div>
+            <WeekHeader
+                stickyDate={stickyDate}
+                fallbackDate={sortedEntries.length > 0 ? formatDate(sortedEntries[0][0]) : formatDate(getCurrentPSTDateKey())}
+                count={currentCount || getWeekCount()}
+                countClassName="text-blue-600"
+                weekRange={weekRange}
+                weekOffset={weekOffset}
+                onPrevWeek={() => setWeekOffset(weekOffset + 1)}
+                onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
+                formatDate={formatDate}
+                rightSlot={
+                    isFetching && !isLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                    ) : null
+                }
+            />
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar w-full">
-                {isInitialLoading ? (
+                {isLoading && data.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-400">
                         <Loader2 className="w-8 h-8 animate-spin" />
                         <p className="text-[10px] font-black uppercase tracking-widest">Loading Records...</p>
                     </div>
-                ) : history.length === 0 ? (
+                ) : sortedEntries.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-40 text-center opacity-20">
                         <Package className="w-16 h-16 mb-4" />
                         <p className="text-[10px] font-black uppercase tracking-widest">No Logs Found</p>
                     </div>
                 ) : (
                     <div className="flex flex-col">
-                        {sortedGroupedEntries
-                            .map(([date, logs]) => (
+                        {sortedEntries.map(([date, logs]) => (
                             <div key={date} className="flex flex-col">
                                 <DateGroupHeader date={date} total={groupedTotals[date] || 0} formatDate={formatDate} />
-                                {logs.map((log, index) => {
-                                    const ts = log.timestamp;
-                                    return (
-                                        <motion.div 
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            key={log.id} 
-                                            onClick={() => onSelectLog?.(log)}
-                                            className={`grid grid-cols-[45px_65px_120px] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/40 ${
-                                                selectedLogId === log.id ? 'bg-blue-50/60' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
-                                            }`}
-                                        >
-                                            <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
-                                                {ts ? (
-                                                    formatTimePST(ts)
-                                                ) : '--:--'}
-                                            </div>
-                                            <div className="flex justify-start">
-                                                <CopyableText 
-                                                    text={log.tracking || ''} 
-                                                    className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 w-[110px]" 
-                                                />
-                                            </div>
-                                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-left opacity-60">
+                                {logs.map((log, index) => (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        key={log.id}
+                                        onClick={() => onSelectLog?.(log)}
+                                        className={`grid grid-cols-[45px_1fr] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/40 ${
+                                            selectedLogId === log.id ? 'bg-blue-50/60' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
+                                        }`}
+                                    >
+                                        <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
+                                            {log.timestamp ? formatTimePST(log.timestamp) : '--:--'}
+                                        </div>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <CopyableText
+                                                text={log.tracking || ''}
+                                                className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 w-[60px]"
+                                            />
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60 truncate">
                                                 {log.status || 'Unknown'}
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
+                                            </span>
+                                        </div>
+                                    </motion.div>
+                                ))}
                             </div>
                         ))}
-                        
-                        {isLoadingMore && (
-                            <div className="py-8 flex justify-center">
-                                <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
-                            </div>
-                        )}
                     </div>
                 )}
             </div>

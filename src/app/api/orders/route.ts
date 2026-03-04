@@ -33,9 +33,11 @@ export async function GET(req: NextRequest) {
       testedBy: testedBy || '',
     });
 
+    const CACHE_HEADERS = { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' };
+
     const cached = await getCachedJson<any>('api:orders', cacheLookup);
     if (cached) {
-      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
     }
 
     let sql = `
@@ -148,7 +150,7 @@ export async function GET(req: NextRequest) {
       weekEnd: weekEnd || null,
     };
     await setCachedJson('api:orders', cacheLookup, payload, 300, ['orders']);
-    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
+    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
   } catch (error: any) {
     console.error('Error in GET /api/orders:', error);
     return NextResponse.json(

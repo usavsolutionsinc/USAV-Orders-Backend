@@ -49,22 +49,56 @@ function DashboardPageContent() {
     }, []);
 
     useEffect(() => {
-        queryClient.prefetchQuery({
-            queryKey: ['dashboard-table', 'pending', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
-            queryFn: () => fetchPendingOrdersData({}),
-            staleTime: 60000,
-        });
-        queryClient.prefetchQuery({
-            queryKey: ['dashboard-table', 'unshipped', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
-            queryFn: () => fetchUnshippedOrdersData({}),
-            staleTime: 60000,
-        });
-        queryClient.prefetchQuery({
-            queryKey: ['dashboard-table', 'shipped', { search: '', packedBy: undefined, testedBy: undefined }],
-            queryFn: () => fetchDashboardShippedData({}),
-            staleTime: 60000,
-        });
-    }, [queryClient]);
+        const STALE = 5 * 60 * 1000;
+
+        // Prefetch the active view immediately so it loads as fast as possible.
+        const prefetchActive = () => {
+            if (orderView === 'pending') {
+                queryClient.prefetchQuery({
+                    queryKey: ['dashboard-table', 'pending', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
+                    queryFn: () => fetchPendingOrdersData({}),
+                    staleTime: STALE,
+                });
+            } else if (orderView === 'unshipped') {
+                queryClient.prefetchQuery({
+                    queryKey: ['dashboard-table', 'unshipped', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
+                    queryFn: () => fetchUnshippedOrdersData({}),
+                    staleTime: STALE,
+                });
+            } else {
+                // shipped view — no weekStart/weekEnd here; DashboardShippedTable
+                // will supply those once it mounts.
+                queryClient.prefetchQuery({
+                    queryKey: ['dashboard-table', 'shipped', { search: '', packedBy: undefined, testedBy: undefined }],
+                    queryFn: () => fetchDashboardShippedData({}),
+                    staleTime: STALE,
+                });
+            }
+        };
+
+        prefetchActive();
+
+        // Warm the inactive tabs after a short idle delay so navigation between
+        // tabs feels instant without competing with the initial page render.
+        const timer = setTimeout(() => {
+            if (orderView !== 'pending') {
+                queryClient.prefetchQuery({
+                    queryKey: ['dashboard-table', 'pending', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
+                    queryFn: () => fetchPendingOrdersData({}),
+                    staleTime: STALE,
+                });
+            }
+            if (orderView !== 'unshipped') {
+                queryClient.prefetchQuery({
+                    queryKey: ['dashboard-table', 'unshipped', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
+                    queryFn: () => fetchUnshippedOrdersData({}),
+                    staleTime: STALE,
+                });
+            }
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [queryClient, orderView]);
 
     useEffect(() => {
         const handleRefresh = () => setRefreshKey((prev) => prev + 1);

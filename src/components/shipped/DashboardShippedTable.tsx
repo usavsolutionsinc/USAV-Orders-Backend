@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { toPSTDateKey, getCurrentPSTDateKey } from '@/lib/timezone';
+import { getCurrentPSTDateKey } from '@/lib/timezone';
 import { OrderRecordsTable } from './OrderRecordsTable';
 import { fetchDashboardShippedData } from '@/lib/dashboard-table-data';
 
@@ -44,12 +44,26 @@ export function DashboardShippedTable({
   const search = searchParams.get('search') || '';
   const weekOffset = Math.max(0, Number.parseInt(searchParams.get('shippedWeekOffset') || '0', 10) || 0);
   const weekRange = getWeekRangeForOffset(weekOffset);
-  const queryKey = ['dashboard-table', 'shipped', { search, packedBy, testedBy }] as const;
+
+  // Include week range in the query key so each week is cached separately and
+  // switching weeks is instant after the first load.  When searching, week is
+  // irrelevant — the server returns all matching records.
+  const queryKey = search.trim()
+    ? (['dashboard-table', 'shipped', { search, packedBy, testedBy }] as const)
+    : (['dashboard-table', 'shipped', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr, packedBy, testedBy }] as const);
+
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchDashboardShippedData({ searchQuery: search, packedBy, testedBy }),
-    staleTime: 60000,
-    gcTime: 10 * 60 * 1000,
+    queryFn: () =>
+      fetchDashboardShippedData({
+        searchQuery: search,
+        packedBy,
+        testedBy,
+        weekStart: search.trim() ? undefined : weekRange.startStr,
+        weekEnd: search.trim() ? undefined : weekRange.endStr,
+      }),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
   });
@@ -81,13 +95,8 @@ export function DashboardShippedTable({
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
   };
 
-  const baseRecords = query.data || [];
-  const filteredRecords = search.trim()
-    ? baseRecords
-    : baseRecords.filter((record) => {
-        const dateKey = toPSTDateKey(record.pack_date_time || record.created_at || '');
-        return Boolean(dateKey) && dateKey >= weekRange.startStr && dateKey <= weekRange.endStr;
-      });
+  // Server already filters by week when not searching — no client-side pass needed.
+  const filteredRecords = query.data || [];
 
   const clearSearch = () => {
     const params = new URLSearchParams(searchParams.toString());

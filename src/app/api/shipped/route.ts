@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAllShippedOrders, updateShippedOrderField, searchShippedOrders } from '@/lib/neon/orders-queries';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
+const CACHE_HEADERS = {
+  'Cache-Control': 'private, max-age=300, stale-while-revalidate=60',
+};
+
 /**
- * GET /api/shipped - Fetch all shipped records (paginated) or search
+ * GET /api/shipped - Fetch all shipped records (paginated/filtered) or search
+ *
+ * Supports optional weekStart/weekEnd (YYYY-MM-DD) params for the dashboard
+ * shipped table so only the current week's ~50 records are returned instead
+ * of up to 5 000 all-time records.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -11,11 +19,13 @@ export async function GET(req: NextRequest) {
     const query = searchParams.get('q');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
-    const cacheLookup = createCacheLookupKey({ query: query || '', page, limit });
+    const weekStart = searchParams.get('weekStart') || '';
+    const weekEnd = searchParams.get('weekEnd') || '';
+    const cacheLookup = createCacheLookupKey({ query: query || '', page, limit, weekStart, weekEnd });
 
     const cached = await getCachedJson<any>('api:shipped', cacheLookup);
     if (cached) {
-      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
     }
 
     if (query) {
@@ -27,20 +37,31 @@ export async function GET(req: NextRequest) {
         query
       };
       await setCachedJson('api:shipped', cacheLookup, payload, 300, ['shipped']);
-      return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
+      return NextResponse.json(payload, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     }
 
     const offset = (page - 1) * limit;
+    let shipped = await getAllShippedOrders(limit, offset);
 
-    const shipped = await getAllShippedOrders(limit, offset);
+    // Apply server-side week filtering when requested (dashboard view uses this
+    // to avoid downloading thousands of all-time records).
+    if (weekStart && weekEnd) {
+      shipped = shipped.filter((r) => {
+        const dateKey = (r.pack_date_time || r.created_at || '').substring(0, 10);
+        return dateKey >= weekStart && dateKey <= weekEnd;
+      });
+    }
+
     const payload = {
       shipped,
       page,
       limit,
       count: shipped.length,
+      weekStart: weekStart || null,
+      weekEnd: weekEnd || null,
     };
     await setCachedJson('api:shipped', cacheLookup, payload, 300, ['shipped']);
-    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
+    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
   } catch (error: any) {
     console.error('Error in GET /api/shipped:', error);
     return NextResponse.json(

@@ -5,6 +5,8 @@ import { Package, AlertTriangle, X, Search, Copy, Check, Loader2, Plus, External
 import { SearchBar } from './ui/SearchBar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDatePST, formatTimePST } from '@/lib/timezone';
+import { getTrackingUrlByCarrier } from '@/utils/tracking';
+import { invalidateReceivingCache } from '@/lib/receivingCache';
 
 interface SearchResult {
     id: string;
@@ -79,6 +81,8 @@ export default function ReceivingPanel({
             if (!res.ok) throw new Error('Failed to add entry');
 
             setTrackingNumber('');
+            invalidateReceivingCache();
+            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
             if (onEntryAdded) onEntryAdded();
         } catch (error) {
             console.error('Error adding entry:', error);
@@ -120,16 +124,6 @@ export default function ReceivingPanel({
         setTimeout(() => setCopiedField(null), 2000);
     };
 
-    const getTrackingUrl = (tracking: string, carrier: string) => {
-        const c = carrier?.toUpperCase() || '';
-        if (c.includes('UPS')) return `https://www.ups.com/track?tracknum=${tracking}`;
-        if (c.includes('FEDEX')) return `https://www.fedex.com/apps/fedextrack/?tracknumbers=${tracking}`;
-        if (c.includes('USPS')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${tracking}`;
-        if (c.includes('DHL')) return `https://www.dhl.com/en/express/tracking.html?AWB=${tracking}`;
-        if (c.includes('AMAZON')) return `https://www.amazon.com/progress-tracker/package/ref=pt_redirect_from_gp?trackingId=${tracking}`;
-        return `https://www.google.com/search?q=${tracking}`;
-    };
-
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: {
@@ -158,7 +152,7 @@ export default function ReceivingPanel({
             variants={containerVariants}
             className={`flex flex-col h-full bg-white ${embedded ? '' : 'border-r border-gray-200'}`}
         >
-            {!hideSectionHeader ? (
+            {!hideSectionHeader && (
                 <motion.div variants={itemVariants} className="p-6 border-b border-gray-200 flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-black tracking-tighter text-gray-900 uppercase leading-none">
@@ -171,14 +165,6 @@ export default function ReceivingPanel({
                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">-</span>
                             <span className="text-sm font-black text-blue-600 leading-none">{todayCount}</span>
                         </div>
-                    </div>
-                </motion.div>
-            ) : (
-                <motion.div variants={itemVariants} className="px-6 pt-3 pb-2">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-black text-black-400 uppercase tracking-widest">Today</span>
-                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">-</span>
-                        <span className="text-sm font-black text-blue-600 leading-none">{todayCount}</span>
                     </div>
                 </motion.div>
             )}

@@ -8,11 +8,17 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const limit = parseInt(searchParams.get('limit') || '50');
         const offset = parseInt(searchParams.get('offset') || '0');
-        const cacheLookup = createCacheLookupKey({ limit, offset });
+        const weekStart = searchParams.get('weekStart') || '';
+        const weekEnd = searchParams.get('weekEnd') || '';
+        const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd });
+
+        const today = new Date().toISOString().substring(0, 10);
+        const cacheTTL = weekEnd && weekEnd < today ? 86400 : 30;
+        const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=15` };
 
         const cached = await getCachedJson<any[]>('api:receiving-logs', cacheLookup);
         if (cached) {
-            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+            return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
         }
 
         const tableCheck = await pool.query(
@@ -22,31 +28,45 @@ export async function GET(request: NextRequest) {
             ) AS exists`
         );
         if (!tableCheck.rows[0]?.exists) {
-            return NextResponse.json([], { headers: { 'x-cache': 'MISS' } });
+            return NextResponse.json([], { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
         }
 
         const { dateColumn, hasQuantity } = await resolveReceivingSchema();
         const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
 
+        // Build optional week pre-filter (UTC ±1 day buffer for PST boundary records).
+        const queryParams: any[] = [];
+        let weekClause = '';
+        if (weekStart && weekEnd) {
+            queryParams.push(weekStart, weekEnd);
+            // Cast dateColumn to timestamptz so the date-arithmetic operators resolve
+            // regardless of whether the column is stored as text or timestamp.
+            weekClause = `AND ${dateColumn}::timestamptz >= ($1::date - interval '1 day')
+              AND ${dateColumn}::timestamptz <  ($2::date + interval '2 days')`;
+        }
+        queryParams.push(limit, offset);
+        const limitIdx = queryParams.length - 1;
+        const offsetIdx = queryParams.length;
+
         const logs = await pool.query(`
             SELECT id, ${dateColumn} AS timestamp, receiving_tracking_number AS tracking, carrier AS status, ${countExpr} AS count
             FROM receiving
             WHERE receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
+              ${weekClause}
             ORDER BY id DESC
-            LIMIT $1 OFFSET $2
-        `, [limit, offset]);
+            LIMIT $${limitIdx} OFFSET $${offsetIdx}
+        `, queryParams);
 
-        // Map to StationHistory interface format
         const formattedLogs = logs.rows.map((log: any) => ({
             id: String(log.id),
             timestamp: log.timestamp || '',
             tracking: log.tracking || '',
-            status: log.status || '',         // Carrier
+            status: log.status || '',
             count: parseInt(String(log.count || '1'), 10) || 1,
         }));
 
-        await setCachedJson('api:receiving-logs', cacheLookup, formattedLogs, 30, ['receiving-logs']);
-        return NextResponse.json(formattedLogs, { headers: { 'x-cache': 'MISS' } });
+        await setCachedJson('api:receiving-logs', cacheLookup, formattedLogs, cacheTTL, ['receiving-logs']);
+        return NextResponse.json(formattedLogs, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     } catch (error: any) {
         console.error('Error fetching receiving logs:', error);
         return NextResponse.json(

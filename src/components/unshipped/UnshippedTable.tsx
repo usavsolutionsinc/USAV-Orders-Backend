@@ -20,8 +20,8 @@ export function UnshippedTable({
   const query = useQuery({
     queryKey,
     queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy }),
-    staleTime: 60000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
   });

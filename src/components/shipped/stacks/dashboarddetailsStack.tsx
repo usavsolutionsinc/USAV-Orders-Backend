@@ -11,6 +11,7 @@ import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { useDeleteOrderRow, useOrderAssignment } from '@/hooks';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
+import { getActiveStaff } from '@/lib/staffCache';
 
 export function DashboardDetailsStack({
   shipped,
@@ -96,24 +97,11 @@ export function DashboardDetailsStack({
 
   useEffect(() => {
     let active = true;
-    const fetchStaff = async () => {
-      try {
-        const res = await fetch('/api/staff?active=true', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!active || !Array.isArray(data)) return;
-        setStaffOptions(
-          data.map((member: any) => ({
-            id: Number(member.id),
-            name: String(member.name || ''),
-            role: String(member.role || ''),
-          }))
-        );
-      } catch (error) {
-        console.error('Failed to load staff options:', error);
-      }
-    };
-    fetchStaff();
+    getActiveStaff()
+      .then((data) => {
+        if (active) setStaffOptions(data);
+      })
+      .catch((error) => console.error('Failed to load staff options:', error));
     return () => {
       active = false;
     };
@@ -513,11 +501,12 @@ export function DashboardDetailsStack({
           durationData={durationData}
           copiedAll={copiedAll}
           onCopyAll={onCopyAll}
+          onUpdate={onUpdate}
           productDetailsFirst
           showPackingPhotos={false}
           showPackingInformation={false}
           showTestingInformation={false}
-          showSerialNumber={false}
+          showSerialNumber
         />
       </motion.div>
 

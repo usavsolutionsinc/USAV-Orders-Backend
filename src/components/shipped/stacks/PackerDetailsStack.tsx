@@ -77,6 +77,7 @@ export function PackerDetailsStack({
         durationData={durationData}
         copiedAll={copiedAll}
         onCopyAll={onCopyAll}
+        onUpdate={onUpdate}
         productDetailsFirst={false}
         showPackingPhotos
         showPackingInformation

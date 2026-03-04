@@ -16,20 +16,35 @@ export interface PackerRecord {
   packer_photos_url: any;
 }
 
-export function usePackerLogs(packerId: number) {
+export interface UsePackerLogsOptions {
+  weekOffset?: number;
+  weekRange?: { startStr: string; endStr: string };
+}
+
+export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = {}) {
+  const { weekOffset = 0, weekRange } = options;
   const queryClient = useQueryClient();
-  const queryKey = ['packer-logs', packerId] as const;
+  const queryKey = [
+    'packer-logs',
+    packerId,
+    { weekStart: weekRange?.startStr ?? '', weekEnd: weekRange?.endStr ?? '' },
+  ] as const;
 
   const query = useQuery<PackerRecord[]>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=5000`);
+      const params = new URLSearchParams({ packerId: String(packerId), limit: '1000' });
+      if (weekRange) {
+        params.set('weekStart', weekRange.startStr);
+        params.set('weekEnd', weekRange.endStr);
+      }
+      const res = await fetch(`/api/packerlogs?${params}`);
       if (!res.ok) throw new Error('Failed to fetch packer logs');
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: weekOffset === 0 ? 2 * 60 * 1000 : 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
     refetchOnWindowFocus: false,
   });

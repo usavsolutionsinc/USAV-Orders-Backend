@@ -67,18 +67,29 @@ export async function fetchDashboardShippedData({
   searchQuery = '',
   packedBy,
   testedBy,
+  weekStart,
+  weekEnd,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
+  weekStart?: string;
+  weekEnd?: string;
 }) {
   const params = new URLSearchParams();
-  if (searchQuery.trim()) params.set('q', searchQuery.trim());
+  if (searchQuery.trim()) {
+    params.set('q', searchQuery.trim());
+  } else {
+    // Without a search query, request only the target week so the server
+    // returns ~50 records instead of up to 5 000 all-time records.
+    if (weekStart) params.set('weekStart', weekStart);
+    if (weekEnd) params.set('weekEnd', weekEnd);
+    params.set('limit', '1000');
+  }
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
-  if (!searchQuery.trim()) params.set('limit', '5000');
 
-  const url = params.toString() ? `/api/shipped?${params.toString()}` : '/api/shipped';
+  const url = `/api/shipped?${params.toString()}`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error('Failed to fetch shipped orders');

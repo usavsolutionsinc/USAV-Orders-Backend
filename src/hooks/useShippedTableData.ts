@@ -26,7 +26,19 @@ async function fetchShippedData(options: UseShippedTableDataOptions): Promise<Sh
 
   let url: string;
   if (!ordersOnly) {
-    url = search ? `/api/shipped?q=${encodeURIComponent(search)}` : '/api/shipped?limit=5000';
+    if (search) {
+      url = `/api/shipped?q=${encodeURIComponent(search)}`;
+    } else if (weekRange) {
+      // Fetch only the target week's records instead of all-time data.
+      const params = new URLSearchParams({
+        weekStart: weekRange.startStr,
+        weekEnd: weekRange.endStr,
+        limit: '1000',
+      });
+      url = `/api/shipped?${params}`;
+    } else {
+      url = '/api/shipped?limit=5000';
+    }
   } else {
     const params = new URLSearchParams();
     if (weekRange) {
@@ -76,14 +88,22 @@ export function useShippedTableData(options: UseShippedTableDataOptions = {}) {
 
   const queryKey = [
     'shipped-table',
-    { search, packedBy, testedBy, ordersOnly, missingTrackingOnly, weekOffset },
+    {
+      search,
+      packedBy,
+      testedBy,
+      ordersOnly,
+      missingTrackingOnly,
+      weekStart: options.weekRange?.startStr ?? '',
+      weekEnd: options.weekRange?.endStr ?? '',
+    },
   ] as const;
 
   const query = useQuery<ShippedOrder[]>({
     queryKey,
     queryFn: () => fetchShippedData(options),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: weekOffset === 0 ? 2 * 60 * 1000 : 30 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
     refetchOnWindowFocus: false,
   });

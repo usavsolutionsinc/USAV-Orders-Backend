@@ -51,7 +51,7 @@ export default function SkuBrowser() {
         if (searchQuery) params.set('q', searchQuery);
 
         const endpoint = view === 'sku_stock' ? '/api/sku-stock' : '/api/sku';
-        const res = await fetch(`${endpoint}?${params.toString()}`, { cache: 'no-store' });
+        const res = await fetch(`${endpoint}?${params.toString()}`);
         const data = await res.json();
 
         if (!res.ok) {
