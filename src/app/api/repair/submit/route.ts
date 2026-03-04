@@ -114,11 +114,13 @@ export async function POST(req: NextRequest) {
             finalRSNumber = `RS-${String(dbId).padStart(4, '0')}`;
         }
 
+        // Invalidate repair cache so the next GET returns fresh data
+        await invalidateCacheTags(['repair-service']);
+
         // Return success with receipt data
         return NextResponse.json({
             success: true,
             rsNumber: finalRSNumber,
-            await invalidateCacheTags(['repair-service']);
             id: dbId,
             receiptData: {
                 rsNumber: finalRSNumber,
