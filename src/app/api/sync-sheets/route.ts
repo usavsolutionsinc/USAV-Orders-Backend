@@ -174,18 +174,42 @@ async function syncShippedSheet(params: {
             const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
             const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
 
-            await client.query(
+            // packer_id and tester_id were removed from orders; assignments go to work_assignments.
+            const insertedOrder = await client.query(
                 `INSERT INTO orders (
                     order_id, product_title, quantity, condition,
-                    shipping_tracking_number, packer_id, tester_id,
+                    shipping_tracking_number,
                     ship_by_date, sku, notes, is_shipped
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                RETURNING id`,
                 [
                     orderId, productTitle, quantity, condition,
-                    shippingTracking, packedById, testedById,
+                    shippingTracking,
                     shipByDate, sku, notes, true,
                 ]
             );
+
+            const newOrderId = insertedOrder.rows[0]?.id;
+            if (newOrderId) {
+                if (testedById) {
+                    await client.query(
+                        `INSERT INTO work_assignments
+                             (entity_type, entity_id, work_type, assigned_tech_id, status, priority, notes, completed_at)
+                         VALUES ('ORDER', $1, 'TEST', $2, 'DONE', 100, 'Imported from Google Sheets sync', NOW())
+                         ON CONFLICT DO NOTHING`,
+                        [newOrderId, testedById]
+                    );
+                }
+                if (packedById) {
+                    await client.query(
+                        `INSERT INTO work_assignments
+                             (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
+                         VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, 'Imported from Google Sheets sync', NOW())
+                         ON CONFLICT DO NOTHING`,
+                        [newOrderId, packedById]
+                    );
+                }
+            }
 
             inserted++;
         }

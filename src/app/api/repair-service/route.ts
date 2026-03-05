@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllRepairs, updateRepairStatus, updateRepairNotes, updateRepairField, searchRepairs } from '@/lib/neon/repair-service-queries';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+import { publishRepairChanged } from '@/lib/realtime/publish';
 
 const REPAIR_CACHE_NS = 'api:repair-service';
 const REPAIR_TTL = 300;
@@ -66,6 +67,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     await invalidateCacheTags(REPAIR_TAGS);
+    await publishRepairChanged({ repairIds: [Number(id)], source: 'repair-service.patch' });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error in PATCH /api/repair-service:', error);

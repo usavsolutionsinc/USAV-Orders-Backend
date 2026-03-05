@@ -119,22 +119,112 @@ export async function PATCH(request: NextRequest) {
         const tracking = String(body?.tracking ?? '').trim();
         const status = String(body?.status ?? '').trim();
         const countRaw = body?.count;
+        const qaStatusRaw = String(body?.qa_status ?? body?.qaStatus ?? '').trim().toUpperCase();
+        const dispositionCodeRaw = String(body?.disposition_code ?? body?.dispositionCode ?? '').trim().toUpperCase();
+        const conditionGradeRaw = String(body?.condition_grade ?? body?.conditionGrade ?? '').trim().toUpperCase();
+        const isReturnRaw = body?.is_return ?? body?.isReturn;
+        const returnPlatformRaw = String(body?.return_platform ?? body?.returnPlatform ?? '').trim().toUpperCase();
+        const returnReasonRaw = body?.return_reason ?? body?.returnReason;
+        const needsTestRaw = body?.needs_test ?? body?.needsTest;
+        const assignedTechIdRaw = body?.assigned_tech_id ?? body?.assignedTechId;
+        const targetChannelRaw = String(body?.target_channel ?? body?.targetChannel ?? '').trim().toUpperCase();
+        const unboxedByRaw = body?.unboxed_by ?? body?.unboxedBy;
+        const unboxedAtRaw = body?.unboxed_at ?? body?.unboxedAt;
+
+        const qaStatusAllowed = new Set(['PENDING', 'PASSED', 'FAILED_DAMAGED', 'FAILED_INCOMPLETE', 'FAILED_FUNCTIONAL', 'HOLD']);
+        const dispositionAllowed = new Set(['ACCEPT', 'HOLD', 'RTV', 'SCRAP', 'REWORK']);
+        const conditionAllowed = new Set(['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
+        const returnPlatformAllowed = new Set(['AMZ', 'EBAY_DRAGONH', 'EBAY_USAV', 'EBAY_MK', 'FBA', 'WALMART', 'ECWID']);
+        const targetChannelAllowed = new Set(['ORDERS', 'FBA']);
 
         if (!Number.isFinite(id) || id <= 0) {
             return NextResponse.json({ error: 'Valid id is required' }, { status: 400 });
         }
-        if (!tracking) {
-            return NextResponse.json({ error: 'tracking is required' }, { status: 400 });
-        }
 
         const { hasQuantity } = await resolveReceivingSchema();
-        const updates: string[] = ['receiving_tracking_number = $1', 'carrier = $2'];
-        const values: any[] = [tracking, status || 'Unknown'];
-        let idx = 3;
+        const columnsRes = await pool.query(
+            `SELECT column_name
+             FROM information_schema.columns
+             WHERE table_name = 'receiving'`
+        );
+        const availableColumns = new Set<string>(columnsRes.rows.map((r: any) => String(r.column_name)));
+
+        const updates: string[] = [];
+        const values: any[] = [];
+        let idx = 1;
+
+        if (tracking) {
+            updates.push(`receiving_tracking_number = $${idx++}`);
+            values.push(tracking);
+        }
+        if (status) {
+            updates.push(`carrier = $${idx++}`);
+            values.push(status || 'Unknown');
+        }
 
         if (hasQuantity && countRaw !== undefined && countRaw !== null && String(countRaw).trim() !== '') {
             updates.push(`quantity = $${idx++}`);
             values.push(String(countRaw).trim());
+        }
+
+        if (availableColumns.has('qa_status') && qaStatusAllowed.has(qaStatusRaw)) {
+            updates.push(`qa_status = $${idx++}`);
+            values.push(qaStatusRaw);
+        }
+        if (availableColumns.has('disposition_code') && dispositionAllowed.has(dispositionCodeRaw)) {
+            updates.push(`disposition_code = $${idx++}`);
+            values.push(dispositionCodeRaw);
+        }
+        if (availableColumns.has('condition_grade') && conditionAllowed.has(conditionGradeRaw)) {
+            updates.push(`condition_grade = $${idx++}`);
+            values.push(conditionGradeRaw);
+        }
+        if (availableColumns.has('is_return') && isReturnRaw !== undefined) {
+            updates.push(`is_return = $${idx++}`);
+            values.push(!!isReturnRaw);
+        }
+        if (availableColumns.has('return_platform') && returnPlatformRaw) {
+            if (!returnPlatformAllowed.has(returnPlatformRaw)) {
+                return NextResponse.json({ error: 'Invalid return_platform' }, { status: 400 });
+            }
+            updates.push(`return_platform = $${idx++}`);
+            values.push(returnPlatformRaw);
+        }
+        if (availableColumns.has('return_reason') && returnReasonRaw !== undefined) {
+            updates.push(`return_reason = $${idx++}`);
+            values.push(String(returnReasonRaw || '').trim() || null);
+        }
+        if (availableColumns.has('needs_test') && needsTestRaw !== undefined) {
+            updates.push(`needs_test = $${idx++}`);
+            values.push(!!needsTestRaw);
+        }
+        if (availableColumns.has('assigned_tech_id') && assignedTechIdRaw !== undefined) {
+            const parsed = Number(assignedTechIdRaw);
+            updates.push(`assigned_tech_id = $${idx++}`);
+            values.push(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+        }
+        if (availableColumns.has('target_channel') && targetChannelRaw) {
+            if (!targetChannelAllowed.has(targetChannelRaw)) {
+                return NextResponse.json({ error: 'Invalid target_channel' }, { status: 400 });
+            }
+            updates.push(`target_channel = $${idx++}`);
+            values.push(targetChannelRaw);
+        }
+        if (availableColumns.has('unboxed_by') && unboxedByRaw !== undefined) {
+            const parsed = Number(unboxedByRaw);
+            updates.push(`unboxed_by = $${idx++}`);
+            values.push(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+        }
+        if (availableColumns.has('unboxed_at') && unboxedAtRaw !== undefined) {
+            updates.push(`unboxed_at = $${idx++}`);
+            values.push(unboxedAtRaw ? String(unboxedAtRaw) : null);
+        }
+        if (availableColumns.has('updated_at')) {
+            updates.push(`updated_at = NOW()`);
+        }
+
+        if (updates.length === 0) {
+            return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
         }
 
         values.push(id);

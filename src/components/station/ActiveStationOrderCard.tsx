@@ -3,14 +3,15 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ShipByDate } from '../ui/ShipByDate';
-import { Check, ClipboardList, ExternalLink, Loader2, Printer } from '../Icons';
+import { Check, ClipboardList } from '../Icons';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
+import ProductManualViewer from './ProductManualViewer';
 
 interface ActiveStationOrderCardProps {
   activeOrder: ActiveStationOrder;
   activeColorTextClass: string;
-  resolvedManual: ResolvedProductManual | null;
+  resolvedManuals: ResolvedProductManual[];
   isManualLoading: boolean;
   onViewManual?: () => void;
   onSaveManual: (params: { googleLinkOrFileId: string; type?: string | null }) => Promise<{ success: boolean; error?: string }>;
@@ -19,27 +20,20 @@ interface ActiveStationOrderCardProps {
 export default function ActiveStationOrderCard({
   activeOrder,
   activeColorTextClass,
-  resolvedManual,
+  resolvedManuals,
   isManualLoading,
   onViewManual,
   onSaveManual,
 }: ActiveStationOrderCardProps) {
   const [isSavingManual, setIsSavingManual] = React.useState(false);
 
-  const handleOpenManual = () => {
-    if (!resolvedManual?.viewUrl) return;
-    window.open(resolvedManual.viewUrl, '_blank', 'noopener,noreferrer');
-  };
-
-  const handlePrintManual = () => {
-    if (!resolvedManual?.downloadUrl) return;
-    window.open(resolvedManual.downloadUrl, '_blank', 'noopener,noreferrer');
-  };
+  const primaryManual = resolvedManuals[0] ?? null;
 
   const handleAddOrChangeManual = async () => {
     const linkOrId = window.prompt('Paste Google Drive view-only link (or file ID):');
     if (!linkOrId) return;
-    const type = window.prompt('Type (e.g. Product Manual, Packing List):', resolvedManual?.type || 'Product Manual');
+    const defaultType = primaryManual?.type || 'Product Manual';
+    const type = window.prompt('Type (e.g. Product Manual, Packing List, QR Code Manual):', defaultType);
 
     setIsSavingManual(true);
     const result = await onSaveManual({ googleLinkOrFileId: linkOrId, type: type || null });
@@ -92,7 +86,7 @@ export default function ActiveStationOrderCard({
         </div>
 
         {activeOrder.notes && (
-          <div className="space-y-3">
+          <div className="space-y-3 mt-4">
             <div className="flex items-center gap-2">
               <ClipboardList className={`w-4 h-4 ${activeColorTextClass}`} />
               <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
@@ -127,74 +121,52 @@ export default function ActiveStationOrderCard({
       )}
 
       {activeOrder.orderFound !== false && (
-      <div className="rounded-2xl p-4 border border-blue-100 bg-blue-50/40 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">Product Manual</p>
-            {resolvedManual ? (
-              <p className="text-[10px] font-bold text-blue-900">
-                Matched by {resolvedManual.matchedBy === 'sku' ? 'SKU' : 'Item #'}
-                {resolvedManual.type ? ` • ${resolvedManual.type}` : ''}
-              </p>
-            ) : (
-              <p className="text-[10px] font-bold text-gray-500">
-                {isManualLoading ? 'Resolving manual...' : 'No manual linked for this product'}
-              </p>
-            )}
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/40 overflow-hidden">
+          {/* Manual header row */}
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <div>
+              <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">Product Manual</p>
+              {resolvedManuals.length > 0 ? (
+                <p className="text-[10px] font-bold text-blue-900">
+                  {resolvedManuals.length} manual{resolvedManuals.length > 1 ? 's' : ''} linked •{' '}
+                  Matched by {primaryManual?.matchedBy === 'sku' ? 'SKU' : 'Item #'}
+                </p>
+              ) : (
+                <p className="text-[10px] font-bold text-gray-500">
+                  {isManualLoading ? 'Resolving manual...' : 'No manual linked for this product'}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleAddOrChangeManual}
+                disabled={isSavingManual}
+                className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border border-blue-200 bg-white hover:bg-blue-50 text-[10px] font-black uppercase tracking-wider text-blue-700 disabled:opacity-60"
+              >
+                {isSavingManual ? 'Saving...' : resolvedManuals.length > 0 ? 'Add Type' : 'Add Manual'}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {isManualLoading && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
-            <button
-              type="button"
-              onClick={handleAddOrChangeManual}
-              disabled={isSavingManual}
-              className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border border-blue-200 bg-white hover:bg-blue-50 text-[10px] font-black uppercase tracking-wider text-blue-700 disabled:opacity-60"
-            >
-              {isSavingManual ? 'Saving...' : resolvedManual ? 'Change Manual' : 'Add Manual'}
-            </button>
-          </div>
-        </div>
 
-        {resolvedManual && (
-          <>
-            <div className="flex gap-2">
+          {/* View Panel button */}
+          {resolvedManuals.length > 0 && (
+            <div className="px-4 pb-3 space-y-3">
               <button
                 type="button"
                 onClick={onViewManual}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider"
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider"
               >
-                View Panel
+                View Full Panel
               </button>
-              <button
-                type="button"
-                onClick={handleOpenManual}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Open
-              </button>
-              <button
-                type="button"
-                onClick={handlePrintManual}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 text-[10px] font-black uppercase tracking-wider"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                Print
-              </button>
-            </div>
 
-            <div className="h-64 rounded-xl overflow-hidden border border-blue-100 bg-white">
-              <iframe
-                src={resolvedManual.previewUrl}
-                title="Product manual preview"
-                className="w-full h-full"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
+              {/* Inline preview using ProductManualViewer */}
+              <div className="h-64 rounded-xl overflow-hidden">
+                <ProductManualViewer manuals={resolvedManuals} isLoading={isManualLoading} />
+              </div>
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </div>
       )}
     </motion.div>
   );

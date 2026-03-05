@@ -11,8 +11,6 @@ import { useStationTestingController } from '@/hooks/useStationTestingController
 interface StationTestingProps {
   userId: string;
   userName: string;
-  sheetId: string;
-  gid?: string;
   themeColor?: 'green' | 'blue' | 'purple' | 'yellow';
   onTrackingScan?: () => void;
   todayCount: number;
@@ -25,8 +23,6 @@ interface StationTestingProps {
 export default function StationTesting({
   userId,
   userName,
-  sheetId,
-  gid,
   themeColor = 'purple',
   onTrackingScan,
   todayCount = 0,
@@ -50,7 +46,7 @@ export default function StationTesting({
     errorMessage,
     successMessage,
     trackingNotFoundAlert,
-    resolvedManual,
+    resolvedManuals,
     isManualLoading,
     handleSubmit,
     triggerGlobalRefresh,
@@ -63,9 +59,6 @@ export default function StationTesting({
     themeColor,
     onTrackingScan,
   });
-
-  void sheetId;
-  void gid;
 
   return (
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
@@ -116,11 +109,11 @@ export default function StationTesting({
               className={`w-full pl-11 pr-14 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
               autoFocus
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <div className="absolute right-3 bottom-2">
               {isLoading ? (
                 <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
               ) : (
-                <div className="px-1.5 py-0.5 bg-white rounded border border-gray-100 shadow-sm">
+                <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
                   <span className="text-[8px] font-black text-gray-400">ENTER</span>
                 </div>
               )}
@@ -174,7 +167,7 @@ export default function StationTesting({
               <ActiveStationOrderCard
                 activeOrder={activeOrder}
                 activeColorTextClass={activeColor.text}
-                resolvedManual={resolvedManual}
+                resolvedManuals={resolvedManuals}
                 isManualLoading={isManualLoading}
                 onViewManual={onViewManual}
                 onSaveManual={({ googleLinkOrFileId, type }) =>

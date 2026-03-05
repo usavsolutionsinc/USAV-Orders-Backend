@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, jsonb, pgEnum } from 'drizzle-orm/pg-core';
 
 // eBay Accounts table
 export const ebayAccounts = pgTable('ebay_accounts', {
@@ -26,6 +26,68 @@ export const staff = pgTable('staff', {
   active: boolean('active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+export const qaStatusEnum = pgEnum('qa_status_enum', [
+  'PENDING',
+  'PASSED',
+  'FAILED_DAMAGED',
+  'FAILED_INCOMPLETE',
+  'FAILED_FUNCTIONAL',
+  'HOLD',
+]);
+
+export const dispositionEnum = pgEnum('disposition_enum', [
+  'ACCEPT',
+  'HOLD',
+  'RTV',
+  'SCRAP',
+  'REWORK',
+]);
+
+export const conditionGradeEnum = pgEnum('condition_grade_enum', [
+  'BRAND_NEW',
+  'USED_A',
+  'USED_B',
+  'USED_C',
+  'PARTS',
+]);
+
+export const returnPlatformEnum = pgEnum('return_platform_enum', [
+  'AMZ',
+  'EBAY_DRAGONH',
+  'EBAY_USAV',
+  'EBAY_MK',
+  'FBA',
+  'WALMART',
+  'ECWID',
+]);
+
+export const targetChannelEnum = pgEnum('target_channel_enum', [
+  'ORDERS',
+  'FBA',
+]);
+
+export const workEntityTypeEnum = pgEnum('work_entity_type_enum', [
+  'ORDER',
+  'REPAIR',
+  'FBA_SHIPMENT',
+  'RECEIVING',
+]);
+
+export const workTypeEnum = pgEnum('work_type_enum', [
+  'TEST',
+  'PACK',
+  'REPAIR',
+  'QA',
+  'RECEIVE',
+]);
+
+export const assignmentStatusEnum = pgEnum('assignment_status_enum', [
+  'ASSIGNED',
+  'IN_PROGRESS',
+  'DONE',
+  'CANCELED',
+]);
 
 // DAILY TASK LOGIC REMOVED
 
@@ -76,6 +138,8 @@ export const customers = pgTable('customers', {
 
 // Orders table - Updated schema (serial tracking moved to tech_serial_numbers)
 // Packing completion tracking moved to packer_logs table (packed_by, pack_date_time, packer_photos_url)
+// Staff assignment (tester/packer) moved to work_assignments (entity_type='ORDER', entity_id=orders.id)
+// BEFORE DELETE trigger trg_cancel_wa_on_order_delete auto-cancels related work_assignments
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   shipByDate: timestamp('ship_by_date'),
@@ -89,15 +153,9 @@ export const orders = pgTable('orders', {
   notes: text('notes'),
   quantity: text('quantity').default('1'),
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
-  // Assignment tracking (who is assigned to pack) - FK to staff.id
-  packerId: integer('packer_id').references(() => staff.id, { onDelete: 'set null' }),
-  // Assignment tracking (who is assigned to test) - FK to staff.id
-  testerId: integer('tester_id').references(() => staff.id, { onDelete: 'set null' }),
   status: text('status'),
-  // Status tracking
   statusHistory: jsonb('status_history').default([]),
   isShipped: boolean('is_shipped').notNull().default(false),
-  // eBay integration columns
   accountSource: text('account_source'),
   orderDate: timestamp('order_date'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -114,15 +172,77 @@ export const packerLogs = pgTable('packer_logs', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// Receiving table - Updated schema based on user screenshot & sheet mapping
+// Receiving table - work_assignments linked via entity_type='RECEIVING', entity_id=receiving.id
+// BEFORE DELETE trigger trg_cancel_wa_on_receiving_delete auto-cancels related work_assignments
 export const receiving = pgTable('receiving', {
   id: serial('id').primaryKey(),
-  // Support both legacy and current column names
-  dateTime: text('date_time'),
-  receivingDateTime: text('receiving_date_time'), // Sheet A
-  receivingTrackingNumber: text('receiving_tracking_number'), // Sheet B
-  carrier: text('carrier'), // Sheet C
+  dateTime: text('date_time'), // Legacy compatibility column
+  receivingDateTime: timestamp('receiving_date_time').notNull(),
+  receivingTrackingNumber: text('receiving_tracking_number'),
+  carrier: text('carrier'),
+  receivedAt: timestamp('received_at'),
+  receivedBy: integer('received_by').references(() => staff.id, { onDelete: 'set null' }),
+  unboxedAt: timestamp('unboxed_at'),
+  unboxedBy: integer('unboxed_by').references(() => staff.id, { onDelete: 'set null' }),
+  qaStatus: qaStatusEnum('qa_status').notNull().default('PENDING'),
+  dispositionCode: dispositionEnum('disposition_code').notNull().default('HOLD'),
+  conditionGrade: conditionGradeEnum('condition_grade').notNull().default('BRAND_NEW'),
+  isReturn: boolean('is_return').notNull().default(false),
+  returnPlatform: returnPlatformEnum('return_platform'),
+  returnReason: text('return_reason'),
+  needsTest: boolean('needs_test').notNull().default(false),
+  assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
+  targetChannel: targetChannelEnum('target_channel'),
+  zohoPurchaseReceiveId: text('zoho_purchase_receive_id'),
+  zohoWarehouseId: text('zoho_warehouse_id'),
   quantity: text('quantity'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const receivingLines = pgTable('receiving_lines', {
+  id: serial('id').primaryKey(),
+  receivingId: integer('receiving_id').notNull().references(() => receiving.id, { onDelete: 'cascade' }),
+  zohoItemId: text('zoho_item_id').notNull(),
+  quantity: integer('quantity').notNull(),
+  qaStatus: qaStatusEnum('qa_status').notNull().default('PENDING'),
+  dispositionCode: dispositionEnum('disposition_code').notNull().default('HOLD'),
+  conditionGrade: conditionGradeEnum('condition_grade').notNull().default('BRAND_NEW'),
+  dispositionAudit: jsonb('disposition_audit').notNull().default([]),
+});
+
+/**
+ * work_assignments — unified assignment queue for orders, receiving, repairs, FBA.
+ *
+ * Join integrity (entity_type + entity_id):
+ *   PostgreSQL does not support polymorphic FKs, so integrity is enforced by:
+ *   1. BEFORE DELETE triggers on orders and receiving that auto-CANCEL any
+ *      active assignment whose entity_id matches the deleted row's id.
+ *      (fn_cancel_work_assignments_on_entity_delete)
+ *   2. Partial composite indexes for fast lateral joins:
+ *        idx_wa_order_entity_active    — WHERE entity_type='ORDER'
+ *        idx_wa_receiving_entity_active — WHERE entity_type='RECEIVING'
+ *   3. ux_work_assignments_active_entity — unique constraint so only one
+ *      ASSIGNED/IN_PROGRESS row exists per (entity_type, entity_id, work_type).
+ */
+export const workAssignments = pgTable('work_assignments', {
+  id: serial('id').primaryKey(),
+  entityType: workEntityTypeEnum('entity_type').notNull(),
+  /** id of the referenced orders, receiving, repair_service, etc. row */
+  entityId: integer('entity_id').notNull(),
+  workType: workTypeEnum('work_type').notNull(),
+  /** Tech assignee (TEST, QA, REPAIR, RECEIVE work types) */
+  assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
+  /** Packer assignee (PACK work type) */
+  assignedPackerId: integer('assigned_packer_id').references(() => staff.id, { onDelete: 'set null' }),
+  status: assignmentStatusEnum('status').notNull().default('ASSIGNED'),
+  priority: integer('priority').notNull().default(100),
+  notes: text('notes'),
+  assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // Shipped table - DEPRECATED: Now using orders table with is_shipped = true
@@ -158,6 +278,7 @@ export const repairService = pgTable('repair_service', {
   price: text('price'),
   status: text('status').default('pending'),
   repairReasons: text('repair_reasons'),
+  repairedBy: integer('repaired_by').references(() => staff.id, { onDelete: 'set null' }),
   process: text('process'), // JSON: [{parts: string, person: string, date: timestamp}]
 });
 
@@ -198,6 +319,10 @@ export type ReceivingTask = typeof receivingTasks.$inferSelect;
 export type NewReceivingTask = typeof receivingTasks.$inferInsert;
 export type Receiving = typeof receiving.$inferSelect;
 export type NewReceiving = typeof receiving.$inferInsert;
+export type ReceivingLine = typeof receivingLines.$inferSelect;
+export type NewReceivingLine = typeof receivingLines.$inferInsert;
+export type WorkAssignment = typeof workAssignments.$inferSelect;
+export type NewWorkAssignment = typeof workAssignments.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
 export type Order = typeof orders.$inferSelect;

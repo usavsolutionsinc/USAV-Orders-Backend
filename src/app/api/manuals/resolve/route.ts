@@ -40,7 +40,6 @@ export async function GET(req: NextRequest) {
          item_number,
          google_file_id,
          type,
-         is_active,
          updated_at
        FROM product_manuals
        WHERE is_active = TRUE
@@ -50,30 +49,20 @@ export async function GET(req: NextRequest) {
          )
        ORDER BY
          CASE WHEN ($1 <> '' AND regexp_replace(UPPER(TRIM(COALESCE(sku, ''))), '[^A-Z0-9]', '', 'g') = $1) THEN 0 ELSE 1 END,
-         updated_at DESC
-       LIMIT 1`,
+         updated_at DESC`,
       [normalizedSku, normalizedItemNumber]
     );
 
     if (result.rows.length === 0) {
-      return NextResponse.json({
-        success: true,
-        found: false,
-        manual: null,
-      });
+      return NextResponse.json({ success: true, found: false, manuals: [] });
     }
 
-    const row = result.rows[0];
-    const matchedBy =
-      normalizedSku &&
-      normalizeIdentifier(String(row.sku || '')) === normalizedSku
-        ? 'sku'
-        : 'item_number';
-
-    return NextResponse.json({
-      success: true,
-      found: true,
-      manual: {
+    const manuals = result.rows.map((row) => {
+      const matchedBy =
+        normalizedSku && normalizeIdentifier(String(row.sku || '')) === normalizedSku
+          ? 'sku'
+          : 'item_number';
+      return {
         id: row.id,
         sku: row.sku || null,
         itemNumber: row.item_number || null,
@@ -82,8 +71,10 @@ export async function GET(req: NextRequest) {
         matchedBy,
         updatedAt: row.updated_at,
         ...buildDriveUrls(row.google_file_id),
-      },
+      };
     });
+
+    return NextResponse.json({ success: true, found: true, manuals });
   } catch (error: any) {
     if (error?.code === '42P01') {
       return NextResponse.json(

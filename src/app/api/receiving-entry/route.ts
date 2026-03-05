@@ -31,6 +31,36 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { trackingNumber, carrier: providedCarrier } = body;
 
+        const conditionGradeAllowed = new Set(['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
+        const qaStatusAllowed = new Set(['PENDING', 'PASSED', 'FAILED_DAMAGED', 'FAILED_INCOMPLETE', 'FAILED_FUNCTIONAL', 'HOLD']);
+        const dispositionAllowed = new Set(['ACCEPT', 'HOLD', 'RTV', 'SCRAP', 'REWORK']);
+        const returnPlatformAllowed = new Set(['AMZ', 'EBAY_DRAGONH', 'EBAY_USAV', 'EBAY_MK', 'FBA', 'WALMART', 'ECWID']);
+        const targetChannelAllowed = new Set(['ORDERS', 'FBA']);
+
+        const rawConditionGrade = String(body?.conditionGrade || body?.condition_grade || 'BRAND_NEW').trim().toUpperCase();
+        const conditionGrade = conditionGradeAllowed.has(rawConditionGrade) ? rawConditionGrade : 'BRAND_NEW';
+
+        const rawQaStatus = String(body?.qaStatus || body?.qa_status || 'PENDING').trim().toUpperCase();
+        const qaStatus = qaStatusAllowed.has(rawQaStatus) ? rawQaStatus : 'PENDING';
+
+        const rawDisposition = String(body?.dispositionCode || body?.disposition_code || 'HOLD').trim().toUpperCase();
+        const dispositionCode = dispositionAllowed.has(rawDisposition) ? rawDisposition : 'HOLD';
+
+        const isReturn = !!body?.isReturn || !!body?.is_return;
+        const rawReturnPlatform = String(body?.returnPlatform || body?.return_platform || '').trim().toUpperCase();
+        const returnPlatform = returnPlatformAllowed.has(rawReturnPlatform) ? rawReturnPlatform : null;
+        const returnReason = String(body?.returnReason || body?.return_reason || '').trim() || null;
+
+        const needsTest = !!body?.needsTest || !!body?.needs_test;
+        const assignedTechIdRaw = Number(body?.assignedTechId ?? body?.assigned_tech_id);
+        const assignedTechId = Number.isFinite(assignedTechIdRaw) && assignedTechIdRaw > 0 ? assignedTechIdRaw : null;
+
+        const rawTargetChannel = String(body?.targetChannel || body?.target_channel || '').trim().toUpperCase();
+        const targetChannel = targetChannelAllowed.has(rawTargetChannel) ? rawTargetChannel : null;
+
+        const zohoPurchaseReceiveId = String(body?.zohoPurchaseReceiveId || body?.zoho_purchase_receive_id || '').trim() || null;
+        const zohoWarehouseId = String(body?.zohoWarehouseId || body?.zoho_warehouse_id || '').trim() || null;
+
         if (!trackingNumber) {
             return NextResponse.json({ 
                 error: 'trackingNumber is required' 
@@ -45,11 +75,50 @@ export async function POST(request: NextRequest) {
         const now = formatPSTTimestamp();
         
         const { dateColumn } = await resolveReceivingSchema();
+        const columnsRes = await pool.query(
+            `SELECT column_name
+             FROM information_schema.columns
+             WHERE table_name = 'receiving'`
+        );
+        const availableColumns = new Set<string>(columnsRes.rows.map((r: any) => String(r.column_name)));
+        const valuesByColumn: Record<string, any> = {
+            [dateColumn]: now,
+            receiving_tracking_number: trackingNumber,
+            carrier: detectedCarrier,
+            receiving_date_time: now,
+            received_at: now,
+            condition_grade: conditionGrade,
+            qa_status: qaStatus,
+            disposition_code: dispositionCode,
+            is_return: isReturn,
+            return_platform: returnPlatform,
+            return_reason: returnReason,
+            needs_test: needsTest,
+            assigned_tech_id: assignedTechId,
+            target_channel: targetChannel,
+            zoho_purchase_receive_id: zohoPurchaseReceiveId,
+            zoho_warehouse_id: zohoWarehouseId,
+            updated_at: now,
+        };
+
+        const insertColumns: string[] = [];
+        const insertValues: any[] = [];
+        Object.entries(valuesByColumn).forEach(([column, value]) => {
+            if (!availableColumns.has(column)) return;
+            insertColumns.push(column);
+            insertValues.push(value);
+        });
+
+        if (insertColumns.length === 0) {
+            throw new Error('No compatible receiving columns found for insert');
+        }
+
+        const valuePlaceholders = insertColumns.map((_, i) => `$${i + 1}`).join(', ');
         const inserted = await pool.query(
-            `INSERT INTO receiving (${dateColumn}, receiving_tracking_number, carrier)
-             VALUES ($1, $2, $3)
+            `INSERT INTO receiving (${insertColumns.join(', ')})
+             VALUES (${valuePlaceholders})
              RETURNING id`,
-            [now, trackingNumber, detectedCarrier]
+            insertValues
         );
 
         const newRecord = {
@@ -58,7 +127,47 @@ export async function POST(request: NextRequest) {
             tracking: trackingNumber,
             status: detectedCarrier,
             count: 1,
+            condition_grade: conditionGrade,
+            qa_status: qaStatus,
+            disposition_code: dispositionCode,
+            is_return: isReturn,
+            return_platform: returnPlatform,
+            needs_test: needsTest,
+            assigned_tech_id: assignedTechId,
+            target_channel: targetChannel,
+            zoho_purchase_receive_id: zohoPurchaseReceiveId,
+            zoho_warehouse_id: zohoWarehouseId,
         };
+
+        if (needsTest && assignedTechId) {
+            const assignmentTableRes = await pool.query(
+                `SELECT EXISTS (
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_name = 'work_assignments'
+                ) AS exists`
+            );
+            if (assignmentTableRes.rows[0]?.exists) {
+                await pool.query(
+                    `INSERT INTO work_assignments (
+                        entity_type,
+                        entity_id,
+                        work_type,
+                        assigned_tech_id,
+                        status,
+                        priority,
+                        notes
+                     )
+                     VALUES ('RECEIVING', $1, 'TEST', $2, 'ASSIGNED', 100, $3)
+                     ON CONFLICT DO NOTHING`,
+                    [
+                        Number(inserted.rows[0].id),
+                        assignedTechId,
+                        `Auto-created from receiving entry ${trackingNumber}`,
+                    ]
+                );
+            }
+        }
 
         // Surgical Redis cache update: prepend the single new record to the
         // current week's cached array instead of invalidating and re-querying.

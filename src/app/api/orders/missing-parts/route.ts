@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishOrderChanged } from '@/lib/realtime/publish';
 
 /**
  * POST /api/orders/missing-parts - Move order to missing parts status
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest) {
     );
 
     await invalidateCacheTags(['orders', 'shipped']);
+    await publishOrderChanged({ orderIds: [Number(orderId)], source: 'orders.missing-parts' });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error marking order as missing parts:', error);

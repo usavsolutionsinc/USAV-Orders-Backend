@@ -34,7 +34,9 @@ export async function fetchPendingOrdersData({
   }
 
   const data = await res.json();
-  return (data.orders || []).map(toOrderRecord) as ShippedOrder[];
+  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter((record) => {
+    return String(record.shipping_tracking_number || '').trim().length > 0;
+  });
 }
 
 export async function fetchUnshippedOrdersData({

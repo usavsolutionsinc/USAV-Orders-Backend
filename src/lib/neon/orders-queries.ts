@@ -12,17 +12,19 @@ export interface ShippedOrder {
   shipping_tracking_number: string;
   serial_number: string; // Aggregated from tech_serial_numbers table
   sku: string;
-  tester_id: number | null; // Staff ID - who is assigned to test (from orders.tester_id)
-  tested_by: number | null; // Staff ID - who actually tested (derived from first serial scan in tech_serial_numbers)
-  test_date_time: string | null; // Derived from first serial scan
-  packer_id: number | null; // Staff ID - who is assigned to pack (from orders.packer_id)
-  packed_by: number | null; // Staff ID - who actually packed (from packer_logs.packed_by)
-  pack_date_time: string | null; // Derived from packer_logs.pack_date_time
-  packer_photos_url: any; // JSONB array from packer_logs: [{url: string, index: number, uploadedAt: string}]
-  tracking_type: string | null; // Carrier type from packer_logs (UPS, USPS, FEDEX, ORDERS, etc.)
-  account_source: string | null; // Account source (Amazon, eBay account name, etc.)
+  /** Staff ID assigned to test — sourced from work_assignments.assigned_tech_id */
+  tester_id: number | null;
+  tested_by: number | null; // who actually tested (first serial scan in tech_serial_numbers)
+  test_date_time: string | null;
+  /** Staff ID assigned to pack — sourced from work_assignments.assigned_packer_id */
+  packer_id: number | null;
+  packed_by: number | null; // who actually packed (packer_logs.packed_by)
+  pack_date_time: string | null;
+  packer_photos_url: any;
+  tracking_type: string | null;
+  account_source: string | null;
   notes: string;
-  status_history: any; // JSONB status history
+  status_history: any;
   is_shipped?: boolean;
   created_at: string | null;
   tested_by_name?: string | null;
@@ -40,9 +42,9 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
   try {
     const result = await pool.query(
       `WITH order_serials AS (
-        SELECT 
+        SELECT
           o.id,
-          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
+          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
           o.order_id,
           o.product_title,
           o.quantity,
@@ -50,24 +52,38 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           o.condition,
           o.shipping_tracking_number,
           o.sku,
-          o.packer_id,
-          o.tester_id,
           o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
-          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at,
-          'order'::text as row_source,
-          NULL::text as exception_reason,
-          NULL::text as exception_status,
+          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+          'order'::text AS row_source,
+          NULL::text AS exception_reason,
+          NULL::text AS exception_status,
+          wa_t.assigned_tech_id   AS tester_id,
+          wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by)::int as tested_by,
-          MIN(tsn.test_date_time)::text as test_date_time
+          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+          MIN(tsn.tested_by)::int AS tested_by,
+          MIN(tsn.test_date_time)::text AS test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT assigned_tech_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) wa_t ON true
+        LEFT JOIN LATERAL (
+          SELECT assigned_packer_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) wa_p ON true
         LEFT JOIN LATERAL (
           SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs pl
@@ -76,50 +92,52 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
           LIMIT 1
         ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn 
+        LEFT JOIN tech_serial_numbers tsn
           ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
              RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
         WHERE COALESCE(o.is_shipped, false) = true
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
-                 o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.item_number, o.shipping_tracking_number, o.sku,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
+                 wa_t.assigned_tech_id, wa_p.assigned_packer_id,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       ),
       exception_serials AS (
         SELECT
-          (-oe.id) as id,
-          NULL::text as ship_by_date,
-          COALESCE(o.order_id, 'EXC-' || oe.id::text) as order_id,
+          (-oe.id) AS id,
+          NULL::text AS ship_by_date,
+          COALESCE(o.order_id, 'EXC-' || oe.id::text) AS order_id,
           CASE
             WHEN POSITION(':' IN oe.shipping_tracking_number) > 0
               THEN COALESCE(ss.product_title, o.product_title, 'Unknown Product (Exception)')
             ELSE COALESCE(o.product_title, 'Unknown Product (Exception)')
-          END as product_title,
-          COALESCE(o.quantity, '1') as quantity,
+          END AS product_title,
+          COALESCE(o.quantity, '1') AS quantity,
           o.item_number,
-          COALESCE(o.condition, 'Unknown') as condition,
+          COALESCE(o.condition, 'Unknown') AS condition,
           oe.shipping_tracking_number,
-          COALESCE(o.sku, '') as sku,
-          o.packer_id,
-          o.tester_id,
-          COALESCE(o.account_source, 'Exception') as account_source,
-          COALESCE(oe.notes, '') as notes,
-          COALESCE(o.status_history, '[]'::jsonb) as status_history,
-          COALESCE(o.is_shipped, false) as is_shipped,
-          to_char(oe.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at,
-          'exception'::text as row_source,
+          COALESCE(o.sku, '') AS sku,
+          COALESCE(o.account_source, 'Exception') AS account_source,
+          COALESCE(oe.notes, '') AS notes,
+          COALESCE(o.status_history, '[]'::jsonb) AS status_history,
+          COALESCE(o.is_shipped, false) AS is_shipped,
+          to_char(oe.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+          'exception'::text AS row_source,
           oe.exception_reason,
-          oe.status as exception_status,
+          oe.status AS exception_status,
+          o_wa_t.assigned_tech_id   AS tester_id,
+          o_wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by)::int as tested_by,
-          MIN(tsn.test_date_time)::text as test_date_time
+          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+          MIN(tsn.tested_by)::int AS tested_by,
+          MIN(tsn.test_date_time)::text AS test_date_time
         FROM orders_exceptions oe
         LEFT JOIN LATERAL (
-          SELECT id, order_id, product_title, quantity, item_number, condition, sku, packer_id, tester_id, account_source, status_history, is_shipped
+          SELECT id, order_id, product_title, quantity, item_number, condition, sku,
+                 account_source, status_history, is_shipped
           FROM orders o
           WHERE o.shipping_tracking_number IS NOT NULL
             AND o.shipping_tracking_number != ''
@@ -127,6 +145,20 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           ORDER BY o.id DESC
           LIMIT 1
         ) o ON true
+        LEFT JOIN LATERAL (
+          SELECT assigned_tech_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) o_wa_t ON true
+        LEFT JOIN LATERAL (
+          SELECT assigned_packer_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) o_wa_p ON true
         LEFT JOIN LATERAL (
           SELECT sk.product_title
           FROM sku_stock sk
@@ -147,9 +179,10 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
           ON RIGHT(tsn.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
         GROUP BY
           oe.id, oe.shipping_tracking_number, oe.exception_reason, oe.status, oe.notes, oe.created_at,
-          o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku, o.packer_id, o.tester_id,
+          o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku,
           ss.product_title,
           o.account_source, o.status_history, o.is_shipped,
+          o_wa_t.assigned_tech_id, o_wa_p.assigned_packer_id,
           pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       ),
       combined AS (
@@ -157,11 +190,11 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
         UNION ALL
         SELECT * FROM exception_serials
       )
-      SELECT 
+      SELECT
         c.*,
-        s1.name as tested_by_name,
-        s2.name as packed_by_name,
-        s3.name as tester_name
+        s1.name AS tested_by_name,
+        s2.name AS packed_by_name,
+        s3.name AS tester_name
       FROM combined c
       LEFT JOIN staff s1 ON c.tested_by = s1.id
       LEFT JOIN staff s2 ON c.packed_by = s2.id
@@ -186,9 +219,9 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
   try {
     const result = await pool.query(
       `WITH order_serials AS (
-        SELECT 
+        SELECT
           o.id,
-          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
+          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
           o.order_id,
           o.product_title,
           o.quantity,
@@ -196,21 +229,35 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.condition,
           o.shipping_tracking_number,
           o.sku,
-          o.packer_id,
-          o.tester_id,
           o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
-          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at,
+          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+          wa_t.assigned_tech_id   AS tester_id,
+          wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by)::int as tested_by,
-          MIN(tsn.test_date_time)::text as test_date_time
+          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+          MIN(tsn.tested_by)::int AS tested_by,
+          MIN(tsn.test_date_time)::text AS test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT assigned_tech_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) wa_t ON true
+        LEFT JOIN LATERAL (
+          SELECT assigned_packer_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) wa_p ON true
         LEFT JOIN LATERAL (
           SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs
@@ -221,15 +268,16 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
-                 o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.item_number, o.shipping_tracking_number, o.sku,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
+                 wa_t.assigned_tech_id, wa_p.assigned_packer_id,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       )
-      SELECT 
+      SELECT
         os.*,
-        s1.name as tested_by_name,
-        s2.name as packed_by_name,
-        s3.name as tester_name
+        s1.name AS tested_by_name,
+        s2.name AS packed_by_name,
+        s3.name AS tester_name
       FROM order_serials os
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
@@ -254,9 +302,9 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
     const last8 = digitsOnly.slice(-8);
     const result = await pool.query(
       `WITH order_serials AS (
-        SELECT 
+        SELECT
           o.id,
-          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
+          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
           o.order_id,
           o.product_title,
           o.quantity,
@@ -264,24 +312,38 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           o.condition,
           o.shipping_tracking_number,
           o.sku,
-          o.packer_id,
-          o.tester_id,
           o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
-          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at,
-          'order'::text as row_source,
-          NULL::text as exception_reason,
-          NULL::text as exception_status,
+          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+          'order'::text AS row_source,
+          NULL::text AS exception_reason,
+          NULL::text AS exception_status,
+          wa_t.assigned_tech_id   AS tester_id,
+          wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by)::int as tested_by,
-          MIN(tsn.test_date_time)::text as test_date_time
+          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+          MIN(tsn.tested_by)::int AS tested_by,
+          MIN(tsn.test_date_time)::text AS test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT assigned_tech_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) wa_t ON true
+        LEFT JOIN LATERAL (
+          SELECT assigned_packer_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) wa_p ON true
         LEFT JOIN LATERAL (
           SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs pl
@@ -290,50 +352,52 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
           LIMIT 1
         ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn 
+        LEFT JOIN tech_serial_numbers tsn
           ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
              RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
         WHERE COALESCE(o.is_shipped, false) = true
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
-                 o.item_number, o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.item_number, o.shipping_tracking_number, o.sku,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
+                 wa_t.assigned_tech_id, wa_p.assigned_packer_id,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       ),
       exception_serials AS (
         SELECT
-          (-oe.id) as id,
-          NULL::text as ship_by_date,
-          COALESCE(o.order_id, 'EXC-' || oe.id::text) as order_id,
+          (-oe.id) AS id,
+          NULL::text AS ship_by_date,
+          COALESCE(o.order_id, 'EXC-' || oe.id::text) AS order_id,
           CASE
             WHEN POSITION(':' IN oe.shipping_tracking_number) > 0
               THEN COALESCE(ss.product_title, o.product_title, 'Unknown Product (Exception)')
             ELSE COALESCE(o.product_title, 'Unknown Product (Exception)')
-          END as product_title,
-          COALESCE(o.quantity, '1') as quantity,
+          END AS product_title,
+          COALESCE(o.quantity, '1') AS quantity,
           o.item_number,
-          COALESCE(o.condition, 'Unknown') as condition,
+          COALESCE(o.condition, 'Unknown') AS condition,
           oe.shipping_tracking_number,
-          COALESCE(o.sku, '') as sku,
-          o.packer_id,
-          o.tester_id,
-          COALESCE(o.account_source, 'Exception') as account_source,
-          COALESCE(oe.notes, '') as notes,
-          COALESCE(o.status_history, '[]'::jsonb) as status_history,
-          COALESCE(o.is_shipped, false) as is_shipped,
-          to_char(oe.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') as created_at,
-          'exception'::text as row_source,
+          COALESCE(o.sku, '') AS sku,
+          COALESCE(o.account_source, 'Exception') AS account_source,
+          COALESCE(oe.notes, '') AS notes,
+          COALESCE(o.status_history, '[]'::jsonb) AS status_history,
+          COALESCE(o.is_shipped, false) AS is_shipped,
+          to_char(oe.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+          'exception'::text AS row_source,
           oe.exception_reason,
-          oe.status as exception_status,
+          oe.status AS exception_status,
+          o_wa_t.assigned_tech_id   AS tester_id,
+          o_wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by)::int as tested_by,
-          MIN(tsn.test_date_time)::text as test_date_time
+          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+          MIN(tsn.tested_by)::int AS tested_by,
+          MIN(tsn.test_date_time)::text AS test_date_time
         FROM orders_exceptions oe
         LEFT JOIN LATERAL (
-          SELECT id, order_id, product_title, quantity, item_number, condition, sku, packer_id, tester_id, account_source, status_history, is_shipped
+          SELECT id, order_id, product_title, quantity, item_number, condition, sku,
+                 account_source, status_history, is_shipped
           FROM orders o
           WHERE o.shipping_tracking_number IS NOT NULL
             AND o.shipping_tracking_number != ''
@@ -341,6 +405,20 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           ORDER BY o.id DESC
           LIMIT 1
         ) o ON true
+        LEFT JOIN LATERAL (
+          SELECT assigned_tech_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) o_wa_t ON true
+        LEFT JOIN LATERAL (
+          SELECT assigned_packer_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) o_wa_p ON true
         LEFT JOIN LATERAL (
           SELECT sk.product_title
           FROM sku_stock sk
@@ -361,9 +439,10 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
           ON RIGHT(tsn.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
         GROUP BY
           oe.id, oe.shipping_tracking_number, oe.exception_reason, oe.status, oe.notes, oe.created_at,
-          o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku, o.packer_id, o.tester_id,
+          o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku,
           ss.product_title,
           o.account_source, o.status_history, o.is_shipped,
+          o_wa_t.assigned_tech_id, o_wa_p.assigned_packer_id,
           pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       ),
       combined AS (
@@ -371,15 +450,15 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
         UNION ALL
         SELECT * FROM exception_serials
       )
-      SELECT 
+      SELECT
         c.*,
-        s1.name as tested_by_name,
-        s2.name as packed_by_name,
-        s3.name as tester_name
+        s1.name AS tested_by_name,
+        s2.name AS packed_by_name,
+        s3.name AS tester_name
       FROM combined c
-      LEFT JOIN staff s1 ON c.tested_by = s1.id
-      LEFT JOIN staff s2 ON c.packed_by = s2.id
-      LEFT JOIN staff s3 ON c.tester_id = s3.id
+      LEFT JOIN staff s1 ON c.tested_by  = s1.id
+      LEFT JOIN staff s2 ON c.packed_by  = s2.id
+      LEFT JOIN staff s3 ON c.tester_id  = s3.id
       WHERE
         c.shipping_tracking_number::text = $2
         OR c.order_id::text = $2
@@ -394,8 +473,8 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
             OR RIGHT(c.order_id::text, 8) = $3
           )
         )
-      ORDER BY 
-        CASE 
+      ORDER BY
+        CASE
           WHEN c.shipping_tracking_number::text = $2 OR c.order_id::text = $2 THEN 1
           ELSE 2
         END,
@@ -420,19 +499,20 @@ export async function updateShippedOrderField(
   value: any
 ): Promise<void> {
   try {
-    // Note: Fields moved to other tables:
-    // - serial_number, tested_by, test_date_time -> tech_serial_numbers table
-    // - packed_by, pack_date_time, packer_photos_url -> packer_logs table
+    // Assignment fields (tester_id / packer_id) are no longer on the orders table.
+    // Use POST /api/orders/assign to update assignments via work_assignments.
     const allowedFields = [
-      'packer_id',
-      'tester_id',
       'notes',
       'is_shipped',
-      'status_history'
+      'status_history',
     ];
 
     if (!allowedFields.includes(field)) {
-      throw new Error(`Field ${field} is not allowed to be updated. Use tech_serial_numbers for serial/test data, or packer_logs for packing completion data.`);
+      throw new Error(
+        `Field '${field}' cannot be updated here. ` +
+        `Use /api/orders/assign for assignment changes, ` +
+        `tech_serial_numbers for serial/test data, or packer_logs for packing completion data.`
+      );
     }
 
     await pool.query(
@@ -453,29 +533,43 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
     const last8 = tracking.slice(-8).toLowerCase();
     const result = await pool.query(
       `WITH order_serials AS (
-        SELECT 
+        SELECT
           o.id,
-          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') as ship_by_date,
+          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
           o.order_id,
           o.product_title,
           o.quantity,
           o.condition,
           o.shipping_tracking_number,
           o.sku,
-          o.packer_id,
-          o.tester_id,
           o.account_source,
           o.notes,
           o.status_history,
           o.is_shipped,
+          wa_t.assigned_tech_id   AS tester_id,
+          wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') as pack_date_time,
+          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number,
-          MIN(tsn.tested_by) as tested_by,
-          MIN(tsn.test_date_time)::text as test_date_time
+          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+          MIN(tsn.tested_by) AS tested_by,
+          MIN(tsn.test_date_time)::text AS test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT assigned_tech_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) wa_t ON true
+        LEFT JOIN LATERAL (
+          SELECT assigned_packer_id
+          FROM work_assignments
+          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+            AND status IN ('ASSIGNED', 'IN_PROGRESS')
+          ORDER BY created_at DESC LIMIT 1
+        ) wa_p ON true
         LEFT JOIN LATERAL (
           SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs
@@ -487,15 +581,16 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
         WHERE COALESCE(o.is_shipped, false) = true
           AND RIGHT(o.shipping_tracking_number, 8) = $1
         GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
-                 o.shipping_tracking_number, o.sku, o.packer_id, o.tester_id,
+                 o.shipping_tracking_number, o.sku,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
+                 wa_t.assigned_tech_id, wa_p.assigned_packer_id,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       )
-      SELECT 
+      SELECT
         os.*,
-        s1.name as tested_by_name,
-        s2.name as packed_by_name,
-        s3.name as tester_name
+        s1.name AS tested_by_name,
+        s2.name AS packed_by_name,
+        s3.name AS tester_name
       FROM order_serials os
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id

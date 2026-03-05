@@ -122,20 +122,19 @@ export async function POST(req: NextRequest) {
         console.log('   DB tracking last 8:', orderState.shipping_tracking_number.slice(-8));
       }
 
-      // 3. Update orders table - set is_shipped to true only if not already shipped
-      // Match using last 8 digits to handle scanned vs manual entry variations
+      // 3. Update orders table - set is_shipped to true only if not already shipped.
+      // packer_id is no longer a column on orders; assignment recorded in work_assignments below.
       const updateResult = await client.query(`
         UPDATE orders
-        SET 
+        SET
           is_shipped = true,
-          status = 'shipped',
-          packer_id = $1
-        WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($2, 8)
+          status = 'shipped'
+        WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
         AND shipping_tracking_number IS NOT NULL
         AND shipping_tracking_number != ''
         AND is_shipped = false
         RETURNING id, order_id, shipping_tracking_number
-      `, [staffId, shippingTrackingNumber]);
+      `, [shippingTrackingNumber]);
 
       console.log('=== UPDATE RESULT ===');
       if (updateResult.rows.length === 0) {
@@ -151,7 +150,22 @@ export async function POST(req: NextRequest) {
         console.log('   DB Tracking:', updateResult.rows[0].shipping_tracking_number);
         console.log('   Set is_shipped = true');
         console.log('   Set status = shipped');
-        console.log('   Set packer_id =', staffId);
+        console.log('   Set packer_id (work_assignments) =', staffId);
+
+        // Record packer assignment in work_assignments
+        const orderId = updateResult.rows[0].id;
+        await client.query(`
+          INSERT INTO work_assignments
+              (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
+          VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
+          ON CONFLICT (entity_type, entity_id, work_type)
+              WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
+          DO UPDATE
+              SET assigned_packer_id = EXCLUDED.assigned_packer_id,
+                  status             = 'DONE',
+                  completed_at       = NOW(),
+                  updated_at         = NOW()
+        `, [orderId, staffId]);
       }
 
       await client.query('COMMIT');

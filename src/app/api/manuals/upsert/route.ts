@@ -39,11 +39,18 @@ export async function POST(req: NextRequest) {
     try {
       await client.query('BEGIN');
 
+      // Only deactivate manuals with the same (identifier, type) so multiple types can coexist per SKU.
       if (sku) {
-        await client.query('UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND sku = $1', [sku]);
+        await client.query(
+          'UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND sku = $1 AND (type = $2 OR ($2 IS NULL AND type IS NULL))',
+          [sku, type]
+        );
       }
       if (itemNumber) {
-        await client.query('UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND item_number = $1', [itemNumber]);
+        await client.query(
+          'UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND item_number = $1 AND (type = $2 OR ($2 IS NULL AND type IS NULL))',
+          [itemNumber, type]
+        );
       }
 
       const inserted = await client.query(

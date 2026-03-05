@@ -10,6 +10,7 @@ import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPa
 import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
 import { Loader2 } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import {
   fetchDashboardShippedData,
   fetchPendingOrdersData,
@@ -32,6 +33,7 @@ function DashboardPageContent() {
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const orderView = getOrderViewFromSearch(searchParams.toString());
+    useRealtimeInvalidation({ dashboard: true });
 
     useEffect(() => {
         const handleOpen = (e: CustomEvent<ShippedOrder>) => {

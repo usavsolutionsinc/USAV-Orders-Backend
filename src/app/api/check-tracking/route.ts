@@ -17,12 +17,30 @@ export async function GET(req: NextRequest) {
     const client = await pool.connect();
     
     try {
-        // Check in orders table with packer_logs join (latest ORDERS scan)
+        // Check in orders table; packer_id / tester_id now live in work_assignments.
         const ordersResult = await client.query(
-            `SELECT o.id, o.order_id, o.shipping_tracking_number, o.is_shipped, 
-                    o.packer_id, o.tester_id, o.product_title,
+            `SELECT o.id, o.order_id, o.shipping_tracking_number, o.is_shipped,
+                    o.product_title,
+                    wa_test.assigned_tech_id   AS tester_id,
+                    wa_pack.assigned_packer_id AS packer_id,
                     pl.packed_by, pl.pack_date_time
              FROM orders o
+             LEFT JOIN LATERAL (
+                 SELECT assigned_tech_id
+                 FROM work_assignments
+                 WHERE entity_type = 'ORDER'
+                   AND entity_id   = o.id
+                   AND work_type   = 'TEST'
+                 ORDER BY id DESC LIMIT 1
+             ) wa_test ON TRUE
+             LEFT JOIN LATERAL (
+                 SELECT assigned_packer_id
+                 FROM work_assignments
+                 WHERE entity_type = 'ORDER'
+                   AND entity_id   = o.id
+                   AND work_type   = 'PACK'
+                 ORDER BY id DESC LIMIT 1
+             ) wa_pack ON TRUE
              LEFT JOIN LATERAL (
                  SELECT packed_by, pack_date_time
                  FROM packer_logs
@@ -30,21 +48,21 @@ export async function GET(req: NextRequest) {
                    AND tracking_type = 'ORDERS'
                  ORDER BY pack_date_time DESC NULLS LAST, id DESC
                  LIMIT 1
-             ) pl ON true
+             ) pl ON TRUE
              WHERE o.shipping_tracking_number LIKE $1`,
             [`%${tracking}%`]
         );
-        
+
         // Check in packer_logs table
         const packerLogsResult = await client.query(
-            `SELECT shipping_tracking_number, tracking_type, pack_date_time 
-             FROM packer_logs 
+            `SELECT shipping_tracking_number, tracking_type, pack_date_time
+             FROM packer_logs
              WHERE shipping_tracking_number ILIKE $1
              ORDER BY pack_date_time DESC NULLS LAST
              LIMIT 50`,
             [`%${tracking}%`]
         );
-        
+
         return NextResponse.json({
             tracking,
             found_in_orders: ordersResult.rows,

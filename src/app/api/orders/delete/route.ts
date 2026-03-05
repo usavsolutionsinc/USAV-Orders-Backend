@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishOrderChanged } from '@/lib/realtime/publish';
 
 /**
  * POST /api/orders/delete - Delete one or more orders
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
     );
 
     await invalidateCacheTags(['orders', 'shipped']);
+    await publishOrderChanged({ orderIds: idsToDelete, source: 'orders.delete' });
     return NextResponse.json({ success: true, deleted: result.rowCount || 0 });
   } catch (error: any) {
     console.error('Error deleting order(s):', error);

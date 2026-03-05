@@ -46,6 +46,7 @@ export default function StaffSelector({ role, selectedStaffId, onSelect, variant
         if (aRank !== bRank) return aRank - bRank;
         return a.name.localeCompare(b.name);
     });
+    const otherStaff = sortedStaff.filter(s => s.id !== selectedStaffId);
     const selectedTheme = selectedStaff ? getStaffThemeById(selectedStaff.id, role) : null;
     const isBoxy = variant === 'boxy';
 
@@ -56,11 +57,11 @@ export default function StaffSelector({ role, selectedStaffId, onSelect, variant
     }
 
     return (
-        <div className="relative">
+        <div className="relative w-full">
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 className={`flex items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm ${
-                    isBoxy ? 'px-3 py-3 rounded-none h-full w-full justify-between' : 'px-3 py-1.5 rounded-xl'
+                    isBoxy ? 'px-3 py-3 rounded-none h-full w-full justify-between border-0' : 'px-3 py-1.5 rounded-xl w-full justify-between'
                 }`}
             >
                 <span className={`text-xs font-black tracking-tight ${selectedTheme ? stationThemeColors[selectedTheme].text : 'text-gray-900'}`}>
@@ -82,12 +83,11 @@ export default function StaffSelector({ role, selectedStaffId, onSelect, variant
                         className="fixed inset-0 z-[60]" 
                         onClick={() => setIsOpen(false)}
                     />
-                    <div className={`absolute top-full left-0 mt-1 min-w-[160px] bg-white border border-gray-200 shadow-xl overflow-hidden z-[70] animate-in fade-in slide-in-from-top-1 duration-200 ${
-                        isBoxy ? 'rounded-none' : 'rounded-xl'
+                    <div className={`absolute top-full left-0 w-full bg-white border border-gray-200 shadow-xl overflow-hidden z-[70] animate-in fade-in slide-in-from-top-1 duration-200 ${
+                        isBoxy ? 'rounded-none border-t-0' : 'rounded-xl mt-1'
                     }`}>
                         <div className="p-1 space-y-1">
-                            {sortedStaff.map((member) => {
-                                const isSelected = selectedStaffId === member.id;
+                            {otherStaff.map((member) => {
                                 const theme = getStaffThemeById(member.id, role);
                                 const textClass = stationThemeColors[theme].text;
                                 return (
@@ -97,16 +97,13 @@ export default function StaffSelector({ role, selectedStaffId, onSelect, variant
                                             onSelect(member.id, member.name);
                                             setIsOpen(false);
                                         }}
-                                        className={`w-full flex items-center justify-between gap-3 px-3 py-1.5 hover:bg-gray-50 transition-all group text-left ${
+                                        className={`w-full flex items-center px-3 py-1.5 hover:bg-gray-50 transition-all group text-left ${
                                             isBoxy ? 'rounded-none' : 'rounded-lg'
                                         }`}
                                     >
-                                        <span className={`text-[11px] font-bold ${textClass}`}>
+                                        <span className={`text-xs font-black ${textClass}`}>
                                             {member.name}
                                         </span>
-                                        {isSelected && (
-                                            <Check className={`w-3 h-3 ${textClass}`} />
-                                        )}
                                     </button>
                                 );
                             })}

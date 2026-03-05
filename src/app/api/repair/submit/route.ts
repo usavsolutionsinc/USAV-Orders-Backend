@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createZendeskTicket } from '@/lib/zendesk';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishRepairChanged } from '@/lib/realtime/publish';
 
 export async function POST(req: NextRequest) {
     try {
@@ -116,6 +117,7 @@ export async function POST(req: NextRequest) {
 
         // Invalidate repair cache so the next GET returns fresh data
         await invalidateCacheTags(['repair-service']);
+        await publishRepairChanged({ repairIds: [Number(dbId)], source: 'repair.submit' });
 
         // Return success with receipt data
         return NextResponse.json({

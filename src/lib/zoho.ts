@@ -61,26 +61,14 @@ export function getInventoryBaseUrl() {
 }
 
 export async function searchItemBySku(sku: string) {
-  if (!ZOHO_ORG_ID) throw new Error('ZOHO_ORG_ID missing');
-
-  const accessToken = await getAccessToken();
-  const baseUrl = getInventoryBaseUrl();
   const normalizedSku = sku.replace(/^0+/, '') || '0';
-  
-  const url = `${baseUrl}/api/v1/items?organization_id=${ZOHO_ORG_ID}&search_text=${encodeURIComponent(normalizedSku)}`;
-
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Zoho-oauthtoken ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
+  const data = await zohoInventoryRequest<{
+    items?: ZohoItem[];
+  }>('/api/v1/items', {
+    search_text: normalizedSku,
   });
-
-  if (!response.ok) throw new Error(`Zoho API error: ${response.status}`);
-
-  const data = await response.json();
   const items = data.items || [];
-  
+
   return items.find((item: any) => {
     const itemSku = String(item.sku || '').replace(/^0+/, '') || '0';
     return itemSku.toLowerCase() === normalizedSku.toLowerCase();
@@ -98,4 +86,108 @@ export function getStockInfo(item: any) {
     availableQty,
     status: availableQty > 0 ? 'In Stock' : 'Out of Stock'
   };
+}
+
+export interface ZohoItem {
+  item_id: string;
+  name?: string;
+  sku?: string;
+  available_stock?: number;
+  stock_on_hand?: number;
+}
+
+export interface ZohoWarehouse {
+  warehouse_id: string;
+  warehouse_name: string;
+  status?: string;
+}
+
+export interface ZohoPurchaseReceive {
+  purchase_receive_id: string;
+  purchaseorder_id?: string;
+  purchaseorder_number?: string;
+  date?: string;
+  status?: string;
+  vendor_name?: string;
+  warehouse_id?: string;
+  warehouse_name?: string;
+}
+
+interface ZohoPagedResponse<T> {
+  code: number;
+  message?: string;
+  page_context?: {
+    page?: number;
+    per_page?: number;
+    has_more_page?: boolean;
+    report_name?: string;
+    applied_filter?: string;
+    sort_column?: string;
+    sort_order?: string;
+  };
+  [key: string]: unknown;
+}
+
+function requireOrgId(): string {
+  if (!ZOHO_ORG_ID) throw new Error('ZOHO_ORG_ID missing');
+  return ZOHO_ORG_ID;
+}
+
+export async function zohoInventoryRequest<T = unknown>(
+  path: string,
+  query: Record<string, string | number | boolean | null | undefined> = {}
+): Promise<T> {
+  const orgId = requireOrgId();
+  const accessToken = await getAccessToken();
+  const baseUrl = getInventoryBaseUrl();
+  const params = new URLSearchParams({
+    organization_id: orgId,
+  });
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    params.set(key, String(value));
+  });
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const url = `${baseUrl}${normalizedPath}?${params.toString()}`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Zoho-oauthtoken ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    throw new Error(`Zoho API error ${response.status}: ${bodyText || 'No response body'}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export async function listPurchaseReceives(params: {
+  page?: number;
+  per_page?: number;
+  last_modified_time?: string;
+  purchaseorder_id?: string;
+} = {}): Promise<ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceives?: ZohoPurchaseReceive[] }> {
+  return zohoInventoryRequest('/api/v1/purchasereceives', params);
+}
+
+export async function getPurchaseReceiveById(
+  purchaseReceiveId: string
+): Promise<ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceive?: ZohoPurchaseReceive }> {
+  const safeId = encodeURIComponent(String(purchaseReceiveId || '').trim());
+  if (!safeId) throw new Error('purchaseReceiveId is required');
+  return zohoInventoryRequest(`/api/v1/purchasereceives/${safeId}`);
+}
+
+export async function listWarehouses(params: {
+  page?: number;
+  per_page?: number;
+} = {}): Promise<ZohoPagedResponse<ZohoWarehouse> & { warehouses?: ZohoWarehouse[] }> {
+  return zohoInventoryRequest('/api/v1/warehouses', params);
 }

@@ -75,7 +75,7 @@ export function useStationTestingController({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [trackingNotFoundAlert, setTrackingNotFoundAlert] = useState<string | null>(null);
-  const [resolvedManual, setResolvedManual] = useState<ResolvedProductManual | null>(null);
+  const [resolvedManuals, setResolvedManuals] = useState<ResolvedProductManual[]>([]);
   const [isManualLoading, setIsManualLoading] = useState(false);
   const manualRequestIdRef = useRef(0);
 
@@ -87,19 +87,19 @@ export function useStationTestingController({
 
   const activeColor = stationThemeColors[themeColor];
 
-  const publishLastManual = (manual: ResolvedProductManual | null) => {
+  const publishLastManual = (manuals: ResolvedProductManual[]) => {
     if (typeof window === 'undefined') return;
     const storageKey = `${LAST_MANUAL_STORAGE_PREFIX}${userId}`;
 
-    if (manual) {
-      window.localStorage.setItem(storageKey, JSON.stringify(manual));
+    if (manuals.length > 0) {
+      window.localStorage.setItem(storageKey, JSON.stringify(manuals));
     } else {
       window.localStorage.removeItem(storageKey);
     }
 
     window.dispatchEvent(
       new CustomEvent('tech-last-manual-updated', {
-        detail: { techId: userId, manual },
+        detail: { techId: userId, manuals },
       })
     );
   };
@@ -121,8 +121,8 @@ export function useStationTestingController({
     const itemNumberValue = String(itemNumber || '').trim();
 
     if (!skuValue && !itemNumberValue) {
-      setResolvedManual(null);
-      publishLastManual(null);
+      setResolvedManuals([]);
+      publishLastManual([]);
       return;
     }
 
@@ -136,19 +136,19 @@ export function useStationTestingController({
       const data = await res.json();
       if (requestId !== manualRequestIdRef.current) return;
 
-      if (res.ok && data?.found && data?.manual) {
-        const manual = data.manual as ResolvedProductManual;
-        setResolvedManual(manual);
-        publishLastManual(manual);
+      if (res.ok && data?.found && Array.isArray(data?.manuals) && data.manuals.length > 0) {
+        const manuals = data.manuals as ResolvedProductManual[];
+        setResolvedManuals(manuals);
+        publishLastManual(manuals);
       } else {
-        setResolvedManual(null);
-        publishLastManual(null);
+        setResolvedManuals([]);
+        publishLastManual([]);
       }
     } catch (error) {
       console.error('Manual resolve failed:', error);
       if (requestId !== manualRequestIdRef.current) return;
-      setResolvedManual(null);
-      publishLastManual(null);
+      setResolvedManuals([]);
+      publishLastManual([]);
     } finally {
       if (requestId !== manualRequestIdRef.current) return;
       setIsManualLoading(false);
@@ -202,9 +202,9 @@ export function useStationTestingController({
   useEffect(() => {
     if (!activeOrder) {
       manualRequestIdRef.current += 1;
-      setResolvedManual(null);
+      setResolvedManuals([]);
       setIsManualLoading(false);
-      publishLastManual(null);
+      publishLastManual([]);
     }
   }, [activeOrder]);
 
@@ -240,7 +240,7 @@ export function useStationTestingController({
       if (!data.found) {
         setErrorMessage(data.error || 'FNSKU not found');
         setActiveOrder(null);
-        setResolvedManual(null);
+        setResolvedManuals([]);
         return;
       }
 
@@ -270,8 +270,8 @@ export function useStationTestingController({
       }
 
       if (data.orderFound === false) {
-        setResolvedManual(null);
-        publishLastManual(null);
+        setResolvedManuals([]);
+        publishLastManual([]);
       } else {
         void resolveManual(data.order.sku, data.order.itemNumber ?? null);
       }
@@ -311,7 +311,7 @@ export function useStationTestingController({
         if (!data.found) {
           setTrackingNotFoundAlert('Tracking number not found in the system');
           setActiveOrder(null);
-          setResolvedManual(null);
+          setResolvedManuals([]);
           return;
         }
 
@@ -341,8 +341,8 @@ export function useStationTestingController({
         }
 
         if (data.orderFound === false) {
-          setResolvedManual(null);
-          publishLastManual(null);
+          setResolvedManuals([]);
+          publishLastManual([]);
         } else {
           void resolveManual(data.order.sku, data.order.itemNumber ?? null);
         }
@@ -496,11 +496,11 @@ export function useStationTestingController({
           createdAt: null,
           orderFound: true,
         });
-        setResolvedManual(null);
+        setResolvedManuals([]);
         setSuccessMessage('Test order loaded');
       } else if (command === 'YES' && activeOrder) {
         setActiveOrder(null);
-        setResolvedManual(null);
+        setResolvedManuals([]);
         setSuccessMessage('Order completed!');
         triggerGlobalRefresh();
       } else if (command === 'YES' && !activeOrder) {
@@ -553,7 +553,7 @@ export function useStationTestingController({
     errorMessage,
     successMessage,
     trackingNotFoundAlert,
-    resolvedManual,
+    resolvedManuals,
     isManualLoading,
     searchQuery,
     setSearchQuery,

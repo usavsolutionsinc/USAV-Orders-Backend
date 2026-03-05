@@ -239,14 +239,30 @@ export async function POST(req: NextRequest) {
 
             const order = orderLookup.rows[0];
 
+            // Mark the order shipped
             await pool.query(`
                 UPDATE orders
-                SET packer_id = $1,
-                    is_shipped = true,
+                SET is_shipped = true,
                     status = 'shipped'
-                WHERE id = $2
-                AND is_shipped = false
-            `, [staffId, order.id]);
+                WHERE id = $1
+                  AND is_shipped = false
+            `, [order.id]);
+
+            // Upsert a PACK work_assignment as DONE.
+            // If an active (ASSIGNED/IN_PROGRESS) row already exists for this order+PACK it is
+            // completed in-place; otherwise a new DONE row is inserted to record who packed it.
+            await pool.query(`
+                INSERT INTO work_assignments
+                    (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
+                VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, 'Auto-completed on pack scan', NOW())
+                ON CONFLICT (entity_type, entity_id, work_type)
+                    WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
+                DO UPDATE
+                    SET assigned_packer_id = EXCLUDED.assigned_packer_id,
+                        status             = 'DONE',
+                        completed_at       = NOW(),
+                        updated_at         = NOW()
+            `, [order.id, staffId]);
 
             const foundInsert = await pool.query(`
                 INSERT INTO packer_logs (

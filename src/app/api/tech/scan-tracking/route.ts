@@ -152,32 +152,53 @@ export async function POST(req: NextRequest) {
             const testedBy = staffResult.rows[0].id;
             const testedByName = staffResult.rows[0].name || null;
 
-            // Query orders table by tracking first so active order always has product info
+            // Query orders table by tracking first so active order always has product info.
+            // packer_id and tester_id are sourced from work_assignments (removed from orders).
             const result = await client.query(`
-                SELECT 
-                    id,
-                    order_id,
-                    product_title,
-                    item_number,
-                    sku,
-                    condition,
-                    notes,
-                    shipping_tracking_number,
-                    account_source,
-                    status,
-                    status_history,
-                    is_shipped,
-                    packer_id,
-                    tester_id,
-                    out_of_stock,
-                    ship_by_date,
-                    order_date,
-                    created_at,
-                    quantity
-                FROM orders
-                WHERE RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
-                  AND shipping_tracking_number IS NOT NULL
-                  AND shipping_tracking_number != ''
+                SELECT
+                    o.id,
+                    o.order_id,
+                    o.product_title,
+                    o.item_number,
+                    o.sku,
+                    o.condition,
+                    o.notes,
+                    o.shipping_tracking_number,
+                    o.account_source,
+                    o.status,
+                    o.status_history,
+                    o.is_shipped,
+                    o.out_of_stock,
+                    o.ship_by_date,
+                    o.order_date,
+                    o.created_at,
+                    o.quantity,
+                    wa_test.assigned_tech_id   AS tester_id,
+                    wa_pack.assigned_packer_id AS packer_id
+                FROM orders o
+                LEFT JOIN LATERAL (
+                    SELECT assigned_tech_id
+                    FROM work_assignments
+                    WHERE entity_type = 'ORDER'
+                      AND entity_id   = o.id
+                      AND work_type   = 'TEST'
+                      AND status NOT IN ('CANCELED', 'DONE')
+                    ORDER BY id DESC
+                    LIMIT 1
+                ) wa_test ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT assigned_packer_id
+                    FROM work_assignments
+                    WHERE entity_type = 'ORDER'
+                      AND entity_id   = o.id
+                      AND work_type   = 'PACK'
+                      AND status NOT IN ('CANCELED', 'DONE')
+                    ORDER BY id DESC
+                    LIMIT 1
+                ) wa_pack ON TRUE
+                WHERE RIGHT(regexp_replace(UPPER(o.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
+                  AND o.shipping_tracking_number IS NOT NULL
+                  AND o.shipping_tracking_number != ''
                 LIMIT 1
             `, [key18]);
 

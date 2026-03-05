@@ -37,9 +37,8 @@ interface UpNextOrderProps {
 }
 
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
-  const [activeTab, setActiveTab] = useState<'current' | 'stock'>('current');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [globalOutOfStockOrders, setGlobalOutOfStockOrders] = useState<Order[]>([]);
+  const [activeTab, setActiveTab] = useState<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'>('orders');
+  const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [allCompletedToday, setAllCompletedToday] = useState(false);
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
@@ -82,15 +81,68 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     return 'text-emerald-600';
   };
 
-  useEffect(() => {
-    fetchOrders();
-    // Poll every 30 seconds for new orders
-    const interval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(interval);
-  }, [techId, activeTab]);
+  const getQueueBucket = (order: Order): 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock' => {
+    const outOfStock = String(order.out_of_stock || '').trim();
+    if (outOfStock) return 'stock';
+
+    const orderId = String(order.order_id || '').toLowerCase();
+    const accountSource = String(order.account_source || '').toLowerCase();
+    const status = String(order.status || '').toLowerCase();
+    const sku = String(order.sku || '').toLowerCase();
+    const haystack = `${orderId} ${accountSource} ${status} ${sku}`;
+
+    if (/\b(return|returns|rma)\b/.test(haystack)) return 'returns';
+    if (/\b(repair|repaired|fix|refurb)\b/.test(haystack)) return 'repair';
+    if (/\b(fba|fnsku)\b/.test(haystack)) return 'fba';
+    if (/\b(test|testing|qa|sample)\b/.test(haystack)) return 'test';
+    return 'orders';
+  };
+
+  const tabCounts = allOrders.reduce(
+    (acc, order) => {
+      const bucket = getQueueBucket(order);
+      acc[bucket] += 1;
+      return acc;
+    },
+    { orders: 0, returns: 0, repair: 0, fba: 0, test: 0, stock: 0 } as Record<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock', number>
+  );
+
+  const visibleTabs: Array<{ id: 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'; label: string; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' }> = [
+    { id: 'orders', label: 'Orders', color: 'green' },
+    ...(tabCounts.returns > 0 ? [{ id: 'returns' as const, label: 'Returns', color: 'yellow' as const }] : []),
+    ...(tabCounts.repair > 0 ? [{ id: 'repair' as const, label: 'Repair', color: 'orange' as const }] : []),
+    ...(tabCounts.fba > 0 ? [{ id: 'fba' as const, label: 'FBA', color: 'purple' as const }] : []),
+    ...(tabCounts.test > 0 ? [{ id: 'test' as const, label: 'Test', color: 'gray' as const }] : []),
+    { id: 'stock', label: 'Stock', color: 'red' },
+  ];
+
+  const activeTabVisible = visibleTabs.some((tab) => tab.id === activeTab);
+  const effectiveTab = activeTabVisible ? activeTab : visibleTabs[0]?.id || 'orders';
+  const orders = allOrders.filter((order) => getQueueBucket(order) === effectiveTab);
+  const preferredSequence: Array<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'> = ['orders', 'returns', 'repair', 'fba', 'test', 'stock'];
 
   useEffect(() => {
-    if (activeTab === 'current' && allCompletedToday && !hasCelebratedRef.current) {
+    if (!activeTabVisible && effectiveTab !== activeTab) {
+      setActiveTab(effectiveTab);
+    }
+  }, [activeTabVisible, effectiveTab, activeTab]);
+
+  useEffect(() => {
+    if (orders.length > 0) return;
+    const next = preferredSequence.find((id) => tabCounts[id] > 0);
+    if (next && next !== activeTab) {
+      setActiveTab(next);
+    }
+  }, [orders.length, activeTab, tabCounts.orders, tabCounts.returns, tabCounts.repair, tabCounts.fba, tabCounts.test, tabCounts.stock]);
+
+  useEffect(() => {
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 30000);
+    return () => clearInterval(interval);
+  }, [techId]);
+
+  useEffect(() => {
+    if (effectiveTab === 'orders' && allCompletedToday && !hasCelebratedRef.current) {
       confetti({ particleCount: 180, spread: 80, origin: { y: 0.7 } });
       hasCelebratedRef.current = true;
       return;
@@ -98,39 +150,25 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     if (!allCompletedToday) {
       hasCelebratedRef.current = false;
     }
-  }, [allCompletedToday, activeTab]);
+  }, [allCompletedToday, effectiveTab]);
 
   const fetchOrders = async () => {
     try {
-      // Fetch orders and filter based on out_of_stock column
-      let url = `/api/orders/next?techId=${techId}&all=true`;
-      
-      // Add filter parameter for out_of_stock
-      if (activeTab === 'stock') {
-        url += '&outOfStock=true';
-      } else {
-        url += '&outOfStock=false';
-      }
+      const [currentRes, stockRes] = await Promise.all([
+        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=false`),
+        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=true`),
+      ]);
 
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        const unshippedOrders = (data.orders || []).filter((order: Order) => !order.is_shipped);
-        setOrders(unshippedOrders);
-        if (activeTab === 'current') {
-          const stockRes = await fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=true`);
-          if (stockRes.ok) {
-            const stockData = await stockRes.json();
-            const stockOrders = (stockData.orders || []).filter((order: Order) => !order.is_shipped);
-            setGlobalOutOfStockOrders(stockOrders);
-          } else {
-            setGlobalOutOfStockOrders([]);
-          }
-        } else {
-          setGlobalOutOfStockOrders([]);
-        }
-        setAllCompletedToday(data.all_completed || false);
-        if (data.all_completed && onAllCompleted && activeTab === 'current') {
+      if (currentRes.ok) {
+        const currentData = await currentRes.json();
+        const currentOrders = (currentData.orders || []).filter((order: Order) => !order.is_shipped);
+        const stockData = stockRes.ok ? await stockRes.json() : { orders: [] };
+        const stockOrders = (stockData.orders || []).filter((order: Order) => !order.is_shipped);
+        const merged = [...currentOrders, ...stockOrders];
+        const deduped = merged.filter((row, idx, arr) => arr.findIndex((cand) => Number(cand.id) === Number(row.id)) === idx);
+        setAllOrders(deduped);
+        setAllCompletedToday(currentData.all_completed || false);
+        if (currentData.all_completed && onAllCompleted) {
           onAllCompleted();
         }
       }
@@ -197,7 +235,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   };
 
   const renderOrderCard = (order: Order) => {
-    const showActions = activeTab === 'current';
+    const showActions = effectiveTab !== 'stock';
     const hasOutOfStock = String(order.out_of_stock || '').trim() !== '';
     const quantity = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
     const openDetails = () => {
@@ -389,16 +427,13 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     <div className="flex flex-col space-y-1.5">
       {/* Tab Switcher */}
       <TabSwitch
-        tabs={[
-          { id: 'current', label: 'Current', color: 'blue' },
-          { id: 'stock', label: 'Stock', color: 'orange' }
-        ]}
-        activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab as 'current' | 'stock')}
+        tabs={visibleTabs}
+        activeTab={effectiveTab}
+        onTabChange={(tab) => setActiveTab(tab as 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock')}
       />
 
       {/* Content Area */}
-      {allCompletedToday && activeTab === 'current' ? (
+      {allCompletedToday && effectiveTab === 'orders' ? (
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -417,7 +452,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       ) : orders.length === 0 ? (
         <div className="space-y-3">
           <div className="bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200">
-            {activeTab === 'stock' ? (
+            {effectiveTab === 'stock' ? (
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No out-of-stock orders</p>
                 <Package className="w-5 h-5 text-gray-300 flex-shrink-0" />
@@ -438,18 +473,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </div>
       )}
 
-      {activeTab === 'current' && globalOutOfStockOrders.length > 0 && (
-        <div>
-          <p className="text-[13px] font-black text-amber-700 uppercase tracking-widest mb-2">
-            Out of Stock Orders
-          </p>
-          <div className="space-y-2">
-            <AnimatePresence mode="popLayout">
-              {globalOutOfStockOrders.map((order) => renderOrderCard(order))}
-            </AnimatePresence>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

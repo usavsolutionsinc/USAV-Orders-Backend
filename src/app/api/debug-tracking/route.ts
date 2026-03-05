@@ -19,22 +19,31 @@ export async function GET(req: NextRequest) {
     console.log('Input length:', tracking.length);
     console.log('Last 8 digits:', tracking.slice(-8));
 
-    // Check if any orders match last 8 digits
+    // Check if any orders match last 8 digits.
+    // packer_id is sourced from work_assignments (removed from orders table).
     const matchResult = await pool.query(`
-      SELECT 
-        id,
-        order_id,
-        shipping_tracking_number,
-        is_shipped,
-        status,
-        packer_id,
-        LENGTH(shipping_tracking_number) as tracking_length,
-        RIGHT(shipping_tracking_number, 8) as db_last8
-      FROM orders
-      WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
-      AND shipping_tracking_number IS NOT NULL
-      AND shipping_tracking_number != ''
-      ORDER BY created_at DESC
+      SELECT
+        o.id,
+        o.order_id,
+        o.shipping_tracking_number,
+        o.is_shipped,
+        o.status,
+        wa_pack.assigned_packer_id AS packer_id,
+        LENGTH(o.shipping_tracking_number) AS tracking_length,
+        RIGHT(o.shipping_tracking_number, 8) AS db_last8
+      FROM orders o
+      LEFT JOIN LATERAL (
+        SELECT assigned_packer_id
+        FROM work_assignments
+        WHERE entity_type = 'ORDER'
+          AND entity_id   = o.id
+          AND work_type   = 'PACK'
+        ORDER BY id DESC LIMIT 1
+      ) wa_pack ON TRUE
+      WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT($1, 8)
+        AND o.shipping_tracking_number IS NOT NULL
+        AND o.shipping_tracking_number != ''
+      ORDER BY o.created_at DESC
     `, [tracking]);
 
     // Also check packer_logs

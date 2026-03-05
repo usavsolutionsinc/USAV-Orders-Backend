@@ -4,10 +4,12 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { RepairTable } from '@/components/repair';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 
 function RepairPageContent() {
     const searchParams = useSearchParams();
     const activeTab = searchParams.get('tab') === 'done' ? 'done' : 'active';
+    useRealtimeInvalidation({ repair: true });
     
     return (
         <div className="flex h-full w-full bg-white">

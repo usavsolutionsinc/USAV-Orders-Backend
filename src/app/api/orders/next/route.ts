@@ -3,20 +3,23 @@ import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
 /**
- * GET /api/orders/next - Get next unassigned order(s) for technicians
+ * GET /api/orders/next - Get next order(s) for a tech station.
+ * "Assigned to this tech" means an active TEST work_assignment points to them.
+ * "Unassigned" means no active TEST work_assignment exists for the order.
  */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const techId = searchParams.get('techId');
-    const getAll = searchParams.get('all') === 'true';
+    const techId     = searchParams.get('techId');
+    const getAll     = searchParams.get('all') === 'true';
     const filterStatus = searchParams.get('status');
     const outOfStock = searchParams.get('outOfStock');
     const includeAllTechForOutOfStock = outOfStock === 'true';
+
     const cacheLookup = createCacheLookupKey({
-      techId: techId || '',
-      all: getAll,
-      status: filterStatus || '',
+      techId:     techId || '',
+      all:        getAll,
+      status:     filterStatus || '',
       outOfStock: outOfStock || '',
     });
 
@@ -26,22 +29,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (!techId) {
-      return NextResponse.json(
-        { error: 'techId is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'techId is required' }, { status: 400 });
     }
 
     const techIdNum = parseInt(techId, 10);
     if (!Number.isFinite(techIdNum)) {
-      return NextResponse.json(
-        { error: 'Invalid techId' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid techId' }, { status: 400 });
     }
 
-    // Resolve station techId (1/2/3/4) to actual staff.id when available.
-    // Some environments store orders.tester_id as staff.id, others as station id.
+    // Resolve station number (1–4) to actual staff.id if applicable
     const techEmployeeIds: Record<string, string> = {
       '1': 'TECH001',
       '2': 'TECH002',
@@ -59,83 +55,91 @@ export async function GET(req: NextRequest) {
         resolvedStaffId = Number(staffResult.rows[0].id);
       }
     }
-    const testerIdScope = Array.from(
+    const techIdScope = Array.from(
       new Set([techIdNum, resolvedStaffId].filter((v): v is number => Number.isFinite(v as number)))
     );
 
-    // 1. Check if there are ANY pending orders left for this tech scope:
-    //    assigned to this tech OR unassigned
+    // Orders assigned to this tech OR unassigned (no active TEST assignment at all)
+    const techAssignedOrUnassigned = `(
+      EXISTS (
+        SELECT 1 FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER'
+          AND wa.entity_id   = o.id
+          AND wa.work_type   = 'TEST'
+          AND wa.assigned_tech_id = ANY($1::int[])
+          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER'
+          AND wa.entity_id   = o.id
+          AND wa.work_type   = 'TEST'
+          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
+      )
+    )`;
+
+    // 1. Count total pending (assigned to this tech OR unassigned)
     const totalPendingResult = await pool.query(
-      `SELECT COUNT(*) as count
+      `SELECT COUNT(*) AS count
        FROM orders o
        WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
-         AND (o.tester_id = ANY($1::int[]) OR COALESCE(o.tester_id::text, '') = '')
+         AND ${includeAllTechForOutOfStock ? 'TRUE' : techAssignedOrUnassigned}
          AND NOT EXISTS (
-           SELECT 1
-           FROM tech_serial_numbers tsn
+           SELECT 1 FROM tech_serial_numbers tsn
            WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
                  RIGHT(regexp_replace(COALESCE(o.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
          )`,
-      [testerIdScope]
+      includeAllTechForOutOfStock ? [] : [techIdScope]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
-    // 2. Build Query
+    // 2. Build main query
     const params: any[] = [];
-    const testerScopeFilter = includeAllTechForOutOfStock
-      ? ''
-      : `AND (tester_id = ANY($1::int[]) OR COALESCE(tester_id::text, '') = '')`;
+    if (!includeAllTechForOutOfStock) {
+      params.push(techIdScope); // $1
+    }
 
     let query = `
-      SELECT 
-        id,
-        ship_by_date,
-        created_at,
-        order_id,
-        product_title,
-        item_number,
-        sku,
-        account_source,
-        quantity,
-        status,
-        condition,
-        shipping_tracking_number,
-        out_of_stock
-      FROM orders
-      WHERE 
-        (is_shipped = false OR is_shipped IS NULL)
-        ${testerScopeFilter}
+      SELECT
+        o.id,
+        o.ship_by_date,
+        o.created_at,
+        o.order_id,
+        o.product_title,
+        o.item_number,
+        o.sku,
+        o.account_source,
+        o.quantity,
+        o.status,
+        o.condition,
+        o.shipping_tracking_number,
+        o.out_of_stock
+      FROM orders o
+      WHERE
+        (o.is_shipped = false OR o.is_shipped IS NULL)
+        ${includeAllTechForOutOfStock ? '' : `AND ${techAssignedOrUnassigned}`}
         AND NOT EXISTS (
-          SELECT 1
-          FROM tech_serial_numbers tsn
+          SELECT 1 FROM tech_serial_numbers tsn
           WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-                RIGHT(regexp_replace(COALESCE(orders.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
+                RIGHT(regexp_replace(COALESCE(o.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
         )
     `;
-    if (!includeAllTechForOutOfStock) {
-      params.push(testerIdScope);
-    }
 
-    // Filter based on out_of_stock parameter
     if (outOfStock === 'true') {
-      // Show orders where out_of_stock is NOT NULL and NOT empty
-      query += ` AND out_of_stock IS NOT NULL AND out_of_stock != '' `;
+      query += ` AND o.out_of_stock IS NOT NULL AND o.out_of_stock != '' `;
     } else if (outOfStock === 'false') {
-      // Show orders where out_of_stock is NULL or empty (current orders)
-      query += ` AND (out_of_stock IS NULL OR out_of_stock = '') `;
+      query += ` AND (o.out_of_stock IS NULL OR o.out_of_stock = '') `;
     }
 
-    // Note: tester_id assignment removed - techs can now work on any order
-    // Filter by status if specified
     if (filterStatus === 'missing_parts') {
-      query += ` AND status = 'missing_parts' `;
+      query += ` AND o.status = 'missing_parts' `;
     }
 
     query += `
-      ORDER BY 
+      ORDER BY
         CASE
-          WHEN ship_by_date IS NULL OR ship_by_date::text ~ '^\\d+$' THEN created_at
-          ELSE ship_by_date
+          WHEN o.ship_by_date IS NULL OR o.ship_by_date::text ~ '^\\d+$' THEN o.created_at
+          ELSE o.ship_by_date
         END ASC
     `;
 
@@ -146,28 +150,18 @@ export async function GET(req: NextRequest) {
     const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
-      const payload = { 
-        order: null, 
-        orders: [],
-        all_completed: totalPending === 0 
-      };
+      const payload = { order: null, orders: [], all_completed: totalPending === 0 };
       await setCachedJson('api:orders-next', cacheLookup, payload, 120, ['orders', 'orders-next']);
       return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
     if (getAll) {
-      const payload = { 
-        orders: result.rows,
-        all_completed: false
-      };
+      const payload = { orders: result.rows, all_completed: false };
       await setCachedJson('api:orders-next', cacheLookup, payload, 120, ['orders', 'orders-next']);
       return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
-    const payload = { 
-      order: result.rows[0],
-      all_completed: false
-    };
+    const payload = { order: result.rows[0], all_completed: false };
     await setCachedJson('api:orders-next', cacheLookup, payload, 120, ['orders', 'orders-next']);
     return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {

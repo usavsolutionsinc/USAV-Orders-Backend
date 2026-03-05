@@ -8,6 +8,7 @@ import { getPackerInputTheme } from '@/utils/staff-colors';
 interface ActivePackingOrder {
   orderId: string;
   productTitle: string;
+  qty: number;
   condition: string;
   tracking: string;
 }
@@ -86,6 +87,7 @@ export default function StationPacking({
         setActiveOrder({
           orderId: String(data?.orderId || '').trim(),
           productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
+          qty: Math.max(1, Number(data?.qty ?? data?.quantity ?? data?.orderQty ?? 1) || 1),
           condition: String(data?.condition || '').trim() || 'N/A',
           tracking: String(data?.shippingTrackingNumber || scan).trim(),
         });
@@ -93,12 +95,13 @@ export default function StationPacking({
         setActiveOrder(null);
       }
 
+      const apiMessage = String(data?.message || '').trim();
       if (data?.warning) {
         setSuccessMessage(String(data.warning));
-      } else if (data?.message) {
-        setSuccessMessage(String(data.message));
+      } else if (apiMessage && apiMessage.toLowerCase() !== 'order packed successfully') {
+        setSuccessMessage(apiMessage);
       } else {
-        setSuccessMessage(`Packed (${String(data?.trackingType || 'ORDERS')})`);
+        setSuccessMessage(null);
       }
 
       setInputValue('');
@@ -158,11 +161,11 @@ export default function StationPacking({
               className={`w-full pl-11 pr-14 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold ${activeColor.ring} ${activeColor.border} outline-none transition-all shadow-inner`}
               autoFocus
             />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <div className="absolute right-3 bottom-2">
               {isLoading ? (
                 <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
               ) : (
-                <div className="px-1.5 py-0.5 bg-white rounded border border-gray-100 shadow-sm">
+                <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
                   <span className="text-[8px] font-black text-gray-400">ENTER</span>
                 </div>
               )}
@@ -213,7 +216,11 @@ export default function StationPacking({
                   <span className="text-[10px] font-mono font-black text-gray-700">{activeOrder.orderId || 'N/A'}</span>
                 </div>
                 <h3 className="text-base font-black text-gray-900 leading-tight">{activeOrder.productTitle}</h3>
-                <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="mt-3 grid grid-cols-3 gap-3">
+                  <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Qty</p>
+                    <p className="text-xs font-bold text-gray-800">{activeOrder.qty}</p>
+                  </div>
                   <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Condition</p>
                     <p className="text-xs font-bold text-gray-800">{activeOrder.condition}</p>

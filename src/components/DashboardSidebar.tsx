@@ -158,23 +158,18 @@ function TechStationContext({ techId }: { techId: string }) {
             />
           </div>
           <div className="relative min-w-0">
-            <select
+            <ViewDropdown
+              options={[
+                { value: 'history', label: 'Tech History' },
+                { value: 'pending', label: 'Pending Orders' },
+                { value: 'manual', label: 'Last Order Manual' },
+              ]}
               value={viewMode}
-              onChange={(e) => updateViewMode(e.target.value as 'history' | 'pending' | 'manual')}
-              className="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none"
-            >
-              <option value="history">Tech History</option>
-              <option value="pending">Pending Orders</option>
-              <option value="manual">Last Order Manual</option>
-            </select>
-            <svg
-              className="w-3 h-3 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-            </svg>
+              onChange={(nextView) => updateViewMode(nextView as 'history' | 'pending' | 'manual')}
+              variant="boxy"
+              buttonClassName="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none text-left"
+              optionClassName="text-[10px] font-black"
+            />
           </div>
         </div>
       </div>
@@ -183,7 +178,6 @@ function TechStationContext({ techId }: { techId: string }) {
           embedded
           userId={techId}
           userName={techName}
-          sheetId="1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE"
           themeColor={techTheme}
           onTrackingScan={() => updateViewMode('history')}
           onViewManual={() => updateViewMode('manual')}
