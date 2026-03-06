@@ -108,14 +108,6 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
                     variant="blue"
                 />
             </motion.div>
-            <motion.header variants={itemVariants} className="p-6 border-b border-gray-100 bg-gray-50">
-                <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-                    SKU Generator
-                </h2>
-                <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
-                    Label Production
-                </p>
-            </motion.header>
             <motion.div variants={itemVariants} className="flex-1 overflow-y-auto scrollbar-hide">
                 <MultiSkuSnBarcode />
             </motion.div>

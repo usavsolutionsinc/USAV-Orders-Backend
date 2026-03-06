@@ -93,14 +93,17 @@ export default function SkuBrowser() {
     const text = String(value || '').trim();
     if (!text) return;
 
+    // Fill the barcode panel on the left and auto-trigger its search
+    window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku: text } }));
+
     try {
       await navigator.clipboard.writeText(text);
       setCopiedSku(text);
       window.setTimeout(() => {
         setCopiedSku((current) => (current === text ? '' : current));
       }, 1200);
-    } catch (error) {
-      console.error('Failed to copy SKU:', error);
+    } catch {
+      // clipboard denied — the fill still happened via the event
     }
   };
 
@@ -167,11 +170,11 @@ export default function SkuBrowser() {
                       <button
                         type="button"
                         onClick={() => handleCopySku(row.sku)}
-                        className="truncate text-left text-[12px] font-bold text-gray-900 hover:text-blue-600"
-                        title="Click to copy SKU"
+                        className="truncate text-left text-[12px] font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                        title="Click to fill barcode panel"
                       >
                         {copiedSku === String(row.sku || '').trim()
-                          ? `${String(row.sku ?? '').trim() || '—'} copied`
+                          ? <span className="text-blue-600">↑ filled</span>
                           : String(row.sku ?? '').trim() || '—'}
                       </button>
                       <div className="text-[12px] font-bold text-gray-900 truncate">
@@ -204,11 +207,11 @@ export default function SkuBrowser() {
                       <button
                         type="button"
                         onClick={() => handleCopySku(row.static_sku)}
-                        className="truncate text-left text-[12px] font-bold text-gray-900 hover:text-blue-600"
-                        title="Click to copy SKU"
+                        className="truncate text-left text-[12px] font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                        title="Click to fill barcode panel"
                       >
                         {copiedSku === String(row.static_sku || '').trim()
-                          ? `${String(row.static_sku ?? '').trim() || '—'} copied`
+                          ? <span className="text-blue-600">↑ filled</span>
                           : String(row.static_sku ?? '').trim() || '—'}
                       </button>
                       <div className="truncate text-[12px] font-bold text-gray-900">

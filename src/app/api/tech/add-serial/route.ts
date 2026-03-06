@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { toISOStringPST } from '@/lib/timezone';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishTechLogChanged } from '@/lib/realtime/publish';
 
 export async function POST(req: NextRequest) {
     try {
@@ -197,6 +198,11 @@ export async function POST(req: NextRequest) {
         }
 
         await invalidateCacheTags(['tech-logs', 'orders-next']);
+        await publishTechLogChanged({
+            techId: staffId,
+            action: 'update',
+            source: 'tech.add-serial',
+        });
         return NextResponse.json({
             success: true,
             serialNumbers: updatedSerialList,

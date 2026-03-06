@@ -4,6 +4,7 @@ import {
   getAiAssistChannelName,
   getOrdersChannelName,
   getRepairsChannelName,
+  getStationChannelName,
 } from '@/lib/realtime/channels';
 
 export const runtime = 'nodejs';
@@ -45,6 +46,7 @@ async function createTokenRequest(req: NextRequest) {
     [getOrdersChannelName()]: ['subscribe'],
     [getRepairsChannelName()]: ['subscribe'],
     [getAiAssistChannelName()]: ['subscribe'],
+    [getStationChannelName()]: ['subscribe'],
   };
 
   if (aiSessionChannel) {

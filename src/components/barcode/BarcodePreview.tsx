@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Check, X } from '../Icons';
+import { Check } from '../Icons';
 
 interface BarcodePreviewProps {
     mode: 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
@@ -21,144 +21,148 @@ interface BarcodePreviewProps {
     onPrint: () => void;
 }
 
-/**
- * Step 3: Barcode preview and print/log component
- */
-export function BarcodePreview({ 
+export function BarcodePreview({
     mode,
     uniqueSku,
     sku,
-    title, 
-    serialNumbers, 
+    title,
+    serialNumbers,
     notes,
     location,
     showNotes,
     barcodeCanvasRef,
     isPosting,
-    isActive, 
+    isActive,
     getSerialLast6,
     onToggleNotes,
     onNotesChange,
-    onPrint 
+    onPrint,
 }: BarcodePreviewProps) {
     const isPrintMode = mode === 'print' || mode === 'reprint';
     const isLocationMode = mode === 'change-location';
 
+    const accentClass = isLocationMode
+        ? 'bg-orange-600 hover:bg-orange-700'
+        : mode === 'reprint'
+        ? 'bg-violet-700 hover:bg-violet-800'
+        : 'bg-gray-900 hover:bg-gray-700';
+
+    const ctaLabel = isLocationMode
+        ? 'Confirm Update'
+        : mode === 'print'
+        ? 'Save & Print Label'
+        : mode === 'reprint'
+        ? 'Reprint Label'
+        : 'Log to Database';
+
     return (
-        <div className={`space-y-6 transition-all duration-300 ${!isActive ? 'opacity-10 pointer-events-none' : ''}`}>
-            <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-900 flex items-center justify-center text-sm font-black border border-gray-200">
-                    3
-                </div>
-                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">
-                    {isLocationMode ? 'Confirm Location' : `Review & ${mode === 'print' ? 'Print' : mode === 'reprint' ? 'Reprint' : 'Log'}`}
-                </h3>
+        <div className={`transition-opacity duration-200 ${!isActive ? 'opacity-15 pointer-events-none' : ''}`}>
+            {/* Step label */}
+            <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+                <span className="text-[9px] font-black tabular-nums text-gray-300 tracking-widest">03</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+                    {isLocationMode ? 'Confirm' : `Review & ${mode === 'print' ? 'Print' : mode === 'reprint' ? 'Reprint' : 'Log'}`}
+                </span>
             </div>
 
-            <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2.5rem] p-8 flex flex-col items-center gap-6 text-center">
+            {/* Preview area — edge-to-edge */}
+            <div className="border-t border-gray-100">
                 {isPrintMode ? (
-                    <>
-                        <div className="bg-white p-4 rounded-2xl shadow-sm">
+                    <div className="px-5 py-6 flex flex-col items-center gap-4 bg-gray-50">
+                        {/* Barcode canvas */}
+                        <div className="bg-white border border-gray-200 px-4 py-3 w-full flex justify-center">
                             <canvas ref={barcodeCanvasRef} className="max-w-full" />
                         </div>
-                        <div className="space-y-3 w-full">
-                            <div className="flex flex-col items-center gap-2">
-                                <p className="font-mono text-lg font-black tracking-tighter text-gray-900">{uniqueSku}</p>
-                            </div>
-                            <p className="text-[11px] text-gray-500 break-words px-4 leading-relaxed font-medium">{title}</p>
-                            {mode !== 'reprint' && (
-                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-full">
-                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                                    <p className="text-[9px] text-blue-600 font-black uppercase tracking-widest">
-                                        SN: {getSerialLast6(serialNumbers)}
-                                    </p>
-                                </div>
+                        {/* SKU + meta */}
+                        <div className="w-full space-y-1 text-center">
+                            <p className="font-mono text-base font-black tracking-tight text-gray-900">{uniqueSku}</p>
+                            <p className="text-[11px] text-gray-500 leading-relaxed">{title}</p>
+                            {mode !== 'reprint' && serialNumbers.length > 0 && (
+                                <p className="text-[10px] text-gray-400 font-mono">
+                                    SN: {getSerialLast6(serialNumbers)}
+                                </p>
+                            )}
+                            {location && (
+                                <p className="text-[10px] text-gray-400 font-mono">LOC: {location}</p>
                             )}
                         </div>
-                    </>
+                    </div>
                 ) : isLocationMode ? (
-                    <div className="py-4 space-y-4 w-full">
-                        <div className="p-6 bg-orange-50 text-orange-700 rounded-[2rem] border border-orange-100">
-                            <p className="text-[10px] font-black uppercase tracking-widest mb-1.5 opacity-60">Location Update</p>
-                            <p className="text-sm font-black">{sku}</p>
+                    <div className="px-5 py-5 space-y-3">
+                        <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">SKU</p>
+                            <p className="text-sm font-black font-mono text-gray-900">{sku}</p>
                         </div>
-                        <div className="text-left space-y-4 px-4">
-                            <div className="flex flex-col gap-1">
-                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">New Location</p>
-                                <p className="text-sm font-black text-orange-600 bg-orange-50/50 px-3 py-2 rounded-xl border border-orange-100/50 font-mono inline-block w-fit">
-                                    {location || 'Not specified'}
-                                </p>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest italic">This will update the master location in Sku-Stock</p>
-                            </div>
+                        <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">New Location</p>
+                            <p className="text-sm font-black font-mono text-orange-600">{location || '—'}</p>
                         </div>
+                        <p className="text-[9px] text-gray-400 italic">Updates master location in Sku-Stock</p>
                     </div>
                 ) : (
-                    <div className="py-4 space-y-4 w-full">
-                        <div className="p-6 bg-emerald-50 text-emerald-700 rounded-[2rem] border border-emerald-100">
-                            <p className="text-[10px] font-black uppercase tracking-widest mb-1.5 opacity-60">Logging Mode</p>
-                            <p className="text-sm font-black">Static SKU + {serialNumbers.length} SNs</p>
+                    /* sn-to-sku log mode */
+                    <div className="px-5 py-5 space-y-3">
+                        <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">SKU</p>
+                            <p className="text-sm font-black font-mono text-gray-900">{sku}</p>
                         </div>
-                        <div className="text-left space-y-3 px-4">
-                            <div className="flex flex-col gap-1">
-                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Selected SKU</p>
-                                <p className="text-xs font-bold text-gray-900 font-mono">{sku}</p>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Serial Numbers</p>
-                                <p className="text-xs font-bold text-gray-900 font-mono break-all">{serialNumbers.join(', ')}</p>
-                            </div>
+                        <div>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">
+                                Serial Numbers ({serialNumbers.length})
+                            </p>
+                            <p className="text-xs font-mono text-gray-700 break-all leading-relaxed">
+                                {serialNumbers.join(', ') || '—'}
+                            </p>
                         </div>
+                        {location && (
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Location</p>
+                                <p className="text-xs font-mono text-gray-700">{location}</p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
 
-            <div className="space-y-3">
-                {!isLocationMode && (
-                    <>
-                        <button
-                            onClick={onToggleNotes}
-                            className="w-full py-2 bg-gray-50 border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-100 transition-all"
-                        >
-                            {showNotes ? 'Hide' : 'Add'} Notes
-                        </button>
-
-                        {showNotes && (
-                            <textarea
-                                value={notes}
-                                onChange={(e) => onNotesChange(e.target.value)}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs outline-none resize-none min-h-[80px] placeholder:text-gray-400 text-gray-900 focus:ring-2 focus:ring-blue-500"
-                                placeholder="Notes (optional)..."
-                            />
-                        )}
-                    </>
-                )}
-
-                <button
-                    onClick={onPrint}
-                    disabled={isPosting}
-                    className={`w-full py-5 ${
-                        isLocationMode 
-                            ? 'bg-gradient-to-r from-orange-600 to-orange-500 shadow-orange-600/10' 
-                            : mode === 'reprint'
-                                ? 'bg-gradient-to-r from-purple-600 to-purple-500 shadow-purple-600/10'
-                                : 'bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-600/10'
-                    } text-white rounded-2xl text-sm font-black uppercase tracking-[0.2em] hover:brightness-110 disabled:opacity-50 transition-all shadow-xl`}
-                >
-                    {isPosting ? (
-                        <span className="flex items-center justify-center gap-2">
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            {isLocationMode ? 'Updating...' : mode === 'print' ? 'Saving & Printing...' : mode === 'reprint' ? 'Reprinting...' : 'Logging...'}
-                        </span>
-                    ) : (
-                        <span className="flex items-center justify-center gap-2">
-                            <Check className="w-5 h-5" /> 
-                            {isLocationMode ? 'Update Location' : mode === 'print' ? 'Print Label' : mode === 'reprint' ? 'Reprint Label' : 'Log to Sheet'}
-                        </span>
+            {/* Notes toggle + input */}
+            {!isLocationMode && (
+                <div className="border-t border-gray-100">
+                    <button
+                        onClick={onToggleNotes}
+                        className="w-full px-5 py-3 text-left text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors flex items-center justify-between"
+                    >
+                        <span>Notes {notes ? '(1)' : ''}</span>
+                        <span>{showNotes ? '−' : '+'}</span>
+                    </button>
+                    {showNotes && (
+                        <textarea
+                            value={notes}
+                            onChange={(e) => onNotesChange(e.target.value)}
+                            className="w-full px-5 pb-4 bg-white text-xs text-gray-900 focus:outline-none resize-none min-h-[72px] placeholder:text-gray-300 border-t border-gray-100"
+                            placeholder="Optional notes…"
+                        />
                     )}
-                </button>
-            </div>
+                </div>
+            )}
+
+            {/* CTA */}
+            <button
+                onClick={onPrint}
+                disabled={isPosting}
+                className={`w-full py-4 ${accentClass} text-white text-[10px] font-black uppercase tracking-[0.2em] transition-colors disabled:opacity-40`}
+            >
+                {isPosting ? (
+                    <span className="flex items-center justify-center gap-2">
+                        <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                        {isLocationMode ? 'Updating…' : mode === 'print' ? 'Saving & Printing…' : mode === 'reprint' ? 'Reprinting…' : 'Logging…'}
+                    </span>
+                ) : (
+                    <span className="flex items-center justify-center gap-2">
+                        <Check className="w-4 h-4" />
+                        {ctaLabel}
+                    </span>
+                )}
+            </button>
         </div>
     );
 }

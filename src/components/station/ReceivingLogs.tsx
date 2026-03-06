@@ -8,6 +8,10 @@ import { formatTimePST, toPSTDateKey, getCurrentPSTDateKey } from '@/lib/timezon
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
+
+const STATION_CHANNEL =
+  process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES || 'station:changes';
 
 interface ReceivingLog {
     id: string;
@@ -153,6 +157,28 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
         window.addEventListener('usav-refresh-data', handleRefresh);
         return () => window.removeEventListener('usav-refresh-data', handleRefresh);
     }, [queryClient]);
+
+    // Ably: cross-session live updates (mobile or other browser tabs).
+    useAblyChannel(
+        STATION_CHANNEL,
+        'receiving-log.changed',
+        (msg: any) => {
+            const { action, row } = msg?.data ?? {};
+            if (action === 'insert' && row) {
+                const currentWeek = computeWeekRange(0);
+                queryClient.setQueryData<ReceivingLog[]>(
+                    ['receiving-logs', { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
+                    (prev) => {
+                        if (!prev) return undefined;
+                        if (prev.some((r) => r.id === (row as ReceivingLog).id)) return prev;
+                        return [row as ReceivingLog, ...prev];
+                    },
+                );
+            } else {
+                queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
+            }
+        },
+    );
 
     const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 

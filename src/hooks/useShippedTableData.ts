@@ -3,6 +3,12 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { useAblyChannel } from './useAblyChannel';
+
+const ORDERS_CHANNEL =
+  process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
+const STATION_CHANNEL =
+  process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES || 'station:changes';
 
 interface UseShippedTableDataOptions {
   search?: string;
@@ -106,6 +112,16 @@ export function useShippedTableData(options: UseShippedTableDataOptions = {}) {
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
     refetchOnWindowFocus: false,
+  });
+
+  // Live invalidation: orders table changed (assignment, status, is_shipped)
+  useAblyChannel(ORDERS_CHANNEL, 'order.changed', () => {
+    queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+  });
+
+  // A packer log was inserted → order transitioned to shipped
+  useAblyChannel(STATION_CHANNEL, 'packer-log.changed', () => {
+    queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
   });
 
   useEffect(() => {

@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { normalizeSku } from '@/utils/sku';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishTechLogChanged } from '@/lib/realtime/publish';
 
 export async function POST(req: NextRequest) {
   try {
@@ -196,6 +197,11 @@ export async function POST(req: NextRequest) {
     );
     
     await invalidateCacheTags(['tech-logs', 'orders-next']);
+    await publishTechLogChanged({
+      techId: staffId,
+      action: 'update',
+      source: 'tech.scan-sku',
+    });
     return NextResponse.json({
       success: true,
       serialNumbers: insertedSerials,

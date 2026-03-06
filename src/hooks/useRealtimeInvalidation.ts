@@ -1,7 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAblyChannel } from './useAblyChannel';
+
+const ORDERS_CHANNEL =
+  process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
+const REPAIRS_CHANNEL =
+  process.env.NEXT_PUBLIC_ABLY_CHANNEL_REPAIR_CHANGES || 'repair:changes';
 
 interface UseRealtimeInvalidationOptions {
   dashboard?: boolean;
@@ -14,68 +19,24 @@ export function useRealtimeInvalidation({
 }: UseRealtimeInvalidationOptions = {}) {
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!dashboard && !repair) return;
-
-    let disposed = false;
-    let realtimeClient: any = null;
-    let ordersChannel: any = null;
-    let repairsChannel: any = null;
-
-    const authPath = process.env.NEXT_PUBLIC_ABLY_AUTH_PATH || '/api/realtime/token';
-    const ordersChannelName = process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
-    const repairsChannelName = process.env.NEXT_PUBLIC_ABLY_CHANNEL_REPAIR_CHANGES || 'repair:changes';
-
-    const invalidateDashboardQueries = () => {
+  useAblyChannel(
+    ORDERS_CHANNEL,
+    'order.changed',
+    () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
-    };
+      queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+    },
+    dashboard,
+  );
 
-    const invalidateRepairQueries = () => {
+  useAblyChannel(
+    REPAIRS_CHANNEL,
+    'repair.changed',
+    () => {
       queryClient.invalidateQueries({ queryKey: ['repairs'] });
-    };
-
-    import('ably').then((Ably) => {
-      if (disposed) return;
-
-      realtimeClient = new Ably.Realtime({
-        authUrl: authPath,
-      });
-
-      if (dashboard) {
-        ordersChannel = realtimeClient.channels.get(ordersChannelName);
-        ordersChannel.subscribe('order.changed', () => {
-          invalidateDashboardQueries();
-        });
-      }
-
-      if (repair) {
-        repairsChannel = realtimeClient.channels.get(repairsChannelName);
-        repairsChannel.subscribe('repair.changed', () => {
-          invalidateRepairQueries();
-        });
-      }
-    }).catch((error) => {
-      console.error('[realtime] Failed to initialize Ably client:', error);
-    });
-
-    return () => {
-      disposed = true;
-
-      try {
-        if (ordersChannel) {
-          ordersChannel.unsubscribe('order.changed');
-        }
-        if (repairsChannel) {
-          repairsChannel.unsubscribe('repair.changed');
-        }
-        if (realtimeClient) {
-          realtimeClient.close();
-        }
-      } catch (error) {
-        console.error('[realtime] Cleanup failed:', error);
-      }
-    };
-  }, [dashboard, queryClient, repair]);
+    },
+    repair,
+  );
 }

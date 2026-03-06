@@ -3,24 +3,23 @@ import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
 /**
- * GET /api/orders/next - Get next order(s) for a tech station.
- * "Assigned to this tech" means an active TEST work_assignment points to them.
- * "Unassigned" means no active TEST work_assignment exists for the order.
+ * GET /api/orders/next - Get next order(s) for a tech.
+ * Rules:
+ *  - orders.shipping_tracking_number must be present
+ *  - orders.is_shipped must be false/null
+ *  - order must be assigned via work_assignments.assigned_tech_id (staff.id)
  */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const techId     = searchParams.get('techId');
     const getAll     = searchParams.get('all') === 'true';
-    const filterStatus = searchParams.get('status');
     const outOfStock = searchParams.get('outOfStock');
     const assignedOnly = searchParams.get('assignedOnly') === 'true';
-    const includeAllTechForOutOfStock = outOfStock === 'true';
 
     const cacheLookup = createCacheLookupKey({
       techId:     techId || '',
       all:        getAll,
-      status:     filterStatus || '',
       outOfStock: outOfStock || '',
       assignedOnly,
     });
@@ -61,60 +60,38 @@ export async function GET(req: NextRequest) {
       new Set([techIdNum, resolvedStaffId].filter((v): v is number => Number.isFinite(v as number)))
     );
 
-    // Orders assigned to this tech OR unassigned (no active TEST assignment at all)
-    const techAssignedOrUnassigned = `(
-      EXISTS (
-        SELECT 1 FROM work_assignments wa
-        WHERE wa.entity_type = 'ORDER'
-          AND wa.entity_id   = o.id
-          AND wa.work_type   = 'TEST'
-          AND wa.assigned_tech_id = ANY($1::int[])
-          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
-      )
-      OR NOT EXISTS (
-        SELECT 1 FROM work_assignments wa
-        WHERE wa.entity_type = 'ORDER'
-          AND wa.entity_id   = o.id
-          AND wa.work_type   = 'TEST'
-          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
-      )
-    )`;
-    const techAssignedOnly = `(
-      EXISTS (
-        SELECT 1 FROM work_assignments wa
-        WHERE wa.entity_type = 'ORDER'
-          AND wa.entity_id   = o.id
-          AND wa.work_type   = 'TEST'
-          AND wa.assigned_tech_id = ANY($1::int[])
-          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
-      )
-    )`;
-    const assignmentScopeSql = assignedOnly ? techAssignedOnly : techAssignedOrUnassigned;
-    const bypassScopeForOutOfStock = includeAllTechForOutOfStock && !assignedOnly;
+    // 1. Count total assigned pending orders for this tech
+    const countWhere: string[] = [
+      "wa.entity_type = 'ORDER'",
+      "wa.work_type = 'TEST'",
+      "wa.assigned_tech_id = ANY($1::int[])",
+      "o.is_shipped IS NOT TRUE",
+      "COALESCE(BTRIM(o.shipping_tracking_number), '') <> ''",
+    ];
+    if (outOfStock === 'true') {
+      countWhere.push("COALESCE(BTRIM(o.out_of_stock), '') <> ''");
+    } else if (outOfStock === 'false') {
+      countWhere.push("COALESCE(BTRIM(o.out_of_stock), '') = ''");
+    }
 
-    // 1. Count total pending (assigned to this tech OR unassigned)
     const totalPendingResult = await pool.query(
-      `SELECT COUNT(*) AS count
+      `SELECT COUNT(DISTINCT o.id) AS count
        FROM orders o
-       WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
-         AND ${bypassScopeForOutOfStock ? 'TRUE' : assignmentScopeSql}
-         AND NOT EXISTS (
-           SELECT 1 FROM tech_serial_numbers tsn
-           WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-                 RIGHT(regexp_replace(COALESCE(o.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
-         )`,
-      bypassScopeForOutOfStock ? [] : [techIdScope]
+       INNER JOIN work_assignments wa
+         ON wa.entity_id = o.id
+       INNER JOIN staff s
+         ON s.id = wa.assigned_tech_id
+       WHERE ${countWhere.join(' AND ')}`,
+      [techIdScope]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
     // 2. Build main query
-    const params: any[] = [];
-    if (!bypassScopeForOutOfStock) {
-      params.push(techIdScope); // $1
-    }
+    const params: any[] = [techIdScope];
+    const where: string[] = [...countWhere];
 
     let query = `
-      SELECT
+      SELECT DISTINCT ON (o.id)
         o.id,
         o.ship_by_date,
         o.created_at,
@@ -124,33 +101,21 @@ export async function GET(req: NextRequest) {
         o.sku,
         o.account_source,
         o.quantity,
-        o.status,
         o.condition,
         o.shipping_tracking_number,
         o.out_of_stock
       FROM orders o
-      WHERE
-        (o.is_shipped = false OR o.is_shipped IS NULL)
-        ${bypassScopeForOutOfStock ? '' : `AND ${assignmentScopeSql}`}
-        AND NOT EXISTS (
-          SELECT 1 FROM tech_serial_numbers tsn
-          WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-                RIGHT(regexp_replace(COALESCE(o.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
-        )
+      INNER JOIN work_assignments wa
+        ON wa.entity_id = o.id
+      INNER JOIN staff s
+        ON s.id = wa.assigned_tech_id
+      WHERE ${where.join(' AND ')}
     `;
-
-    if (outOfStock === 'true') {
-      query += ` AND o.out_of_stock IS NOT NULL AND o.out_of_stock != '' `;
-    } else if (outOfStock === 'false') {
-      query += ` AND (o.out_of_stock IS NULL OR o.out_of_stock = '') `;
-    }
-
-    if (filterStatus === 'missing_parts') {
-      query += ` AND o.status = 'missing_parts' `;
-    }
 
     query += `
       ORDER BY
+        o.id,
+        wa.assigned_at DESC,
         CASE
           WHEN o.ship_by_date IS NULL OR o.ship_by_date::text ~ '^\\d+$' THEN o.created_at
           ELSE o.ship_by_date

@@ -4,6 +4,7 @@ import { getCarrier } from '@/utils/tracking';
 import { formatPSTTimestamp } from '@/lib/timezone';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
+import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 
 /**
  * Compute Mon–Fri week range (PST date strings) for a given PST timestamp string
@@ -189,6 +190,13 @@ export async function POST(request: NextRequest) {
                 ['receiving-logs'],
             );
         }
+
+        await publishReceivingLogChanged({
+            action: 'insert',
+            rowId: newRecord.id,
+            row: newRecord,
+            source: 'receiving-entry',
+        });
 
         return NextResponse.json({ success: true, record: newRecord }, { status: 201 });
     } catch (error) {

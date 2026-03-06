@@ -14,6 +14,16 @@ interface ActivePackingOrder {
   tracking: string;
 }
 
+interface ActiveFbaScan {
+  fnsku: string;
+  productTitle: string;
+  shipmentRef: string | null;
+  actualQty: number;
+  expectedQty: number;
+  status: string;
+  isNew: boolean;  // true if no existing fba_shipment_items row was found (added on-the-fly)
+}
+
 interface StationPackingProps {
   userId: string;
   userName: string;
@@ -22,6 +32,12 @@ interface StationPackingProps {
   goal?: number;
   onComplete?: () => void;
   embedded?: boolean;
+}
+
+// FNSKUs start with X0, B0, or are exactly 10 alphanumeric chars — Amazon barcode pattern
+function looksLikeFnsku(value: string): boolean {
+  const v = value.trim().toUpperCase();
+  return /^X0[A-Z0-9]{8,10}$/.test(v) || /^B0[A-Z0-9]{8,}$/.test(v);
 }
 
 export default function StationPacking({
@@ -37,8 +53,8 @@ export default function StationPacking({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [lastScanType, setLastScanType] = useState<string | null>(null);
   const [activeOrder, setActiveOrder] = useState<ActivePackingOrder | null>(null);
+  const [activeFba, setActiveFba] = useState<ActiveFbaScan | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const safeGoal = Math.max(1, Number(goal) || 1);
@@ -46,71 +62,100 @@ export default function StationPacking({
   const remainingToGoal = Math.max(safeGoal - todayCount, 0);
   const activeColor = getPackerInputTheme(themeColor);
 
-  const handleSubmit = async (event?: React.FormEvent, externalInput?: string) => {
+  const handleSubmit = async (event?: React.FormEvent) => {
     if (event) event.preventDefault();
-    const scan = String(externalInput ?? inputValue ?? '').trim();
+    const scan = inputValue.trim();
     if (!scan || isLoading) return;
 
     setIsLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setActiveOrder(null);
+    setActiveFba(null);
 
     try {
-      const res = await fetch('/api/packing-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trackingNumber: scan,
-          photos: [],
-          packerId: String(userId),
-          packerName: userName,
-          timestamp: formatPSTTimestamp(),
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || 'Failed to save packing scan');
-      }
-
-      const resolvedScanType = String(data?.trackingType || '').trim() || 'ORDERS';
-      setLastScanType(resolvedScanType);
-      if (resolvedScanType === 'ORDERS') {
-        setActiveOrder({
-          orderId: String(data?.orderId || '').trim(),
-          productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
-          qty: Math.max(1, Number(data?.qty ?? data?.quantity ?? data?.orderQty ?? 1) || 1),
-          condition: String(data?.condition || '').trim() || 'N/A',
-          tracking: String(data?.shippingTrackingNumber || scan).trim(),
+      // ── FBA path: FNSKU detected ───────────────────────────────────────────
+      if (looksLikeFnsku(scan)) {
+        const res = await fetch('/api/fba/items/scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fnsku: scan, staff_id: Number(userId), station: 'PACK_STATION' }),
         });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setErrorMessage(data?.error || 'FBA scan failed');
+        } else {
+          setActiveFba({
+            fnsku: data.fnsku,
+            productTitle: data.product_title || scan,
+            shipmentRef: data.shipment_ref || null,
+            actualQty: data.actual_qty ?? 0,
+            expectedQty: data.expected_qty ?? 0,
+            status: data.status || 'READY_TO_GO',
+            isNew: !!data.is_new,
+          });
+          setSuccessMessage(data.is_new
+            ? `Added ${scan} to scan log (no active plan found)`
+            : `Updated: ${data.product_title || scan} — ${data.actual_qty} scanned`
+          );
+          onComplete?.();
+          window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        }
       } else {
-        setActiveOrder(null);
-      }
+        // ── Regular packing path ───────────────────────────────────────────
+        const res = await fetch('/api/packing-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackingNumber: scan,
+            photos: [],
+            packerId: String(userId),
+            packerName: userName,
+            timestamp: formatPSTTimestamp(),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Failed to save packing scan');
 
-      const apiMessage = String(data?.message || '').trim();
-      if (data?.warning) {
-        setSuccessMessage(String(data.warning));
-      } else if (apiMessage && apiMessage.toLowerCase() !== 'order packed successfully') {
-        setSuccessMessage(apiMessage);
-      } else {
-        setSuccessMessage(null);
-      }
+        const resolvedScanType = String(data?.trackingType || '').trim() || 'ORDERS';
+        if (resolvedScanType === 'ORDERS') {
+          setActiveOrder({
+            orderId: String(data?.orderId || '').trim(),
+            productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
+            qty: Math.max(1, Number(data?.qty ?? data?.quantity ?? data?.orderQty ?? 1) || 1),
+            condition: String(data?.condition || '').trim() || 'N/A',
+            tracking: String(data?.shippingTrackingNumber || scan).trim(),
+          });
+        }
 
-      setInputValue('');
-      onComplete?.();
+        const apiMessage = String(data?.message || '').trim();
+        if (data?.warning) {
+          setSuccessMessage(String(data.warning));
+        } else if (apiMessage && apiMessage.toLowerCase() !== 'order packed successfully') {
+          setSuccessMessage(apiMessage);
+        }
 
-      // Surgical insert: fire a targeted event so PackerTable can prepend the new
-      // row via setQueryData without invalidating/re-fetching the whole list.
-      if (data.packerRecord?.id) {
-        window.dispatchEvent(new CustomEvent('packer-log-added', { detail: data.packerRecord }));
+        onComplete?.();
+        if (data.packerRecord?.id) {
+          window.dispatchEvent(new CustomEvent('packer-log-added', { detail: data.packerRecord }));
+        }
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
       }
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Packing scan failed');
+      setErrorMessage(err?.message || 'Scan failed');
     } finally {
+      setInputValue('');
       setIsLoading(false);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
+  };
+
+  const FBA_STATUS_STYLES: Record<string, string> = {
+    PLANNED:        'bg-gray-100 text-gray-600',
+    READY_TO_GO:    'bg-emerald-100 text-emerald-700',
+    LABEL_ASSIGNED: 'bg-blue-100 text-blue-700',
+    SHIPPED:        'bg-purple-100 text-purple-700',
   };
 
   return (
@@ -164,7 +209,9 @@ export default function StationPacking({
             </div>
           </form>
 
-          <p className="text-[10px] font-bold text-gray-400 px-1">Supports tracking, X0/B0/FBA, and `SKU:VALUE` scans.</p>
+          <p className="text-[10px] font-bold text-gray-400 px-1">
+            Supports tracking, FNSKU (X0.../B0...), FBA, and <code className="font-mono">SKU:VALUE</code> scans.
+          </p>
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-6 pb-6 space-y-3">
@@ -194,8 +241,53 @@ export default function StationPacking({
             )}
           </AnimatePresence>
 
+          {/* FBA scan result card */}
           <AnimatePresence mode="wait">
-            {activeOrder ? (
+            {activeFba && (
+              <motion.div
+                key={activeFba.fnsku}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="p-4 bg-white rounded-2xl border border-purple-200 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">FBA Scan</p>
+                    {activeFba.isNew && (
+                      <span className="text-[9px] font-black bg-amber-100 text-amber-700 border border-amber-200 rounded-lg px-1.5 py-0.5 uppercase tracking-wider">
+                        No Plan Found
+                      </span>
+                    )}
+                  </div>
+                  {activeFba.shipmentRef && (
+                    <span className="text-[10px] font-mono font-black text-purple-700">{activeFba.shipmentRef}</span>
+                  )}
+                </div>
+                <h3 className="text-base font-black text-gray-900 leading-tight">{activeFba.productTitle}</h3>
+                <div className="mt-3 grid grid-cols-3 gap-3">
+                  <div className="bg-purple-50 rounded-xl px-3 py-2 border border-purple-100">
+                    <p className="text-[9px] font-black text-purple-400 uppercase tracking-wider mb-1">FNSKU</p>
+                    <p className="text-[10px] font-mono font-bold text-gray-700 truncate">{activeFba.fnsku}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Scanned</p>
+                    <p className="text-xs font-bold text-gray-800 tabular-nums">
+                      {activeFba.actualQty}/{activeFba.expectedQty > 0 ? activeFba.expectedQty : '?'}
+                    </p>
+                  </div>
+                  <div className={`rounded-xl px-3 py-2 border ${FBA_STATUS_STYLES[activeFba.status] || 'bg-gray-50 text-gray-600'} border-current/20`}>
+                    <p className="text-[9px] font-black uppercase tracking-wider mb-1">Status</p>
+                    <p className="text-[10px] font-black uppercase truncate">{activeFba.status.replace('_', ' ')}</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Regular order scan result */}
+          <AnimatePresence mode="wait">
+            {activeOrder && !activeFba && (
               <motion.div
                 key={activeOrder.tracking}
                 initial={{ opacity: 0, y: 10 }}
@@ -223,7 +315,7 @@ export default function StationPacking({
                   </div>
                 </div>
               </motion.div>
-            ) : null}
+            )}
           </AnimatePresence>
 
           <div className="mt-auto pt-6 border-t border-gray-50 text-center">

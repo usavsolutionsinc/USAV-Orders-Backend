@@ -5,6 +5,7 @@ import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
 import { invalidateCacheTags, createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp } from '@/lib/timezone';
+import { publishTechLogChanged } from '@/lib/realtime/publish';
 
 /** Compute Mon–Fri PST week range from the current PST timestamp. */
 function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
@@ -269,7 +270,7 @@ export async function POST(req: NextRequest) {
 
                 // Surgical cache update: only when a new row was actually inserted.
                 if (techSerialId && techTestDateTime) {
-                    await prependToTechLogsCache(testedBy, {
+                    const newRow = {
                         id: techSerialId,
                         order_db_id: null,
                         test_date_time: techTestDateTime,
@@ -288,6 +289,14 @@ export async function POST(req: NextRequest) {
                         ship_by_date: null,
                         created_at: null,
                         out_of_stock: null,
+                    };
+                    await prependToTechLogsCache(testedBy, newRow);
+                    await publishTechLogChanged({
+                        techId: testedBy,
+                        action: 'insert',
+                        rowId: techSerialId,
+                        row: newRow,
+                        source: 'tech.scan-tracking',
                     });
                 }
 
@@ -347,7 +356,7 @@ export async function POST(req: NextRequest) {
 
             // Surgical Redis cache update for brand-new rows only.
             if (techSerialId && techTestDateTime) {
-                await prependToTechLogsCache(testedBy, {
+                const newRow = {
                     id: techSerialId,
                     order_db_id: row.id ?? null,
                     test_date_time: techTestDateTime,
@@ -366,6 +375,14 @@ export async function POST(req: NextRequest) {
                     ship_by_date: row.ship_by_date ?? null,
                     created_at: row.created_at ?? null,
                     out_of_stock: row.out_of_stock ?? null,
+                };
+                await prependToTechLogsCache(testedBy, newRow);
+                await publishTechLogChanged({
+                    techId: testedBy,
+                    action: 'insert',
+                    rowId: techSerialId,
+                    row: newRow,
+                    source: 'tech.scan-tracking',
                 });
             }
 

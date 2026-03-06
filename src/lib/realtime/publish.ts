@@ -3,6 +3,7 @@ import {
   getAiAssistSessionChannelName,
   getOrdersChannelName,
   getRepairsChannelName,
+  getStationChannelName,
 } from '@/lib/realtime/channels';
 
 type OrderChangedPayload = {
@@ -21,6 +22,29 @@ type AiAssistantPayload = {
   prompt: string;
   answer: string;
   model: string;
+};
+
+type TechLogChangedPayload = {
+  techId: number;
+  action: 'insert' | 'update' | 'delete';
+  rowId?: number;
+  row?: Record<string, unknown>;
+  source: string;
+};
+
+type PackerLogChangedPayload = {
+  packerId: number;
+  action: 'insert' | 'update' | 'delete';
+  packerLogId?: number;
+  row?: Record<string, unknown>;
+  source: string;
+};
+
+type ReceivingLogChangedPayload = {
+  action: 'insert' | 'update' | 'delete';
+  rowId?: string;
+  row?: Record<string, unknown>;
+  source: string;
 };
 
 let ablyRestClient: Ably.Rest | null = null;
@@ -78,6 +102,41 @@ export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
     prompt: payload.prompt,
     answer: payload.answer,
     model: payload.model,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export async function publishTechLogChanged(payload: TechLogChangedPayload) {
+  await publishEvent(getStationChannelName(), 'tech-log.changed', {
+    type: 'tech-log.changed',
+    techId: payload.techId,
+    action: payload.action,
+    rowId: payload.rowId,
+    row: payload.row,
+    source: payload.source,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export async function publishPackerLogChanged(payload: PackerLogChangedPayload) {
+  await publishEvent(getStationChannelName(), 'packer-log.changed', {
+    type: 'packer-log.changed',
+    packerId: payload.packerId,
+    action: payload.action,
+    packerLogId: payload.packerLogId,
+    row: payload.row,
+    source: payload.source,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export async function publishReceivingLogChanged(payload: ReceivingLogChangedPayload) {
+  await publishEvent(getStationChannelName(), 'receiving-log.changed', {
+    type: 'receiving-log.changed',
+    action: payload.action,
+    rowId: payload.rowId,
+    row: payload.row,
+    source: payload.source,
     timestamp: new Date().toISOString(),
   });
 }

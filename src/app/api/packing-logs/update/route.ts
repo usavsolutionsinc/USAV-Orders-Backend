@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishPackerLogChanged, publishOrderChanged } from '@/lib/realtime/publish';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
   '1': 4,
@@ -179,6 +180,32 @@ export async function POST(req: NextRequest) {
       await client.query('COMMIT');
 
       await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
+
+      // Build packer-log row for live surgical insert on all subscribed web sessions.
+      const shippedOrderId = updateResult.rows[0]?.id ?? null;
+      const packerRow = {
+        id: packerLogId,
+        pack_date_time: packDate.toISOString(),
+        shipping_tracking_number: shippingTrackingNumber,
+        packed_by: staffId,
+        order_id: updateResult.rows[0]?.order_id ?? null,
+        product_title: null,
+        quantity: null,
+        condition: null,
+        sku: null,
+        packer_photos_url: photoUrlList,
+      };
+      await publishPackerLogChanged({
+        packerId: staffId,
+        action: 'insert',
+        packerLogId,
+        row: packerRow,
+        source: 'packing-logs.update',
+      });
+      if (shippedOrderId) {
+        await publishOrderChanged({ orderIds: [shippedOrderId], source: 'packing-logs.update' });
+      }
+
       return NextResponse.json({
         success: true,
         message: 'Packer logs updated and order marked as shipped',

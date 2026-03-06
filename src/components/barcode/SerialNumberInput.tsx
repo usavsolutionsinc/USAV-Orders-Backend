@@ -22,127 +22,128 @@ interface SerialNumberInputProps {
     onChangeSku?: () => void;
 }
 
-/**
- * Step 2: Serial number and location input component
- */
-export function SerialNumberInput({ 
+export function SerialNumberInput({
     sku,
     mode,
-    title, 
-    stock, 
-    snInput, 
+    title,
+    stock,
+    snInput,
     location,
     currentLocation,
     snInputRef,
     isLoadingTitle,
-    isActive, 
+    isActive,
     showChangeSku,
-    onSnInputChange, 
-    onLocationChange, 
+    onSnInputChange,
+    onLocationChange,
     onNext,
     onFinalAction,
     isPosting,
-    onChangeSku 
+    onChangeSku,
 }: SerialNumberInputProps) {
     const isLocationMode = mode === 'change-location';
-    const isReprintMode = mode === 'reprint';
 
     return (
-        <div className={`space-y-5 transition-all duration-300 ${
-            !isActive ? 'opacity-10 pointer-events-none grayscale' : ''
-        }`}>
-            <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-900 flex items-center justify-center text-sm font-black border border-gray-200">
-                    2
-                </div>
-                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">
-                    {isLocationMode ? 'Update Location' : 'Details & SN'}
-                </h3>
-            </div>
-            
-            {showChangeSku && onChangeSku && (
-                <div className="flex justify-end">
+        <div className={`transition-opacity duration-200 ${!isActive ? 'opacity-15 pointer-events-none' : ''}`}>
+            {/* Step label */}
+            <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+                <span className="text-[9px] font-black tabular-nums text-gray-300 tracking-widest">02</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+                    {isLocationMode ? 'Update Location' : 'Details & Serial Numbers'}
+                </span>
+                {showChangeSku && onChangeSku && (
                     <button
                         onClick={onChangeSku}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
+                        className="ml-auto text-[9px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 transition-colors"
                     >
-                        Change SKU
+                        ← Change SKU
                     </button>
-                </div>
-            )}
+                )}
+            </div>
 
-            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-200 space-y-4">
-                <div className="flex justify-between items-start">
+            {/* Product info */}
+            <div className="border-t border-gray-100 px-5 py-4">
+                <div className="flex justify-between items-start gap-4">
                     <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Product</p>
-                        <p className="text-sm font-bold text-gray-900 leading-relaxed break-words">
-                            {isLoadingTitle ? 'Loading...' : title}
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Product</p>
+                        <p className="text-sm font-semibold text-gray-900 leading-snug break-words">
+                            {isLoadingTitle ? (
+                                <span className="text-gray-400 italic font-normal">Loading…</span>
+                            ) : (
+                                title || <span className="text-gray-400 italic font-normal">—</span>
+                            )}
                         </p>
                     </div>
                     {!isLocationMode && (
-                        <div className="text-right ml-4">
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Stock</p>
-                            <p className={`text-xs font-black px-2 py-0.5 rounded-md ${
-                                parseInt(stock) > 0 ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50'
+                        <div className="text-right flex-shrink-0">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Stock</p>
+                            <span className={`text-xs font-black px-2 py-0.5 ${
+                                parseInt(stock) > 0
+                                    ? 'text-blue-700 bg-blue-50'
+                                    : 'text-red-700 bg-red-50'
                             }`}>
-                                {stock}
-                            </p>
+                                {stock || '0'}
+                            </span>
                         </div>
                     )}
                 </div>
 
-                {isLocationMode && (
-                    <div className="pt-4 border-t border-gray-200">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Current Location</p>
-                        <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-2 rounded-xl border border-orange-100">
-                            <span className="text-xs font-black font-mono">{currentLocation || 'No location set'}</span>
-                        </div>
+                {isLocationMode && currentLocation && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Current Location</p>
+                        <span className="text-xs font-black font-mono text-orange-600">{currentLocation}</span>
                     </div>
                 )}
             </div>
 
-            <div className="space-y-4">
+            {/* Inputs */}
+            <div className="border-t border-gray-100">
                 {!isLocationMode && (
                     <input
                         ref={snInputRef}
                         value={snInput}
                         onChange={(e) => onSnInputChange(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && onNext()}
-                        className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono placeholder:text-gray-400 text-gray-900"
-                        placeholder="Comma-separated SNs..."
+                        className="w-full px-5 py-4 bg-white text-sm focus:outline-none font-mono placeholder:text-gray-300 text-gray-900 border-b border-gray-100"
+                        placeholder="Serial numbers, comma-separated…"
+                        autoComplete="off"
+                        spellCheck={false}
                     />
                 )}
 
-                <div className={isLocationMode ? "pt-8" : ""}>
-                    {isLocationMode && (
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">New Location Entry</p>
-                    )}
-                    <input
-                        value={location}
-                        onChange={(e) => onLocationChange(e.target.value)}
-                        onKeyDown={(e) => isLocationMode && e.key === 'Enter' && onFinalAction?.()}
-                        className={`w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-2xl ${isLocationMode ? 'text-sm font-mono' : 'text-[10px] font-black uppercase tracking-widest'} focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-400 text-gray-900`}
-                        placeholder={isLocationMode ? "Enter new location..." : "Location (optional)"}
-                    />
-                </div>
-
-                <button
-                    onClick={isLocationMode ? onFinalAction : onNext}
-                    disabled={isPosting}
-                    className={`w-full py-4 ${isLocationMode ? 'bg-orange-600 hover:bg-orange-700' : 'bg-gray-900 hover:bg-blue-600'} text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-gray-200 disabled:opacity-50`}
-                >
-                    {isPosting ? (
-                        <div className="flex items-center justify-center gap-2">
-                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Updating...
-                        </div>
-                    ) : isLocationMode ? (
-                        'Update Location'
-                    ) : (
-                        'Continue to Final'
-                    )}
-                </button>
+                <input
+                    value={location}
+                    onChange={(e) => onLocationChange(e.target.value)}
+                    onKeyDown={(e) => isLocationMode && e.key === 'Enter' && onFinalAction?.()}
+                    className={`w-full px-5 py-4 bg-white focus:outline-none placeholder:text-gray-300 text-gray-900 ${
+                        isLocationMode ? 'text-sm font-mono' : 'text-[10px] font-black uppercase tracking-widest'
+                    }`}
+                    placeholder={isLocationMode ? 'Enter new location…' : 'Location (optional)'}
+                    autoComplete="off"
+                />
             </div>
+
+            {/* CTA */}
+            <button
+                onClick={isLocationMode ? onFinalAction : onNext}
+                disabled={isPosting}
+                className={`w-full py-4 ${
+                    isLocationMode
+                        ? 'bg-orange-600 hover:bg-orange-700'
+                        : 'bg-gray-900 hover:bg-gray-700'
+                } text-white text-[10px] font-black uppercase tracking-[0.2em] transition-colors disabled:opacity-40`}
+            >
+                {isPosting ? (
+                    <span className="flex items-center justify-center gap-2">
+                        <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                        {isLocationMode ? 'Updating…' : 'Processing…'}
+                    </span>
+                ) : isLocationMode ? (
+                    'Update Location'
+                ) : (
+                    'Continue →'
+                )}
+            </button>
         </div>
     );
 }

@@ -2,36 +2,56 @@
  * Zoho Inventory API Client for Next.js
  */
 
+import {
+  getCachedZohoAccessToken,
+  getZohoRefreshTokenFromKv,
+  setZohoTokens,
+} from '@/lib/zoho-kv';
+
 const ZOHO_ORG_ID = process.env.ZOHO_ORG_ID;
 const ZOHO_DOMAIN = process.env.ZOHO_DOMAIN || 'accounts.zoho.com';
 const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
 const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
-const ZOHO_REFRESH_TOKEN = process.env.ZOHO_REFRESH_TOKEN;
 
-let tokenCache: {
-  accessToken: string | null;
-  expiresAt: number | null;
-} = {
-  accessToken: null,
-  expiresAt: null,
-};
+/**
+ * Returns a valid Zoho access token.
+ *
+ * Resolution order:
+ *  1. Upstash KV cached access token (set on last successful refresh)
+ *  2. Refresh using ZOHO_REFRESH_TOKEN env var (if set)
+ *  3. Refresh using refresh token stored in KV (set by /api/zoho/oauth/callback)
+ */
+export async function getAccessToken(): Promise<string> {
+  // 1. Return cached access token from KV if still valid
+  const cached = await getCachedZohoAccessToken();
+  if (cached) return cached;
 
-export async function getAccessToken() {
-  const now = Date.now();
-  
-  if (tokenCache.accessToken && tokenCache.expiresAt && now < tokenCache.expiresAt) {
-    return tokenCache.accessToken;
+  const clientId = ZOHO_CLIENT_ID;
+  const clientSecret = ZOHO_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET must be set. ' +
+        'Visit /api/zoho/oauth/authorize to connect your Zoho account.'
+    );
   }
 
-  if (!ZOHO_CLIENT_ID || !ZOHO_CLIENT_SECRET || !ZOHO_REFRESH_TOKEN) {
-    throw new Error('Zoho OAuth credentials missing');
+  // 2. Resolve refresh token: env var takes priority, then KV
+  const refreshToken =
+    process.env.ZOHO_REFRESH_TOKEN || (await getZohoRefreshTokenFromKv());
+
+  if (!refreshToken) {
+    throw new Error(
+      'No Zoho refresh token available. ' +
+        'Visit /api/zoho/oauth/authorize to complete OAuth setup.'
+    );
   }
 
   const tokenUrl = `https://${ZOHO_DOMAIN}/oauth/v2/token`;
   const params = new URLSearchParams({
-    refresh_token: ZOHO_REFRESH_TOKEN,
-    client_id: ZOHO_CLIENT_ID,
-    client_secret: ZOHO_CLIENT_SECRET,
+    refresh_token: refreshToken,
+    client_id: clientId,
+    client_secret: clientSecret,
     grant_type: 'refresh_token',
   });
 
@@ -39,6 +59,7 @@ export async function getAccessToken() {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
+    cache: 'no-store',
   });
 
   if (!response.ok) {
@@ -46,12 +67,18 @@ export async function getAccessToken() {
   }
 
   const data = await response.json();
-  tokenCache = {
-    accessToken: data.access_token,
-    expiresAt: now + (data.expires_in_sec || 3600) * 1000 - 300000,
-  };
 
-  return tokenCache.accessToken;
+  if (data.error) {
+    throw new Error(`Zoho token refresh error: ${data.error}`);
+  }
+
+  const accessToken: string = data.access_token;
+  const expiresIn: number = data.expires_in_sec || data.expires_in || 3600;
+
+  // Persist the fresh access token to KV (no new refresh token on refresh grant)
+  await setZohoTokens({ accessToken, expiresIn });
+
+  return accessToken;
 }
 
 export function getInventoryBaseUrl() {

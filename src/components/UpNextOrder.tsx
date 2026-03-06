@@ -12,6 +12,29 @@ import { PlatformExternalChip } from './ui/PlatformExternalChip';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 
+// FBA queue item — one row per FNSKU across all active shipments
+interface FBAQueueItem {
+  item_id: number;
+  shipment_id: number;
+  shipment_ref: string;
+  fnsku: string;
+  product_title: string | null;
+  asin: string | null;
+  sku: string | null;
+  expected_qty: number;
+  actual_qty: number;
+  status: 'PLANNED' | 'READY_TO_GO' | 'LABEL_ASSIGNED' | 'SHIPPED';
+  assigned_tech_name: string | null;
+  due_date: string | null;
+}
+
+const FBA_ITEM_STATUS_BADGE: Record<string, string> = {
+  PLANNED:        'bg-gray-100 text-gray-500 border-gray-200',
+  READY_TO_GO:    'bg-emerald-100 text-emerald-700 border-emerald-200',
+  LABEL_ASSIGNED: 'bg-blue-100 text-blue-700 border-blue-200',
+  SHIPPED:        'bg-purple-100 text-purple-700 border-purple-200',
+};
+
 interface Order {
   id: number;
   ship_by_date: string | null;
@@ -59,6 +82,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const [activeTab, setActiveTab] = useState<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'>('orders');
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [allRepairs, setAllRepairs] = useState<RepairQueueItem[]>([]);
+  const [fbaItems, setFbaItems] = useState<FBAQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [allCompletedToday, setAllCompletedToday] = useState(false);
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
@@ -101,7 +125,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     return 'text-emerald-600';
   };
 
-  const getOrderBucket = (order: Order): 'orders' | 'returns' | 'fba' | 'test' | 'stock' => {
+  const getOrderBucket = (order: Order): 'orders' | 'returns' | 'test' | 'stock' => {
     const outOfStock = String(order.out_of_stock || '').trim();
     if (outOfStock) return 'stock';
 
@@ -112,7 +136,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     const haystack = `${orderId} ${accountSource} ${status} ${sku}`;
 
     if (/\b(return|returns|rma)\b/.test(haystack)) return 'returns';
-    if (/\b(fba|fnsku)\b/.test(haystack)) return 'fba';
+    // FBA orders now come from explicit fba_shipments table — no regex needed here
     if (/\b(test|testing|qa|sample)\b/.test(haystack)) return 'test';
     return 'orders';
   };
@@ -130,6 +154,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       { orders: 0, returns: 0, repair: 0, fba: 0, test: 0, stock: 0 } as Record<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock', number>
     ),
     repair: allRepairs.length,
+    fba: fbaItems.filter((i) => i.status !== 'SHIPPED').length,
   };
 
   const visibleTabs: Array<{ id: 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'; label: string; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' }> = [
@@ -162,7 +187,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
+    fetchFbaShipments();
+    const interval = setInterval(() => {
+      fetchOrders();
+      fetchFbaShipments();
+    }, 30000);
     return () => clearInterval(interval);
   }, [techId]);
 
@@ -176,6 +205,18 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       hasCelebratedRef.current = false;
     }
   }, [allCompletedToday, effectiveTab]);
+
+  const fetchFbaShipments = async () => {
+    try {
+      const res = await fetch('/api/fba/items/queue?limit=100');
+      if (res.ok) {
+        const data = await res.json();
+        setFbaItems(Array.isArray(data?.items) ? data.items : []);
+      }
+    } catch (error) {
+      console.error('Error fetching FBA queue:', error);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -286,6 +327,73 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     } catch {
       return '';
     }
+  };
+
+  const renderFbaItemCard = (item: FBAQueueItem) => {
+    const badgeCls = FBA_ITEM_STATUS_BADGE[item.status] || FBA_ITEM_STATUS_BADGE['PLANNED'];
+    const dueDateStr = item.due_date
+      ? new Date(item.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : null;
+    const qtyReady = Number(item.actual_qty) || 0;
+    const qtyExpected = Number(item.expected_qty) || 0;
+
+    return (
+      <motion.div
+        key={`fba-item-${item.item_id}`}
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 10 }}
+        className="rounded-2xl p-3 border transition-all relative shadow-sm hover:shadow-md mb-2 bg-white border-gray-200 hover:border-purple-300 cursor-default"
+      >
+        {/* Header: shipment ref + due date */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-black font-mono text-purple-700 bg-purple-50 border border-purple-100 rounded-lg px-2 py-0.5">
+              {item.shipment_ref}
+            </span>
+            {dueDateStr && (
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-gray-400" />
+                <span className="text-[10px] font-bold text-gray-500">{dueDateStr}</span>
+              </div>
+            )}
+          </div>
+          <span className={`text-[9px] font-black uppercase tracking-widest border rounded-lg px-2 py-0.5 ${badgeCls}`}>
+            {item.status.replace('_', ' ')}
+          </span>
+        </div>
+
+        {/* Product info */}
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[13px] font-black text-gray-700 tabular-nums">{qtyReady}</span>
+            <span className="text-[11px] font-black text-gray-400">/</span>
+            <span className="text-[13px] font-black text-gray-400">{qtyExpected > 0 ? qtyExpected : '?'}</span>
+            <span className="text-[11px] font-black uppercase text-gray-400 tracking-wider">units</span>
+            <span className="ml-auto text-[11px] font-mono font-black text-gray-400">{item.fnsku}</span>
+          </div>
+          <h4 className="text-sm font-black text-gray-900 leading-tight">
+            {item.product_title || item.fnsku}
+          </h4>
+          {item.asin && (
+            <p className="text-[10px] font-mono text-gray-400 mt-0.5">{item.asin}</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+          {item.assigned_tech_name && (
+            <span className="text-[10px] font-black text-gray-500 truncate">Tech: {item.assigned_tech_name}</span>
+          )}
+          <div className="ml-auto h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full"
+              style={{ width: qtyExpected > 0 ? `${Math.min(100, Math.round((qtyReady / qtyExpected) * 100))}%` : '0%' }}
+            />
+          </div>
+        </div>
+      </motion.div>
+    );
   };
 
   const renderRepairCard = (repair: RepairQueueItem) => {
@@ -601,6 +709,23 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           <div className="flex flex-col">
             <AnimatePresence mode="popLayout">
               {allRepairs.map((repair) => renderRepairCard(repair))}
+            </AnimatePresence>
+          </div>
+        )
+      ) : effectiveTab === 'fba' ? (
+        fbaItems.filter((i) => i.status !== 'SHIPPED').length === 0 ? (
+          <div className="bg-purple-50 rounded-2xl px-4 py-3 border border-purple-100">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-bold text-purple-400 uppercase tracking-widest">No active FBA items</p>
+              <Package className="w-5 h-5 text-purple-200 flex-shrink-0" />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            <AnimatePresence mode="popLayout">
+              {fbaItems
+                .filter((i) => i.status !== 'SHIPPED')
+                .map((item) => renderFbaItemCard(item))}
             </AnimatePresence>
           </div>
         )

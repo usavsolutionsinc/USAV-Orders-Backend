@@ -4,6 +4,7 @@ import {
   Calendar,
   ClipboardList,
   LayoutDashboard,
+  Package,
   ShieldCheck,
   Tool,
   User,
@@ -12,6 +13,7 @@ import {
 
 export type SidebarRouteKey =
   | 'dashboard'
+  | 'fba'
   | 'receiving'
   | 'repair'
   | 'sku-stock'
@@ -34,6 +36,7 @@ export interface SidebarNavItem {
 
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, kind: 'main' },
+  { id: 'fba', label: 'FBA', href: '/fba', icon: Package, kind: 'main' },
   { id: 'repair', label: 'Repair', href: '/repair', icon: Tool, kind: 'main' },
   { id: 'sku-stock', label: 'Sku Stock', href: '/sku-stock', icon: Box, kind: 'main' },
   { id: 'receiving', label: 'Receiving', href: '/receiving', icon: ClipboardList, kind: 'station' },
@@ -47,6 +50,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
 export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (!pathname) return 'unknown';
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'dashboard';
+  if (pathname === '/fba' || pathname.startsWith('/fba/')) return 'fba';
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
   if (pathname === '/repair' || pathname.startsWith('/repair/')) return 'repair';
   if (pathname === '/sku-stock' || pathname.startsWith('/sku-stock/')) return 'sku-stock';

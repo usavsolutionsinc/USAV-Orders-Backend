@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAblyChannel } from './useAblyChannel';
 
 export interface PackerRecord {
   id: number;
@@ -20,6 +21,23 @@ export interface UsePackerLogsOptions {
   weekOffset?: number;
   weekRange?: { startStr: string; endStr: string };
 }
+
+/** Compute PST Mon–Fri range for the current week. */
+function computeCurrentPSTWeek(): { startStr: string; endStr: string } {
+  const d = new Date();
+  const pstMs = d.getTime() - 7 * 60 * 60 * 1000;
+  const pst = new Date(pstMs);
+  const dow = pst.getUTCDay();
+  const daysFromMonday = dow === 0 ? 6 : dow - 1;
+  const mon = new Date(pstMs - daysFromMonday * 86400000);
+  const fri = new Date(pstMs + (4 - daysFromMonday) * 86400000);
+  const fmt = (x: Date) =>
+    `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
+  return { startStr: fmt(mon), endStr: fmt(fri) };
+}
+
+const STATION_CHANNEL =
+  process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES || 'station:changes';
 
 export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = {}) {
   const { weekOffset = 0, weekRange } = options;
@@ -49,25 +67,37 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
     refetchOnWindowFocus: false,
   });
 
-  // Surgical insert: prepend the brand-new row without a network round-trip.
+  // ── Ably: live row-level updates from any session (mobile or web) ─────────
+  useAblyChannel(
+    STATION_CHANNEL,
+    'packer-log.changed',
+    (msg: any) => {
+      const { packerId: changedId, action, row } = msg?.data ?? {};
+      if (Number(changedId) !== packerId) return;
+
+      if (action === 'insert' && row) {
+        const currentWeek = computeCurrentPSTWeek();
+        queryClient.setQueryData<PackerRecord[]>(
+          ['packer-logs', packerId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
+          (prev) => {
+            if (!prev) return undefined;
+            if (prev.some((r) => r.id === (row as PackerRecord).id)) return prev;
+            return [row as PackerRecord, ...prev];
+          },
+        );
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['packer-logs', packerId] });
+      }
+    },
+  );
+
+  // ── Local surgical insert (same-tab scans dispatched via CustomEvent) ─────
   useEffect(() => {
     const handleNewLog = (e: any) => {
       const record = e?.detail as PackerRecord | null;
       if (!record?.id || record.packed_by !== packerId) return;
 
-      const currentWeek = (() => {
-        const d = new Date();
-        const pstMs = d.getTime() - 7 * 60 * 60 * 1000;
-        const pst = new Date(pstMs);
-        const dow = pst.getUTCDay();
-        const daysFromMonday = dow === 0 ? 6 : dow - 1;
-        const mon = new Date(pstMs - daysFromMonday * 86400000);
-        const fri = new Date(pstMs + (4 - daysFromMonday) * 86400000);
-        const fmt = (x: Date) =>
-          `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
-        return { startStr: fmt(mon), endStr: fmt(fri) };
-      })();
-
+      const currentWeek = computeCurrentPSTWeek();
       queryClient.setQueryData<PackerRecord[]>(
         ['packer-logs', packerId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
         (prev) => {
@@ -81,7 +111,7 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
     return () => window.removeEventListener('packer-log-added', handleNewLog);
   }, [queryClient, packerId]);
 
-  // Full invalidation for deletes and external data changes.
+  // ── Full invalidation for manual refreshes ────────────────────────────────
   useEffect(() => {
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['packer-logs', packerId] });

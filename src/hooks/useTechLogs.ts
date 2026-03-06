@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAblyChannel } from './useAblyChannel';
 
 export interface TechRecord {
   id: number;
@@ -29,6 +30,23 @@ export interface UseTechLogsOptions {
   weekRange?: { startStr: string; endStr: string };
 }
 
+/** Compute PST Mon–Fri range for the current week. */
+function computeCurrentPSTWeek(): { startStr: string; endStr: string } {
+  const d = new Date();
+  const pstMs = d.getTime() - 7 * 60 * 60 * 1000;
+  const pst = new Date(pstMs);
+  const dow = pst.getUTCDay();
+  const daysFromMonday = dow === 0 ? 6 : dow - 1;
+  const mon = new Date(pstMs - daysFromMonday * 86400000);
+  const fri = new Date(pstMs + (4 - daysFromMonday) * 86400000);
+  const fmt = (x: Date) =>
+    `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
+  return { startStr: fmt(mon), endStr: fmt(fri) };
+}
+
+const STATION_CHANNEL =
+  process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES || 'station:changes';
+
 export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
   const { weekOffset = 0, weekRange } = options;
   const queryClient = useQueryClient();
@@ -51,35 +69,46 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    // Current week stays fresh for 2 min so new scans appear quickly;
-    // historical weeks are cached for 30 min (Redis holds them for 24 h).
+    // Current week stays fresh for 2 min; historical weeks cache for 30 min.
     staleTime: weekOffset === 0 ? 2 * 60 * 1000 : 30 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
     refetchOnWindowFocus: false,
   });
 
-  // Surgical insert: prepend the brand-new row without a network round-trip.
-  // The server already updated its Redis cache via prependToTechLogsCache.
+  // ── Ably: live row-level updates from any session (mobile or web) ─────────
+  useAblyChannel(
+    STATION_CHANNEL,
+    'tech-log.changed',
+    (msg: any) => {
+      const { techId: changedId, action, row, rowId } = msg?.data ?? {};
+      if (Number(changedId) !== techId) return;
+
+      if (action === 'insert' && row) {
+        // Surgical prepend into the current-week cache slice only.
+        const currentWeek = computeCurrentPSTWeek();
+        queryClient.setQueryData<TechRecord[]>(
+          ['tech-logs', techId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
+          (prev) => {
+            if (!prev) return undefined;
+            if (prev.some((r) => r.id === (row as TechRecord).id)) return prev;
+            return [row as TechRecord, ...prev];
+          },
+        );
+      } else {
+        // update / delete: invalidate so the query re-fetches fresh data.
+        queryClient.invalidateQueries({ queryKey: ['tech-logs', techId] });
+      }
+    },
+  );
+
+  // ── Local surgical insert (same-tab scans dispatched via CustomEvent) ─────
   useEffect(() => {
     const handleNewLog = (e: any) => {
       const record = e?.detail as TechRecord | null;
       if (!record?.id || record.tested_by !== techId) return;
 
-      const currentWeek = (() => {
-        const d = new Date();
-        // Approximate PST offset (-7h) to match client-side computeWeekRange
-        const pstMs = d.getTime() - 7 * 60 * 60 * 1000;
-        const pst = new Date(pstMs);
-        const dow = pst.getUTCDay();
-        const daysFromMonday = dow === 0 ? 6 : dow - 1;
-        const mon = new Date(pstMs - daysFromMonday * 86400000);
-        const fri = new Date(pstMs + (4 - daysFromMonday) * 86400000);
-        const fmt = (x: Date) =>
-          `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
-        return { startStr: fmt(mon), endStr: fmt(fri) };
-      })();
-
+      const currentWeek = computeCurrentPSTWeek();
       queryClient.setQueryData<TechRecord[]>(
         ['tech-logs', techId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
         (prev) => {
@@ -93,7 +122,7 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
     return () => window.removeEventListener('tech-log-added', handleNewLog);
   }, [queryClient, techId]);
 
-  // Full invalidation for serial updates, deletes, and other external changes.
+  // ── Full invalidation for manual refreshes ────────────────────────────────
   useEffect(() => {
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['tech-logs', techId] });
