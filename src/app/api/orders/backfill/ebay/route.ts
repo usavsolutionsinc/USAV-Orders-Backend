@@ -89,19 +89,16 @@ export async function POST(req: NextRequest) {
       allAccountNames.map((name) => [name, new EbayClient(name)])
     );
 
-    /**
-     * Pick accounts to try for a given account_source.
-     * If the source matches an account name (case-insensitive contains), try that first.
-     * Otherwise fall back to all accounts.
-     */
-    function accountsForSource(accountSource: string | null): string[] {
+    // Pick accounts to try for a given account_source.
+    // If the source matches an account name (case-insensitive contains), try that first.
+    const accountsForSource = (accountSource: string | null): string[] => {
       if (!accountSource) return allAccountNames;
       const src = accountSource.toLowerCase();
       const match = allAccountNames.find(
         (name) => src.includes(name.toLowerCase()) || name.toLowerCase().includes(src)
       );
       return match ? [match, ...allAccountNames.filter((n) => n !== match)] : allAccountNames;
-    }
+    };
 
     // ── 3. Process each candidate ─────────────────────────────────────────────
     let scanned = 0;
