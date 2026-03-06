@@ -18,9 +18,10 @@ interface StaffSelectorProps {
     selectedStaffId: number | null;
     onSelect: (staffId: number, staffName: string) => void;
     variant?: 'default' | 'boxy';
+    labelOverrides?: Record<number, string>;
 }
 
-export default function StaffSelector({ role = 'all', selectedStaffId, onSelect, variant = 'default' }: StaffSelectorProps) {
+export default function StaffSelector({ role = 'all', selectedStaffId, onSelect, variant = 'default', labelOverrides }: StaffSelectorProps) {
     const [isOpen, setIsOpen] = useState(false);
 
     const { data: staff = [], isLoading } = useQuery<Staff[]>({
@@ -70,7 +71,7 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                 }`}
             >
                 <span className={`text-xs font-black tracking-tight ${selectedTheme ? stationThemeColors[selectedTheme].text : 'text-gray-900'}`}>
-                    {selectedStaff ? selectedStaff.name : 'Select Staff'}
+                    {selectedStaff ? (labelOverrides?.[selectedStaff.id] ?? selectedStaff.name) : 'Select Staff'}
                 </span>
                 <svg 
                     className={`w-3 h-3 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -100,7 +101,7 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                                     <button
                                         key={member.id}
                                         onClick={() => {
-                                            onSelect(member.id, member.name);
+                                            onSelect(member.id, labelOverrides?.[member.id] ?? member.name);
                                             setIsOpen(false);
                                         }}
                                         className={`w-full flex items-center px-3 hover:bg-gray-50 transition-all group text-left ${
@@ -108,7 +109,7 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                                         }`}
                                     >
                                         <span className={`text-xs font-black tracking-tight ${textClass}`}>
-                                            {member.name}
+                                            {labelOverrides?.[member.id] ?? member.name}
                                         </span>
                                         {role === 'all' ? (
                                             <span className="ml-2 text-[9px] font-black uppercase tracking-wider text-gray-400">

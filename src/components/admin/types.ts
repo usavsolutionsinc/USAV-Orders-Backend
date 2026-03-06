@@ -3,7 +3,6 @@ export interface Staff {
   name: string;
   role: string;
   employee_id: string | null;
-  source_table: string | null;
   active: boolean;
   created_at?: string | null;
 }

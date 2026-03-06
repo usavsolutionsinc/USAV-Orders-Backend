@@ -226,7 +226,7 @@ function ReceivingContext() {
   const mode: ReceivingMode =
     rawMode === 'unboxing' ? 'unboxing' : rawMode === 'pickup' ? 'pickup' : 'bulk';
 
-  const staffId = searchParams.get('staffId') || '1';
+  const staffId = searchParams.get('staffId') || '7';
 
   const updateMode = (nextMode: ReceivingMode) => {
     const nextParams = new URLSearchParams(searchParams.toString());

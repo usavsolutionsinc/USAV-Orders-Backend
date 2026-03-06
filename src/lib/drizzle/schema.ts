@@ -22,7 +22,6 @@ export const staff = pgTable('staff', {
   name: varchar('name', { length: 100 }).notNull(),
   role: varchar('role', { length: 50 }).notNull(),
   employeeId: varchar('employee_id', { length: 50 }).unique(),
-  sourceTable: text('source_table'), // Maps to tech_1, tech_2, tech_3, packer_1, packer_2
   active: boolean('active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
 });

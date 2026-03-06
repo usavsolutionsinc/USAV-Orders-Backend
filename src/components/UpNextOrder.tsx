@@ -117,6 +117,9 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     return 'orders';
   };
 
+  const hasTrackingNumber = (order: Order): boolean =>
+    String(order.shipping_tracking_number || '').trim().length > 0;
+
   const tabCounts = {
     ...allOrders.reduce(
       (acc, order) => {
@@ -129,8 +132,9 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     repair: allRepairs.length,
   };
 
+  const shouldShowOrdersTab = tabCounts.orders > 0 || tabCounts.stock === 0;
   const visibleTabs: Array<{ id: 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'; label: string; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' }> = [
-    { id: 'orders', label: 'Orders', color: 'green' },
+    ...(shouldShowOrdersTab ? [{ id: 'orders' as const, label: 'Orders', color: 'green' as const }] : []),
     ...(tabCounts.returns > 0 ? [{ id: 'returns' as const, label: 'Returns', color: 'yellow' as const }] : []),
     ...(tabCounts.repair > 0 ? [{ id: 'repair' as const, label: 'Repair', color: 'orange' as const }] : []),
     ...(tabCounts.fba > 0 ? [{ id: 'fba' as const, label: 'FBA', color: 'purple' as const }] : []),
@@ -184,9 +188,13 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
       if (currentRes.ok) {
         const currentData = await currentRes.json();
-        const currentOrders = (currentData.orders || []).filter((order: Order) => !order.is_shipped);
+        const currentOrders = (currentData.orders || []).filter(
+          (order: Order) => !order.is_shipped && hasTrackingNumber(order)
+        );
         const stockData = stockRes.ok ? await stockRes.json() : { orders: [] };
-        const stockOrders = (stockData.orders || []).filter((order: Order) => !order.is_shipped);
+        const stockOrders = (stockData.orders || []).filter(
+          (order: Order) => !order.is_shipped && hasTrackingNumber(order)
+        );
         const merged = [...currentOrders, ...stockOrders];
         const deduped = merged.filter((row, idx, arr) => arr.findIndex((cand) => Number(cand.id) === Number(row.id)) === idx);
         setAllOrders(deduped);

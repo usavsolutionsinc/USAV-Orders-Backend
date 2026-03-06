@@ -7,5 +7,4 @@ export default defineSchema('staff', [
   { name: 'employee_id', type: 'VARCHAR(50)' },
   { name: 'active', type: 'BOOLEAN', default: 'true' },
   { name: 'created_at', type: 'TIMESTAMP', default: 'CURRENT_TIMESTAMP' },
-  { name: 'source_table', type: 'TEXT' },
 ]);

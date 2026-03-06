@@ -15,10 +15,24 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-if ! command -v vercel &>/dev/null; then
-  echo "ERROR: Vercel CLI not installed. Run: npm i -g vercel"
-  exit 1
+# Resolve vercel binary — global install, local node_modules, or npx
+VERCEL_BIN=""
+if command -v vercel &>/dev/null; then
+  VERCEL_BIN="vercel"
+elif [ -x "$SCRIPT_DIR/node_modules/.bin/vercel" ]; then
+  VERCEL_BIN="$SCRIPT_DIR/node_modules/.bin/vercel"
+else
+  echo "Vercel CLI not found globally — installing locally..."
+  npm install --prefix "$SCRIPT_DIR" vercel --save-dev 2>&1 | grep -v "^npm warn"
+  if [ -x "$SCRIPT_DIR/node_modules/.bin/vercel" ]; then
+    VERCEL_BIN="$SCRIPT_DIR/node_modules/.bin/vercel"
+  else
+    echo "Falling back to npx vercel..."
+    VERCEL_BIN="npx --yes vercel"
+  fi
 fi
+echo "Using Vercel CLI: $VERCEL_BIN"
+export VERCEL_BIN
 
 if ! command -v python3 &>/dev/null; then
   echo "ERROR: python3 is required but not found."
@@ -35,8 +49,8 @@ echo ""
 echo "▶ Step 1/2 — Removing existing production env vars..."
 echo ""
 
-EXISTING=$(vercel env ls production 2>&1 \
-  | awk '/^[[:space:]]+[A-Z_][A-Z0-9_]/ { gsub(/^[[:space:]]+/, ""); print $1 }' \
+EXISTING=$($VERCEL_BIN env ls production 2>&1 \
+  | awk '/^[[:space:]]+[A-Za-z_][A-Za-z0-9_]/ { gsub(/^[[:space:]]+/, ""); print $1 }' \
   || true)
 
 if [ -z "$EXISTING" ]; then
@@ -45,7 +59,7 @@ else
   while IFS= read -r var; do
     [ -z "$var" ] && continue
     echo "  Removing: $var"
-    vercel env rm "$var" production --yes 2>/dev/null || echo "  (skip — $var not found)"
+    $VERCEL_BIN env rm "$var" production --yes 2>/dev/null || echo "  (skip — $var not found)"
   done <<< "$EXISTING"
 fi
 
@@ -82,8 +96,8 @@ while i < len(lines):
     key, _, raw_value = line.partition("=")
     key = key.strip()
 
-    # Skip commented-out keys
-    if not key or key.startswith("#"):
+    # Skip commented-out or empty keys
+    if not key or key.startswith("#") or not key.replace("_", "").isalnum():
         i += 1
         continue
 
@@ -114,8 +128,9 @@ while i < len(lines):
 success, failed = 0, 0
 
 for key, value in env_vars.items():
+    vercel_cmd = os.environ["VERCEL_BIN"].split()
     result = subprocess.run(
-        ["vercel", "env", "add", key, "production"],
+        vercel_cmd + ["env", "add", key, "production"],
         input=value,
         text=True,
         capture_output=True,

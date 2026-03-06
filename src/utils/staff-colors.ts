@@ -1,4 +1,4 @@
-export type StationTheme = 'green' | 'purple' | 'blue' | 'yellow' | 'black' | 'red';
+export type StationTheme = 'green' | 'purple' | 'blue' | 'yellow' | 'black' | 'red' | 'lightblue' | 'pink';
 export type TechStationTheme = 'green' | 'purple' | 'blue' | 'yellow';
 export type PackerStationTheme = 'black' | 'red';
 
@@ -67,6 +67,22 @@ export const stationThemeColors: Record<StationTheme, StationThemeColors> = {
     text: 'text-red-600',
     shadow: 'shadow-red-100',
   },
+  lightblue: {
+    bg: 'bg-sky-400',
+    hover: 'hover:bg-sky-500',
+    light: 'bg-sky-50',
+    border: 'border-sky-100',
+    text: 'text-sky-500',
+    shadow: 'shadow-sky-100',
+  },
+  pink: {
+    bg: 'bg-pink-500',
+    hover: 'hover:bg-pink-600',
+    light: 'bg-pink-50',
+    border: 'border-pink-100',
+    text: 'text-pink-500',
+    shadow: 'shadow-pink-100',
+  },
 };
 
 export const stationThemeClasses: Record<
@@ -100,6 +116,14 @@ export const stationThemeClasses: Record<
     active: 'bg-red-600 text-white border-red-600',
     inactive: 'bg-white text-red-700 border-red-200 hover:bg-red-50',
   },
+  lightblue: {
+    active: 'bg-sky-400 text-white border-sky-400',
+    inactive: 'bg-white text-sky-600 border-sky-200 hover:bg-sky-50',
+  },
+  pink: {
+    active: 'bg-pink-500 text-white border-pink-500',
+    inactive: 'bg-white text-pink-600 border-pink-200 hover:bg-pink-50',
+  },
 };
 
 export const packerInputThemeClasses: Record<PackerStationTheme, StationInputThemeClasses> = {
@@ -115,6 +139,11 @@ export const packerInputThemeClasses: Record<PackerStationTheme, StationInputThe
     ring: 'focus:ring-red-500/10',
     border: 'focus:border-red-500',
   },
+};
+
+const STAFF_THEME_BY_ID: Partial<Record<number, StationTheme>> = {
+  7: 'lightblue',
+  8: 'pink',
 };
 
 const TECH_THEME_BY_STATION_ID: Record<number, TechStationTheme> = {
@@ -178,6 +207,8 @@ export function getStaffThemeById(
   staffId: number | string | null | undefined,
   role: 'technician' | 'packer'
 ): StationTheme {
+  const id = parseStaffId(staffId);
+  if (id && STAFF_THEME_BY_ID[id]) return STAFF_THEME_BY_ID[id]!;
   return role === 'technician' ? getTechThemeById(staffId) : getPackerThemeById(staffId);
 }
 

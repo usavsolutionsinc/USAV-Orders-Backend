@@ -423,15 +423,7 @@ async function syncPackerSheets(params: {
         try {
             await ensureOrdersExceptionsTable(client);
 
-            const staffLookup = await client.query(
-                `SELECT id
-                 FROM staff
-                 WHERE LOWER(COALESCE(source_table, '')) = $1
-                 ORDER BY active DESC, id ASC
-                 LIMIT 1`,
-                [normalizedSheetName]
-            );
-            const packedBy = staffLookup.rows[0]?.id ?? fallbackByName[normalizedSheetName] ?? null;
+            const packedBy = fallbackByName[normalizedSheetName] ?? null;
 
             const response = await sheets.spreadsheets.values.get({
                 spreadsheetId,

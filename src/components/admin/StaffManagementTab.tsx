@@ -12,12 +12,10 @@ export function StaffManagementTab() {
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<'technician' | 'packer'>('technician');
   const [newStaffEmployeeId, setNewStaffEmployeeId] = useState('');
-  const [newStaffSourceTable, setNewStaffSourceTable] = useState('');
   const [editingStaffId, setEditingStaffId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<'technician' | 'packer'>('technician');
   const [editEmployeeId, setEditEmployeeId] = useState('');
-  const [editSourceTable, setEditSourceTable] = useState('');
   const [editActive, setEditActive] = useState(true);
 
   const { data: staff = [] } = useQuery<Staff[]>({
@@ -30,7 +28,7 @@ export function StaffManagementTab() {
   });
 
   const createStaffMutation = useMutation({
-    mutationFn: async (data: { name: string; role: string; employee_id: string; source_table: string; active: boolean }) => {
+    mutationFn: async (data: { name: string; role: string; employee_id: string; active: boolean }) => {
       const res = await fetch('/api/staff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,7 +42,6 @@ export function StaffManagementTab() {
       setIsAddingStaff(false);
       setNewStaffName('');
       setNewStaffEmployeeId('');
-      setNewStaffSourceTable('');
       setNewStaffRole('technician');
     },
   });
@@ -55,7 +52,6 @@ export function StaffManagementTab() {
       name?: string;
       role?: string;
       employee_id?: string;
-      source_table?: string;
       active?: boolean;
     }) => {
       const res = await fetch('/api/staff', {
@@ -89,7 +85,6 @@ export function StaffManagementTab() {
     setEditName(member.name || '');
     setEditRole((member.role as 'technician' | 'packer') || 'technician');
     setEditEmployeeId(member.employee_id || '');
-    setEditSourceTable(member.source_table || '');
     setEditActive(Boolean(member.active));
   };
 
@@ -134,16 +129,6 @@ export function StaffManagementTab() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[9px] font-black text-gray-600 uppercase px-2 tracking-widest">Source Table</label>
-            <input
-              type="text"
-              value={newStaffSourceTable}
-              onChange={(e) => setNewStaffSourceTable(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-gray-900 font-bold text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-              placeholder="tech_1, tech_2, packer_1..."
-            />
-          </div>
-          <div className="space-y-1.5">
             <label className="text-[9px] font-black text-gray-600 uppercase px-2 tracking-widest">Assign Role</label>
             <div className="flex gap-2">
               {['technician', 'packer'].map((r) => (
@@ -169,7 +154,6 @@ export function StaffManagementTab() {
                   name: newStaffName,
                   role: newStaffRole,
                   employee_id: newStaffEmployeeId,
-                  source_table: newStaffSourceTable,
                   active: true,
                 })
               }
@@ -220,13 +204,6 @@ export function StaffManagementTab() {
                     <option value="technician">technician</option>
                     <option value="packer">packer</option>
                   </select>
-                  <input
-                    type="text"
-                    value={editSourceTable}
-                    onChange={(e) => setEditSourceTable(e.target.value)}
-                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-blue-500"
-                    placeholder="source_table"
-                  />
                 </div>
                 <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-600">
                   <input
@@ -245,7 +222,6 @@ export function StaffManagementTab() {
                         name: editName.trim(),
                         role: editRole,
                         employee_id: editEmployeeId,
-                        source_table: editSourceTable,
                         active: editActive,
                       })
                     }
@@ -279,9 +255,6 @@ export function StaffManagementTab() {
                       <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{member.role}</span>
                       {member.employee_id && (
                         <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">• ID: {member.employee_id}</span>
-                      )}
-                      {member.source_table && (
-                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">• SRC: {member.source_table}</span>
                       )}
                       <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">• {member.active ? 'Active' : 'Inactive'}</span>
                     </div>
