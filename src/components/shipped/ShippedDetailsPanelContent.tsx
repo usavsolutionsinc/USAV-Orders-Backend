@@ -12,6 +12,7 @@ import { useOrderAssignment } from '@/hooks';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { OrderIdFieldBlock } from '@/components/shipped/details-panel/blocks/OrderIdFieldBlock';
 import { SerialNumberFieldBlock } from '@/components/shipped/details-panel/blocks/SerialNumberFieldBlock';
+import { ViewDropdown } from '@/components/ui/ViewDropdown';
 
 interface DurationData {
   boxingDuration?: string;
@@ -32,6 +33,22 @@ interface ShippedDetailsPanelContentProps {
   productDetailsFirst?: boolean;
 }
 
+type ConditionValue = 'NEW' | 'USED' | 'PARTS';
+
+const CONDITION_OPTIONS: Array<{ value: ConditionValue; label: string }> = [
+  { value: 'NEW', label: 'NEW' },
+  { value: 'USED', label: 'USED' },
+  { value: 'PARTS', label: 'PARTS' },
+];
+
+function normalizeCondition(value: string | null | undefined): ConditionValue {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'NEW') return 'NEW';
+  if (normalized === 'PARTS' || normalized === 'PARTS USED') return 'PARTS';
+  if (normalized === 'USED') return 'USED';
+  return 'USED';
+}
+
 export function ShippedDetailsPanelContent({
   shipped,
   durationData,
@@ -45,15 +62,16 @@ export function ShippedDetailsPanelContent({
   showSerialNumber = true,
   productDetailsFirst = false
 }: ShippedDetailsPanelContentProps) {
-  const [conditionValue, setConditionValue] = useState(shipped.condition || 'Parts Used');
+  const [conditionValue, setConditionValue] = useState<ConditionValue>(normalizeCondition(shipped.condition));
   const [isSavingCondition, setIsSavingCondition] = useState(false);
   const orderAssignmentMutation = useOrderAssignment();
 
   useEffect(() => {
-    setConditionValue(shipped.condition || 'Parts Used');
+    setConditionValue(normalizeCondition(shipped.condition));
   }, [shipped.id, shipped.condition]);
 
-  const handleConditionChange = async (nextCondition: string) => {
+  const handleConditionChange = async (nextCondition: ConditionValue) => {
+    if (isSavingCondition) return;
     setConditionValue(nextCondition);
     setIsSavingCondition(true);
     try {
@@ -95,18 +113,14 @@ export function ShippedDetailsPanelContent({
           <div>
             <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest block mb-1">Condition</span>
             <div className="relative">
-              <select
+              <ViewDropdown
+                options={CONDITION_OPTIONS}
                 value={conditionValue}
-                onChange={(e) => handleConditionChange(e.target.value)}
-                disabled={isSavingCondition}
-                className="w-full rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-black text-blue-600 uppercase outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
-              >
-                {conditionValue !== 'Parts Used' && conditionValue !== 'New' && (
-                  <option value={conditionValue}>{conditionValue}</option>
-                )}
-                <option value="Parts Used">Parts Used</option>
-                <option value="New">New</option>
-              </select>
+                onChange={handleConditionChange}
+                className="w-full"
+                buttonClassName="h-8 w-full rounded-lg border border-gray-200 bg-white px-2.5 pr-8 text-left text-xs font-bold uppercase tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50"
+                optionClassName="text-xs font-bold tracking-wide text-gray-800"
+              />
               {isSavingCondition && (
                 <span className="absolute -bottom-4 left-0 text-[9px] font-bold text-gray-400 normal-case tracking-normal">
                   Saving...

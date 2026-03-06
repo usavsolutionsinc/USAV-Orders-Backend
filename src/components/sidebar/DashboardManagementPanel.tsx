@@ -18,6 +18,7 @@ interface DashboardManagementPanelProps {
   onCloseForm?: () => void;
   onFormSubmit?: (data: ShippedFormData) => void;
   filterControl?: ReactNode;
+  showNextUnassignedButton?: boolean;
 }
 
 interface SearchHistory {
@@ -31,9 +32,9 @@ export function DashboardManagementPanel({
   onCloseForm,
   onFormSubmit,
   filterControl,
+  showNextUnassignedButton = false,
 }: DashboardManagementPanelProps) {
   const [isTransferring, setIsTransferring] = useState(false);
-  const [isCheckingShipped, setIsCheckingShipped] = useState(false);
   const [manualSheetName, setManualSheetName] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -145,28 +146,6 @@ export function DashboardManagementPanel({
     }
   };
 
-  const handleCheckShipped = async () => {
-    setIsCheckingShipped(true);
-    setStatus(null);
-    try {
-      const res = await fetch('/api/orders/check-shipped', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStatus({ type: 'success', message: data.message || 'Shipped orders check completed' });
-        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      } else {
-        setStatus({ type: 'error', message: data.error || 'Shipped orders check failed' });
-      }
-    } catch (_error) {
-      setStatus({ type: 'error', message: 'Network error occurred' });
-    } finally {
-      setIsCheckingShipped(false);
-    }
-  };
-
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -264,14 +243,16 @@ export function DashboardManagementPanel({
                 Import Latest Orders
               </button>
 
-              <button
-                onClick={handleCheckShipped}
-                disabled={isCheckingShipped}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
-              >
-                {isCheckingShipped ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Check Shipped Orders
-              </button>
+              {showNextUnassignedButton ? (
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-next-unassigned'))}
+                  className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center"
+                >
+                  Next Unassigned Order
+                </button>
+              ) : null}
+
             </div>
           </motion.div>
 

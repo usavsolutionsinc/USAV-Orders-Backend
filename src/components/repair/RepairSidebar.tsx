@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { Plus } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { TabSwitch } from '@/components/ui/TabSwitch';
@@ -21,9 +22,14 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
   const searchParams = useSearchParams();
   const [showIntakeForm, setShowIntakeForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
 
   const activeTab: RepairTab = searchParams.get('tab') === 'done' ? 'done' : 'active';
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     setSearchValue(searchParams.get('search') || '');
@@ -35,6 +41,17 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
       router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname || '/repair');
     }
   }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    if (!showIntakeForm) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMounted, showIntakeForm]);
 
   const updateParams = (mutate: (params: URLSearchParams) => void) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -99,9 +116,7 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
     },
   };
 
-  const content = showIntakeForm ? (
-    <RepairIntakeForm onClose={handleCloseForm} onSubmit={handleSubmitForm} />
-  ) : (
+  const content = (
     <motion.div initial="hidden" animate="visible" variants={containerVariants} className="px-6 py-4 space-y-6 h-full flex flex-col overflow-y-auto">
       {!hideSectionHeader ? (
         <motion.header variants={itemVariants}>
@@ -163,9 +178,29 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
     </motion.div>
   );
 
+  const intakeOverlay =
+    isMounted && showIntakeForm
+      ? createPortal(
+          <div className="fixed inset-0 z-[130] bg-white">
+            <RepairIntakeForm onClose={handleCloseForm} onSubmit={handleSubmitForm} />
+          </div>,
+          document.body
+        )
+      : null;
+
   if (embedded) {
-    return <div className="h-full overflow-hidden bg-white">{content}</div>;
+    return (
+      <>
+        <div className="h-full overflow-hidden bg-white">{content}</div>
+        {intakeOverlay}
+      </>
+    );
   }
 
-  return <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative">{content}</aside>;
+  return (
+    <>
+      <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative">{content}</aside>
+      {intakeOverlay}
+    </>
+  );
 }

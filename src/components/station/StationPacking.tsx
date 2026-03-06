@@ -4,6 +4,7 @@ import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, AlertCircle, Loader2, Check, Package } from '../Icons';
 import { getPackerInputTheme } from '@/utils/staff-colors';
+import { formatPSTTimestamp } from '@/lib/timezone';
 
 interface ActivePackingOrder {
   orderId: string;
@@ -21,15 +22,6 @@ interface StationPackingProps {
   goal?: number;
   onComplete?: () => void;
   embedded?: boolean;
-}
-
-function mapStaffIdToPackingStation(staffId: string): string {
-  const normalized = String(staffId || '').trim();
-  if (normalized === '4') return '1';
-  if (normalized === '5') return '2';
-  if (normalized === '6') return '3';
-  if (normalized === '1' || normalized === '2' || normalized === '3') return normalized;
-  return '1';
 }
 
 export default function StationPacking({
@@ -70,9 +62,9 @@ export default function StationPacking({
         body: JSON.stringify({
           trackingNumber: scan,
           photos: [],
-          packerId: mapStaffIdToPackingStation(userId),
+          packerId: String(userId),
           packerName: userName,
-          timestamp: new Date().toISOString(),
+          timestamp: formatPSTTimestamp(),
         }),
       });
 

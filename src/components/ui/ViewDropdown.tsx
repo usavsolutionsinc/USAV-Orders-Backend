@@ -17,6 +17,9 @@ interface ViewDropdownProps<T extends string> {
   buttonClassName?: string;
   optionClassName?: string;
   variant?: 'default' | 'boxy';
+  borderRadius?: string;
+  backgroundColor?: string;
+  fontSize?: string;
 }
 
 export function ViewDropdown<T extends string>({
@@ -27,6 +30,9 @@ export function ViewDropdown<T extends string>({
   buttonClassName = '',
   optionClassName = '',
   variant = 'default',
+  borderRadius,
+  backgroundColor,
+  fontSize,
 }: ViewDropdownProps<T>) {
   const [isOpen, setIsOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
@@ -110,12 +116,17 @@ export function ViewDropdown<T extends string>({
           aria-expanded={isOpen}
           onClick={() => setIsOpen((prev) => !prev)}
           onKeyDown={handleButtonKeyDown}
+          style={{
+            ...(borderRadius ? { borderRadius } : {}),
+            ...(backgroundColor ? { backgroundColor } : {}),
+            ...(fontSize ? { fontSize } : {}),
+          }}
           className={
             buttonClassName ||
             `h-14 w-full border-b border-gray-200 bg-white px-4 pr-12 text-left text-[13px] uppercase tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50 ${dmSans.className} font-bold`
           }
         >
-          {selectedOption?.label || ''}
+          <span className="truncate">{selectedOption?.label || ''}</span>
         </button>
         <svg
           className={`pointer-events-none absolute right-4 h-4 w-4 text-gray-500 transition-transform ${
@@ -131,6 +142,10 @@ export function ViewDropdown<T extends string>({
 
         {isOpen && (
           <div
+            style={{
+              ...(backgroundColor ? { backgroundColor } : {}),
+              ...(borderRadius ? { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius } : {}),
+            }}
             className={`absolute left-0 top-full z-50 w-full border border-gray-200 bg-white shadow-lg ${
               isBoxy ? 'rounded-none border-t-0' : 'rounded-b-xl -mt-[1px]'
             }`}
@@ -146,9 +161,15 @@ export function ViewDropdown<T extends string>({
                       data-dropdown-option-index={index}
                       onClick={() => handleSelect(option.value)}
                       onKeyDown={(event) => handleOptionKeyDown(event, index)}
-                      className={`flex h-11 w-full items-center px-4 text-left ${
-                        optionClassName || 'text-[13px] font-bold'
-                      } uppercase tracking-wide transition-colors ${dmSans.className} text-gray-800 hover:bg-gray-50`}
+                      style={{
+                        ...(backgroundColor ? { backgroundColor } : {}),
+                        ...(fontSize ? { fontSize } : {}),
+                      }}
+                      className={`flex h-11 w-full items-center ${
+                        isBoxy ? 'px-3' : 'px-4'
+                      } text-left ${
+                        optionClassName || 'text-[13px] font-bold tracking-wide'
+                      } uppercase transition-colors ${dmSans.className} text-gray-800 hover:bg-gray-50`}
                     >
                       <span className="truncate">{option.label}</span>
                     </button>

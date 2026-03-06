@@ -15,6 +15,21 @@ interface ReceivingLog {
     tracking?: string;
     status?: string;
     count?: number;
+    qa_status?: string | null;
+    disposition_code?: string | null;
+    condition_grade?: string | null;
+    is_return?: boolean;
+    return_platform?: string | null;
+    return_reason?: string | null;
+    needs_test?: boolean;
+    assigned_tech_id?: number | null;
+    target_channel?: string | null;
+    received_at?: string | null;
+    received_by?: number | null;
+    unboxed_at?: string | null;
+    unboxed_by?: number | null;
+    zoho_purchase_receive_id?: string | null;
+    zoho_warehouse_id?: string | null;
 }
 
 interface ReceivingLogsProps {
@@ -247,6 +262,21 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60 truncate">
                                                 {log.status || 'Unknown'}
                                             </span>
+                                            {log.is_return ? (
+                                                <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-700">
+                                                    Return
+                                                </span>
+                                            ) : null}
+                                            {log.needs_test ? (
+                                                <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-slate-600">
+                                                    Test
+                                                </span>
+                                            ) : null}
+                                            {String(log.target_channel || '').toUpperCase() === 'FBA' ? (
+                                                <span className="rounded border border-purple-200 bg-purple-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-purple-700">
+                                                    FBA
+                                                </span>
+                                            ) : null}
                                         </div>
                                     </motion.div>
                                 ))}

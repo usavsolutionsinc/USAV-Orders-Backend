@@ -7,6 +7,24 @@ import { normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp } from '@/lib/timezone';
 
+const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
+    '1': 4,
+    '2': 5,
+    '3': 6,
+};
+
+function resolvePackerStaffId(rawId: string | number | null | undefined): number | null {
+    const normalized = String(rawId ?? '').trim();
+    if (!normalized) return null;
+
+    if (LEGACY_PACKER_ALIAS_TO_STAFF_ID[normalized]) {
+        return LEGACY_PACKER_ALIAS_TO_STAFF_ID[normalized];
+    }
+
+    const numeric = Number(normalized);
+    return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
 /** Compute Mon–Fri PST week range from the current server time. */
 function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
     const ts = formatPSTTimestamp();
@@ -52,28 +70,18 @@ async function prependToPackerLogsCache(staffId: number, newRecord: Record<strin
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const packerId = searchParams.get('packerId') || '1';
+    const staffId = resolvePackerStaffId(packerId);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
-    const cacheLookup = createCacheLookupKey({ packerId, limit, offset });
+    if (!staffId) {
+        return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
+    }
+    const cacheLookup = createCacheLookupKey({ packerId: String(staffId), limit, offset });
 
     try {
         const cached = await getCachedJson<any[]>('api:packing-logs', cacheLookup);
         if (cached) {
             return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
-        }
-
-        // Map packerId directly to staff ID
-        // packer_1 (from mobile) -> staff id 4 (Tuan)
-        // packer_2 (from mobile) -> staff id 5 (Thuy)
-        const packerStaffIds: { [key: string]: number } = {
-            '1': 4,  // Tuan
-            '2': 5,  // Thuy
-            '3': 6   // Future packer (if needed)
-        };
-        const staffId = packerStaffIds[packerId];
-
-        if (!staffId) {
-            return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
         }
 
         const result = await pool.query(`
@@ -92,7 +100,7 @@ export async function GET(req: NextRequest) {
 
         // Map to format expected by StationHistory (include all fields for compatibility)
         const formattedLogs = result.rows.map((log: any) => ({
-            id: `packer${packerId}-${log.id}`,
+            id: `packer${staffId}-${log.id}`,
             timestamp: log.timestamp || '',
             tracking: log.tracking || '',
             trackingNumber: log.tracking || '',
@@ -125,16 +133,7 @@ export async function POST(req: NextRequest) {
             packerId,
             timestamp
         });
-        
-        // Map packerId directly to staff ID
-        // packer_1 (from mobile) -> staff id 4 (Tuan)
-        // packer_2 (from mobile) -> staff id 5 (Thuy)
-        const packerStaffIds: { [key: string]: number } = {
-            '1': 4,  // Tuan
-            '2': 5,  // Thuy
-            '3': 6   // Future packer (if needed)
-        };
-        const staffId = packerStaffIds[packerId];
+        const staffId = resolvePackerStaffId(packerId);
 
         if (!staffId) {
             return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });

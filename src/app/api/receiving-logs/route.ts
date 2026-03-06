@@ -33,6 +33,36 @@ export async function GET(request: NextRequest) {
 
         const { dateColumn, hasQuantity } = await resolveReceivingSchema();
         const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
+        const columnsRes = await pool.query(
+            `SELECT column_name
+             FROM information_schema.columns
+             WHERE table_name = 'receiving'`
+        );
+        const availableColumns = new Set<string>(columnsRes.rows.map((r: any) => String(r.column_name)));
+        const hasColumn = (name: string) => availableColumns.has(name);
+
+        const selectFields: string[] = [
+            'id',
+            `${dateColumn} AS timestamp`,
+            'receiving_tracking_number AS tracking',
+            'carrier AS status',
+            `${countExpr} AS count`,
+            hasColumn('qa_status') ? 'qa_status' : "NULL::text AS qa_status",
+            hasColumn('disposition_code') ? 'disposition_code' : "NULL::text AS disposition_code",
+            hasColumn('condition_grade') ? 'condition_grade' : "NULL::text AS condition_grade",
+            hasColumn('is_return') ? 'is_return' : 'FALSE AS is_return',
+            hasColumn('return_platform') ? 'return_platform' : "NULL::text AS return_platform",
+            hasColumn('return_reason') ? 'return_reason' : "NULL::text AS return_reason",
+            hasColumn('needs_test') ? 'needs_test' : 'FALSE AS needs_test',
+            hasColumn('assigned_tech_id') ? 'assigned_tech_id' : 'NULL::int AS assigned_tech_id',
+            hasColumn('target_channel') ? 'target_channel' : "NULL::text AS target_channel",
+            hasColumn('received_at') ? 'received_at' : 'NULL::text AS received_at',
+            hasColumn('received_by') ? 'received_by' : 'NULL::int AS received_by',
+            hasColumn('unboxed_at') ? 'unboxed_at' : 'NULL::text AS unboxed_at',
+            hasColumn('unboxed_by') ? 'unboxed_by' : 'NULL::int AS unboxed_by',
+            hasColumn('zoho_purchase_receive_id') ? 'zoho_purchase_receive_id' : "NULL::text AS zoho_purchase_receive_id",
+            hasColumn('zoho_warehouse_id') ? 'zoho_warehouse_id' : "NULL::text AS zoho_warehouse_id",
+        ];
 
         // Build optional week pre-filter (UTC ±1 day buffer for PST boundary records).
         const queryParams: any[] = [];
@@ -49,7 +79,7 @@ export async function GET(request: NextRequest) {
         const offsetIdx = queryParams.length;
 
         const logs = await pool.query(`
-            SELECT id, ${dateColumn} AS timestamp, receiving_tracking_number AS tracking, carrier AS status, ${countExpr} AS count
+            SELECT ${selectFields.join(', ')}
             FROM receiving
             WHERE receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
               ${weekClause}
@@ -63,6 +93,21 @@ export async function GET(request: NextRequest) {
             tracking: log.tracking || '',
             status: log.status || '',
             count: parseInt(String(log.count || '1'), 10) || 1,
+            qa_status: log.qa_status || null,
+            disposition_code: log.disposition_code || null,
+            condition_grade: log.condition_grade || null,
+            is_return: !!log.is_return,
+            return_platform: log.return_platform || null,
+            return_reason: log.return_reason || null,
+            needs_test: !!log.needs_test,
+            assigned_tech_id: log.assigned_tech_id ? Number(log.assigned_tech_id) : null,
+            target_channel: log.target_channel || null,
+            received_at: log.received_at || null,
+            received_by: log.received_by ? Number(log.received_by) : null,
+            unboxed_at: log.unboxed_at || null,
+            unboxed_by: log.unboxed_by ? Number(log.unboxed_by) : null,
+            zoho_purchase_receive_id: log.zoho_purchase_receive_id || null,
+            zoho_warehouse_id: log.zoho_warehouse_id || null,
         }));
 
         await setCachedJson('api:receiving-logs', cacheLookup, formattedLogs, cacheTTL, ['receiving-logs']);
@@ -137,6 +182,9 @@ export async function PATCH(request: NextRequest) {
         const returnPlatformAllowed = new Set(['AMZ', 'EBAY_DRAGONH', 'EBAY_USAV', 'EBAY_MK', 'FBA', 'WALMART', 'ECWID']);
         const targetChannelAllowed = new Set(['ORDERS', 'FBA']);
 
+        const hasReturnPlatformField = Object.prototype.hasOwnProperty.call(body ?? {}, 'return_platform') || Object.prototype.hasOwnProperty.call(body ?? {}, 'returnPlatform');
+        const hasTargetChannelField = Object.prototype.hasOwnProperty.call(body ?? {}, 'target_channel') || Object.prototype.hasOwnProperty.call(body ?? {}, 'targetChannel');
+
         if (!Number.isFinite(id) || id <= 0) {
             return NextResponse.json({ error: 'Valid id is required' }, { status: 400 });
         }
@@ -182,13 +230,23 @@ export async function PATCH(request: NextRequest) {
         if (availableColumns.has('is_return') && isReturnRaw !== undefined) {
             updates.push(`is_return = $${idx++}`);
             values.push(!!isReturnRaw);
-        }
-        if (availableColumns.has('return_platform') && returnPlatformRaw) {
-            if (!returnPlatformAllowed.has(returnPlatformRaw)) {
-                return NextResponse.json({ error: 'Invalid return_platform' }, { status: 400 });
+            if (!isReturnRaw && availableColumns.has('return_platform')) {
+                updates.push(`return_platform = NULL`);
             }
-            updates.push(`return_platform = $${idx++}`);
-            values.push(returnPlatformRaw);
+            if (!isReturnRaw && availableColumns.has('return_reason')) {
+                updates.push(`return_reason = NULL`);
+            }
+        }
+        if (availableColumns.has('return_platform') && hasReturnPlatformField) {
+            if (!returnPlatformRaw) {
+                updates.push(`return_platform = NULL`);
+            } else {
+                if (!returnPlatformAllowed.has(returnPlatformRaw)) {
+                    return NextResponse.json({ error: 'Invalid return_platform' }, { status: 400 });
+                }
+                updates.push(`return_platform = $${idx++}`);
+                values.push(returnPlatformRaw);
+            }
         }
         if (availableColumns.has('return_reason') && returnReasonRaw !== undefined) {
             updates.push(`return_reason = $${idx++}`);
@@ -197,18 +255,25 @@ export async function PATCH(request: NextRequest) {
         if (availableColumns.has('needs_test') && needsTestRaw !== undefined) {
             updates.push(`needs_test = $${idx++}`);
             values.push(!!needsTestRaw);
+            if (!needsTestRaw && availableColumns.has('assigned_tech_id')) {
+                updates.push(`assigned_tech_id = NULL`);
+            }
         }
         if (availableColumns.has('assigned_tech_id') && assignedTechIdRaw !== undefined) {
             const parsed = Number(assignedTechIdRaw);
             updates.push(`assigned_tech_id = $${idx++}`);
             values.push(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
         }
-        if (availableColumns.has('target_channel') && targetChannelRaw) {
-            if (!targetChannelAllowed.has(targetChannelRaw)) {
-                return NextResponse.json({ error: 'Invalid target_channel' }, { status: 400 });
+        if (availableColumns.has('target_channel') && hasTargetChannelField) {
+            if (!targetChannelRaw) {
+                updates.push(`target_channel = NULL`);
+            } else {
+                if (!targetChannelAllowed.has(targetChannelRaw)) {
+                    return NextResponse.json({ error: 'Invalid target_channel' }, { status: 400 });
+                }
+                updates.push(`target_channel = $${idx++}`);
+                values.push(targetChannelRaw);
             }
-            updates.push(`target_channel = $${idx++}`);
-            values.push(targetChannelRaw);
         }
         if (availableColumns.has('unboxed_by') && unboxedByRaw !== undefined) {
             const parsed = Number(unboxedByRaw);

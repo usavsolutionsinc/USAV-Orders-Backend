@@ -37,8 +37,8 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'repair', label: 'Repair', href: '/repair', icon: Tool, kind: 'main' },
   { id: 'sku-stock', label: 'Sku Stock', href: '/sku-stock', icon: Box, kind: 'main' },
   { id: 'receiving', label: 'Receiving', href: '/receiving', icon: ClipboardList, kind: 'station' },
-  { id: 'tech', label: 'Technicians', href: '/tech/1', icon: Wrench, kind: 'station' },
-  { id: 'packer', label: 'Packers', href: '/packer/4', icon: User, kind: 'station' },
+  { id: 'tech', label: 'Technicians', href: '/tech?staffId=1', icon: Wrench, kind: 'station' },
+  { id: 'packer', label: 'Packers', href: '/packer?staffId=4', icon: User, kind: 'station' },
   { id: 'support', label: 'Support', href: '/support', icon: AlertCircle, kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters', href: '/previous-quarters', icon: Calendar, kind: 'bottom' },
   { id: 'admin', label: 'Admin', href: '/admin', icon: ShieldCheck, kind: 'bottom' },
@@ -53,8 +53,8 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
   if (pathname === '/previous-quarters' || pathname.startsWith('/previous-quarters/')) return 'previous-quarters';
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
-  if (/^\/tech\/\d+/.test(pathname)) return 'tech';
-  if (/^\/packer\/\d+/.test(pathname)) return 'packer';
+  if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
+  if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
   return 'unknown';
 }
 

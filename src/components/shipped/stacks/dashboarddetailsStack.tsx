@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Check, ChevronUp, ChevronDown } from '@/components/Icons';
 import { motion } from 'framer-motion';
 import { DetailsStackProps } from './types';
@@ -31,8 +31,6 @@ export function DashboardDetailsStack({
   const [isSavingOutOfStock, setIsSavingOutOfStock] = useState(false);
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [isSavingShipByDate, setIsSavingShipByDate] = useState(false);
-  const [isSavingItemNumber, setIsSavingItemNumber] = useState(false);
-  const [isSavingTrackingNumber, setIsSavingTrackingNumber] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
@@ -40,6 +38,9 @@ export function DashboardDetailsStack({
   const [assignedPackerId, setAssignedPackerId] = useState<number | null>((shipped as any).packer_id ?? null);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const deleteArmTimeoutRef = useRef<number | null>(null);
+  const isSavingInlineFieldsRef = useRef(false);
+  const lastSavedItemNumberRef = useRef(String(shipped.item_number || '').trim());
+  const lastSavedTrackingNumberRef = useRef(String(shipped.shipping_tracking_number || '').trim());
   const hasOutOfStockValue = outOfStock.trim().length > 0;
   const orderAssignmentMutation = useOrderAssignment();
   const deleteOrderMutation = useDeleteOrderRow();
@@ -85,6 +86,8 @@ export function DashboardDetailsStack({
     setAssignmentError(null);
     setActiveInput('none');
     setIsDeleteArmed(false);
+    lastSavedItemNumberRef.current = String(shipped.item_number || '').trim();
+    lastSavedTrackingNumberRef.current = String(shipped.shipping_tracking_number || '').trim();
   }, [shipped.id, (shipped as any).out_of_stock, shipped.notes, shipped.shipping_tracking_number, shipped.item_number]);
 
   useEffect(() => {
@@ -167,35 +170,41 @@ export function DashboardDetailsStack({
     }
   };
 
-  const saveShippingTrackingNumber = async () => {
-    setIsSavingTrackingNumber(true);
-    try {
-      await orderAssignmentMutation.mutateAsync({
-        orderId: shipped.id,
-        shippingTrackingNumber: shippingTrackingNumber.trim(),
-      });
-      onUpdate?.();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsSavingTrackingNumber(false);
-    }
-  };
+  const saveInlineFields = useCallback(async () => {
+    if (isSavingInlineFieldsRef.current) return;
+    const nextItemNumber = itemNumber.trim();
+    const nextTrackingNumber = shippingTrackingNumber.trim();
+    const itemChanged = nextItemNumber !== lastSavedItemNumberRef.current;
+    const trackingChanged = nextTrackingNumber !== lastSavedTrackingNumberRef.current;
+    if (!itemChanged && !trackingChanged) return;
 
-  const saveItemNumber = async () => {
-    setIsSavingItemNumber(true);
+    isSavingInlineFieldsRef.current = true;
     try {
       await orderAssignmentMutation.mutateAsync({
         orderId: shipped.id,
-        itemNumber: itemNumber.trim(),
+        ...(itemChanged ? { itemNumber: nextItemNumber } : {}),
+        ...(trackingChanged ? { shippingTrackingNumber: nextTrackingNumber } : {}),
       });
+      if (itemChanged) lastSavedItemNumberRef.current = nextItemNumber;
+      if (trackingChanged) lastSavedTrackingNumberRef.current = nextTrackingNumber;
       onUpdate?.();
     } catch (error) {
       console.error(error);
     } finally {
-      setIsSavingItemNumber(false);
+      isSavingInlineFieldsRef.current = false;
     }
-  };
+  }, [itemNumber, onUpdate, orderAssignmentMutation, shipped.id, shippingTrackingNumber]);
+
+  useEffect(() => {
+    const handleClose = () => {
+      void saveInlineFields();
+    };
+
+    window.addEventListener('close-shipped-details' as any, handleClose as any);
+    return () => {
+      window.removeEventListener('close-shipped-details' as any, handleClose as any);
+    };
+  }, [saveInlineFields]);
 
   const cancelOrder = async () => {
     if (!isDeleteArmed) {
@@ -301,6 +310,40 @@ export function DashboardDetailsStack({
       className="pb-8 pt-4 space-y-4"
     >
       <motion.section variants={itemVariants} className="mx-8 space-y-2">
+        <section>
+          <div className="px-0 pt-1 pb-0.5 border-b border-gray-200">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+              Update Item Number
+            </p>
+            <div className="mt-0.5 flex items-end">
+              <input
+                type="text"
+                value={itemNumber}
+                onChange={(e) => setItemNumber(e.target.value)}
+                onBlur={() => void saveInlineFields()}
+                placeholder="Enter Item Number"
+                className="flex-1 min-w-0 border-0 bg-transparent px-0 pb-0.5 pt-2 text-[11px] font-bold leading-none text-gray-900 outline-none focus:ring-0"
+              />
+            </div>
+          </div>
+
+          <div className="px-0 pt-1 pb-0.5 border-b border-gray-200">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+              Update Tracking Number
+            </p>
+            <div className="mt-0.5 flex items-end">
+              <input
+                type="text"
+                value={shippingTrackingNumber}
+                onChange={(e) => setShippingTrackingNumber(e.target.value)}
+                onBlur={() => void saveInlineFields()}
+                placeholder="Enter Tracking Number"
+                className="flex-1 min-w-0 border-0 bg-transparent px-0 pb-0.5 pt-2 text-[11px] font-bold leading-none text-gray-900 outline-none focus:ring-0"
+              />
+            </div>
+          </div>
+        </section>
+
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
             <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
@@ -506,61 +549,11 @@ export function DashboardDetailsStack({
           showPackingPhotos={false}
           showPackingInformation={false}
           showTestingInformation={false}
-          showSerialNumber
+          showSerialNumber={false}
         />
       </motion.div>
 
       <motion.section variants={itemVariants} className="mx-8 pt-2">
-        <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 mb-3">
-          <label className="block text-[9px] font-black uppercase tracking-widest text-blue-700">
-            Update Item Number
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={itemNumber}
-              onChange={(e) => setItemNumber(e.target.value)}
-              placeholder="Enter item number..."
-              className="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-            />
-            <button
-              type="button"
-              onClick={saveItemNumber}
-              disabled={isSavingItemNumber}
-              className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-              aria-label="Update item number"
-              title="Update item number"
-            >
-              <Check className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/40 p-3 mb-3">
-          <label className="block text-[9px] font-black uppercase tracking-widest text-blue-700">
-            Update Shipping Tracking Number
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={shippingTrackingNumber}
-              onChange={(e) => setShippingTrackingNumber(e.target.value)}
-              placeholder="Enter new tracking number..."
-              className="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-            />
-            <button
-              type="button"
-              onClick={saveShippingTrackingNumber}
-              disabled={isSavingTrackingNumber}
-              className="h-9 w-9 inline-flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-              aria-label="Update shipping tracking number"
-              title="Update shipping tracking number"
-            >
-              <Check className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-
         <button
           type="button"
           onClick={cancelOrder}

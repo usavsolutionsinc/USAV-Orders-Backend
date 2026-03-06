@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
+const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
+  '1': 4,
+  '2': 5,
+  '3': 6,
+};
+
+function resolvePackerStaffId(rawId: string | number | null | undefined): number | null {
+  const normalized = String(rawId ?? '').trim();
+  if (!normalized) return null;
+  if (LEGACY_PACKER_ALIAS_TO_STAFF_ID[normalized]) {
+    return LEGACY_PACKER_ALIAS_TO_STAFF_ID[normalized];
+  }
+  const numeric = Number(normalized);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
 /**
  * Update packer_logs table and set orders.is_shipped to true
  * Called from mobile app after photos are uploaded
@@ -40,13 +56,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'packerPhotosUrl must be a non-empty array' }, { status: 400 });
     }
 
-    // Map mobile packerId (1, 2) to staff IDs (4, 5)
-    const packerStaffIds: { [key: number]: number } = {
-      1: 4,  // Tuan
-      2: 5,  // Thuy
-      3: 6   // Future packer
-    };
-    const staffId = packerStaffIds[packedBy];
+    const staffId = resolvePackerStaffId(packedBy);
 
     if (!staffId) {
       return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });

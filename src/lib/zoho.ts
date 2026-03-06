@@ -191,3 +191,72 @@ export async function listWarehouses(params: {
 } = {}): Promise<ZohoPagedResponse<ZohoWarehouse> & { warehouses?: ZohoWarehouse[] }> {
   return zohoInventoryRequest('/api/v1/warehouses', params);
 }
+
+/**
+ * Search Zoho purchase receives by tracking number.
+ * Uses the search_text param which Zoho supports for fuzzy matching across fields.
+ */
+export async function searchPurchaseReceivesByTracking(
+  trackingNumber: string
+): Promise<ZohoPurchaseReceive[]> {
+  const trimmed = trackingNumber.trim();
+  if (!trimmed) return [];
+
+  const data = await zohoInventoryRequest<
+    ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceives?: ZohoPurchaseReceive[] }
+  >('/api/v1/purchasereceives', {
+    search_text: trimmed,
+    per_page: 5,
+  });
+
+  return data.purchasereceives || [];
+}
+
+export interface ZohoPurchaseReceiveLine {
+  line_item_id: string;
+  quantity_received: number;
+}
+
+/**
+ * Create a purchase receive in Zoho Inventory (marks PO items as physically received).
+ * Used after unboxing confirmation in Mode 2.
+ */
+export async function createPurchaseReceive(params: {
+  purchaseOrderId: string;
+  warehouseId?: string;
+  date?: string;
+  lineItems: ZohoPurchaseReceiveLine[];
+}): Promise<ZohoPagedResponse<ZohoPurchaseReceive> & { purchasereceive?: ZohoPurchaseReceive }> {
+  const orgId = requireOrgId();
+  const accessToken = await getAccessToken();
+  const baseUrl = getInventoryBaseUrl();
+
+  const body = {
+    purchaseorder_id: params.purchaseOrderId,
+    date: params.date || new Date().toISOString().substring(0, 10),
+    warehouse_id: params.warehouseId,
+    line_items: params.lineItems.map((l) => ({
+      line_item_id: l.line_item_id,
+      quantity_received: l.quantity_received,
+    })),
+  };
+
+  const url = `${baseUrl}/api/v1/purchasereceives?organization_id=${orgId}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Zoho-oauthtoken ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '');
+    throw new Error(`Zoho createPurchaseReceive error ${response.status}: ${bodyText || 'No response body'}`);
+  }
+
+  return response.json();
+}

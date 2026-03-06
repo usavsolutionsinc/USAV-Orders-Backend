@@ -1,377 +1,397 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Package, AlertTriangle, X, Search, Copy, Check, Loader2, Plus, ExternalLink } from './Icons';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Copy, Loader2, Search } from './Icons';
 import { SearchBar } from './ui/SearchBar';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { formatDatePST, formatTimePST } from '@/lib/timezone';
-import { getTrackingUrlByCarrier } from '@/utils/tracking';
 import { invalidateReceivingCache } from '@/lib/receivingCache';
 
-interface SearchResult {
-    id: string;
-    timestamp: string;
-    tracking: string;
-    status: string;
-    count: number;
-}
+type ReceivingMode = 'INCOMING' | 'RETURN';
+
+type SearchResult = {
+  id: string;
+  timestamp: string;
+  tracking: string;
+  status: string;
+  count: number;
+};
+
+type StaffOption = {
+  id: number;
+  name: string;
+};
 
 interface ReceivingPanelProps {
-    onEntryAdded?: () => void;
-    todayCount: number;
-    averageTime: string;
-    embedded?: boolean;
-    hideSectionHeader?: boolean;
+  onEntryAdded?: () => void;
+  todayCount: number;
+  averageTime: string;
+  embedded?: boolean;
+  hideSectionHeader?: boolean;
 }
 
+const CONDITION_OPTIONS = [
+  { value: 'BRAND_NEW', label: 'Brand New' },
+  { value: 'USED_A', label: 'Used - A' },
+  { value: 'USED_B', label: 'Used - B' },
+  { value: 'USED_C', label: 'Used - C' },
+  { value: 'PARTS', label: 'Parts' },
+] as const;
+
+const RETURN_PLATFORM_OPTIONS = [
+  { value: 'AMZ', label: 'AMZ' },
+  { value: 'EBAY_DRAGONH', label: 'eBay Dragonh' },
+  { value: 'EBAY_USAV', label: 'eBay USAV' },
+  { value: 'EBAY_MK', label: 'eBay MK' },
+  { value: 'FBA', label: 'FBA' },
+  { value: 'WALMART', label: 'Walmart' },
+  { value: 'ECWID', label: 'Ecwid' },
+] as const;
+
+const TARGET_CHANNEL_OPTIONS = [
+  { value: '', label: 'No Target Channel' },
+  { value: 'ORDERS', label: 'Orders' },
+  { value: 'FBA', label: 'FBA' },
+] as const;
+
 export default function ReceivingPanel({
-    onEntryAdded,
-    todayCount,
-    averageTime,
-    embedded = false,
-    hideSectionHeader = false,
+  onEntryAdded,
+  todayCount,
+  averageTime,
+  embedded = false,
+  hideSectionHeader = false,
 }: ReceivingPanelProps) {
-    const [trackingNumber, setTrackingNumber] = useState('');
-    const [carrier, setCarrier] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+  const scanInputRef = useRef<HTMLInputElement | null>(null);
 
-    const [results, setResults] = useState<SearchResult[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [copiedField, setCopiedField] = useState<string | null>(null);
-    const [mode, setMode] = useState<'entry' | 'search'>('entry');
-    const [lastFound, setLastFound] = useState<SearchResult | null>(null);
-    const [isManualMode, setIsManualMode] = useState(false);
-    const scanInputRef = useRef<HTMLInputElement | null>(null);
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [carrier, setCarrier] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [technicians, setTechnicians] = useState<StaffOption[]>([]);
 
-    useEffect(() => {
-        const handleFocusScan = () => {
-            setMode('entry');
-            requestAnimationFrame(() => {
-                scanInputRef.current?.focus();
-            });
-        };
-        window.addEventListener('receiving-focus-scan', handleFocusScan as EventListener);
-        return () => {
-            window.removeEventListener('receiving-focus-scan', handleFocusScan as EventListener);
-        };
-    }, []);
+  const [receivingMode, setReceivingMode] = useState<ReceivingMode>('INCOMING');
+  const [conditionGrade, setConditionGrade] = useState('BRAND_NEW');
+  const [needsTest, setNeedsTest] = useState(false);
+  const [assignedTechId, setAssignedTechId] = useState('');
+  const [targetChannel, setTargetChannel] = useState('');
+  const [returnPlatform, setReturnPlatform] = useState('');
+  const [returnReason, setReturnReason] = useState('');
 
-    const handleSubmit = async (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-        if (!trackingNumber.trim()) return;
+  useEffect(() => {
+    const handleFocusScan = () => {
+      requestAnimationFrame(() => {
+        scanInputRef.current?.focus();
+      });
+    };
+    window.addEventListener('receiving-focus-scan', handleFocusScan as EventListener);
+    return () => {
+      window.removeEventListener('receiving-focus-scan', handleFocusScan as EventListener);
+    };
+  }, []);
 
-        if (mode === 'search') {
-            await handleSearch();
-            setMode('entry');
-            return;
-        }
-
-        setIsSubmitting(true);
-        setLastFound(null);
-        try {
-            const res = await fetch('/api/receiving-entry', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    trackingNumber,
-                    carrier: carrier || 'Unknown',
-                }),
-            });
-
-            if (!res.ok) throw new Error('Failed to add entry');
-
-            const data = await res.json();
-            setTrackingNumber('');
-            invalidateReceivingCache();
-
-            // Fire a specific event so ReceivingLogs can surgically prepend the
-            // single new record without a full cache invalidation + re-fetch.
-            if (data.record) {
-                window.dispatchEvent(new CustomEvent('receiving-entry-added', { detail: data.record }));
-            }
-            // Still dispatch the generic refresh for ReceivingSidebar count etc.
-            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-            if (onEntryAdded) onEntryAdded();
-        } catch (error) {
-            console.error('Error adding entry:', error);
-            alert('Failed to add entry');
-        } finally {
-            setIsSubmitting(false);
-        }
+  useEffect(() => {
+    const loadTechs = async () => {
+      try {
+        const res = await fetch('/api/staff?role=technician&active=true', { cache: 'no-store' });
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (!Array.isArray(rows)) return;
+        setTechnicians(
+          rows
+            .map((row: any) => ({ id: Number(row.id), name: String(row.name || '') }))
+            .filter((row: StaffOption) => Number.isFinite(row.id) && row.id > 0 && row.name)
+        );
+      } catch {
+        // no-op
+      }
     };
 
-    const handleSearch = async () => {
-        if (!trackingNumber.trim()) {
-            setResults([]);
-            return;
-        }
+    loadTechs();
+  }, []);
 
-        setIsSearching(true);
-        setLastFound(null);
-        try {
-            const res = await fetch(`/api/receiving-logs/search?q=${encodeURIComponent(trackingNumber)}`);
-            const data = await res.json();
-            
-            if (data.results && data.results.length > 0) {
-                setResults(data.results);
-                setLastFound(null);
-            } else {
-                setResults([]);
-            }
-        } catch (error) {
-            console.error('Search error:', error);
-            setResults([]);
-        } finally {
-            setIsSearching(false);
-        }
+  const showReturnFields = receivingMode === 'RETURN';
+  const showTechSelector = needsTest;
+
+  const payload = useMemo(() => {
+    const techId = Number(assignedTechId);
+    return {
+      trackingNumber: trackingNumber.trim(),
+      carrier: carrier || 'Unknown',
+      conditionGrade,
+      qaStatus: 'PENDING',
+      dispositionCode: 'HOLD',
+      isReturn: showReturnFields,
+      returnPlatform: showReturnFields ? returnPlatform || null : null,
+      returnReason: showReturnFields ? returnReason.trim() || null : null,
+      needsTest,
+      assignedTechId: showTechSelector && Number.isFinite(techId) && techId > 0 ? techId : null,
+      targetChannel: targetChannel || null,
     };
+  }, [trackingNumber, carrier, conditionGrade, showReturnFields, returnPlatform, returnReason, needsTest, showTechSelector, assignedTechId, targetChannel]);
 
-    const copyToClipboard = (text: string, field: string) => {
-        navigator.clipboard.writeText(text);
-        setCopiedField(field);
-        setTimeout(() => setCopiedField(null), 2000);
-    };
+  const resetForm = () => {
+    setTrackingNumber('');
+    setCarrier('');
+    setConditionGrade('BRAND_NEW');
+    setReceivingMode('INCOMING');
+    setNeedsTest(false);
+    setAssignedTechId('');
+    setTargetChannel('');
+    setReturnPlatform('');
+    setReturnReason('');
+  };
 
-    const containerVariants = {
-        hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.05,
-                delayChildren: 0.05,
-            },
-        },
-    };
+  const handleSubmit = async () => {
+    if (!payload.trackingNumber) return;
 
-    const itemVariants = {
-        hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
-        visible: {
-            opacity: 1,
-            x: 0,
-            filter: 'blur(0px)',
-            transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 },
-        },
-    };
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/receiving-entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Failed to add receiving entry');
 
-    return (
-        <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className={`flex flex-col h-full bg-white ${embedded ? '' : 'border-r border-gray-200'}`}
+      const data = await res.json();
+      resetForm();
+      invalidateReceivingCache();
+
+      if (data.record) {
+        window.dispatchEvent(new CustomEvent('receiving-entry-added', { detail: data.record }));
+      }
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      onEntryAdded?.();
+      scanInputRef.current?.focus();
+    } catch (error) {
+      console.error('Error adding receiving entry:', error);
+      window.alert('Failed to add receiving entry.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    const q = trackingNumber.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/receiving-logs/search?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
+      const data = await res.json();
+      setResults(Array.isArray(data.results) ? data.results : []);
+    } catch {
+      setResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    window.setTimeout(() => setCopiedField(null), 1500);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className={`flex h-full flex-col bg-white ${embedded ? '' : 'border-r border-gray-200'}`}
+    >
+      {!hideSectionHeader && (
+        <div className="flex items-center justify-between border-b border-gray-200 p-6">
+          <div>
+            <h2 className="text-xl font-black uppercase leading-none tracking-tighter text-gray-900">Receiving</h2>
+            <p className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">QA Intake</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Today</p>
+            <p className="text-lg font-black text-blue-600">{todayCount}</p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Avg {averageTime}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="border-b border-gray-200 p-4">
+        <SearchBar
+          inputRef={scanInputRef}
+          value={trackingNumber}
+          onChange={setTrackingNumber}
+          onSearch={handleSubmit}
+          placeholder="Scan tracking number..."
+          isSearching={isSubmitting}
+          variant="blue"
+          rightElement={
+            <button
+              type="button"
+              onClick={handleSearch}
+              disabled={isSearching || !trackingNumber.trim()}
+              className="rounded-2xl bg-emerald-600 p-3 text-white shadow-lg shadow-emerald-600/10 transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+              title="Search logs"
+            >
+              {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </button>
+          }
+        />
+      </div>
+
+      <div className="space-y-3 border-b border-gray-200 p-4">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setReceivingMode('INCOMING')}
+            className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+              receivingMode === 'INCOMING' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            Incoming
+          </button>
+          <button
+            type="button"
+            onClick={() => setReceivingMode('RETURN')}
+            className={`rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+              receivingMode === 'RETURN' ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            Return
+          </button>
+        </div>
+
+        <select
+          value={carrier}
+          onChange={(e) => setCarrier(e.target.value)}
+          className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
         >
-            {!hideSectionHeader && (
-                <motion.div variants={itemVariants} className="p-6 border-b border-gray-200 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black tracking-tighter text-gray-900 uppercase leading-none">
-                            Receiving
-                        </h2>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl">
-                            <span className="text-[10px] font-black text-black-400 uppercase tracking-widest">Today</span>
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">-</span>
-                            <span className="text-sm font-black text-blue-600 leading-none">{todayCount}</span>
-                        </div>
-                    </div>
-                </motion.div>
-            )}
+          <option value="">Auto-detect Carrier</option>
+          <option value="UPS">UPS</option>
+          <option value="FEDEX">FedEx</option>
+          <option value="USPS">USPS</option>
+          <option value="AMAZON">Amazon</option>
+          <option value="DHL">DHL</option>
+          <option value="UNIUNI">UniUni</option>
+        </select>
 
-            {/* Unified Scan & Search Section */}
-            <motion.div variants={itemVariants} className="p-4 border-b border-gray-200 space-y-3">
-                <SearchBar 
-                    inputRef={scanInputRef}
-                    value={trackingNumber}
-                    onChange={(val) => {
-                        setTrackingNumber(val);
-                        if (mode === 'search' && !val) setMode('entry');
-                    }}
-                    onSearch={() => handleSubmit()}
-                    placeholder={mode === 'entry' ? "Scan to Input..." : "Search Logs..."}
-                    isSearching={isSubmitting || isSearching}
-                    variant={mode === 'entry' ? 'blue' : 'emerald'}
-                    rightElement={
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (mode === 'entry') {
-                                    setMode('search');
-                                    handleSearch().then(() => setMode('entry'));
-                                } else {
-                                    handleSearch();
-                                }
-                            }}
-                            disabled={isSearching || !trackingNumber.trim()}
-                            className={`p-3 rounded-2xl transition-all active:scale-95 shadow-lg disabled:cursor-not-allowed ${
-                                mode === 'entry' 
-                                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/10' 
-                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/10'
-                            }`}
-                            title="Search Logs"
-                        >
-                            {isSearching ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Search className="w-4 h-4" />
-                            )}
-                        </button>
-                    }
-                />
+        <select
+          value={conditionGrade}
+          onChange={(e) => setConditionGrade(e.target.value)}
+          className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
+        >
+          {CONDITION_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
 
-                {/* Manual Entry Mode Dropdown */}
-                <div className="space-y-2">
-                    <button
-                        onClick={() => setIsManualMode(!isManualMode)}
-                        className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-gray-400 hover:text-blue-600 transition-colors px-1"
-                    >
-                        <div className={`w-3 h-3 rounded-full border-2 transition-all ${isManualMode ? 'bg-blue-600 border-blue-600 scale-110' : 'border-gray-200'}`} />
-                        Manual Entry Mode
-                    </button>
+        {showReturnFields && (
+          <>
+            <select
+              value={returnPlatform}
+              onChange={(e) => setReturnPlatform(e.target.value)}
+              className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] font-black uppercase tracking-wider text-amber-800 outline-none focus:border-amber-400"
+            >
+              <option value="">Return Platform</option>
+              {RETURN_PLATFORM_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <textarea
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              placeholder="Return reason (optional)"
+              className="min-h-[72px] w-full resize-none rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-gray-900 outline-none focus:border-amber-400"
+            />
+          </>
+        )}
 
-                    <AnimatePresence>
-                        {isManualMode && (
-                            <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden"
-                            >
-                                <select
-                                    value={carrier}
-                                    onChange={(e) => setCarrier(e.target.value)}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-[11px] font-black uppercase tracking-wider outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer shadow-inner"
-                                >
-                                    <option value="">Auto-detect Carrier</option>
-                                    <option value="UPS">UPS</option>
-                                    <option value="FEDEX">FedEx</option>
-                                    <option value="USPS">USPS</option>
-                                    <option value="AMAZON">Amazon</option>
-                                    <option value="DHL">DHL</option>
-                                </select>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+        <div className="space-y-2 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+          <label className="flex cursor-pointer items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-700">
+            <input type="checkbox" checked={needsTest} onChange={(e) => setNeedsTest(e.target.checked)} />
+            Needs Test
+          </label>
+
+          {showTechSelector && (
+            <select
+              value={assignedTechId}
+              onChange={(e) => setAssignedTechId(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-900 outline-none focus:border-purple-500"
+            >
+              <option value="">Assign Tech</option>
+              {technicians.map((tech) => (
+                <option key={tech.id} value={String(tech.id)}>
+                  {tech.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <select
+            value={targetChannel}
+            onChange={(e) => setTargetChannel(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-900 outline-none focus:border-purple-500"
+          >
+            {TARGET_CHANNEL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isSubmitting || !trackingNumber.trim()}
+          className="w-full rounded-2xl bg-blue-600 py-3 text-[11px] font-black uppercase tracking-widest text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+        >
+          {isSubmitting ? 'Saving...' : 'Acknowledge Package'}
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        {results.length > 0 ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Search Results</p>
+              <button
+                onClick={() => setResults([])}
+                className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:underline"
+              >
+                Clear
+              </button>
+            </div>
+            {results.map((result) => (
+              <div key={result.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-[10px] font-mono font-black text-blue-600">{result.tracking}</p>
+                  <button
+                    onClick={() => copyToClipboard(result.tracking, `tracking-${result.id}`)}
+                    className="rounded p-1 hover:bg-gray-200"
+                  >
+                    {copiedField === `tracking-${result.id}` ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-gray-400" />}
+                  </button>
                 </div>
-            </motion.div>
-
-            {/* Found Record Component */}
-            <AnimatePresence>
-                {lastFound && (
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="m-4 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl shadow-sm relative overflow-hidden group"
-                    >
-                        <div className="relative z-10">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-600/20">
-                                        <Check className="w-4 h-4 text-white" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black text-emerald-900 uppercase tracking-tight leading-none">Entry Found</p>
-                                        <p className="text-[8px] font-bold text-emerald-600 uppercase tracking-[0.2em] mt-1">Verified Record</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setLastFound(null)}
-                                    className="p-2 bg-white hover:bg-emerald-100 text-emerald-600 rounded-xl border border-emerald-100 transition-all active:scale-95 shadow-sm"
-                                    title="Close"
-                                >
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Carrier</span>
-                                    <span className="text-[11px] font-black text-gray-900 uppercase bg-white/50 px-2 py-0.5 rounded-lg border border-emerald-100/50">
-                                        {lastFound.status || 'UPS'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Tracking</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[11px] font-black font-mono text-blue-600">
-                                            {lastFound.tracking.slice(-4)}
-                                        </span>
-                                        <button
-                                            onClick={() => copyToClipboard(lastFound.tracking, 'found-tracking')}
-                                            className="p-1 hover:bg-white rounded transition-all text-emerald-600"
-                                            title="Copy Tracking #"
-                                        >
-                                            {copiedField === 'found-tracking' ? (
-                                                <Check className="w-3 h-3" />
-                                            ) : (
-                                                <Copy className="w-3 h-3" />
-                                            )}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Arrived</span>
-                                    <span className="text-[10px] font-black text-gray-900 uppercase">
-                                        {formatTimePST(lastFound.timestamp)} — {formatDatePST(lastFound.timestamp)}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Results Section */}
-            <motion.div variants={itemVariants} className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {results.length > 0 && (
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between mb-2 px-1">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Search Results</p>
-                                <button 
-                                    onClick={() => setResults([])}
-                                    className="text-[10px] font-bold text-blue-600 uppercase hover:underline"
-                                >
-                                    Clear
-                                </button>
-                            </div>
-                            
-                            {results.map((result) => (
-                                <div
-                                    key={result.id}
-                                    className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2 hover:border-blue-300 transition-all"
-                                >
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className="text-[10px] font-mono font-bold text-blue-600 flex-1">
-                                            {result.tracking.slice(-4)}
-                                        </span>
-                                        <button
-                                            onClick={() => copyToClipboard(result.tracking, `tracking-${result.id}`)}
-                                            className="p-1 hover:bg-gray-200 rounded transition-all"
-                                        >
-                                            {copiedField === `tracking-${result.id}` ? (
-                                                <Check className="w-3 h-3 text-emerald-600" />
-                                            ) : (
-                                                <Copy className="w-3 h-3 text-gray-400" />
-                                            )}
-                                        </button>
-                                    </div>
-
-                                    <div className="flex items-center justify-between text-[8px]">
-                                        <span className="text-gray-500 font-bold uppercase">
-                                            {result.status || 'Unknown'}
-                                        </span>
-                                        <span className="text-gray-400 font-medium">
-                                            {formatTimePST(result.timestamp)} — {formatDatePST(result.timestamp)}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                <div className="mt-1 flex items-center justify-between">
+                  <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">{result.status || 'Unknown'}</p>
+                  <p className="text-[8px] font-bold uppercase tracking-wide text-gray-400">
+                    {formatTimePST(result.timestamp)} - {formatDatePST(result.timestamp)}
+                  </p>
                 </div>
-            </motion.div>
-        </motion.div>
-    );
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-gray-300">No search results</div>
+        )}
+      </div>
+    </motion.div>
+  );
 }

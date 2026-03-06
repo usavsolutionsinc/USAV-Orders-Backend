@@ -5,7 +5,7 @@ import { X } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
-import { RecentOrderManualsBlock } from '@/components/shipped/details-panel/blocks/RecentOrderManualsBlock';
+import { QuickAddManualForm } from '@/components/admin/QuickAddManualForm';
 
 export function TechDetailsStack({
   shipped,
@@ -77,10 +77,9 @@ export function TechDetailsStack({
 
   return (
     <div className="pb-8 pt-4 space-y-4">
-      <RecentOrderManualsBlock
+      <QuickAddManualForm
         sku={shipped.sku}
         itemNumber={shipped.item_number}
-        rowSource={shipped.row_source}
       />
 
       <ShippedDetailsPanelContent

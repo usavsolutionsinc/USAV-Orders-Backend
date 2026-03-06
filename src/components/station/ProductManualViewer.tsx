@@ -65,24 +65,28 @@ export default function ProductManualViewer({ manuals, isLoading = false, classN
             <p className="text-[11px] font-black uppercase tracking-wider text-white truncate">{typeLabel}</p>
           )}
         </div>
-        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+
+        <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+          {/* Primary: labeled "Open Manual" button */}
           <a
             href={selected.viewUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/20 hover:bg-white/30 text-white text-[10px] font-black uppercase tracking-wider transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-indigo-700 text-[10px] font-black uppercase tracking-wider hover:bg-indigo-50 shadow-sm transition-all"
           >
             <ExternalLink className="w-3 h-3" />
-            Open
+            Open Manual
           </a>
+          {/* Secondary: print/download icon-only */}
           <a
             href={selected.downloadUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/20 hover:bg-white/30 text-white text-[10px] font-black uppercase tracking-wider transition-all"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-all"
+            title="Print / download manual"
+            aria-label="Print manual"
           >
-            <Printer className="w-3 h-3" />
-            Print
+            <Printer className="w-3.5 h-3.5" />
           </a>
         </div>
       </div>

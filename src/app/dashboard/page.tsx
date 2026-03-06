@@ -8,6 +8,7 @@ import { DashboardShippedTable, ShippedDetailsPanel } from '@/components/shipped
 import PendingOrdersTable from '@/components/PendingOrdersTable';
 import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
 import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
+import FBAShipmentsTable from '@/components/dashboard/FBAShipmentsTable';
 import { Loader2 } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
@@ -17,13 +18,14 @@ import {
   fetchUnshippedOrdersData,
 } from '@/lib/dashboard-table-data';
 
-type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
+type DashboardOrderView = 'pending' | 'unshipped' | 'shipped' | 'fba';
 
 const getOrderViewFromSearch = (search: string): DashboardOrderView => {
     const params = new URLSearchParams(search);
     if (params.has('unshipped')) return 'unshipped';
     if (params.has('pending')) return 'pending';
     if (params.has('shipped')) return 'shipped';
+    if (params.has('fba')) return 'fba';
     return 'pending';
 };
 
@@ -67,6 +69,17 @@ function DashboardPageContent() {
                     queryFn: () => fetchUnshippedOrdersData({}),
                     staleTime: STALE,
                 });
+            } else if (orderView === 'fba') {
+                queryClient.prefetchQuery({
+                    queryKey: ['dashboard-fba-shipments'],
+                    queryFn: async () => {
+                        const res = await fetch('/api/dashboard/fba-shipments?limit=500', { cache: 'no-store' });
+                        if (!res.ok) throw new Error('Failed to fetch FBA shipments');
+                        const json = await res.json();
+                        return json?.rows || [];
+                    },
+                    staleTime: STALE,
+                });
             } else {
                 // shipped view — no weekStart/weekEnd here; DashboardShippedTable
                 // will supply those once it mounts.
@@ -97,6 +110,18 @@ function DashboardPageContent() {
                     staleTime: STALE,
                 });
             }
+            if (orderView !== 'fba') {
+                queryClient.prefetchQuery({
+                    queryKey: ['dashboard-fba-shipments'],
+                    queryFn: async () => {
+                        const res = await fetch('/api/dashboard/fba-shipments?limit=500', { cache: 'no-store' });
+                        if (!res.ok) throw new Error('Failed to fetch FBA shipments');
+                        const json = await res.json();
+                        return json?.rows || [];
+                    },
+                    staleTime: STALE,
+                });
+            }
         }, 400);
 
         return () => clearTimeout(timer);
@@ -123,6 +148,8 @@ function DashboardPageContent() {
                     <DashboardShippedTable key={`shipped-${refreshKey}`} />
                 ) : orderView === 'unshipped' ? (
                     <UnshippedTable key={`unshipped-${refreshKey}`} />
+                ) : orderView === 'fba' ? (
+                    <FBAShipmentsTable key={`fba-${refreshKey}`} />
                 ) : (
                     <PendingOrdersTable key={`pending-${refreshKey}`} />
                 )}

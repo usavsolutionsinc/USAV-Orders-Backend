@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { EbayClient } from '@/lib/ebay/client';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 export const maxDuration = 60;
 
@@ -9,221 +8,198 @@ function isBlank(value: unknown): boolean {
   return value === null || value === undefined || String(value).trim() === '';
 }
 
-function extractTrackingNumbers(ebayOrder: any): string[] {
+function extractTrackingFromOrder(ebayOrder: any): string {
   const fromInstructions =
     ebayOrder?.fulfillmentStartInstructions?.[0]?.shippingStep?.shipmentTracking;
   const list = Array.isArray(fromInstructions) ? fromInstructions : [];
-  const numbers = list
-    .map((entry: any) => String(entry?.trackingNumber || '').trim())
-    .filter(Boolean);
-  return Array.from(new Set(numbers));
+  return list.map((e: any) => String(e?.trackingNumber || '').trim()).filter(Boolean)[0] || '';
 }
 
+/**
+ * POST /api/orders/backfill/ebay
+ *
+ * Strategy (update-only, no inserts):
+ *  1. Find unshipped orders in our DB that have at least one blank critical field
+ *     AND have a non-empty order_id we can look up on eBay.
+ *  2. For each order, find the right eBay account (via account_source match) and
+ *     call getOrderDetails(order_id) to retrieve the live eBay data.
+ *  3. Fill in ONLY columns that are currently blank — never overwrite existing data.
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const lookbackDays = Number(body.lookbackDays || 30);
-    const limitPerPage = Math.max(1, Math.min(500, Number(body.limitPerPage || body.limitPerAccount || 200)));
-    const maxPages = Math.max(1, Math.min(50, Number(body.maxPages || 10)));
-    const sinceIso = new Date(Date.now() - Math.max(1, lookbackDays) * 24 * 60 * 60 * 1000).toISOString();
+    const limit = Math.max(1, Math.min(1000, Number(body.limit || 500)));
 
-    const accountsResult = await pool.query(
-      'SELECT account_name FROM ebay_accounts WHERE is_active = true ORDER BY account_name'
+    // ── 1. Orders needing backfill ────────────────────────────────────────────
+    const { rows: candidates } = await pool.query<{
+      id: number;
+      order_id: string;
+      account_source: string | null;
+      sku: string | null;
+      item_number: string | null;
+      product_title: string | null;
+      condition: string | null;
+      quantity: string | null;
+      order_date: Date | null;
+      shipping_tracking_number: string | null;
+    }>(
+      `SELECT id, order_id, account_source, sku, item_number, product_title,
+              condition, quantity, order_date, shipping_tracking_number
+       FROM orders
+       WHERE is_shipped = FALSE
+         AND COALESCE(order_id, '') != ''
+         AND (
+           COALESCE(sku, '')                       = '' OR
+           COALESCE(item_number, '')               = '' OR
+           COALESCE(product_title, '')             = '' OR
+           COALESCE(condition, '')                 = '' OR
+           COALESCE(quantity, '')                  = '' OR
+           order_date IS NULL                         OR
+           COALESCE(shipping_tracking_number, '') = ''  OR
+           COALESCE(account_source, '')            = ''
+         )
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
     );
-    const accounts = accountsResult.rows.map((row: any) => String(row.account_name));
 
-    if (accounts.length === 0) {
+    if (candidates.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'No active eBay accounts found',
-        totals: { scanned: 0, matched: 0, updated: 0, unchanged: 0, unmatched: 0, errors: 0 },
-        results: [],
+        message: 'No unshipped orders with blank fields found.',
+        totals: { scanned: 0, updated: 0, unchanged: 0, notFound: 0, errors: 0 },
       });
     }
 
-    const results: any[] = [];
+    // ── 2. Active eBay accounts ───────────────────────────────────────────────
+    const { rows: accountRows } = await pool.query<{ account_name: string }>(
+      'SELECT account_name FROM ebay_accounts WHERE is_active = true ORDER BY account_name'
+    );
+    const allAccountNames = accountRows.map((r) => r.account_name);
+
+    if (allAccountNames.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No active eBay accounts configured.' },
+        { status: 400 }
+      );
+    }
+
+    // Pre-build EbayClient instances (one per account)
+    const clients = new Map<string, EbayClient>(
+      allAccountNames.map((name) => [name, new EbayClient(name)])
+    );
+
+    /**
+     * Pick accounts to try for a given account_source.
+     * If the source matches an account name (case-insensitive contains), try that first.
+     * Otherwise fall back to all accounts.
+     */
+    function accountsForSource(accountSource: string | null): string[] {
+      if (!accountSource) return allAccountNames;
+      const src = accountSource.toLowerCase();
+      const match = allAccountNames.find(
+        (name) => src.includes(name.toLowerCase()) || name.toLowerCase().includes(src)
+      );
+      return match ? [match, ...allAccountNames.filter((n) => n !== match)] : allAccountNames;
+    }
+
+    // ── 3. Process each candidate ─────────────────────────────────────────────
     let scanned = 0;
-    let matched = 0;
     let updated = 0;
     let unchanged = 0;
-    let unmatched = 0;
-    let resolvedExceptions = 0;
+    let notFound = 0;
     let errors = 0;
+    const errorMessages: string[] = [];
 
-    for (const accountName of accounts) {
-      const accountStats = {
-        accountName,
-        scanned: 0,
-        matched: 0,
-        updated: 0,
-        unchanged: 0,
-        unmatched: 0,
-        errors: [] as string[],
-      };
-
+    for (const order of candidates) {
+      scanned++;
       try {
-        const client = new EbayClient(accountName);
-        const seenOrderIds = new Set<string>();
-        const ebayOrders: any[] = [];
+        // Try accounts in priority order until we get a result
+        let ebayOrder: any = null;
+        let matchedAccount = '';
 
-        for (let page = 0; page < maxPages; page++) {
-          const offset = page * limitPerPage;
-          const pageOrders = await client.fetchOrders({
-            lastModifiedDate: sinceIso,
-            limit: limitPerPage,
-            offset,
-          });
-
-          if (!Array.isArray(pageOrders) || pageOrders.length === 0) break;
-
-          for (const order of pageOrders) {
-            const orderId = String(order?.orderId || '').trim();
-            if (orderId && seenOrderIds.has(orderId)) continue;
-            if (orderId) seenOrderIds.add(orderId);
-            ebayOrders.push(order);
-          }
-
-          if (pageOrders.length < limitPerPage) break;
-        }
-
-        for (const ebayOrder of ebayOrders) {
+        for (const accountName of accountsForSource(order.account_source)) {
           try {
-            const orderId = String(ebayOrder?.orderId || '').trim();
-
-            const lineItems = Array.isArray(ebayOrder?.lineItems) ? ebayOrder.lineItems : [];
-            const firstItem = lineItems[0] || {};
-            const trackingNumbers = extractTrackingNumbers(ebayOrder);
-            const orderDate = ebayOrder?.creationDate ? new Date(ebayOrder.creationDate) : null;
-            const productTitle = String(firstItem?.title || '').trim();
-            const sku = String(firstItem?.sku || '').trim();
-            const itemNumber = String(
-              firstItem?.legacyItemId ||
-              firstItem?.itemId ||
-              firstItem?.lineItemId ||
-              ''
-            ).trim();
-            const condition = String(firstItem?.condition || firstItem?.conditionId || '').trim();
-            const quantity = firstItem?.quantity ? String(firstItem.quantity).trim() : '1';
-            const candidateRows = trackingNumbers.length > 0 ? trackingNumbers : [''];
-
-            for (const trackingNumber of candidateRows) {
-              accountStats.scanned++;
-              scanned++;
-
-              const trackingKey18 = normalizeTrackingKey18(trackingNumber);
-              if (!trackingKey18) {
-                accountStats.unmatched++;
-                unmatched++;
-                continue;
-              }
-
-              const existingRows = await pool.query(
-                `SELECT id, order_id, account_source, order_date, sku, item_number, shipping_tracking_number, product_title, condition, quantity
-                 FROM orders
-                 WHERE shipping_tracking_number IS NOT NULL
-                   AND shipping_tracking_number != ''
-                   AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-                 ORDER BY created_at DESC NULLS LAST, id DESC
-                 LIMIT 1`,
-                [trackingKey18]
-              );
-
-              if (existingRows.rows.length === 0) {
-                accountStats.unmatched++;
-                unmatched++;
-                continue;
-              }
-
-              accountStats.matched++;
-              matched++;
-
-              const current = existingRows.rows[0];
-              const updates: string[] = [];
-              const values: any[] = [];
-              let idx = 1;
-
-              if (isBlank(current.account_source)) {
-                updates.push(`account_source = $${idx++}`);
-                values.push(accountName);
-              }
-              if (!current.order_date && orderDate && !Number.isNaN(orderDate.getTime())) {
-                updates.push(`order_date = $${idx++}`);
-                values.push(orderDate);
-              }
-              if (isBlank(current.sku) && sku) {
-                updates.push(`sku = $${idx++}`);
-                values.push(sku);
-              }
-              if (isBlank(current.item_number) && itemNumber) {
-                updates.push(`item_number = $${idx++}`);
-                values.push(itemNumber);
-              }
-              if (isBlank(current.shipping_tracking_number) && trackingNumber) {
-                updates.push(`shipping_tracking_number = $${idx++}`);
-                values.push(trackingNumber);
-              }
-              if (isBlank(current.product_title) && productTitle) {
-                updates.push(`product_title = $${idx++}`);
-                values.push(productTitle);
-              }
-              if (isBlank(current.condition) && condition) {
-                updates.push(`condition = $${idx++}`);
-                values.push(condition);
-              }
-              if (isBlank(current.quantity) && quantity) {
-                updates.push(`quantity = $${idx++}`);
-                values.push(quantity);
-              }
-              if (isBlank(current.order_id) && orderId) {
-                updates.push(`order_id = $${idx++}`);
-                values.push(orderId);
-              }
-
-              if (updates.length === 0) {
-                accountStats.unchanged++;
-                unchanged++;
-              } else {
-                values.push(current.id);
-                await pool.query(
-                  `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idx}`,
-                  values
-                );
-
-                accountStats.updated++;
-                updated++;
-              }
-
-              const resolveResult = await pool.query(
-                `UPDATE orders_exceptions
-                 SET status = 'resolved',
-                     updated_at = NOW()
-                 WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-                   AND COALESCE(status, '') != 'resolved'`,
-                [trackingKey18]
-              );
-              resolvedExceptions += resolveResult.rowCount || 0;
-            }
-          } catch (error: any) {
-            accountStats.errors.push(error?.message || 'Unknown order error');
-            errors++;
+            const client = clients.get(accountName)!;
+            ebayOrder = await client.getOrderDetails(order.order_id);
+            matchedAccount = accountName;
+            break;
+          } catch {
+            // This account doesn't have the order — try the next
           }
         }
-      } catch (error: any) {
-        accountStats.errors.push(error?.message || 'Account sync failed');
-        errors++;
-      }
 
-      results.push(accountStats);
+        if (!ebayOrder) {
+          notFound++;
+          continue;
+        }
+
+        // Extract fields from the eBay order
+        const lineItems = Array.isArray(ebayOrder?.lineItems) ? ebayOrder.lineItems : [];
+        const firstItem = lineItems[0] || {};
+        const productTitle = String(firstItem?.title || '').trim();
+        const sku = String(firstItem?.sku || '').trim();
+        // legacyItemId is the eBay listing item number (e.g. "123456789")
+        const itemNumber = String(
+          firstItem?.legacyItemId || firstItem?.lineItemId || ''
+        ).trim();
+        const condition = String(firstItem?.condition || firstItem?.conditionId || '').trim();
+        const quantity = firstItem?.quantity ? String(firstItem.quantity).trim() : '';
+        const orderDate = ebayOrder?.creationDate ? new Date(ebayOrder.creationDate) : null;
+        const trackingNumber = extractTrackingFromOrder(ebayOrder);
+
+        // Build the SET clause — only patch blank columns
+        const updates: string[] = [];
+        const values: unknown[] = [];
+        let idx = 1;
+
+        if (isBlank(order.product_title) && productTitle) {
+          updates.push(`product_title = $${idx++}`); values.push(productTitle);
+        }
+        if (isBlank(order.sku) && sku) {
+          updates.push(`sku = $${idx++}`); values.push(sku);
+        }
+        if (isBlank(order.item_number) && itemNumber) {
+          updates.push(`item_number = $${idx++}`); values.push(itemNumber);
+        }
+        if (isBlank(order.condition) && condition) {
+          updates.push(`condition = $${idx++}`); values.push(condition);
+        }
+        if (isBlank(order.quantity) && quantity) {
+          updates.push(`quantity = $${idx++}`); values.push(quantity);
+        }
+        if (!order.order_date && orderDate && !Number.isNaN(orderDate.getTime())) {
+          updates.push(`order_date = $${idx++}`); values.push(orderDate);
+        }
+        if (isBlank(order.shipping_tracking_number) && trackingNumber) {
+          updates.push(`shipping_tracking_number = $${idx++}`); values.push(trackingNumber);
+        }
+        if (isBlank(order.account_source) && matchedAccount) {
+          updates.push(`account_source = $${idx++}`); values.push(matchedAccount);
+        }
+
+        if (updates.length === 0) {
+          unchanged++;
+          continue;
+        }
+
+        values.push(order.id);
+        await pool.query(
+          `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idx}`,
+          values
+        );
+        updated++;
+      } catch (err: any) {
+        errors++;
+        errorMessages.push(`order ${order.order_id}: ${err?.message || 'unknown error'}`);
+      }
     }
 
     return NextResponse.json({
       success: true,
-      message: `eBay backfill completed: updated ${updated} order(s).`,
-      totals: { scanned, matched, updated, unchanged, unmatched, resolvedExceptions, errors },
-      results,
-      accountsProcessed: accounts,
-      pagination: { limitPerPage, maxPages },
-      since: sinceIso,
+      message: `eBay backfill complete: ${updated} updated, ${unchanged} already complete, ${notFound} not found on eBay, ${errors} errors.`,
+      totals: { scanned, updated, unchanged, notFound, errors },
+      errorMessages: errorMessages.slice(0, 20),
     });
   } catch (error: any) {
     console.error('eBay backfill error:', error);

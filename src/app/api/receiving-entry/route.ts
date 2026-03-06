@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { getCarrier } from '@/utils/tracking';
 import { formatPSTTimestamp } from '@/lib/timezone';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
-import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
 /**
  * Compute Mon–Fri week range (PST date strings) for a given PST timestamp string
@@ -48,12 +48,12 @@ export async function POST(request: NextRequest) {
 
         const isReturn = !!body?.isReturn || !!body?.is_return;
         const rawReturnPlatform = String(body?.returnPlatform || body?.return_platform || '').trim().toUpperCase();
-        const returnPlatform = returnPlatformAllowed.has(rawReturnPlatform) ? rawReturnPlatform : null;
-        const returnReason = String(body?.returnReason || body?.return_reason || '').trim() || null;
+        const returnPlatform = isReturn && returnPlatformAllowed.has(rawReturnPlatform) ? rawReturnPlatform : null;
+        const returnReason = isReturn ? (String(body?.returnReason || body?.return_reason || '').trim() || null) : null;
 
         const needsTest = !!body?.needsTest || !!body?.needs_test;
         const assignedTechIdRaw = Number(body?.assignedTechId ?? body?.assigned_tech_id);
-        const assignedTechId = Number.isFinite(assignedTechIdRaw) && assignedTechIdRaw > 0 ? assignedTechIdRaw : null;
+        const assignedTechId = needsTest && Number.isFinite(assignedTechIdRaw) && assignedTechIdRaw > 0 ? assignedTechIdRaw : null;
 
         const rawTargetChannel = String(body?.targetChannel || body?.target_channel || '').trim().toUpperCase();
         const targetChannel = targetChannelAllowed.has(rawTargetChannel) ? rawTargetChannel : null;

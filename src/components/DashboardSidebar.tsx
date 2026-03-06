@@ -45,20 +45,6 @@ const ORDER_VIEW_OPTIONS: Array<{ value: DashboardOrderView; label: string }> = 
   { value: 'shipped', label: 'Shipped Orders' },
 ];
 
-const TECH_NAMES: Record<string, string> = {
-  '1': 'Michael',
-  '2': 'Thuc',
-  '3': 'Sang',
-  '4': 'Cuong',
-  '6': 'Cuong',
-};
-
-const PACKER_NAMES: Record<string, string> = {
-  '4': 'Tuan',
-  '5': 'Thuy',
-  '6': 'Packer',
-};
-
 function getOrderViewFromSearch(searchParams: { has: (key: string) => boolean }): DashboardOrderView {
   if (searchParams.has('unshipped')) return 'unshipped';
   if (searchParams.has('pending')) return 'pending';
@@ -75,12 +61,50 @@ function normalizeOrderViewParams(params: URLSearchParams, preferredView?: Dashb
   return nextView;
 }
 
-function getTechName(id: string) {
-  return TECH_NAMES[id] || 'Technician';
+type StaffMember = {
+  id: number;
+  name: string;
+  role: string;
+};
+
+function useActiveStaffDirectory() {
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStaff = async () => {
+      try {
+        const res = await fetch('/api/staff?active=true', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted || !Array.isArray(data)) return;
+        setStaff(
+          data.filter((member: any) => Number.isFinite(Number(member?.id))).map((member: any) => ({
+            id: Number(member.id),
+            name: String(member.name || '').trim() || `Staff ${member.id}`,
+            role: String(member.role || ''),
+          })),
+        );
+      } catch (_error) {
+        // no-op
+      }
+    };
+
+    fetchStaff();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return staff;
 }
 
-function getPackerName(id: string) {
-  return PACKER_NAMES[id] || 'Packer';
+function getPathStaffId(pathname: string | null, segment: 'tech' | 'packer'): string | null {
+  if (!pathname) return null;
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts[0] !== segment) return null;
+  const value = String(parts[1] || '').trim();
+  return /^\d+$/.test(value) ? value : null;
 }
 
 function TechStationContext({ techId }: { techId: string }) {
@@ -88,8 +112,9 @@ function TechStationContext({ techId }: { techId: string }) {
   const searchParams = useSearchParams();
   const [history, setHistory] = useState<any[]>([]);
   const [dailyGoal, setDailyGoal] = useState(50);
+  const staffDirectory = useActiveStaffDirectory();
 
-  const techName = getTechName(techId);
+  const techName = staffDirectory.find((member) => String(member.id) === String(techId))?.name || 'Technician';
   const techTheme = getTechThemeById(techId);
   const rawView = searchParams.get('view');
   const viewMode = rawView === 'pending' ? 'pending' : rawView === 'manual' ? 'manual' : 'history';
@@ -121,6 +146,7 @@ function TechStationContext({ techId }: { techId: string }) {
 
   const updateViewMode = (nextView: 'history' | 'pending' | 'manual') => {
     const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('staffId', techId);
     if (nextView === 'history') {
       nextParams.delete('view');
     } else if (nextView === 'pending') {
@@ -129,7 +155,7 @@ function TechStationContext({ techId }: { techId: string }) {
       nextParams.set('view', 'manual');
     }
     const nextSearch = nextParams.toString();
-    router.replace(nextSearch ? `/tech/${techId}?${nextSearch}` : `/tech/${techId}`);
+    router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
   };
 
   const refreshHistory = async () => {
@@ -154,7 +180,7 @@ function TechStationContext({ techId }: { techId: string }) {
               role="technician"
               variant="boxy"
               selectedStaffId={parseInt(techId, 10)}
-              onSelect={(id) => router.push(`/tech/${id}`)}
+              onSelect={(id) => router.push(`/tech?staffId=${id}`)}
             />
           </div>
           <div className="relative min-w-0">
@@ -168,7 +194,7 @@ function TechStationContext({ techId }: { techId: string }) {
               onChange={(nextView) => updateViewMode(nextView as 'history' | 'pending' | 'manual')}
               variant="boxy"
               buttonClassName="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none text-left"
-              optionClassName="text-[10px] font-black"
+              optionClassName="text-[10px] font-black tracking-wider"
             />
           </div>
         </div>
@@ -190,11 +216,71 @@ function TechStationContext({ techId }: { techId: string }) {
   );
 }
 
+type ReceivingMode = 'bulk' | 'unboxing' | 'pickup';
+
+function ReceivingContext() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const rawMode = searchParams.get('mode');
+  const mode: ReceivingMode =
+    rawMode === 'unboxing' ? 'unboxing' : rawMode === 'pickup' ? 'pickup' : 'bulk';
+
+  const staffId = searchParams.get('staffId') || '1';
+
+  const updateMode = (nextMode: ReceivingMode) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('mode', nextMode);
+    router.replace(`/receiving?${nextParams.toString()}`);
+  };
+
+  const updateStaff = (id: number) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('staffId', String(id));
+    router.replace(`/receiving?${nextParams.toString()}`);
+  };
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="border-b border-gray-200 bg-white">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
+          <div className="min-w-0">
+            <StaffSelector
+              role="all"
+              variant="boxy"
+              selectedStaffId={parseInt(staffId, 10)}
+              onSelect={updateStaff}
+            />
+          </div>
+          <div className="relative min-w-0">
+            <ViewDropdown
+              options={[
+                { value: 'bulk', label: 'Bulk Scan' },
+                { value: 'unboxing', label: 'Unboxing' },
+                { value: 'pickup', label: 'Local Pickup' },
+              ]}
+              value={mode}
+              onChange={(nextMode) => updateMode(nextMode as ReceivingMode)}
+              variant="boxy"
+              buttonClassName="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none text-left"
+              optionClassName="text-[10px] font-black tracking-wider"
+            />
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <ReceivingSidebar embedded hideSectionHeader mode={mode} staffId={staffId} />
+      </div>
+    </div>
+  );
+}
+
 function PackerStationContext({ packerId }: { packerId: string }) {
   const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
   const [dailyGoal, setDailyGoal] = useState(50);
-  const packerName = getPackerName(packerId);
+  const staffDirectory = useActiveStaffDirectory();
+  const packerName = staffDirectory.find((member) => String(member.id) === String(packerId))?.name || 'Packer';
   const packerTheme = getPackerThemeById(packerId);
 
   useEffect(() => {
@@ -240,10 +326,10 @@ function PackerStationContext({ packerId }: { packerId: string }) {
       <div className="border-b border-gray-200 bg-white">
         <div className="grid grid-cols-1">
           <StaffSelector
-            role="packer"
+            role="all"
             variant="boxy"
             selectedStaffId={parseInt(packerId, 10)}
-            onSelect={(id) => router.push(`/packer/${id}`)}
+            onSelect={(id) => router.push(`/packer?staffId=${id}`)}
           />
         </div>
       </div>
@@ -368,6 +454,7 @@ function SidebarContextPanel() {
         onCloseForm={closeIntakeForm}
         onFormSubmit={submitShippedForm}
         filterControl={filterControl}
+        showNextUnassignedButton={orderView === 'pending'}
       />
     );
   }
@@ -432,7 +519,7 @@ function SidebarContextPanel() {
   }
 
   if (routeKey === 'receiving') {
-    return <ReceivingSidebar embedded hideSectionHeader />;
+    return <ReceivingContext />;
   }
 
   if (routeKey === 'sku-stock') {
@@ -448,12 +535,12 @@ function SidebarContextPanel() {
   }
 
   if (routeKey === 'tech') {
-    const techId = pathname?.split('/').filter(Boolean)[1] || '1';
+    const techId = searchParams.get('staffId') || getPathStaffId(pathname, 'tech') || '1';
     return <TechStationContext techId={techId} />;
   }
 
   if (routeKey === 'packer') {
-    const packerId = pathname?.split('/').filter(Boolean)[1] || '4';
+    const packerId = searchParams.get('staffId') || getPathStaffId(pathname, 'packer') || '4';
     return <PackerStationContext packerId={packerId} />;
   }
 
@@ -536,38 +623,59 @@ function NavSection({
 
 export default function DashboardSidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(false);
   const [showHomeNavigation, setShowHomeNavigation] = useState(false);
-  const [lastTechHref, setLastTechHref] = useState('/tech/1');
-  const [lastPackerHref, setLastPackerHref] = useState('/packer/4');
+  const [lastTechHref, setLastTechHref] = useState('/tech?staffId=1');
+  const [lastPackerHref, setLastPackerHref] = useState('/packer?staffId=4');
 
   useEffect(() => {
     const savedTechHref = localStorage.getItem('last-tech-station-href');
-    if (savedTechHref && /^\/tech\/\d+$/.test(savedTechHref)) {
-      setLastTechHref(savedTechHref);
+    if (savedTechHref) {
+      const legacyId = savedTechHref.match(/^\/tech\/(\d+)$/)?.[1];
+      if (legacyId) {
+        setLastTechHref(`/tech?staffId=${legacyId}`);
+      } else if (/^\/tech(\?.*)?$/.test(savedTechHref)) {
+        setLastTechHref(savedTechHref);
+      }
     }
 
     const savedPackerHref = localStorage.getItem('last-packer-station-href');
-    if (savedPackerHref && /^\/packer\/\d+$/.test(savedPackerHref)) {
-      setLastPackerHref(savedPackerHref);
+    if (savedPackerHref) {
+      const legacyId = savedPackerHref.match(/^\/packer\/(\d+)$/)?.[1];
+      if (legacyId) {
+        setLastPackerHref(`/packer?staffId=${legacyId}`);
+      } else if (/^\/packer(\?.*)?$/.test(savedPackerHref)) {
+        setLastPackerHref(savedPackerHref);
+      }
     }
   }, []);
 
   useEffect(() => {
     if (!pathname) return;
-    if (/^\/tech\/\d+$/.test(pathname)) {
-      localStorage.setItem('last-tech-station-href', pathname);
-      setLastTechHref(pathname);
+    if (pathname.startsWith('/tech')) {
+      const params = new URLSearchParams(searchParams.toString());
+      const pathId = getPathStaffId(pathname, 'tech');
+      if (!params.get('staffId') && pathId) params.set('staffId', pathId);
+      if (!params.get('staffId')) params.set('staffId', '1');
+      const href = `/tech?${params.toString()}`;
+      localStorage.setItem('last-tech-station-href', href);
+      setLastTechHref(href);
     }
-    if (/^\/packer\/\d+$/.test(pathname)) {
-      localStorage.setItem('last-packer-station-href', pathname);
-      setLastPackerHref(pathname);
+    if (pathname.startsWith('/packer')) {
+      const params = new URLSearchParams(searchParams.toString());
+      const pathId = getPathStaffId(pathname, 'packer');
+      if (!params.get('staffId') && pathId) params.set('staffId', pathId);
+      if (!params.get('staffId')) params.set('staffId', '4');
+      const href = `/packer?${params.toString()}`;
+      localStorage.setItem('last-packer-station-href', href);
+      setLastPackerHref(href);
     }
     setShowHomeNavigation(false);
     setIsMobileOpen(false);
     setIsDetailsPanelOpen(false);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     const handleOpenDetails = () => {

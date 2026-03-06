@@ -1,5 +1,9 @@
 import Ably from 'ably';
-import { getOrdersChannelName, getRepairsChannelName } from '@/lib/realtime/channels';
+import {
+  getAiAssistSessionChannelName,
+  getOrdersChannelName,
+  getRepairsChannelName,
+} from '@/lib/realtime/channels';
 
 type OrderChangedPayload = {
   orderIds: number[];
@@ -9,6 +13,14 @@ type OrderChangedPayload = {
 type RepairChangedPayload = {
   repairIds: number[];
   source: string;
+};
+
+type AiAssistantPayload = {
+  channel?: string;
+  sessionId: string;
+  prompt: string;
+  answer: string;
+  model: string;
 };
 
 let ablyRestClient: Ably.Rest | null = null;
@@ -54,6 +66,18 @@ export async function publishRepairChanged(payload: RepairChangedPayload) {
     type: 'repair.changed',
     repairIds: normalizedIds,
     source: payload.source,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
+  const channel = payload.channel || getAiAssistSessionChannelName(payload.sessionId);
+  await publishEvent(channel, 'ai.assistant.reply', {
+    type: 'ai.assistant.reply',
+    sessionId: payload.sessionId,
+    prompt: payload.prompt,
+    answer: payload.answer,
+    model: payload.model,
     timestamp: new Date().toISOString(),
   });
 }

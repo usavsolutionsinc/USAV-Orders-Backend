@@ -31,9 +31,8 @@ export function CustomerInfoForm({
     onCustomerChange, 
     onSerialNumberChange,
     onPriceChange,
-    onNotesChange
+    onNotesChange,
 }: CustomerInfoFormProps) {
-    // Parse serial numbers from comma-separated string
     const [serialNumbers, setSerialNumbers] = React.useState<string[]>(
         serialNumber ? serialNumber.split(',').map(s => s.trim()).filter(s => s) : ['']
     );

@@ -14,19 +14,20 @@ interface Staff {
 }
 
 interface StaffSelectorProps {
-    role: 'technician' | 'packer';
+    role?: 'technician' | 'packer' | 'all';
     selectedStaffId: number | null;
     onSelect: (staffId: number, staffName: string) => void;
     variant?: 'default' | 'boxy';
 }
 
-export default function StaffSelector({ role, selectedStaffId, onSelect, variant = 'default' }: StaffSelectorProps) {
+export default function StaffSelector({ role = 'all', selectedStaffId, onSelect, variant = 'default' }: StaffSelectorProps) {
     const [isOpen, setIsOpen] = useState(false);
 
     const { data: staff = [], isLoading } = useQuery<Staff[]>({
         queryKey: ['staff', role],
         queryFn: async () => {
-            const res = await fetch(`/api/staff?role=${role}&active=true`);
+            const query = role === 'all' ? '/api/staff?active=true' : `/api/staff?role=${role}&active=true`;
+            const res = await fetch(query);
             if (!res.ok) throw new Error('Failed to fetch staff');
             return res.json();
         },
@@ -36,6 +37,9 @@ export default function StaffSelector({ role, selectedStaffId, onSelect, variant
     const techOrder = ['michael', 'thuc', 'sang', 'cuong'];
     const orderMap = new Map(techOrder.map((name, index) => [name, index]));
     const sortedStaff = [...staff].sort((a, b) => {
+        if (role === 'all' && a.role !== b.role) {
+            return a.role.localeCompare(b.role);
+        }
         if (role === 'packer') {
             return a.id - b.id;
         }
@@ -47,7 +51,8 @@ export default function StaffSelector({ role, selectedStaffId, onSelect, variant
         return a.name.localeCompare(b.name);
     });
     const otherStaff = sortedStaff.filter(s => s.id !== selectedStaffId);
-    const selectedTheme = selectedStaff ? getStaffThemeById(selectedStaff.id, role) : null;
+    const selectedRole = selectedStaff?.role === 'packer' ? 'packer' : 'technician';
+    const selectedTheme = selectedStaff ? getStaffThemeById(selectedStaff.id, selectedRole) : null;
     const isBoxy = variant === 'boxy';
 
     if (isLoading) {
@@ -86,9 +91,10 @@ export default function StaffSelector({ role, selectedStaffId, onSelect, variant
                     <div className={`absolute top-full left-0 w-full bg-white border border-gray-200 shadow-xl overflow-hidden z-[70] animate-in fade-in slide-in-from-top-1 duration-200 ${
                         isBoxy ? 'rounded-none border-t-0' : 'rounded-xl mt-1'
                     }`}>
-                        <div className="p-1 space-y-1">
+                        <div className={`${isBoxy ? '' : 'p-1 space-y-1'}`}>
                             {otherStaff.map((member) => {
-                                const theme = getStaffThemeById(member.id, role);
+                                const memberRole = member.role === 'packer' ? 'packer' : 'technician';
+                                const theme = getStaffThemeById(member.id, memberRole);
                                 const textClass = stationThemeColors[theme].text;
                                 return (
                                     <button
@@ -97,13 +103,18 @@ export default function StaffSelector({ role, selectedStaffId, onSelect, variant
                                             onSelect(member.id, member.name);
                                             setIsOpen(false);
                                         }}
-                                        className={`w-full flex items-center px-3 py-1.5 hover:bg-gray-50 transition-all group text-left ${
-                                            isBoxy ? 'rounded-none' : 'rounded-lg'
+                                        className={`w-full flex items-center px-3 hover:bg-gray-50 transition-all group text-left ${
+                                            isBoxy ? 'rounded-none py-3' : 'rounded-lg py-1.5'
                                         }`}
                                     >
-                                        <span className={`text-xs font-black ${textClass}`}>
+                                        <span className={`text-xs font-black tracking-tight ${textClass}`}>
                                             {member.name}
                                         </span>
+                                        {role === 'all' ? (
+                                            <span className="ml-2 text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                                {member.role}
+                                            </span>
+                                        ) : null}
                                     </button>
                                 );
                             })}

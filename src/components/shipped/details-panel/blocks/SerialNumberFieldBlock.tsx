@@ -204,7 +204,7 @@ export function SerialNumberFieldBlock({
         <div className="space-y-3">
           <div className="space-y-2">
             {serialRows.map((serial, index) => (
-              <div key={`${index}-${serial}`} className="flex items-center gap-2">
+              <div key={index} className="flex items-center gap-2">
                 <input
                   type="text"
                   value={serial}

@@ -1,18 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 const navItems = [
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Shipped', href: '/dashboard?shipped=' },
+    { name: 'FBA', href: '/dashboard?fba=' },
     { name: 'Repair', href: '/repair' },
-    { name: 'Michael', href: '/tech/1' },
-    { name: 'Thuc', href: '/tech/2' },
-    { name: 'Sang', href: '/tech/3' },
-    { name: 'Tuan', href: '/packer/1' },
-    { name: 'Thuy', href: '/packer/2' },
+    { name: 'Tech', href: '/tech?staffId=1' },
+    { name: 'Packer', href: '/packer?staffId=4' },
     { name: 'Receiving', href: '/receiving' },
     { name: 'Sku-Stock', href: '/sku-stock' },
     { name: 'Sku', href: '/sku' },
@@ -22,9 +19,7 @@ const navItems = [
 
 export default function Navigation() {
     const pathname = usePathname();
-
-    // On desktop, StationLayout will include this component
-    const isStation = pathname?.startsWith('/packer/') || pathname?.startsWith('/tech/');
+    const searchParams = useSearchParams();
 
     return (
         <nav className={`bg-white text-gray-900 sticky top-0 z-[100] border-b border-gray-200`}>
@@ -44,7 +39,15 @@ export default function Navigation() {
                             {navItems.map((item) => {
                                 const isActive =
                                     item.name === 'Shipped'
-                                        ? pathname === '/dashboard'
+                                        ? pathname === '/dashboard' && searchParams.has('shipped')
+                                        : item.name === 'FBA'
+                                        ? pathname === '/dashboard' && searchParams.has('fba')
+                                        : item.name === 'Dashboard'
+                                        ? pathname === '/dashboard' && !searchParams.has('shipped') && !searchParams.has('fba')
+                                        : item.name === 'Tech'
+                                        ? Boolean(pathname?.startsWith('/tech'))
+                                        : item.name === 'Packer'
+                                        ? Boolean(pathname?.startsWith('/packer'))
                                         : pathname === item.href;
                                 // We'll render Admin separately if we want it on the far right, 
                                 // but for now let's just use the items and filter/map them.

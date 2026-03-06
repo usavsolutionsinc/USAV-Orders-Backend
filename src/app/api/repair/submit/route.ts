@@ -7,7 +7,7 @@ import { publishRepairChanged } from '@/lib/realtime/publish';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { customer, product, repairReasons, repairNotes, serialNumber, price, notes } = body;
+        const { customer, product, repairReasons, repairNotes, serialNumber, price, notes, assignedTechId } = body;
 
         // Validate required fields (email is optional)
         if (!customer?.name || !customer?.phone || !product?.type || !product?.model || !repairReasons?.length || !serialNumber || !price) {
@@ -113,6 +113,18 @@ export async function POST(req: NextRequest) {
                 WHERE id = $2
             `, [`RS-${String(dbId).padStart(4, '0')}`, dbId]);
             finalRSNumber = `RS-${String(dbId).padStart(4, '0')}`;
+        }
+
+        // Insert into work_assignments so the repair appears in the Up Next queue
+        const techId = assignedTechId ? Number(assignedTechId) : null;
+        try {
+            await pool.query(`
+                INSERT INTO work_assignments (entity_type, entity_id, work_type, assigned_tech_id, status, priority)
+                VALUES ('REPAIR', $1, 'REPAIR', $2, 'ASSIGNED', 100)
+                ON CONFLICT ON CONSTRAINT ux_work_assignments_active_entity DO NOTHING
+            `, [dbId, techId]);
+        } catch (waErr) {
+            console.warn('work_assignments insert skipped (constraint or missing):', waErr);
         }
 
         // Invalidate repair cache so the next GET returns fresh data

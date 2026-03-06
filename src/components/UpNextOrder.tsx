@@ -29,6 +29,25 @@ interface Order {
   is_shipped: boolean;
 }
 
+interface RepairQueueItem {
+  kind: 'REPAIR';
+  repairId: number;
+  assignmentId: number;
+  assignmentStatus: string;
+  ticketNumber: string;
+  productTitle: string;
+  issue: string;
+  serialNumber: string;
+  contactInfo: string;
+  dateTime: string;
+  repairStatus: string;
+  price: string;
+  assignedTechId: number | null;
+  techName: string | null;
+}
+
+type QueueItem = ({ kind: 'ORDER' } & Order) | RepairQueueItem;
+
 interface UpNextOrderProps {
   techId: string;
   onStart: (tracking: string) => void;
@@ -39,6 +58,7 @@ interface UpNextOrderProps {
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'>('orders');
   const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [allRepairs, setAllRepairs] = useState<RepairQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [allCompletedToday, setAllCompletedToday] = useState(false);
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
@@ -81,7 +101,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     return 'text-emerald-600';
   };
 
-  const getQueueBucket = (order: Order): 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock' => {
+  const getOrderBucket = (order: Order): 'orders' | 'returns' | 'fba' | 'test' | 'stock' => {
     const outOfStock = String(order.out_of_stock || '').trim();
     if (outOfStock) return 'stock';
 
@@ -92,20 +112,22 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     const haystack = `${orderId} ${accountSource} ${status} ${sku}`;
 
     if (/\b(return|returns|rma)\b/.test(haystack)) return 'returns';
-    if (/\b(repair|repaired|fix|refurb)\b/.test(haystack)) return 'repair';
     if (/\b(fba|fnsku)\b/.test(haystack)) return 'fba';
     if (/\b(test|testing|qa|sample)\b/.test(haystack)) return 'test';
     return 'orders';
   };
 
-  const tabCounts = allOrders.reduce(
-    (acc, order) => {
-      const bucket = getQueueBucket(order);
-      acc[bucket] += 1;
-      return acc;
-    },
-    { orders: 0, returns: 0, repair: 0, fba: 0, test: 0, stock: 0 } as Record<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock', number>
-  );
+  const tabCounts = {
+    ...allOrders.reduce(
+      (acc, order) => {
+        const bucket = getOrderBucket(order);
+        acc[bucket] += 1;
+        return acc;
+      },
+      { orders: 0, returns: 0, repair: 0, fba: 0, test: 0, stock: 0 } as Record<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock', number>
+    ),
+    repair: allRepairs.length,
+  };
 
   const visibleTabs: Array<{ id: 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'; label: string; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' }> = [
     { id: 'orders', label: 'Orders', color: 'green' },
@@ -118,7 +140,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   const activeTabVisible = visibleTabs.some((tab) => tab.id === activeTab);
   const effectiveTab = activeTabVisible ? activeTab : visibleTabs[0]?.id || 'orders';
-  const orders = allOrders.filter((order) => getQueueBucket(order) === effectiveTab);
+  const orders = allOrders.filter((order) => getOrderBucket(order) === effectiveTab);
   const preferredSequence: Array<'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'> = ['orders', 'returns', 'repair', 'fba', 'test', 'stock'];
 
   useEffect(() => {
@@ -154,9 +176,10 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   const fetchOrders = async () => {
     try {
-      const [currentRes, stockRes] = await Promise.all([
+      const [currentRes, stockRes, repairRes] = await Promise.all([
         fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=false`),
         fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=true`),
+        fetch(`/api/repair-service/next?techId=${techId}`),
       ]);
 
       if (currentRes.ok) {
@@ -171,6 +194,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         if (currentData.all_completed && onAllCompleted) {
           onAllCompleted();
         }
+      }
+
+      if (repairRes.ok) {
+        const repairData = await repairRes.json();
+        setAllRepairs(Array.isArray(repairData.repairs) ? repairData.repairs : []);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -232,6 +260,109 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     } catch (error) {
       console.error('Error marking missing parts:', error);
     }
+  };
+
+  const getRepairAge = (dateTime: string): string => {
+    if (!dateTime) return '';
+    try {
+      const parsed = typeof dateTime === 'string' && dateTime.startsWith('"')
+        ? JSON.parse(dateTime)
+        : dateTime;
+      const dt = typeof parsed === 'object' && parsed?.start ? parsed.start : parsed;
+      const ms = Date.now() - new Date(dt).getTime();
+      const days = Math.floor(ms / 86400000);
+      if (days === 0) return 'Today';
+      if (days === 1) return '1 day ago';
+      return `${days}d ago`;
+    } catch {
+      return '';
+    }
+  };
+
+  const renderRepairCard = (repair: RepairQueueItem) => {
+    const ticketShort = repair.ticketNumber ? repair.ticketNumber.slice(-4) : '????';
+    const customerName = repair.contactInfo ? repair.contactInfo.split(',')[0]?.trim() : '';
+    const customerPhone = repair.contactInfo ? repair.contactInfo.split(',')[1]?.trim() : '';
+    const age = getRepairAge(repair.dateTime);
+
+    const statusColor: Record<string, string> = {
+      'Pending Repair': 'bg-amber-100 text-amber-700 border-amber-200',
+      'Awaiting Parts': 'bg-orange-100 text-orange-700 border-orange-200',
+      'Awaiting Pickup': 'bg-blue-100 text-blue-700 border-blue-200',
+      'Repaired, Contact Customer': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      'Awaiting Payment': 'bg-purple-100 text-purple-700 border-purple-200',
+    };
+    const statusClass = statusColor[repair.repairStatus] || 'bg-gray-100 text-gray-600 border-gray-200';
+
+    const openRepair = () => {
+      window.dispatchEvent(new CustomEvent('open-repair-search', { detail: { ticketNumber: repair.ticketNumber, repairId: repair.repairId } }));
+    };
+
+    return (
+      <motion.div
+        key={`repair-${repair.repairId}`}
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 10 }}
+        onClick={openRepair}
+        className="rounded-2xl p-3 border-2 border-orange-200 bg-orange-50 hover:border-orange-400 transition-all shadow-sm hover:shadow-md mb-2 cursor-pointer"
+      >
+        {/* Header row */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-black text-orange-800 bg-white border border-orange-200 rounded-lg px-2 py-0.5">
+              #{ticketShort}
+            </span>
+            {age && (
+              <span className="text-[10px] font-bold text-orange-500">{age}</span>
+            )}
+          </div>
+          <span className={`text-[10px] font-black uppercase tracking-wide border rounded-lg px-2 py-0.5 ${statusClass}`}>
+            {repair.repairStatus}
+          </span>
+        </div>
+
+        {/* Product */}
+        <h4 className="text-sm font-black text-gray-900 leading-tight mb-1">
+          {repair.productTitle || 'Unknown Product'}
+        </h4>
+
+        {/* Issue */}
+        {repair.issue && (
+          <p className="text-[11px] font-semibold text-gray-500 mb-2 line-clamp-2">{repair.issue}</p>
+        )}
+
+        {/* Customer + Serial row */}
+        <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-gray-500 mb-3">
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="truncate">{customerName}</span>
+            {customerPhone && <span className="text-gray-400">· {customerPhone}</span>}
+          </div>
+          {repair.serialNumber && (
+            <span className="font-mono text-gray-400 flex-shrink-0">{repair.serialNumber}</span>
+          )}
+        </div>
+
+        {/* Footer: tech + price + open button */}
+        <div className="flex items-center gap-2 pt-2 border-t border-orange-200">
+          {repair.techName && (
+            <span className="text-[10px] font-black text-orange-700 bg-white border border-orange-200 rounded-lg px-2 py-0.5 truncate flex-1">
+              {repair.techName}
+            </span>
+          )}
+          {repair.price && (
+            <span className="text-[10px] font-black text-emerald-700">${repair.price}</span>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); openRepair(); }}
+            className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ml-auto"
+          >
+            <ExternalLink className="w-3 h-3" />
+            Open
+          </button>
+        </div>
+      </motion.div>
+    );
   };
 
   const renderOrderCard = (order: Order) => {
@@ -449,6 +580,21 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
             Great job!
           </p>
         </motion.div>
+      ) : effectiveTab === 'repair' ? (
+        allRepairs.length === 0 ? (
+          <div className="bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No repairs in queue</p>
+              <Package className="w-5 h-5 text-gray-300 flex-shrink-0" />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            <AnimatePresence mode="popLayout">
+              {allRepairs.map((repair) => renderRepairCard(repair))}
+            </AnimatePresence>
+          </div>
+        )
       ) : orders.length === 0 ? (
         <div className="space-y-3">
           <div className="bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200">

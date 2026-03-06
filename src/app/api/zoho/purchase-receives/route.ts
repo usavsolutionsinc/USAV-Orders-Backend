@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPurchaseReceiveById, listPurchaseReceives } from '@/lib/zoho';
+import { getPurchaseReceiveById, listPurchaseReceives, searchPurchaseReceivesByTracking } from '@/lib/zoho';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const purchaseReceiveId = String(searchParams.get('purchase_receive_id') || '').trim();
+    const tracking = String(searchParams.get('tracking') || '').trim();
     const page = Number(searchParams.get('page') || 1);
     const perPage = Number(searchParams.get('per_page') || 50);
     const lastModifiedTime = String(searchParams.get('last_modified_time') || '').trim();
@@ -18,6 +19,17 @@ export async function GET(request: NextRequest) {
         success: true,
         mode: 'detail',
         ...data,
+      });
+    }
+
+    // Tracking-based lookup: used by Mode 1 background Zoho enrichment
+    if (tracking) {
+      const receives = await searchPurchaseReceivesByTracking(tracking);
+      return NextResponse.json({
+        success: true,
+        mode: 'tracking-search',
+        purchasereceives: receives,
+        found: receives.length > 0,
       });
     }
 

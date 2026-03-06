@@ -27,11 +27,22 @@ function getEnvHosts(): string[] {
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.APP_URL,
     process.env.VERCEL_URL,
+    process.env.OLLAMA_TUNNEL_URL,
+    process.env.CLOUDFLARE_TUNNEL_URL,
   ];
 
-  return candidates
+  const explicitHosts = candidates
     .map((value) => normalizeHost(value))
     .filter(Boolean);
+
+  const additionalTunnelHosts = String(
+    process.env.CLOUDFLARE_TUNNEL_HOSTS || process.env.ALLOWED_ORIGIN_HOSTS || ''
+  )
+    .split(',')
+    .map((value) => normalizeHost(value))
+    .filter(Boolean);
+
+  return [...explicitHosts, ...additionalTunnelHosts];
 }
 
 export function isAllowedAdminOrigin(req: Request): boolean {
@@ -59,4 +70,3 @@ export function isAllowedAdminOrigin(req: Request): boolean {
   const envHosts = getEnvHosts();
   return envHosts.includes(originHost);
 }
-

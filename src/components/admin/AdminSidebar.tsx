@@ -3,6 +3,7 @@
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from './admin-sections';
+import { ManualAssignmentSidebarPanel } from './ManualAssignmentSidebarPanel';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -24,18 +25,25 @@ export function AdminSidebar({
         value={activeSection}
         onChange={onSectionChange}
       />
-      <div className="flex h-[calc(100%-56px)] flex-col overflow-hidden px-6 pb-6 pt-4">
-        <div>
-          <SearchBar
-            value={searchValue}
-            onChange={onSearchChange}
-            onClear={() => onSearchChange('')}
-            placeholder="Search admin sections..."
-            className="w-full"
-            variant="blue"
-          />
+
+      {activeSection === 'manuals' ? (
+        <div className="flex-1 overflow-hidden">
+          <ManualAssignmentSidebarPanel />
         </div>
-      </div>
+      ) : (
+        <div className="flex h-[calc(100%-56px)] flex-col overflow-hidden px-6 pb-6 pt-4">
+          <div>
+            <SearchBar
+              value={searchValue}
+              onChange={onSearchChange}
+              onClear={() => onSearchChange('')}
+              placeholder="Search admin sections..."
+              className="w-full"
+              variant="blue"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

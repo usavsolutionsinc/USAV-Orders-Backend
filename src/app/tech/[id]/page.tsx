@@ -1,11 +1,6 @@
-import { Suspense } from 'react';
-import TechDashboard from '@/components/TechDashboard';
+import { redirect } from 'next/navigation';
 
 export default async function TechPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    return (
-        <Suspense fallback={null}>
-            <TechDashboard techId={id} />
-        </Suspense>
-    );
+    redirect(`/tech?staffId=${encodeURIComponent(id)}`);
 }

@@ -62,6 +62,7 @@ The app has many route handlers under `src/app/api`. Core groups include:
 - `staff`, `staff-goals`, `support/overview`
 - sync + migration helpers: `sync-sheets`, `sync-sheets-to-tech-serials`, `import-orders`, `migrate-process`, `drizzle-setup`, `setup-db`
 - integrations: `ebay/*`, `ecwid-square/sync`, `google-sheets/*`, `manuals/resolve`, `orders-exceptions/*`
+- realtime/ai: `realtime/token`, `ai/chat`, `ai/search`, `ai/health`
 
 ## Database Model (Current Core Tables)
 
@@ -149,6 +150,26 @@ npm run dev
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
+### Realtime / Ably
+
+- `ABLY_API_KEY` (server-only)
+- `NEXT_PUBLIC_ABLY_AUTH_PATH` (usually `/api/realtime/token`)
+- `ABLY_CHANNEL_ORDERS_CHANGES` (optional override)
+- `ABLY_CHANNEL_REPAIR_CHANGES` (optional override)
+- `ABLY_CHANNEL_AI_ASSIST` (optional override, default `ai:assist`)
+
+### AI (Ollama + Cloudflare Tunnel)
+
+- `OLLAMA_BASE_URL` (example: `http://127.0.0.1:11434` or tunnel URL)
+- `OLLAMA_TUNNEL_URL` (optional, used as fallback for base URL + origin allowlist)
+- `OLLAMA_MODEL` (example: `llama3.1:8b`)
+- `OLLAMA_TIMEOUT_MS` (optional request timeout)
+- `AI_CHAT_RATE_LIMIT` (optional per-minute cap, default `25`)
+- `AI_SEARCH_RATE_LIMIT` (optional per-minute cap, default `40`)
+- `CLOUDFLARE_TUNNEL_URL` (optional, added to allowed origins)
+- `CLOUDFLARE_TUNNEL_HOSTS` (optional comma-separated allowed hosts)
+- `ALLOWED_ORIGIN_HOSTS` (optional comma-separated allowed hosts)
+
 ## NPM Scripts
 
 ```bash
@@ -186,4 +207,3 @@ Prefer using Drizzle migration workflow (`db:generate` + `db:push`) for schema e
 - Root route redirects to `/dashboard`.
 - The app uses PST (`America/Los_Angeles`) assumptions in several workflows and DB connection options.
 - Some setup/sync routes are retained for migration compatibility and may overlap with newer Drizzle-based patterns.
-
