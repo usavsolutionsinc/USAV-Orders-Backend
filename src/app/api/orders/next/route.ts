@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const getAll     = searchParams.get('all') === 'true';
     const filterStatus = searchParams.get('status');
     const outOfStock = searchParams.get('outOfStock');
+    const assignedOnly = searchParams.get('assignedOnly') === 'true';
     const includeAllTechForOutOfStock = outOfStock === 'true';
 
     const cacheLookup = createCacheLookupKey({
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
       all:        getAll,
       status:     filterStatus || '',
       outOfStock: outOfStock || '',
+      assignedOnly,
     });
 
     const cached = await getCachedJson<any>('api:orders-next', cacheLookup);
@@ -77,25 +79,37 @@ export async function GET(req: NextRequest) {
           AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
       )
     )`;
+    const techAssignedOnly = `(
+      EXISTS (
+        SELECT 1 FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER'
+          AND wa.entity_id   = o.id
+          AND wa.work_type   = 'TEST'
+          AND wa.assigned_tech_id = ANY($1::int[])
+          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
+      )
+    )`;
+    const assignmentScopeSql = assignedOnly ? techAssignedOnly : techAssignedOrUnassigned;
+    const bypassScopeForOutOfStock = includeAllTechForOutOfStock && !assignedOnly;
 
     // 1. Count total pending (assigned to this tech OR unassigned)
     const totalPendingResult = await pool.query(
       `SELECT COUNT(*) AS count
        FROM orders o
        WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
-         AND ${includeAllTechForOutOfStock ? 'TRUE' : techAssignedOrUnassigned}
+         AND ${bypassScopeForOutOfStock ? 'TRUE' : assignmentScopeSql}
          AND NOT EXISTS (
            SELECT 1 FROM tech_serial_numbers tsn
            WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
                  RIGHT(regexp_replace(COALESCE(o.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
          )`,
-      includeAllTechForOutOfStock ? [] : [techIdScope]
+      bypassScopeForOutOfStock ? [] : [techIdScope]
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
     // 2. Build main query
     const params: any[] = [];
-    if (!includeAllTechForOutOfStock) {
+    if (!bypassScopeForOutOfStock) {
       params.push(techIdScope); // $1
     }
 
@@ -117,7 +131,7 @@ export async function GET(req: NextRequest) {
       FROM orders o
       WHERE
         (o.is_shipped = false OR o.is_shipped IS NULL)
-        ${includeAllTechForOutOfStock ? '' : `AND ${techAssignedOrUnassigned}`}
+        ${bypassScopeForOutOfStock ? '' : `AND ${assignmentScopeSql}`}
         AND NOT EXISTS (
           SELECT 1 FROM tech_serial_numbers tsn
           WHERE RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8) =

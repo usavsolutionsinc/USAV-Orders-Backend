@@ -132,9 +132,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     repair: allRepairs.length,
   };
 
-  const shouldShowOrdersTab = tabCounts.orders > 0 || tabCounts.stock === 0;
   const visibleTabs: Array<{ id: 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock'; label: string; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' }> = [
-    ...(shouldShowOrdersTab ? [{ id: 'orders' as const, label: 'Orders', color: 'green' as const }] : []),
+    { id: 'orders', label: 'Orders', color: 'green' },
     ...(tabCounts.returns > 0 ? [{ id: 'returns' as const, label: 'Returns', color: 'yellow' as const }] : []),
     ...(tabCounts.repair > 0 ? [{ id: 'repair' as const, label: 'Repair', color: 'orange' as const }] : []),
     ...(tabCounts.fba > 0 ? [{ id: 'fba' as const, label: 'FBA', color: 'purple' as const }] : []),
@@ -181,8 +180,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const fetchOrders = async () => {
     try {
       const [currentRes, stockRes, repairRes] = await Promise.all([
-        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=false`),
-        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=true`),
+        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=false&assignedOnly=true`),
+        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=true&assignedOnly=true`),
         fetch(`/api/repair-service/next?techId=${techId}`),
       ]);
 
@@ -196,7 +195,9 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           (order: Order) => !order.is_shipped && hasTrackingNumber(order)
         );
         const merged = [...currentOrders, ...stockOrders];
-        const deduped = merged.filter((row, idx, arr) => arr.findIndex((cand) => Number(cand.id) === Number(row.id)) === idx);
+        const deduped = merged.filter((row: Order, idx: number, arr: Order[]) =>
+          arr.findIndex((cand: Order) => Number(cand.id) === Number(row.id)) === idx
+        );
         setAllOrders(deduped);
         setAllCompletedToday(currentData.all_completed || false);
         if (currentData.all_completed && onAllCompleted) {
