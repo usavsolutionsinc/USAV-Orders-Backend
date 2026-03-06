@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     console.log('Tracking Type:', trackingType);
     console.log('Pack Date Time:', packDateTime);
     console.log('Packed By:', packedBy);
-    console.log('Photos Count:', packerPhotosUrl?.length);
+    console.log('Photos Count:', Array.isArray(packerPhotosUrl) ? packerPhotosUrl.length : 0);
     console.log('Order ID:', orderId);
 
     // Validation
@@ -62,30 +62,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
     }
 
-    // Parse pack date time
     const packDate = packDateTime ? new Date(packDateTime) : new Date();
-    
-    // Format timestamp without milliseconds for uploadedAt
-    const uploadedAtDate = new Date();
-    const year = uploadedAtDate.getFullYear();
-    const month = String(uploadedAtDate.getMonth() + 1).padStart(2, '0');
-    const day = String(uploadedAtDate.getDate()).padStart(2, '0');
-    const hours = String(uploadedAtDate.getHours()).padStart(2, '0');
-    const minutes = String(uploadedAtDate.getMinutes()).padStart(2, '0');
-    const seconds = String(uploadedAtDate.getSeconds()).padStart(2, '0');
-    const uploadedAtFormatted = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    
-    // Format photos as JSONB
-    const photosJsonb = JSON.stringify(packerPhotosUrl.map((url, index) => ({
-      url,
-      index: index + 1,
-      uploadedAt: uploadedAtFormatted
-    })));
+
+    const photoUrlList: string[] = Array.isArray(packerPhotosUrl)
+      ? packerPhotosUrl.filter((u: any) => typeof u === 'string' && u.trim())
+      : [];
 
     console.log('=== DATABASE UPDATE ===');
     console.log('Staff ID:', staffId);
     console.log('Pack Date:', packDate);
-    console.log('Photos JSONB:', photosJsonb);
+    console.log('Photos Count:', photoUrlList.length);
 
     // Begin transaction
     const client = await pool.connect();
@@ -98,16 +84,28 @@ export async function POST(req: NextRequest) {
           shipping_tracking_number,
           tracking_type,
           pack_date_time,
-          packed_by,
-          packer_photos_url
-        ) VALUES ($1, $2, $3, $4, $5::jsonb)
+          packed_by
+        ) VALUES ($1, $2, $3, $4)
         RETURNING id
-      `, [shippingTrackingNumber, trackingType, packDate, staffId, photosJsonb]);
+      `, [shippingTrackingNumber, trackingType, packDate, staffId]);
 
       const packerLogId = insertResult.rows[0]?.id;
       console.log('Inserted into packer_logs, ID:', packerLogId);
 
-      // 2. First check if order exists and its current state
+      // 2. Insert photo URLs into the unified photos table
+      if (packerLogId && photoUrlList.length > 0) {
+        for (const url of photoUrlList) {
+          await client.query(
+            `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
+             VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
+             ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
+            [packerLogId, url, staffId]
+          );
+        }
+        console.log(`Inserted ${photoUrlList.length} photo(s) into photos table`);
+      }
+
+      // 3. First check if order exists and its current state
       const checkResult = await client.query(`
         SELECT id, order_id, shipping_tracking_number, is_shipped, status
         FROM orders
@@ -188,7 +186,7 @@ export async function POST(req: NextRequest) {
         ordersUpdated: updateResult.rows.length,
         trackingNumber: shippingTrackingNumber,
         trackingType,
-        photosCount: packerPhotosUrl.length
+        photosCount: photoUrlList.length
       });
 
     } catch (error) {

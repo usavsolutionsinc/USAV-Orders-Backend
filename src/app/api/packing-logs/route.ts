@@ -142,18 +142,10 @@ export async function POST(req: NextRequest) {
         const now = new Date();
         const packDateTime = parseScanTimestamp(timestamp) || now;
         
-        // Convert photos array to structured JSONB format
-        const photosJsonb = Array.isArray(photos) 
-            ? JSON.stringify(photos.map((url, index) => ({
-                url,
-                index: index + 1,
-                uploadedAt: now.toISOString()
-              })))
-            : '[]';
-        
+        const photoUrls: string[] = Array.isArray(photos) ? photos.filter((u: any) => typeof u === 'string' && u.trim()) : [];
+
         console.log('=== PACKING UPDATE DEBUG ===');
         console.log('Photos received:', photos);
-        console.log('Photos JSONB:', photosJsonb);
         console.log('Update parameters:', {
             staffId,
             packDateTime,
@@ -202,14 +194,25 @@ export async function POST(req: NextRequest) {
                         shipping_tracking_number,
                         tracking_type,
                         pack_date_time,
-                        packed_by,
-                        packer_photos_url
-                    ) VALUES ($1, $2, $3, $4, $5::jsonb)
+                        packed_by
+                    ) VALUES ($1, $2, $3, $4)
                     RETURNING id, pack_date_time::text
-                `, [scanInput, classification.trackingType, packDateTime, staffId, photosJsonb]);
+                `, [scanInput, classification.trackingType, packDateTime, staffId]);
+
+                const notFoundPackerLogId = notFoundInsert.rows[0]?.id ?? null;
+                if (notFoundPackerLogId && photoUrls.length > 0) {
+                    for (const url of photoUrls) {
+                    await pool.query(
+                        `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
+                         VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
+                         ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
+                        [notFoundPackerLogId, url, staffId]
+                    );
+                    }
+                }
 
                 const notFoundRecord = {
-                    id: notFoundInsert.rows[0]?.id ?? null,
+                    id: notFoundPackerLogId,
                     pack_date_time: notFoundInsert.rows[0]?.pack_date_time ?? packDateTime,
                     shipping_tracking_number: scanInput,
                     packed_by: staffId,
@@ -268,14 +271,25 @@ export async function POST(req: NextRequest) {
                     shipping_tracking_number,
                     tracking_type,
                     pack_date_time,
-                    packed_by,
-                    packer_photos_url
-                ) VALUES ($1, $2, $3, $4, $5::jsonb)
+                    packed_by
+                ) VALUES ($1, $2, $3, $4)
                 RETURNING id, pack_date_time::text
-            `, [order.shipping_tracking_number, classification.trackingType, packDateTime, staffId, photosJsonb]);
+            `, [order.shipping_tracking_number, classification.trackingType, packDateTime, staffId]);
+
+            const foundPackerLogId = foundInsert.rows[0]?.id ?? null;
+            if (foundPackerLogId && photoUrls.length > 0) {
+                for (const url of photoUrls) {
+                    await pool.query(
+                        `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
+                         VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
+                         ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
+                        [foundPackerLogId, url, staffId]
+                    );
+                }
+            }
 
             const foundRecord = {
-                id: foundInsert.rows[0]?.id ?? null,
+                id: foundPackerLogId,
                 pack_date_time: foundInsert.rows[0]?.pack_date_time ?? packDateTime,
                 shipping_tracking_number: order.shipping_tracking_number,
                 packed_by: staffId,
@@ -311,13 +325,25 @@ export async function POST(req: NextRequest) {
                 shipping_tracking_number,
                 tracking_type,
                 pack_date_time,
-                packed_by,
-                packer_photos_url
-            ) VALUES ($1, $2, $3, $4, $5::jsonb)
+                packed_by
+            ) VALUES ($1, $2, $3, $4)
             RETURNING id, pack_date_time::text
-        `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId, photosJsonb]);
+        `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId]);
+
+        const nonOrderPackerLogId = nonOrderInsert.rows[0]?.id ?? null;
+        if (nonOrderPackerLogId && photoUrls.length > 0) {
+            for (const url of photoUrls) {
+                    await pool.query(
+                        `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
+                         VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
+                         ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
+                        [nonOrderPackerLogId, url, staffId]
+                    );
+            }
+        }
+
         const nonOrderRecord = {
-            id: nonOrderInsert.rows[0]?.id ?? null,
+            id: nonOrderPackerLogId,
             pack_date_time: nonOrderInsert.rows[0]?.pack_date_time ?? packDateTime,
             shipping_tracking_number: classification.normalizedInput,
             packed_by: staffId,

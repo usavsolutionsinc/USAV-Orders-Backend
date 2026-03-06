@@ -56,7 +56,12 @@ export async function GET(req: NextRequest) {
                 pl.pack_date_time,
                 pl.shipping_tracking_number,
                 pl.packed_by,
-                pl.packer_photos_url,
+                COALESCE(
+                    (SELECT json_agg(json_build_object('url', p.url, 'uploadedAt', p.created_at) ORDER BY p.created_at)
+                     FROM photos p
+                     WHERE p.entity_type = 'PACKER_LOG' AND p.entity_id = pl.id),
+                    '[]'::json
+                ) AS packer_photos_url,
                 (
                     SELECT o.order_id 
                     FROM orders o 
@@ -118,14 +123,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        
+
         const newLog = await db.insert(packerLogs).values({
             packDateTime: body.packDateTime,
             shippingTrackingNumber: body.shippingTrackingNumber,
             trackingType: body.trackingType || 'ORDERS',
             packedBy: body.packedBy,
-            packerPhotosUrl: body.packerPhotosUrl || [],
         }).returning();
+
+        const packerLogId = newLog[0]?.id;
+        if (packerLogId && Array.isArray(body.packerPhotosUrl) && body.packerPhotosUrl.length > 0) {
+            for (const url of body.packerPhotosUrl) {
+                if (typeof url === 'string' && url.trim()) {
+                    await pool.query(
+                        `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
+                         VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
+                         ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
+                        [packerLogId, url, body.packedBy || null]
+                    );
+                }
+            }
+        }
 
         await invalidateCacheTags(['packerlogs']);
         return NextResponse.json(newLog[0]);

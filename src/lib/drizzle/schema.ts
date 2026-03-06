@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, jsonb, pgEnum, bigserial } from 'drizzle-orm/pg-core';
 
 // eBay Accounts table
 export const ebayAccounts = pgTable('ebay_accounts', {
@@ -161,14 +161,27 @@ export const orders = pgTable('orders', {
 });
 
 // Packer logs - audit trail for all packer scans (orders, SKU, FNSKU, FBA, etc.)
+// Photos are stored in the photos table (entity_type='PACKER_LOG', entity_id=packer_logs.id)
 export const packerLogs = pgTable('packer_logs', {
   id: serial('id').primaryKey(),
   shippingTrackingNumber: text('shipping_tracking_number').notNull(),
   trackingType: varchar('tracking_type', { length: 20 }).notNull(),
   packDateTime: timestamp('pack_date_time'),
   packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
-  packerPhotosUrl: jsonb('packer_photos_url'),
   createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Unified photos table — polymorphic: entity_type IN ('PACKER_LOG','RECEIVING')
+// Cascade delete via DB triggers (trg_delete_photos_on_packer_log_delete / _receiving_delete)
+export const photos = pgTable('photos', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  entityType: text('entity_type').notNull(),
+  entityId: integer('entity_id').notNull(),
+  url: text('url').notNull(),
+  takenByStaffId: integer('taken_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  photoType: text('photo_type'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // Receiving table - work_assignments linked via entity_type='RECEIVING', entity_id=receiving.id
@@ -281,8 +294,7 @@ export const repairService = pgTable('repair_service', {
   process: text('process'), // JSON: [{parts: string, person: string, date: timestamp}]
 });
 
-// Packing logs table removed - all packing data now stored in orders table
-// (packed_by, pack_date_time, packer_photos_url, is_shipped, status)
+// Packing data audit trail lives in packer_logs; photos in the unified photos table.
 
 // NEW: Tech Serial Numbers table - Individual serial tracking with types
 export const techSerialNumbers = pgTable('tech_serial_numbers', {
@@ -328,6 +340,8 @@ export type Order = typeof orders.$inferSelect;
 export type NewOrder = typeof orders.$inferInsert;
 export type PackerLog = typeof packerLogs.$inferSelect;
 export type NewPackerLog = typeof packerLogs.$inferInsert;
+export type Photo = typeof photos.$inferSelect;
+export type NewPhoto = typeof photos.$inferInsert;
 export type RepairService = typeof repairService.$inferSelect;
 export type NewRepairService = typeof repairService.$inferInsert;
 export type TechSerialNumber = typeof techSerialNumbers.$inferSelect;

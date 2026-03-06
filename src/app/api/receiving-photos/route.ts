@@ -13,19 +13,11 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Valid receivingId is required' }, { status: 400 });
         }
 
-        const tableCheck = await pool.query(
-            `SELECT EXISTS (
-                SELECT FROM information_schema.tables WHERE table_name = 'receiving_photos'
-            ) AS exists`
-        );
-        if (!tableCheck.rows[0]?.exists) {
-            return NextResponse.json({ photos: [] });
-        }
-
         const result = await pool.query(
-            `SELECT id, receiving_id, photo_url, caption, uploaded_by, created_at
-             FROM receiving_photos
-             WHERE receiving_id = $1
+            `SELECT id, entity_id AS receiving_id, url AS photo_url, photo_type AS caption,
+                    taken_by_staff_id AS uploaded_by, created_at
+             FROM photos
+             WHERE entity_type = 'RECEIVING' AND entity_id = $1
              ORDER BY created_at ASC`,
             [receivingId]
         );
@@ -58,13 +50,11 @@ export async function POST(request: NextRequest) {
         if (!Number.isFinite(receivingId) || receivingId <= 0) {
             return NextResponse.json({ error: 'Valid receivingId is required' }, { status: 400 });
         }
-
         if (!photoBase64 && !photoUrl) {
             return NextResponse.json({ error: 'Either photoBase64 or photoUrl is required' }, { status: 400 });
         }
 
         let finalUrl = photoUrl || '';
-
         if (photoBase64) {
             const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
             const buffer = Buffer.from(base64Data, 'base64');
@@ -73,34 +63,18 @@ export async function POST(request: NextRequest) {
             finalUrl = blob.url;
         }
 
-        const tableCheck = await pool.query(
-            `SELECT EXISTS (
-                SELECT FROM information_schema.tables WHERE table_name = 'receiving_photos'
-            ) AS exists`
-        );
-
-        if (!tableCheck.rows[0]?.exists) {
-            await pool.query(`
-                CREATE TABLE IF NOT EXISTS receiving_photos (
-                    id SERIAL PRIMARY KEY,
-                    receiving_id INTEGER NOT NULL,
-                    photo_url TEXT NOT NULL,
-                    caption TEXT,
-                    uploaded_by INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-            await pool.query(
-                `CREATE INDEX IF NOT EXISTS idx_receiving_photos_receiving_id ON receiving_photos(receiving_id)`
-            );
-        }
-
         const result = await pool.query(
-            `INSERT INTO receiving_photos (receiving_id, photo_url, caption, uploaded_by)
-             VALUES ($1, $2, $3, $4)
-             RETURNING id, receiving_id, photo_url, caption, uploaded_by, created_at`,
-            [receivingId, finalUrl, caption, uploadedBy || null]
+            `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
+             VALUES ('RECEIVING', $1, $2, $3, $4)
+             ON CONFLICT (entity_type, entity_id, url) DO NOTHING
+             RETURNING id, entity_id AS receiving_id, url AS photo_url,
+                       photo_type AS caption, taken_by_staff_id AS uploaded_by, created_at`,
+            [receivingId, finalUrl, uploadedBy || null, caption || 'receiving']
         );
+
+        if (result.rowCount === 0) {
+            return NextResponse.json({ error: 'Photo already exists' }, { status: 409 });
+        }
 
         const row = result.rows[0];
         return NextResponse.json({
@@ -130,7 +104,7 @@ export async function DELETE(request: NextRequest) {
         }
 
         const existing = await pool.query(
-            `SELECT photo_url FROM receiving_photos WHERE id = $1`,
+            `SELECT url FROM photos WHERE id = $1 AND entity_type = 'RECEIVING'`,
             [id]
         );
 
@@ -138,17 +112,11 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'Photo not found' }, { status: 404 });
         }
 
-        const photoUrl: string = existing.rows[0].photo_url;
+        const photoUrl: string = existing.rows[0].url;
+        await pool.query(`DELETE FROM photos WHERE id = $1`, [id]);
 
-        await pool.query(`DELETE FROM receiving_photos WHERE id = $1`, [id]);
-
-        // Remove from Vercel Blob if it's a blob URL
         if (photoUrl.includes('blob.vercel-storage.com') || photoUrl.includes('vercel-storage')) {
-            try {
-                await del(photoUrl);
-            } catch {
-                // non-fatal — blob deletion failure should not fail the request
-            }
+            try { await del(photoUrl); } catch { /* non-fatal */ }
         }
 
         return NextResponse.json({ success: true, id });
