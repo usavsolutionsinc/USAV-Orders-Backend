@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const sku = normalizeIdentifier(String(body?.sku || ''));
     const itemNumber = normalizeIdentifier(String(body?.itemNumber || ''));
+    const productTitle = String(body?.productTitle || body?.product_title || '').trim() || null;
     const googleFileId = extractGoogleFileId(String(body?.googleLinkOrFileId || ''));
     const type = String(body?.type || '').trim() || null;
 
@@ -54,10 +55,10 @@ export async function POST(req: NextRequest) {
       }
 
       const inserted = await client.query(
-        `INSERT INTO product_manuals (sku, item_number, google_file_id, type, is_active, updated_at)
-         VALUES ($1, $2, $3, $4, TRUE, NOW())
+        `INSERT INTO product_manuals (sku, item_number, product_title, google_file_id, type, is_active, updated_at)
+         VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
          RETURNING id`,
-        [sku || null, itemNumber || null, googleFileId, type]
+        [sku || null, itemNumber || null, productTitle, googleFileId, type]
       );
 
       await client.query('COMMIT');

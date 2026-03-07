@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
          id,
          sku,
          item_number,
+         product_title,
          google_file_id,
          type,
          updated_at
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
         id: row.id,
         sku: row.sku || null,
         itemNumber: row.item_number || null,
+        productTitle: row.product_title || null,
         googleFileId: row.google_file_id,
         type: row.type || null,
         matchedBy,

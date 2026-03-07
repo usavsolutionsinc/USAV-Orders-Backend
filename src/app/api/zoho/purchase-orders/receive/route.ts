@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       .toUpperCase();
     const notes = String(body?.notes || '').trim() || null;
 
-    const rawLines = Array.isArray(body?.line_items) ? body.line_items : [];
+    const rawLines: Record<string, unknown>[] = Array.isArray(body?.line_items) ? body.line_items : [];
     const lineItems = rawLines
       .map((l: Record<string, unknown>) => ({
         line_item_id:      String(l?.line_item_id || '').trim(),

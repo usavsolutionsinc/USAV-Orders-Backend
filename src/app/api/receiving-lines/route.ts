@@ -119,7 +119,7 @@ export async function PATCH(request: NextRequest) {
     let idx = 1;
 
     // Scalar text fields
-    const textFields: Array<[string, string | undefined]> = [
+    const textFields: Array<[string, string | null]> = [
       ['item_name',                String(body?.item_name ?? '').trim() || null],
       ['sku',                      String(body?.sku ?? '').trim() || null],
       ['zoho_line_item_id',        String(body?.zoho_line_item_id ?? '').trim() || null],

@@ -30,6 +30,7 @@ interface RecentManual {
   id: number;
   sku: string | null;
   itemNumber: string | null;
+  productTitle: string | null;
   googleFileId: string;
   type: string | null;
   isActive: boolean;
@@ -149,6 +150,8 @@ function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
       const payload = {
         itemNumber: effectiveItemNumber,
         item_number: effectiveItemNumber,
+        productTitle: row.productTitle || null,
+        product_title: row.productTitle || null,
         googleDocId: docId,
         google_doc_id: docId,
       };

@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 10000) : 5000;
 
     const result = await pool.query(
-      `SELECT id, sku, item_number, google_file_id, type, updated_at
+      `SELECT id, sku, item_number, product_title, google_file_id, type, updated_at
        FROM product_manuals
        WHERE is_active = TRUE
        ORDER BY updated_at DESC
@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
       id: row.id,
       sku: row.sku || null,
       item_number: row.item_number || null,
+      product_title: row.product_title || null,
       google_doc_id: row.google_file_id || '',
       type: row.type || null,
       updated_at: row.updated_at || null,
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
     const manual = await upsertProductManual({
       sku: String(body?.sku || ''),
       itemNumber: String(body?.itemNumber || body?.item_number || ''),
+      productTitle: String(body?.productTitle || body?.product_title || ''),
       googleDocIdOrUrl: String(body?.googleDocId || body?.google_doc_id || body?.googleLinkOrFileId || ''),
       type: body?.type,
     });

@@ -7,6 +7,7 @@ export interface LegacyProductManualRecord {
   id: number;
   sku: string | null;
   item_number: string | null;
+  product_title: string | null;
   google_doc_id: string;
   type: string | null;
   updated_at: string | null;
@@ -54,6 +55,7 @@ function toLegacyManualRecord(row: any): LegacyProductManualRecord {
     id: Number(row.id),
     sku: row.sku ? String(row.sku) : null,
     item_number: row.item_number ? String(row.item_number) : null,
+    product_title: row.product_title ? String(row.product_title) : null,
     google_doc_id: String(row.google_file_id || row.google_doc_id || ''),
     type: row.type ? String(row.type) : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
@@ -63,11 +65,13 @@ function toLegacyManualRecord(row: any): LegacyProductManualRecord {
 export async function upsertProductManual(params: {
   sku?: string | null;
   itemNumber?: string | null;
+  productTitle?: string | null;
   googleDocIdOrUrl: string;
   type?: string | null;
 }): Promise<LegacyProductManualRecord> {
   const sku = normalizeIdentifier(String(params.sku || '')) || null;
   const itemNumber = normalizeIdentifier(String(params.itemNumber || '')) || null;
+  const productTitle = String(params.productTitle || '').trim() || null;
   const googleDocId = extractGoogleDocId(String(params.googleDocIdOrUrl || ''));
   const type = String(params.type || '').trim() || null;
 
@@ -96,10 +100,10 @@ export async function upsertProductManual(params: {
     }
 
     const inserted = await client.query(
-      `INSERT INTO product_manuals (sku, item_number, google_file_id, type, is_active, updated_at)
-       VALUES ($1, $2, $3, $4, TRUE, NOW())
-       RETURNING id, sku, item_number, google_file_id, type, updated_at`,
-      [sku, itemNumber, googleDocId, type]
+      `INSERT INTO product_manuals (sku, item_number, product_title, google_file_id, type, is_active, updated_at)
+       VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
+       RETURNING id, sku, item_number, product_title, google_file_id, type, updated_at`,
+      [sku, itemNumber, productTitle, googleDocId, type]
     );
 
     await client.query('COMMIT');
