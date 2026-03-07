@@ -9,7 +9,7 @@ import { SearchBar } from '@/components/ui/SearchBar';
 
 type ReceivingMode = 'bulk' | 'unboxing' | 'pickup';
 
-interface LogRow {
+export interface LogRow {
     id?: string | number;
     timestamp?: string;
     tracking?: string;
@@ -159,7 +159,7 @@ function BulkScanPanel({ onEntryAdded }: { history: LogRow[]; onEntryAdded: () =
 
 // ─── Mode 2: Unboxing Queue ───────────────────────────────────────────────────
 
-function UnboxingQueuePanel({ history }: { history: LogRow[] }) {
+export function UnboxingQueuePanel({ history }: { history: LogRow[] }) {
     const pending = useMemo(
         () => history.filter((l) => !l.qa_status || l.qa_status === 'PENDING'),
         [history],

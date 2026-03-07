@@ -38,14 +38,16 @@ export async function POST(request: NextRequest) {
         const returnPlatformAllowed = new Set(['AMZ', 'EBAY_DRAGONH', 'EBAY_USAV', 'EBAY_MK', 'FBA', 'WALMART', 'ECWID']);
         const targetChannelAllowed = new Set(['ORDERS', 'FBA']);
 
-        const rawConditionGrade = String(body?.conditionGrade || body?.condition_grade || 'BRAND_NEW').trim().toUpperCase();
-        const conditionGrade = conditionGradeAllowed.has(rawConditionGrade) ? rawConditionGrade : 'BRAND_NEW';
+        // condition_grade / disposition_code are nullable for Zoho PO-originated entries
+        // (per-item state lives in receiving_lines); for standalone bulk scans they default to BRAND_NEW/HOLD.
+        const rawConditionGrade = String(body?.conditionGrade || body?.condition_grade || '').trim().toUpperCase();
+        const conditionGrade = conditionGradeAllowed.has(rawConditionGrade) ? rawConditionGrade : null;
 
         const rawQaStatus = String(body?.qaStatus || body?.qa_status || 'PENDING').trim().toUpperCase();
         const qaStatus = qaStatusAllowed.has(rawQaStatus) ? rawQaStatus : 'PENDING';
 
-        const rawDisposition = String(body?.dispositionCode || body?.disposition_code || 'HOLD').trim().toUpperCase();
-        const dispositionCode = dispositionAllowed.has(rawDisposition) ? rawDisposition : 'HOLD';
+        const rawDisposition = String(body?.dispositionCode || body?.disposition_code || '').trim().toUpperCase();
+        const dispositionCode = dispositionAllowed.has(rawDisposition) ? rawDisposition : null;
 
         const isReturn = !!body?.isReturn || !!body?.is_return;
         const rawReturnPlatform = String(body?.returnPlatform || body?.return_platform || '').trim().toUpperCase();

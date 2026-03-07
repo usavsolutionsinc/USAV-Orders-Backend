@@ -236,6 +236,17 @@ export default function MultiSkuSnBarcode() {
         setSerialNumbers(value.split(',').map(s => s.trim()).filter(s => !!s));
     };
 
+    // Called by SerialNumberInput on each Enter scan — appends a single SN
+    const handleSnAdd = (sn: string) => {
+        const trimmed = sn.trim();
+        if (!trimmed) return;
+        setSerialNumbers(prev => {
+            const next = [...prev, trimmed];
+            setSnInput(next.join(', '));
+            return next;
+        });
+    };
+
     const postToSheets = async () => {
         setIsPosting(true);
         try {
@@ -399,6 +410,7 @@ export default function MultiSkuSnBarcode() {
                         title={title}
                         stock={stock}
                         snInput={snInput}
+                        serialNumbers={serialNumbers}
                         location={location}
                         currentLocation={currentLocation}
                         snInputRef={snInputRef}
@@ -406,6 +418,7 @@ export default function MultiSkuSnBarcode() {
                         isActive={step >= 2}
                         showChangeSku={mode === 'print' && step === 2}
                         onSnInputChange={handleSnInputChange}
+                        onSnAdd={handleSnAdd}
                         onLocationChange={setLocation}
                         onNext={handleNextStepSn}
                         onFinalAction={handleFinalAction}

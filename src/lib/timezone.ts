@@ -51,7 +51,7 @@ export function formatPSTTimestamp(date?: Date): string {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false
+    hourCycle: 'h23',
   }).formatToParts(base);
 
   const year = parts.find((p) => p.type === 'year')?.value;
@@ -92,7 +92,7 @@ export function toISOStringPST(timestamp: string): string {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-        hour12: false
+        hourCycle: 'h23',
       }).replace(/(\d+)\/(\d+)\/(\d+), (\d+):(\d+):(\d+)/, '$3-$1-$2T$4:$5:$6');
     }
     return timestamp;
@@ -162,7 +162,7 @@ export function formatDateTimePST(input: string | Date | null | undefined): stri
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-        hour12: false,
+        hourCycle: 'h23',
       })
       .replace(',', '');
   }
@@ -212,7 +212,7 @@ export function formatDateTimePST(input: string | Date | null | undefined): stri
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: false,
+      hourCycle: 'h23',
     })
     .replace(',', '');
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface SerialNumberInputProps {
     sku: string;
@@ -8,6 +8,7 @@ interface SerialNumberInputProps {
     title: string;
     stock: string;
     snInput: string;
+    serialNumbers: string[];
     location: string;
     currentLocation?: string;
     snInputRef: React.RefObject<HTMLInputElement>;
@@ -15,6 +16,7 @@ interface SerialNumberInputProps {
     isActive: boolean;
     showChangeSku: boolean;
     onSnInputChange: (value: string) => void;
+    onSnAdd: (sn: string) => void;
     onLocationChange: (value: string) => void;
     onNext: () => void;
     onFinalAction?: () => void;
@@ -28,6 +30,7 @@ export function SerialNumberInput({
     title,
     stock,
     snInput,
+    serialNumbers,
     location,
     currentLocation,
     snInputRef,
@@ -35,6 +38,7 @@ export function SerialNumberInput({
     isActive,
     showChangeSku,
     onSnInputChange,
+    onSnAdd,
     onLocationChange,
     onNext,
     onFinalAction,
@@ -43,12 +47,40 @@ export function SerialNumberInput({
 }: SerialNumberInputProps) {
     const isLocationMode = mode === 'change-location';
 
+    // Local state for the current scan field — cleared after each Enter scan
+    const [scanValue, setScanValue] = useState('');
+
+    // Reset scan field when sku changes (new item cycle)
+    useEffect(() => { setScanValue(''); }, [sku]);
+
+    const handleScanKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const trimmed = scanValue.trim();
+            if (trimmed) {
+                onSnAdd(trimmed);
+                setScanValue('');
+            }
+        }
+    };
+
+    const handleScanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        // If user pastes a comma-separated list, add each one immediately
+        if (val.includes(',')) {
+            val.split(',').map(s => s.trim()).filter(Boolean).forEach(onSnAdd);
+            setScanValue('');
+        } else {
+            setScanValue(val);
+        }
+    };
+
     return (
         <div className={`transition-opacity duration-200 ${!isActive ? 'opacity-15 pointer-events-none' : ''}`}>
             {/* Step label */}
             <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-                <span className="text-[9px] font-black tabular-nums text-gray-300 tracking-widest">02</span>
-                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+                <span className="text-[9px] font-black tabular-nums text-gray-500 tracking-widest">02</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-600">
                     {isLocationMode ? 'Update Location' : 'Details & Serial Numbers'}
                 </span>
                 {showChangeSku && onChangeSku && (
@@ -62,21 +94,21 @@ export function SerialNumberInput({
             </div>
 
             {/* Product info */}
-            <div className="border-t border-gray-100 px-5 py-4">
+            <div className="border-t border-gray-200 px-5 py-4">
                 <div className="flex justify-between items-start gap-4">
                     <div className="flex-1 min-w-0">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Product</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1">Product</p>
                         <p className="text-sm font-semibold text-gray-900 leading-snug break-words">
                             {isLoadingTitle ? (
-                                <span className="text-gray-400 italic font-normal">Loading…</span>
+                                <span className="text-gray-500 italic font-normal">Loading…</span>
                             ) : (
-                                title || <span className="text-gray-400 italic font-normal">—</span>
+                                title || <span className="text-gray-500 italic font-normal">—</span>
                             )}
                         </p>
                     </div>
                     {!isLocationMode && (
                         <div className="text-right flex-shrink-0">
-                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Stock</p>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1">Stock</p>
                             <span className={`text-xs font-black px-2 py-0.5 ${
                                 parseInt(stock) > 0
                                     ? 'text-blue-700 bg-blue-50'
@@ -89,33 +121,55 @@ export function SerialNumberInput({
                 </div>
 
                 {isLocationMode && currentLocation && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-1">Current Location</p>
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1">Current Location</p>
                         <span className="text-xs font-black font-mono text-orange-600">{currentLocation}</span>
                     </div>
                 )}
             </div>
 
             {/* Inputs */}
-            <div className="border-t border-gray-100">
+            <div className="border-t border-gray-200">
                 {!isLocationMode && (
-                    <input
-                        ref={snInputRef}
-                        value={snInput}
-                        onChange={(e) => onSnInputChange(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && onNext()}
-                        className="w-full px-5 py-4 bg-white text-sm focus:outline-none font-mono placeholder:text-gray-300 text-gray-900 border-b border-gray-100"
-                        placeholder="Serial numbers, comma-separated…"
-                        autoComplete="off"
-                        spellCheck={false}
-                    />
+                    <>
+                        {/* Scan field — Enter adds to list */}
+                        <div className="flex border-b border-gray-200">
+                            <input
+                                ref={snInputRef}
+                                value={scanValue}
+                                onChange={handleScanChange}
+                                onKeyDown={handleScanKeyDown}
+                                className="flex-1 px-5 py-4 bg-white text-sm focus:outline-none font-mono placeholder:text-gray-500 text-gray-900"
+                                placeholder="Scan SN → Enter to add…"
+                                autoComplete="off"
+                                spellCheck={false}
+                            />
+                            {/* SN count badge */}
+                            {serialNumbers.length > 0 && (
+                                <div className="flex items-center px-4 bg-blue-50 border-l border-gray-200">
+                                    <span className="text-[11px] font-black text-blue-700 tabular-nums">
+                                        {serialNumbers.length} SN{serialNumbers.length !== 1 ? 's' : ''}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Accumulated SN list */}
+                        {serialNumbers.length > 0 && (
+                            <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-200">
+                                <p className="text-[10px] font-mono text-gray-600 break-all leading-relaxed">
+                                    {serialNumbers.join(', ')}
+                                </p>
+                            </div>
+                        )}
+                    </>
                 )}
 
                 <input
                     value={location}
                     onChange={(e) => onLocationChange(e.target.value)}
                     onKeyDown={(e) => isLocationMode && e.key === 'Enter' && onFinalAction?.()}
-                    className={`w-full px-5 py-4 bg-white focus:outline-none placeholder:text-gray-300 text-gray-900 ${
+                    className={`w-full px-5 py-4 bg-white focus:outline-none placeholder:text-gray-500 text-gray-900 ${
                         isLocationMode ? 'text-sm font-mono' : 'text-[10px] font-black uppercase tracking-widest'
                     }`}
                     placeholder={isLocationMode ? 'Enter new location…' : 'Location (optional)'}
@@ -130,7 +184,7 @@ export function SerialNumberInput({
                 className={`w-full py-4 ${
                     isLocationMode
                         ? 'bg-orange-600 hover:bg-orange-700'
-                        : 'bg-gray-900 hover:bg-gray-700'
+                        : 'bg-blue-600 hover:bg-blue-700'
                 } text-white text-[10px] font-black uppercase tracking-[0.2em] transition-colors disabled:opacity-40`}
             >
                 {isPosting ? (

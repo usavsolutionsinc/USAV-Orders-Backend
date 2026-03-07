@@ -45,7 +45,7 @@ export function BarcodePreview({
         ? 'bg-orange-600 hover:bg-orange-700'
         : mode === 'reprint'
         ? 'bg-violet-700 hover:bg-violet-800'
-        : 'bg-gray-900 hover:bg-gray-700';
+        : 'bg-blue-600 hover:bg-blue-700';
 
     const ctaLabel = isLocationMode
         ? 'Confirm Update'
@@ -59,14 +59,14 @@ export function BarcodePreview({
         <div className={`transition-opacity duration-200 ${!isActive ? 'opacity-15 pointer-events-none' : ''}`}>
             {/* Step label */}
             <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-                <span className="text-[9px] font-black tabular-nums text-gray-300 tracking-widest">03</span>
-                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
+                <span className="text-[9px] font-black tabular-nums text-gray-500 tracking-widest">03</span>
+                <span className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-600">
                     {isLocationMode ? 'Confirm' : `Review & ${mode === 'print' ? 'Print' : mode === 'reprint' ? 'Reprint' : 'Log'}`}
                 </span>
             </div>
 
             {/* Preview area — edge-to-edge */}
-            <div className="border-t border-gray-100">
+            <div className="border-t border-gray-200">
                 {isPrintMode ? (
                     <div className="px-5 py-6 flex flex-col items-center gap-4 bg-gray-50">
                         {/* Barcode canvas */}
@@ -126,7 +126,7 @@ export function BarcodePreview({
 
             {/* Notes toggle + input */}
             {!isLocationMode && (
-                <div className="border-t border-gray-100">
+                <div className="border-t border-gray-200">
                     <button
                         onClick={onToggleNotes}
                         className="w-full px-5 py-3 text-left text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors flex items-center justify-between"
@@ -138,7 +138,7 @@ export function BarcodePreview({
                         <textarea
                             value={notes}
                             onChange={(e) => onNotesChange(e.target.value)}
-                            className="w-full px-5 pb-4 bg-white text-xs text-gray-900 focus:outline-none resize-none min-h-[72px] placeholder:text-gray-300 border-t border-gray-100"
+                            className="w-full px-5 pb-4 bg-white text-xs text-gray-900 focus:outline-none resize-none min-h-[72px] placeholder:text-gray-500 border-t border-gray-200"
                             placeholder="Optional notes…"
                         />
                     )}

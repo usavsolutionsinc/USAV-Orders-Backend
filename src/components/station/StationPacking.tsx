@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Barcode, AlertCircle, Loader2, Check, Package } from '../Icons';
+import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import { getPackerInputTheme } from '@/utils/staff-colors';
 import { formatPSTTimestamp } from '@/lib/timezone';
 
@@ -52,7 +52,6 @@ export default function StationPacking({
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [activeOrder, setActiveOrder] = useState<ActivePackingOrder | null>(null);
   const [activeFba, setActiveFba] = useState<ActiveFbaScan | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -69,7 +68,6 @@ export default function StationPacking({
 
     setIsLoading(true);
     setErrorMessage(null);
-    setSuccessMessage(null);
     setActiveOrder(null);
     setActiveFba(null);
 
@@ -95,10 +93,6 @@ export default function StationPacking({
             status: data.status || 'READY_TO_GO',
             isNew: !!data.is_new,
           });
-          setSuccessMessage(data.is_new
-            ? `Added ${scan} to scan log (no active plan found)`
-            : `Updated: ${data.product_title || scan} — ${data.actual_qty} scanned`
-          );
           onComplete?.();
           window.dispatchEvent(new CustomEvent('usav-refresh-data'));
         }
@@ -127,13 +121,6 @@ export default function StationPacking({
             condition: String(data?.condition || '').trim() || 'N/A',
             tracking: String(data?.shippingTrackingNumber || scan).trim(),
           });
-        }
-
-        const apiMessage = String(data?.message || '').trim();
-        if (data?.warning) {
-          setSuccessMessage(String(data.warning));
-        } else if (apiMessage && apiMessage.toLowerCase() !== 'order packed successfully') {
-          setSuccessMessage(apiMessage);
         }
 
         onComplete?.();
@@ -228,17 +215,6 @@ export default function StationPacking({
               </motion.div>
             )}
 
-            {successMessage && !errorMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="p-4 bg-green-50 text-green-700 rounded-2xl border border-green-200 flex items-center gap-3"
-              >
-                <Check className="w-5 h-5 flex-shrink-0" />
-                <p className="text-xs font-bold">{successMessage}</p>
-              </motion.div>
-            )}
           </AnimatePresence>
 
           {/* FBA scan result card */}

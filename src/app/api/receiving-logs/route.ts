@@ -219,13 +219,22 @@ export async function PATCH(request: NextRequest) {
             updates.push(`qa_status = $${idx++}`);
             values.push(qaStatusRaw);
         }
-        if (availableColumns.has('disposition_code') && dispositionAllowed.has(dispositionCodeRaw)) {
-            updates.push(`disposition_code = $${idx++}`);
-            values.push(dispositionCodeRaw);
+        // disposition_code and condition_grade are now nullable — allow explicit null clear
+        if (availableColumns.has('disposition_code') && Object.prototype.hasOwnProperty.call(body ?? {}, 'disposition_code') || Object.prototype.hasOwnProperty.call(body ?? {}, 'dispositionCode')) {
+            if (!dispositionCodeRaw) {
+                updates.push(`disposition_code = NULL`);
+            } else if (dispositionAllowed.has(dispositionCodeRaw)) {
+                updates.push(`disposition_code = $${idx++}`);
+                values.push(dispositionCodeRaw);
+            }
         }
-        if (availableColumns.has('condition_grade') && conditionAllowed.has(conditionGradeRaw)) {
-            updates.push(`condition_grade = $${idx++}`);
-            values.push(conditionGradeRaw);
+        if (availableColumns.has('condition_grade') && Object.prototype.hasOwnProperty.call(body ?? {}, 'condition_grade') || Object.prototype.hasOwnProperty.call(body ?? {}, 'conditionGrade')) {
+            if (!conditionGradeRaw) {
+                updates.push(`condition_grade = NULL`);
+            } else if (conditionAllowed.has(conditionGradeRaw)) {
+                updates.push(`condition_grade = $${idx++}`);
+                values.push(conditionGradeRaw);
+            }
         }
         if (availableColumns.has('is_return') && isReturnRaw !== undefined) {
             updates.push(`is_return = $${idx++}`);

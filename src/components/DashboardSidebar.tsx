@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ChevronLeft,
   LayoutDashboard,
+  Loader2,
   Menu,
-  Plus,
+  Package,
+  RefreshCw,
   X,
 } from '@/components/Icons';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
@@ -19,12 +21,14 @@ import { DashboardManagementPanel } from '@/components/sidebar/DashboardManageme
 import { RepairSidebar } from '@/components/repair';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
-import ReceivingSidebar from '@/components/ReceivingSidebar';
+import { UnboxingQueuePanel, type LogRow } from '@/components/ReceivingSidebar';
+import { getReceivingLogs, invalidateReceivingCache } from '@/lib/receivingCache';
 import { FbaSidebar } from '@/components/fba/FbaSidebar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { SearchBar } from '@/components/ui/SearchBar';
 import StationTesting from '@/components/station/StationTesting';
 import StationPacking from '@/components/station/StationPacking';
+import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
 import StaffSelector from '@/components/StaffSelector';
 import {
   APP_SIDEBAR_NAV,
@@ -229,6 +233,26 @@ function TechStationContext({ techId }: { techId: string }) {
 
 type ReceivingMode = 'bulk' | 'unboxing' | 'pickup';
 
+interface ZohoPORow {
+  purchaseorder_id: string;
+  purchaseorder_number?: string;
+  vendor_name?: string;
+  status?: string;
+  date?: string;
+  total?: number;
+  currency_code?: string;
+}
+
+function statusPill(status?: string) {
+  switch ((status || '').toLowerCase()) {
+    case 'open':      return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'billed':    return 'bg-green-50 text-green-700 border-green-200';
+    case 'draft':     return 'bg-gray-100 text-gray-600 border-gray-200';
+    case 'cancelled': return 'bg-red-50 text-red-600 border-red-200';
+    default:          return 'bg-gray-100 text-gray-500 border-gray-200';
+  }
+}
+
 function ReceivingContext() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -238,6 +262,67 @@ function ReceivingContext() {
     rawMode === 'unboxing' ? 'unboxing' : rawMode === 'pickup' ? 'pickup' : 'bulk';
 
   const staffId = searchParams.get('staffId') || '7';
+
+  // ── PO search state ──────────────────────────────────────────────────────────
+  const [poSearch, setPoSearch] = useState('');
+  const [poList, setPoList] = useState<ZohoPORow[]>([]);
+  const [poLoading, setPoLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchPOs = useCallback(async (q: string) => {
+    setPoLoading(true);
+    try {
+      const params = new URLSearchParams({ per_page: '60', status: 'open' });
+      if (q.trim()) params.set('search_text', q.trim());
+      const res = await fetch(`/api/zoho/purchase-orders?${params}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json();
+      setPoList(Array.isArray(json.purchaseorders) ? json.purchaseorders : []);
+    } catch {
+      // no-op
+    } finally {
+      setPoLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchPOs(poSearch), 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [poSearch, fetchPOs]);
+
+  // ── Unboxing queue history ────────────────────────────────────────────────────
+  const [history, setHistory] = useState<LogRow[]>([]);
+
+  useEffect(() => {
+    if (mode !== 'unboxing') return;
+    const load = async () => {
+      try {
+        const data = await getReceivingLogs(500);
+        setHistory(data);
+      } catch { /* no-op */ }
+    };
+    load();
+
+    const onRefresh = () => { invalidateReceivingCache(); load(); };
+    const onEntry = (e: Event) => {
+      const { detail } = e as CustomEvent;
+      if (!detail) return;
+      setHistory((prev) => [{
+        id: detail.id,
+        timestamp: detail.timestamp,
+        tracking: detail.receiving_tracking_number || detail.tracking,
+        carrier: detail.carrier,
+        qa_status: detail.qa_status || 'PENDING',
+      }, ...prev]);
+    };
+    window.addEventListener('usav-refresh-data', onRefresh);
+    window.addEventListener('receiving-entry-added', onEntry);
+    return () => {
+      window.removeEventListener('usav-refresh-data', onRefresh);
+      window.removeEventListener('receiving-entry-added', onEntry);
+    };
+  }, [mode]);
 
   const updateMode = (nextMode: ReceivingMode) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -253,6 +338,7 @@ function ReceivingContext() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {/* Staff + mode selector */}
       <div className="border-b border-gray-200 bg-white">
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
           <div className="min-w-0">
@@ -279,8 +365,75 @@ function ReceivingContext() {
           </div>
         </div>
       </div>
-      <div className="flex-1 overflow-hidden">
-        <ReceivingSidebar embedded hideSectionHeader mode={mode} staffId={staffId} />
+
+      {/* PO search bar — always visible */}
+      <div className="border-b border-gray-200 bg-white px-3 py-2">
+        <SearchBar
+          value={poSearch}
+          onChange={setPoSearch}
+          onClear={() => setPoSearch('')}
+          placeholder="Search purchase orders…"
+          variant="emerald"
+          isSearching={poLoading}
+          rightElement={
+            <button
+              type="button"
+              onClick={() => fetchPOs(poSearch)}
+              disabled={poLoading}
+              className="flex-shrink-0 p-2 rounded-xl border border-gray-200 bg-white text-gray-400 hover:text-emerald-600 hover:border-emerald-300 transition-colors disabled:opacity-40"
+              title="Refresh POs"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${poLoading ? 'animate-spin' : ''}`} />
+            </button>
+          }
+        />
+      </div>
+
+      {/* Unboxing queue (only in unboxing mode) */}
+      {mode === 'unboxing' && (
+        <div className="flex-1 overflow-hidden border-b border-gray-100">
+          <UnboxingQueuePanel history={history} />
+        </div>
+      )}
+
+      {/* PO list */}
+      <div className={`${mode === 'unboxing' ? 'h-0 overflow-hidden' : 'flex-1 overflow-y-auto'}`}>
+        {poLoading && poList.length === 0 ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
+          </div>
+        ) : poList.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-2 opacity-30">
+            <Package className="w-8 h-8" />
+            <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+              {poSearch.trim() ? 'No matching POs' : 'No open POs'}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {poList.map((po) => (
+              <button
+                key={po.purchaseorder_id}
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('receiving-open-po', { detail: po }))}
+                className="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors group"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-black text-gray-800 uppercase tracking-wide truncate">
+                    {po.purchaseorder_number || po.purchaseorder_id}
+                  </span>
+                  <span className={`flex-shrink-0 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${statusPill(po.status)}`}>
+                    {po.status || '—'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                  {po.vendor_name || 'Unknown vendor'}
+                  {po.date ? ` · ${po.date}` : ''}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -625,6 +778,10 @@ function SidebarContextPanel() {
     return <PackerStationContext packerId={packerId} />;
   }
 
+  if (routeKey === 'manuals') {
+    return <ManualsSidebar />;
+  }
+
   return (
     <div className="h-full flex flex-col px-6 py-6">
       <div className="rounded-3xl border border-gray-200 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-5 text-white">
@@ -661,6 +818,7 @@ function getSidebarTitle(pathname: string | null) {
   if (routeKey === 'support') return 'Support';
   if (routeKey === 'previous-quarters') return 'Quarters';
   if (routeKey === 'admin') return 'Admin';
+  if (routeKey === 'manuals') return 'Manuals';
 
   return 'Home';
 }

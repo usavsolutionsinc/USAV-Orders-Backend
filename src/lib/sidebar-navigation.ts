@@ -3,6 +3,7 @@ import {
   Box,
   Calendar,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   Package,
   ShieldCheck,
@@ -22,6 +23,7 @@ export type SidebarRouteKey =
   | 'support'
   | 'previous-quarters'
   | 'admin'
+  | 'manuals'
   | 'unknown';
 
 export type SidebarIconComponent = (props: { className?: string }) => JSX.Element;
@@ -45,6 +47,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'support', label: 'Support', href: '/support', icon: AlertCircle, kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters', href: '/previous-quarters', icon: Calendar, kind: 'bottom' },
   { id: 'admin', label: 'Admin', href: '/admin', icon: ShieldCheck, kind: 'bottom' },
+  { id: 'manuals', label: 'Manuals', href: '/manuals', icon: FileText, kind: 'bottom' },
 ];
 
 export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
@@ -59,6 +62,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin';
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
+  if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'manuals';
   return 'unknown';
 }
 

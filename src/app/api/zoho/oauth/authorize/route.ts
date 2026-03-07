@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
 
   // Scopes required for Zoho Inventory receiving lines integration
   const scope = [
+    'ZohoInventory.purchaseorders.READ',
     'ZohoInventory.purchasereceives.READ',
     'ZohoInventory.purchasereceives.CREATE',
     'ZohoInventory.items.READ',

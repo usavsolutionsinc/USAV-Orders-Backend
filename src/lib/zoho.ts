@@ -244,6 +244,64 @@ export interface ZohoPurchaseReceiveLine {
   quantity_received: number;
 }
 
+// ─── Purchase Orders ─────────────────────────────────────────────────────────
+
+export interface ZohoPurchaseOrderLine {
+  line_item_id: string;
+  item_id: string;
+  name?: string;
+  description?: string;
+  sku?: string;
+  quantity?: number;
+  quantity_received?: number;
+  rate?: number;
+  total?: number;
+  unit?: string;
+  item_order?: number;
+  account_id?: string;
+}
+
+export interface ZohoPurchaseOrder {
+  purchaseorder_id: string;
+  purchaseorder_number?: string;
+  vendor_id?: string;
+  vendor_name?: string;
+  /** draft | open | billed | cancelled */
+  status?: string;
+  date?: string;
+  delivery_date?: string;
+  expected_delivery_date?: string;
+  total?: number;
+  sub_total?: number;
+  currency_code?: string;
+  warehouse_id?: string;
+  warehouse_name?: string;
+  line_items?: ZohoPurchaseOrderLine[];
+  notes?: string;
+  reference_number?: string;
+}
+
+export async function listPurchaseOrders(params: {
+  page?: number;
+  per_page?: number;
+  /** Filter by status: draft | open | billed | cancelled */
+  status?: string;
+  search_text?: string;
+  purchaseorder_number?: string;
+  vendor_id?: string;
+  last_modified_time?: string;
+} = {}): Promise<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }> {
+  return zohoInventoryRequest('/api/v1/purchaseorders', params);
+}
+
+export async function getPurchaseOrderById(
+  purchaseOrderId: string
+): Promise<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorder?: ZohoPurchaseOrder }> {
+  const safeId = encodeURIComponent(String(purchaseOrderId || '').trim());
+  if (!safeId) throw new Error('purchaseOrderId is required');
+  return zohoInventoryRequest(`/api/v1/purchaseorders/${safeId}`);
+}
+
 /**
  * Create a purchase receive in Zoho Inventory (marks PO items as physically received).
  * Used after unboxing confirmation in Mode 2.
