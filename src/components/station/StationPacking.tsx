@@ -286,7 +286,7 @@ export default function StationPacking({
                     <p className="text-xs font-bold text-gray-800">{activeOrder.condition}</p>
                   </div>
                   <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Tracking #</p>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">TRK #</p>
                     <p className="text-xs font-mono font-bold text-gray-800">{activeOrder.tracking.slice(-4) || '—'}</p>
                   </div>
                 </div>

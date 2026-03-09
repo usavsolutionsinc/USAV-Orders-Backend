@@ -4,6 +4,11 @@ import { importZohoPurchaseReceiveToReceiving } from '@/lib/zoho-receiving-sync'
 
 export const dynamic = 'force-dynamic';
 
+/** Format a Date for Zoho API params: YYYY-MM-DDTHH:MM:SS+0000 (no ms, explicit UTC offset) */
+function toZohoDate(d: Date): string {
+  return d.toISOString().replace(/\.\d{3}Z$/, '+0000');
+}
+
 function normalizeId(value: unknown): string | null {
   if (typeof value === 'string') {
     const trimmed = value.trim();
@@ -28,7 +33,7 @@ export async function POST(request: NextRequest) {
     const daysBack = Number.isFinite(daysBackRaw) && daysBackRaw > 0 ? Math.min(365, Math.floor(daysBackRaw)) : 30;
     const lastModifiedTime =
       String(body?.last_modified_time || '').trim() ||
-      new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+      toZohoDate(new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000));
 
     const receivedBy = Number(body?.received_by);
     const assignedTechId = Number(body?.assigned_tech_id);

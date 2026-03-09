@@ -85,7 +85,7 @@ interface InlineFormProps {
   onClose: () => void;
 }
 
-function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
+export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
   // When item_number is missing on the order row, let the user enter it here
   const [localItemNumber, setLocalItemNumber] = useState('');
   const effectiveItemNumber = row.itemNumber.trim() || localItemNumber.trim().toUpperCase();

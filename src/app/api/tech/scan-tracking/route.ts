@@ -5,7 +5,7 @@ import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
 import { invalidateCacheTags, createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp } from '@/lib/timezone';
-import { publishTechLogChanged } from '@/lib/realtime/publish';
+import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 
 /** Compute Mon–Fri PST week range from the current PST timestamp. */
 function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
@@ -385,6 +385,12 @@ export async function POST(req: NextRequest) {
                     source: 'tech.scan-tracking',
                 });
             }
+
+            await publishOrderTested({
+                orderId: Number(row.id),
+                testedBy,
+                source: 'tech.scan-tracking',
+            });
 
             return NextResponse.json({
                 success: true,

@@ -11,6 +11,7 @@ import {
 } from '@/components/Icons';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { TabSwitch } from '@/components/ui/TabSwitch';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 
 interface DashboardManagementPanelProps {
@@ -27,6 +28,8 @@ interface SearchHistory {
   resultCount?: number;
 }
 
+type PendingFilterMode = 'all' | 'pending' | 'stock';
+
 export function DashboardManagementPanel({
   showIntakeForm = false,
   onCloseForm,
@@ -38,9 +41,18 @@ export function DashboardManagementPanel({
   const [manualSheetName, setManualSheetName] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingFilterMode, setPendingFilterMode] = useState<PendingFilterMode>('all');
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('dashboard-pending-filter', {
+        detail: { mode: pendingFilterMode },
+      })
+    );
+  }, [pendingFilterMode]);
 
   useEffect(() => {
     const focusSearchInput = () => {
@@ -172,6 +184,11 @@ export function DashboardManagementPanel({
   }
 
   const visibleSearchHistory = showAllSearchHistory ? searchHistory : searchHistory.slice(0, 3);
+  const pendingFilterTabs: Array<{ id: PendingFilterMode; label: string; color: 'green' | 'yellow' | 'red' }> = [
+    { id: 'all', label: 'All', color: 'green' },
+    { id: 'pending', label: 'Pending', color: 'yellow' },
+    { id: 'stock', label: 'Stock', color: 'red' },
+  ];
 
   return (
     <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
@@ -202,6 +219,13 @@ export function DashboardManagementPanel({
               }
                 />
           </motion.div>
+          <motion.div variants={itemVariants} className="-mt-2">
+            <TabSwitch
+              tabs={pendingFilterTabs}
+              activeTab={pendingFilterMode}
+              onTabChange={(tabId) => setPendingFilterMode(tabId === 'stock' ? 'stock' : tabId === 'pending' ? 'pending' : 'all')}
+            />
+          </motion.div>
           <motion.div variants={itemVariants} className="-mt-1">
             <RecentSearchesList
               items={visibleSearchHistory}
@@ -218,6 +242,20 @@ export function DashboardManagementPanel({
           <motion.div variants={itemVariants} className="-mt-1 text-left">
             <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">Click an order for more details</p>
             <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Orders are sorted by ship-by date</p>
+            <div className="flex flex-col gap-1 mt-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Out of stock</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Pending pick/test</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Tested by tech</span>
+              </div>
+            </div>
           </motion.div>
 
           <motion.div variants={itemVariants} className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">

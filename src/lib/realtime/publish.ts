@@ -11,6 +11,12 @@ type OrderChangedPayload = {
   source: string;
 };
 
+type OrderTestedPayload = {
+  orderId: number;
+  testedBy: number | null;
+  source: string;
+};
+
 type RepairChangedPayload = {
   repairIds: number[];
   source: string;
@@ -77,6 +83,21 @@ export async function publishOrderChanged(payload: OrderChangedPayload) {
   await publishEvent(getOrdersChannelName(), 'order.changed', {
     type: 'order.changed',
     orderIds: normalizedIds,
+    source: payload.source,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+export async function publishOrderTested(payload: OrderTestedPayload) {
+  const orderId = Number(payload.orderId);
+  if (!Number.isFinite(orderId)) return;
+
+  const testedByRaw = payload.testedBy == null ? null : Number(payload.testedBy);
+  const testedBy = testedByRaw != null && Number.isFinite(testedByRaw) ? testedByRaw : null;
+  await publishEvent(getOrdersChannelName(), 'order.tested', {
+    type: 'order.tested',
+    orderId,
+    testedBy,
     source: payload.source,
     timestamp: new Date().toISOString(),
   });

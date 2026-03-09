@@ -7,7 +7,7 @@ function toOrderRecord(order: any): ShippedOrder {
     ...order,
     pack_date_time: order.ship_by_date || null,
     packed_by: order.packer_id ?? null,
-    tested_by: order.tester_id ?? null,
+    tested_by: order.tested_by ?? null,
     serial_number: '',
     condition: order.condition || '',
   };
@@ -17,15 +17,18 @@ export async function fetchPendingOrdersData({
   searchQuery = '',
   packedBy,
   testedBy,
+  pendingOnly = false,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
+  pendingOnly?: boolean;
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) params.set('q', searchQuery.trim());
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+  if (pendingOnly) params.set('pendingOnly', 'true');
 
   const url = params.toString() ? `/api/orders?${params.toString()}` : '/api/orders';
   const res = await fetch(url, { cache: 'no-store' });

@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     const shipByDate         = searchParams.get('shipByDate') || '';
     const packedBy           = searchParams.get('packedBy');
     const testedBy           = searchParams.get('testedBy');
+    const pendingOnly        = searchParams.get('pendingOnly') === 'true';
 
     const cacheLookup = createCacheLookupKey({
       status:             status || '',
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
       shipByDate,
       packedBy:           packedBy || '',
       testedBy:           testedBy || '',
+      pendingOnly,
     });
 
     const CACHE_HEADERS = { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' };
@@ -62,7 +64,9 @@ export async function GET(req: NextRequest) {
         o.is_shipped,
         o.created_at,
         wa_t.assigned_tech_id   AS tester_id,
-        wa_p.assigned_packer_id AS packer_id
+        wa_p.assigned_packer_id AS packer_id,
+        tsn_scan.tested_by      AS tested_by,
+        (COALESCE(tsn_scan.scan_count, 0) > 0) AS has_tech_scan
       FROM orders o
       LEFT JOIN LATERAL (
         SELECT assigned_tech_id
@@ -84,6 +88,14 @@ export async function GET(req: NextRequest) {
         ORDER BY created_at DESC
         LIMIT 1
       ) wa_p ON true
+      LEFT JOIN LATERAL (
+        SELECT
+          MIN(tsn.tested_by)::int AS tested_by,
+          COUNT(*)::int AS scan_count
+        FROM tech_serial_numbers tsn
+        WHERE RIGHT(regexp_replace(UPPER(COALESCE(tsn.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) =
+              RIGHT(regexp_replace(UPPER(COALESCE(o.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18)
+      ) tsn_scan ON true
       WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
     `;
     const params: any[] = [];
@@ -108,6 +120,12 @@ export async function GET(req: NextRequest) {
     if (testedBy) {
       sql += ` AND wa_t.assigned_tech_id = $${paramCount++}`;
       params.push(Number(testedBy));
+    }
+
+    if (pendingOnly) {
+      // Orders not flagged out-of-stock AND whose tracking number has no match in tech_serial_numbers
+      sql += ` AND COALESCE(BTRIM(o.out_of_stock), '') = ''`;
+      sql += ` AND COALESCE(tsn_scan.scan_count, 0) = 0`;
     }
 
     if (missingTrackingOnly || trackingStatus === 'missing') {

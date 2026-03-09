@@ -132,7 +132,7 @@ function TechStationContext({ techId }: { techId: string }) {
   const techName = staffDirectory.find((member) => String(member.id) === String(techId))?.name || 'Technician';
   const techTheme = getTechThemeById(techId);
   const rawView = searchParams.get('view');
-  const viewMode = rawView === 'pending' ? 'pending' : rawView === 'manual' ? 'manual' : 'history';
+  const viewMode = rawView === 'pending' ? 'pending' : rawView === 'manual' ? 'manual' : rawView === 'update-manuals' ? 'update-manuals' : 'history';
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -159,15 +159,13 @@ function TechStationContext({ techId }: { techId: string }) {
     return history.filter((item) => toPSTDateKey(item.test_date_time || item.timestamp || '') === todayDate).length;
   }, [history]);
 
-  const updateViewMode = (nextView: 'history' | 'pending' | 'manual') => {
+  const updateViewMode = (nextView: 'history' | 'pending' | 'manual' | 'update-manuals') => {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('staffId', techId);
     if (nextView === 'history') {
       nextParams.delete('view');
-    } else if (nextView === 'pending') {
-      nextParams.set('view', 'pending');
     } else {
-      nextParams.set('view', 'manual');
+      nextParams.set('view', nextView);
     }
     const nextSearch = nextParams.toString();
     router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
@@ -204,9 +202,10 @@ function TechStationContext({ techId }: { techId: string }) {
                 { value: 'history', label: 'Tech History' },
                 { value: 'pending', label: 'Pending Orders' },
                 { value: 'manual', label: 'Last Order Manual' },
+                { value: 'update-manuals', label: 'Update Manuals' },
               ]}
               value={viewMode}
-              onChange={(nextView) => updateViewMode(nextView as 'history' | 'pending' | 'manual')}
+              onChange={(nextView) => updateViewMode(nextView as 'history' | 'pending' | 'manual' | 'update-manuals')}
               variant="boxy"
               buttonClassName="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none text-left"
               optionClassName="text-[10px] font-black tracking-wider"

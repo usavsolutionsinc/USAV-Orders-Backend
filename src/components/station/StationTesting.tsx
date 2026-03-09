@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
-import { Barcode, AlertCircle, Loader2, Check, Search } from '../Icons';
+import { Barcode, AlertCircle, Loader2, Search } from '../Icons';
 import ActiveStationOrderCard from './ActiveStationOrderCard';
 import { useStationTestingController } from '@/hooks/useStationTestingController';
 
@@ -43,7 +43,6 @@ export default function StationTesting({
     activeOrder,
     setActiveOrder,
     errorMessage,
-    successMessage,
     trackingNotFoundAlert,
     resolvedManuals,
     isManualLoading,
@@ -155,17 +154,6 @@ export default function StationTesting({
               </motion.div>
             )}
 
-            {successMessage && !errorMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="p-4 bg-green-50 text-green-700 rounded-2xl border border-green-200 flex items-center gap-3"
-              >
-                <Check className="w-5 h-5 flex-shrink-0" />
-                <p className="text-xs font-bold">{successMessage}</p>
-              </motion.div>
-            )}
           </AnimatePresence>
 
           <AnimatePresence mode="wait">

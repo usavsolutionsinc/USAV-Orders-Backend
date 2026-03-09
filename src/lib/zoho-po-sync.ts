@@ -269,7 +269,7 @@ export async function syncZohoPurchaseOrdersToReceiving(
   let lastModifiedTime = String(opts.last_modified_time || '').trim() || undefined;
   if (!lastModifiedTime && opts.days_back && Number(opts.days_back) > 0) {
     const cutoff = new Date(Date.now() - Number(opts.days_back) * 24 * 60 * 60 * 1000);
-    lastModifiedTime = cutoff.toISOString();
+    lastModifiedTime = cutoff.toISOString().replace(/\.\d{3}Z$/, '+0000');
   }
 
   const summary: BulkSyncSummary = {

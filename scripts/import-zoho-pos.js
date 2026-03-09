@@ -376,7 +376,7 @@ async function main() {
 
   let lastModifiedTime;
   if (DAYS_BACK > 0) {
-    lastModifiedTime = new Date(Date.now() - DAYS_BACK * 86400 * 1000).toISOString();
+    lastModifiedTime = new Date(Date.now() - DAYS_BACK * 86400 * 1000).toISOString().replace(/\.\d{3}Z$/, '+0000');
   }
 
   let processed = 0, created = 0, updated = 0, failed = 0;

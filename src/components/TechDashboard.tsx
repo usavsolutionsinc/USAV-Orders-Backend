@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { TechTable } from './TechTable';
 import PendingOrdersTable from './PendingOrdersTable';
+import UpdateManualsView from './UpdateManualsView';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
 import ProductManualViewer from './station/ProductManualViewer';
 import type { ResolvedProductManual } from '@/hooks/useStationTestingController';
@@ -15,7 +16,14 @@ interface TechDashboardProps {
 export default function TechDashboard({ techId }: TechDashboardProps) {
     const searchParams = useSearchParams();
     const rawView = searchParams.get('view');
-    const rightViewMode = rawView === 'pending' ? 'pending' : rawView === 'manual' ? 'manual' : 'history';
+    const rightViewMode = rawView === 'pending'
+        ? 'pending'
+        : rawView === 'manual'
+            ? 'manual'
+            : rawView === 'update-manuals'
+                ? 'update-manuals'
+                : 'history';
+
     const [lastManuals, setLastManuals] = useState<ResolvedProductManual[]>([]);
 
     useEffect(() => {
@@ -24,7 +32,6 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
             const raw = window.localStorage.getItem(storageKey);
             if (!raw) { setLastManuals([]); return; }
             const parsed = JSON.parse(raw);
-            // Support both legacy single-object and new array format
             setLastManuals(Array.isArray(parsed) ? parsed : [parsed]);
         } catch {
             setLastManuals([]);
@@ -49,11 +56,13 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                     </div>
                 ) : rightViewMode === 'pending' ? (
                     <PendingOrdersTable />
+                ) : rightViewMode === 'update-manuals' ? (
+                    <UpdateManualsView techId={techId} days={30} />
                 ) : (
                     <TechTable testedBy={parseInt(techId)} />
                 )}
             </div>
-            <StationDetailsHandler viewMode={rightViewMode} />
+            <StationDetailsHandler viewMode={rightViewMode === 'update-manuals' ? 'history' : rightViewMode} />
         </div>
     );
 }

@@ -332,6 +332,15 @@ export function OrderRecordsTable({
                           (record as any).packer_name ||
                           getStaffName((record as any).packed_by) ||
                           getStaffName((record as any).packer_id);
+                        const outOfStockValue = String((record as any).out_of_stock || '').trim();
+                        const hasOutOfStock = outOfStockValue !== '';
+                        const testedByValue = (record as any).tested_by;
+                        const hasTestedBy =
+                          testedByValue !== null &&
+                          testedByValue !== undefined &&
+                          String(testedByValue).trim() !== '' &&
+                          Number.isFinite(Number(testedByValue));
+                        const hasTechScan = Boolean((record as any).has_tech_scan);
 
                         return (
                           <motion.div
@@ -346,11 +355,14 @@ export function OrderRecordsTable({
                           >
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
-                                {ordersOnly && String((record as any).out_of_stock || '').trim() === '' ? (
-                                  <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
-                                ) : null}
-                                {String((record as any).out_of_stock || '').trim() !== '' ? (
-                                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
+                                {ordersOnly ? (
+                                  hasOutOfStock ? (
+                                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
+                                  ) : hasTechScan ? (
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
+                                  ) : (
+                                    <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
+                                  )
                                 ) : null}
                                 <div className="text-[12px] font-bold text-gray-900 truncate">
                                   {record.product_title || 'Unknown Product'}
@@ -381,11 +393,11 @@ export function OrderRecordsTable({
                                       <span className={getDaysLateTone(getDaysLateNumber(record.ship_by_date as any, record.created_at as any))}>
                                         {getDaysLateNumber(record.ship_by_date as any, record.created_at as any)}
                                       </span>
-                                      {String((record as any).out_of_stock || '').trim() !== '' ? (
+                                      {hasOutOfStock ? (
                                         <>
                                           {' • '}
                                           <span className="text-red-600">
-                                            {String((record as any).out_of_stock || '').trim()}
+                                            {outOfStockValue}
                                           </span>
                                         </>
                                       ) : null}
