@@ -316,7 +316,8 @@ export async function syncZohoPurchaseOrdersToReceiving(
       }
     }
 
-    const hasMore = Boolean((data as AnyRow)?.page_context?.has_more_page);
+    const pageCtx = (data as AnyRow)?.page_context as AnyRow | undefined;
+    const hasMore = Boolean(pageCtx?.has_more_page);
     if (!hasMore) break;
   }
 
