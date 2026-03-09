@@ -344,7 +344,11 @@ export function DashboardDetailsStack({
     const isFullyAssigned = nextTesterId != null && nextPackerId != null;
     if (wasFullyAssigned || !isFullyAssigned) return;
 
-    window.dispatchEvent(new CustomEvent('navigate-dashboard-next-unassigned'));
+    // Defer by one tick so React can flush the cache patches and re-render
+    // OrderRecordsTable with updated tester_id/packer_id before navigating.
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('navigate-dashboard-next-unassigned'));
+    }, 50);
   };
 
   const containerVariants = {
@@ -409,82 +413,6 @@ export function DashboardDetailsStack({
             </div>
           </div>
         </section>
-
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setIsMarkAsShippedOpen((prev) => !prev)}
-            disabled={isMarkingShipped}
-            className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
-          >
-            <PackageCheck className="w-3.5 h-3.5" />
-            {isMarkingShipped ? 'Marking...' : 'Mark As Shipped'}
-          </button>
-
-          {isMarkAsShippedOpen && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 space-y-2.5">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">
-                    Packer
-                  </span>
-                  <select
-                    value={selectedMarkPackerId ?? ''}
-                    onChange={(e) => setSelectedMarkPackerId(Number(e.target.value) || null)}
-                    className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] font-bold text-gray-900 outline-none"
-                  >
-                    <option value="">Select</option>
-                    {packerOptions.map((packer) => (
-                      <option key={packer.id} value={packer.id}>
-                        {packer.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">
-                    Date &amp; Time
-                  </span>
-                  <input
-                    type="datetime-local"
-                    value={markPackedAt}
-                    onChange={(e) => setMarkPackedAt(e.target.value)}
-                    className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] font-bold text-gray-900 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5">
-                  <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 block">Packer</span>
-                  <p className="text-[10px] font-bold text-gray-900 truncate">
-                    {selectedMarkPackerId ? getStaffName(selectedMarkPackerId) : 'N/A'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5">
-                  <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 block">Time</span>
-                  <p className="text-[10px] font-bold text-gray-900 truncate">
-                    {markPackedAt ? formatDateTimePST(new Date(markPackedAt)) : 'N/A'}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={markAsShipped}
-                disabled={isMarkingShipped}
-                className="w-full h-8 inline-flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
-              >
-                {isMarkingShipped ? 'Saving...' : 'Confirm Mark As Shipped'}
-              </button>
-
-              {markShippedError && (
-                <p className="text-[9px] font-bold text-red-600">{markShippedError}</p>
-              )}
-            </div>
-          )}
-        </div>
 
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
@@ -694,6 +622,82 @@ export function DashboardDetailsStack({
           showSerialNumber={false}
         />
       </motion.div>
+
+      <motion.section variants={itemVariants} className="mx-8 space-y-2">
+        <button
+          type="button"
+          onClick={() => setIsMarkAsShippedOpen((prev) => !prev)}
+          disabled={isMarkingShipped}
+          className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+        >
+          <PackageCheck className="w-3.5 h-3.5" />
+          {isMarkingShipped ? 'Marking...' : 'Mark As Shipped'}
+        </button>
+
+        {isMarkAsShippedOpen && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 space-y-2.5">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">
+                  Packer
+                </span>
+                <select
+                  value={selectedMarkPackerId ?? ''}
+                  onChange={(e) => setSelectedMarkPackerId(Number(e.target.value) || null)}
+                  className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] font-bold text-gray-900 outline-none"
+                >
+                  <option value="">Select</option>
+                  {packerOptions.map((packer) => (
+                    <option key={packer.id} value={packer.id}>
+                      {packer.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-800/80 block mb-1">
+                  Date &amp; Time
+                </span>
+                <input
+                  type="datetime-local"
+                  value={markPackedAt}
+                  onChange={(e) => setMarkPackedAt(e.target.value)}
+                  className="w-full h-8 rounded-lg border border-emerald-200 bg-white px-2 text-[10px] font-bold text-gray-900 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5">
+                <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 block">Packer</span>
+                <p className="text-[10px] font-bold text-gray-900 truncate">
+                  {selectedMarkPackerId ? getStaffName(selectedMarkPackerId) : 'N/A'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-white px-2 py-1.5">
+                <span className="text-[8px] font-black uppercase tracking-wider text-gray-500 block">Time</span>
+                <p className="text-[10px] font-bold text-gray-900 truncate">
+                  {markPackedAt ? formatDateTimePST(new Date(markPackedAt)) : 'N/A'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={markAsShipped}
+              disabled={isMarkingShipped}
+              className="w-full h-8 inline-flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
+            >
+              {isMarkingShipped ? 'Saving...' : 'Confirm Mark As Shipped'}
+            </button>
+
+            {markShippedError && (
+              <p className="text-[9px] font-bold text-red-600">{markShippedError}</p>
+            )}
+          </div>
+        )}
+      </motion.section>
 
       <motion.section variants={itemVariants} className="mx-8 pt-2">
         <button

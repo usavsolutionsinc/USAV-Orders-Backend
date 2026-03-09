@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listPurchaseReceives } from '@/lib/zoho';
-import { importZohoPurchaseReceiveToReceiving } from '@/lib/zoho-receiving-sync';
+import { listPurchaseOrders } from '@/lib/zoho';
+import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 
 export const dynamic = 'force-dynamic';
-
-/** Format a Date for Zoho API params: YYYY-MM-DDTHH:MM:SS+0000 (no ms, explicit UTC offset) */
-function toZohoDate(d: Date): string {
-  return d.toISOString().replace(/\.\d{3}Z$/, '+0000');
-}
 
 function normalizeId(value: unknown): string | null {
   if (typeof value === 'string') {
@@ -24,73 +19,72 @@ export async function POST(request: NextRequest) {
 
     const perPageRaw = Number(body?.per_page ?? 100);
     const perPage = Number.isFinite(perPageRaw) && perPageRaw > 0 ? Math.min(200, Math.floor(perPageRaw)) : 100;
-    const maxPagesRaw = Number(body?.max_pages ?? 3);
-    const maxPages = Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? Math.min(20, Math.floor(maxPagesRaw)) : 3;
-    const maxItemsRaw = Number(body?.max_items ?? 300);
-    const maxItems = Number.isFinite(maxItemsRaw) && maxItemsRaw > 0 ? Math.min(2000, Math.floor(maxItemsRaw)) : 300;
+    const maxPagesRaw = Number(body?.max_pages ?? 5);
+    const maxPages = Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? Math.min(20, Math.floor(maxPagesRaw)) : 5;
+    const maxItemsRaw = Number(body?.max_items ?? 500);
+    const maxItems = Number.isFinite(maxItemsRaw) && maxItemsRaw > 0 ? Math.min(2000, Math.floor(maxItemsRaw)) : 500;
 
-    const daysBackRaw = Number(body?.days_back ?? 30);
-    const daysBack = Number.isFinite(daysBackRaw) && daysBackRaw > 0 ? Math.min(365, Math.floor(daysBackRaw)) : 30;
-    const lastModifiedTime =
-      String(body?.last_modified_time || '').trim() ||
-      toZohoDate(new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000));
-
-    const receivedBy = Number(body?.received_by);
-    const assignedTechId = Number(body?.assigned_tech_id);
-    const needsTest = !!body?.needs_test;
-    const targetChannel = String(body?.target_channel || '').trim().toUpperCase() || null;
+    // Optional status filter — Zoho PO statuses: draft, open, issued, partially_received, billed, cancelled
+    // Default: sync open + issued + partially_received POs
+    const statusFilter = String(body?.status || '').trim() || undefined;
 
     let processed = 0;
     let imported = 0;
     let created = 0;
     let updated = 0;
     let failed = 0;
-    const errors: Array<{ purchase_receive_id: string; error: string }> = [];
+    const errors: Array<{ purchaseorder_id: string; error: string }> = [];
 
     for (let page = 1; page <= maxPages && processed < maxItems; page++) {
-      const data = await listPurchaseReceives({
-        page,
-        per_page: perPage,
-        last_modified_time: lastModifiedTime,
-      });
+      let data;
+      try {
+        data = await listPurchaseOrders({
+          page,
+          per_page: perPage,
+          ...(statusFilter ? { status: statusFilter } : {}),
+        });
+      } catch (err: unknown) {
+        const cause = (err as any)?.cause;
+        const causeMsg = cause?.code || cause?.message || '';
+        const msg = err instanceof Error ? err.message : String(err);
+        const fullMsg = causeMsg ? `${msg} (${causeMsg})` : msg;
+        console.error(`[zoho-sync] listPurchaseOrders page ${page} failed:`, fullMsg);
+        return NextResponse.json(
+          { success: false, error: `Failed to list Zoho purchase orders: ${fullMsg}` },
+          { status: 500 }
+        );
+      }
 
-      const rows = (data as Record<string, unknown>)?.purchasereceives;
-      const receives = Array.isArray(rows) ? rows : [];
-      if (receives.length === 0) break;
+      const rows = (data as Record<string, unknown>)?.purchaseorders;
+      const orders = Array.isArray(rows) ? rows : [];
 
-      for (const receive of receives) {
+      if (orders.length === 0) break;
+
+      for (const order of orders) {
         if (processed >= maxItems) break;
         processed++;
 
-        const receiveRow = receive as Record<string, unknown>;
-        const purchaseReceiveId =
-          normalizeId(receiveRow.purchase_receive_id) ||
-          normalizeId(receiveRow.receive_id) ||
-          normalizeId(receiveRow.id);
+        const orderRow = order as Record<string, unknown>;
+        const purchaseOrderId =
+          normalizeId(orderRow.purchaseorder_id) ||
+          normalizeId(orderRow.id);
 
-        if (!purchaseReceiveId) {
+        if (!purchaseOrderId) {
           failed++;
-          errors.push({ purchase_receive_id: 'unknown', error: 'Missing purchase receive ID' });
+          errors.push({ purchaseorder_id: 'unknown', error: 'Missing purchase order ID' });
           continue;
         }
 
         try {
-          const result = await importZohoPurchaseReceiveToReceiving({
-            purchaseReceiveId,
-            receivedBy: Number.isFinite(receivedBy) && receivedBy > 0 ? Math.floor(receivedBy) : null,
-            assignedTechId: Number.isFinite(assignedTechId) && assignedTechId > 0 ? Math.floor(assignedTechId) : null,
-            needsTest,
-            targetChannel,
-          });
+          const result = await importZohoPurchaseOrderToReceiving(purchaseOrderId);
           imported++;
           if (result.mode === 'created') created++;
           if (result.mode === 'updated') updated++;
         } catch (error: unknown) {
           failed++;
-          errors.push({
-            purchase_receive_id: purchaseReceiveId,
-            error: error instanceof Error ? error.message : 'Import failed',
-          });
+          const msg = error instanceof Error ? error.message : 'Import failed';
+          console.error(`[zoho-sync] Failed to import PO ${purchaseOrderId}:`, msg);
+          errors.push({ purchaseorder_id: purchaseOrderId, error: msg });
         }
       }
 
@@ -100,11 +94,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Zoho purchase receives sync completed.',
-      last_modified_time: lastModifiedTime,
+      message: 'Zoho purchase orders sync completed.',
       per_page: perPage,
       max_pages: maxPages,
       max_items: maxItems,
+      status_filter: statusFilter || 'all',
       totals: {
         processed,
         imported,
@@ -115,7 +109,8 @@ export async function POST(request: NextRequest) {
       errors: errors.slice(0, 25),
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to sync Zoho purchase receives';
+    const message = error instanceof Error ? error.message : 'Failed to sync Zoho purchase orders';
+    console.error('[zoho-sync] Unexpected error:', message);
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

@@ -87,16 +87,53 @@ export default function PendingOrdersTable({
       else setFilterMode('all');
     };
 
+    // Patch assigned_tech_id / assigned_packer_id directly into cached rows when an
+    // assignment succeeds — no full refetch needed, bypasses the Upstash cache.
+    const handleAssignmentUpdated = (e: any) => {
+      const { orderIds, testerId, packerId, testerName, packerName } = e?.detail || {};
+      if (!Array.isArray(orderIds) || orderIds.length === 0) return;
+      if (testerId === undefined && packerId === undefined) return;
+
+      const idSet = new Set<number>(orderIds.map(Number));
+
+      queryClient.setQueriesData(
+        { queryKey: ['dashboard-table', 'pending'] },
+        (current: unknown) => {
+          if (!Array.isArray(current)) return current;
+          let changed = false;
+          const next = current.map((row: any) => {
+            if (!idSet.has(Number(row?.id))) return row;
+            changed = true;
+            const patched = { ...row };
+            if (testerId !== undefined) {
+              patched.tester_id = testerId;
+              patched.tester_name = testerName ?? null;
+              patched.tested_by_name = testerName ?? null;
+            }
+            if (packerId !== undefined) {
+              patched.packer_id = packerId;
+              patched.packer_name = packerName ?? null;
+              patched.packed_by_name = packerName ?? null;
+            }
+            return patched;
+          });
+          return changed ? next : current;
+        }
+      );
+    };
+
     window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
     window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
     window.addEventListener('dashboard-search' as any, handleDashboardSearch as any);
     window.addEventListener('dashboard-pending-filter' as any, handlePendingFilter as any);
+    window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
 
     return () => {
       window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
       window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
       window.removeEventListener('dashboard-search' as any, handleDashboardSearch as any);
       window.removeEventListener('dashboard-pending-filter' as any, handlePendingFilter as any);
+      window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
     };
   }, [queryClient]);
 

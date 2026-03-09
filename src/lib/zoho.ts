@@ -81,13 +81,20 @@ export async function getAccessToken(): Promise<string> {
   return accessToken;
 }
 
+/**
+ * Returns the Zoho Inventory API base URL for the configured domain.
+ * Uses the www.zohoapis.com/inventory/v1 format for US (default), as
+ * inventory.zohoapis.com may not resolve on all DNS configurations.
+ * Path prefix (/api/v1 or /inventory/v1) is included in the base URL.
+ */
 export function getInventoryBaseUrl() {
-  if (ZOHO_DOMAIN.includes('.eu')) return 'https://inventory.zohoapis.eu';
-  if (ZOHO_DOMAIN.includes('.in')) return 'https://inventory.zohoapis.in';
-  if (ZOHO_DOMAIN.includes('.com.au')) return 'https://inventory.zohoapis.com.au';
-  if (ZOHO_DOMAIN.includes('.ca')) return 'https://inventory.zohoapis.ca';
-  if (ZOHO_DOMAIN.includes('.jp')) return 'https://inventory.zohoapis.jp';
-  return 'https://inventory.zohoapis.com';
+  if (ZOHO_DOMAIN.includes('.eu')) return 'https://inventory.zohoapis.eu/api/v1';
+  if (ZOHO_DOMAIN.includes('.in')) return 'https://inventory.zohoapis.in/api/v1';
+  if (ZOHO_DOMAIN.includes('.com.au')) return 'https://inventory.zohoapis.com.au/api/v1';
+  if (ZOHO_DOMAIN.includes('.ca')) return 'https://inventory.zohoapis.ca/api/v1';
+  if (ZOHO_DOMAIN.includes('.jp')) return 'https://inventory.zohoapis.jp/api/v1';
+  // US: use www.zohoapis.com/inventory/v1 — resolves reliably
+  return 'https://www.zohoapis.com/inventory/v1';
 }
 
 export async function searchItemBySku(sku: string) {
@@ -179,23 +186,47 @@ export async function zohoInventoryRequest<T = unknown>(
     params.set(key, String(value));
   });
 
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  // Normalize path: strip leading /api/v1 since it's now included in getInventoryBaseUrl()
+  let normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (normalizedPath.startsWith('/api/v1')) {
+    normalizedPath = normalizedPath.slice('/api/v1'.length) || '/';
+  }
   const url = `${baseUrl}${normalizedPath}?${params.toString()}`;
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Zoho-oauthtoken ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    cache: 'no-store',
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    });
+  } catch (fetchErr: unknown) {
+    const cause = (fetchErr as any)?.cause;
+    const causeMsg = cause?.code || cause?.message || '';
+    const baseMsg = fetchErr instanceof Error ? fetchErr.message : 'fetch failed';
+    throw new Error(causeMsg ? `${baseMsg} (${causeMsg})` : baseMsg);
+  }
+
+  if (response.status === 401) {
+    throw new Error(
+      'Zoho access token is invalid or expired. Re-authorize at /api/zoho/oauth/authorize'
+    );
+  }
 
   if (!response.ok) {
     const bodyText = await response.text().catch(() => '');
     throw new Error(`Zoho API error ${response.status}: ${bodyText || 'No response body'}`);
   }
 
-  return response.json() as Promise<T>;
+  const json = await response.json() as Record<string, unknown>;
+  // Zoho returns code:0 for success; non-zero means API-level error
+  if (typeof json.code === 'number' && json.code !== 0) {
+    throw new Error(`Zoho API code ${json.code}: ${json.message || 'unknown error'}`);
+  }
+
+  return json as T;
 }
 
 export async function listPurchaseReceives(params: {

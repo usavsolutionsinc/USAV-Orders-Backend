@@ -138,8 +138,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await invalidateCacheTags(['orders', 'shipped']);
-    await publishOrderChanged({ orderIds: idsToUpdate, source: 'orders.assign' });
+    try {
+      await invalidateCacheTags(['orders', 'shipped']);
+    } catch (cacheErr) {
+      console.warn('[orders/assign] cache invalidation failed (non-critical):', cacheErr);
+    }
+    try {
+      await publishOrderChanged({ orderIds: idsToUpdate, source: 'orders.assign' });
+    } catch (realtimeErr) {
+      console.warn('[orders/assign] realtime publish failed (non-critical):', realtimeErr);
+    }
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error assigning order:', error);
