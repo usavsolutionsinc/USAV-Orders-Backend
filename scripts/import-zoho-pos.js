@@ -132,9 +132,12 @@ async function getAccessToken() {
 }
 
 function getBaseUrl() {
-  if (ZOHO_DOMAIN.includes('eu')) return 'https://inventory.zoho.eu';
-  if (ZOHO_DOMAIN.includes('in')) return 'https://inventory.zoho.in';
-  return 'https://inventory.zoho.com';
+  if (ZOHO_DOMAIN.includes('.eu')) return 'https://inventory.zohoapis.eu';
+  if (ZOHO_DOMAIN.includes('.in')) return 'https://inventory.zohoapis.in';
+  if (ZOHO_DOMAIN.includes('.com.au')) return 'https://inventory.zohoapis.com.au';
+  if (ZOHO_DOMAIN.includes('.ca')) return 'https://inventory.zohoapis.ca';
+  if (ZOHO_DOMAIN.includes('.jp')) return 'https://inventory.zohoapis.jp';
+  return 'https://inventory.zohoapis.com';
 }
 
 async function zohoGet(path, query = {}) {
