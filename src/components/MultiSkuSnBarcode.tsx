@@ -189,10 +189,18 @@ export default function MultiSkuSnBarcode() {
         setTimeout(() => snInputRef.current?.focus(), 100);
     };
 
-    const handleNextStepSn = async () => {
-        if (mode !== 'change-location' && serialNumbers.length === 0) {
+    const handleNextStepSn = async (pendingSn?: string) => {
+        const allSns = pendingSn ? [...serialNumbers, pendingSn] : serialNumbers;
+
+        if (mode !== 'change-location' && allSns.length === 0) {
             setError("Serial numbers required");
             return;
+        }
+
+        // Flush any pending SN (typed/scanned but not yet Enter-confirmed) into state
+        if (pendingSn) {
+            setSerialNumbers(allSns);
+            setSnInput(allSns.join(', '));
         }
 
         if (mode === 'print') {
@@ -214,7 +222,7 @@ export default function MultiSkuSnBarcode() {
             setUniqueSku(sku);
             setStep(3);
         } else {
-            setUniqueSku(sku); 
+            setUniqueSku(sku);
             setStep(3);
         }
     };

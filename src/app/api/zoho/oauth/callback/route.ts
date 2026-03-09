@@ -118,16 +118,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Clear any stale tokens, then persist fresh ones
+  // Clear any stale tokens, then persist fresh ones to the DB (ebay_accounts ZOHO_MAIN row)
   await clearZohoTokens();
   await setZohoTokens({ accessToken, refreshToken: refreshToken || undefined, expiresIn });
 
   return NextResponse.json({
     success: true,
-    message: 'Zoho OAuth connected successfully. Tokens saved to KV store.',
+    message: 'Zoho OAuth connected successfully. Tokens saved to database (ebay_accounts).',
     ...(refreshToken && {
       refresh_token: refreshToken,
-      tip: 'Copy this refresh_token into ZOHO_REFRESH_TOKEN in your .env / Vercel settings for a permanent fallback.',
+      tip: 'Tokens are stored in the database. No env var update needed.',
     }),
     scopes: tokenData.scope ?? null,
     token_type: tokenData.token_type ?? 'Bearer',

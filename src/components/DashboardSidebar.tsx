@@ -236,21 +236,35 @@ type ReceivingMode = 'bulk' | 'unboxing' | 'pickup';
 interface ZohoPORow {
   purchaseorder_id: string;
   purchaseorder_number?: string;
+  reference_number?: string;
   vendor_name?: string;
   status?: string;
   date?: string;
+  delivery_date?: string;
   total?: number;
   currency_code?: string;
 }
 
 function statusPill(status?: string) {
   switch ((status || '').toLowerCase()) {
+    case 'issued':    return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'partially_received': return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'received':  return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     case 'open':      return 'bg-blue-50 text-blue-700 border-blue-200';
     case 'billed':    return 'bg-green-50 text-green-700 border-green-200';
     case 'draft':     return 'bg-gray-100 text-gray-600 border-gray-200';
     case 'cancelled': return 'bg-red-50 text-red-600 border-red-200';
     default:          return 'bg-gray-100 text-gray-500 border-gray-200';
   }
+}
+
+function formatMoney(value?: number, currencyCode?: string): string {
+  if (!Number.isFinite(value)) return '';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currencyCode || 'USD',
+    maximumFractionDigits: 2,
+  }).format(value as number);
 }
 
 function ReceivingContext() {
@@ -267,17 +281,27 @@ function ReceivingContext() {
   const [poSearch, setPoSearch] = useState('');
   const [poList, setPoList] = useState<ZohoPORow[]>([]);
   const [poLoading, setPoLoading] = useState(false);
+  const [bulkTracking, setBulkTracking] = useState('');
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchPOs = useCallback(async (q: string) => {
     setPoLoading(true);
     try {
-      const params = new URLSearchParams({ per_page: '60', status: 'open' });
+      const params = new URLSearchParams({ per_page: '60' });
       if (q.trim()) params.set('search_text', q.trim());
       const res = await fetch(`/api/zoho/purchase-orders?${params}`, { cache: 'no-store' });
       if (!res.ok) return;
       const json = await res.json();
-      setPoList(Array.isArray(json.purchaseorders) ? json.purchaseorders : []);
+      const rows = Array.isArray(json.purchaseorders) ? json.purchaseorders : [];
+      const activeStatuses = new Set(['issued', 'partially_received', 'open']);
+      setPoList(
+        rows.filter((row: ZohoPORow) => {
+          const status = String(row?.status || '').toLowerCase();
+          if (!q.trim()) return activeStatuses.has(status);
+          return true;
+        })
+      );
     } catch {
       // no-op
     } finally {
@@ -290,6 +314,42 @@ function ReceivingContext() {
     debounceRef.current = setTimeout(() => fetchPOs(poSearch), 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [poSearch, fetchPOs]);
+
+  const submitBulkScan = useCallback(async () => {
+    const trackingNumber = bulkTracking.trim();
+    if (!trackingNumber || bulkSubmitting) return;
+
+    setBulkSubmitting(true);
+    try {
+      const res = await fetch('/api/receiving-entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackingNumber,
+          qaStatus: 'PENDING',
+          dispositionCode: 'HOLD',
+          conditionGrade: 'BRAND_NEW',
+          isReturn: false,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to add receiving entry');
+      const data = await res.json();
+
+      setBulkTracking('');
+      invalidateReceivingCache();
+      if (data?.record) {
+        window.dispatchEvent(new CustomEvent('receiving-entry-added', { detail: data.record }));
+      }
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      if (data?.record?.id) {
+        window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
+      }
+    } catch (_error) {
+      window.alert('Failed to add receiving entry.');
+    } finally {
+      setBulkSubmitting(false);
+    }
+  }, [bulkTracking, bulkSubmitting]);
 
   // ── Unboxing queue history ────────────────────────────────────────────────────
   const [history, setHistory] = useState<LogRow[]>([]);
@@ -368,25 +428,37 @@ function ReceivingContext() {
 
       {/* PO search bar — always visible */}
       <div className="border-b border-gray-200 bg-white px-3 py-2">
-        <SearchBar
-          value={poSearch}
-          onChange={setPoSearch}
-          onClear={() => setPoSearch('')}
-          placeholder="Search purchase orders…"
-          variant="emerald"
-          isSearching={poLoading}
-          rightElement={
-            <button
-              type="button"
-              onClick={() => fetchPOs(poSearch)}
-              disabled={poLoading}
-              className="flex-shrink-0 p-2 rounded-xl border border-gray-200 bg-white text-gray-400 hover:text-emerald-600 hover:border-emerald-300 transition-colors disabled:opacity-40"
-              title="Refresh POs"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${poLoading ? 'animate-spin' : ''}`} />
-            </button>
-          }
-        />
+        {mode === 'bulk' ? (
+          <SearchBar
+            value={bulkTracking}
+            onChange={setBulkTracking}
+            onSearch={submitBulkScan}
+            onClear={() => setBulkTracking('')}
+            placeholder="Scan or enter tracking…"
+            variant="blue"
+            isSearching={bulkSubmitting}
+          />
+        ) : (
+          <SearchBar
+            value={poSearch}
+            onChange={setPoSearch}
+            onClear={() => setPoSearch('')}
+            placeholder="Search purchase orders…"
+            variant="emerald"
+            isSearching={poLoading}
+            rightElement={
+              <button
+                type="button"
+                onClick={() => fetchPOs(poSearch)}
+                disabled={poLoading}
+                className="flex-shrink-0 p-2 rounded-xl border border-gray-200 bg-white text-gray-400 hover:text-emerald-600 hover:border-emerald-300 transition-colors disabled:opacity-40"
+                title="Refresh POs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${poLoading ? 'animate-spin' : ''}`} />
+              </button>
+            }
+          />
+        )}
       </div>
 
       {/* Unboxing queue (only in unboxing mode) */}
@@ -420,16 +492,21 @@ function ReceivingContext() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-black text-gray-800 uppercase tracking-wide truncate">
-                    {po.purchaseorder_number || po.purchaseorder_id}
+                    {po.purchaseorder_number || po.reference_number || po.purchaseorder_id}
                   </span>
                   <span className={`flex-shrink-0 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${statusPill(po.status)}`}>
                     {po.status || '—'}
                   </span>
                 </div>
-                <p className="text-[10px] text-gray-400 truncate mt-0.5">
-                  {po.vendor_name || 'Unknown vendor'}
-                  {po.date ? ` · ${po.date}` : ''}
-                </p>
+                <div className="mt-0.5 flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-gray-400 truncate">
+                    {po.vendor_name || 'Unknown vendor'}
+                    {po.date ? ` · ${po.date}` : ''}
+                  </p>
+                  <span className="text-[10px] text-gray-400 tabular-nums shrink-0">
+                    {formatMoney(po.total, po.currency_code) || '—'}
+                  </span>
+                </div>
               </button>
             ))}
           </div>

@@ -1,74 +1,106 @@
 /**
- * Upstash KV storage for Zoho OAuth tokens.
- * Uses KV_REST_API_URL / KV_REST_API_TOKEN (Vercel KV / Upstash Redis REST API).
+ * Zoho OAuth token storage backed by the `ebay_accounts` table.
+ *
+ * The ZOHO_MAIN row is seeded by the migration and updated by the OAuth
+ * callback. This replaces the previous Upstash KV implementation while
+ * keeping the same exported function signatures so no other files need
+ * to change.
+ *
+ * Table: ebay_accounts  (account_name = 'ZOHO_MAIN', platform = 'ZOHO')
+ *   access_token          — current short-lived access token
+ *   token_expires_at      — when the access token expires
+ *   refresh_token         — long-lived refresh token (never expires automatically)
+ *   refresh_token_expires_at — set far in the future; not a real expiry for Zoho
  */
 
-const KV_URL = process.env.KV_REST_API_URL || '';
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || '';
+import pool from '@/lib/db';
 
-const KEYS = {
-  refreshToken: 'zoho:refresh_token',
-  accessToken: 'zoho:access_token',
-} as const;
+const ZOHO_ACCOUNT = 'ZOHO_MAIN';
 
-function isConfigured() {
-  return Boolean(KV_URL && KV_TOKEN);
-}
-
-async function kvPipeline(commands: string[][]): Promise<Array<{ result: unknown } | null>> {
-  if (!isConfigured()) return [];
-  const res = await fetch(`${KV_URL.replace(/\/$/, '')}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${KV_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(commands),
-    cache: 'no-store',
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
-}
-
-/** Returns the persisted Zoho refresh token from KV, or null if not found. */
-export async function getZohoRefreshTokenFromKv(): Promise<string | null> {
-  const results = await kvPipeline([['GET', KEYS.refreshToken]]);
-  const value = results[0]?.result;
-  return typeof value === 'string' && value ? value : null;
-}
-
-/** Returns a cached Zoho access token from KV (respects TTL set on write). */
+/**
+ * Returns the cached Zoho access token if it is still valid (> 5 min remaining),
+ * otherwise returns null so the caller will trigger a token refresh.
+ */
 export async function getCachedZohoAccessToken(): Promise<string | null> {
-  const results = await kvPipeline([['GET', KEYS.accessToken]]);
-  const value = results[0]?.result;
-  return typeof value === 'string' && value ? value : null;
+  try {
+    const res = await pool.query<{ access_token: string }>(
+      `SELECT access_token FROM ebay_accounts
+       WHERE account_name = $1
+         AND token_expires_at > NOW() + INTERVAL '5 minutes'
+       LIMIT 1`,
+      [ZOHO_ACCOUNT]
+    );
+    const token = res.rows[0]?.access_token;
+    return typeof token === 'string' && token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns the stored Zoho refresh token, or null if none is saved yet. */
+export async function getZohoRefreshTokenFromKv(): Promise<string | null> {
+  try {
+    const res = await pool.query<{ refresh_token: string }>(
+      `SELECT refresh_token FROM ebay_accounts WHERE account_name = $1 LIMIT 1`,
+      [ZOHO_ACCOUNT]
+    );
+    const token = res.rows[0]?.refresh_token;
+    return typeof token === 'string' && token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Persists Zoho tokens to KV.
- * - refreshToken is stored indefinitely (only updated on new OAuth grant).
- * - accessToken is stored with a TTL = expiresIn - 5 minutes (buffer).
+ * Persists Zoho tokens to the database.
+ * - accessToken + expiry are always updated.
+ * - refreshToken is only updated when provided (never cleared on a refresh grant).
  */
 export async function setZohoTokens(tokens: {
   accessToken: string;
   refreshToken?: string;
   expiresIn: number;
 }): Promise<void> {
-  const ttl = Math.max(tokens.expiresIn - 300, 60);
-  const commands: string[][] = [
-    ['SET', KEYS.accessToken, tokens.accessToken, 'EX', String(ttl)],
-  ];
+  const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
+
   if (tokens.refreshToken) {
-    commands.push(['SET', KEYS.refreshToken, tokens.refreshToken]);
+    await pool.query(
+      `INSERT INTO ebay_accounts
+         (account_name, platform, access_token, refresh_token,
+          token_expires_at, refresh_token_expires_at, is_active)
+       VALUES ($1, 'ZOHO', $2, $3, $4, NOW() + INTERVAL '10 years', true)
+       ON CONFLICT (account_name) DO UPDATE SET
+         access_token          = EXCLUDED.access_token,
+         refresh_token         = EXCLUDED.refresh_token,
+         token_expires_at      = EXCLUDED.token_expires_at,
+         updated_at            = NOW()`,
+      [ZOHO_ACCOUNT, tokens.accessToken, tokens.refreshToken, expiresAt]
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO ebay_accounts
+         (account_name, platform, access_token, refresh_token,
+          token_expires_at, refresh_token_expires_at, is_active)
+       VALUES ($1, 'ZOHO', $2, '', $3, NOW() + INTERVAL '10 years', true)
+       ON CONFLICT (account_name) DO UPDATE SET
+         access_token     = EXCLUDED.access_token,
+         token_expires_at = EXCLUDED.token_expires_at,
+         updated_at       = NOW()`,
+      [ZOHO_ACCOUNT, tokens.accessToken, expiresAt]
+    );
   }
-  await kvPipeline(commands);
 }
 
-/** Clears all stored Zoho tokens (useful for re-authorization). */
+/** Clears the Zoho access token (forces a refresh on the next call). */
 export async function clearZohoTokens(): Promise<void> {
-  await kvPipeline([
-    ['DEL', KEYS.accessToken],
-    ['DEL', KEYS.refreshToken],
-  ]);
+  try {
+    await pool.query(
+      `UPDATE ebay_accounts
+       SET access_token = '', token_expires_at = NOW(), updated_at = NOW()
+       WHERE account_name = $1`,
+      [ZOHO_ACCOUNT]
+    );
+  } catch {
+    // Ignore — row may not exist yet before first OAuth
+  }
 }

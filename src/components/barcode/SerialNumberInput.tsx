@@ -18,7 +18,7 @@ interface SerialNumberInputProps {
     onSnInputChange: (value: string) => void;
     onSnAdd: (sn: string) => void;
     onLocationChange: (value: string) => void;
-    onNext: () => void;
+    onNext: (pendingSn?: string) => void;
     onFinalAction?: () => void;
     isPosting?: boolean;
     onChangeSku?: () => void;
@@ -57,9 +57,13 @@ export function SerialNumberInput({
         if (e.key === 'Enter') {
             e.preventDefault();
             const trimmed = scanValue.trim();
-            if (trimmed) {
+            if (!trimmed) return;
+            setScanValue('');
+            if (mode === 'print') {
+                // In print mode: scan + Enter auto-proceeds to preview/print
+                onNext(trimmed);
+            } else {
                 onSnAdd(trimmed);
-                setScanValue('');
             }
         }
     };
@@ -179,7 +183,11 @@ export function SerialNumberInput({
 
             {/* CTA */}
             <button
-                onClick={isLocationMode ? onFinalAction : onNext}
+                onClick={isLocationMode ? onFinalAction : () => {
+                    const pending = scanValue.trim() || undefined;
+                    if (pending) setScanValue('');
+                    onNext(pending);
+                }}
                 disabled={isPosting}
                 className={`w-full py-4 ${
                     isLocationMode

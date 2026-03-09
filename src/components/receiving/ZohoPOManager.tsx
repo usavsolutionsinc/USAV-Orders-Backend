@@ -44,11 +44,13 @@ interface ZohoPO {
   reference_number?: string;
 }
 
-type POStatus = 'open' | 'billed' | 'draft' | 'cancelled' | 'all';
+type POStatus = 'issued' | 'partially_received' | 'open' | 'received' | 'draft' | 'cancelled' | 'all';
 
 const STATUS_OPTIONS: Array<{ value: POStatus; label: string }> = [
+  { value: 'issued', label: 'Issued' },
+  { value: 'partially_received', label: 'Partially Received' },
   { value: 'open', label: 'Open' },
-  { value: 'billed', label: 'Billed' },
+  { value: 'received', label: 'Received' },
   { value: 'draft', label: 'Draft' },
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'all', label: 'All' },
@@ -72,8 +74,10 @@ const CHANNEL_OPTIONS = [
 
 function statusColor(status?: string) {
   switch ((status || '').toLowerCase()) {
+    case 'issued':    return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'partially_received': return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'received':  return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     case 'open':      return 'bg-blue-50 text-blue-700 border-blue-200';
-    case 'billed':    return 'bg-green-50 text-green-700 border-green-200';
     case 'draft':     return 'bg-gray-100 text-gray-600 border-gray-200';
     case 'cancelled': return 'bg-red-50 text-red-600 border-red-200';
     default:          return 'bg-gray-100 text-gray-500 border-gray-200';
@@ -429,7 +433,7 @@ function PODetailPanel({
 
 export default function ZohoPOManager() {
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<POStatus>('open');
+  const [statusFilter, setStatusFilter] = useState<POStatus>('issued');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedPO, setSelectedPO] = useState<ZohoPO | null>(null);
