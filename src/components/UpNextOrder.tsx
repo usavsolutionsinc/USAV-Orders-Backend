@@ -83,6 +83,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   useEffect(() => {
     // Only auto-switch if the current tab is empty. For non-order tabs (repair/fba/receiving)
     // we use tabCounts directly; for order-bucket tabs we fall through the same path.
+    if (effectiveTab === 'orders') return;
     if (tabCounts[effectiveTab] > 0) return;
     const next = preferred.find((id) => tabCounts[id] > 0);
     if (next && next !== activeTab) setActiveTab(next);
@@ -90,13 +91,13 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   }, [effectiveTab, activeTab, tabCounts.orders, tabCounts.returns, tabCounts.repair, tabCounts.fba, tabCounts.test, tabCounts.stock, tabCounts.receiving]);
 
   useEffect(() => {
-    if (effectiveTab === 'orders' && allCompletedToday && !hasCelebratedRef.current) {
+    if (effectiveTab === 'orders' && allCompletedToday && stockOrders.length === 0 && !hasCelebratedRef.current) {
       confetti({ particleCount: 180, spread: 80, origin: { y: 0.7 } });
       hasCelebratedRef.current = true;
       return;
     }
-    if (!allCompletedToday) hasCelebratedRef.current = false;
-  }, [allCompletedToday, effectiveTab]);
+    if (!allCompletedToday || stockOrders.length > 0) hasCelebratedRef.current = false;
+  }, [allCompletedToday, effectiveTab, stockOrders.length]);
 
   const handleStart = async (order: { id: number; shipping_tracking_number: string; order_id: string }) => {
     try {
@@ -176,7 +177,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
             </div>
           )
 
-        ) : allCompletedToday && effectiveTab === 'orders' ? (
+        ) : allCompletedToday && effectiveTab === 'orders' && stockOrders.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

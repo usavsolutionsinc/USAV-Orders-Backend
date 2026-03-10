@@ -19,20 +19,24 @@ export interface ManualAssignmentRow {
 interface ManualAssignmentTableProps {
   rows: ManualAssignmentRow[];
   selectedItemNumber?: string;
+  selectedRowKey?: string;
   onRowClick: (row: ManualAssignmentRow) => void;
   /** Inline expansion rendered directly below the selected row */
   renderExpanded?: (row: ManualAssignmentRow) => React.ReactNode;
   loading?: boolean;
   emptyMessage?: string;
+  getRowKey?: (row: ManualAssignmentRow, index: number) => string;
 }
 
 export function ManualAssignmentTable({
   rows,
   selectedItemNumber,
+  selectedRowKey,
   onRowClick,
   renderExpanded,
   loading = false,
   emptyMessage = 'Select a category or order to view products.',
+  getRowKey,
 }: ManualAssignmentTableProps) {
   if (loading) {
     return (
@@ -63,11 +67,14 @@ export function ManualAssignmentTable({
       {/* Rows with inline expansion */}
       <div>
         {rows.map((row, idx) => {
-          const isSelected = row.itemNumber === selectedItemNumber;
+          const rowKey = getRowKey ? getRowKey(row, idx) : `${row.itemNumber}-${idx}`;
+          const isSelected = selectedRowKey != null
+            ? rowKey === selectedRowKey
+            : row.itemNumber === selectedItemNumber;
           const hasManual = row.googleDocId.trim().length > 0;
 
           return (
-            <div key={`${row.itemNumber}-${idx}`}>
+            <div key={rowKey}>
               <motion.button
                 type="button"
                 initial={{ opacity: 0, y: 4 }}
@@ -113,7 +120,7 @@ export function ManualAssignmentTable({
               <AnimatePresence>
                 {isSelected && renderExpanded && (
                   <motion.div
-                    key={`expand-${row.itemNumber}`}
+                    key={`expand-${rowKey}`}
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}

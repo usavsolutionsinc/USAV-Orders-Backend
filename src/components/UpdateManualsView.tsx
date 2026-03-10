@@ -38,6 +38,11 @@ function buildRows(orders: OrderWithoutManual[]): ManualAssignmentRow[] {
   }));
 }
 
+function manualRowKey(row: ManualAssignmentRow, index?: number) {
+  if (row.dbId != null) return String(row.dbId);
+  return row.trackingNumber ?? row.orderId ?? `${row.itemNumber}-${index ?? 0}`;
+}
+
 interface UpdateManualsViewProps {
   techId: string;
   /** Rolling window in days — defaults to 365 (full history) */
@@ -49,6 +54,7 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<ManualAssignmentRow | null>(null);
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState(0);
 
   const fetchOrders = useCallback(async () => {
@@ -62,6 +68,30 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
       const data  = await res.json();
       const orders: OrderWithoutManual[] = Array.isArray(data?.orders) ? data.orders : [];
       setRows(buildRows(orders));
+      setSelectedRow((prev) => {
+        if (!prev) return prev;
+        const stillExists = orders.some((order) => {
+          const builtRow = {
+            itemNumber: order.item_number || '',
+            productTitle: order.product_title || order.sku || '—',
+            googleDocId: '',
+            orderId: order.order_id,
+            dbId: order.id ?? undefined,
+            trackingNumber: order.shipping_tracking_number,
+            isShipped: order.is_shipped,
+          };
+          return (
+            prev.dbId === builtRow.dbId &&
+            prev.orderId === builtRow.orderId &&
+            prev.trackingNumber === builtRow.trackingNumber
+          );
+        });
+        return stillExists ? prev : null;
+      });
+      setSelectedRowKey((prev) => {
+        if (!prev) return prev;
+        return orders.some((order) => rowKey(order) === prev) ? prev : null;
+      });
     } catch (err: any) {
       setError(err?.message || 'Failed to load orders');
     } finally {
@@ -74,7 +104,12 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
   }, [fetchOrders, lastRefresh]);
 
   const handleRowClick = (row: ManualAssignmentRow) => {
-    setSelectedRow((prev) => (prev?.itemNumber === row.itemNumber ? null : row));
+    const key = manualRowKey(row);
+    setSelectedRowKey((prevKey) => {
+      const nextKey = prevKey === key ? null : key;
+      setSelectedRow(nextKey ? row : null);
+      return nextKey;
+    });
   };
 
   const handleSaved = (itemNumber: string, googleDocId: string) => {
@@ -87,7 +122,13 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
     );
     setTimeout(() => {
       setRows((prev) => prev.filter((r) => r.itemNumber !== itemNumber));
-      setSelectedRow((prev) => (prev?.itemNumber === itemNumber ? null : prev));
+      setSelectedRow((prev) => {
+        if (prev?.itemNumber === itemNumber) {
+          setSelectedRowKey(null);
+          return null;
+        }
+        return prev;
+      });
     }, 1200);
   };
 
@@ -140,14 +181,19 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
         <ManualAssignmentTable
           rows={rows}
           selectedItemNumber={selectedRow?.itemNumber}
+          selectedRowKey={selectedRowKey ?? undefined}
           onRowClick={handleRowClick}
           loading={loading}
           emptyMessage="All your orders have manuals linked — great job!"
+          getRowKey={manualRowKey}
           renderExpanded={(row) => (
             <InlineManualForm
               row={row}
               onSaved={handleSaved}
-              onClose={() => setSelectedRow(null)}
+              onClose={() => {
+                setSelectedRow(null);
+                setSelectedRowKey(null);
+              }}
             />
           )}
         />

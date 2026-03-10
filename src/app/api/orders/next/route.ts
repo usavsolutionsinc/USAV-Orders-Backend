@@ -59,6 +59,14 @@ export async function GET(req: NextRequest) {
     const techIdScope = Array.from(
       new Set([techIdNum, resolvedStaffId].filter((v): v is number => Number.isFinite(v as number)))
     );
+    const noTechScanClause = `
+      NOT EXISTS (
+        SELECT 1
+        FROM tech_serial_numbers tsn
+        WHERE RIGHT(regexp_replace(UPPER(COALESCE(tsn.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) =
+              RIGHT(regexp_replace(UPPER(COALESCE(o.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18)
+      )
+    `;
 
     // 1. Count total pending orders for the requested scope.
     const countWhere: string[] = [
@@ -83,6 +91,7 @@ export async function GET(req: NextRequest) {
       countWhere.push("COALESCE(BTRIM(o.out_of_stock), '') <> ''");
     } else if (outOfStock === 'false') {
       countWhere.push("COALESCE(BTRIM(o.out_of_stock), '') = ''");
+      countWhere.push(noTechScanClause);
     }
 
     const totalPendingResult = await pool.query(
