@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     let sql = `
       SELECT
         o.id,
-        to_char(o.ship_by_date, 'YYYY-MM-DD') AS ship_by_date,
+        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
         o.order_id,
         o.product_title,
         o.item_number,
@@ -72,6 +72,12 @@ export async function GET(req: NextRequest) {
         staff_packed_by.name     AS packed_by_name,
         (COALESCE(tsn_scan.scan_count, 0) > 0) AS has_tech_scan
       FROM orders o
+      LEFT JOIN LATERAL (
+        SELECT wa.deadline_at FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+        ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                 wa.updated_at DESC, wa.id DESC LIMIT 1
+      ) wa_deadline ON TRUE
       LEFT JOIN LATERAL (
         SELECT assigned_tech_id
         FROM work_assignments
@@ -159,15 +165,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (shipByDate) {
-      sql += ` AND COALESCE(o.ship_by_date::date, o.created_at::date) = $${paramCount++}`;
+      sql += ` AND COALESCE(wa_deadline.deadline_at::date, o.created_at::date) = $${paramCount++}`;
       params.push(shipByDate);
     } else {
       if (weekStart) {
-        sql += ` AND COALESCE(o.ship_by_date::date, o.created_at::date) >= $${paramCount++}`;
+        sql += ` AND COALESCE(wa_deadline.deadline_at::date, o.created_at::date) >= $${paramCount++}`;
         params.push(weekStart);
       }
       if (weekEnd) {
-        sql += ` AND COALESCE(o.ship_by_date::date, o.created_at::date) <= $${paramCount++}`;
+        sql += ` AND COALESCE(wa_deadline.deadline_at::date, o.created_at::date) <= $${paramCount++}`;
         params.push(weekEnd);
       }
     }
@@ -211,7 +217,7 @@ export async function GET(req: NextRequest) {
       sql += `)`;
     }
 
-    sql += ` ORDER BY COALESCE(o.ship_by_date::date, o.created_at::date) ASC, o.id ASC`;
+    sql += ` ORDER BY COALESCE(wa_deadline.deadline_at::date, o.created_at::date) ASC, o.id ASC`;
 
     const result = await pool.query(sql, params);
 

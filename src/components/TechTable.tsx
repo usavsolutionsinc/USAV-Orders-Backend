@@ -68,9 +68,14 @@ export function TechTable({ testedBy }: TechTableProps) {
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
   const openDetails = (record: TechRecord) => {
+    // Normalize deadline to YYYY-MM-DD — field is sourced from work_assignments.deadline_at (TIMESTAMPTZ)
+    const shipByDate = record.ship_by_date
+      ? String(record.ship_by_date).split('T')[0]
+      : '';
+
     const detail: ShippedOrder & { tech_serial_id?: number } = {
       id: record.order_db_id ?? record.id,
-      ship_by_date: record.ship_by_date || '',
+      ship_by_date: shipByDate,
       order_id: record.order_id || '',
       product_title: record.product_title || '',
       item_number: record.item_number || null,

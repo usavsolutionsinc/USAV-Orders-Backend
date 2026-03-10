@@ -87,12 +87,24 @@ export default function PendingOrdersTable({
       else setFilterMode('all');
     };
 
-    // Patch assigned_tech_id / assigned_packer_id directly into cached rows when an
-    // assignment succeeds — no full refetch needed, bypasses the Upstash cache.
+    // Patch order fields directly into cached rows when an assignment succeeds —
+    // no full refetch needed, bypasses the Upstash cache.
+    // ship_by_date is now sourced from work_assignments.deadline_at so we patch
+    // it here too to keep the table in sync without a round-trip.
     const handleAssignmentUpdated = (e: any) => {
-      const { orderIds, testerId, packerId, testerName, packerName } = e?.detail || {};
+      const {
+        orderIds,
+        testerId, packerId, testerName, packerName,
+        shipByDate, outOfStock, notes, shippingTrackingNumber, itemNumber, condition,
+      } = e?.detail || {};
       if (!Array.isArray(orderIds) || orderIds.length === 0) return;
-      if (testerId === undefined && packerId === undefined) return;
+
+      const hasAnyChange =
+        testerId !== undefined || packerId !== undefined ||
+        shipByDate !== undefined || outOfStock !== undefined ||
+        notes !== undefined || shippingTrackingNumber !== undefined ||
+        itemNumber !== undefined || condition !== undefined;
+      if (!hasAnyChange) return;
 
       const idSet = new Set<number>(orderIds.map(Number));
 
@@ -115,6 +127,12 @@ export default function PendingOrdersTable({
               patched.packer_name = packerName ?? null;
               patched.packed_by_name = packerName ?? null;
             }
+            if (shipByDate !== undefined) patched.ship_by_date = shipByDate;
+            if (outOfStock !== undefined) patched.out_of_stock = outOfStock;
+            if (notes !== undefined) patched.notes = notes;
+            if (shippingTrackingNumber !== undefined) patched.shipping_tracking_number = shippingTrackingNumber;
+            if (itemNumber !== undefined) patched.item_number = itemNumber;
+            if (condition !== undefined) patched.condition = condition;
             return patched;
           });
           return changed ? next : current;

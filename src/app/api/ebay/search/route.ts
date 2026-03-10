@@ -28,15 +28,21 @@ export async function GET(req: NextRequest) {
         o.account_source, 
         o.order_date, 
         o.shipping_tracking_number,
-        o.ship_by_date,
+        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
         o.status,
         o.is_shipped,
         COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number
       FROM orders o
+      LEFT JOIN LATERAL (
+        SELECT wa.deadline_at FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+        ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                 wa.updated_at DESC, wa.id DESC LIMIT 1
+      ) wa_deadline ON TRUE
       LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
       WHERE o.account_source IS NOT NULL
       GROUP BY o.id, o.order_id, o.product_title, o.sku, o.account_source, o.order_date, 
-               o.shipping_tracking_number, o.ship_by_date, o.status, o.is_shipped
+               o.shipping_tracking_number, wa_deadline.deadline_at, o.status, o.is_shipped
     `;
 
     const params: any[] = [];

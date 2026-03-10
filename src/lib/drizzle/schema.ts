@@ -82,6 +82,7 @@ export const workTypeEnum = pgEnum('work_type_enum', [
 ]);
 
 export const assignmentStatusEnum = pgEnum('assignment_status_enum', [
+  'OPEN',
   'ASSIGNED',
   'IN_PROGRESS',
   'DONE',
@@ -308,6 +309,8 @@ export const workAssignments = pgTable('work_assignments', {
   assignedPackerId: integer('assigned_packer_id').references(() => staff.id, { onDelete: 'set null' }),
   status: assignmentStatusEnum('status').notNull().default('ASSIGNED'),
   priority: integer('priority').notNull().default(100),
+  /** Operational deadline sourced from orders.ship_by_date during migration, then maintained here. */
+  deadlineAt: timestamp('deadline_at', { withTimezone: true }),
   notes: text('notes'),
   assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
   startedAt: timestamp('started_at', { withTimezone: true }),

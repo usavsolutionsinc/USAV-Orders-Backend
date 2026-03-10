@@ -184,7 +184,7 @@ async function runTransferOrders(manualSheetName?: string) {
                 .orderBy(desc(customersTable.createdAt))
             : [];
 
-        const latestOrderByOrderId = new Map<string, {
+        const latestBlankTrackingOrderByOrderId = new Map<string, {
             id: number;
             orderId: string | null;
             shipByDate: Date | null;
@@ -199,9 +199,10 @@ async function runTransferOrders(manualSheetName?: string) {
         }>();
         sourceOrdersByOrderId.forEach(order => {
             const key = String(order.orderId || '').trim();
+            const tracking = normalizeTracking(order.shippingTrackingNumber);
             const id = Number(order.id);
-            if (!key || Number.isNaN(id) || latestOrderByOrderId.has(key)) return;
-            latestOrderByOrderId.set(key, {
+            if (!key || tracking || Number.isNaN(id) || latestBlankTrackingOrderByOrderId.has(key)) return;
+            latestBlankTrackingOrderByOrderId.set(key, {
                 id,
                 orderId: order.orderId,
                 shipByDate: order.shipByDate,
@@ -212,7 +213,7 @@ async function runTransferOrders(manualSheetName?: string) {
                 condition: order.condition,
                 notes: order.notes,
                 customerId: order.customerId,
-                tracking: normalizeTracking(order.shippingTrackingNumber),
+                tracking,
             });
         });
 
@@ -252,12 +253,13 @@ async function runTransferOrders(manualSheetName?: string) {
             String(customer.orderId || '').trim()
         );
 
-        // Keep one latest source row per order_id (or tracking when order_id is missing).
+        // Keep one source row per tracking number. For rows without tracking, fall back to order_id
+        // so re-running the transfer does not create duplicates for blank-tracking orders.
         const latestSourceRowByKey = new Map<string, any[]>();
         sourceRows.slice(1).forEach(row => {
             const orderId = String(row[colIndices.orderNumber] || '').trim();
             const tracking = normalizeTracking(row[colIndices.tracking]);
-            const key = orderId || tracking;
+            const key = tracking ? `tracking:${tracking}` : orderId ? `order:${orderId}` : '';
             if (!key) return;
             latestSourceRowByKey.set(key, row);
         });
@@ -272,8 +274,9 @@ async function runTransferOrders(manualSheetName?: string) {
         latestSourceRowByKey.forEach((row) => {
             const orderId = String(row[colIndices.orderNumber] || '').trim();
             const sheetTracking = normalizeTracking(row[colIndices.tracking]);
-            const existingOrder = (orderId ? latestOrderByOrderId.get(orderId) : undefined)
-                || (sheetTracking ? latestOrderByTracking.get(sheetTracking) : undefined);
+            const existingOrder = sheetTracking
+                ? latestOrderByTracking.get(sheetTracking)
+                : (orderId ? latestBlankTrackingOrderByOrderId.get(orderId) : undefined);
             const rawShipByDate = row[colIndices.shipByDate] || '';
             const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
             const sheetShipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;

@@ -194,19 +194,28 @@ async function syncShippedSheet(params: {
                 if (testedById) {
                     await client.query(
                         `INSERT INTO work_assignments
-                             (entity_type, entity_id, work_type, assigned_tech_id, status, priority, notes, completed_at)
-                         VALUES ('ORDER', $1, 'TEST', $2, 'DONE', 100, 'Imported from Google Sheets sync', NOW())
+                             (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, completed_at)
+                         VALUES ('ORDER', $1, 'TEST', $2, 'DONE', 100, $3, 'Imported from Google Sheets sync', NOW())
                          ON CONFLICT DO NOTHING`,
-                        [newOrderId, testedById]
+                        [newOrderId, testedById, shipByDate]
+                    );
+                } else {
+                    // No tech assigned — create canonical OPEN deadline row so the deadline is preserved.
+                    await client.query(
+                        `INSERT INTO work_assignments
+                             (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+                         VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2, 'Canonical deadline row from sync-sheets import', NOW(), NOW(), NOW())
+                         ON CONFLICT DO NOTHING`,
+                        [newOrderId, shipByDate]
                     );
                 }
                 if (packedById) {
                     await client.query(
                         `INSERT INTO work_assignments
-                             (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
-                         VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, 'Imported from Google Sheets sync', NOW())
+                             (entity_type, entity_id, work_type, assigned_packer_id, status, priority, deadline_at, notes, completed_at)
+                         VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, $3, 'Imported from Google Sheets sync', NOW())
                          ON CONFLICT DO NOTHING`,
-                        [newOrderId, packedById]
+                        [newOrderId, packedById, shipByDate]
                     );
                 }
             }

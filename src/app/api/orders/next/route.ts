@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
     let query = `
       SELECT DISTINCT ON (o.id)
         o.id,
-        o.ship_by_date,
+        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
         o.created_at,
         o.order_id,
         o.product_title,
@@ -131,6 +131,12 @@ export async function GET(req: NextRequest) {
         o.shipping_tracking_number,
         o.out_of_stock
       FROM orders o
+      LEFT JOIN LATERAL (
+        SELECT wa.deadline_at FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+        ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                 wa.updated_at DESC, wa.id DESC LIMIT 1
+      ) wa_deadline ON TRUE
       ${mainJoins.join('\n')}
       WHERE ${where.join(' AND ')}
     `;
@@ -139,10 +145,7 @@ export async function GET(req: NextRequest) {
       ORDER BY
         o.id,
         ${assignedOnly ? 'wa.assigned_at DESC,' : ''}
-        CASE
-          WHEN o.ship_by_date IS NULL OR o.ship_by_date::text ~ '^\\d+$' THEN o.created_at
-          ELSE o.ship_by_date
-        END ASC
+        COALESCE(wa_deadline.deadline_at, o.created_at) ASC
     `;
 
     if (!getAll) {

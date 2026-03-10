@@ -79,11 +79,35 @@ export interface CreateOrderParams {
  * The order_serials CTE: joins orders with work_assignments, packer_logs, tech_serial_numbers.
  * Returns all columns needed for ShippedOrder.
  */
+/**
+ * Lateral join fragment that resolves the canonical deadline for an order from work_assignments.
+ * Priority: IN_PROGRESS > ASSIGNED > OPEN > DONE. Alias: wa_deadline.deadline_at.
+ */
+const WA_DEADLINE_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT wa.deadline_at
+    FROM work_assignments wa
+    WHERE wa.entity_type = 'ORDER'
+      AND wa.entity_id   = o.id
+      AND wa.work_type   = 'TEST'
+    ORDER BY
+      CASE wa.status
+        WHEN 'IN_PROGRESS' THEN 1
+        WHEN 'ASSIGNED'    THEN 2
+        WHEN 'OPEN'        THEN 3
+        WHEN 'DONE'        THEN 4
+        ELSE 5
+      END,
+      wa.updated_at DESC,
+      wa.id DESC
+    LIMIT 1
+  ) wa_deadline ON TRUE`;
+
 const ORDER_SERIALS_CTE = `
   order_serials AS (
     SELECT
       o.id,
-      to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
+      to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
       o.order_id,
       o.product_title,
       o.quantity,
@@ -109,6 +133,7 @@ const ORDER_SERIALS_CTE = `
       MIN(tsn.tested_by)::int AS tested_by,
       MIN(tsn.test_date_time)::text AS test_date_time
     FROM orders o
+    ${WA_DEADLINE_LATERAL}
     LEFT JOIN LATERAL (
       SELECT assigned_tech_id
       FROM work_assignments
@@ -144,7 +169,7 @@ const ORDER_SERIALS_CTE = `
       ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
          RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
     WHERE COALESCE(o.is_shipped, false) = true
-    GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
+    GROUP BY o.id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity, o.condition,
              o.item_number, o.shipping_tracking_number, o.sku,
              o.account_source, o.notes, o.status_history, o.is_shipped,
              wa_t.assigned_tech_id, wa_p.assigned_packer_id,
@@ -189,7 +214,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
       `WITH order_serials AS (
         SELECT
           o.id,
-          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
+          to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
           o.order_id,
           o.product_title,
           o.quantity,
@@ -212,6 +237,12 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           MIN(tsn.tested_by)::int AS tested_by,
           MIN(tsn.test_date_time)::text AS test_date_time
         FROM orders o
+        LEFT JOIN LATERAL (
+          SELECT wa.deadline_at FROM work_assignments wa
+          WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+          ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                   wa.updated_at DESC, wa.id DESC LIMIT 1
+        ) wa_deadline ON TRUE
         LEFT JOIN LATERAL (
           SELECT assigned_tech_id FROM work_assignments
           WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
@@ -241,7 +272,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
-        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
+        GROUP BY o.id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity, o.condition,
                  o.item_number, o.shipping_tracking_number, o.sku,
                  o.account_source, o.notes, o.status_history, o.is_shipped,
                  wa_t.assigned_tech_id, wa_p.assigned_packer_id,
@@ -377,8 +408,8 @@ export async function getActiveOrders(options?: {
   if (options?.missingTrackingOnly) {
     conditions.push(`(o.shipping_tracking_number IS NULL OR o.shipping_tracking_number = '')`);
   }
-  if (options?.weekStart) { conditions.push(`o.ship_by_date >= $${idx++}`); params.push(options.weekStart); }
-  if (options?.weekEnd) { conditions.push(`o.ship_by_date <= $${idx++}`); params.push(options.weekEnd); }
+  if (options?.weekStart) { conditions.push(`wa_deadline.deadline_at >= $${idx++}`); params.push(options.weekStart); }
+  if (options?.weekEnd) { conditions.push(`wa_deadline.deadline_at <= $${idx++}`); params.push(options.weekEnd); }
   if (options?.assignedTechId != null) {
     conditions.push(`wa_t.assigned_tech_id = $${idx++}`);
     params.push(options.assignedTechId);
@@ -409,7 +440,7 @@ export async function getActiveOrders(options?: {
        o.notes,
        o.status_history,
        COALESCE(o.is_shipped, false) AS is_shipped,
-       to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
+       to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
        o.out_of_stock,
        to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
        wa_t.assigned_tech_id   AS tester_id,
@@ -419,6 +450,12 @@ export async function getActiveOrders(options?: {
        COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
        MIN(tsn.tested_by)::int AS tested_by
      FROM orders o
+     LEFT JOIN LATERAL (
+       SELECT wa.deadline_at FROM work_assignments wa
+       WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+       ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                wa.updated_at DESC, wa.id DESC LIMIT 1
+     ) wa_deadline ON TRUE
      LEFT JOIN LATERAL (
        SELECT assigned_tech_id FROM work_assignments
        WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
@@ -441,12 +478,12 @@ export async function getActiveOrders(options?: {
        ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
           RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
      WHERE ${conditions.join(' AND ')}
-     GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
+     GROUP BY o.id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity, o.condition,
               o.item_number, o.shipping_tracking_number, o.sku, o.out_of_stock,
               o.account_source, o.notes, o.status_history, o.is_shipped,
               wa_t.assigned_tech_id, wa_p.assigned_packer_id,
               pl.packed_by, pl.pack_date_time
-     ORDER BY o.ship_by_date ASC NULLS LAST, o.id ASC
+     ORDER BY wa_deadline.deadline_at ASC NULLS LAST, o.id ASC
      LIMIT $${idx++} OFFSET $${idx}`,
     params,
   );

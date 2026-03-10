@@ -5,7 +5,7 @@ import { publishOrderChanged } from '@/lib/realtime/publish';
 
 /**
  * Upsert a single work_assignment row for a given order + work_type.
- * Uses the appropriate assignee column (assigned_tech_id or assigned_packer_id).
+ * For TEST assignments: promotes an OPEN canonical row to ASSIGNED rather than inserting a new row.
  */
 async function upsertOrderAssignment(
   orderId: number,
@@ -16,7 +16,7 @@ async function upsertOrderAssignment(
   const col = workType === 'PACK' ? 'assigned_packer_id' : 'assigned_tech_id';
 
   if (staffId === null) {
-    // Cancel any active assignment for this order/work_type
+    // Cancel any active assignment; leave OPEN canonical rows intact (they hold deadline)
     await client.query(
       `UPDATE work_assignments
        SET status = 'CANCELED', updated_at = NOW()
@@ -29,14 +29,21 @@ async function upsertOrderAssignment(
     return;
   }
 
+  // For TEST: include OPEN rows so we promote the canonical deadline row to ASSIGNED.
+  const activeStatuses = workType === 'TEST'
+    ? "('OPEN', 'ASSIGNED', 'IN_PROGRESS')"
+    : "('ASSIGNED', 'IN_PROGRESS')";
+
   const existing = await client.query(
     `SELECT id
      FROM work_assignments
      WHERE entity_type = 'ORDER'
        AND entity_id   = $1
        AND work_type   = $2
-       AND status IN ('ASSIGNED', 'IN_PROGRESS')
-     ORDER BY id DESC
+       AND status IN ${activeStatuses}
+     ORDER BY
+       CASE status WHEN 'ASSIGNED' THEN 1 WHEN 'IN_PROGRESS' THEN 2 WHEN 'OPEN' THEN 3 END,
+       id DESC
      LIMIT 1`,
     [orderId, workType]
   );
@@ -44,7 +51,7 @@ async function upsertOrderAssignment(
   if (existing.rows.length > 0) {
     await client.query(
       `UPDATE work_assignments
-       SET ${col} = $1, updated_at = NOW()
+       SET ${col} = $1, status = 'ASSIGNED', updated_at = NOW()
        WHERE id = $2`,
       [staffId, existing.rows[0].id]
     );
@@ -54,6 +61,47 @@ async function upsertOrderAssignment(
        VALUES ('ORDER', $1, $2, $3, 'ASSIGNED', 100)
        ON CONFLICT DO NOTHING`,
       [orderId, workType, staffId]
+    );
+  }
+}
+
+/**
+ * Upsert the canonical ORDER/TEST work_assignment row's deadline_at.
+ * Creates an OPEN row if no active TEST row exists.
+ */
+async function upsertOrderDeadline(
+  orderId: number,
+  deadlineAt: string | null,
+  client: typeof pool = pool
+) {
+  const existing = await client.query(
+    `SELECT id
+     FROM work_assignments
+     WHERE entity_type = 'ORDER'
+       AND entity_id   = $1
+       AND work_type   = 'TEST'
+       AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+     ORDER BY
+       CASE status WHEN 'ASSIGNED' THEN 1 WHEN 'IN_PROGRESS' THEN 2 WHEN 'OPEN' THEN 3 END,
+       id DESC
+     LIMIT 1`,
+    [orderId]
+  );
+
+  if (existing.rows.length > 0) {
+    await client.query(
+      `UPDATE work_assignments
+       SET deadline_at = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [deadlineAt ?? null, existing.rows[0].id]
+    );
+  } else {
+    await client.query(
+      `INSERT INTO work_assignments
+         (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at)
+       VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2)
+       ON CONFLICT DO NOTHING`,
+      [orderId, deadlineAt ?? null]
     );
   }
 }
@@ -99,15 +147,18 @@ export async function POST(req: NextRequest) {
       await Promise.all(idsToUpdate.map((id) => upsertOrderAssignment(id, 'PACK', pkId)));
     }
 
-    // ── 2. Update remaining fields directly on orders table ─────────────────
+    // ── 2a. Write deadline_at into the canonical ORDER/TEST work_assignment row ──
+    if (shipByDate !== undefined) {
+      await Promise.all(
+        idsToUpdate.map((id) => upsertOrderDeadline(id, shipByDate || null))
+      );
+    }
+
+    // ── 2b. Update remaining fields directly on orders table ─────────────────
     const updates: string[] = [];
     const values: any[]     = [];
     let paramCount = 1;
 
-    if (shipByDate !== undefined) {
-      updates.push(`ship_by_date = $${paramCount++}`);
-      values.push(shipByDate);
-    }
     if (outOfStock !== undefined) {
       updates.push(`out_of_stock = $${paramCount++}`);
       values.push(outOfStock);

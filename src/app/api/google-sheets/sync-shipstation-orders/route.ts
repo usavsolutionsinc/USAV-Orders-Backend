@@ -213,8 +213,10 @@ export async function POST(req: NextRequest) {
           [orderId]
         );
 
+        let affectedOrderId: number | null = null;
+
         if (existing.rows.length === 0) {
-          await client.query(
+          const inserted_row = await client.query(
             `INSERT INTO orders (
               order_id,
               shipping_tracking_number,
@@ -225,7 +227,8 @@ export async function POST(req: NextRequest) {
               is_shipped,
               account_source,
               created_at
-            ) VALUES ($1, $2, $3, $4::date, $5, $6::jsonb, $7, $8, timezone('America/Los_Angeles', now()))`,
+            ) VALUES ($1, $2, $3, $4::date, $5, $6::jsonb, $7, $8, timezone('America/Los_Angeles', now()))
+            RETURNING id`,
             [
               orderId,
               payload.tracking,
@@ -237,6 +240,7 @@ export async function POST(req: NextRequest) {
               'shipstation',
             ]
           );
+          affectedOrderId = inserted_row.rows[0]?.id ?? null;
           inserted++;
         } else {
           const needsUpdate = existing.rows.some((row: any) => {
@@ -254,6 +258,8 @@ export async function POST(req: NextRequest) {
               status === 'unassigned'
             );
           });
+
+          affectedOrderId = existing.rows[0]?.id ?? null;
 
           if (!needsUpdate) {
             unchanged++;
@@ -273,6 +279,19 @@ export async function POST(req: NextRequest) {
             );
             updated++;
           }
+        }
+
+        // Upsert canonical ORDER/TEST deadline row in work_assignments.
+        if (affectedOrderId && payload.shipByDate) {
+          await client.query(
+            `INSERT INTO work_assignments
+               (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+             VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2::timestamptz, 'Canonical deadline row from shipstation sync', NOW(), NOW(), NOW())
+             ON CONFLICT ON CONSTRAINT ux_work_assignments_active_entity DO UPDATE
+               SET deadline_at = EXCLUDED.deadline_at, updated_at = NOW()
+             WHERE work_assignments.status = 'OPEN'`,
+            [affectedOrderId, payload.shipByDate]
+          );
         }
 
         const exceptionIds = openExceptions.rows.map((row: any) => row.id);

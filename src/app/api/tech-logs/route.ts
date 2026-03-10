@@ -114,7 +114,13 @@ export async function GET(req: NextRequest) {
                 SELECT
                     id,
                     order_id,
-                    ship_by_date,
+                    (
+                      SELECT wa.deadline_at
+                      FROM work_assignments wa
+                      WHERE wa.entity_type = 'ORDER' AND wa.entity_id = orders.id AND wa.work_type = 'TEST'
+                      ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                               wa.updated_at DESC, wa.id DESC LIMIT 1
+                    ) AS ship_by_date,
                     created_at,
                     item_number,
                     product_title,

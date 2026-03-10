@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
         o.shipping_tracking_number,
         COALESCE(o.is_shipped, false) AS is_shipped,
         o.status,
-        to_char(o.ship_by_date, 'YYYY-MM-DD') AS ship_by_date,
+        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
         o.created_at,
         EXISTS (
           SELECT 1 FROM product_manuals pm
@@ -56,6 +56,12 @@ export async function GET(req: NextRequest) {
             )
         ) AS has_manual
       FROM orders o
+      LEFT JOIN LATERAL (
+        SELECT wa.deadline_at FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+        ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                 wa.updated_at DESC, wa.id DESC LIMIT 1
+      ) wa_deadline ON TRUE
       WHERE o.created_at >= NOW() - INTERVAL '${days} days'
     `;
 

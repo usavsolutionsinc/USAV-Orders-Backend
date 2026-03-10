@@ -170,13 +170,19 @@ export async function POST(req: NextRequest) {
                     o.status_history,
                     o.is_shipped,
                     o.out_of_stock,
-                    o.ship_by_date,
+                    to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
                     o.order_date,
                     o.created_at,
                     o.quantity,
                     wa_test.assigned_tech_id   AS tester_id,
                     wa_pack.assigned_packer_id AS packer_id
                 FROM orders o
+                LEFT JOIN LATERAL (
+                    SELECT wa.deadline_at FROM work_assignments wa
+                    WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+                    ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                             wa.updated_at DESC, wa.id DESC LIMIT 1
+                ) wa_deadline ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT assigned_tech_id
                     FROM work_assignments
