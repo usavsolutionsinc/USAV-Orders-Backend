@@ -12,10 +12,12 @@ interface OrderStaffAssignmentButtonsProps {
   packerOptions: AssignmentStaffOption[];
   testerId: number | null;
   packerId: number | null;
-  onAssignTester: (staffId: number) => void;
-  onAssignPacker: (staffId: number) => void;
+  onAssignTester: (staffId: number) => void | Promise<void>;
+  onAssignPacker: (staffId: number) => void | Promise<void>;
   onContainerClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
   disabled?: boolean;
+  testerDisabled?: boolean;
+  packerDisabled?: boolean;
   layout?: 'columns' | 'rows';
 }
 
@@ -28,6 +30,8 @@ export function OrderStaffAssignmentButtons({
   onAssignPacker,
   onContainerClick,
   disabled = false,
+  testerDisabled = false,
+  packerDisabled = false,
   layout = 'columns',
 }: OrderStaffAssignmentButtonsProps) {
   const resolveTechnicianTheme = (staffId: number) => {
@@ -52,9 +56,10 @@ export function OrderStaffAssignmentButtons({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (!disabled) onAssignTester(member.id);
+                if (!disabled && !testerDisabled && !isActiveTester) void onAssignTester(member.id);
               }}
-              disabled={disabled}
+              disabled={disabled || testerDisabled}
+              aria-pressed={isActiveTester}
               className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors disabled:opacity-50 ${
                 isActiveTester ? testerThemeClasses.active : testerThemeClasses.inactive
               } ${isTech3PurpleFallback ? '!text-purple-700 !border-purple-300 !bg-white hover:!bg-purple-50' : ''}`}
@@ -88,9 +93,10 @@ export function OrderStaffAssignmentButtons({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                if (!disabled) onAssignPacker(member.id);
+                if (!disabled && !packerDisabled && !isActivePacker) void onAssignPacker(member.id);
               }}
-              disabled={disabled}
+              disabled={disabled || packerDisabled}
+              aria-pressed={isActivePacker}
               className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors disabled:opacity-50 ${packerClasses}`}
             >
               {member.name}

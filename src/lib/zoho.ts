@@ -315,6 +315,47 @@ export interface ZohoPurchaseOrder {
   reference_number?: string;
 }
 
+/**
+ * Search Zoho Purchase Orders by tracking number or reference number.
+ * Runs two parallel queries — one against reference_number, one via search_text —
+ * then deduplicates and returns all matching open/billed POs.
+ *
+ * Note: Zoho's search_text is a fuzzy full-text search across PO fields.
+ * For tracking numbers on the vendor's shipment, reference_number is the most
+ * likely field, but search_text catches custom fields and notes too.
+ */
+export async function searchPurchaseOrdersByTracking(
+  trackingNumber: string
+): Promise<ZohoPurchaseOrder[]> {
+  const trimmed = trackingNumber.trim();
+  if (!trimmed) return [];
+
+  const [byRef, bySearch] = await Promise.allSettled([
+    zohoInventoryRequest<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+      '/api/v1/purchaseorders',
+      { reference_number: trimmed, status: 'open', per_page: 10 }
+    ),
+    zohoInventoryRequest<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+      '/api/v1/purchaseorders',
+      { search_text: trimmed, per_page: 10 }
+    ),
+  ]);
+
+  const seen = new Set<string>();
+  const results: ZohoPurchaseOrder[] = [];
+
+  for (const settled of [byRef, bySearch]) {
+    if (settled.status !== 'fulfilled') continue;
+    for (const po of settled.value.purchaseorders || []) {
+      if (!po.purchaseorder_id || seen.has(po.purchaseorder_id)) continue;
+      seen.add(po.purchaseorder_id);
+      results.push(po);
+    }
+  }
+
+  return results;
+}
+
 export async function listPurchaseOrders(params: {
   page?: number;
   per_page?: number;

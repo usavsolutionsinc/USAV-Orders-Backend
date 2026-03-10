@@ -60,14 +60,25 @@ export async function GET(req: NextRequest) {
       new Set([techIdNum, resolvedStaffId].filter((v): v is number => Number.isFinite(v as number)))
     );
 
-    // 1. Count total assigned pending orders for this tech
+    // 1. Count total pending orders for the requested scope.
     const countWhere: string[] = [
-      "wa.entity_type = 'ORDER'",
-      "wa.work_type = 'TEST'",
-      "wa.assigned_tech_id = ANY($1::int[])",
       "o.is_shipped IS NOT TRUE",
       "COALESCE(BTRIM(o.shipping_tracking_number), '') <> ''",
     ];
+    const countJoins: string[] = [];
+    if (assignedOnly) {
+      countJoins.push(
+        `INNER JOIN work_assignments wa
+           ON wa.entity_id = o.id`,
+        `INNER JOIN staff s
+           ON s.id = wa.assigned_tech_id`
+      );
+      countWhere.unshift(
+        "wa.entity_type = 'ORDER'",
+        "wa.work_type = 'TEST'",
+        "wa.assigned_tech_id = ANY($1::int[])"
+      );
+    }
     if (outOfStock === 'true') {
       countWhere.push("COALESCE(BTRIM(o.out_of_stock), '') <> ''");
     } else if (outOfStock === 'false') {
@@ -77,18 +88,24 @@ export async function GET(req: NextRequest) {
     const totalPendingResult = await pool.query(
       `SELECT COUNT(DISTINCT o.id) AS count
        FROM orders o
-       INNER JOIN work_assignments wa
-         ON wa.entity_id = o.id
-       INNER JOIN staff s
-         ON s.id = wa.assigned_tech_id
+       ${countJoins.join('\n')}
        WHERE ${countWhere.join(' AND ')}`,
-      [techIdScope]
+      assignedOnly ? [techIdScope] : []
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
     // 2. Build main query
-    const params: any[] = [techIdScope];
+    const params: any[] = assignedOnly ? [techIdScope] : [];
     const where: string[] = [...countWhere];
+    const mainJoins: string[] = [];
+    if (assignedOnly) {
+      mainJoins.push(
+        `INNER JOIN work_assignments wa
+          ON wa.entity_id = o.id`,
+        `INNER JOIN staff s
+          ON s.id = wa.assigned_tech_id`
+      );
+    }
 
     let query = `
       SELECT DISTINCT ON (o.id)
@@ -105,17 +122,14 @@ export async function GET(req: NextRequest) {
         o.shipping_tracking_number,
         o.out_of_stock
       FROM orders o
-      INNER JOIN work_assignments wa
-        ON wa.entity_id = o.id
-      INNER JOIN staff s
-        ON s.id = wa.assigned_tech_id
+      ${mainJoins.join('\n')}
       WHERE ${where.join(' AND ')}
     `;
 
     query += `
       ORDER BY
         o.id,
-        wa.assigned_at DESC,
+        ${assignedOnly ? 'wa.assigned_at DESC,' : ''}
         CASE
           WHEN o.ship_by_date IS NULL OR o.ship_by_date::text ~ '^\\d+$' THEN o.created_at
           ELSE o.ship_by_date

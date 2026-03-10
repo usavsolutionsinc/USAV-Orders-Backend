@@ -151,17 +151,18 @@ CREATE TABLE IF NOT EXISTS sku (
 -- 13. REPAIR_SERVICE TABLE
 CREATE TABLE IF NOT EXISTS repair_service (
     id SERIAL PRIMARY KEY,
-    date_time TEXT,
     ticket_number TEXT,
+    contact_info TEXT,
     product_title TEXT,
+    price TEXT,
     issue TEXT,
     serial_number TEXT,
-    name TEXT,
-    contact TEXT,
-    price TEXT,
-    status TEXT DEFAULT 'pending',
-    repair_reasons TEXT,
-    process TEXT
+    notes TEXT,
+    status_history JSON DEFAULT '[]',
+    status TEXT,
+    process JSON DEFAULT '[]',
+    date_time JSON,
+    repaired_by INTEGER
 );
 
 -- Create indexes on primary keys (for performance)

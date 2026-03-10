@@ -10,15 +10,15 @@ export interface ShippedOrder {
   item_number?: string | null;
   condition: string;
   shipping_tracking_number: string;
-  serial_number: string; // Aggregated from tech_serial_numbers table
+  serial_number: string; // Aggregated from tech_serial_numbers
   sku: string;
   /** Staff ID assigned to test — sourced from work_assignments.assigned_tech_id */
   tester_id: number | null;
-  tested_by: number | null; // who actually tested (first serial scan in tech_serial_numbers)
+  tested_by: number | null;
   test_date_time: string | null;
   /** Staff ID assigned to pack — sourced from work_assignments.assigned_packer_id */
   packer_id: number | null;
-  packed_by: number | null; // who actually packed (packer_logs.packed_by)
+  packed_by: number | null;
   pack_date_time: string | null;
   packer_photos_url: any;
   tracking_type: string | null;
@@ -35,185 +35,244 @@ export interface ShippedOrder {
   exception_status?: string | null;
 }
 
+export interface ActiveOrder {
+  id: number;
+  order_id: string;
+  product_title: string;
+  quantity: string | null;
+  item_number: string | null;
+  condition: string;
+  shipping_tracking_number: string | null;
+  sku: string | null;
+  account_source: string | null;
+  notes: string | null;
+  status_history: any;
+  is_shipped: boolean;
+  ship_by_date: string | null;
+  out_of_stock: string | null;
+  created_at: string | null;
+  tester_id: number | null;
+  packer_id: number | null;
+  tested_by: number | null;
+  packed_by: number | null;
+  pack_date_time: string | null;
+  serial_number: string | null;
+}
+
+export interface CreateOrderParams {
+  orderId: string;
+  productTitle: string;
+  shippingTrackingNumber?: string | null;
+  sku?: string | null;
+  accountSource?: string | null;
+  condition?: string;
+  quantity?: string | null;
+  itemNumber?: string | null;
+  shipByDate?: string | null;
+  notes?: string | null;
+  isShipped?: boolean;
+}
+
+// ─── Shared CTE fragments ─────────────────────────────────────────────────────
+
 /**
- * Get all shipped orders (is_shipped = true) with optional limit and offset for pagination
+ * The order_serials CTE: joins orders with work_assignments, packer_logs, tech_serial_numbers.
+ * Returns all columns needed for ShippedOrder.
+ */
+const ORDER_SERIALS_CTE = `
+  order_serials AS (
+    SELECT
+      o.id,
+      to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
+      o.order_id,
+      o.product_title,
+      o.quantity,
+      o.item_number,
+      o.condition,
+      o.shipping_tracking_number,
+      o.sku,
+      o.account_source,
+      o.notes,
+      o.status_history,
+      o.is_shipped,
+      to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+      'order'::text AS row_source,
+      NULL::text AS exception_reason,
+      NULL::text AS exception_status,
+      wa_t.assigned_tech_id   AS tester_id,
+      wa_p.assigned_packer_id AS packer_id,
+      pl.packed_by,
+      to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+      pl.packer_photos_url,
+      pl.tracking_type,
+      COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+      MIN(tsn.tested_by)::int AS tested_by,
+      MIN(tsn.test_date_time)::text AS test_date_time
+    FROM orders o
+    LEFT JOIN LATERAL (
+      SELECT assigned_tech_id
+      FROM work_assignments
+      WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+        AND status IN ('ASSIGNED', 'IN_PROGRESS')
+      ORDER BY created_at DESC LIMIT 1
+    ) wa_t ON true
+    LEFT JOIN LATERAL (
+      SELECT assigned_packer_id
+      FROM work_assignments
+      WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+        AND status IN ('ASSIGNED', 'IN_PROGRESS')
+      ORDER BY created_at DESC LIMIT 1
+    ) wa_p ON true
+    LEFT JOIN LATERAL (
+      SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
+      FROM packer_logs pl
+      WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
+            RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+      ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
+      LIMIT 1
+    ) pl ON true
+    LEFT JOIN tech_serial_numbers tsn
+      ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
+         RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+    WHERE COALESCE(o.is_shipped, false) = true
+    GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
+             o.item_number, o.shipping_tracking_number, o.sku,
+             o.account_source, o.notes, o.status_history, o.is_shipped,
+             wa_t.assigned_tech_id, wa_p.assigned_packer_id,
+             pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
+  )`;
+
+/**
+ * The exception_serials CTE: joins orders_exceptions with matching orders.
+ */
+const EXCEPTION_SERIALS_CTE = `
+  exception_serials AS (
+    SELECT
+      (-oe.id) AS id,
+      NULL::text AS ship_by_date,
+      COALESCE(o.order_id, 'EXC-' || oe.id::text) AS order_id,
+      CASE
+        WHEN POSITION(':' IN oe.shipping_tracking_number) > 0
+          THEN COALESCE(ss.product_title, o.product_title, 'Unknown Product (Exception)')
+        ELSE COALESCE(o.product_title, 'Unknown Product (Exception)')
+      END AS product_title,
+      COALESCE(o.quantity, '1') AS quantity,
+      o.item_number,
+      COALESCE(o.condition, 'Unknown') AS condition,
+      oe.shipping_tracking_number,
+      COALESCE(o.sku, '') AS sku,
+      COALESCE(o.account_source, 'Exception') AS account_source,
+      COALESCE(oe.notes, '') AS notes,
+      COALESCE(o.status_history, '[]'::jsonb) AS status_history,
+      COALESCE(o.is_shipped, false) AS is_shipped,
+      to_char(oe.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+      'exception'::text AS row_source,
+      oe.exception_reason,
+      oe.status AS exception_status,
+      o_wa_t.assigned_tech_id   AS tester_id,
+      o_wa_p.assigned_packer_id AS packer_id,
+      pl.packed_by,
+      to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+      pl.packer_photos_url,
+      pl.tracking_type,
+      COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+      MIN(tsn.tested_by)::int AS tested_by,
+      MIN(tsn.test_date_time)::text AS test_date_time
+    FROM orders_exceptions oe
+    LEFT JOIN LATERAL (
+      SELECT id, order_id, product_title, quantity, item_number, condition, sku,
+             account_source, status_history, is_shipped
+      FROM orders o
+      WHERE o.shipping_tracking_number IS NOT NULL
+        AND o.shipping_tracking_number != ''
+        AND RIGHT(o.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
+      ORDER BY o.id DESC
+      LIMIT 1
+    ) o ON true
+    LEFT JOIN LATERAL (
+      SELECT assigned_tech_id
+      FROM work_assignments
+      WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+        AND status IN ('ASSIGNED', 'IN_PROGRESS')
+      ORDER BY created_at DESC LIMIT 1
+    ) o_wa_t ON true
+    LEFT JOIN LATERAL (
+      SELECT assigned_packer_id
+      FROM work_assignments
+      WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+        AND status IN ('ASSIGNED', 'IN_PROGRESS')
+      ORDER BY created_at DESC LIMIT 1
+    ) o_wa_p ON true
+    LEFT JOIN LATERAL (
+      SELECT sk.product_title
+      FROM sku_stock sk
+      WHERE POSITION(':' IN oe.shipping_tracking_number) > 0
+        AND regexp_replace(UPPER(TRIM(COALESCE(sk.sku, ''))), '^0+', '') =
+            regexp_replace(UPPER(TRIM(split_part(oe.shipping_tracking_number, ':', 1))), '^0+', '')
+      ORDER BY sk.id DESC
+      LIMIT 1
+    ) ss ON true
+    LEFT JOIN LATERAL (
+      SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
+      FROM packer_logs pl
+      WHERE RIGHT(pl.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
+      ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
+      LIMIT 1
+    ) pl ON true
+    LEFT JOIN tech_serial_numbers tsn
+      ON RIGHT(tsn.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
+    GROUP BY
+      oe.id, oe.shipping_tracking_number, oe.exception_reason, oe.status, oe.notes, oe.created_at,
+      o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku,
+      ss.product_title,
+      o.account_source, o.status_history, o.is_shipped,
+      o_wa_t.assigned_tech_id, o_wa_p.assigned_packer_id,
+      pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
+  )`;
+
+/**
+ * The combined CTE + staff name join suffix used by all multi-source shipped queries.
+ */
+const COMBINED_WITH_STAFF = `
+  combined AS (
+    SELECT * FROM order_serials
+    UNION ALL
+    SELECT * FROM exception_serials
+  )
+  SELECT
+    c.*,
+    s1.name AS tested_by_name,
+    s2.name AS packed_by_name,
+    s3.name AS tester_name
+  FROM combined c
+  LEFT JOIN staff s1 ON c.tested_by = s1.id
+  LEFT JOIN staff s2 ON c.packed_by = s2.id
+  LEFT JOIN staff s3 ON c.tester_id = s3.id`;
+
+// ─── Shipped Orders (Read) ────────────────────────────────────────────────────
+
+/**
+ * Get all shipped orders with optional limit and offset
  */
 export async function getAllShippedOrders(limit = 100, offset = 0): Promise<ShippedOrder[]> {
   try {
     const result = await pool.query(
-      `WITH order_serials AS (
-        SELECT
-          o.id,
-          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
-          o.order_id,
-          o.product_title,
-          o.quantity,
-          o.item_number,
-          o.condition,
-          o.shipping_tracking_number,
-          o.sku,
-          o.account_source,
-          o.notes,
-          o.status_history,
-          o.is_shipped,
-          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
-          'order'::text AS row_source,
-          NULL::text AS exception_reason,
-          NULL::text AS exception_status,
-          wa_t.assigned_tech_id   AS tester_id,
-          wa_p.assigned_packer_id AS packer_id,
-          pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
-          pl.packer_photos_url,
-          pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
-          MIN(tsn.tested_by)::int AS tested_by,
-          MIN(tsn.test_date_time)::text AS test_date_time
-        FROM orders o
-        LEFT JOIN LATERAL (
-          SELECT assigned_tech_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) wa_t ON true
-        LEFT JOIN LATERAL (
-          SELECT assigned_packer_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) wa_p ON true
-        LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
-          FROM packer_logs pl
-          WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
-                RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-          ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
-          LIMIT 1
-        ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn
-          ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-        WHERE COALESCE(o.is_shipped, false) = true
-        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
-                 o.item_number, o.shipping_tracking_number, o.sku,
-                 o.account_source, o.notes, o.status_history, o.is_shipped,
-                 wa_t.assigned_tech_id, wa_p.assigned_packer_id,
-                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
-      ),
-      exception_serials AS (
-        SELECT
-          (-oe.id) AS id,
-          NULL::text AS ship_by_date,
-          COALESCE(o.order_id, 'EXC-' || oe.id::text) AS order_id,
-          CASE
-            WHEN POSITION(':' IN oe.shipping_tracking_number) > 0
-              THEN COALESCE(ss.product_title, o.product_title, 'Unknown Product (Exception)')
-            ELSE COALESCE(o.product_title, 'Unknown Product (Exception)')
-          END AS product_title,
-          COALESCE(o.quantity, '1') AS quantity,
-          o.item_number,
-          COALESCE(o.condition, 'Unknown') AS condition,
-          oe.shipping_tracking_number,
-          COALESCE(o.sku, '') AS sku,
-          COALESCE(o.account_source, 'Exception') AS account_source,
-          COALESCE(oe.notes, '') AS notes,
-          COALESCE(o.status_history, '[]'::jsonb) AS status_history,
-          COALESCE(o.is_shipped, false) AS is_shipped,
-          to_char(oe.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
-          'exception'::text AS row_source,
-          oe.exception_reason,
-          oe.status AS exception_status,
-          o_wa_t.assigned_tech_id   AS tester_id,
-          o_wa_p.assigned_packer_id AS packer_id,
-          pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
-          pl.packer_photos_url,
-          pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
-          MIN(tsn.tested_by)::int AS tested_by,
-          MIN(tsn.test_date_time)::text AS test_date_time
-        FROM orders_exceptions oe
-        LEFT JOIN LATERAL (
-          SELECT id, order_id, product_title, quantity, item_number, condition, sku,
-                 account_source, status_history, is_shipped
-          FROM orders o
-          WHERE o.shipping_tracking_number IS NOT NULL
-            AND o.shipping_tracking_number != ''
-            AND RIGHT(o.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
-          ORDER BY o.id DESC
-          LIMIT 1
-        ) o ON true
-        LEFT JOIN LATERAL (
-          SELECT assigned_tech_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) o_wa_t ON true
-        LEFT JOIN LATERAL (
-          SELECT assigned_packer_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) o_wa_p ON true
-        LEFT JOIN LATERAL (
-          SELECT sk.product_title
-          FROM sku_stock sk
-          WHERE POSITION(':' IN oe.shipping_tracking_number) > 0
-            AND regexp_replace(UPPER(TRIM(COALESCE(sk.sku, ''))), '^0+', '') =
-                regexp_replace(UPPER(TRIM(split_part(oe.shipping_tracking_number, ':', 1))), '^0+', '')
-          ORDER BY sk.id DESC
-          LIMIT 1
-        ) ss ON true
-        LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
-          FROM packer_logs pl
-          WHERE RIGHT(pl.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
-          ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
-          LIMIT 1
-        ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn
-          ON RIGHT(tsn.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
-        GROUP BY
-          oe.id, oe.shipping_tracking_number, oe.exception_reason, oe.status, oe.notes, oe.created_at,
-          o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku,
-          ss.product_title,
-          o.account_source, o.status_history, o.is_shipped,
-          o_wa_t.assigned_tech_id, o_wa_p.assigned_packer_id,
-          pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
-      ),
-      combined AS (
-        SELECT * FROM order_serials
-        UNION ALL
-        SELECT * FROM exception_serials
-      )
-      SELECT
-        c.*,
-        s1.name AS tested_by_name,
-        s2.name AS packed_by_name,
-        s3.name AS tester_name
-      FROM combined c
-      LEFT JOIN staff s1 ON c.tested_by = s1.id
-      LEFT JOIN staff s2 ON c.packed_by = s2.id
-      LEFT JOIN staff s3 ON c.tester_id = s3.id
-      ORDER BY COALESCE(c.pack_date_time::timestamp, c.created_at::timestamp) DESC NULLS LAST, c.id DESC
-      LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      `WITH ${ORDER_SERIALS_CTE},
+            ${EXCEPTION_SERIALS_CTE},
+            ${COMBINED_WITH_STAFF}
+       ORDER BY COALESCE(c.pack_date_time::timestamp, c.created_at::timestamp) DESC NULLS LAST, c.id DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset],
     );
-
     return result.rows;
   } catch (error: any) {
-    console.error('Error fetching shipped orders:', error);
-    console.error('Error details:', error.message, error.stack);
+    console.error('Error fetching shipped orders:', error.message);
     throw error;
   }
 }
 
 /**
- * Get a single shipped order by ID
+ * Get a single shipped order by ID (orders table only, no exceptions)
  */
 export async function getShippedOrderById(id: number): Promise<ShippedOrder | null> {
   try {
@@ -245,15 +304,13 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           MIN(tsn.test_date_time)::text AS test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
-          SELECT assigned_tech_id
-          FROM work_assignments
+          SELECT assigned_tech_id FROM work_assignments
           WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
             AND status IN ('ASSIGNED', 'IN_PROGRESS')
           ORDER BY created_at DESC LIMIT 1
         ) wa_t ON true
         LEFT JOIN LATERAL (
-          SELECT assigned_packer_id
-          FROM work_assignments
+          SELECT assigned_packer_id FROM work_assignments
           WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
             AND status IN ('ASSIGNED', 'IN_PROGRESS')
           ORDER BY created_at DESC LIMIT 1
@@ -262,8 +319,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
           FROM packer_logs
           WHERE shipping_tracking_number = o.shipping_tracking_number
-          ORDER BY pack_date_time DESC NULLS LAST, id DESC
-          LIMIT 1
+          ORDER BY pack_date_time DESC NULLS LAST, id DESC LIMIT 1
         ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
         WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
@@ -273,19 +329,17 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
                  wa_t.assigned_tech_id, wa_p.assigned_packer_id,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       )
-      SELECT
-        os.*,
-        s1.name AS tested_by_name,
-        s2.name AS packed_by_name,
-        s3.name AS tester_name
+      SELECT os.*,
+             s1.name AS tested_by_name,
+             s2.name AS packed_by_name,
+             s3.name AS tester_name
       FROM order_serials os
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
       LEFT JOIN staff s3 ON os.tester_id = s3.id`,
-      [id]
+      [id],
     );
-
-    return result.rows[0] || null;
+    return result.rows[0] ?? null;
   } catch (error) {
     console.error('Error fetching shipped order by ID:', error);
     throw new Error('Failed to fetch shipped order');
@@ -301,188 +355,29 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
     const digitsOnly = query.replace(/\D/g, '');
     const last8 = digitsOnly.slice(-8);
     const result = await pool.query(
-      `WITH order_serials AS (
-        SELECT
-          o.id,
-          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
-          o.order_id,
-          o.product_title,
-          o.quantity,
-          o.item_number,
-          o.condition,
-          o.shipping_tracking_number,
-          o.sku,
-          o.account_source,
-          o.notes,
-          o.status_history,
-          o.is_shipped,
-          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
-          'order'::text AS row_source,
-          NULL::text AS exception_reason,
-          NULL::text AS exception_status,
-          wa_t.assigned_tech_id   AS tester_id,
-          wa_p.assigned_packer_id AS packer_id,
-          pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
-          pl.packer_photos_url,
-          pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
-          MIN(tsn.tested_by)::int AS tested_by,
-          MIN(tsn.test_date_time)::text AS test_date_time
-        FROM orders o
-        LEFT JOIN LATERAL (
-          SELECT assigned_tech_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) wa_t ON true
-        LEFT JOIN LATERAL (
-          SELECT assigned_packer_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) wa_p ON true
-        LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
-          FROM packer_logs pl
-          WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
-                RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-          ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
-          LIMIT 1
-        ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn
-          ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-        WHERE COALESCE(o.is_shipped, false) = true
-        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
-                 o.item_number, o.shipping_tracking_number, o.sku,
-                 o.account_source, o.notes, o.status_history, o.is_shipped,
-                 wa_t.assigned_tech_id, wa_p.assigned_packer_id,
-                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
-      ),
-      exception_serials AS (
-        SELECT
-          (-oe.id) AS id,
-          NULL::text AS ship_by_date,
-          COALESCE(o.order_id, 'EXC-' || oe.id::text) AS order_id,
-          CASE
-            WHEN POSITION(':' IN oe.shipping_tracking_number) > 0
-              THEN COALESCE(ss.product_title, o.product_title, 'Unknown Product (Exception)')
-            ELSE COALESCE(o.product_title, 'Unknown Product (Exception)')
-          END AS product_title,
-          COALESCE(o.quantity, '1') AS quantity,
-          o.item_number,
-          COALESCE(o.condition, 'Unknown') AS condition,
-          oe.shipping_tracking_number,
-          COALESCE(o.sku, '') AS sku,
-          COALESCE(o.account_source, 'Exception') AS account_source,
-          COALESCE(oe.notes, '') AS notes,
-          COALESCE(o.status_history, '[]'::jsonb) AS status_history,
-          COALESCE(o.is_shipped, false) AS is_shipped,
-          to_char(oe.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
-          'exception'::text AS row_source,
-          oe.exception_reason,
-          oe.status AS exception_status,
-          o_wa_t.assigned_tech_id   AS tester_id,
-          o_wa_p.assigned_packer_id AS packer_id,
-          pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
-          pl.packer_photos_url,
-          pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
-          MIN(tsn.tested_by)::int AS tested_by,
-          MIN(tsn.test_date_time)::text AS test_date_time
-        FROM orders_exceptions oe
-        LEFT JOIN LATERAL (
-          SELECT id, order_id, product_title, quantity, item_number, condition, sku,
-                 account_source, status_history, is_shipped
-          FROM orders o
-          WHERE o.shipping_tracking_number IS NOT NULL
-            AND o.shipping_tracking_number != ''
-            AND RIGHT(o.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
-          ORDER BY o.id DESC
-          LIMIT 1
-        ) o ON true
-        LEFT JOIN LATERAL (
-          SELECT assigned_tech_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) o_wa_t ON true
-        LEFT JOIN LATERAL (
-          SELECT assigned_packer_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) o_wa_p ON true
-        LEFT JOIN LATERAL (
-          SELECT sk.product_title
-          FROM sku_stock sk
-          WHERE POSITION(':' IN oe.shipping_tracking_number) > 0
-            AND regexp_replace(UPPER(TRIM(COALESCE(sk.sku, ''))), '^0+', '') =
-                regexp_replace(UPPER(TRIM(split_part(oe.shipping_tracking_number, ':', 1))), '^0+', '')
-          ORDER BY sk.id DESC
-          LIMIT 1
-        ) ss ON true
-        LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
-          FROM packer_logs pl
-          WHERE RIGHT(pl.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
-          ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
-          LIMIT 1
-        ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn
-          ON RIGHT(tsn.shipping_tracking_number, 8) = RIGHT(oe.shipping_tracking_number, 8)
-        GROUP BY
-          oe.id, oe.shipping_tracking_number, oe.exception_reason, oe.status, oe.notes, oe.created_at,
-          o.order_id, o.product_title, o.quantity, o.item_number, o.condition, o.sku,
-          ss.product_title,
-          o.account_source, o.status_history, o.is_shipped,
-          o_wa_t.assigned_tech_id, o_wa_p.assigned_packer_id,
-          pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
-      ),
-      combined AS (
-        SELECT * FROM order_serials
-        UNION ALL
-        SELECT * FROM exception_serials
-      )
-      SELECT
-        c.*,
-        s1.name AS tested_by_name,
-        s2.name AS packed_by_name,
-        s3.name AS tester_name
-      FROM combined c
-      LEFT JOIN staff s1 ON c.tested_by  = s1.id
-      LEFT JOIN staff s2 ON c.packed_by  = s2.id
-      LEFT JOIN staff s3 ON c.tester_id  = s3.id
-      WHERE
-        c.shipping_tracking_number::text = $2
-        OR c.order_id::text = $2
-        OR c.shipping_tracking_number::text ILIKE $1
-        OR c.order_id::text ILIKE $1
-        OR c.product_title::text ILIKE $1
-        OR c.sku::text ILIKE $1
-        OR c.serial_number::text ILIKE $1
-        OR (
-          $3 != '' AND LENGTH($3) >= 8 AND (
-            RIGHT(regexp_replace(c.shipping_tracking_number::text, '\\D', '', 'g'), 8) = $3
-            OR RIGHT(c.order_id::text, 8) = $3
-          )
-        )
-      ORDER BY
-        CASE
-          WHEN c.shipping_tracking_number::text = $2 OR c.order_id::text = $2 THEN 1
-          ELSE 2
-        END,
-        c.id DESC
-      LIMIT 100`,
-      [searchTerm, query, last8]
+      `WITH ${ORDER_SERIALS_CTE},
+            ${EXCEPTION_SERIALS_CTE},
+            ${COMBINED_WITH_STAFF}
+       WHERE
+         c.shipping_tracking_number::text = $2
+         OR c.order_id::text = $2
+         OR c.shipping_tracking_number::text ILIKE $1
+         OR c.order_id::text ILIKE $1
+         OR c.product_title::text ILIKE $1
+         OR c.sku::text ILIKE $1
+         OR c.serial_number::text ILIKE $1
+         OR (
+           $3 != '' AND LENGTH($3) >= 8 AND (
+             RIGHT(regexp_replace(c.shipping_tracking_number::text, '\\D', '', 'g'), 8) = $3
+             OR RIGHT(c.order_id::text, 8) = $3
+           )
+         )
+       ORDER BY
+         CASE WHEN c.shipping_tracking_number::text = $2 OR c.order_id::text = $2 THEN 1 ELSE 2 END,
+         c.id DESC
+       LIMIT 100`,
+      [searchTerm, query, last8],
     );
-
     return result.rows;
   } catch (error) {
     console.error('Error searching shipped orders:', error);
@@ -491,115 +386,20 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
 }
 
 /**
- * Update a specific field in a shipped order
- */
-export async function updateShippedOrderField(
-  id: number,
-  field: string,
-  value: any
-): Promise<void> {
-  try {
-    // Assignment fields (tester_id / packer_id) are no longer on the orders table.
-    // Use POST /api/orders/assign to update assignments via work_assignments.
-    const allowedFields = [
-      'notes',
-      'is_shipped',
-      'status_history',
-    ];
-
-    if (!allowedFields.includes(field)) {
-      throw new Error(
-        `Field '${field}' cannot be updated here. ` +
-        `Use /api/orders/assign for assignment changes, ` +
-        `tech_serial_numbers for serial/test data, or packer_logs for packing completion data.`
-      );
-    }
-
-    await pool.query(
-      `UPDATE orders SET ${field} = $1 WHERE id = $2 AND COALESCE(is_shipped, false) = true`,
-      [value, id]
-    );
-  } catch (error) {
-    console.error('Error updating shipped order field:', error);
-    throw new Error('Failed to update shipped order field');
-  }
-}
-
-/**
- * Get shipped orders by tracking number (last 8 digits match)
+ * Get shipped orders by tracking number (last-8 digits match)
  */
 export async function getShippedOrderByTracking(tracking: string): Promise<ShippedOrder | null> {
   try {
     const last8 = tracking.slice(-8).toLowerCase();
     const result = await pool.query(
-      `WITH order_serials AS (
-        SELECT
-          o.id,
-          to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
-          o.order_id,
-          o.product_title,
-          o.quantity,
-          o.condition,
-          o.shipping_tracking_number,
-          o.sku,
-          o.account_source,
-          o.notes,
-          o.status_history,
-          o.is_shipped,
-          wa_t.assigned_tech_id   AS tester_id,
-          wa_p.assigned_packer_id AS packer_id,
-          pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
-          pl.packer_photos_url,
-          pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
-          MIN(tsn.tested_by) AS tested_by,
-          MIN(tsn.test_date_time)::text AS test_date_time
-        FROM orders o
-        LEFT JOIN LATERAL (
-          SELECT assigned_tech_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) wa_t ON true
-        LEFT JOIN LATERAL (
-          SELECT assigned_packer_id
-          FROM work_assignments
-          WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
-            AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          ORDER BY created_at DESC LIMIT 1
-        ) wa_p ON true
-        LEFT JOIN LATERAL (
-          SELECT packed_by, pack_date_time, packer_photos_url, tracking_type
-          FROM packer_logs
-          WHERE shipping_tracking_number = o.shipping_tracking_number
-          ORDER BY pack_date_time DESC NULLS LAST, id DESC
-          LIMIT 1
-        ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
-        WHERE COALESCE(o.is_shipped, false) = true
-          AND RIGHT(o.shipping_tracking_number, 8) = $1
-        GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
-                 o.shipping_tracking_number, o.sku,
-                 o.account_source, o.notes, o.status_history, o.is_shipped,
-                 wa_t.assigned_tech_id, wa_p.assigned_packer_id,
-                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
-      )
-      SELECT
-        os.*,
-        s1.name AS tested_by_name,
-        s2.name AS packed_by_name,
-        s3.name AS tester_name
-      FROM order_serials os
-      LEFT JOIN staff s1 ON os.tested_by = s1.id
-      LEFT JOIN staff s2 ON os.packed_by = s2.id
-      LEFT JOIN staff s3 ON os.tester_id = s3.id
-      LIMIT 1`,
-      [last8]
+      `WITH ${ORDER_SERIALS_CTE},
+            ${EXCEPTION_SERIALS_CTE},
+            ${COMBINED_WITH_STAFF}
+       WHERE RIGHT(c.shipping_tracking_number, 8) = $1
+       LIMIT 1`,
+      [last8],
     );
-
-    return result.rows[0] || null;
+    return result.rows[0] ?? null;
   } catch (error) {
     console.error('Error fetching shipped order by tracking:', error);
     throw new Error('Failed to fetch shipped order by tracking');
@@ -612,13 +412,254 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
 export async function getShippedOrdersCount(): Promise<number> {
   try {
     const result = await pool.query(
-      `SELECT COUNT(DISTINCT id) as count 
-       FROM orders
-       WHERE COALESCE(is_shipped, false) = true`
+      `SELECT COUNT(DISTINCT id) AS count FROM orders WHERE COALESCE(is_shipped, false) = true`,
     );
     return parseInt(result.rows[0].count);
   } catch (error) {
     console.error('Error counting shipped orders:', error);
     throw new Error('Failed to count shipped orders');
   }
+}
+
+// ─── Active Orders (Read) ─────────────────────────────────────────────────────
+
+/**
+ * Get active (non-shipped) orders with assignment info
+ */
+export async function getActiveOrders(options?: {
+  status?: string;
+  assignedTechId?: number;
+  assignedPackerId?: number;
+  weekStart?: string;
+  weekEnd?: string;
+  missingTrackingOnly?: boolean;
+  pendingOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<ActiveOrder[]> {
+  const conditions: string[] = ['COALESCE(o.is_shipped, false) = false'];
+  const params: any[] = [];
+  let idx = 1;
+
+  if (options?.missingTrackingOnly) {
+    conditions.push(`(o.shipping_tracking_number IS NULL OR o.shipping_tracking_number = '')`);
+  }
+  if (options?.weekStart) { conditions.push(`o.ship_by_date >= $${idx++}`); params.push(options.weekStart); }
+  if (options?.weekEnd) { conditions.push(`o.ship_by_date <= $${idx++}`); params.push(options.weekEnd); }
+  if (options?.assignedTechId != null) {
+    conditions.push(`wa_t.assigned_tech_id = $${idx++}`);
+    params.push(options.assignedTechId);
+  }
+  if (options?.assignedPackerId != null) {
+    conditions.push(`wa_p.assigned_packer_id = $${idx++}`);
+    params.push(options.assignedPackerId);
+  }
+  if (options?.pendingOnly) {
+    conditions.push(`(wa_t.assigned_tech_id IS NULL OR wa_p.assigned_packer_id IS NULL)`);
+  }
+
+  const limit = options?.limit ?? 200;
+  const offset = options?.offset ?? 0;
+  params.push(limit, offset);
+
+  const result = await pool.query(
+    `SELECT
+       o.id,
+       o.order_id,
+       o.product_title,
+       o.quantity,
+       o.item_number,
+       o.condition,
+       o.shipping_tracking_number,
+       o.sku,
+       o.account_source,
+       o.notes,
+       o.status_history,
+       COALESCE(o.is_shipped, false) AS is_shipped,
+       to_char(o.ship_by_date, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
+       o.out_of_stock,
+       to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+       wa_t.assigned_tech_id   AS tester_id,
+       wa_p.assigned_packer_id AS packer_id,
+       pl.packed_by,
+       to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+       COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+       MIN(tsn.tested_by)::int AS tested_by
+     FROM orders o
+     LEFT JOIN LATERAL (
+       SELECT assigned_tech_id FROM work_assignments
+       WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+         AND status IN ('ASSIGNED', 'IN_PROGRESS')
+       ORDER BY created_at DESC LIMIT 1
+     ) wa_t ON true
+     LEFT JOIN LATERAL (
+       SELECT assigned_packer_id FROM work_assignments
+       WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+         AND status IN ('ASSIGNED', 'IN_PROGRESS')
+       ORDER BY created_at DESC LIMIT 1
+     ) wa_p ON true
+     LEFT JOIN LATERAL (
+       SELECT packed_by, pack_date_time FROM packer_logs pl
+       WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
+             RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+       ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC LIMIT 1
+     ) pl ON true
+     LEFT JOIN tech_serial_numbers tsn
+       ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
+          RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+     WHERE ${conditions.join(' AND ')}
+     GROUP BY o.id, o.ship_by_date, o.order_id, o.product_title, o.quantity, o.condition,
+              o.item_number, o.shipping_tracking_number, o.sku, o.out_of_stock,
+              o.account_source, o.notes, o.status_history, o.is_shipped,
+              wa_t.assigned_tech_id, wa_p.assigned_packer_id,
+              pl.packed_by, pl.pack_date_time
+     ORDER BY o.ship_by_date ASC NULLS LAST, o.id ASC
+     LIMIT $${idx++} OFFSET $${idx}`,
+    params,
+  );
+  return result.rows;
+}
+
+// ─── Orders (Write) ───────────────────────────────────────────────────────────
+
+/**
+ * Update a specific field in a shipped order
+ */
+export async function updateShippedOrderField(id: number, field: string, value: any): Promise<void> {
+  const allowedFields = ['notes', 'is_shipped', 'status_history'];
+  if (!allowedFields.includes(field)) {
+    throw new Error(
+      `Field '${field}' cannot be updated here. ` +
+      `Use /api/orders/assign for assignment changes, ` +
+      `tech_serial_numbers for serial/test data, or packer_logs for packing completion data.`,
+    );
+  }
+  try {
+    await pool.query(
+      `UPDATE orders SET ${field} = $1 WHERE id = $2 AND COALESCE(is_shipped, false) = true`,
+      [value, id],
+    );
+  } catch (error) {
+    console.error('Error updating shipped order field:', error);
+    throw new Error('Failed to update shipped order field');
+  }
+}
+
+/**
+ * Create a new order
+ */
+export async function createOrder(params: CreateOrderParams): Promise<ActiveOrder> {
+  const result = await pool.query(
+    `INSERT INTO orders
+       (order_id, product_title, shipping_tracking_number, sku, account_source,
+        condition, quantity, item_number, ship_by_date, notes, is_shipped)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     RETURNING *`,
+    [
+      params.orderId,
+      params.productTitle,
+      params.shippingTrackingNumber ?? null,
+      params.sku ?? null,
+      params.accountSource ?? 'Manual',
+      params.condition ?? 'Good',
+      params.quantity ?? null,
+      params.itemNumber ?? null,
+      params.shipByDate ?? null,
+      params.notes ?? null,
+      params.isShipped ?? false,
+    ],
+  );
+  return result.rows[0];
+}
+
+/**
+ * Check if a tracking number already exists in orders (last-8 match)
+ */
+export async function trackingNumberExists(trackingNumber: string): Promise<boolean> {
+  const last8 = trackingNumber.replace(/\D/g, '').slice(-8);
+  const result = await pool.query(
+    `SELECT 1 FROM orders
+     WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
+     LIMIT 1`,
+    [last8],
+  );
+  return result.rowCount ? result.rowCount > 0 : false;
+}
+
+/**
+ * Update order fields (general-purpose for active orders)
+ */
+export async function updateOrder(
+  id: number,
+  updates: Partial<{
+    productTitle: string;
+    shippingTrackingNumber: string | null;
+    sku: string | null;
+    condition: string;
+    quantity: string | null;
+    itemNumber: string | null;
+    shipByDate: string | null;
+    notes: string | null;
+    isShipped: boolean;
+    outOfStock: string | null;
+    statusHistory: any;
+    accountSource: string | null;
+  }>,
+): Promise<ActiveOrder | null> {
+  const columnMap: Record<string, string> = {
+    productTitle: 'product_title',
+    shippingTrackingNumber: 'shipping_tracking_number',
+    sku: 'sku',
+    condition: 'condition',
+    quantity: 'quantity',
+    itemNumber: 'item_number',
+    shipByDate: 'ship_by_date',
+    notes: 'notes',
+    isShipped: 'is_shipped',
+    outOfStock: 'out_of_stock',
+    statusHistory: 'status_history',
+    accountSource: 'account_source',
+  };
+
+  const setClauses: string[] = [];
+  const params: any[] = [];
+  let idx = 1;
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined && columnMap[key]) {
+      setClauses.push(`${columnMap[key]} = $${idx++}`);
+      params.push(value);
+    }
+  }
+
+  if (setClauses.length === 0) return null;
+
+  params.push(id);
+  const result = await pool.query(
+    `UPDATE orders SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
+    params,
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Delete an order by ID
+ */
+export async function deleteOrder(id: number): Promise<boolean> {
+  const result = await pool.query('DELETE FROM orders WHERE id = $1', [id]);
+  return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Skip an order (mark with a skip status in status_history)
+ */
+export async function skipOrder(id: number, reason?: string): Promise<boolean> {
+  const now = new Date().toISOString();
+  const result = await pool.query(
+    `UPDATE orders
+     SET status_history = COALESCE(status_history, '[]'::jsonb) || $1::jsonb
+     WHERE id = $2`,
+    [JSON.stringify([{ status: 'SKIPPED', timestamp: now, reason: reason ?? null }]), id],
+  );
+  return (result.rowCount ?? 0) > 0;
 }

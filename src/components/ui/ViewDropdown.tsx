@@ -10,7 +10,7 @@ export interface ViewDropdownOption<T extends string> {
 }
 
 interface ViewDropdownProps<T extends string> {
-  options: Array<ViewDropdownOption<T>>;
+  options: ReadonlyArray<ViewDropdownOption<T>>;
   value: T;
   onChange: (nextValue: T) => void;
   className?: string;

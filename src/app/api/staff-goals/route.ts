@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { upsertStaffGoal } from '@/lib/neon/staff-goals-queries';
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,45 +10,31 @@ export async function GET(req: NextRequest) {
 
     if (staffId && Number.isFinite(staffId)) {
       const single = await pool.query(
-        `
-          SELECT
-            s.id AS staff_id,
-            s.name,
-            COALESCE(sg.daily_goal, 50) AS daily_goal
-          FROM staff s
-          LEFT JOIN staff_goals sg ON sg.staff_id = s.id
-          WHERE s.id = $1
-          LIMIT 1
-        `,
-        [staffId]
+        `SELECT s.id AS staff_id, s.name, COALESCE(sg.daily_goal, 50) AS daily_goal
+         FROM staff s
+         LEFT JOIN staff_goals sg ON sg.staff_id = s.id
+         WHERE s.id = $1 LIMIT 1`,
+        [staffId],
       );
-
       if (single.rows.length === 0) {
         return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
       }
-
       return NextResponse.json(single.rows[0]);
     }
 
     const result = await pool.query(`
       WITH today_counts AS (
-        SELECT
-          tested_by AS staff_id,
-          COUNT(*)::int AS today_count
+        SELECT tested_by AS staff_id, COUNT(*)::int AS today_count
         FROM tech_serial_numbers
-        WHERE tested_by IS NOT NULL
-          AND test_date_time IS NOT NULL
+        WHERE tested_by IS NOT NULL AND test_date_time IS NOT NULL
           AND DATE(test_date_time AT TIME ZONE 'America/Los_Angeles') =
               DATE(NOW() AT TIME ZONE 'America/Los_Angeles')
         GROUP BY tested_by
       ),
       week_counts AS (
-        SELECT
-          tested_by AS staff_id,
-          COUNT(*)::int AS week_count
+        SELECT tested_by AS staff_id, COUNT(*)::int AS week_count
         FROM tech_serial_numbers
-        WHERE tested_by IS NOT NULL
-          AND test_date_time IS NOT NULL
+        WHERE tested_by IS NOT NULL AND test_date_time IS NOT NULL
           AND DATE(test_date_time AT TIME ZONE 'America/Los_Angeles') >=
               DATE(NOW() AT TIME ZONE 'America/Los_Angeles') - INTERVAL '6 day'
         GROUP BY tested_by
@@ -64,8 +51,7 @@ export async function GET(req: NextRequest) {
       LEFT JOIN staff_goals sg ON sg.staff_id = s.id
       LEFT JOIN today_counts tc ON tc.staff_id = s.id
       LEFT JOIN week_counts wc ON wc.staff_id = s.id
-      WHERE s.active = true
-        AND s.role = 'technician'
+      WHERE s.active = true AND s.role = 'technician'
       ORDER BY s.name ASC
     `);
 
@@ -85,23 +71,11 @@ export async function PUT(req: NextRequest) {
     if (!Number.isFinite(staffId) || staffId <= 0) {
       return NextResponse.json({ error: 'Valid staffId is required' }, { status: 400 });
     }
-
     if (!Number.isFinite(dailyGoal) || dailyGoal <= 0) {
       return NextResponse.json({ error: 'dailyGoal must be greater than 0' }, { status: 400 });
     }
 
-    await pool.query(
-      `
-        INSERT INTO staff_goals (staff_id, daily_goal, updated_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (staff_id)
-        DO UPDATE SET
-          daily_goal = EXCLUDED.daily_goal,
-          updated_at = NOW()
-      `,
-      [staffId, dailyGoal]
-    );
-
+    await upsertStaffGoal(staffId, dailyGoal);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error updating staff goal:', error);

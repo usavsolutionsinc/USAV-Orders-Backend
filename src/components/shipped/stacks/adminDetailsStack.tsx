@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Package, X } from '@/components/Icons';
-import { DashboardDetailsStack } from './dashboarddetailsStack';
+import { DashboardDetailsStack } from './DashboardDetailsStack';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
 

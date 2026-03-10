@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, jsonb, pgEnum, bigserial } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, json, jsonb, pgEnum, bigserial } from 'drizzle-orm/pg-core';
 
 // eBay Accounts table
 export const ebayAccounts = pgTable('ebay_accounts', {
@@ -86,6 +86,20 @@ export const assignmentStatusEnum = pgEnum('assignment_status_enum', [
   'IN_PROGRESS',
   'DONE',
   'CANCELED',
+]);
+
+export const inboundWorkflowStatusEnum = pgEnum('inbound_workflow_status_enum', [
+  'EXPECTED',
+  'ARRIVED',
+  'MATCHED',
+  'UNBOXED',
+  'AWAITING_TEST',
+  'IN_TEST',
+  'PASSED',
+  'FAILED',
+  'RTV',
+  'SCRAP',
+  'DONE',
 ]);
 
 // DAILY TASK LOGIC REMOVED
@@ -212,15 +226,60 @@ export const receiving = pgTable('receiving', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * receiving_lines — one row per expected inbound SKU/line item.
+ *
+ * Lifecycle model:
+ *   EXPECTED   — Zoho PO sync created the row; receiving_id is NULL.
+ *   ARRIVED    — Physical package scanned at dock (receiving row created, not yet linked).
+ *   MATCHED    — receiving_id set; this line linked to its physical package.
+ *   UNBOXED    — Item extracted from box; qty/condition captured.
+ *   AWAITING_TEST → IN_TEST → PASSED | FAILED → RTV | SCRAP | DONE.
+ *
+ * The receiving table is the package/container event.
+ * receiving_lines is the authoritative operational unit.
+ * Every tech-facing action resolves to one or more receiving_lines rows.
+ */
 export const receivingLines = pgTable('receiving_lines', {
   id: serial('id').primaryKey(),
-  receivingId: integer('receiving_id').notNull().references(() => receiving.id, { onDelete: 'cascade' }),
+  /** NULL until a physical scan is matched (Zoho PO pre-staging rows start NULL) */
+  receivingId: integer('receiving_id').references(() => receiving.id, { onDelete: 'cascade' }),
+
+  // Zoho identifiers — at least one is required for Zoho-originated rows
   zohoItemId: text('zoho_item_id').notNull(),
-  quantity: integer('quantity').notNull(),
+  zohoLineItemId: text('zoho_line_item_id'),
+  zohoPurchaseReceiveId: text('zoho_purchase_receive_id'),
+  zohoPurchaseOrderId: text('zoho_purchaseorder_id'),
+
+  // Item metadata
+  itemName: text('item_name'),
+  sku: text('sku'),
+
+  // Quantities
+  /** Legacy column; prefer quantity_received / quantity_expected */
+  quantity: integer('quantity'),
+  quantityReceived: integer('quantity_received').default(0),
+  quantityExpected: integer('quantity_expected'),
+
+  // Lifecycle state
+  workflowStatus: inboundWorkflowStatusEnum('workflow_status').notNull().default('EXPECTED'),
+
+  // QA / disposition
   qaStatus: qaStatusEnum('qa_status').notNull().default('PENDING'),
   dispositionCode: dispositionEnum('disposition_code').notNull().default('HOLD'),
   conditionGrade: conditionGradeEnum('condition_grade').notNull().default('BRAND_NEW'),
   dispositionAudit: jsonb('disposition_audit').notNull().default([]),
+
+  // Line-level test assignment (separate from package-level receiving.needs_test)
+  needsTest: boolean('needs_test').notNull().default(false),
+  assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
+
+  // Final disposition label (PASS_TO_STOCK | PASS_TO_FBA | PASS_TO_ORDER_TEST | FAIL_DAMAGED | ...)
+  dispositionFinal: text('disposition_final'),
+
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 /**
@@ -278,20 +337,21 @@ export const sku = pgTable('sku', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-// Repair Service table - Updated schema with JSON date_time
+// Repair Service table
 export const repairService = pgTable('repair_service', {
   id: serial('id').primaryKey(),
-  dateTime: text('date_time'), // JSON: {start: timestamp, repaired: timestamp, done: timestamp}
   ticketNumber: text('ticket_number'),
+  contactInfo: text('contact_info'), // "name, phone, email"
   productTitle: text('product_title'),
+  price: text('price'),
   issue: text('issue'),
   serialNumber: text('serial_number'),
-  contactInfo: text('contact_info'), // CSV: "name, phone, email"
-  price: text('price'),
-  status: text('status').default('pending'),
-  repairReasons: text('repair_reasons'),
+  notes: text('notes'),
+  statusHistory: json('status_history').default([]),
+  status: text('status').default('Pending Repair'),
+  process: json('process').default([]),
+  dateTime: json('date_time'),
   repairedBy: integer('repaired_by').references(() => staff.id, { onDelete: 'set null' }),
-  process: text('process'), // JSON: [{parts: string, person: string, date: timestamp}]
 });
 
 // Packing data audit trail lives in packer_logs; photos in the unified photos table.
@@ -332,6 +392,7 @@ export type Receiving = typeof receiving.$inferSelect;
 export type NewReceiving = typeof receiving.$inferInsert;
 export type ReceivingLine = typeof receivingLines.$inferSelect;
 export type NewReceivingLine = typeof receivingLines.$inferInsert;
+export type InboundWorkflowStatus = typeof inboundWorkflowStatusEnum.enumValues[number];
 export type WorkAssignment = typeof workAssignments.$inferSelect;
 export type NewWorkAssignment = typeof workAssignments.$inferInsert;
 export type Customer = typeof customers.$inferSelect;

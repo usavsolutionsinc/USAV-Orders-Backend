@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { createRepair } from '@/lib/neon/repair-service-queries';
+import { createAssignment } from '@/lib/neon/assignments-queries';
 import { createZendeskTicket } from '@/lib/zendesk';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
@@ -8,36 +9,41 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
         const { customer, product, repairReasons, repairNotes, serialNumber, price, notes, assignedTechId } = body;
+        const normalizedProductTitle = String(product?.model || '').trim();
+        const normalizedReasons = Array.isArray(repairReasons)
+            ? repairReasons.map((reason: unknown) => String(reason || '').trim()).filter(Boolean)
+            : [];
+        const normalizedRepairNotes = String(repairNotes || '').trim();
+        const normalizedSerialNumber = String(serialNumber || '').trim();
+        const normalizedPrice = String(price || '').trim();
+        const normalizedNotes = String(notes || '').trim();
+        const techId = assignedTechId ? Number(assignedTechId) : null;
 
         // Validate required fields (email is optional)
-        if (!customer?.name || !customer?.phone || !product?.type || !product?.model || !repairReasons?.length || !serialNumber || !price) {
+        if (
+            !customer?.name ||
+            !customer?.phone ||
+            !normalizedProductTitle ||
+            (!normalizedReasons.length && !normalizedRepairNotes) ||
+            !normalizedSerialNumber ||
+            !normalizedPrice
+        ) {
             const missing = [];
             if (!customer?.name) missing.push('Name');
             if (!customer?.phone) missing.push('Phone');
-            if (!product?.type || !product?.model) missing.push('Product Title');
-            if (!repairReasons?.length) missing.push('Repair Reasons');
-            if (!serialNumber) missing.push('Serial #');
-            if (!price) missing.push('Price');
+            if (!normalizedProductTitle) missing.push('Product Title');
+            if (!normalizedReasons.length && !normalizedRepairNotes) missing.push('Repair Reason or Notes');
+            if (!normalizedSerialNumber) missing.push('Serial #');
+            if (!normalizedPrice) missing.push('Price');
 
             return NextResponse.json({ 
                 error: `Missing required fields: ${missing.join(', ')}` 
             }, { status: 400 });
         }
 
-        // Format date/time (MM/DD/YYYY HH:mm:ss)
-        const now = new Date();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const year = now.getFullYear();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        const formattedDateTime = `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+        const isoTimestamp = new Date().toISOString();
 
-        // Format product string
-        const productString = product.type === 'Other' 
-            ? product.model 
-            : `${product.type} Music System - ${product.model}`;
+        const productString = normalizedProductTitle;
 
         // Format contact info (email is optional)
         const contactInfo = customer.email 
@@ -45,84 +51,53 @@ export async function POST(req: NextRequest) {
             : `${customer.name}, ${customer.phone}`;
 
         // Format issue (repair reasons + repair notes from step 2)
-        const issueString = repairReasons.join(', ') + (repairNotes ? ` - ${repairNotes}` : '');
+        const issueString = normalizedReasons.join(', ') + (normalizedRepairNotes ? `${normalizedReasons.length ? ' - ' : ''}${normalizedRepairNotes}` : '');
 
         // Step 1: Create Zendesk ticket via GAS Web App
-        // Note: Currently unable to retrieve ticket number from Zendesk, using "NA"
-        let zendeskTicketNumber: string = 'NA';
+        let zendeskTicketNumber: string | null = null;
         try {
-            await createZendeskTicket({
+            zendeskTicketNumber = await createZendeskTicket({
                 customerName: customer.name,
                 customerPhone: customer.phone,
                 customerEmail: customer.email || '', // Optional
                 productTitle: productString,
                 contactInfo: contactInfo,
                 issue: issueString,
-                serialNumber,
-                price,
-                notes: notes || '' // Optional notes from step 3
+                serialNumber: normalizedSerialNumber,
+                price: normalizedPrice,
+                notes: normalizedNotes // Optional notes from step 3
             });
-            // Ticket created but number not retrieved, using NA
-            console.log('✅ Zendesk ticket created (ticket number: NA)');
+            console.log('Zendesk ticket created:', zendeskTicketNumber ?? 'missing ticket number');
         } catch (error: any) {
             console.error('Failed to create Zendesk ticket:', error);
             // Continue with DB insert even if Zendesk fails
         }
 
         // Step 2: Insert into repair_service table in NEON DB
-        console.log('📝 Inserting repair service:', {
-            date_time: formattedDateTime,
-            ticket_number: zendeskTicketNumber,
-            contact_info: contactInfo,
-            product_title: productString,
-            price: price || '130',
+        const repairRecord = await createRepair({
+            dateTime: isoTimestamp,
+            ticketNumber: zendeskTicketNumber,
+            contactInfo,
+            productTitle: productString,
+            price: normalizedPrice,
             issue: issueString,
-            serial_number: serialNumber || '',
-            notes: notes || '',
-            status: 'Pending Repair'
+            serialNumber: normalizedSerialNumber,
+            notes: normalizedNotes || null,
+            repairedBy: techId,
         });
 
-        const insertResult = await pool.query(`
-            INSERT INTO repair_service (date_time, ticket_number, contact_info, product_title, price, issue, serial_number, notes, process, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id, ticket_number
-        `, [
-            JSON.stringify(formattedDateTime), // date_time (JSON)
-            zendeskTicketNumber,               // ticket_number (TEXT) - "NA" for now
-            contactInfo,                       // contact_info (TEXT - CSV format)
-            productString,                     // product_title (TEXT)
-            price || '130',                    // price (TEXT)
-            issueString,                       // issue (TEXT - repair reasons + repair notes)
-            serialNumber || '',                // serial_number (TEXT)
-            notes || '',                       // notes (TEXT - notes from step 3)
-            '[]',                              // process (JSON - empty array)
-            'Pending Repair'                   // status (TEXT)
-        ]);
-
-        console.log('✅ Insert successful, ID:', insertResult.rows[0]?.id);
-
-        const insertedRow = insertResult.rows[0];
-        const dbId = insertedRow.id;
-        
-        // If no Zendesk ticket, update ticket_number with DB ID
-        let finalRSNumber = zendeskTicketNumber;
-        if (!zendeskTicketNumber) {
-            await pool.query(`
-                UPDATE repair_service 
-                SET ticket_number = $1 
-                WHERE id = $2
-            `, [`RS-${String(dbId).padStart(4, '0')}`, dbId]);
-            finalRSNumber = `RS-${String(dbId).padStart(4, '0')}`;
-        }
+        const dbId = repairRecord.id;
+        const finalRSNumber = repairRecord.ticket_number;
 
         // Insert into work_assignments so the repair appears in the Up Next queue
-        const techId = assignedTechId ? Number(assignedTechId) : null;
         try {
-            await pool.query(`
-                INSERT INTO work_assignments (entity_type, entity_id, work_type, assigned_tech_id, status, priority)
-                VALUES ('REPAIR', $1, 'REPAIR', $2, 'ASSIGNED', 100)
-                ON CONFLICT ON CONSTRAINT ux_work_assignments_active_entity DO NOTHING
-            `, [dbId, techId]);
+            await createAssignment({
+                entityType: 'REPAIR',
+                entityId: dbId,
+                workType: 'REPAIR',
+                assignedTechId: techId,
+                status: 'ASSIGNED',
+            });
         } catch (waErr) {
             console.warn('work_assignments insert skipped (constraint or missing):', waErr);
         }
@@ -138,18 +113,18 @@ export async function POST(req: NextRequest) {
             id: dbId,
             receiptData: {
                 rsNumber: finalRSNumber,
-                dropOffDate: formattedDateTime,
+                dropOffDate: isoTimestamp,
                 customer: {
                     name: customer.name,
                     phone: customer.phone,
                     email: customer.email
                 },
                 product: productString,
-                serialNumber: serialNumber || 'Not provided',
-                price: price || '130',
-                repairReasons: repairReasons,
-                repairNotes: repairNotes || '',
-                notes: notes || '',
+                serialNumber: normalizedSerialNumber || 'Not provided',
+                price: normalizedPrice,
+                repairReasons: normalizedReasons,
+                repairNotes: normalizedRepairNotes,
+                notes: normalizedNotes,
                 status: 'Pending Repair'
             }
         });

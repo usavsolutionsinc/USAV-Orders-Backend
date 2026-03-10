@@ -2,17 +2,18 @@ import pool from '../db';
 
 // Neon DB Repair Service Table Schema:
 // id (SERIAL PRIMARY KEY) - auto-increment
-// date_time (TEXT)
 // ticket_number (TEXT) - formerly "RS #"
 // contact_info (TEXT) - CSV format: "name, phone, email"
 // product_title (TEXT) - formerly "Product(s)"
 // price (TEXT)
 // issue (TEXT)
 // serial_number (TEXT) - formerly "Serial #"
-// process (TEXT - JSON) - parts repaired, person who did it, and date
-// status (TEXT)
 // notes (TEXT)
 // status_history (JSON) - tracks status changes with timestamps
+// status (TEXT)
+// process (JSON) - parts repaired, person who did it, and date
+// date_time (JSON string or object)
+// repaired_by (INTEGER)
 
 export interface StatusHistoryEntry {
   status: string;
@@ -39,6 +40,7 @@ export interface RSRecord {
   status: string;
   notes?: string;
   status_history?: StatusHistoryEntry[];
+  repaired_by?: number | null;
 }
 
 // Valid status options for repair service
@@ -71,6 +73,34 @@ function parseProcess(processData: any): ProcessEntry[] {
   return [];
 }
 
+function parseDateTime(dateTimeData: any): string {
+  if (!dateTimeData) return '';
+  if (typeof dateTimeData === 'string') return dateTimeData;
+  if (typeof dateTimeData === 'object') {
+    return String(
+      dateTimeData.start ||
+      dateTimeData.submittedAt ||
+      dateTimeData.createdAt ||
+      dateTimeData.repaired ||
+      dateTimeData.done ||
+      ''
+    );
+  }
+  return String(dateTimeData);
+}
+
+function normalizeJsonColumnValue(field: string, value: any): any {
+  if (field === 'date_time') {
+    return JSON.stringify(parseDateTime(value));
+  }
+
+  if (field === 'process' || field === 'status_history') {
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  }
+
+  return value;
+}
+
 /**
  * Get all repairs with optional limit and offset for pagination
  */
@@ -89,7 +119,8 @@ export async function getAllRepairs(limit = 100, offset = 0): Promise<RSRecord[]
         process,
         status,
         notes,
-        status_history
+        status_history,
+        repaired_by
       FROM repair_service
       ORDER BY id DESC
       LIMIT $1 OFFSET $2`,
@@ -98,6 +129,7 @@ export async function getAllRepairs(limit = 100, offset = 0): Promise<RSRecord[]
 
     return result.rows.map(row => ({
       ...row,
+      date_time: parseDateTime(row.date_time),
       process: parseProcess(row.process),
       status_history: parseStatusHistory(row.status_history),
     }));
@@ -125,7 +157,8 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
         process,
         status,
         notes,
-        status_history
+        status_history,
+        repaired_by
       FROM repair_service
       WHERE id = $1`,
       [id]
@@ -138,6 +171,7 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
     const row = result.rows[0];
     return {
       ...row,
+      date_time: parseDateTime(row.date_time),
       process: parseProcess(row.process),
       status_history: parseStatusHistory(row.status_history),
     };
@@ -175,7 +209,7 @@ export async function updateRepairStatus(id: number, newStatus: string): Promise
     if (newStatus === 'Shipped' || newStatus === 'Picked Up') {
       await pool.query(
         'UPDATE repair_service SET status = $1, status_history = $2, date_time = $3 WHERE id = $4',
-        [newStatus, historyJson, now, id]
+        [newStatus, historyJson, JSON.stringify(now), id]
       );
     } else {
       await pool.query(
@@ -220,20 +254,83 @@ export async function updateRepairField(id: number, field: string, value: any): 
       'process',
       'status',
       'notes',
+      'status_history',
+      'repaired_by',
     ];
 
     if (!validFields.includes(field)) {
       throw new Error(`Invalid field: ${field}`);
     }
 
-    await pool.query(
-      `UPDATE repair_service SET ${field} = $1 WHERE id = $2`,
-      [value, id]
-    );
+    const normalizedValue = normalizeJsonColumnValue(field, value);
+
+    await pool.query(`UPDATE repair_service SET ${field} = $1 WHERE id = $2`, [
+      normalizedValue,
+      id,
+    ]);
   } catch (error) {
     console.error('Error updating repair field:', error);
     throw new Error('Failed to update repair field');
   }
+}
+
+export interface CreateRepairParams {
+  dateTime: string;
+  ticketNumber?: string | null;
+  contactInfo: string;
+  productTitle: string;
+  price: string;
+  issue: string;
+  serialNumber: string;
+  notes?: string | null;
+  statusHistory?: StatusHistoryEntry[];
+  process?: ProcessEntry[];
+  status?: string;
+  repairedBy?: number | null;
+}
+
+/**
+ * Create a new repair record
+ */
+export async function createRepair(params: CreateRepairParams): Promise<RSRecord> {
+  const statusHistory = params.statusHistory ?? [
+    { status: params.status ?? 'Pending Repair', timestamp: new Date().toISOString() },
+  ];
+
+  const result = await pool.query(
+    `INSERT INTO repair_service
+       (date_time, ticket_number, contact_info, product_title, price, issue,
+        serial_number, notes, status_history, process, status, repaired_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id, ticket_number`,
+    [
+      JSON.stringify(params.dateTime),
+      params.ticketNumber ?? null,
+      params.contactInfo,
+      params.productTitle,
+      params.price,
+      params.issue,
+      params.serialNumber,
+      params.notes ?? null,
+      JSON.stringify(statusHistory),
+      JSON.stringify(params.process ?? []),
+      params.status ?? 'Pending Repair',
+      params.repairedBy ?? null,
+    ],
+  );
+
+  const { id } = result.rows[0];
+
+  // If no ticket number was provided, assign a fallback RS-XXXX number
+  let ticketNumber = result.rows[0].ticket_number;
+  if (!ticketNumber) {
+    const fallback = `RS-${String(id).padStart(4, '0')}`;
+    await pool.query('UPDATE repair_service SET ticket_number = $1 WHERE id = $2', [fallback, id]);
+    ticketNumber = fallback;
+  }
+
+  const record = await getRepairById(id);
+  return record!;
 }
 
 /**
@@ -255,7 +352,8 @@ export async function searchRepairs(query: string): Promise<RSRecord[]> {
         process,
         status,
         notes,
-        status_history
+        status_history,
+        repaired_by
       FROM repair_service
       WHERE 
         ticket_number ILIKE $1 OR
@@ -269,6 +367,7 @@ export async function searchRepairs(query: string): Promise<RSRecord[]> {
 
     return result.rows.map(row => ({
       ...row,
+      date_time: parseDateTime(row.date_time),
       process: parseProcess(row.process),
       status_history: parseStatusHistory(row.status_history),
     }));

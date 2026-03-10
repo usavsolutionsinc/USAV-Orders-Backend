@@ -206,7 +206,7 @@ export function DashboardManagementPanel({
               onSearch={handleSearch}
               onClear={() => handleSearch('')}
               inputRef={searchInputRef}
-              placeholder="Search orders, serials..."
+              placeholder="Search order ID, tracking, SKU, title, customer..."
               variant="blue"
               rightElement={
                 <button

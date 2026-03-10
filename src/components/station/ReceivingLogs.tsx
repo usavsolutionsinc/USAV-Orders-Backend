@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Package, Loader2, Copy, Check } from '../Icons';
 import { motion } from 'framer-motion';
-import { formatTimePST, toPSTDateKey, getCurrentPSTDateKey } from '@/lib/timezone';
+import { toPSTDateKey, getCurrentPSTDateKey } from '@/lib/timezone';
 import { formatDateWithOrdinal } from '@/lib/date-format';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
@@ -39,6 +39,19 @@ interface ReceivingLog {
 interface ReceivingLogsProps {
     onSelectLog?: (log: ReceivingLog) => void;
     selectedLogId?: string | null;
+}
+
+function formatDbTime(value: string | null | undefined): string {
+    if (!value) return '--:--';
+
+    const raw = String(value).trim();
+    if (!raw) return '--:--';
+
+    // Handles ISO strings like "2026-03-09T13:25:19.000Z" and plain "2026-03-09 13:25:19"
+    const match = raw.match(/(?:T|\s)(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/);
+    if (match) return `${match[1]}:${match[2]}`;
+
+    return '--:--';
 }
 
 function computeWeekRange(weekOffset: number) {
@@ -278,7 +291,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                         }`}
                                     >
                                         <div className="text-[11px] font-black text-gray-400 tabular-nums uppercase text-left">
-                                            {log.timestamp ? formatTimePST(log.timestamp) : '--:--'}
+                                            {formatDbTime(log.timestamp)}
                                         </div>
                                         <div className="flex items-center gap-2 min-w-0">
                                             <CopyableText

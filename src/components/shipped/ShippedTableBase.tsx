@@ -92,10 +92,20 @@ export function ShippedTableBase({
       if (detail.testerId !== undefined) {
         next.tester_id = detail.testerId;
         next.tested_by = detail.testerId;
+        next.testerId = detail.testerId;
+        if (detail.testerName !== undefined) {
+          next.tested_by_name = detail.testerName;
+          next.tester_name = detail.testerName;
+        }
       }
       if (detail.packerId !== undefined) {
         next.packer_id = detail.packerId;
         next.packed_by = detail.packerId;
+        next.packerId = detail.packerId;
+        if (detail.packerName !== undefined) {
+          next.packed_by_name = detail.packerName;
+          next.packer_name = detail.packerName;
+        }
       }
       if (detail.shipByDate !== undefined) next.ship_by_date = detail.shipByDate;
       if (detail.outOfStock !== undefined) next.out_of_stock = detail.outOfStock;
@@ -225,6 +235,14 @@ export function ShippedTableBase({
     setSelectedShipped(record);
   }, [selectedShipped]);
 
+  const scrollRowIntoView = useCallback((orderId: number | string | null | undefined) => {
+    if (orderId == null) return;
+    window.setTimeout(() => {
+      const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(orderId)}"]`) as HTMLElement | null;
+      targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+  }, []);
+
   const strictFilteredRecords = shipped;
   const filteredRecords = strictFilteredRecords;
 
@@ -306,16 +324,14 @@ export function ShippedTableBase({
       if (!nextRecord || nextRecord.id === selectedShipped?.id) return;
 
       handleRowClick(nextRecord);
-      window.setTimeout(() => {
-        const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(nextRecord.id)}"]`) as HTMLElement | null;
-        targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 0);
+      scrollRowIntoView(nextRecord.id);
     };
 
-    const handleNavigateNextUnassigned = () => {
+    const handleNavigateNextUnassigned = (e: any) => {
       if (displayedRecords.length === 0) return;
 
-      const currentIndex = displayedRecords.findIndex((record) => record.id === selectedShipped?.id);
+      const currentOrderId = Number(e?.detail?.currentOrderId ?? selectedShipped?.id);
+      const currentIndex = displayedRecords.findIndex((record) => Number(record.id) === currentOrderId);
       const safeCurrentIndex = currentIndex >= 0 ? currentIndex : -1;
 
       const nextRecord =
@@ -329,10 +345,7 @@ export function ShippedTableBase({
       }
 
       handleRowClick(nextRecord);
-      window.setTimeout(() => {
-        const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(nextRecord.id)}"]`) as HTMLElement | null;
-        targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 0);
+      scrollRowIntoView(nextRecord.id);
     };
 
     window.addEventListener('navigate-dashboard-order' as any, handleNavigate as any);
@@ -341,7 +354,7 @@ export function ShippedTableBase({
       window.removeEventListener('navigate-dashboard-order' as any, handleNavigate as any);
       window.removeEventListener('navigate-dashboard-next-unassigned' as any, handleNavigateNextUnassigned as any);
     };
-  }, [displayedRecords, handleRowClick, selectedShipped?.id, ordersOnly]);
+  }, [displayedRecords, handleRowClick, ordersOnly, scrollRowIntoView, selectedShipped?.id]);
 
   // Get total count for current week
   const getWeekCount = () => {

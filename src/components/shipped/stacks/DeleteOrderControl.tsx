@@ -1,0 +1,53 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useDeleteOrderRow } from '@/hooks';
+
+interface DeleteOrderControlProps {
+  orderId: number;
+  onDeleted: () => void;
+}
+
+export function DeleteOrderControl({ orderId, onDeleted }: DeleteOrderControlProps) {
+  const [isDeleteArmed, setIsDeleteArmed] = useState(false);
+  const deleteArmTimeoutRef = useRef<number | null>(null);
+  const deleteOrderMutation = useDeleteOrderRow();
+
+  useEffect(() => {
+    return () => {
+      if (deleteArmTimeoutRef.current) window.clearTimeout(deleteArmTimeoutRef.current);
+    };
+  }, []);
+
+  const handleDelete = async () => {
+    if (!isDeleteArmed) {
+      setIsDeleteArmed(true);
+      if (deleteArmTimeoutRef.current) window.clearTimeout(deleteArmTimeoutRef.current);
+      deleteArmTimeoutRef.current = window.setTimeout(() => setIsDeleteArmed(false), 3000);
+      return;
+    }
+    if (deleteArmTimeoutRef.current) {
+      window.clearTimeout(deleteArmTimeoutRef.current);
+      deleteArmTimeoutRef.current = null;
+    }
+    setIsDeleteArmed(false);
+    try {
+      await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderId });
+      onDeleted();
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+      window.alert('Failed to cancel order. Please try again.');
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleDelete}
+      disabled={deleteOrderMutation.isPending}
+      className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+    >
+      {deleteOrderMutation.isPending ? 'Cancelling...' : isDeleteArmed ? 'Click Again To Confirm' : 'Cancel/Delete Order'}
+    </button>
+  );
+}

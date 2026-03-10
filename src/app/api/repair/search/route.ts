@@ -18,19 +18,20 @@ export async function GET(req: NextRequest) {
                 id,
                 date_time,
                 ticket_number,
-                name,
-                contact,
+                contact_info,
                 product_title,
                 price,
-                issue as repair_reasons,
+                issue,
                 serial_number,
                 process,
-                status
+                status,
+                notes,
+                status_history,
+                repaired_by
             FROM repair_service
             WHERE 
                 ticket_number ILIKE $1 OR
-                name ILIKE $1 OR
-                contact ILIKE $1 OR
+                contact_info ILIKE $1 OR
                 product_title ILIKE $1 OR
                 serial_number ILIKE $1
             ORDER BY id DESC

@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { X, Package, Trash2 } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
-import { DashboardDetailsStack } from './stacks/dashboarddetailsStack';
+import { DashboardDetailsStack } from './stacks/DashboardDetailsStack';
 import { TechDetailsStack } from './stacks/TechDetailsStack';
 import { PackerDetailsStack } from './stacks/PackerDetailsStack';
 import { DetailsStackDurationData } from './stacks/types';

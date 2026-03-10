@@ -25,14 +25,12 @@ export async function POST(request: NextRequest) {
     const maxItems = Number.isFinite(maxItemsRaw) && maxItemsRaw > 0 ? Math.min(2000, Math.floor(maxItemsRaw)) : 500;
 
     // Optional status filter — Zoho PO statuses: draft, open, issued, partially_received, billed, cancelled
-    // Default: sync open + issued + partially_received POs
     const statusFilter = String(body?.status || '').trim() || undefined;
 
     let processed = 0;
-    let imported = 0;
-    let created = 0;
-    let updated = 0;
+    let synced = 0;
     let failed = 0;
+    let totalLineItems = 0;
     const errors: Array<{ purchaseorder_id: string; error: string }> = [];
 
     for (let page = 1; page <= maxPages && processed < maxItems; page++) {
@@ -57,7 +55,6 @@ export async function POST(request: NextRequest) {
 
       const rows = (data as Record<string, unknown>)?.purchaseorders;
       const orders = Array.isArray(rows) ? rows : [];
-
       if (orders.length === 0) break;
 
       for (const order of orders) {
@@ -77,13 +74,12 @@ export async function POST(request: NextRequest) {
 
         try {
           const result = await importZohoPurchaseOrderToReceiving(purchaseOrderId);
-          imported++;
-          if (result.mode === 'created') created++;
-          if (result.mode === 'updated') updated++;
+          synced++;
+          totalLineItems += result.line_items_synced;
         } catch (error: unknown) {
           failed++;
           const msg = error instanceof Error ? error.message : 'Import failed';
-          console.error(`[zoho-sync] Failed to import PO ${purchaseOrderId}:`, msg);
+          console.error(`[zoho-sync] Failed to sync PO ${purchaseOrderId}:`, msg);
           errors.push({ purchaseorder_id: purchaseOrderId, error: msg });
         }
       }
@@ -94,17 +90,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Zoho purchase orders sync completed.',
-      per_page: perPage,
-      max_pages: maxPages,
-      max_items: maxItems,
+      message: 'Zoho purchase orders synced to receiving_lines.',
       status_filter: statusFilter || 'all',
       totals: {
-        processed,
-        imported,
-        created,
-        updated,
-        failed,
+        pos_processed: processed,
+        pos_synced: synced,
+        pos_failed: failed,
+        line_items_synced: totalLineItems,
       },
       errors: errors.slice(0, 25),
     });

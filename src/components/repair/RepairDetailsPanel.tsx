@@ -5,9 +5,16 @@ import { motion } from 'framer-motion';
 import { X, Check, Clock, Pencil } from '../Icons';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { formatStatusTimestamp } from '@/lib/neon/status-history';
+import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
+import type { AssignmentStaffOption } from '@/components/ui/OrderStaffAssignmentButtons';
+import { getActiveStaff } from '@/lib/staffCache';
 
 interface RepairDetailsPanelProps {
   repair: RSRecord;
+  /** If coming from the queue, pass the current work_assignment id (null = unassigned) */
+  assignmentId?: number | null;
+  /** Current assigned tech id, if any */
+  assignedTechId?: number | null;
   onClose: () => void;
   onUpdate: () => void;
 }
@@ -23,6 +30,8 @@ const STATUS_OPTIONS = [
 
 export function RepairDetailsPanel({ 
   repair, 
+  assignmentId: initialAssignmentId,
+  assignedTechId: initialAssignedTechId,
   onClose, 
   onUpdate 
 }: RepairDetailsPanelProps) {
@@ -34,12 +43,51 @@ export function RepairDetailsPanel({
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const ticketInputRef = useRef<HTMLInputElement>(null);
 
+  // Assignment state
+  const [assignmentId, setAssignmentId] = useState<number | null>(initialAssignmentId ?? null);
+  const [assignedTechId, setAssignedTechId] = useState<number | null>(initialAssignedTechId ?? null);
+  const [techOptions, setTechOptions] = useState<AssignmentStaffOption[]>([]);
+  const [assigningTech, setAssigningTech] = useState(false);
+
+  useEffect(() => {
+    getActiveStaff().then((staff) => {
+      setTechOptions(staff.filter((s) => s.role === 'technician').map((s) => ({ id: s.id, name: s.name })));
+    });
+  }, []);
+
   useEffect(() => {
     if (isEditingTicket && ticketInputRef.current) {
       ticketInputRef.current.focus();
       ticketInputRef.current.select();
     }
   }, [isEditingTicket]);
+
+  const handleAssignTech = async (techId: number) => {
+    setAssigningTech(true);
+    try {
+      const res = await fetch('/api/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity_type:      'REPAIR',
+          entity_id:        repair.id,
+          work_type:        'REPAIR',
+          assigned_tech_id: techId,
+          status:           'ASSIGNED',
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to assign technician');
+      const data = await res.json();
+      const row = data.assignment;
+      setAssignmentId(row?.id ?? assignmentId);
+      setAssignedTechId(techId);
+      onUpdate();
+    } catch (error) {
+      console.error('Error assigning technician:', error);
+    } finally {
+      setAssigningTech(false);
+    }
+  };
 
   const handleSaveTicket = async () => {
     if (ticketNumber === repair.ticket_number) {
@@ -66,7 +114,6 @@ export function RepairDetailsPanel({
       onUpdate();
     } catch (error) {
       console.error('Error saving ticket number:', error);
-      // Revert on error
       setTicketNumber(repair.ticket_number || '');
     } finally {
       setIsSavingTicket(false);
@@ -96,7 +143,6 @@ export function RepairDetailsPanel({
       onUpdate();
     } catch (error) {
       console.error('Error saving notes:', error);
-      // Revert on error
       setNotes(repair.notes || '');
     } finally {
       setIsSaving(false);
@@ -194,7 +240,31 @@ export function RepairDetailsPanel({
       
       {/* Content sections */}
       <div className="p-6 space-y-6">
-        {/* Current Status - Moved to Top */}
+        {/* Technician Assignment */}
+        {techOptions.length > 0 && (
+          <section>
+            <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+              {assignedTechId ? 'Assigned Technician' : 'Assign Technician'}
+            </h3>
+            {!assignedTechId && (
+              <p className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                Not yet assigned — select a technician below
+              </p>
+            )}
+            <OrderStaffAssignmentButtons
+              testerOptions={techOptions}
+              packerOptions={[]}
+              testerId={assignedTechId}
+              packerId={null}
+              onAssignTester={handleAssignTech}
+              onAssignPacker={() => {}}
+              disabled={assigningTech}
+              layout="rows"
+            />
+          </section>
+        )}
+
+        {/* Current Status */}
         <section>
           <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
             Update Status
@@ -243,7 +313,6 @@ export function RepairDetailsPanel({
                   const phone = parts[1] || '';
                   const email = parts[2] || '';
                   
-                  // Format phone number
                   const formatPhoneNumber = (phone: string): string => {
                     if (!phone) return '';
                     const cleaned = phone.replace(/\D/g, '');

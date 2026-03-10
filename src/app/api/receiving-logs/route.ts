@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
 
 export async function GET(request: NextRequest) {
     try {
@@ -10,7 +11,8 @@ export async function GET(request: NextRequest) {
         const offset = parseInt(searchParams.get('offset') || '0');
         const weekStart = searchParams.get('weekStart') || '';
         const weekEnd = searchParams.get('weekEnd') || '';
-        const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd });
+        const needsTestParam = searchParams.get('needs_test');
+        const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd, needsTestParam });
 
         const today = new Date().toISOString().substring(0, 10);
         const cacheTTL = weekEnd && weekEnd < today ? 86400 : 30;
@@ -43,7 +45,7 @@ export async function GET(request: NextRequest) {
 
         const selectFields: string[] = [
             'id',
-            `${dateColumn} AS timestamp`,
+            `(${dateColumn} AT TIME ZONE 'America/Los_Angeles')::text AS timestamp`,
             'receiving_tracking_number AS tracking',
             'carrier AS status',
             `${countExpr} AS count`,
@@ -56,9 +58,9 @@ export async function GET(request: NextRequest) {
             hasColumn('needs_test') ? 'needs_test' : 'FALSE AS needs_test',
             hasColumn('assigned_tech_id') ? 'assigned_tech_id' : 'NULL::int AS assigned_tech_id',
             hasColumn('target_channel') ? 'target_channel' : "NULL::text AS target_channel",
-            hasColumn('received_at') ? 'received_at' : 'NULL::text AS received_at',
+            hasColumn('received_at') ? "(received_at AT TIME ZONE 'America/Los_Angeles')::text AS received_at" : 'NULL::text AS received_at',
             hasColumn('received_by') ? 'received_by' : 'NULL::int AS received_by',
-            hasColumn('unboxed_at') ? 'unboxed_at' : 'NULL::text AS unboxed_at',
+            hasColumn('unboxed_at') ? "(unboxed_at AT TIME ZONE 'America/Los_Angeles')::text AS unboxed_at" : 'NULL::text AS unboxed_at',
             hasColumn('unboxed_by') ? 'unboxed_by' : 'NULL::int AS unboxed_by',
             hasColumn('zoho_purchase_receive_id') ? 'zoho_purchase_receive_id' : "NULL::text AS zoho_purchase_receive_id",
             hasColumn('zoho_warehouse_id') ? 'zoho_warehouse_id' : "NULL::text AS zoho_warehouse_id",
@@ -78,11 +80,20 @@ export async function GET(request: NextRequest) {
         const limitIdx = queryParams.length - 1;
         const offsetIdx = queryParams.length;
 
+        // Optional needs_test filter
+        let needsTestClause = '';
+        if (needsTestParam === 'true' && hasColumn('needs_test')) {
+            needsTestClause = 'AND needs_test = TRUE';
+        } else if (needsTestParam === 'false' && hasColumn('needs_test')) {
+            needsTestClause = 'AND needs_test = FALSE';
+        }
+
         const logs = await pool.query(`
             SELECT ${selectFields.join(', ')}
             FROM receiving
             WHERE receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
               ${weekClause}
+              ${needsTestClause}
             ORDER BY id DESC
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
         `, queryParams);
@@ -312,6 +323,32 @@ export async function PATCH(request: NextRequest) {
 
         if (result.rowCount === 0) {
             return NextResponse.json({ error: 'Receiving log not found' }, { status: 404 });
+        }
+
+        // Phase 4: deterministic assignment upsert — keep work_assignments in sync
+        // whenever needs_test or assigned_tech_id change on the parent package row.
+        const assignmentFieldChanged =
+            needsTestRaw !== undefined || assignedTechIdRaw !== undefined;
+
+        if (assignmentFieldChanged) {
+            // Fetch the current state of the row after update
+            const currentRow = await pool.query<{
+                needs_test: boolean;
+                assigned_tech_id: number | null;
+            }>(
+                `SELECT needs_test, assigned_tech_id FROM receiving WHERE id = $1`,
+                [id]
+            );
+            if (currentRow.rows.length > 0) {
+                const { needs_test, assigned_tech_id } = currentRow.rows[0];
+                await upsertReceivingAssignment({
+                    db: pool,
+                    receivingId: id,
+                    needsTest: !!needs_test,
+                    assignedTechId: assigned_tech_id ?? null,
+                    notes: `Updated from receiving-logs PATCH`,
+                });
+            }
         }
 
         await invalidateCacheTags(['receiving-logs']);

@@ -5,6 +5,7 @@ import { formatPSTTimestamp } from '@/lib/timezone';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking, getPurchaseOrderById } from '@/lib/zoho';
 
 /**
  * Compute Mon–Fri week range (PST date strings) for a given PST timestamp string
@@ -142,6 +143,211 @@ export async function POST(request: NextRequest) {
             zoho_warehouse_id: zohoWarehouseId,
         };
 
+        // ── Auto-match Zoho PO lines to this receiving row ──────────────────
+        // 1. Try local unmatched receiving_lines first (fastest, no Zoho API call).
+        // 2. If none found, search Zoho by tracking number and sync any matching POs.
+        let zohoMatchSummary: {
+            strategy: string;
+            matched_lines: number;
+            zoho_po_ids: string[];
+        } | null = null;
+
+        try {
+            const newReceivingId = Number(inserted.rows[0].id);
+
+            // 1a. Check if local receiving_lines already exist for this tracking number
+            //     (pre-synced via Zoho PO sync). Try matching by purchase receive tracking.
+            const localUnmatched = await pool.query<{ id: number; zoho_purchaseorder_id: string | null }>(
+                `SELECT id, zoho_purchaseorder_id
+                 FROM receiving_lines
+                 WHERE receiving_id IS NULL
+                   AND (
+                     zoho_purchase_receive_id = $1
+                     OR notes ILIKE $2
+                   )
+                 LIMIT 50`,
+                [trackingNumber, `%${trackingNumber}%`]
+            );
+
+            if (localUnmatched.rows.length > 0) {
+                const lineIds = localUnmatched.rows.map((r) => r.id);
+                await pool.query(
+                    `UPDATE receiving_lines
+                     SET receiving_id    = $1,
+                         workflow_status = 'MATCHED'::inbound_workflow_status_enum,
+                         updated_at      = NOW()
+                     WHERE id = ANY($2::int[])`,
+                    [newReceivingId, lineIds]
+                );
+                zohoMatchSummary = {
+                    strategy: 'local_lines',
+                    matched_lines: lineIds.length,
+                    zoho_po_ids: Array.from(new Set(localUnmatched.rows.map((r) => r.zoho_purchaseorder_id).filter(Boolean))) as string[],
+                };
+            } else {
+                // 1b. Search Zoho Purchase Receives by tracking number
+                const zohoReceives = await searchPurchaseReceivesByTracking(trackingNumber).catch(() => []);
+                let matchedPoIds: string[] = [];
+
+                if (zohoReceives.length > 0) {
+                    // Mark this receiving row with the first matching purchase receive ID
+                    const firstReceive = zohoReceives[0];
+                    const prId = String(firstReceive.purchase_receive_id || '');
+                    if (prId) {
+                        await pool.query(
+                            `UPDATE receiving
+                             SET zoho_purchase_receive_id = $1, updated_at = NOW()
+                             WHERE id = $2 AND zoho_purchase_receive_id IS NULL`,
+                            [prId, newReceivingId]
+                        );
+                        newRecord.zoho_purchase_receive_id = prId;
+                    }
+                    // Sync lines from each purchase receive's parent PO
+                    for (const receive of zohoReceives.slice(0, 3)) {
+                        const poId = String(receive.purchaseorder_id || '');
+                        if (!poId || matchedPoIds.includes(poId)) continue;
+                        matchedPoIds.push(poId);
+
+                        const existingLines = await pool.query<{ id: number }>(
+                            `SELECT id FROM receiving_lines
+                             WHERE zoho_purchaseorder_id = $1 AND receiving_id IS NULL
+                             LIMIT 1`,
+                            [poId]
+                        );
+
+                        if (existingLines.rows.length > 0) {
+                            // Lines already synced — just link them
+                            const linked = await pool.query<{ id: number }>(
+                                `UPDATE receiving_lines
+                                 SET receiving_id    = $1,
+                                     workflow_status = 'MATCHED'::inbound_workflow_status_enum,
+                                     updated_at      = NOW()
+                                 WHERE zoho_purchaseorder_id = $2
+                                   AND receiving_id IS NULL
+                                 RETURNING id`,
+                                [newReceivingId, poId]
+                            );
+                            const lineCount = linked.rowCount ?? 0;
+                            if (zohoMatchSummary) {
+                                zohoMatchSummary.matched_lines += lineCount;
+                            } else {
+                                zohoMatchSummary = { strategy: 'local_po_lines', matched_lines: lineCount, zoho_po_ids: [poId] };
+                            }
+                        } else {
+                            // Fetch PO detail from Zoho and insert lines now
+                            try {
+                                const poDetail = await getPurchaseOrderById(poId);
+                                const po = (poDetail as any)?.purchaseorder;
+                                const lineItems = Array.isArray(po?.line_items) ? po.line_items : [];
+                                let insertedCount = 0;
+                                for (const line of lineItems) {
+                                    const zohoItemId = String(line?.item_id || '').trim();
+                                    const zohoLineItemId = String(line?.line_item_id || line?.id || '').trim();
+                                    const qtyExpected = Math.floor(Math.max(0, Number(line?.quantity ?? 0)));
+                                    if (!zohoItemId || qtyExpected <= 0) continue;
+
+                                    await pool.query(
+                                        `INSERT INTO receiving_lines (
+                                           receiving_id, zoho_item_id, zoho_line_item_id,
+                                           zoho_purchaseorder_id, item_name, sku,
+                                           quantity_received, quantity_expected,
+                                           qa_status, disposition_code, condition_grade,
+                                           disposition_audit, workflow_status
+                                         )
+                                         VALUES ($1,$2,$3,$4,$5,$6,0,$7,
+                                                 'PENDING','HOLD','BRAND_NEW','[]'::jsonb,
+                                                 'MATCHED'::inbound_workflow_status_enum)
+                                         ON CONFLICT DO NOTHING`,
+                                        [
+                                            newReceivingId,
+                                            zohoItemId,
+                                            zohoLineItemId || null,
+                                            poId,
+                                            String(line?.name || line?.item_name || '').trim() || null,
+                                            String(line?.sku || '').trim() || null,
+                                            qtyExpected,
+                                        ]
+                                    );
+                                    insertedCount++;
+                                }
+                                if (insertedCount > 0) {
+                                    if (zohoMatchSummary) {
+                                        zohoMatchSummary.matched_lines += insertedCount;
+                                        zohoMatchSummary.zoho_po_ids.push(poId);
+                                    } else {
+                                        zohoMatchSummary = { strategy: 'zoho_purchase_receive', matched_lines: insertedCount, zoho_po_ids: [poId] };
+                                    }
+                                }
+                            } catch {
+                                // Zoho PO fetch failed — non-fatal
+                            }
+                        }
+                    }
+                }
+
+                // 1c. If still no match, search Zoho POs directly by tracking as reference
+                if (!zohoMatchSummary) {
+                    const zohoPOs = await searchPurchaseOrdersByTracking(trackingNumber).catch(() => []);
+                    for (const po of zohoPOs.slice(0, 3)) {
+                        const poId = po.purchaseorder_id;
+                        if (!poId || matchedPoIds.includes(poId)) continue;
+                        matchedPoIds.push(poId);
+
+                        // Try to fetch full PO detail (may already have line_items)
+                        const lineItems = Array.isArray(po.line_items) ? po.line_items : [];
+                        const fullLineItems = lineItems.length > 0
+                            ? lineItems
+                            : await getPurchaseOrderById(poId)
+                                .then((d) => (d as any)?.purchaseorder?.line_items ?? [])
+                                .catch(() => []);
+
+                        let insertedCount = 0;
+                        for (const line of fullLineItems) {
+                            const zohoItemId = String(line?.item_id || '').trim();
+                            const zohoLineItemId = String(line?.line_item_id || line?.id || '').trim();
+                            const qtyExpected = Math.floor(Math.max(0, Number(line?.quantity ?? 0)));
+                            if (!zohoItemId || qtyExpected <= 0) continue;
+
+                            await pool.query(
+                                `INSERT INTO receiving_lines (
+                                   receiving_id, zoho_item_id, zoho_line_item_id,
+                                   zoho_purchaseorder_id, item_name, sku,
+                                   quantity_received, quantity_expected,
+                                   qa_status, disposition_code, condition_grade,
+                                   disposition_audit, workflow_status
+                                 )
+                                 VALUES ($1,$2,$3,$4,$5,$6,0,$7,
+                                         'PENDING','HOLD','BRAND_NEW','[]'::jsonb,
+                                         'MATCHED'::inbound_workflow_status_enum)
+                                 ON CONFLICT DO NOTHING`,
+                                [
+                                    newReceivingId,
+                                    zohoItemId,
+                                    zohoLineItemId || null,
+                                    poId,
+                                    String(line?.name || line?.item_name || '').trim() || null,
+                                    String(line?.sku || '').trim() || null,
+                                    qtyExpected,
+                                ]
+                            );
+                            insertedCount++;
+                        }
+                        if (insertedCount > 0) {
+                            if (zohoMatchSummary) {
+                                zohoMatchSummary.matched_lines += insertedCount;
+                                zohoMatchSummary.zoho_po_ids.push(poId);
+                            } else {
+                                zohoMatchSummary = { strategy: 'zoho_po_search', matched_lines: insertedCount, zoho_po_ids: [poId] };
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (matchErr) {
+            // Zoho auto-match is best-effort — don't fail the receiving entry
+            console.warn('Zoho auto-match warning:', matchErr instanceof Error ? matchErr.message : matchErr);
+        }
+
         if (needsTest && assignedTechId) {
             const assignmentTableRes = await pool.query(
                 `SELECT EXISTS (
@@ -200,7 +406,11 @@ export async function POST(request: NextRequest) {
             source: 'receiving-entry',
         });
 
-        return NextResponse.json({ success: true, record: newRecord }, { status: 201 });
+        return NextResponse.json({
+            success: true,
+            record: newRecord,
+            ...(zohoMatchSummary ? { zoho_match: zohoMatchSummary } : {}),
+        }, { status: 201 });
     } catch (error) {
         console.error('Error adding receiving entry:', error);
         return NextResponse.json({ 
@@ -228,7 +438,7 @@ export async function GET(req: NextRequest) {
         const result = await pool.query(
             `SELECT
                 id,
-                ${dateColumn} AS timestamp,
+                (${dateColumn} AT TIME ZONE 'America/Los_Angeles')::text AS timestamp,
                 receiving_tracking_number AS tracking,
                 carrier,
                 ${countExpr} AS quantity

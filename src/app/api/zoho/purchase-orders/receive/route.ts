@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
       if (hasAssignRes.rows[0]?.exists) {
         await client.query(
           `INSERT INTO work_assignments
-             (entity_type, entity_id, work_type, assignee_staff_id, status, priority, notes)
+             (entity_type, entity_id, work_type, assigned_tech_id, status, priority, notes)
            VALUES ('RECEIVING', $1, 'TEST', $2, 'ASSIGNED', 100, $3)
            ON CONFLICT DO NOTHING`,
           [

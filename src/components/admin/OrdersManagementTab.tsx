@@ -6,7 +6,7 @@ import { AlertCircle, ExternalLink } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
-import { AdminDetailsStack } from '@/components/shipped/stacks/adminDetailsStack';
+import { AdminDetailsStack } from '@/components/shipped/stacks/AdminDetailsStack';
 import { getOrderPlatformLabel } from '@/utils/order-platform';
 import { getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';

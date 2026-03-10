@@ -3,7 +3,7 @@
 interface Tab {
   id: string;
   label: string;
-  color?: 'blue' | 'emerald' | 'orange' | 'purple' | 'green' | 'yellow' | 'gray' | 'red';
+  color?: 'blue' | 'emerald' | 'orange' | 'purple' | 'green' | 'yellow' | 'gray' | 'red' | 'teal';
 }
 
 interface TabSwitchProps {
@@ -28,6 +28,7 @@ export function TabSwitch({ tabs, activeTab, onTabChange, className = '' }: TabS
       yellow: 'bg-white text-amber-600 shadow-sm',
       gray: 'bg-white text-slate-600 shadow-sm',
       red: 'bg-white text-red-600 shadow-sm',
+      teal: 'bg-white text-teal-600 shadow-sm',
     };
 
     return colorMap[color] || colorMap.blue;

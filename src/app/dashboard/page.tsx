@@ -42,13 +42,49 @@ function DashboardPageContent() {
             if (e.detail) setSelectedShipped(e.detail);
         };
         const handleClose = () => setSelectedShipped(null);
+        const handleAssignmentUpdate = (e: any) => {
+            const detail = e?.detail || {};
+            const ids = new Set<number>((detail.orderIds || []).map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id)));
+            if (ids.size === 0) return;
+
+            setSelectedShipped((current) => {
+                if (!current || !ids.has(Number(current.id))) return current;
+
+                const next: any = { ...current };
+                if (detail.testerId !== undefined) {
+                    next.tester_id = detail.testerId;
+                    next.tested_by = detail.testerId;
+                    if (detail.testerName !== undefined) {
+                        next.tester_name = detail.testerName;
+                        next.tested_by_name = detail.testerName;
+                    }
+                }
+                if (detail.packerId !== undefined) {
+                    next.packer_id = detail.packerId;
+                    next.packed_by = detail.packerId;
+                    if (detail.packerName !== undefined) {
+                        next.packer_name = detail.packerName;
+                        next.packed_by_name = detail.packerName;
+                    }
+                }
+                if (detail.shipByDate !== undefined) next.ship_by_date = detail.shipByDate;
+                if (detail.outOfStock !== undefined) next.out_of_stock = detail.outOfStock;
+                if (detail.notes !== undefined) next.notes = detail.notes;
+                if (detail.shippingTrackingNumber !== undefined) next.shipping_tracking_number = detail.shippingTrackingNumber;
+                if (detail.itemNumber !== undefined) next.item_number = detail.itemNumber;
+                if (detail.condition !== undefined) next.condition = detail.condition;
+                return next;
+            });
+        };
 
         window.addEventListener('open-shipped-details' as any, handleOpen as any);
         window.addEventListener('close-shipped-details' as any, handleClose as any);
+        window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdate as any);
 
         return () => {
             window.removeEventListener('open-shipped-details' as any, handleOpen as any);
             window.removeEventListener('close-shipped-details' as any, handleClose as any);
+            window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdate as any);
         };
     }, []);
 

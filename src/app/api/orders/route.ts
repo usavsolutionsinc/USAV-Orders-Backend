@@ -66,6 +66,10 @@ export async function GET(req: NextRequest) {
         wa_t.assigned_tech_id   AS tester_id,
         wa_p.assigned_packer_id AS packer_id,
         tsn_scan.tested_by      AS tested_by,
+        staff_test_assignee.name AS tester_name,
+        staff_tested_by.name     AS tested_by_name,
+        staff_pack_assignee.name AS packer_name,
+        staff_packed_by.name     AS packed_by_name,
         (COALESCE(tsn_scan.scan_count, 0) > 0) AS has_tech_scan
       FROM orders o
       LEFT JOIN LATERAL (
@@ -96,6 +100,10 @@ export async function GET(req: NextRequest) {
         WHERE RIGHT(regexp_replace(UPPER(COALESCE(tsn.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) =
               RIGHT(regexp_replace(UPPER(COALESCE(o.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18)
       ) tsn_scan ON true
+      LEFT JOIN staff staff_test_assignee ON staff_test_assignee.id = wa_t.assigned_tech_id
+      LEFT JOIN staff staff_packed_by ON staff_packed_by.id = wa_p.assigned_packer_id
+      LEFT JOIN staff staff_tested_by ON staff_tested_by.id = tsn_scan.tested_by
+      LEFT JOIN staff staff_pack_assignee ON staff_pack_assignee.id = wa_p.assigned_packer_id
       WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
     `;
     const params: any[] = [];
@@ -168,13 +176,20 @@ export async function GET(req: NextRequest) {
     const last8 = normalizedDigits.length >= 8 ? normalizedDigits.slice(-8) : '';
 
     if (query.trim()) {
-      const likeValue = `%${query.trim()}%`;
+      const trimmedQuery = query.trim();
+      const likeValue = `%${trimmedQuery}%`;
       sql += ` AND (
         o.product_title ILIKE $${paramCount}
         OR COALESCE(o.sku, '') ILIKE $${paramCount}
         OR COALESCE(o.order_id, '') ILIKE $${paramCount}
         OR COALESCE(o.item_number, '') ILIKE $${paramCount}
         OR COALESCE(o.shipping_tracking_number, '') ILIKE $${paramCount}
+        OR COALESCE(o.status, '') ILIKE $${paramCount}
+        OR COALESCE(o.notes, '') ILIKE $${paramCount}
+        OR COALESCE(o.account_source, '') ILIKE $${paramCount}
+        OR COALESCE(o.quantity, '') ILIKE $${paramCount}
+        OR COALESCE(o.customer_id::text, '') ILIKE $${paramCount}
+        OR o.id::text ILIKE $${paramCount}
       `;
       params.push(likeValue);
       paramCount++;
@@ -183,6 +198,13 @@ export async function GET(req: NextRequest) {
         sql += ` OR RIGHT(regexp_replace(COALESCE(o.order_id, ''), '\\D', '', 'g'), 8) = $${paramCount}
           OR RIGHT(regexp_replace(COALESCE(o.shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $${paramCount}`;
         params.push(last8);
+        paramCount++;
+      }
+
+      if (/^\d+$/.test(trimmedQuery)) {
+        sql += ` OR o.id = $${paramCount}
+          OR COALESCE(o.customer_id, -1) = $${paramCount}`;
+        params.push(Number(trimmedQuery));
         paramCount++;
       }
 

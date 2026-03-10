@@ -56,6 +56,14 @@ export function OrderRecordsTable({
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
+  useEffect(() => {
+    if (!selectedShipped) return;
+    const nextSelected = records.find((record) => Number(record.id) === Number(selectedShipped.id));
+    if (nextSelected && nextSelected !== selectedShipped) {
+      setSelectedShipped(nextSelected);
+    }
+  }, [records, selectedShipped]);
+
   const handleRowClick = useCallback((record: ShippedOrder) => {
     if (selectedShipped && Number(selectedShipped.id) === Number(record.id)) {
       dispatchCloseShippedDetails();
@@ -66,6 +74,14 @@ export function OrderRecordsTable({
     window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: record }));
     setSelectedShipped(record);
   }, [selectedShipped]);
+
+  const scrollRowIntoView = useCallback((orderId: number | string | null | undefined) => {
+    if (orderId == null) return;
+    window.setTimeout(() => {
+      const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(orderId)}"]`) as HTMLElement | null;
+      targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+  }, []);
 
   useEffect(() => {
     const handleOpen = (e: CustomEvent<ShippedOrder>) => {
@@ -128,7 +144,8 @@ export function OrderRecordsTable({
       const direction = e?.detail?.direction === 'up' ? 'up' : e?.detail?.direction === 'down' ? 'down' : null;
       if (!direction || displayedRecords.length === 0) return;
 
-      const currentIndex = displayedRecords.findIndex((record) => record.id === selectedShipped?.id);
+      const currentOrderId = Number(e?.detail?.currentOrderId ?? selectedShipped?.id);
+      const currentIndex = displayedRecords.findIndex((record) => Number(record.id) === currentOrderId);
       const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
       const nextIndex =
         direction === 'up'
@@ -139,16 +156,14 @@ export function OrderRecordsTable({
       if (!nextRecord || nextRecord.id === selectedShipped?.id) return;
 
       handleRowClick(nextRecord);
-      window.setTimeout(() => {
-        const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(nextRecord.id)}"]`) as HTMLElement | null;
-        targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 0);
+      scrollRowIntoView(nextRecord.id);
     };
 
-    const handleNavigateNextUnassigned = () => {
+    const handleNavigateNextUnassigned = (e: any) => {
       if (displayedRecords.length === 0) return;
 
-      const currentIndex = displayedRecords.findIndex((record) => record.id === selectedShipped?.id);
+      const currentOrderId = Number(e?.detail?.currentOrderId ?? selectedShipped?.id);
+      const currentIndex = displayedRecords.findIndex((record) => Number(record.id) === currentOrderId);
       const safeCurrentIndex = currentIndex >= 0 ? currentIndex : -1;
 
       const nextRecord =
@@ -162,10 +177,7 @@ export function OrderRecordsTable({
       }
 
       handleRowClick(nextRecord);
-      window.setTimeout(() => {
-        const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(nextRecord.id)}"]`) as HTMLElement | null;
-        targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 0);
+      scrollRowIntoView(nextRecord.id);
     };
 
     window.addEventListener('navigate-dashboard-order' as any, handleNavigate as any);
@@ -175,7 +187,7 @@ export function OrderRecordsTable({
       window.removeEventListener('navigate-dashboard-order' as any, handleNavigate as any);
       window.removeEventListener('navigate-dashboard-next-unassigned' as any, handleNavigateNextUnassigned as any);
     };
-  }, [displayedRecords, handleRowClick, ordersOnly, selectedShipped?.id]);
+  }, [displayedRecords, handleRowClick, ordersOnly, scrollRowIntoView, selectedShipped?.id]);
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
