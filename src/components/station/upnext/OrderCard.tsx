@@ -107,13 +107,13 @@ export function OrderCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
       onClick={openDetails}
-      className={`rounded-2xl p-3 border-2 transition-all relative shadow-sm hover:shadow-md mb-2 cursor-pointer ${
+      className={`border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
         isStockTab
           ? 'bg-white border-red-300 hover:border-red-500'
-          : 'bg-white border-gray-300 hover:border-gray-500'
+          : 'bg-white border-gray-200 hover:border-emerald-500'
       }`}
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 px-3">
         <div className="flex items-center gap-2">
           <ShipByDate
             date={getDisplayShipByDate(order) || ''}
@@ -132,7 +132,7 @@ export function OrderCard({
         />
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 px-3">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[13px] font-black text-gray-900">{quantity}</span>
@@ -148,10 +148,10 @@ export function OrderCard({
         <h4 className="text-base font-black text-gray-900 leading-tight">{order.product_title}</h4>
       </div>
 
-      {hasOutOfStock && <OutOfStockField value={String(order.out_of_stock || '')} className="mb-4" />}
+      {hasOutOfStock && <OutOfStockField value={String(order.out_of_stock || '')} className="mb-4 mx-3" />}
 
       {hasOutOfStock && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
+        <div className="mt-2 px-3 pt-2 border-t border-gray-100">
           <button
             onClick={(e) => { e.stopPropagation(); onStart(order); }}
             className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
@@ -163,7 +163,7 @@ export function OrderCard({
       )}
 
       {showActions && !hasOutOfStock && (
-        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-gray-100">
+        <div className="flex flex-col gap-2 mt-2 px-3 pt-2 border-t border-gray-100">
           <div className="flex items-center gap-3">
             <button
               onClick={(e) => { e.stopPropagation(); onMissingPartsToggle(order.id); }}

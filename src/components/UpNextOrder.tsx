@@ -11,7 +11,7 @@ import { RepairCard } from './station/upnext/RepairCard';
 import { FbaItemCard } from './station/upnext/FbaItemCard';
 import { ReceivingAssignmentCard } from './station/upnext/ReceivingAssignmentCard';
 
-type TabId = 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock' | 'receiving';
+type TabId = 'all' | 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock' | 'receiving';
 
 interface UpNextOrderProps {
   techId: string;
@@ -35,9 +35,33 @@ function getOrderBucket(order: { order_id: string; account_source: string | null
   return 'orders';
 }
 
+function getRepairSortValue(dateTime: string | null | undefined): number {
+  if (!dateTime) return Number.POSITIVE_INFINITY;
+  try {
+    const parsed = typeof dateTime === 'string' && dateTime.startsWith('"') ? JSON.parse(dateTime) : dateTime;
+    const value = typeof parsed === 'object' && parsed?.start ? parsed.start : parsed;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function getDateSortValue(value: string | null | undefined): number {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+type CombinedCardItem =
+  | { type: 'order'; key: string; sortValue: number; order: any; effectiveTab: 'orders' | 'returns' | 'test' | 'stock' }
+  | { type: 'repair'; key: string; sortValue: number; repair: any }
+  | { type: 'fba'; key: string; sortValue: number; item: any }
+  | { type: 'receiving'; key: string; sortValue: number; item: any };
+
 
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('orders');
+  const [activeTab, setActiveTab] = useState<TabId>('all');
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
   const hasCelebratedRef = useRef(false);
@@ -48,19 +72,53 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   const stockOrders   = allOrders.filter(isOutOfStock);
   const nonStockOrders = allOrders.filter((o) => !isOutOfStock(o));
+  const sortedRepairs = [...allRepairs].sort(
+    (a, b) => getRepairSortValue(a.dateTime) - getRepairSortValue(b.dateTime)
+  );
+  const activeFbaItems = fbaItems.filter((i) => i.status !== 'SHIPPED');
 
   const tabCounts = {
     ...nonStockOrders.reduce(
       (acc, order) => { acc[getOrderBucket(order)] += 1; return acc; },
-      { orders: 0, returns: 0, repair: 0, fba: 0, test: 0, stock: 0, receiving: 0 } as Record<TabId, number>
+      { all: 0, orders: 0, returns: 0, repair: 0, fba: 0, test: 0, stock: 0, receiving: 0 } as Record<TabId, number>
     ),
     stock:     stockOrders.length,
-    repair:    allRepairs.length,
-    fba:       fbaItems.filter((i) => i.status !== 'SHIPPED').length,
+    repair:    sortedRepairs.length,
+    fba:       activeFbaItems.length,
     receiving: receivingItems.length,
+    all:       nonStockOrders.length + sortedRepairs.length + activeFbaItems.length + receivingItems.length,
   };
 
+  const allItems: CombinedCardItem[] = [
+    ...nonStockOrders.map((order) => ({
+      type: 'order' as const,
+      key: `order-${order.id}`,
+      sortValue: getDateSortValue(order.ship_by_date || order.created_at),
+      order,
+      effectiveTab: getOrderBucket(order) as 'orders' | 'returns' | 'test',
+    })),
+    ...sortedRepairs.map((repair) => ({
+      type: 'repair' as const,
+      key: `repair-${repair.repairId}`,
+      sortValue: getRepairSortValue(repair.dateTime),
+      repair,
+    })),
+    ...activeFbaItems.map((item) => ({
+      type: 'fba' as const,
+      key: `fba-${item.item_id}`,
+      sortValue: getDateSortValue(item.due_date),
+      item,
+    })),
+    ...receivingItems.map((item) => ({
+      type: 'receiving' as const,
+      key: `receiving-${item.assignment_id}`,
+      sortValue: getDateSortValue(item.assigned_at),
+      item,
+    })),
+  ].sort((a, b) => a.sortValue - b.sortValue);
+
   const visibleTabs: Array<{ id: TabId; label: string; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal' }> = [
+    { id: 'all',       label: 'All',       color: 'green' },
     { id: 'orders',    label: 'Orders',    color: 'green' },
     ...(tabCounts.returns   > 0 ? [{ id: 'returns'   as const, label: 'Returns',   color: 'yellow' as const }] : []),
     ...(tabCounts.fba       > 0 ? [{ id: 'fba'       as const, label: 'FBA',       color: 'purple' as const }] : []),
@@ -73,7 +131,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const activeTabVisible = visibleTabs.some((tab) => tab.id === activeTab);
   const effectiveTab     = activeTabVisible ? activeTab : visibleTabs[0]?.id || 'orders';
   const orders           = nonStockOrders.filter((order) => getOrderBucket(order) === effectiveTab);
-  const preferred: TabId[] = ['orders', 'returns', 'fba', 'repair', 'test', 'stock', 'receiving'];
+  const preferred: TabId[] = ['all', 'orders', 'returns', 'fba', 'repair', 'test', 'stock', 'receiving'];
   const shouldShowStockSection = stockOrders.length > 0 && effectiveTab !== 'stock';
 
   useEffect(() => {
@@ -83,7 +141,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   useEffect(() => {
     // Only auto-switch if the current tab is empty. For non-order tabs (repair/fba/receiving)
     // we use tabCounts directly; for order-bucket tabs we fall through the same path.
-    if (effectiveTab === 'orders') return;
+    if (effectiveTab === 'all' || effectiveTab === 'orders') return;
     if (tabCounts[effectiveTab] > 0) return;
     const next = preferred.find((id) => tabCounts[id] > 0);
     if (next && next !== activeTab) setActiveTab(next);
@@ -177,6 +235,38 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
             </div>
           )
 
+        ) : effectiveTab === 'all' ? (
+          allItems.length === 0 ? (
+            <EmptySlate label="No current work" color="green" />
+          ) : (
+            <div className="flex flex-col">
+              <AnimatePresence mode="popLayout">
+                {allItems.map((item) => {
+                  if (item.type === 'order') {
+                    return (
+                      <OrderCard
+                        key={item.key}
+                        order={item.order}
+                        effectiveTab={item.effectiveTab}
+                        techId={techId}
+                        showMissingPartsInput={showMissingPartsInput}
+                        missingPartsReason={missingPartsReason}
+                        onStart={handleStart}
+                        onMissingPartsToggle={(id) => setShowMissingPartsInput(showMissingPartsInput === id ? null : id)}
+                        onMissingPartsReasonChange={setMissingPartsReason}
+                        onMissingPartsSubmit={handleMissingParts}
+                        onMissingPartsCancel={() => setShowMissingPartsInput(null)}
+                      />
+                    );
+                  }
+                  if (item.type === 'repair') return <RepairCard key={item.key} repair={item.repair} />;
+                  if (item.type === 'fba') return <FbaItemCard key={item.key} item={item.item} />;
+                  return <ReceivingAssignmentCard key={item.key} item={item.item} />;
+                })}
+              </AnimatePresence>
+            </div>
+          )
+
         ) : allCompletedToday && effectiveTab === 'orders' && stockOrders.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -193,22 +283,22 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           </motion.div>
 
         ) : effectiveTab === 'repair' ? (
-          allRepairs.length === 0 ? (
+          sortedRepairs.length === 0 ? (
             <EmptySlate label="No repairs in queue" />
           ) : (
             <div className="flex flex-col">
               {/* Unassigned notice */}
-              {allRepairs.some((r) => r.assignedTechId === null) && (
+              {sortedRepairs.some((r) => r.assignedTechId === null) && (
                 <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
                   <div className="h-px flex-1 bg-red-100" />
                   <span className="text-[9px] font-black uppercase tracking-widest text-red-400">
-                    {allRepairs.filter((r) => r.assignedTechId === null).length} unassigned
+                    {sortedRepairs.filter((r) => r.assignedTechId === null).length} unassigned
                   </span>
                   <div className="h-px flex-1 bg-red-100" />
                 </div>
               )}
               <AnimatePresence mode="popLayout">
-                {allRepairs.map((repair) => <RepairCard key={repair.repairId} repair={repair} />)}
+                {sortedRepairs.map((repair) => <RepairCard key={repair.repairId} repair={repair} />)}
               </AnimatePresence>
             </div>
           )
@@ -240,7 +330,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           )
 
         ) : orders.length === 0 ? (
-          <EmptySlate label="No current orders" />
+          <EmptySlate label="No current orders" color="green" />
 
         ) : (
           <div className="flex flex-col">
@@ -299,10 +389,10 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   );
 }
 
-function EmptySlate({ label, color = 'gray' }: { label: string; color?: 'gray' | 'purple' | 'teal' | 'red' }) {
-  const bg   = color === 'purple' ? 'bg-purple-50 border-purple-100' : color === 'teal' ? 'bg-teal-50 border-teal-100' : color === 'red' ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-200';
-  const text = color === 'purple' ? 'text-purple-400' : color === 'teal' ? 'text-teal-400' : color === 'red' ? 'text-red-400' : 'text-gray-400';
-  const icon = color === 'purple' ? 'text-purple-200' : color === 'teal' ? 'text-teal-200' : color === 'red' ? 'text-red-200' : 'text-gray-300';
+function EmptySlate({ label, color = 'gray' }: { label: string; color?: 'gray' | 'green' | 'purple' | 'teal' | 'red' }) {
+  const bg   = color === 'green' ? 'bg-emerald-50 border-emerald-100' : color === 'purple' ? 'bg-purple-50 border-purple-100' : color === 'teal' ? 'bg-teal-50 border-teal-100' : color === 'red' ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-200';
+  const text = color === 'green' ? 'text-emerald-500' : color === 'purple' ? 'text-purple-400' : color === 'teal' ? 'text-teal-400' : color === 'red' ? 'text-red-400' : 'text-gray-400';
+  const icon = color === 'green' ? 'text-emerald-300' : color === 'purple' ? 'text-purple-200' : color === 'teal' ? 'text-teal-200' : color === 'red' ? 'text-red-200' : 'text-gray-300';
   return (
     <div className={`rounded-2xl px-4 py-3 border ${bg}`}>
       <div className="flex items-center justify-between gap-3">

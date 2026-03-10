@@ -46,9 +46,9 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
       onClick={openReceiving}
-      className="rounded-2xl p-3 border-2 border-teal-300 bg-white hover:border-teal-500 transition-all shadow-sm hover:shadow-md mb-2 cursor-pointer"
+      className="border-b-2 px-0 py-3 border-teal-300 bg-white hover:border-teal-500 transition-colors cursor-pointer"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 px-3">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 text-[14px] font-black text-gray-900">
             <Package className="w-4 h-4 text-teal-600" />
@@ -60,7 +60,7 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
         </span>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 px-3">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[13px] font-black text-gray-900">{item.line_count || 1}</span>
@@ -79,7 +79,7 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
       </div>
 
       {(item.line_skus.length > 0 || item.carrier || item.qa_status) && (
-        <div className="mb-4 rounded-xl border border-teal-200 px-3 py-2">
+        <div className="mb-4 mx-3 rounded-xl border border-teal-200 px-3 py-2">
           <div className="text-[10px] font-black uppercase tracking-widest text-teal-700 mb-1">
             Receiving Details
           </div>
@@ -93,7 +93,7 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
         </div>
       )}
 
-      <div className="flex items-center gap-2 pt-2 border-t border-teal-200">
+      <div className="flex items-center gap-2 px-3 pt-2 border-t border-teal-200">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-black text-gray-900 truncate">
             {item.assigned_tech_name || 'Receiving Queue'}

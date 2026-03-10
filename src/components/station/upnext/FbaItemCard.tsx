@@ -23,9 +23,9 @@ export function FbaItemCard({ item }: FbaItemCardProps) {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      className="rounded-2xl p-3 border-2 transition-all relative shadow-sm hover:shadow-md mb-2 bg-white border-purple-300 hover:border-purple-500 cursor-default"
+      className="border-b-2 px-0 py-3 transition-colors relative bg-white border-purple-300 hover:border-purple-500 cursor-default"
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 px-3">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 text-[14px] font-black text-gray-900">
             <Calendar className="w-4 h-4 text-purple-600" />
@@ -37,7 +37,7 @@ export function FbaItemCard({ item }: FbaItemCardProps) {
         </span>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 px-3">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[13px] font-black text-gray-900">{qtyLabel}</span>
@@ -54,7 +54,7 @@ export function FbaItemCard({ item }: FbaItemCardProps) {
       </div>
 
       {(item.asin || item.fnsku || item.sku) && (
-        <div className="mb-4 rounded-xl border border-purple-200 px-3 py-2">
+        <div className="mb-4 mx-3 rounded-xl border border-purple-200 px-3 py-2">
           <div className="text-[10px] font-black uppercase tracking-widest text-purple-700 mb-1">
             FBA Details
           </div>
@@ -68,7 +68,7 @@ export function FbaItemCard({ item }: FbaItemCardProps) {
         </div>
       )}
 
-      <div className="flex items-center gap-2 pt-2 border-t border-purple-200">
+      <div className="flex items-center gap-2 px-3 pt-2 border-t border-purple-200">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-black text-gray-900 truncate">
             {item.assigned_tech_name || 'FBA Queue'}

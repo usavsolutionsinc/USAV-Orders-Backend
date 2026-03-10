@@ -39,6 +39,7 @@ export interface ResolvedProductManual {
 }
 
 const LAST_MANUAL_STORAGE_PREFIX = 'usav:last-manual:tech:';
+const COMPLETED_ORDER_AUTO_HIDE_MS = 2 * 60 * 1000;
 
 function detectType(val: string) {
   const input = val.trim();
@@ -72,12 +73,14 @@ export function useStationTestingController({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [activeOrder, setActiveOrder] = useState<ActiveStationOrder | null>(null);
+  const [isActiveOrderVisible, setIsActiveOrderVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [trackingNotFoundAlert, setTrackingNotFoundAlert] = useState<string | null>(null);
   const [resolvedManuals, setResolvedManuals] = useState<ResolvedProductManual[]>([]);
   const [isManualLoading, setIsManualLoading] = useState(false);
   const manualRequestIdRef = useRef(0);
+  const completedOrderHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -86,6 +89,38 @@ export function useStationTestingController({
   const { normalizeTrackingQuery } = useLast8TrackingSearch();
 
   const activeColor = stationThemeColors[themeColor];
+
+  const clearCompletedOrderHideTimer = () => {
+    if (!completedOrderHideTimerRef.current) return;
+    clearTimeout(completedOrderHideTimerRef.current);
+    completedOrderHideTimerRef.current = null;
+  };
+
+  const isOrderComplete = (order: ActiveStationOrder | null) => {
+    if (!order) return false;
+    const quantity = Math.max(1, Number(order.quantity) || 1);
+    return order.serialNumbers.length >= quantity;
+  };
+
+  const syncActiveOrderState = (nextOrder: ActiveStationOrder | null, options?: { preserveHidden?: boolean }) => {
+    setActiveOrder(nextOrder);
+
+    if (!nextOrder) {
+      clearCompletedOrderHideTimer();
+      setIsActiveOrderVisible(false);
+      return;
+    }
+
+    const shouldShow = options?.preserveHidden ? isActiveOrderVisible : true;
+    setIsActiveOrderVisible(shouldShow);
+    clearCompletedOrderHideTimer();
+
+    if (isOrderComplete(nextOrder) && shouldShow) {
+      completedOrderHideTimerRef.current = setTimeout(() => {
+        setIsActiveOrderVisible(false);
+      }, COMPLETED_ORDER_AUTO_HIDE_MS);
+    }
+  };
 
   const publishLastManual = (manuals: ResolvedProductManual[]) => {
     if (typeof window === 'undefined') return;
@@ -114,6 +149,8 @@ export function useStationTestingController({
     setSuccessMessage(null);
     setTrackingNotFoundAlert(null);
   };
+
+  useEffect(() => () => clearCompletedOrderHideTimer(), []);
 
   const resolveManual = async (sku?: string | null, itemNumber?: string | null) => {
     const requestId = ++manualRequestIdRef.current;
@@ -215,10 +252,10 @@ export function useStationTestingController({
       const removedSerial = e?.detail?.removedSerial;
       if (!activeOrder) return;
       if (String(activeOrder.tracking || '') !== tracking) return;
-      setActiveOrder({
+      syncActiveOrderState({
         ...activeOrder,
         serialNumbers,
-      });
+      }, { preserveHidden: true });
       if (removedSerial) {
         setSuccessMessage(`Undo successful: removed ${removedSerial}`);
       } else {
@@ -239,12 +276,12 @@ export function useStationTestingController({
 
       if (!data.found) {
         setErrorMessage(data.error || 'FNSKU not found');
-        setActiveOrder(null);
+        syncActiveOrderState(null);
         setResolvedManuals([]);
         return;
       }
 
-      setActiveOrder({
+      syncActiveOrderState({
         id: data.order.id,
         orderId: data.order.orderId,
         productTitle: data.order.productTitle,
@@ -310,12 +347,12 @@ export function useStationTestingController({
 
         if (!data.found) {
           setTrackingNotFoundAlert('Tracking number not found in the system');
-          setActiveOrder(null);
+          syncActiveOrderState(null);
           setResolvedManuals([]);
           return;
         }
 
-        setActiveOrder({
+        syncActiveOrderState({
           id: data.order.id,
           orderId: data.order.orderId,
           productTitle: data.order.productTitle,
@@ -410,7 +447,7 @@ export function useStationTestingController({
           alert(`Notes for SKU:\n\n${data.notes}`);
         }
 
-        setActiveOrder({
+        syncActiveOrderState({
           ...activeOrder,
           serialNumbers: data.updatedSerials,
         });
@@ -454,7 +491,7 @@ export function useStationTestingController({
           return;
         }
 
-        setActiveOrder({
+        syncActiveOrderState({
           ...activeOrder,
           serialNumbers: data.serialNumbers,
         });
@@ -479,7 +516,7 @@ export function useStationTestingController({
     } else if (type === 'COMMAND') {
       const command = input.toUpperCase();
       if (command === 'TEST') {
-        setActiveOrder({
+        syncActiveOrderState({
           id: 99999,
           orderId: 'TEST-ORD-001',
           productTitle: 'TEST UNIT - Sony Alpha a7 IV',
@@ -499,7 +536,7 @@ export function useStationTestingController({
         setResolvedManuals([]);
         setSuccessMessage('Test order loaded');
       } else if (command === 'YES' && activeOrder) {
-        setActiveOrder(null);
+        syncActiveOrderState(null);
         setResolvedManuals([]);
         setSuccessMessage('Order completed!');
         triggerGlobalRefresh();
@@ -549,7 +586,8 @@ export function useStationTestingController({
     isLoading,
     inputRef,
     activeOrder,
-    setActiveOrder,
+    setActiveOrder: syncActiveOrderState,
+    isActiveOrderVisible,
     errorMessage,
     successMessage,
     trackingNotFoundAlert,

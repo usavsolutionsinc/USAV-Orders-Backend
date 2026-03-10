@@ -146,18 +146,6 @@ function DashboardPageContent() {
                     staleTime: STALE,
                 });
             }
-            if (orderView !== 'fba') {
-                queryClient.prefetchQuery({
-                    queryKey: ['dashboard-fba-shipments'],
-                    queryFn: async () => {
-                        const res = await fetch('/api/dashboard/fba-shipments?limit=500', { cache: 'no-store' });
-                        if (!res.ok) throw new Error('Failed to fetch FBA shipments');
-                        const json = await res.json();
-                        return json?.rows || [];
-                    },
-                    staleTime: STALE,
-                });
-            }
         }, 400);
 
         return () => clearTimeout(timer);

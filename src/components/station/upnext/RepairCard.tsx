@@ -48,13 +48,13 @@ export function RepairCard({ repair }: RepairCardProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
       onClick={openRepair}
-      className={`rounded-2xl p-3 border-2 transition-all shadow-sm hover:shadow-md mb-2 cursor-pointer ${
+      className={`border-b-2 px-0 py-3 transition-colors cursor-pointer ${
         isUnassigned
           ? 'border-orange-400 bg-white hover:border-orange-500'
           : 'border-orange-300 bg-white hover:border-orange-500'
       }`}
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 px-3">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1 text-[14px] font-black text-gray-900">
             <Wrench className="w-4 h-4 text-orange-600" />
@@ -66,7 +66,7 @@ export function RepairCard({ repair }: RepairCardProps) {
         </span>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 px-3">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[13px] font-black text-gray-900">1</span>
@@ -83,7 +83,7 @@ export function RepairCard({ repair }: RepairCardProps) {
       </div>
 
       {repair.issue && (
-        <div className="mb-4 rounded-xl border border-orange-200 px-3 py-2">
+        <div className="mb-4 mx-3 rounded-xl border border-orange-200 px-3 py-2">
           <div className="text-[10px] font-black uppercase tracking-widest text-orange-700 mb-1">
             Out Of Stock / Part Issue
           </div>
@@ -93,7 +93,7 @@ export function RepairCard({ repair }: RepairCardProps) {
         </div>
       )}
 
-      <div className="flex items-center gap-2 pt-2 border-t border-orange-200">
+      <div className="flex items-center gap-2 px-3 pt-2 border-t border-orange-200">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-black text-gray-900 truncate">
             {customerName || repair.techName || 'Repair Queue'}

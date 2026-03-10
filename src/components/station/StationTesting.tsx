@@ -42,6 +42,7 @@ export default function StationTesting({
     inputRef,
     activeOrder,
     setActiveOrder,
+    isActiveOrderVisible,
     errorMessage,
     trackingNotFoundAlert,
     resolvedManuals,
@@ -157,7 +158,7 @@ export default function StationTesting({
           </AnimatePresence>
 
           <AnimatePresence mode="wait">
-            {activeOrder ? (
+            {activeOrder && isActiveOrderVisible ? (
               <ActiveStationOrderCard
                 activeOrder={activeOrder}
                 activeColorTextClass={activeColor.text}

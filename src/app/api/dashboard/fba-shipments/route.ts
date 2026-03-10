@@ -30,6 +30,19 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, rows: [], source: 'none' });
       }
 
+      const receivingColumns = await pool.query(
+        `SELECT column_name
+         FROM information_schema.columns
+         WHERE table_name = 'receiving'`
+      );
+      const hasReceivedAt = receivingColumns.rows.some((row) => row.column_name === 'received_at');
+      const hasReceivingDateTime = receivingColumns.rows.some((row) => row.column_name === 'receiving_date_time');
+      const receivedAtSelect = hasReceivedAt
+        ? 'r.received_at::text'
+        : hasReceivingDateTime
+          ? 'r.receiving_date_time::text'
+          : 'NULL::text';
+
       const legacy = await pool.query(
         `SELECT
            r.id,
@@ -42,7 +55,7 @@ export async function GET(request: NextRequest) {
            r.needs_test,
            r.assigned_tech_id,
            s.name AS assigned_tech_name,
-           COALESCE(r.received_at::text, r.receiving_date_time::text) AS received_at,
+           ${receivedAtSelect} AS received_at,
            'LEGACY' AS source
          FROM receiving r
          LEFT JOIN staff s ON s.id = r.assigned_tech_id
