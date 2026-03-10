@@ -519,27 +519,50 @@ export async function updateShippedOrderField(id: number, field: string, value: 
  * Create a new order
  */
 export async function createOrder(params: CreateOrderParams): Promise<ActiveOrder> {
-  const result = await pool.query(
-    `INSERT INTO orders
-       (order_id, product_title, shipping_tracking_number, sku, account_source,
-        condition, quantity, item_number, ship_by_date, notes, is_shipped)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     RETURNING *`,
-    [
-      params.orderId,
-      params.productTitle,
-      params.shippingTrackingNumber ?? null,
-      params.sku ?? null,
-      params.accountSource ?? 'Manual',
-      params.condition ?? 'Good',
-      params.quantity ?? null,
-      params.itemNumber ?? null,
-      params.shipByDate ?? null,
-      params.notes ?? null,
-      params.isShipped ?? false,
-    ],
-  );
-  return result.rows[0];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `INSERT INTO orders
+         (order_id, product_title, shipping_tracking_number, sku, account_source,
+          condition, quantity, item_number, notes, is_shipped)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        params.orderId,
+        params.productTitle,
+        params.shippingTrackingNumber ?? null,
+        params.sku ?? null,
+        params.accountSource ?? 'Manual',
+        params.condition ?? 'Good',
+        params.quantity ?? null,
+        params.itemNumber ?? null,
+        params.notes ?? null,
+        params.isShipped ?? false,
+      ],
+    );
+
+    const order = result.rows[0];
+    await client.query(
+      `INSERT INTO work_assignments
+         (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+       VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2, 'Canonical deadline row from createOrder', NOW(), NOW(), NOW())
+       ON CONFLICT DO NOTHING`,
+      [order.id, params.shipByDate ?? null],
+    );
+
+    await client.query('COMMIT');
+    return {
+      ...order,
+      ship_by_date: params.shipByDate ?? null,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -583,7 +606,6 @@ export async function updateOrder(
     condition: 'condition',
     quantity: 'quantity',
     itemNumber: 'item_number',
-    shipByDate: 'ship_by_date',
     notes: 'notes',
     isShipped: 'is_shipped',
     outOfStock: 'out_of_stock',
@@ -594,22 +616,70 @@ export async function updateOrder(
   const setClauses: string[] = [];
   const params: any[] = [];
   let idx = 1;
+  const deadlineAt = updates.shipByDate;
 
   for (const [key, value] of Object.entries(updates)) {
+    if (key === 'shipByDate') continue;
     if (value !== undefined && columnMap[key]) {
       setClauses.push(`${columnMap[key]} = $${idx++}`);
       params.push(value);
     }
   }
 
-  if (setClauses.length === 0) return null;
+  if (setClauses.length === 0 && deadlineAt === undefined) return null;
 
-  params.push(id);
-  const result = await pool.query(
-    `UPDATE orders SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
-    params,
-  );
-  return result.rows[0] ?? null;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let order: any = null;
+    if (setClauses.length > 0) {
+      params.push(id);
+      const result = await client.query(
+        `UPDATE orders SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
+        params,
+      );
+      order = result.rows[0] ?? null;
+    } else {
+      const result = await client.query(`SELECT * FROM orders WHERE id = $1`, [id]);
+      order = result.rows[0] ?? null;
+    }
+
+    if (!order) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    if (deadlineAt !== undefined) {
+      await client.query(
+        `INSERT INTO work_assignments
+           (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+         VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2, 'Canonical deadline row from updateOrder', NOW(), NOW(), NOW())
+         ON CONFLICT DO NOTHING`,
+        [id, deadlineAt ?? null],
+      );
+      await client.query(
+        `UPDATE work_assignments
+         SET deadline_at = $1, updated_at = NOW()
+         WHERE entity_type = 'ORDER'
+           AND entity_id = $2
+           AND work_type = 'TEST'
+           AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')`,
+        [deadlineAt ?? null, id],
+      );
+    }
+
+    await client.query('COMMIT');
+    return {
+      ...order,
+      ship_by_date: deadlineAt !== undefined ? (deadlineAt ?? null) : null,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**

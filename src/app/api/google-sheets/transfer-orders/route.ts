@@ -135,7 +135,6 @@ async function runTransferOrders(manualSheetName?: string) {
                 .select({
                     orderId: ordersTable.orderId,
                     id: ordersTable.id,
-                    shipByDate: ordersTable.shipByDate,
                     itemNumber: ordersTable.itemNumber,
                     productTitle: ordersTable.productTitle,
                     quantity: ordersTable.quantity,
@@ -156,7 +155,6 @@ async function runTransferOrders(manualSheetName?: string) {
                 .select({
                     orderId: ordersTable.orderId,
                     id: ordersTable.id,
-                    shipByDate: ordersTable.shipByDate,
                     itemNumber: ordersTable.itemNumber,
                     productTitle: ordersTable.productTitle,
                     quantity: ordersTable.quantity,
@@ -205,7 +203,7 @@ async function runTransferOrders(manualSheetName?: string) {
             latestBlankTrackingOrderByOrderId.set(key, {
                 id,
                 orderId: order.orderId,
-                shipByDate: order.shipByDate,
+                shipByDate: null,
                 itemNumber: order.itemNumber,
                 productTitle: order.productTitle,
                 quantity: order.quantity,
@@ -238,7 +236,7 @@ async function runTransferOrders(manualSheetName?: string) {
                 id,
                 tracking,
                 orderId: order.orderId,
-                shipByDate: order.shipByDate,
+                shipByDate: null,
                 itemNumber: order.itemNumber,
                 productTitle: order.productTitle,
                 quantity: order.quantity,

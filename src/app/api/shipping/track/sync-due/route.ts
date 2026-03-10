@@ -1,0 +1,46 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { runDueShipments } from '@/lib/shipping/scheduler';
+
+// Protected by CRON_SECRET — safe for Vercel cron jobs and internal scheduler calls.
+function isAuthorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true; // no secret configured → open (dev only)
+
+  const authHeader = req.headers.get('authorization');
+  if (authHeader === `Bearer ${secret}`) return true;
+
+  const bodySecret = req.headers.get('x-cron-secret');
+  if (bodySecret === secret) return true;
+
+  return false;
+}
+
+export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let limit = 50;
+  let concurrency = 5;
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    if (body.limit) limit = Math.min(Number(body.limit), 200);
+    if (body.concurrency) concurrency = Math.min(Number(body.concurrency), 10);
+  } catch {
+    // body is optional
+  }
+
+  try {
+    const result = await runDueShipments({ limit, concurrency });
+    return NextResponse.json({ ok: true, ...result });
+  } catch (err: any) {
+    console.error('[shipping/sync-due]', err);
+    return NextResponse.json({ ok: false, error: err?.message }, { status: 500 });
+  }
+}
+
+// Also accept GET so Vercel cron can hit it directly
+export async function GET(req: NextRequest) {
+  return POST(req);
+}

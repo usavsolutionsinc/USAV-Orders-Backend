@@ -206,8 +206,24 @@ export async function POST(req: NextRequest) {
         matchedExceptions += openExceptions.rows.length;
 
         const existing = await client.query(
-          `SELECT id, shipping_tracking_number, order_date, ship_by_date, is_shipped, status
-           FROM orders
+          `SELECT
+             o.id,
+             o.shipping_tracking_number,
+             o.order_date,
+             wa_deadline.deadline_at AS ship_by_date,
+             o.is_shipped,
+             o.status
+           FROM orders o
+           LEFT JOIN LATERAL (
+             SELECT wa.deadline_at
+             FROM work_assignments wa
+             WHERE wa.entity_type = 'ORDER'
+               AND wa.entity_id = o.id
+               AND wa.work_type = 'TEST'
+             ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                      wa.updated_at DESC, wa.id DESC
+             LIMIT 1
+           ) wa_deadline ON TRUE
            WHERE order_id = $1
            ORDER BY created_at DESC NULLS LAST, id DESC`,
           [orderId]
@@ -221,19 +237,17 @@ export async function POST(req: NextRequest) {
               order_id,
               shipping_tracking_number,
               order_date,
-              ship_by_date,
               status,
               status_history,
               is_shipped,
               account_source,
               created_at
-            ) VALUES ($1, $2, $3, $4::date, $5, $6::jsonb, $7, $8, timezone('America/Los_Angeles', now()))
+            ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, timezone('America/Los_Angeles', now()))
             RETURNING id`,
             [
               orderId,
               payload.tracking,
               payload.orderDate,
-              payload.shipByDate,
               'shipped',
               JSON.stringify([]),
               true,
@@ -268,14 +282,13 @@ export async function POST(req: NextRequest) {
               `UPDATE orders
                SET shipping_tracking_number = $2,
                    order_date = COALESCE($3, order_date),
-                   ship_by_date = COALESCE($4::date, ship_by_date),
                    is_shipped = true,
                    status = CASE
                      WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
                      ELSE status
                    END
                WHERE order_id = $1`,
-              [orderId, payload.tracking, payload.orderDate, payload.shipByDate]
+              [orderId, payload.tracking, payload.orderDate]
             );
             updated++;
           }

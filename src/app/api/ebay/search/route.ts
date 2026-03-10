@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
                  wa.updated_at DESC, wa.id DESC LIMIT 1
       ) wa_deadline ON TRUE
-      LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
+      LEFT JOIN tech_serial_numbers tsn ON o.shipment_id = tsn.shipment_id AND o.shipment_id IS NOT NULL
       WHERE o.account_source IS NOT NULL
       GROUP BY o.id, o.order_id, o.product_title, o.sku, o.account_source, o.order_date, 
                o.shipping_tracking_number, wa_deadline.deadline_at, o.status, o.is_shipped

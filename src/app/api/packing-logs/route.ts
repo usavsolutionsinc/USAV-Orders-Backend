@@ -6,6 +6,7 @@ import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp } from '@/lib/timezone';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -85,14 +86,15 @@ export async function GET(req: NextRequest) {
         }
 
         const result = await pool.query(`
-            SELECT 
+            SELECT
                 pl.id,
                 pl.pack_date_time as timestamp,
-                pl.shipping_tracking_number as tracking,
+                COALESCE(stn.tracking_number_raw, pl.scan_ref) AS tracking,
                 pl.tracking_type,
                 o.product_title as title
             FROM packer_logs pl
-            LEFT JOIN orders o ON o.shipping_tracking_number = pl.shipping_tracking_number
+            LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
+            LEFT JOIN orders o ON o.shipment_id = pl.shipment_id AND pl.shipment_id IS NOT NULL
             WHERE pl.packed_by = $1
             ORDER BY pl.id DESC
             LIMIT $2 OFFSET $3
@@ -169,7 +171,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Invalid tracking number' }, { status: 400 });
             }
             const orderLookup = await pool.query(
-                `SELECT id, order_id, shipping_tracking_number, product_title, condition, quantity, sku
+                `SELECT id, order_id, shipping_tracking_number, shipment_id, product_title, condition, quantity, sku
                  FROM orders
                  WHERE shipping_tracking_number IS NOT NULL
                    AND shipping_tracking_number != ''
@@ -189,15 +191,17 @@ export async function POST(req: NextRequest) {
                     notes: 'Packer scan: tracking not found in orders',
                 });
 
+                const { shipmentId: nfShipmentId, scanRef: nfScanRef } = await resolveShipmentId(scanInput);
                 const notFoundInsert = await pool.query(`
                     INSERT INTO packer_logs (
-                        shipping_tracking_number,
+                        shipment_id,
+                        scan_ref,
                         tracking_type,
                         pack_date_time,
                         packed_by
-                    ) VALUES ($1, $2, $3, $4)
+                    ) VALUES ($1, $2, $3, $4, $5)
                     RETURNING id, pack_date_time::text
-                `, [scanInput, classification.trackingType, packDateTime, staffId]);
+                `, [nfShipmentId, nfScanRef, classification.trackingType, packDateTime, staffId]);
 
                 const notFoundPackerLogId = notFoundInsert.rows[0]?.id ?? null;
                 if (notFoundPackerLogId && photoUrls.length > 0) {
@@ -266,15 +270,21 @@ export async function POST(req: NextRequest) {
                         updated_at         = NOW()
             `, [order.id, staffId]);
 
+            let orderShipmentId: number | null = order.shipment_id ?? null;
+            if (!orderShipmentId && order.shipping_tracking_number) {
+                const resolved = await resolveShipmentId(order.shipping_tracking_number);
+                orderShipmentId = resolved.shipmentId;
+            }
             const foundInsert = await pool.query(`
                 INSERT INTO packer_logs (
-                    shipping_tracking_number,
+                    shipment_id,
+                    scan_ref,
                     tracking_type,
                     pack_date_time,
                     packed_by
-                ) VALUES ($1, $2, $3, $4)
+                ) VALUES ($1, NULL, $2, $3, $4)
                 RETURNING id, pack_date_time::text
-            `, [order.shipping_tracking_number, classification.trackingType, packDateTime, staffId]);
+            `, [orderShipmentId, classification.trackingType, packDateTime, staffId]);
 
             const foundPackerLogId = foundInsert.rows[0]?.id ?? null;
             if (foundPackerLogId && photoUrls.length > 0) {
@@ -319,14 +329,15 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // Non-order scans: write only to packer_logs
+        // Non-order scans (SKU, FNSKU, etc.): store raw input in scan_ref
         const nonOrderInsert = await pool.query(`
             INSERT INTO packer_logs (
-                shipping_tracking_number,
+                scan_ref,
+                shipment_id,
                 tracking_type,
                 pack_date_time,
                 packed_by
-            ) VALUES ($1, $2, $3, $4)
+            ) VALUES ($1, NULL, $2, $3, $4)
             RETURNING id, pack_date_time::text
         `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId]);
 

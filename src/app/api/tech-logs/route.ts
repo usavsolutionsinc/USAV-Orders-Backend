@@ -73,25 +73,25 @@ export async function GET(req: NextRequest) {
         const limitIdx = idx;
         const offsetIdx = idx + 1;
 
-        // Query tech serial logs and join matching order info by normalized tracking last-8.
+        // Query tech serial logs joined via shipment_id FK for order data.
         const result = await pool.query(`
-            SELECT 
+            SELECT
                 tsn.id,
                 tsn.test_date_time,
-                tsn.shipping_tracking_number,
+                COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
                 tsn.serial_number,
                 tsn.tested_by,
                 o.id as order_db_id,
                 CASE
-                    WHEN UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, ''))) LIKE 'X00%' THEN 'FBA'
+                    WHEN UPPER(TRIM(COALESCE(tsn.scan_ref, stn.tracking_number_raw, ''))) LIKE 'X00%' THEN 'FBA'
                     ELSE o.order_id
                 END as order_id,
-                o.ship_by_date,
+                wa_deadline.deadline_at AS ship_by_date,
                 o.created_at,
                 o.item_number,
                 COALESCE(
                     CASE
-                        WHEN UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, ''))) LIKE 'X00%' THEN fba.product_title
+                        WHEN UPPER(TRIM(COALESCE(tsn.scan_ref, stn.tracking_number_raw, ''))) LIKE 'X00%' THEN fba.product_title
                         ELSE NULL
                     END,
                     o.product_title
@@ -104,38 +104,21 @@ export async function GET(req: NextRequest) {
                 o.out_of_stock,
                 o.is_shipped
             FROM tech_serial_numbers tsn
+            LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+            LEFT JOIN orders o ON o.shipment_id = tsn.shipment_id AND tsn.shipment_id IS NOT NULL
+            LEFT JOIN LATERAL (
+                SELECT wa.deadline_at
+                FROM work_assignments wa
+                WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+                ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+                         wa.updated_at DESC, wa.id DESC LIMIT 1
+            ) wa_deadline ON o.id IS NOT NULL
             LEFT JOIN LATERAL (
                 SELECT product_title
                 FROM fba_fnskus
-                WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, '')))
+                WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = UPPER(TRIM(COALESCE(tsn.scan_ref, '')))
                 LIMIT 1
-            ) fba ON true
-            LEFT JOIN LATERAL (
-                SELECT
-                    id,
-                    order_id,
-                    (
-                      SELECT wa.deadline_at
-                      FROM work_assignments wa
-                      WHERE wa.entity_type = 'ORDER' AND wa.entity_id = orders.id AND wa.work_type = 'TEST'
-                      ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
-                               wa.updated_at DESC, wa.id DESC LIMIT 1
-                    ) AS ship_by_date,
-                    created_at,
-                    item_number,
-                    product_title,
-                    quantity,
-                    condition,
-                    sku,
-                    account_source,
-                    notes,
-                    out_of_stock,
-                    is_shipped
-                FROM orders
-                WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-                      RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
-                LIMIT 1
-            ) o ON true
+            ) fba ON tsn.scan_ref IS NOT NULL AND UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%'
             WHERE tsn.tested_by = $1
               AND tsn.test_date_time IS NOT NULL
               ${weekClause}

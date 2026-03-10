@@ -1,5 +1,5 @@
--- Phase 1: Add deadline_at to work_assignments and seed canonical OPEN TEST rows.
--- Do NOT drop orders.ship_by_date in this deployment.
+-- Move order deadlines from orders.ship_by_date to work_assignments.deadline_at
+-- and drop the legacy orders.ship_by_date column.
 
 BEGIN;
 
@@ -75,5 +75,34 @@ WHERE NOT EXISTS (
     AND wa.work_type   = 'TEST'
     AND wa.status      IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
 );
+
+-- 7. Preserve historical deadlines on completed/canceled TEST rows if they are blank.
+UPDATE work_assignments wa
+SET
+  deadline_at = seeded.deadline_at,
+  updated_at  = NOW()
+FROM (
+  SELECT DISTINCT ON (entity_id)
+    entity_id,
+    deadline_at
+  FROM work_assignments
+  WHERE entity_type = 'ORDER'
+    AND work_type = 'TEST'
+    AND deadline_at IS NOT NULL
+  ORDER BY entity_id,
+           CASE status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
+           updated_at DESC,
+           id DESC
+) seeded
+WHERE wa.entity_type = 'ORDER'
+  AND wa.work_type = 'TEST'
+  AND wa.entity_id = seeded.entity_id
+  AND wa.deadline_at IS NULL;
+
+-- 8. Drop the legacy index/column now that deadline_at is populated.
+DROP INDEX IF EXISTS idx_orders_ship_by_date;
+
+ALTER TABLE orders
+  DROP COLUMN IF EXISTS ship_by_date;
 
 COMMIT;

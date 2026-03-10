@@ -4,6 +4,7 @@ import { db } from '@/lib/drizzle/db';
 import { packerLogs } from '@/lib/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -51,60 +52,36 @@ export async function GET(req: NextRequest) {
         const offsetIdx = params.length;
 
         const query = `
-            SELECT 
+            SELECT
                 pl.id,
                 pl.pack_date_time,
-                pl.shipping_tracking_number,
+                COALESCE(stn.tracking_number_raw, pl.scan_ref) AS shipping_tracking_number,
                 pl.packed_by,
+                pl.tracking_type,
                 COALESCE(
                     (SELECT json_agg(json_build_object('url', p.url, 'uploadedAt', p.created_at) ORDER BY p.created_at)
                      FROM photos p
                      WHERE p.entity_type = 'PACKER_LOG' AND p.entity_id = pl.id),
                     '[]'::json
                 ) AS packer_photos_url,
-                (
-                    SELECT o.order_id 
-                    FROM orders o 
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as order_id,
-                (
-                    SELECT COALESCE(
-                        (
-                            SELECT ss.product_title
-                            FROM sku_stock ss
-                            WHERE POSITION(':' IN COALESCE(pl.shipping_tracking_number, '')) > 0
-                              AND regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
-                                  regexp_replace(UPPER(TRIM(split_part(pl.shipping_tracking_number, ':', 1))), '^0+', '')
-                            LIMIT 1
-                        ),
-                        (
-                            SELECT o.product_title
-                            FROM orders o
-                            WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
-                            LIMIT 1
-                        )
-                    )
-                ) as product_title,
-                (
-                    SELECT o.condition 
-                    FROM orders o 
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as condition,
-                (
-                    SELECT o.quantity
-                    FROM orders o
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as quantity,
-                (
-                    SELECT o.sku 
-                    FROM orders o 
-                    WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT(pl.shipping_tracking_number, 8)
-                    LIMIT 1
-                ) as sku
+                o.order_id,
+                COALESCE(
+                    (
+                        SELECT ss.product_title
+                        FROM sku_stock ss
+                        WHERE POSITION(':' IN COALESCE(pl.scan_ref, '')) > 0
+                          AND regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
+                              regexp_replace(UPPER(TRIM(split_part(pl.scan_ref, ':', 1))), '^0+', '')
+                        LIMIT 1
+                    ),
+                    o.product_title
+                ) AS product_title,
+                o.condition,
+                o.quantity,
+                o.sku
             FROM packer_logs pl
+            LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
+            LEFT JOIN orders o ON o.shipment_id = pl.shipment_id AND pl.shipment_id IS NOT NULL
             ${whereClause}
             ORDER BY pl.pack_date_time DESC NULLS LAST
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
@@ -124,9 +101,11 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
 
+        const { shipmentId, scanRef } = await resolveShipmentId(body.shippingTrackingNumber || '');
         const newLog = await db.insert(packerLogs).values({
             packDateTime: body.packDateTime,
-            shippingTrackingNumber: body.shippingTrackingNumber,
+            shipmentId: shipmentId ?? undefined,
+            scanRef: scanRef ?? undefined,
             trackingType: body.trackingType || 'ORDERS',
             packedBy: body.packedBy,
         }).returning();

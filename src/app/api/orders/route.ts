@@ -103,8 +103,8 @@ export async function GET(req: NextRequest) {
           MIN(tsn.tested_by)::int AS tested_by,
           COUNT(*)::int AS scan_count
         FROM tech_serial_numbers tsn
-        WHERE RIGHT(regexp_replace(UPPER(COALESCE(tsn.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) =
-              RIGHT(regexp_replace(UPPER(COALESCE(o.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18)
+        WHERE tsn.shipment_id IS NOT NULL
+          AND tsn.shipment_id = o.shipment_id
       ) tsn_scan ON true
       LEFT JOIN staff staff_test_assignee ON staff_test_assignee.id = wa_t.assigned_tech_id
       LEFT JOIN staff staff_packed_by ON staff_packed_by.id = wa_p.assigned_packer_id

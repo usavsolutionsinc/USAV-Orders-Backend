@@ -63,8 +63,8 @@ export async function GET(req: NextRequest) {
       NOT EXISTS (
         SELECT 1
         FROM tech_serial_numbers tsn
-        WHERE RIGHT(regexp_replace(UPPER(COALESCE(tsn.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) =
-              RIGHT(regexp_replace(UPPER(COALESCE(o.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18)
+        WHERE tsn.shipment_id IS NOT NULL
+          AND tsn.shipment_id = o.shipment_id
       )
     `;
 

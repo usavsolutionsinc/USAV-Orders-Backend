@@ -6,6 +6,7 @@ import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 import {
     ensureOrdersExceptionsTable,
     getTrackingLast8,
@@ -44,27 +45,16 @@ export async function POST(req: NextRequest) {
 }
 
 async function executeCheckShippedOrders() {
-    // Get all packer logs with tracking numbers
-    const packerLogsData = await db.select().from(packerLogs);
-    
-    // Get all orders that are not yet marked as shipped
-    const ordersData = await db.select().from(orders).where(eq(orders.isShipped, false));
-    
-    // Create a set of tracking numbers from packer logs for faster lookup
-    const packerTrackingSet = new Set(
-        packerLogsData
-            .map(log => String(log.shippingTrackingNumber || '').trim())
-            .filter(tracking => tracking !== '')
+    // Find orders where a packer log exists via the shipment_id FK
+    const shippedResult = await pool.query(
+        `SELECT DISTINCT o.id
+         FROM orders o
+         INNER JOIN packer_logs pl ON pl.shipment_id = o.shipment_id
+         WHERE o.is_shipped = false
+           AND o.shipment_id IS NOT NULL
+           AND pl.tracking_type = 'ORDERS'`
     );
-    
-    // Find orders that have matching tracking numbers in packer logs
-    const ordersToUpdate: number[] = [];
-    for (const order of ordersData) {
-        const orderTracking = String(order.shippingTrackingNumber || '').trim();
-        if (orderTracking && packerTrackingSet.has(orderTracking)) {
-            ordersToUpdate.push(order.id);
-        }
-    }
+    const ordersToUpdate: number[] = shippedResult.rows.map((r: any) => Number(r.id));
     
     // Update orders to mark as shipped
     if (ordersToUpdate.length > 0) {
@@ -74,9 +64,9 @@ async function executeCheckShippedOrders() {
             .where(inArray(orders.id, ordersToUpdate));
     }
     
-    return NextResponse.json({ 
-        success: true, 
-        message: `Checked ${ordersData.length} orders. Updated ${ordersToUpdate.length} orders to shipped status.` 
+    return NextResponse.json({
+        success: true,
+        message: `Checked orders via shipment_id FK. Updated ${ordersToUpdate.length} orders to shipped status.`,
     });
 }
 
@@ -199,12 +189,13 @@ async function executeSyncTechSerialNumbers() {
                     skippedMissingTrackingForSheet++;
                     continue;
                 }
+                const { shipmentId: tsnShipmentId, scanRef: tsnScanRef } = await resolveShipmentId(shippingTrackingNumber);
                 const existingTrackingResult = await client.query(
-                    `SELECT id
-                     FROM tech_serial_numbers
-                     WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+                    `SELECT id FROM tech_serial_numbers
+                     WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
+                        OR (shipment_id IS NULL AND scan_ref = $2)
                      LIMIT 1`,
-                    [trackingKey18]
+                    [tsnShipmentId, tsnScanRef ?? shippingTrackingNumber]
                 );
                 if (existingTrackingResult.rows.length > 0) {
                     skippedExistingForSheet++;
@@ -213,13 +204,14 @@ async function executeSyncTechSerialNumbers() {
 
                 await client.query(
                     `INSERT INTO tech_serial_numbers (
-                        shipping_tracking_number,
+                        shipment_id,
+                        scan_ref,
                         serial_number,
                         serial_type,
                         test_date_time,
                         tested_by
-                    ) VALUES ($1, $2, 'SERIAL', $3, $4)`,
-                    [shippingTrackingNumber, serialNumber, testDateTime, techSheet.testedBy]
+                    ) VALUES ($1, $2, $3, 'SERIAL', $4, $5)`,
+                    [tsnShipmentId, tsnScanRef, serialNumber, testDateTime, techSheet.testedBy]
                 );
 
                 insertedForSheet++;
@@ -322,9 +314,13 @@ async function executeSyncPackerLogs() {
                     exceptionsLoggedForSheet++;
                 }
 
+                const { shipmentId: plShipmentId, scanRef: plScanRef } = await resolveShipmentId(shippingTrackingNumber);
                 const existingTrackingResult = await client.query(
-                    `SELECT id FROM packer_logs WHERE shipping_tracking_number = $1 LIMIT 1`,
-                    [shippingTrackingNumber]
+                    `SELECT id FROM packer_logs
+                     WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
+                        OR (shipment_id IS NULL AND scan_ref = $2)
+                     LIMIT 1`,
+                    [plShipmentId, plScanRef ?? shippingTrackingNumber]
                 );
                 if (existingTrackingResult.rows.length > 0) {
                     skippedExistingForSheet++;
@@ -333,12 +329,13 @@ async function executeSyncPackerLogs() {
 
                 await client.query(
                     `INSERT INTO packer_logs (
-                        shipping_tracking_number,
+                        shipment_id,
+                        scan_ref,
                         tracking_type,
                         pack_date_time,
                         packed_by
-                    ) VALUES ($1, $2, $3, $4)`,
-                    [shippingTrackingNumber, 'ORDERS', packDateTime || null, packerSheet.packedBy]
+                    ) VALUES ($1, $2, $3, $4, $5)`,
+                    [plShipmentId, plScanRef, 'ORDERS', packDateTime || null, packerSheet.packedBy]
                 );
 
                 insertedForSheet++;

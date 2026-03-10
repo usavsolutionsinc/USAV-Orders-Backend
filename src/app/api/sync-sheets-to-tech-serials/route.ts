@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 export const maxDuration = 60;
 
@@ -98,30 +99,33 @@ export async function POST(req: NextRequest) {
                             serialType = 'FNSKU';
                         }
 
-                        // Check if this serial already exists for this tracking number
+                        const { shipmentId: tsnShipmentId, scanRef: tsnScanRef } = await resolveShipmentId(tracking);
+
+                        // Check if this serial already exists (match by shipment_id or scan_ref)
                         const existingSerial = await client.query(
-                            `SELECT id, test_date_time, tested_by FROM tech_serial_numbers 
-                             WHERE shipping_tracking_number = $1 AND serial_number = $2`,
-                            [tracking, upperSerial]
+                            `SELECT id, test_date_time, tested_by FROM tech_serial_numbers
+                             WHERE (
+                               (shipment_id IS NOT NULL AND shipment_id = $1)
+                               OR (shipment_id IS NULL AND scan_ref = $2)
+                             ) AND serial_number = $3`,
+                            [tsnShipmentId, tsnScanRef ?? tracking, upperSerial]
                         );
 
                         if (existingSerial.rows.length > 0) {
-                            // Update existing record with sheet data
                             await client.query(
                                 `UPDATE tech_serial_numbers
                                  SET test_date_time = $1,
                                      tested_by = $2
-                                 WHERE shipping_tracking_number = $3 AND serial_number = $4`,
-                                [parsedDateTime, staffId, tracking, upperSerial]
+                                 WHERE id = $3`,
+                                [parsedDateTime, staffId, existingSerial.rows[0].id]
                             );
                             updatedCount++;
                         } else {
-                            // Insert new serial from sheet
                             await client.query(
-                                `INSERT INTO tech_serial_numbers 
-                                 (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
-                                 VALUES ($1, $2, $3, $4, $5)`,
-                                [tracking, upperSerial, serialType, parsedDateTime, staffId]
+                                `INSERT INTO tech_serial_numbers
+                                 (shipment_id, scan_ref, serial_number, serial_type, test_date_time, tested_by)
+                                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                                [tsnShipmentId, tsnScanRef, upperSerial, serialType, parsedDateTime, staffId]
                             );
                             insertedCount++;
                         }

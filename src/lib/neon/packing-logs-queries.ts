@@ -1,4 +1,5 @@
 import pool from '../db';
+import { resolveShipmentId } from '../shipping/resolve';
 
 export interface PackingLog {
   id: number;
@@ -49,10 +50,11 @@ export async function getPackingLogs(options?: {
     params.push(options.packerId);
   }
   if (options?.trackingNumber) {
+    const last8 = options.trackingNumber.replace(/\D/g, '').slice(-8);
     conditions.push(
-      `RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $${idx++}`,
+      `RIGHT(COALESCE(stn.tracking_number_normalized, regexp_replace(UPPER(COALESCE(pl.scan_ref,'')), '[^A-Z0-9]', '', 'g')), 8) = $${idx++}`,
     );
-    params.push(options.trackingNumber.replace(/\D/g, '').slice(-8));
+    params.push(last8);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -61,7 +63,14 @@ export async function getPackingLogs(options?: {
   params.push(limit, offset);
 
   const result = await pool.query(
-    `SELECT * FROM packer_logs ${where} ORDER BY pack_date_time DESC NULLS LAST, id DESC LIMIT $${idx++} OFFSET $${idx}`,
+    `SELECT pl.id, pl.packed_by, pl.pack_date_time, pl.tracking_type, pl.created_at,
+            pl.shipment_id, pl.scan_ref,
+            COALESCE(stn.tracking_number_raw, pl.scan_ref) AS shipping_tracking_number
+     FROM packer_logs pl
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
+     ${where}
+     ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC
+     LIMIT $${idx++} OFFSET $${idx}`,
     params,
   );
   return result.rows;
@@ -81,9 +90,14 @@ export async function getPackingLogById(id: number): Promise<PackingLog | null> 
 export async function getPackingLogByTracking(tracking: string): Promise<PackingLog | null> {
   const last8 = tracking.replace(/\D/g, '').slice(-8);
   const result = await pool.query(
-    `SELECT * FROM packer_logs
-     WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
-     ORDER BY pack_date_time DESC NULLS LAST, id DESC LIMIT 1`,
+    `SELECT pl.id, pl.packed_by, pl.pack_date_time, pl.tracking_type, pl.created_at,
+            pl.shipment_id, pl.scan_ref,
+            COALESCE(stn.tracking_number_raw, pl.scan_ref) AS shipping_tracking_number
+     FROM packer_logs pl
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
+     WHERE RIGHT(COALESCE(stn.tracking_number_normalized,
+                          regexp_replace(UPPER(COALESCE(pl.scan_ref,'')), '[^A-Z0-9]', '', 'g')), 8) = $1
+     ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC LIMIT 1`,
     [last8],
   );
   return result.rows[0] ?? null;
@@ -93,18 +107,19 @@ export async function getPackingLogByTracking(tracking: string): Promise<Packing
  * Create a new packing log
  */
 export async function createPackingLog(params: CreatePackingLogParams): Promise<PackingLog> {
+  const raw = params.shippingTrackingNumber?.trim() ?? '';
+  const { shipmentId, scanRef } = raw ? await resolveShipmentId(raw) : { shipmentId: null, scanRef: null };
   const result = await pool.query(
     `INSERT INTO packer_logs
-       (shipping_tracking_number, packed_by, pack_date_time, packer_photos_url, tracking_type, sku, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (shipment_id, scan_ref, packed_by, pack_date_time, tracking_type, notes)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
     [
-      params.shippingTrackingNumber,
+      shipmentId,
+      scanRef,
       params.packedBy ?? null,
       params.packDateTime ?? null,
-      params.packerPhotosUrl ?? null,
       params.trackingType ?? null,
-      params.sku ?? null,
       params.notes ?? null,
     ],
   );

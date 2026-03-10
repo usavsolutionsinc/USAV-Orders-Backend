@@ -146,16 +146,13 @@ async function upsertEcwidOrder(params: {
         status,
         status_history,
         is_shipped,
-        packer_id,
         notes,
         quantity,
         out_of_stock,
         account_source,
-        order_date,
-        tester_id,
-        ship_by_date
+        order_date
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16
+        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13
       )`,
       [
         orderId || null,
@@ -166,14 +163,11 @@ async function upsertEcwidOrder(params: {
         'shipped',
         JSON.stringify([]),
         true,
-        5,
         '',
         quantity,
         '',
         'ecwid',
         orderDate,
-        6,
-        null,
       ]
     );
 

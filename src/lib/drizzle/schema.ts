@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, json, jsonb, pgEnum, bigserial } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, json, jsonb, pgEnum, bigserial, bigint } from 'drizzle-orm/pg-core';
 
 // eBay Accounts table
 export const ebayAccounts = pgTable('ebay_accounts', {
@@ -156,13 +156,14 @@ export const customers = pgTable('customers', {
 // BEFORE DELETE trigger trg_cancel_wa_on_order_delete auto-cancels related work_assignments
 export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
-  shipByDate: timestamp('ship_by_date'),
   orderId: text('order_id'),
   itemNumber: text('item_number'),
   productTitle: text('product_title'),
   sku: text('sku'),
   condition: text('condition'),
   shippingTrackingNumber: text('shipping_tracking_number'),
+  /** FK to shipping_tracking_numbers — single source of truth for carrier tracking */
+  shipmentId: bigint('shipment_id', { mode: 'number' }),
   outOfStock: text('out_of_stock'),
   notes: text('notes'),
   quantity: text('quantity').default('1'),
@@ -177,9 +178,14 @@ export const orders = pgTable('orders', {
 
 // Packer logs - audit trail for all packer scans (orders, SKU, FNSKU, FBA, etc.)
 // Photos are stored in the photos table (entity_type='PACKER_LOG', entity_id=packer_logs.id)
+// shipment_id links ORDERS-type scans to shipping_tracking_numbers (carrier tracking)
+// scan_ref stores non-carrier raw inputs (SKU, FNSKU, garbage scans)
 export const packerLogs = pgTable('packer_logs', {
   id: serial('id').primaryKey(),
-  shippingTrackingNumber: text('shipping_tracking_number').notNull(),
+  /** FK to shipping_tracking_numbers for carrier-tracking ORDERS scans */
+  shipmentId: bigint('shipment_id', { mode: 'number' }),
+  /** Raw scan value for non-carrier scans (SKU codes, FNSKUs, garbage) */
+  scanRef: text('scan_ref'),
   trackingType: varchar('tracking_type', { length: 20 }).notNull(),
   packDateTime: timestamp('pack_date_time'),
   packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
@@ -360,9 +366,14 @@ export const repairService = pgTable('repair_service', {
 // Packing data audit trail lives in packer_logs; photos in the unified photos table.
 
 // NEW: Tech Serial Numbers table - Individual serial tracking with types
+// shipment_id links carrier-tracking rows to shipping_tracking_numbers
+// scan_ref stores non-carrier raw inputs (FNSKU X00..., etc.)
 export const techSerialNumbers = pgTable('tech_serial_numbers', {
   id: serial('id').primaryKey(),
-  shippingTrackingNumber: text('shipping_tracking_number').notNull(),
+  /** FK to shipping_tracking_numbers for carrier-tracking rows */
+  shipmentId: bigint('shipment_id', { mode: 'number' }),
+  /** Raw scan value for non-carrier rows (FNSKU, etc.) */
+  scanRef: text('scan_ref'),
   serialNumber: text('serial_number').notNull(),
   serialType: varchar('serial_type', { length: 20 }).notNull().default('SERIAL'),
   testDateTime: timestamp('test_date_time').defaultNow(),

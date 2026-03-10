@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 import {
     ensureOrdersExceptionsTable,
     getTrackingLast8,
@@ -179,13 +180,13 @@ async function syncShippedSheet(params: {
                 `INSERT INTO orders (
                     order_id, product_title, quantity, condition,
                     shipping_tracking_number,
-                    ship_by_date, sku, notes, is_shipped
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    sku, notes, is_shipped
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id`,
                 [
                     orderId, productTitle, quantity, condition,
                     shippingTracking,
-                    shipByDate, sku, notes, true,
+                    sku, notes, true,
                 ]
             );
 
@@ -352,12 +353,13 @@ async function syncTechSheets(params: {
                     skippedMissingTracking++;
                     continue;
                 }
+                const { shipmentId: tsnShipmentId, scanRef: tsnScanRef } = await resolveShipmentId(shippingTracking);
                 const existing = await client.query(
-                    `SELECT id
-                     FROM tech_serial_numbers
-                     WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+                    `SELECT id FROM tech_serial_numbers
+                     WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
+                        OR (shipment_id IS NULL AND scan_ref = $2)
                      LIMIT 1`,
-                    [trackingKey18]
+                    [tsnShipmentId, tsnScanRef ?? shippingTracking]
                 );
                 if (existing.rows.length > 0) {
                     skippedExisting++;
@@ -366,13 +368,14 @@ async function syncTechSheets(params: {
 
                 await client.query(
                     `INSERT INTO tech_serial_numbers (
-                        shipping_tracking_number,
+                        shipment_id,
+                        scan_ref,
                         serial_number,
                         serial_type,
                         test_date_time,
                         tested_by
-                    ) VALUES ($1, $2, $3, $4, $5)`,
-                    [shippingTracking, serialNumber, 'SERIAL', testDateTime, techSheet.testedBy]
+                    ) VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [tsnShipmentId, tsnScanRef, serialNumber, 'SERIAL', testDateTime, techSheet.testedBy]
                 );
 
                 inserted++;
@@ -483,14 +486,17 @@ async function syncPackerSheets(params: {
                     }
                 }
 
+                const { shipmentId: plShipmentId, scanRef: plScanRef } = await resolveShipmentId(scanInput);
                 const existing = await client.query(
-                    `SELECT id
-                     FROM packer_logs
-                     WHERE shipping_tracking_number = $1
-                       AND tracking_type = $2
-                       AND packed_by IS NOT DISTINCT FROM $3
+                    `SELECT id FROM packer_logs
+                     WHERE tracking_type = $1
+                       AND packed_by IS NOT DISTINCT FROM $2
+                       AND (
+                         (shipment_id IS NOT NULL AND shipment_id = $3)
+                         OR (shipment_id IS NULL AND scan_ref = $4)
+                       )
                      LIMIT 1`,
-                    [scanInput, trackingType, packedBy]
+                    [trackingType, packedBy, plShipmentId, plScanRef ?? scanInput]
                 );
                 if (existing.rows.length > 0) {
                     skippedExisting++;
@@ -499,12 +505,13 @@ async function syncPackerSheets(params: {
 
                 await client.query(
                     `INSERT INTO packer_logs (
-                        shipping_tracking_number,
+                        shipment_id,
+                        scan_ref,
                         tracking_type,
                         pack_date_time,
                         packed_by
-                    ) VALUES ($1, $2, $3, $4)`,
-                    [scanInput, trackingType, packDateTime, packedBy]
+                    ) VALUES ($1, $2, $3, $4, $5)`,
+                    [plShipmentId, plScanRef, trackingType, packDateTime, packedBy]
                 );
 
                 inserted++;

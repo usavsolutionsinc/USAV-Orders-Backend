@@ -1,9 +1,13 @@
 import pool from '../db';
+import { resolveShipmentId } from '../shipping/resolve';
 
 export interface TechSerialNumber {
   id: number;
   serial_number: string;
+  /** Resolved from shipment FK or scan_ref for display */
   shipping_tracking_number: string | null;
+  shipment_id: number | null;
+  scan_ref: string | null;
   tested_by: number | null;
   test_date_time: string | null;
   fnsku: string | null;
@@ -63,20 +67,17 @@ export async function getTechLogs(options?: {
 
   const result = await pool.query(
     `SELECT
-       tsn.*,
+       tsn.id, tsn.serial_number, tsn.serial_type, tsn.test_date_time,
+       tsn.tested_by, tsn.fnsku, tsn.notes, tsn.created_at,
+       tsn.shipment_id, tsn.scan_ref,
+       COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
        o.order_id,
        o.product_title,
        o.sku,
        ff.product_title AS fnsku_title
      FROM tech_serial_numbers tsn
-     LEFT JOIN LATERAL (
-       SELECT order_id, product_title, sku
-       FROM orders o
-       WHERE o.shipping_tracking_number IS NOT NULL
-         AND RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
-       ORDER BY o.id DESC LIMIT 1
-     ) o ON true
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+     LEFT JOIN orders o ON o.shipment_id = tsn.shipment_id AND tsn.shipment_id IS NOT NULL
      LEFT JOIN LATERAL (
        SELECT product_title
        FROM fba_fnskus ff
@@ -110,26 +111,24 @@ export async function searchTechLogs(query: string, techId?: number): Promise<Te
 
   const result = await pool.query(
     `SELECT
-       tsn.*,
+       tsn.id, tsn.serial_number, tsn.serial_type, tsn.test_date_time,
+       tsn.tested_by, tsn.fnsku, tsn.notes, tsn.created_at,
+       tsn.shipment_id, tsn.scan_ref,
+       COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
        o.order_id,
        o.product_title,
        o.sku,
        ff.product_title AS fnsku_title
      FROM tech_serial_numbers tsn
-     LEFT JOIN LATERAL (
-       SELECT order_id, product_title, sku
-       FROM orders o
-       WHERE o.shipping_tracking_number IS NOT NULL
-         AND RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
-       ORDER BY o.id DESC LIMIT 1
-     ) o ON true
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+     LEFT JOIN orders o ON o.shipment_id = tsn.shipment_id AND tsn.shipment_id IS NOT NULL
      LEFT JOIN LATERAL (
        SELECT product_title FROM fba_fnskus ff WHERE ff.fnsku = tsn.fnsku LIMIT 1
      ) ff ON tsn.fnsku IS NOT NULL
      WHERE (
        tsn.serial_number ILIKE $1
-       OR tsn.shipping_tracking_number ILIKE $1
+       OR stn.tracking_number_raw ILIKE $1
+       OR tsn.scan_ref ILIKE $1
        OR tsn.fnsku ILIKE $1
      ) ${techCondition}
      ORDER BY tsn.test_date_time DESC NULLS LAST, tsn.id DESC
@@ -143,14 +142,17 @@ export async function searchTechLogs(query: string, techId?: number): Promise<Te
  * Create a new tech serial number log
  */
 export async function createTechLog(params: CreateTechLogParams): Promise<TechSerialNumber> {
+  const raw = params.shippingTrackingNumber?.trim() ?? '';
+  const { shipmentId, scanRef } = raw ? await resolveShipmentId(raw) : { shipmentId: null, scanRef: null };
   const result = await pool.query(
     `INSERT INTO tech_serial_numbers
-       (serial_number, shipping_tracking_number, tested_by, test_date_time, fnsku, notes)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (serial_number, shipment_id, scan_ref, tested_by, test_date_time, fnsku, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
     [
       params.serialNumber,
-      params.shippingTrackingNumber ?? null,
+      shipmentId,
+      scanRef,
       params.testedBy ?? null,
       params.testDateTime ?? new Date().toISOString(),
       params.fnsku ?? null,
@@ -179,7 +181,13 @@ export async function updateTechLog(
   let idx = 1;
 
   if (updates.serialNumber !== undefined) { setClauses.push(`serial_number = $${idx++}`); params.push(updates.serialNumber); }
-  if (updates.shippingTrackingNumber !== undefined) { setClauses.push(`shipping_tracking_number = $${idx++}`); params.push(updates.shippingTrackingNumber); }
+  if (updates.shippingTrackingNumber !== undefined) {
+    // Legacy field — resolve to shipment_id/scan_ref
+    const raw = updates.shippingTrackingNumber?.trim() ?? '';
+    const resolved = raw ? await resolveShipmentId(raw) : { shipmentId: null, scanRef: null };
+    setClauses.push(`shipment_id = $${idx++}`); params.push(resolved.shipmentId);
+    setClauses.push(`scan_ref = $${idx++}`); params.push(resolved.scanRef);
+  }
   if (updates.testedBy !== undefined) { setClauses.push(`tested_by = $${idx++}`); params.push(updates.testedBy); }
   if (updates.testDateTime !== undefined) { setClauses.push(`test_date_time = $${idx++}`); params.push(updates.testDateTime); }
   if (updates.fnsku !== undefined) { setClauses.push(`fnsku = $${idx++}`); params.push(updates.fnsku); }
@@ -218,10 +226,14 @@ export async function deleteLatestTechLogByTracking(
   const result = await pool.query(
     `DELETE FROM tech_serial_numbers
      WHERE id = (
-       SELECT id FROM tech_serial_numbers
-       WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+       SELECT tsn.id FROM tech_serial_numbers tsn
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+       WHERE RIGHT(
+               COALESCE(stn.tracking_number_normalized,
+                        regexp_replace(UPPER(COALESCE(tsn.scan_ref, '')), '[^A-Z0-9]', '', 'g')),
+               8) = $1
          ${techCondition}
-       ORDER BY test_date_time DESC NULLS LAST, id DESC
+       ORDER BY tsn.test_date_time DESC NULLS LAST, tsn.id DESC
        LIMIT 1
      )
      RETURNING id, serial_number`,
@@ -237,9 +249,14 @@ export async function deleteLatestTechLogByTracking(
 export async function getSerialsByTracking(tracking: string): Promise<string[]> {
   const last8 = tracking.replace(/\D/g, '').slice(-8);
   const result = await pool.query(
-    `SELECT serial_number FROM tech_serial_numbers
-     WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
-     ORDER BY test_date_time ASC`,
+    `SELECT tsn.serial_number
+     FROM tech_serial_numbers tsn
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+     WHERE RIGHT(
+             COALESCE(stn.tracking_number_normalized,
+                      regexp_replace(UPPER(COALESCE(tsn.scan_ref, '')), '[^A-Z0-9]', '', 'g')),
+             8) = $1
+     ORDER BY tsn.test_date_time ASC`,
     [last8],
   );
   return result.rows.map((r) => r.serial_number);

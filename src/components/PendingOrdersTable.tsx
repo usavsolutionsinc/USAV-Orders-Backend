@@ -13,6 +13,41 @@ export interface PendingOrdersTableProps {
 
 type FilterMode = 'all' | 'pending' | 'stock';
 
+function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
+  const patched = { ...row };
+  const {
+    testerId,
+    packerId,
+    testerName,
+    packerName,
+    shipByDate,
+    outOfStock,
+    notes,
+    shippingTrackingNumber,
+    itemNumber,
+    condition,
+  } = detail || {};
+
+  if (testerId !== undefined) {
+    patched.tester_id = testerId;
+    patched.tester_name = testerName ?? null;
+    patched.tested_by_name = testerName ?? null;
+  }
+  if (packerId !== undefined) {
+    patched.packer_id = packerId;
+    patched.packer_name = packerName ?? null;
+    patched.packed_by_name = packerName ?? null;
+  }
+  if (shipByDate !== undefined) patched.ship_by_date = shipByDate;
+  if (outOfStock !== undefined) patched.out_of_stock = outOfStock;
+  if (notes !== undefined) patched.notes = notes;
+  if (shippingTrackingNumber !== undefined) patched.shipping_tracking_number = shippingTrackingNumber;
+  if (itemNumber !== undefined) patched.item_number = itemNumber;
+  if (condition !== undefined) patched.condition = condition;
+
+  return patched;
+}
+
 export default function PendingOrdersTable({
   packedBy,
   testedBy,
@@ -116,24 +151,7 @@ export default function PendingOrdersTable({
           const next = current.map((row: any) => {
             if (!idSet.has(Number(row?.id))) return row;
             changed = true;
-            const patched = { ...row };
-            if (testerId !== undefined) {
-              patched.tester_id = testerId;
-              patched.tester_name = testerName ?? null;
-              patched.tested_by_name = testerName ?? null;
-            }
-            if (packerId !== undefined) {
-              patched.packer_id = packerId;
-              patched.packer_name = packerName ?? null;
-              patched.packed_by_name = packerName ?? null;
-            }
-            if (shipByDate !== undefined) patched.ship_by_date = shipByDate;
-            if (outOfStock !== undefined) patched.out_of_stock = outOfStock;
-            if (notes !== undefined) patched.notes = notes;
-            if (shippingTrackingNumber !== undefined) patched.shipping_tracking_number = shippingTrackingNumber;
-            if (itemNumber !== undefined) patched.item_number = itemNumber;
-            if (condition !== undefined) patched.condition = condition;
-            return patched;
+            return patchOrderRecordFromAssignmentEvent(row, e?.detail);
           });
           return changed ? next : current;
         }

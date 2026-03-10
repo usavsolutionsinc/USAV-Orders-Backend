@@ -26,7 +26,6 @@ export interface OrderRecord {
   sku: string | null;
   status_history: any;
   is_shipped: boolean;
-  ship_by_date: string | null;
   notes: string | null;
   quantity: string | null;
   customer_id: number | null;
@@ -42,6 +41,8 @@ export interface OrderRecord {
  */
 export interface OrderWithDerived extends OrderRecord {
   status?: string;
+  /** Derived from work_assignments.deadline_at and returned as ship_by_date for compat. */
+  ship_by_date?: string | null;
   /** Sourced from work_assignments (work_type=TEST, assigned_tech_id) */
   tester_id?: number | null;
   /** Sourced from work_assignments (work_type=PACK, assigned_packer_id) */
@@ -69,7 +70,6 @@ export const ORDER_COLUMNS = {
   SKU:                       'sku',
   STATUS_HISTORY:            'status_history',
   IS_SHIPPED:                'is_shipped',
-  SHIP_BY_DATE:              'ship_by_date',
   NOTES:                     'notes',
   QUANTITY:                  'quantity',
   CUSTOMER_ID:               'customer_id',
@@ -91,7 +91,6 @@ export const UPDATABLE_ORDER_FIELDS = [
   ORDER_COLUMNS.OUT_OF_STOCK,
   ORDER_COLUMNS.QUANTITY,
   ORDER_COLUMNS.CONDITION,
-  ORDER_COLUMNS.SHIP_BY_DATE,
 ] as const;
 
 /**
