@@ -74,7 +74,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       ? String(record.ship_by_date).split('T')[0]
       : '';
 
-    const detail: ShippedOrder & { tech_serial_id?: number } = {
+    const detail: ShippedOrder & { tech_serial_id?: number; shipment_id?: number | null; status?: string | null } = {
       id: record.order_db_id ?? record.id,
       ship_by_date: shipByDate,
       order_id: record.order_id || '',
@@ -94,14 +94,16 @@ export function TechTable({ testedBy }: TechTableProps) {
       tracking_type: null,
       account_source: record.account_source || null,
       notes: record.notes || '',
-      status_history: [],
+      status_history: record.status_history || [],
       is_shipped: !!record.is_shipped,
       created_at: record.created_at || null,
       quantity: record.quantity || '1',
+      shipment_id: record.shipment_id ?? null,
+      status: record.status ?? null,
       tech_serial_id: record.id,
     };
 
-    const detailId = Number(detail.id);
+    const detailId = Number(detail.id ?? detail.shipment_id ?? record.id);
     if (selectedDetailId !== null && detailId === selectedDetailId) {
       dispatchCloseShippedDetails();
       setSelectedDetailId(null);

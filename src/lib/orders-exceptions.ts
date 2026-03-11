@@ -34,12 +34,20 @@ export async function findOrderByTrackingKey(
   if (!trackingKey18) return null;
 
   const result = await dbClient.query(
-    `SELECT id, shipping_tracking_number
-     FROM orders
-     WHERE shipping_tracking_number IS NOT NULL
-       AND shipping_tracking_number != ''
-       AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-     ORDER BY id DESC
+    `SELECT
+        o.id,
+        COALESCE(stn.tracking_number_raw, o.shipping_tracking_number) AS shipping_tracking_number
+     FROM orders o
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+     WHERE (
+        o.shipment_id IS NOT NULL
+        AND RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_normalized, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+     ) OR (
+        o.shipping_tracking_number IS NOT NULL
+        AND o.shipping_tracking_number != ''
+        AND RIGHT(regexp_replace(UPPER(COALESCE(o.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+     )
+     ORDER BY o.id DESC
      LIMIT 1`,
     [trackingKey18]
   );

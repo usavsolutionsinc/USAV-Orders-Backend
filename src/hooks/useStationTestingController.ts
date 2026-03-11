@@ -346,7 +346,7 @@ export function useStationTestingController({
         const data = await res.json();
 
         if (!data.found) {
-          setTrackingNotFoundAlert('Tracking number not found in the system');
+          setTrackingNotFoundAlert('Tracking number not found. Logged to orders exceptions.');
           syncActiveOrderState(null);
           setResolvedManuals([]);
           return;
@@ -391,6 +391,7 @@ export function useStationTestingController({
             detail: {
               id: data.techSerialId,
               order_db_id: data.order.id ?? null,
+              shipment_id: data.order.shipmentId ?? null,
               test_date_time: data.order.testDateTime ?? null,
               shipping_tracking_number: data.order.tracking ?? '',
               serial_number: '',
@@ -400,6 +401,8 @@ export function useStationTestingController({
               item_number: data.order.itemNumber ?? null,
               sku: data.order.sku !== 'N/A' ? data.order.sku : null,
               condition: data.order.condition !== 'N/A' ? data.order.condition : null,
+              status: data.order.status ?? null,
+              status_history: data.order.statusHistory ?? [],
               notes: data.order.notes ?? null,
               account_source: data.order.accountSource ?? null,
               quantity: String(data.order.quantity || '1'),

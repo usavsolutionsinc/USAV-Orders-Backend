@@ -6,6 +6,7 @@ import { checkRateLimit } from '@/lib/api-guard';
 import { invalidateCacheTags, createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp } from '@/lib/timezone';
 import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 /** Compute Mon–Fri PST week range from the current PST timestamp. */
 function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
@@ -127,6 +128,7 @@ export async function POST(req: NextRequest) {
         if (!key18) {
             return NextResponse.json({ success: false, found: false, error: 'Invalid tracking number' }, { status: 400 });
         }
+        const resolvedScan = await resolveShipmentId(scannedTracking);
         const techIdNum = parseInt(techId, 10);
         if (!techIdNum) {
             return NextResponse.json({ success: false, found: false, error: 'Invalid Tech ID' }, { status: 400 });
@@ -164,7 +166,7 @@ export async function POST(req: NextRequest) {
                     o.sku,
                     o.condition,
                     o.notes,
-                    o.shipping_tracking_number,
+                    COALESCE(stn.tracking_number_raw, o.shipping_tracking_number) AS shipping_tracking_number,
                     o.account_source,
                     o.status,
                     o.status_history,
@@ -177,6 +179,7 @@ export async function POST(req: NextRequest) {
                     wa_test.assigned_tech_id   AS tester_id,
                     wa_pack.assigned_packer_id AS packer_id
                 FROM orders o
+                LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
                 LEFT JOIN LATERAL (
                     SELECT wa.deadline_at FROM work_assignments wa
                     WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
@@ -203,19 +206,39 @@ export async function POST(req: NextRequest) {
                     ORDER BY id DESC
                     LIMIT 1
                 ) wa_pack ON TRUE
-                WHERE RIGHT(regexp_replace(UPPER(o.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
-                  AND o.shipping_tracking_number IS NOT NULL
-                  AND o.shipping_tracking_number != ''
+                WHERE (
+                    $1::bigint IS NOT NULL
+                    AND o.shipment_id = $1
+                ) OR (
+                    o.shipping_tracking_number IS NOT NULL
+                    AND o.shipping_tracking_number != ''
+                    AND RIGHT(regexp_replace(UPPER(o.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $2
+                )
+                ORDER BY
+                    CASE WHEN $1::bigint IS NOT NULL AND o.shipment_id = $1 THEN 0 ELSE 1 END,
+                    o.id DESC
                 LIMIT 1
-            `, [key18]);
+            `, [resolvedScan.shipmentId, key18]);
 
             // Check tech_serial_numbers for existing tracking entry
             const existingTracking = await client.query(
-                `SELECT id, shipping_tracking_number, serial_number
-                 FROM tech_serial_numbers
-                 WHERE RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $1
+                `SELECT
+                    tsn.id,
+                    tsn.serial_number,
+                    COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number
+                 FROM tech_serial_numbers tsn
+                 LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+                 WHERE (
+                    $1::bigint IS NOT NULL
+                    AND tsn.shipment_id = $1
+                 ) OR (
+                    tsn.scan_ref IS NOT NULL
+                    AND tsn.scan_ref != ''
+                    AND RIGHT(regexp_replace(UPPER(tsn.scan_ref), '[^A-Z0-9]', '', 'g'), 18) = $2
+                 )
+                 ORDER BY tsn.id DESC
                  LIMIT 1`,
-                [key18]
+                [resolvedScan.shipmentId, key18]
             );
 
             const row = result.rows[0] || null;
@@ -246,10 +269,15 @@ export async function POST(req: NextRequest) {
                 const exactTrackingRow = await client.query(
                     `SELECT id, serial_number
                      FROM tech_serial_numbers
-                     WHERE shipping_tracking_number = $1
+                     WHERE (
+                        $1::bigint IS NOT NULL
+                        AND shipment_id = $1
+                     ) OR (
+                        scan_ref = $2
+                     )
                      ORDER BY id ASC
                      LIMIT 1`,
-                    [scannedTracking]
+                    [resolvedScan.shipmentId, resolvedScan.scanRef ?? scannedTracking]
                 );
 
                 let techSerialId: number | null = null;
@@ -258,10 +286,10 @@ export async function POST(req: NextRequest) {
                 if (exactTrackingRow.rows.length === 0) {
                     const insertResult = await client.query(
                         `INSERT INTO tech_serial_numbers (
-                            shipping_tracking_number, serial_number, test_date_time, tested_by
-                        ) VALUES ($1, $2, date_trunc('second', NOW()), $3)
+                            shipment_id, scan_ref, serial_number, test_date_time, tested_by
+                        ) VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)
                         RETURNING id, test_date_time::text`,
-                        [scannedTracking, '', testedBy]
+                        [resolvedScan.shipmentId, resolvedScan.scanRef, '', testedBy]
                     );
                     techSerialId = insertResult.rows[0]?.id ?? null;
                     techTestDateTime = insertResult.rows[0]?.test_date_time ?? null;
@@ -348,10 +376,10 @@ export async function POST(req: NextRequest) {
             if (existingTracking.rows.length === 0) {
                 const insertResult = await client.query(
                     `INSERT INTO tech_serial_numbers (
-                        shipping_tracking_number, serial_number, test_date_time, tested_by
-                    ) VALUES ($1, $2, date_trunc('second', NOW()), $3)
+                        shipment_id, scan_ref, serial_number, test_date_time, tested_by
+                    ) VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)
                     RETURNING id, test_date_time::text`,
-                    [trackingValue, '', testedBy]
+                    [resolvedScan.shipmentId, resolvedScan.scanRef, '', testedBy]
                 );
                 techSerialId = insertResult.rows[0]?.id ?? null;
                 techTestDateTime = insertResult.rows[0]?.test_date_time ?? null;
@@ -405,6 +433,7 @@ export async function POST(req: NextRequest) {
                 techSerialId,
                 order: {
                     id: row.id,
+                    shipmentId: resolvedScan.shipmentId ?? null,
                     orderId: row.order_id || 'N/A',
                     productTitle: row.product_title || 'Unknown Product',
                     itemNumber: row.item_number || null,

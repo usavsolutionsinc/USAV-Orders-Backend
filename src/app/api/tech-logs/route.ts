@@ -73,7 +73,9 @@ export async function GET(req: NextRequest) {
         const limitIdx = idx;
         const offsetIdx = idx + 1;
 
-        // Query tech serial logs joined via shipment_id FK for order data.
+        // Query tech serial logs joined to the best matching order.
+        // Prefer shipment_id, but fall back to the legacy orders.shipping_tracking_number
+        // so older rows still hydrate correctly in TechTable.
         const result = await pool.query(`
             SELECT
                 tsn.id,
@@ -81,6 +83,7 @@ export async function GET(req: NextRequest) {
                 COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
                 tsn.serial_number,
                 tsn.tested_by,
+                order_match.shipment_id,
                 o.id as order_db_id,
                 CASE
                     WHEN UPPER(TRIM(COALESCE(tsn.scan_ref, stn.tracking_number_raw, ''))) LIKE 'X00%' THEN 'FBA'
@@ -99,13 +102,36 @@ export async function GET(req: NextRequest) {
                 o.quantity,
                 o.condition,
                 o.sku,
+                o.status,
+                o.status_history,
                 o.account_source,
                 o.notes,
                 o.out_of_stock,
                 o.is_shipped
             FROM tech_serial_numbers tsn
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
-            LEFT JOIN orders o ON o.shipment_id = tsn.shipment_id AND tsn.shipment_id IS NOT NULL
+            LEFT JOIN LATERAL (
+                SELECT
+                    o_match.id,
+                    o_match.shipment_id
+                FROM orders o_match
+                WHERE (
+                    tsn.shipment_id IS NOT NULL
+                    AND o_match.shipment_id = tsn.shipment_id
+                ) OR (
+                    COALESCE(tsn.scan_ref, stn.tracking_number_raw, '') <> ''
+                    AND o_match.shipping_tracking_number IS NOT NULL
+                    AND o_match.shipping_tracking_number != ''
+                    AND RIGHT(regexp_replace(UPPER(o_match.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) =
+                        RIGHT(regexp_replace(UPPER(COALESCE(tsn.scan_ref, stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
+                )
+                ORDER BY
+                    CASE WHEN tsn.shipment_id IS NOT NULL AND o_match.shipment_id = tsn.shipment_id THEN 0 ELSE 1 END,
+                    o_match.created_at DESC NULLS LAST,
+                    o_match.id DESC
+                LIMIT 1
+            ) order_match ON TRUE
+            LEFT JOIN orders o ON o.id = order_match.id
             LEFT JOIN LATERAL (
                 SELECT wa.deadline_at
                 FROM work_assignments wa

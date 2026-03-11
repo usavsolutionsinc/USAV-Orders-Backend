@@ -669,6 +669,7 @@ export async function PATCH(request: NextRequest) {
     const assignedTechId = Number.isFinite(techIdRaw) && techIdRaw > 0 ? techIdRaw : null;
     const assignedPackerId = Number.isFinite(packerIdRaw) && packerIdRaw > 0 ? packerIdRaw : null;
     const priority = Number.isFinite(priorityRaw) ? Math.max(1, Math.min(priorityRaw, 9999)) : 100;
+    const isShipped = body?.isShipped === true;
 
     if (entityType === 'ORDER') {
       await upsertAssignment({
@@ -693,6 +694,13 @@ export async function PATCH(request: NextRequest) {
         deadlineAt: null,
         notes,
       });
+
+      if (isShipped) {
+        await pool.query(
+          `UPDATE orders SET is_shipped = true WHERE id = $1`,
+          [entityId]
+        );
+      }
     } else {
       const workType: WorkType =
         entityType === 'REPAIR'

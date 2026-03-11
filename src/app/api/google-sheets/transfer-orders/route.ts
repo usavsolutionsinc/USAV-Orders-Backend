@@ -4,6 +4,8 @@ import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
 import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { desc, eq, inArray } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
@@ -175,6 +177,40 @@ async function runTransferOrders(manualSheetName?: string) {
             )
         );
 
+        const sourceTrackingNormalized = Array.from(
+            new Set(sourceTrackings.map((tracking) => normalizeTrackingNumber(tracking)).filter(Boolean))
+        );
+
+        const existingShipmentsResult = sourceTrackingNormalized.length > 0
+            ? await pool.query(
+                `SELECT id, tracking_number_raw, tracking_number_normalized
+                 FROM shipping_tracking_numbers
+                 WHERE tracking_number_normalized = ANY($1::text[])`,
+                [sourceTrackingNormalized]
+            )
+            : { rows: [] as Array<{ id: number; tracking_number_raw: string | null; tracking_number_normalized: string }> };
+
+        const shipmentByNormalized = new Map<string, { id: number; tracking: string }>();
+        const shipmentTrackingById = new Map<number, string>();
+        existingShipmentsResult.rows.forEach((row: any) => {
+            const normalized = String(row.tracking_number_normalized || '').trim();
+            const id = Number(row.id);
+            if (!normalized || Number.isNaN(id) || shipmentByNormalized.has(normalized)) return;
+            shipmentByNormalized.set(normalized, {
+                id,
+                tracking: String(row.tracking_number_raw || '').trim(),
+            });
+            shipmentTrackingById.set(id, String(row.tracking_number_raw || '').trim());
+        });
+
+        const sourceShipmentIds = Array.from(
+            new Set(
+                Array.from(shipmentByNormalized.values())
+                    .map((shipment) => shipment.id)
+                    .filter((id) => Number.isFinite(id))
+            )
+        );
+
         const sourceOrdersByOrderId = sourceOrderIds.length > 0
             ? await db
                 .select({
@@ -188,6 +224,7 @@ async function runTransferOrders(manualSheetName?: string) {
                     notes: ordersTable.notes,
                     customerId: ordersTable.customerId,
                     shippingTrackingNumber: ordersTable.shippingTrackingNumber,
+                    shipmentId: ordersTable.shipmentId,
                     createdAt: ordersTable.createdAt,
                 })
                 .from(ordersTable)
@@ -195,7 +232,7 @@ async function runTransferOrders(manualSheetName?: string) {
                 .orderBy(desc(ordersTable.createdAt))
             : [];
 
-        const sourceOrdersByTracking = sourceTrackings.length > 0
+        const sourceOrdersByShipmentId = sourceShipmentIds.length > 0
             ? await db
                 .select({
                     orderId: ordersTable.orderId,
@@ -208,6 +245,28 @@ async function runTransferOrders(manualSheetName?: string) {
                     notes: ordersTable.notes,
                     customerId: ordersTable.customerId,
                     shippingTrackingNumber: ordersTable.shippingTrackingNumber,
+                    shipmentId: ordersTable.shipmentId,
+                    createdAt: ordersTable.createdAt,
+                })
+                .from(ordersTable)
+                .where(inArray(ordersTable.shipmentId, sourceShipmentIds))
+                .orderBy(desc(ordersTable.createdAt))
+            : [];
+
+        const sourceLegacyOrdersByTracking = sourceTrackings.length > 0
+            ? await db
+                .select({
+                    orderId: ordersTable.orderId,
+                    id: ordersTable.id,
+                    itemNumber: ordersTable.itemNumber,
+                    productTitle: ordersTable.productTitle,
+                    quantity: ordersTable.quantity,
+                    sku: ordersTable.sku,
+                    condition: ordersTable.condition,
+                    notes: ordersTable.notes,
+                    customerId: ordersTable.customerId,
+                    shippingTrackingNumber: ordersTable.shippingTrackingNumber,
+                    shipmentId: ordersTable.shipmentId,
                     createdAt: ordersTable.createdAt,
                 })
                 .from(ordersTable)
@@ -238,10 +297,14 @@ async function runTransferOrders(manualSheetName?: string) {
             notes: string | null;
             customerId: number | null;
             tracking: string;
+            shipmentId: number | null;
         }>();
         sourceOrdersByOrderId.forEach(order => {
             const key = String(order.orderId || '').trim();
-            const tracking = normalizeTracking(order.shippingTrackingNumber);
+            const tracking = normalizeTracking(
+                (order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined)
+                || order.shippingTrackingNumber
+            );
             const id = Number(order.id);
             if (!key || tracking || Number.isNaN(id) || latestBlankTrackingOrderByOrderId.has(key)) return;
             latestBlankTrackingOrderByOrderId.set(key, {
@@ -255,6 +318,7 @@ async function runTransferOrders(manualSheetName?: string) {
                 notes: order.notes,
                 customerId: order.customerId,
                 tracking,
+                shipmentId: order.shipmentId ?? null,
             });
         });
 
@@ -269,12 +333,17 @@ async function runTransferOrders(manualSheetName?: string) {
             condition: string | null;
             notes: string | null;
             customerId: number | null;
+            shipmentId: number | null;
         }>();
-        sourceOrdersByTracking.forEach(order => {
-            const tracking = normalizeTracking(order.shippingTrackingNumber);
+        [...sourceOrdersByShipmentId, ...sourceLegacyOrdersByTracking].forEach(order => {
+            const tracking = normalizeTracking(
+                (order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined)
+                || order.shippingTrackingNumber
+            );
+            const trackingKey = normalizeTrackingNumber(tracking) || tracking;
             const id = Number(order.id);
-            if (!tracking || Number.isNaN(id) || latestOrderByTracking.has(tracking)) return;
-            latestOrderByTracking.set(tracking, {
+            if (!trackingKey || Number.isNaN(id) || latestOrderByTracking.has(trackingKey)) return;
+            latestOrderByTracking.set(trackingKey, {
                 id,
                 tracking,
                 orderId: order.orderId,
@@ -285,6 +354,7 @@ async function runTransferOrders(manualSheetName?: string) {
                 condition: order.condition,
                 notes: order.notes,
                 customerId: order.customerId,
+                shipmentId: order.shipmentId ?? null,
             });
         });
 
@@ -292,13 +362,28 @@ async function runTransferOrders(manualSheetName?: string) {
             String(customer.orderId || '').trim()
         );
 
+        const shipmentIdCache = new Map<string, number | null>();
+        shipmentByNormalized.forEach((shipment, normalized) => {
+            shipmentIdCache.set(normalized, shipment.id);
+        });
+
+        const ensureShipmentId = async (tracking: string) => {
+            const normalized = normalizeTrackingNumber(tracking);
+            if (!normalized) return null;
+            if (shipmentIdCache.has(normalized)) return shipmentIdCache.get(normalized) ?? null;
+            const resolved = await resolveShipmentId(tracking);
+            shipmentIdCache.set(normalized, resolved.shipmentId ?? null);
+            return resolved.shipmentId ?? null;
+        };
+
         // Keep one source row per tracking number. For rows without tracking, fall back to order_id
         // so re-running the transfer does not create duplicates for blank-tracking orders.
         const latestSourceRowByKey = new Map<string, any[]>();
         sourceRows.slice(1).forEach(row => {
             const orderId = String(row[colIndices.orderNumber] || '').trim();
             const tracking = normalizeTracking(row[colIndices.tracking]);
-            const key = tracking ? `tracking:${tracking}` : orderId ? `order:${orderId}` : '';
+            const normalizedTracking = normalizeTrackingNumber(tracking);
+            const key = normalizedTracking ? `tracking:${normalizedTracking}` : orderId ? `order:${orderId}` : '';
             if (!key) return;
             latestSourceRowByKey.set(key, row);
         });
@@ -311,11 +396,17 @@ async function runTransferOrders(manualSheetName?: string) {
         let matchedCustomers = 0;
         let unmatchedCustomers = 0;
 
-        latestSourceRowByKey.forEach((row) => {
+        for (const row of Array.from(latestSourceRowByKey.values())) {
             const orderId = String(row[colIndices.orderNumber] || '').trim();
             const sheetTracking = normalizeTracking(row[colIndices.tracking]);
-            const existingOrder = sheetTracking
-                ? latestOrderByTracking.get(sheetTracking)
+            const normalizedSheetTracking = normalizeTrackingNumber(sheetTracking);
+            const existingShipmentId = normalizedSheetTracking
+                ? shipmentIdCache.get(normalizedSheetTracking)
+                    ?? shipmentByNormalized.get(normalizedSheetTracking)?.id
+                    ?? null
+                : null;
+            const existingOrder = normalizedSheetTracking
+                ? latestOrderByTracking.get(normalizedSheetTracking)
                 : (orderId ? latestBlankTrackingOrderByOrderId.get(orderId) : undefined);
             const rawShipByDate = row[colIndices.shipByDate] || '';
             const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
@@ -347,7 +438,10 @@ async function runTransferOrders(manualSheetName?: string) {
                 if (isBlank(existingOrder.sku) && sheetSku) updateValues.sku = sheetSku;
                 if (isBlank(existingOrder.condition) && sheetCondition) updateValues.condition = sheetCondition;
                 if (isBlank(existingOrder.notes) && sheetNotes) updateValues.notes = sheetNotes;
-                if (isBlank(existingOrder.tracking) && sheetTracking) updateValues.shippingTrackingNumber = sheetTracking;
+                if (existingOrder.shipmentId == null && sheetTracking) {
+                    const shipmentId = existingShipmentId ?? await ensureShipmentId(sheetTracking);
+                    if (shipmentId) updateValues.shipmentId = shipmentId;
+                }
                 if (existingOrder.customerId == null && customerId) updateValues.customerId = customerId;
                 const compactedUpdateValues = compactUpdateValues(updateValues);
                 if (Object.keys(compactedUpdateValues).length > 0) {
@@ -357,6 +451,7 @@ async function runTransferOrders(manualSheetName?: string) {
                     orderDeadlinesToUpsert.push({ id: existingOrder.id, shipByDate: sheetShipByDate });
                 }
             } else {
+                const shipmentId = sheetTracking ? await ensureShipmentId(sheetTracking) : null;
                 ordersToInsert.push({
                     shipByDate: sheetShipByDate,
                     values: {
@@ -366,7 +461,7 @@ async function runTransferOrders(manualSheetName?: string) {
                         quantity: sheetQuantity || '1',
                         sku: sheetSku || '',
                         condition: sheetCondition || '',
-                        shippingTrackingNumber: sheetTracking || '',
+                        shipmentId,
                         outOfStock: '',
                         notes: sheetNotes || '',
                         status: 'unassigned',
@@ -376,7 +471,7 @@ async function runTransferOrders(manualSheetName?: string) {
                     },
                 });
             }
-        });
+        }
 
         // Apply DB sync
         if (ordersToBackfill.length > 0) {

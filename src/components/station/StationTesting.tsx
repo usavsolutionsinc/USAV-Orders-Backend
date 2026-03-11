@@ -131,6 +131,8 @@ export default function StationTesting({
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
+                  role="status"
+                  aria-live="polite"
                   className="mt-2 p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-2"
                 >
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />

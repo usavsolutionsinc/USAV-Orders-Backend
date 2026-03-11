@@ -7,6 +7,7 @@ import { useAblyChannel } from './useAblyChannel';
 export interface TechRecord {
   id: number;
   order_db_id?: number | null;
+  shipment_id?: number | null;
   test_date_time: string;
   shipping_tracking_number: string;
   serial_number: string;
@@ -19,6 +20,8 @@ export interface TechRecord {
   quantity?: string | null;
   condition: string | null;
   sku: string | null;
+  status?: string | null;
+  status_history?: any;
   account_source?: string | null;
   notes?: string | null;
   out_of_stock?: string | null;

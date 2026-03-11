@@ -6,8 +6,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
-import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
 import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
+import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
+import { WorkOrderAssignmentCard } from './WorkOrderAssignmentCard';
 import {
   type WorkOrderRow,
   type QueueCounts,
@@ -34,6 +35,7 @@ export function WorkOrdersDashboard() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
+  const [assigningState, setAssigningState] = useState<{ rows: WorkOrderRow[]; startIndex: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { getStaffName } = useStaffNameMap();
 
@@ -195,6 +197,51 @@ export function WorkOrdersDashboard() {
     }
   };
 
+  // Called by the assignment card when user finalises a single row's selection
+  const handleAssignConfirm = useCallback(async (
+    row: WorkOrderRow,
+    { techId: newTechId, packerId: newPackerId, deadline, status: statusOverride, isShipped }: import('./WorkOrderAssignmentCard').AssignmentConfirmPayload
+  ) => {
+    const newStatus =
+      statusOverride ??
+      (newTechId && newPackerId && row.status === 'OPEN' ? 'ASSIGNED' : row.status);
+
+    // Optimistic update
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? { ...r, techId: newTechId, packerId: newPackerId, deadlineAt: deadline, status: newStatus }
+          : r
+      )
+    );
+
+    try {
+      const res = await fetch('/api/work-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: row.entityType,
+          entityId: row.entityId,
+          assignedTechId: newTechId,
+          assignedPackerId: newPackerId,
+          status: newStatus,
+          priority: row.priority,
+          deadlineAt: deadline,
+          notes: row.notes,
+          isShipped: isShipped ?? false,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.details || payload?.error || 'Failed to assign');
+      }
+      void refreshRows();
+    } catch (err: any) {
+      setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
+      window.alert(err?.message || 'Failed to assign staff');
+    }
+  }, [refreshRows]);
+
   // Row is "assigned" only when BOTH tech and packer are set
   const unassignedRows = rows.filter((r) => !r.techId || !r.packerId);
   const assignedRows = rows.filter((r) => r.techId && r.packerId);
@@ -256,17 +303,14 @@ export function WorkOrdersDashboard() {
                   </span>
                   <div className="h-px flex-1 bg-orange-200" />
                 </motion.div>
-                {unassignedRows.map((row) => (
+                {unassignedRows.map((row, i) => (
                   <WorkOrderTableRow
                     key={row.id}
                     row={row}
                     isSelected={selectedId === row.id}
-                    isSaving={savingRowId === row.id}
-                    technicianOptions={technicianOptions}
-                    packerOptions={packerOptions}
                     getStaffName={getStaffName}
                     onClick={handleRowClick}
-                    onInlineAssign={handleInlineAssign}
+                    onOpenAssign={(r) => setAssigningState({ rows: unassignedRows, startIndex: i })}
                   />
                 ))}
               </>
@@ -294,12 +338,9 @@ export function WorkOrdersDashboard() {
                     key={row.id}
                     row={row}
                     isSelected={selectedId === row.id}
-                    isSaving={savingRowId === row.id}
-                    technicianOptions={technicianOptions}
-                    packerOptions={packerOptions}
                     getStaffName={getStaffName}
                     onClick={handleRowClick}
-                    onInlineAssign={handleInlineAssign}
+                    onOpenAssign={(r) => setAssigningState({ rows: [r], startIndex: 0 })}
                   />
                 ))}
               </>
@@ -321,6 +362,21 @@ export function WorkOrdersDashboard() {
           />
         )}
       </AnimatePresence>
+
+      {/* Assignment overlay card */}
+      <AnimatePresence>
+        {assigningState && (
+          <WorkOrderAssignmentCard
+            key="assignment-card"
+            rows={assigningState.rows}
+            startIndex={assigningState.startIndex}
+            technicianOptions={technicianOptions}
+            packerOptions={packerOptions}
+            onConfirm={handleAssignConfirm}
+            onClose={() => setAssigningState(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -332,23 +388,17 @@ export function WorkOrdersDashboard() {
 interface WorkOrderTableRowProps {
   row: WorkOrderRow;
   isSelected: boolean;
-  isSaving: boolean;
-  technicianOptions: { id: number; name: string }[];
-  packerOptions: { id: number; name: string }[];
   getStaffName: (id: number | null | undefined) => string;
   onClick: (row: WorkOrderRow) => void;
-  onInlineAssign: (row: WorkOrderRow, type: 'tech' | 'packer', staffId: number) => Promise<void>;
+  onOpenAssign: (row: WorkOrderRow) => void;
 }
 
 function WorkOrderTableRow({
   row,
   isSelected,
-  isSaving,
-  technicianOptions,
-  packerOptions,
   getStaffName,
   onClick,
-  onInlineAssign,
+  onOpenAssign,
 }: WorkOrderTableRowProps) {
   const statusClass = STATUS_COLOR[row.status] || 'text-slate-600 bg-slate-100';
   // Row is fully unassigned until BOTH tech and packer are set
@@ -418,40 +468,28 @@ function WorkOrderTableRow({
           </p>
         </div>
 
-        {/* Right: record label + priority */}
-        <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
+        {/* Right: record label + priority + assign button */}
+        <div className="flex flex-col items-end gap-1.5 shrink-0 pt-0.5">
           <span className="text-[9px] font-black text-gray-500 uppercase tracking-wide">
             {row.recordLabel}
           </span>
           {row.priority < 100 && (
             <span className="text-[8px] font-black text-red-500">P{row.priority}</span>
           )}
+          {/* Assign / Edit chip */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenAssign(row); }}
+            className={[
+              'h-6 px-2 rounded-md text-[8px] font-black uppercase tracking-wider border transition-all',
+              isUnassigned
+                ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100',
+            ].join(' ')}
+          >
+            {isUnassigned ? 'Assign' : 'Reassign'}
+          </button>
         </div>
-      </div>
-
-      {/* Inline assignment buttons — stop propagation */}
-      <div
-        className="px-4 pb-3"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-        role="presentation"
-      >
-        {isSaving ? (
-          <div className="flex items-center gap-1.5 py-1">
-            <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
-            <span className="text-[9px] font-bold text-slate-400">Assigning…</span>
-          </div>
-        ) : (
-          <OrderStaffAssignmentButtons
-            testerOptions={technicianOptions}
-            packerOptions={row.techId ? packerOptions : []}
-            testerId={row.techId}
-            packerId={row.packerId}
-            onAssignTester={(id) => void onInlineAssign(row, 'tech', id)}
-            onAssignPacker={(id) => void onInlineAssign(row, 'packer', id)}
-            layout="rows"
-          />
-        )}
       </div>
     </motion.div>
   );
