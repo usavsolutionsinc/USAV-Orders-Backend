@@ -5,9 +5,6 @@ import { motion } from 'framer-motion';
 import { X, Check, Clock, Pencil } from '../Icons';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { formatStatusTimestamp } from '@/lib/neon/status-history';
-import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
-import type { AssignmentStaffOption } from '@/components/ui/OrderStaffAssignmentButtons';
-import { getActiveStaff } from '@/lib/staffCache';
 
 interface RepairDetailsPanelProps {
   repair: RSRecord;
@@ -43,17 +40,7 @@ export function RepairDetailsPanel({
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const ticketInputRef = useRef<HTMLInputElement>(null);
 
-  // Assignment state
-  const [assignmentId, setAssignmentId] = useState<number | null>(initialAssignmentId ?? null);
   const [assignedTechId, setAssignedTechId] = useState<number | null>(initialAssignedTechId ?? null);
-  const [techOptions, setTechOptions] = useState<AssignmentStaffOption[]>([]);
-  const [assigningTech, setAssigningTech] = useState(false);
-
-  useEffect(() => {
-    getActiveStaff().then((staff) => {
-      setTechOptions(staff.filter((s) => s.role === 'technician').map((s) => ({ id: s.id, name: s.name })));
-    });
-  }, []);
 
   useEffect(() => {
     if (isEditingTicket && ticketInputRef.current) {
@@ -61,33 +48,6 @@ export function RepairDetailsPanel({
       ticketInputRef.current.select();
     }
   }, [isEditingTicket]);
-
-  const handleAssignTech = async (techId: number) => {
-    setAssigningTech(true);
-    try {
-      const res = await fetch('/api/assignments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entity_type:      'REPAIR',
-          entity_id:        repair.id,
-          work_type:        'REPAIR',
-          assigned_tech_id: techId,
-          status:           'ASSIGNED',
-        }),
-      });
-      if (!res.ok) throw new Error('Failed to assign technician');
-      const data = await res.json();
-      const row = data.assignment;
-      setAssignmentId(row?.id ?? assignmentId);
-      setAssignedTechId(techId);
-      onUpdate();
-    } catch (error) {
-      console.error('Error assigning technician:', error);
-    } finally {
-      setAssigningTech(false);
-    }
-  };
 
   const handleSaveTicket = async () => {
     if (ticketNumber === repair.ticket_number) {
@@ -240,29 +200,22 @@ export function RepairDetailsPanel({
       
       {/* Content sections */}
       <div className="p-6 space-y-6">
-        {/* Technician Assignment */}
-        {techOptions.length > 0 && (
-          <section>
-            <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-              {assignedTechId ? 'Assigned Technician' : 'Assign Technician'}
-            </h3>
-            {!assignedTechId && (
-              <p className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                Not yet assigned — select a technician below
-              </p>
-            )}
-            <OrderStaffAssignmentButtons
-              testerOptions={techOptions}
-              packerOptions={[]}
-              testerId={assignedTechId}
-              packerId={null}
-              onAssignTester={handleAssignTech}
-              onAssignPacker={() => {}}
-              disabled={assigningTech}
-              layout="rows"
-            />
-          </section>
-        )}
+        <section>
+          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+            Work Orders
+          </h3>
+          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3">
+            <p className="text-[10px] font-semibold text-orange-700">
+              Technician: <span className="font-black text-orange-950">{assignedTechId ? `#${assignedTechId}` : 'Unassigned'}</span>
+            </p>
+            <a
+              href={`/work-orders?queue=repair_services&entityType=REPAIR&entityId=${repair.id}`}
+              className="mt-3 inline-flex h-9 items-center justify-center rounded-xl bg-orange-600 px-3 text-[9px] font-black uppercase tracking-[0.18em] text-white hover:bg-orange-700"
+            >
+              Open In Work Orders
+            </a>
+          </div>
+        </section>
 
         {/* Current Status */}
         <section>

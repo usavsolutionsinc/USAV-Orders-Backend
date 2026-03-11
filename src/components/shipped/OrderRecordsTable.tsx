@@ -10,6 +10,7 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { dispatchCloseShippedDetails } from '@/utils/events';
+import { isFbaOrder } from '@/utils/order-platform';
 import { DateGroupHeader } from './DateGroupHeader';
 
 interface WeekRange {
@@ -23,6 +24,7 @@ interface OrderRecordsTableProps {
   isRefreshing: boolean;
   searchValue: string;
   ordersOnly?: boolean;
+  hideLeadingIndicators?: boolean;
   showWeekControls?: boolean;
   weekRange?: WeekRange;
   weekOffset?: number;
@@ -39,6 +41,7 @@ export function OrderRecordsTable({
   isRefreshing,
   searchValue,
   ordersOnly = false,
+  hideLeadingIndicators = false,
   showWeekControls = false,
   weekRange,
   weekOffset = 0,
@@ -241,7 +244,6 @@ export function OrderRecordsTable({
     if (daysLate === 1) return 'text-yellow-600';
     return 'text-emerald-600';
   };
-
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -353,6 +355,7 @@ export function OrderRecordsTable({
                           String(testedByValue).trim() !== '' &&
                           Number.isFinite(Number(testedByValue));
                         const hasTechScan = Boolean((record as any).has_tech_scan);
+                        const isFba = isFbaOrder(record.order_id, record.account_source);
 
                         return (
                           <motion.div
@@ -367,7 +370,7 @@ export function OrderRecordsTable({
                           >
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
-                                {ordersOnly ? (
+                                {ordersOnly && !hideLeadingIndicators ? (
                                   hasOutOfStock ? (
                                     <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
                                   ) : hasTechScan ? (
@@ -375,6 +378,12 @@ export function OrderRecordsTable({
                                   ) : (
                                     <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
                                   )
+                                ) : null}
+                                {isFba && !hideLeadingIndicators ? (
+                                  <span
+                                    className="h-2.5 w-2.5 shrink-0 rounded-full bg-purple-500"
+                                    title="FBA"
+                                  />
                                 ) : null}
                                 <div className="text-[12px] font-bold text-gray-900 truncate">
                                   {record.product_title || 'Unknown Product'}

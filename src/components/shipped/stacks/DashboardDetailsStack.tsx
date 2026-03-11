@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ExternalLink, Check, ChevronUp, ChevronDown, PackageCheck } from '@/components/Icons';
 import { motion } from 'framer-motion';
 import { DetailsStackProps } from './types';
@@ -9,7 +9,6 @@ import { toPSTDateKey } from '@/lib/timezone';
 import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { dispatchCloseShippedDetails } from '@/utils/events';
-import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
 import { getActiveStaff } from '@/lib/staffCache';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
 import { DeleteOrderControl } from './DeleteOrderControl';
@@ -35,11 +34,6 @@ export function DashboardDetailsStack({
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
   const [assignedTesterId, setAssignedTesterId] = useState<number | null>((shipped as any).tester_id ?? null);
   const [assignedPackerId, setAssignedPackerId] = useState<number | null>((shipped as any).packer_id ?? null);
-  const [isAssigningTester, setIsAssigningTester] = useState(false);
-  const [isAssigningPacker, setIsAssigningPacker] = useState(false);
-  const [assignmentError, setAssignmentError] = useState<string | null>(null);
-  const assignedTesterIdRef = useRef<number | null>((shipped as any).tester_id ?? null);
-  const assignedPackerIdRef = useRef<number | null>((shipped as any).packer_id ?? null);
   const hasOutOfStockValue = outOfStock.trim().length > 0;
   const testerIdOrder = [1, 2, 3, 6];
   const packerIdOrder = [4, 5];
@@ -50,7 +44,6 @@ export function DashboardDetailsStack({
     initialTrackingNumber: shipped.shipping_tracking_number || '',
     onUpdate,
   });
-  const { orderAssignmentMutation } = fieldSave;
 
   const testerOptions = testerIdOrder
     .map((id) => staffOptions.find((member) => member.role === 'technician' && member.id === id))
@@ -87,11 +80,6 @@ export function DashboardDetailsStack({
     setShippingTrackingNumber(shipped.shipping_tracking_number || '');
     setAssignedTesterId((shipped as any).tester_id ?? null);
     setAssignedPackerId((shipped as any).packer_id ?? null);
-    assignedTesterIdRef.current = (shipped as any).tester_id ?? null;
-    assignedPackerIdRef.current = (shipped as any).packer_id ?? null;
-    setIsAssigningTester(false);
-    setIsAssigningPacker(false);
-    setAssignmentError(null);
     setActiveInput('none');
     setIsMarkAsShippedOpen(false);
     fieldSave.resetRefs(shipped.item_number || '', shipped.shipping_tracking_number || '');
@@ -104,9 +92,6 @@ export function DashboardDetailsStack({
     (shipped as any).tester_id,
     (shipped as any).packer_id,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { assignedTesterIdRef.current = assignedTesterId; }, [assignedTesterId]);
-  useEffect(() => { assignedPackerIdRef.current = assignedPackerId; }, [assignedPackerId]);
 
   useEffect(() => {
     let active = true;
@@ -158,25 +143,6 @@ export function DashboardDetailsStack({
     } finally {
       setIsUndoing(false);
     }
-  };
-
-  const handleLastAssignmentComplete = (
-    previousTesterId: number | null,
-    previousPackerId: number | null,
-    nextTesterId: number | null,
-    nextPackerId: number | null
-  ) => {
-    const wasFullyAssigned = previousTesterId != null && previousPackerId != null;
-    const isFullyAssigned = nextTesterId != null && nextPackerId != null;
-    if (wasFullyAssigned || !isFullyAssigned) return;
-
-    // Defer by one tick so React can flush the cache patches and re-render
-    // OrderRecordsTable with updated tester_id/packer_id before navigating.
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('navigate-dashboard-next-unassigned', {
-        detail: { currentOrderId: shipped.id },
-      }));
-    }, 50);
   };
 
   const containerVariants = {
@@ -331,82 +297,26 @@ export function DashboardDetailsStack({
               <ChevronDown className="w-4 h-4" />
             </button>
           </div>
-          <div className="flex-1">
-            <OrderStaffAssignmentButtons
-              layout="rows"
-              testerOptions={testerOptions}
-              packerOptions={packerOptions}
-              testerId={assignedTesterId}
-              packerId={assignedPackerId}
-              onAssignTester={async (staffId) => {
-                if (isAssigningTester) return;
-                const previousTesterId = assignedTesterId;
-                const previousPackerId = assignedPackerIdRef.current;
-                const nextTesterId = staffId;
-                const nextPackerId = assignedPackerIdRef.current;
-                const testerName = testerOptions.find((member) => member.id === staffId)?.name || null;
-                setAssignmentError(null);
-                setAssignedTesterId(staffId);
-                assignedTesterIdRef.current = staffId;
-                setIsAssigningTester(true);
-                try {
-                  await orderAssignmentMutation.mutateAsync({
-                    orderId: shipped.id,
-                    testerId: staffId,
-                    testerName,
-                  });
-                  handleLastAssignmentComplete(previousTesterId, previousPackerId, nextTesterId, nextPackerId);
-                } catch (error) {
-                  if (assignedTesterIdRef.current === staffId) {
-                    setAssignedTesterId(previousTesterId);
-                    assignedTesterIdRef.current = previousTesterId;
-                  }
-                  setAssignmentError('Failed to update tester assignment. Please try again.');
-                  console.error(error);
-                } finally {
-                  setIsAssigningTester(false);
-                }
-              }}
-              onAssignPacker={async (staffId) => {
-                if (isAssigningPacker) return;
-                const previousTesterId = assignedTesterIdRef.current;
-                const previousPackerId = assignedPackerId;
-                const nextTesterId = assignedTesterIdRef.current;
-                const nextPackerId = staffId;
-                const packerName = packerOptions.find((member) => member.id === staffId)?.name || null;
-                setAssignmentError(null);
-                setAssignedPackerId(staffId);
-                assignedPackerIdRef.current = staffId;
-                setIsAssigningPacker(true);
-                try {
-                  await orderAssignmentMutation.mutateAsync({
-                    orderId: shipped.id,
-                    packerId: staffId,
-                    packerName,
-                  });
-                  handleLastAssignmentComplete(previousTesterId, previousPackerId, nextTesterId, nextPackerId);
-                } catch (error) {
-                  if (assignedPackerIdRef.current === staffId) {
-                    setAssignedPackerId(previousPackerId);
-                    assignedPackerIdRef.current = previousPackerId;
-                  }
-                  setAssignmentError('Failed to update packer assignment. Please try again.');
-                  console.error(error);
-                } finally {
-                  setIsAssigningPacker(false);
-                }
-              }}
-              disabled={false}
-              testerDisabled={isAssigningTester}
-              packerDisabled={isAssigningPacker}
-            />
+          <div className="flex-1 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700">Work Orders</p>
+                <p className="mt-1 text-[10px] font-bold text-emerald-950">
+                  Tech: {testerOptions.find((member) => member.id === assignedTesterId)?.name || 'Unassigned'}
+                </p>
+                <p className="mt-0.5 text-[10px] font-bold text-emerald-950">
+                  Packer: {packerOptions.find((member) => member.id === assignedPackerId)?.name || 'Optional'}
+                </p>
+              </div>
+              <a
+                href={`/work-orders?queue=orders&entityType=ORDER&entityId=${shipped.id}`}
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-700 px-3 text-[9px] font-black uppercase tracking-[0.18em] text-white hover:bg-emerald-800"
+              >
+                Open
+              </a>
+            </div>
           </div>
         </div>
-        {assignmentError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[10px] font-bold text-red-700">
-            {assignmentError}
-          </div>
-        )}
 
         {(activeInput === 'out_of_stock' || hasOutOfStockValue) && (
           <OutOfStockField

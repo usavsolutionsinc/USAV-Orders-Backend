@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
+import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
 import { desc, eq, inArray } from 'drizzle-orm';
 
@@ -14,6 +15,50 @@ function normalizeTracking(str: any) {
 
 function isBlank(value: unknown) {
     return value === null || value === undefined || String(value).trim() === '';
+}
+
+function compactUpdateValues(values: Record<string, unknown>) {
+    return Object.fromEntries(
+        Object.entries(values).filter(([_, value]) => {
+            if (value === undefined) return false;
+            if (typeof value === 'number' && !Number.isFinite(value)) return false;
+            return true;
+        })
+    );
+}
+
+async function upsertOrderDeadline(orderId: number, deadlineAt: Date | null) {
+    const existing = await pool.query(
+        `SELECT id
+         FROM work_assignments
+         WHERE entity_type = 'ORDER'
+           AND entity_id   = $1
+           AND work_type   = 'TEST'
+           AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+         ORDER BY
+           CASE status WHEN 'ASSIGNED' THEN 1 WHEN 'IN_PROGRESS' THEN 2 WHEN 'OPEN' THEN 3 END,
+           id DESC
+         LIMIT 1`,
+        [orderId]
+    );
+
+    if (existing.rows.length > 0) {
+        await pool.query(
+            `UPDATE work_assignments
+             SET deadline_at = $1, updated_at = NOW()
+             WHERE id = $2`,
+            [deadlineAt, existing.rows[0].id]
+        );
+        return;
+    }
+
+    await pool.query(
+        `INSERT INTO work_assignments
+           (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at)
+         VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2)
+         ON CONFLICT DO NOTHING`,
+        [orderId, deadlineAt]
+    );
 }
 
 function pickLatestByKey<T extends { createdAt: Date | null }>(
@@ -185,7 +230,6 @@ async function runTransferOrders(manualSheetName?: string) {
         const latestBlankTrackingOrderByOrderId = new Map<string, {
             id: number;
             orderId: string | null;
-            shipByDate: Date | null;
             itemNumber: string | null;
             productTitle: string | null;
             quantity: string | null;
@@ -203,7 +247,6 @@ async function runTransferOrders(manualSheetName?: string) {
             latestBlankTrackingOrderByOrderId.set(key, {
                 id,
                 orderId: order.orderId,
-                shipByDate: null,
                 itemNumber: order.itemNumber,
                 productTitle: order.productTitle,
                 quantity: order.quantity,
@@ -219,7 +262,6 @@ async function runTransferOrders(manualSheetName?: string) {
             id: number;
             tracking: string;
             orderId: string | null;
-            shipByDate: Date | null;
             itemNumber: string | null;
             productTitle: string | null;
             quantity: string | null;
@@ -236,7 +278,6 @@ async function runTransferOrders(manualSheetName?: string) {
                 id,
                 tracking,
                 orderId: order.orderId,
-                shipByDate: null,
                 itemNumber: order.itemNumber,
                 productTitle: order.productTitle,
                 quantity: order.quantity,
@@ -264,8 +305,9 @@ async function runTransferOrders(manualSheetName?: string) {
 
         // 5. Build insertion/update list for the orders table.
         // Store unshipped orders even when tracking is blank, and only fill fields when the DB value is empty.
-        const ordersToInsert: any[] = [];
-        const ordersToBackfill: Array<{ id: number; values: Record<string, any> }> = [];
+        const ordersToInsert: Array<{ values: Record<string, unknown>; shipByDate: Date | null }> = [];
+        const ordersToBackfill: Array<{ id: number; values: Record<string, unknown> }> = [];
+        const orderDeadlinesToUpsert: Array<{ id: number; shipByDate: Date | null }> = [];
         let matchedCustomers = 0;
         let unmatchedCustomers = 0;
 
@@ -285,7 +327,8 @@ async function runTransferOrders(manualSheetName?: string) {
             const sheetCondition = String(row[colIndices.condition] || '').trim();
             const sheetNotes = String(row[colIndices.note] || '').trim();
             const matchedCustomer = orderId ? latestCustomerByOrderId.get(orderId) : undefined;
-            const customerId = matchedCustomer ? Number(matchedCustomer.id) : null;
+            const matchedCustomerId = matchedCustomer ? Number(matchedCustomer.id) : NaN;
+            const customerId = Number.isFinite(matchedCustomerId) ? matchedCustomerId : null;
 
             if (customerId) {
                 matchedCustomers++;
@@ -306,26 +349,31 @@ async function runTransferOrders(manualSheetName?: string) {
                 if (isBlank(existingOrder.notes) && sheetNotes) updateValues.notes = sheetNotes;
                 if (isBlank(existingOrder.tracking) && sheetTracking) updateValues.shippingTrackingNumber = sheetTracking;
                 if (existingOrder.customerId == null && customerId) updateValues.customerId = customerId;
-                if (!existingOrder.shipByDate && sheetShipByDate) updateValues.shipByDate = sheetShipByDate;
-                if (Object.keys(updateValues).length > 0) {
-                    ordersToBackfill.push({ id: existingOrder.id, values: updateValues });
+                const compactedUpdateValues = compactUpdateValues(updateValues);
+                if (Object.keys(compactedUpdateValues).length > 0) {
+                    ordersToBackfill.push({ id: existingOrder.id, values: compactedUpdateValues });
+                }
+                if (sheetShipByDate) {
+                    orderDeadlinesToUpsert.push({ id: existingOrder.id, shipByDate: sheetShipByDate });
                 }
             } else {
                 ordersToInsert.push({
                     shipByDate: sheetShipByDate,
-                    orderId,
-                    itemNumber: sheetItemNumber || '',
-                    productTitle: sheetProductTitle || '',
-                    quantity: sheetQuantity || '1',
-                    sku: sheetSku || '',
-                    condition: sheetCondition || '',
-                    shippingTrackingNumber: sheetTracking || '',
-                    outOfStock: '',
-                    notes: sheetNotes || '',
-                    status: 'unassigned',
-                    statusHistory: [],
-                    isShipped: false,
-                    customerId,
+                    values: {
+                        orderId,
+                        itemNumber: sheetItemNumber || '',
+                        productTitle: sheetProductTitle || '',
+                        quantity: sheetQuantity || '1',
+                        sku: sheetSku || '',
+                        condition: sheetCondition || '',
+                        shippingTrackingNumber: sheetTracking || '',
+                        outOfStock: '',
+                        notes: sheetNotes || '',
+                        status: 'unassigned',
+                        statusHistory: [],
+                        isShipped: false,
+                        customerId,
+                    },
                 });
             }
         });
@@ -333,15 +381,33 @@ async function runTransferOrders(manualSheetName?: string) {
         // Apply DB sync
         if (ordersToBackfill.length > 0) {
             for (const entry of ordersToBackfill) {
+                const compactedUpdateValues = compactUpdateValues(entry.values);
+                if (Object.keys(compactedUpdateValues).length === 0) continue;
                 await db
                     .update(ordersTable)
-                    .set(entry.values)
+                    .set(compactedUpdateValues)
                     .where(eq(ordersTable.id, entry.id));
             }
         }
 
         if (ordersToInsert.length > 0) {
-            await db.insert(ordersTable).values(ordersToInsert);
+            const insertedOrders = await db
+                .insert(ordersTable)
+                .values(ordersToInsert.map((entry) => entry.values))
+                .returning({ id: ordersTable.id });
+
+            insertedOrders.forEach((order, index) => {
+                const shipByDate = ordersToInsert[index]?.shipByDate ?? null;
+                if (shipByDate) {
+                    orderDeadlinesToUpsert.push({ id: order.id, shipByDate });
+                }
+            });
+        }
+
+        if (orderDeadlinesToUpsert.length > 0) {
+            for (const entry of orderDeadlinesToUpsert) {
+                await upsertOrderDeadline(entry.id, entry.shipByDate);
+            }
         }
 
         return NextResponse.json({ 

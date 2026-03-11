@@ -15,6 +15,8 @@ interface UnshippedSidebarProps {
   filterControl?: ReactNode;
   embedded?: boolean;
   hideSectionHeader?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 interface SearchHistory {
@@ -31,11 +33,17 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     filterControl,
     embedded = false,
     hideSectionHeader = false,
+    searchValue = '',
+    onSearchChange,
   } = props;
   const [searchQuery, setSearchQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setSearchQuery(searchValue);
+  }, [searchValue]);
 
   useEffect(() => {
     try {
@@ -64,16 +72,12 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     localStorage.setItem('dashboard_search_history', JSON.stringify(newHistory));
   };
 
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     const trimmedQuery = query.trim();
     if (trimmedQuery) {
       saveSearchHistory(trimmedQuery);
     }
-    window.dispatchEvent(
-      new CustomEvent('dashboard-search', {
-        detail: { query: trimmedQuery },
-      })
-    );
+    await onSearchChange?.(trimmedQuery);
   };
 
   const clearSearchHistory = () => {

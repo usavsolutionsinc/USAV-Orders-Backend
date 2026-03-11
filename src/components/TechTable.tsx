@@ -10,6 +10,7 @@ import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
+import { isFbaOrder } from '@/utils/order-platform';
 import { useTechLogs, TechRecord } from '@/hooks/useTechLogs';
 
 interface TechTableProps {
@@ -117,6 +118,8 @@ export function TechTable({ testedBy }: TechTableProps) {
   };
 
   const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
+
+  const getSourceDotClass = (fba: boolean) => (fba ? 'bg-purple-500' : 'bg-emerald-500');
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -230,6 +233,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                           condition: record.condition,
                           trackingNumber: record.shipping_tracking_number,
                         });
+                        const isFba = isFbaOrder(record.order_id, record.account_source);
                         return (
                           <motion.div
                             initial={{ opacity: 0 }}
@@ -241,8 +245,14 @@ export function TechTable({ testedBy }: TechTableProps) {
                             }`}
                           >
                             <div className="flex flex-col min-w-0">
-                              <div className="text-[11px] font-bold text-gray-900 truncate">
-                                {record.product_title || 'Unknown Product'}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${getSourceDotClass(isFba)}`}
+                                  title={isFba ? 'FBA' : 'Orders'}
+                                />
+                                <div className="text-[11px] font-bold text-gray-900 truncate">
+                                  {record.product_title || 'Unknown Product'}
+                                </div>
                               </div>
                               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>

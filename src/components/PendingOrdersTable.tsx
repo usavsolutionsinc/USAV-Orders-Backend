@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { OrderRecordsTable } from '@/components/shipped/OrderRecordsTable';
 import { fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
@@ -52,9 +53,12 @@ export default function PendingOrdersTable({
   packedBy,
   testedBy,
 }: PendingOrdersTableProps = {}) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const queryClient = useQueryClient();
+  const searchQuery = String(searchParams.get('search') || '').trim();
 
   // 'pending' mode fetches server-filtered data (SQL: no out_of_stock + not in tech_serial_numbers).
   // 'all' and 'stock' share the same base fetch and filter client-side for 'stock'.
@@ -112,9 +116,6 @@ export default function PendingOrdersTable({
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
     };
-    const handleDashboardSearch = (e: any) => {
-      setSearchQuery(String(e?.detail?.query || '').trim());
-    };
     const handlePendingFilter = (e: any) => {
       const mode = String(e?.detail?.mode || 'all').toLowerCase();
       if (mode === 'stock') setFilterMode('stock');
@@ -160,22 +161,23 @@ export default function PendingOrdersTable({
 
     window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
     window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
-    window.addEventListener('dashboard-search' as any, handleDashboardSearch as any);
     window.addEventListener('dashboard-pending-filter' as any, handlePendingFilter as any);
     window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
 
     return () => {
       window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
       window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
-      window.removeEventListener('dashboard-search' as any, handleDashboardSearch as any);
       window.removeEventListener('dashboard-pending-filter' as any, handlePendingFilter as any);
       window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
     };
   }, [queryClient]);
 
   const clearSearch = () => {
-    setSearchQuery('');
-    window.dispatchEvent(new CustomEvent('dashboard-search', { detail: { query: '' } }));
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('search');
+    const nextSearch = params.toString();
+    const nextPath = pathname || '/dashboard';
+    router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
   };
 
   // 'pending' is already filtered server-side. 'stock' is a simple client-side check.

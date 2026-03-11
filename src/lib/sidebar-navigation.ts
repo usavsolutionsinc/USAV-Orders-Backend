@@ -6,6 +6,7 @@ import {
   FileText,
   LayoutDashboard,
   Package,
+  PackageCheck,
   ShieldCheck,
   Tool,
   User,
@@ -17,6 +18,7 @@ export type SidebarRouteKey =
   | 'fba'
   | 'receiving'
   | 'repair'
+  | 'work-orders'
   | 'sku-stock'
   | 'tech'
   | 'packer'
@@ -44,6 +46,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'receiving', label: 'Receiving', href: '/receiving', icon: ClipboardList, kind: 'station' },
   { id: 'tech', label: 'Technicians', href: '/tech?staffId=1', icon: Wrench, kind: 'station' },
   { id: 'packer', label: 'Packers', href: '/packer?staffId=4', icon: User, kind: 'station' },
+  { id: 'work-orders', label: 'Work Orders', href: '/work-orders', icon: PackageCheck, kind: 'bottom' },
   { id: 'manuals', label: 'Manuals', href: '/manuals', icon: FileText, kind: 'bottom' },
   { id: 'support', label: 'Support', href: '/support', icon: AlertCircle, kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters', href: '/previous-quarters', icon: Calendar, kind: 'bottom' },
@@ -56,6 +59,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/fba' || pathname.startsWith('/fba/')) return 'fba';
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
   if (pathname === '/repair' || pathname.startsWith('/repair/')) return 'repair';
+  if (pathname === '/work-orders' || pathname.startsWith('/work-orders/')) return 'work-orders';
   if (pathname === '/sku-stock' || pathname.startsWith('/sku-stock/')) return 'sku-stock';
   if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
   if (pathname === '/previous-quarters' || pathname.startsWith('/previous-quarters/')) return 'previous-quarters';

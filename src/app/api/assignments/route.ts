@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
-const ENTITY_TYPES = new Set(['ORDER', 'REPAIR', 'FBA_SHIPMENT', 'RECEIVING']);
-const WORK_TYPES = new Set(['TEST', 'PACK', 'REPAIR', 'QA', 'RECEIVE']);
-const STATUSES = new Set(['ASSIGNED', 'IN_PROGRESS', 'DONE', 'CANCELED']);
+const ENTITY_TYPES = new Set(['ORDER', 'REPAIR', 'FBA_SHIPMENT', 'RECEIVING', 'SKU_STOCK']);
+const WORK_TYPES = new Set(['TEST', 'PACK', 'REPAIR', 'QA', 'RECEIVE', 'STOCK_REPLENISH']);
+const STATUSES = new Set(['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE', 'CANCELED']);
 
 /** Returns the correct assignee column for a given work_type */
 function assigneeColumn(workType: string): 'assigned_tech_id' | 'assigned_packer_id' {

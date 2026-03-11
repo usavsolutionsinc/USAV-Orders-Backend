@@ -1,6 +1,7 @@
 'use client';
 
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
+import { isFbaOrder } from '@/utils/order-platform';
 
 function toOrderRecord(order: any): ShippedOrder {
   return {
@@ -11,6 +12,10 @@ function toOrderRecord(order: any): ShippedOrder {
     serial_number: '',
     condition: order.condition || '',
   };
+}
+
+function isNonFbaRecord(record: ShippedOrder) {
+  return !isFbaOrder(record.order_id, record.account_source);
 }
 
 export async function fetchPendingOrdersData({
@@ -26,6 +31,7 @@ export async function fetchPendingOrdersData({
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) params.set('q', searchQuery.trim());
+  if (searchQuery.trim()) params.set('includeShipped', 'true');
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
   if (pendingOnly) params.set('pendingOnly', 'true');
@@ -37,9 +43,9 @@ export async function fetchPendingOrdersData({
   }
 
   const data = await res.json();
-  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter((record) => {
-    return String(record.shipping_tracking_number || '').trim().length > 0;
-  });
+  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[])
+    .filter((record) => String(record.shipping_tracking_number || '').trim().length > 0)
+    .filter(isNonFbaRecord);
 }
 
 export async function fetchUnshippedOrdersData({
@@ -63,9 +69,9 @@ export async function fetchUnshippedOrdersData({
   }
 
   const data = await res.json();
-  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter((record) => {
-    return String(record.shipping_tracking_number || '').trim().length === 0;
-  });
+  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[])
+    .filter((record) => String(record.shipping_tracking_number || '').trim().length === 0)
+    .filter(isNonFbaRecord);
 }
 
 export async function fetchDashboardShippedData({
@@ -82,24 +88,23 @@ export async function fetchDashboardShippedData({
   weekEnd?: string;
 }) {
   const params = new URLSearchParams();
+  params.set('shippedOnly', 'true');
+  params.set('includeShipped', 'true');
   if (searchQuery.trim()) {
     params.set('q', searchQuery.trim());
   } else {
-    // Without a search query, request only the target week so the server
-    // returns ~50 records instead of up to 5 000 all-time records.
     if (weekStart) params.set('weekStart', weekStart);
     if (weekEnd) params.set('weekEnd', weekEnd);
-    params.set('limit', '1000');
   }
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
 
-  const url = `/api/shipped?${params.toString()}`;
+  const url = `/api/orders?${params.toString()}`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error('Failed to fetch shipped orders');
   }
 
   const data = await res.json();
-  return (data.results || data.shipped || []) as ShippedOrder[];
+  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
 }

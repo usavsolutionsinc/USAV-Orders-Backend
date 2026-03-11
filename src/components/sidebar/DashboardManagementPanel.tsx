@@ -20,6 +20,8 @@ interface DashboardManagementPanelProps {
   onFormSubmit?: (data: ShippedFormData) => void;
   filterControl?: ReactNode;
   showNextUnassignedButton?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 interface SearchHistory {
@@ -36,6 +38,8 @@ export function DashboardManagementPanel({
   onFormSubmit,
   filterControl,
   showNextUnassignedButton = false,
+  searchValue = '',
+  onSearchChange,
 }: DashboardManagementPanelProps) {
   const [isTransferring, setIsTransferring] = useState(false);
   const [manualSheetName, setManualSheetName] = useState('');
@@ -45,6 +49,10 @@ export function DashboardManagementPanel({
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setSearchQuery(searchValue);
+  }, [searchValue]);
 
   useEffect(() => {
     window.dispatchEvent(
@@ -109,16 +117,12 @@ export function DashboardManagementPanel({
     localStorage.setItem('dashboard_search_history', JSON.stringify(newHistory));
   };
 
-  const handleSearch = (query: string) => {
+  const handleSearch = async (query: string) => {
     const trimmedQuery = query.trim();
     if (trimmedQuery) {
       saveSearchHistory(trimmedQuery);
     }
-    window.dispatchEvent(
-      new CustomEvent('dashboard-search', {
-        detail: { query: trimmedQuery },
-      })
-    );
+    await onSearchChange?.(trimmedQuery);
   };
 
   const clearSearchHistory = () => {

@@ -71,6 +71,7 @@ export const workEntityTypeEnum = pgEnum('work_entity_type_enum', [
   'REPAIR',
   'FBA_SHIPMENT',
   'RECEIVING',
+  'SKU_STOCK',
 ]);
 
 export const workTypeEnum = pgEnum('work_type_enum', [
@@ -79,6 +80,7 @@ export const workTypeEnum = pgEnum('work_type_enum', [
   'REPAIR',
   'QA',
   'RECEIVE',
+  'STOCK_REPLENISH',
 ]);
 
 export const assignmentStatusEnum = pgEnum('assignment_status_enum', [

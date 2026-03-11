@@ -42,6 +42,7 @@ export function DashboardShippedTable({
   const queryClient = useQueryClient();
 
   const search = searchParams.get('search') || '';
+  const openOrderId = Number.parseInt(searchParams.get('openOrderId') || '', 10);
   const weekOffset = Math.max(0, Number.parseInt(searchParams.get('shippedWeekOffset') || '0', 10) || 0);
   const weekRange = getWeekRangeForOffset(weekOffset);
 
@@ -98,6 +99,20 @@ export function DashboardShippedTable({
   // Server already filters by week when not searching — no client-side pass needed.
   const filteredRecords = query.data || [];
 
+  useEffect(() => {
+    if (!Number.isFinite(openOrderId)) return;
+    const match = filteredRecords.find((record) => Number(record.id) === openOrderId);
+    if (!match) return;
+
+    window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: match }));
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('openOrderId');
+    const nextSearch = params.toString();
+    const nextPath = pathname || '/dashboard';
+    router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
+  }, [filteredRecords, openOrderId, pathname, router, searchParams]);
+
   const clearSearch = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete('search');
@@ -113,6 +128,8 @@ export function DashboardShippedTable({
         loading={query.isLoading}
         isRefreshing={query.isFetching && !query.isLoading}
         searchValue={search}
+        ordersOnly
+        hideLeadingIndicators
         weekRange={weekRange}
         weekOffset={weekOffset}
         showWeekControls

@@ -1,7 +1,7 @@
 import pool from '../db';
 
-export type WorkType = 'TEST' | 'PACK' | 'REPAIR' | 'QA' | 'RECEIVE';
-export type EntityType = 'ORDER' | 'REPAIR' | 'FBA_SHIPMENT' | 'RECEIVING';
+export type WorkType = 'TEST' | 'PACK' | 'REPAIR' | 'QA' | 'RECEIVE' | 'STOCK_REPLENISH';
+export type EntityType = 'ORDER' | 'REPAIR' | 'FBA_SHIPMENT' | 'RECEIVING' | 'SKU_STOCK';
 export type AssignmentStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'DONE' | 'CANCELED';
 
 export interface WorkAssignment {

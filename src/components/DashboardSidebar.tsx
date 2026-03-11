@@ -20,6 +20,7 @@ import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
 import { FbaSidebarPanel } from '@/components/sidebar/FbaSidebarPanel';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
+import { WorkOrdersSidebarPanel } from '@/components/sidebar/WorkOrdersSidebarPanel';
 import {
   APP_SIDEBAR_NAV,
   getSidebarRouteKey,
@@ -68,6 +69,7 @@ function getSidebarTitle(pathname: string | null) {
     fba: 'FBA',
     receiving: 'Receiving',
     repair: 'Repair',
+    'work-orders': 'Work Orders',
     'sku-stock': 'Sku Stock',
     tech: 'Technicians',
     packer: 'Packers',
@@ -91,6 +93,53 @@ function SidebarContextPanel() {
     const targetPath = nextPathname || pathname || '/dashboard';
     const nextSearch = nextParams.toString();
     router.replace(nextSearch ? `${targetPath}?${nextSearch}` : targetPath);
+  };
+
+  const findShippedMatches = async (query: string) => {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return [];
+
+    const params = new URLSearchParams({
+      q: trimmedQuery,
+      shippedOnly: 'true',
+      includeShipped: 'true',
+    });
+    const response = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
+    if (!response.ok) return [];
+    const json = await response.json();
+    return Array.isArray(json?.orders) ? json.orders : [];
+  };
+
+  const handleDashboardOrderSearch = async (nextValue: string) => {
+    const trimmed = nextValue.trim();
+    if (!trimmed) {
+      updateSearch((params) => {
+        params.delete('search');
+        params.delete('openOrderId');
+      }, '/dashboard');
+      return;
+    }
+
+    try {
+      const shippedMatches = await findShippedMatches(trimmed);
+      if (shippedMatches.length > 0) {
+        updateSearch((params) => {
+          normalizeOrderViewParams(params, 'shipped');
+          params.set('search', trimmed);
+          if (shippedMatches.length === 1) params.set('openOrderId', String(shippedMatches[0].id));
+          else params.delete('openOrderId');
+        }, '/dashboard');
+        return;
+      }
+    } catch (_error) {
+      // Fall back to the current view search if the lookup fails.
+    }
+
+    updateSearch((params) => {
+      if (trimmed) params.set('search', trimmed);
+      else params.delete('search');
+      params.delete('openOrderId');
+    }, '/dashboard');
   };
 
   const closeIntakeForm = () => updateSearch((params) => { params.delete('new'); });
@@ -132,6 +181,7 @@ function SidebarContextPanel() {
 
   if (routeKey === 'dashboard') {
     const orderView = getOrderViewFromSearch(searchParams);
+    const dashboardSearch = searchParams.get('search') || '';
     const filterControl = (
       <ViewDropdown
         options={ORDER_VIEW_OPTIONS}
@@ -139,7 +189,6 @@ function SidebarContextPanel() {
         onChange={(nextView) =>
           updateSearch((params) => {
             normalizeOrderViewParams(params, nextView);
-            if (nextView !== 'shipped') params.delete('search');
           }, '/dashboard')
         }
       />
@@ -168,6 +217,8 @@ function SidebarContextPanel() {
           onCloseForm={closeIntakeForm}
           onFormSubmit={submitShippedForm}
           filterControl={filterControl}
+          searchValue={dashboardSearch}
+          onSearchChange={handleDashboardOrderSearch}
         />
       );
     }
@@ -179,6 +230,8 @@ function SidebarContextPanel() {
         onFormSubmit={submitShippedForm}
         filterControl={filterControl}
         showNextUnassignedButton={orderView === 'pending'}
+        searchValue={dashboardSearch}
+        onSearchChange={handleDashboardOrderSearch}
       />
     );
   }
@@ -210,6 +263,7 @@ function SidebarContextPanel() {
   if (routeKey === 'support') return <SupportSidebarPanel />;
   if (routeKey === 'receiving') return <ReceivingSidebarPanel />;
   if (routeKey === 'fba') return <FbaSidebarPanel />;
+  if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
   if (routeKey === 'sku-stock') return <BarcodeSidebar embedded />;
   if (routeKey === 'repair') return <RepairSidebar embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { OrderRecordsTable } from '@/components/shipped/OrderRecordsTable';
 import { fetchUnshippedOrdersData } from '@/lib/dashboard-table-data';
 
@@ -49,8 +50,11 @@ export function UnshippedTable({
   packedBy,
   testedBy,
 }: UnshippedTableProps = {}) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const searchQuery = String(searchParams.get('search') || '').trim();
   const queryKey = ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy }] as const;
   const query = useQuery({
     queryKey,
@@ -64,9 +68,6 @@ export function UnshippedTable({
   useEffect(() => {
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
-    };
-    const handleDashboardSearch = (e: any) => {
-      setSearchQuery(String(e?.detail?.query || '').trim());
     };
     const handleAssignmentUpdated = (e: any) => {
       const detail = e?.detail || {};
@@ -102,20 +103,21 @@ export function UnshippedTable({
 
     window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
     window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
-    window.addEventListener('dashboard-search' as any, handleDashboardSearch as any);
     window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
 
     return () => {
       window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
       window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
-      window.removeEventListener('dashboard-search' as any, handleDashboardSearch as any);
       window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
     };
   }, [queryClient]);
 
   const clearSearch = () => {
-    setSearchQuery('');
-    window.dispatchEvent(new CustomEvent('dashboard-search', { detail: { query: '' } }));
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('search');
+    const nextSearch = params.toString();
+    const nextPath = pathname || '/dashboard';
+    router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
   };
 
   return (

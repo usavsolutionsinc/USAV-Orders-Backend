@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode, useState, useEffect } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShippedIntakeForm, type ShippedFormData } from './shipped';
@@ -11,6 +12,7 @@ import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { formatDateTimePST } from '@/lib/timezone';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
+import { isFbaOrder } from '@/utils/order-platform';
 
 interface SearchHistory {
     query: string;
@@ -43,6 +45,17 @@ function getStaffName(staffId: number | null | undefined): string {
     return STAFF_NAMES[staffId] || `Staff #${staffId}`;
 }
 
+function toShippedOrder(order: any): ShippedOrder {
+    return {
+        ...order,
+        pack_date_time: order.ship_by_date || null,
+        packed_by: order.packer_id ?? null,
+        tested_by: order.tested_by ?? null,
+        serial_number: '',
+        condition: order.condition || '',
+    };
+}
+
 export default function ShippedSidebar({
     showIntakeForm = false,
     onCloseForm,
@@ -52,6 +65,9 @@ export default function ShippedSidebar({
     embedded = false,
     hideSectionHeader = false,
 }: ShippedSidebarProps) {
+    const pathname = usePathname();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<ShippedOrder[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -148,25 +164,49 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
         setIsSearching(true);
         setHasSearched(true);
         try {
-            // First pass: use exact input so full order IDs are matched as stored in orders.order_id.
-            let res = await fetch(`/api/shipped?q=${encodeURIComponent(trimmedQuery)}`);
-            let data = await res.json();
+            const runSearch = async (value: string) => {
+                const params = new URLSearchParams({
+                    q: value,
+                    shippedOnly: 'true',
+                    includeShipped: 'true',
+                });
+                const res = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
+                const data = await res.json();
+                const orders = Array.isArray(data?.orders) ? data.orders : [];
+                return orders
+                    .map(toShippedOrder)
+                    .filter((record: ShippedOrder) => !isFbaOrder(record.order_id, record.account_source));
+            };
+
+            let records = await runSearch(trimmedQuery);
 
             // Fallback for tracking searches: retry with normalized last-8 if no results.
-            if ((!data?.results || data.results.length === 0) && normalizedQuery !== trimmedQuery) {
-                res = await fetch(`/api/shipped?q=${encodeURIComponent(normalizedQuery)}`);
-                data = await res.json();
+            if (records.length === 0 && normalizedQuery !== trimmedQuery) {
+                records = await runSearch(normalizedQuery);
             }
             
-            if (data.results) {
-                setResults(data.results);
-                saveSearchHistory(trimmedQuery, data.count);
-                // If only one result, open it directly using the shared event system
-                if (data.results.length === 1) {
-                    openDetails(data.results[0]);
+            setResults(records);
+            saveSearchHistory(trimmedQuery, records.length);
+
+            if (pathname === '/dashboard') {
+                const params = new URLSearchParams(searchParams.toString());
+                params.delete('pending');
+                params.delete('unshipped');
+                params.delete('fba');
+                params.set('shipped', '');
+                params.set('search', trimmedQuery);
+                if (records.length === 1) params.set('openOrderId', String(records[0].id));
+                else params.delete('openOrderId');
+                const nextSearch = params.toString();
+                router.replace(nextSearch ? `/dashboard?${nextSearch}` : '/dashboard');
+            }
+
+            if (records.length === 1) {
+                if (pathname === '/dashboard') {
+                    window.dispatchEvent(new CustomEvent('close-shipped-details'));
+                } else {
+                    openDetails(records[0]);
                 }
-            } else {
-                setResults([]);
             }
         } catch (error) {
             console.error('Search error:', error);

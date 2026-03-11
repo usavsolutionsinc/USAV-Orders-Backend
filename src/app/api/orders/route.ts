@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
     const packedBy           = searchParams.get('packedBy');
     const testedBy           = searchParams.get('testedBy');
     const pendingOnly        = searchParams.get('pendingOnly') === 'true';
+    const includeShipped     = searchParams.get('includeShipped') === 'true';
+    const shippedOnly        = searchParams.get('shippedOnly') === 'true';
 
     const cacheLookup = createCacheLookupKey({
       status:             status || '',
@@ -35,6 +37,8 @@ export async function GET(req: NextRequest) {
       packedBy:           packedBy || '',
       testedBy:           testedBy || '',
       pendingOnly,
+      includeShipped,
+      shippedOnly,
     });
 
     const CACHE_HEADERS = { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' };
@@ -110,10 +114,16 @@ export async function GET(req: NextRequest) {
       LEFT JOIN staff staff_packed_by ON staff_packed_by.id = wa_p.assigned_packer_id
       LEFT JOIN staff staff_tested_by ON staff_tested_by.id = tsn_scan.tested_by
       LEFT JOIN staff staff_pack_assignee ON staff_pack_assignee.id = wa_p.assigned_packer_id
-      WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
+      WHERE 1=1
     `;
     const params: any[] = [];
     let paramCount = 1;
+
+    if (shippedOnly) {
+      sql += ` AND COALESCE(o.is_shipped, false) = true`;
+    } else if (!includeShipped) {
+      sql += ` AND (o.is_shipped = false OR o.is_shipped IS NULL)`;
+    }
 
     if (status) {
       sql += ` AND o.status = $${paramCount++}`;

@@ -1,7 +1,7 @@
 export function getOrderPlatformLabel(orderId: string, accountSource: string | null | undefined): string {
   if (!orderId || orderId === 'Not available' || orderId === 'N/A') return '';
 
-  if (orderId.toUpperCase().includes('FBA')) {
+  if (isFbaOrder(orderId, accountSource)) {
     return 'FBA';
   }
 
@@ -24,3 +24,15 @@ export function getOrderPlatformLabel(orderId: string, accountSource: string | n
   return accountSource || '';
 }
 
+export function isFbaOrder(orderId: string | null | undefined, accountSource: string | null | undefined): boolean {
+  const normalizedOrderId = String(orderId || '').trim().toUpperCase();
+  const normalizedAccountSource = String(accountSource || '').trim().toLowerCase();
+  return normalizedOrderId.includes('FBA') || normalizedAccountSource === 'fba';
+}
+
+export function getOrderSourceTag(
+  orderId: string | null | undefined,
+  accountSource: string | null | undefined,
+): 'FBA' | 'Orders' {
+  return isFbaOrder(orderId, accountSource) ? 'FBA' : 'Orders';
+}

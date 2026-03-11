@@ -21,6 +21,14 @@ interface OrderStaffAssignmentButtonsProps {
   layout?: 'columns' | 'rows';
 }
 
+function resolveTechTheme(staffId: number) {
+  if (staffId === 1) return 'green';
+  if (staffId === 2) return 'blue';
+  if (staffId === 3) return 'purple';
+  if (staffId === 4 || staffId === 6) return 'yellow';
+  return getStaffThemeById(staffId, 'technician');
+}
+
 export function OrderStaffAssignmentButtons({
   testerOptions,
   packerOptions,
@@ -34,35 +42,34 @@ export function OrderStaffAssignmentButtons({
   packerDisabled = false,
   layout = 'columns',
 }: OrderStaffAssignmentButtonsProps) {
-  const resolveTechnicianTheme = (staffId: number) => {
-    if (staffId === 1) return 'green';
-    if (staffId === 2) return 'blue';
-    if (staffId === 3) return 'purple';
-    if (staffId === 4 || staffId === 6) return 'yellow';
-    return getStaffThemeById(staffId, 'technician');
-  };
-
-  const testerRow = (
-    <div className="bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2">
-      <div className="flex-1 flex flex-wrap gap-1.5">
+  const techRow = (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400 w-7">Tech</span>
+      <div className="flex flex-wrap gap-1">
         {testerOptions.map((member) => {
-          const isActiveTester = testerId === member.id;
-          const testerTheme = resolveTechnicianTheme(member.id);
-          const testerThemeClasses = stationThemeClasses[testerTheme];
-          const isTech3PurpleFallback = member.id === 3 && !isActiveTester;
+          const isActive = testerId === member.id;
+          const theme = resolveTechTheme(member.id);
+          const themeClass = stationThemeClasses[theme];
+          const isPurple3Fallback = member.id === 3 && !isActive;
           return (
             <button
               key={member.id}
               type="button"
+              aria-pressed={isActive}
+              disabled={disabled || testerDisabled}
               onClick={(e) => {
                 e.stopPropagation();
-                if (!disabled && !testerDisabled && !isActiveTester) void onAssignTester(member.id);
+                if (!disabled && !testerDisabled && !isActive) void onAssignTester(member.id);
               }}
-              disabled={disabled || testerDisabled}
-              aria-pressed={isActiveTester}
-              className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors disabled:opacity-50 ${
-                isActiveTester ? testerThemeClasses.active : testerThemeClasses.inactive
-              } ${isTech3PurpleFallback ? '!text-purple-700 !border-purple-300 !bg-white hover:!bg-purple-50' : ''}`}
+              className={[
+                'h-7 px-2.5 rounded-md text-[9px] font-black uppercase tracking-wide border transition-all disabled:opacity-50',
+                isActive ? themeClass.active : themeClass.inactive,
+                isPurple3Fallback
+                  ? '!text-purple-700 !border-purple-200 !bg-white hover:!bg-purple-50'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             >
               {member.name}
             </button>
@@ -72,32 +79,33 @@ export function OrderStaffAssignmentButtons({
     </div>
   );
 
-  const packerRow = (
-    <div className="bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2">
-      <div className="flex-1 flex flex-wrap gap-1.5">
+  const packRow = (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400 w-7">Pack</span>
+      <div className="flex flex-wrap gap-1">
         {packerOptions.map((member) => {
-          const isActivePacker = packerId === member.id;
-          const packerTheme = getStaffThemeById(member.id, 'packer');
-          const packerThemeClasses = stationThemeClasses[packerTheme];
-          const packerClasses =
-            member.id === 4
-              ? (
-                isActivePacker
-                  ? 'bg-slate-300 text-slate-900 border-slate-500 shadow-sm'
-                  : 'bg-slate-100 text-slate-900 border-slate-300 hover:bg-slate-200'
-              )
-              : (isActivePacker ? packerThemeClasses.active : packerThemeClasses.inactive);
+          const isActive = packerId === member.id;
+          const theme = getStaffThemeById(member.id, 'packer');
+          const themeClass = stationThemeClasses[theme];
+          const isSlate4 = member.id === 4;
+          const packerClass = isSlate4
+            ? isActive
+              ? 'bg-slate-800 text-white border-slate-800'
+              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+            : isActive
+              ? themeClass.active
+              : themeClass.inactive;
           return (
             <button
               key={member.id}
               type="button"
+              aria-pressed={isActive}
+              disabled={disabled || packerDisabled}
               onClick={(e) => {
                 e.stopPropagation();
-                if (!disabled && !packerDisabled && !isActivePacker) void onAssignPacker(member.id);
+                if (!disabled && !packerDisabled && !isActive) void onAssignPacker(member.id);
               }}
-              disabled={disabled || packerDisabled}
-              aria-pressed={isActivePacker}
-              className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors disabled:opacity-50 ${packerClasses}`}
+              className={`h-7 px-2.5 rounded-md text-[9px] font-black uppercase tracking-wide border transition-all disabled:opacity-50 ${packerClass}`}
             >
               {member.name}
             </button>
@@ -106,20 +114,22 @@ export function OrderStaffAssignmentButtons({
       </div>
     </div>
   );
+
+  const showPackRow = packerOptions.length > 0;
 
   if (layout === 'rows') {
     return (
-      <div className="grid grid-rows-2 gap-2" onClick={onContainerClick}>
-        {testerRow}
-        {packerRow}
+      <div className="flex flex-col gap-1.5" onClick={onContainerClick}>
+        {techRow}
+        {showPackRow && packRow}
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3" onClick={onContainerClick}>
-      {testerRow}
-      {packerRow}
+    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5" onClick={onContainerClick}>
+      {techRow}
+      {showPackRow && packRow}
     </div>
   );
 }

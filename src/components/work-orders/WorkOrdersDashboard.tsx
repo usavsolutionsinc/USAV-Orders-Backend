@@ -1,0 +1,458 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Loader2 } from '@/components/Icons';
+import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
+import { useStaffNameMap } from '@/hooks/useStaffNameMap';
+import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
+import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
+import {
+  type WorkOrderRow,
+  type QueueCounts,
+  EMPTY_COUNTS,
+  STATUS_COLOR,
+  normalizeQueue,
+  formatDate,
+} from './types';
+
+export type { WorkOrderRow };
+
+export function WorkOrdersDashboard() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queue = normalizeQueue(searchParams.get('queue'));
+  const query = searchParams.get('q') || '';
+  const entityTypeParam = searchParams.get('entityType');
+  const entityIdParam = Number(searchParams.get('entityId'));
+
+  const [rows, setRows] = useState<WorkOrderRow[]>([]);
+  const [counts, setCounts] = useState<QueueCounts>(EMPTY_COUNTS);
+  const [loading, setLoading] = useState(true);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [savingRowId, setSavingRowId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { getStaffName } = useStaffNameMap();
+
+  useEffect(() => {
+    let active = true;
+    getActiveStaff()
+      .then((members) => { if (active) setStaff(members); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    fetch(`/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
+      .then((json) => {
+        setRows(Array.isArray(json?.rows) ? json.rows : []);
+        setCounts({ ...EMPTY_COUNTS, ...(json?.counts || {}) });
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          setRows([]);
+          setCounts(EMPTY_COUNTS);
+        }
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [queue, query]);
+
+  useEffect(() => {
+    if (!rows.length) {
+      setSelectedId(null);
+      return;
+    }
+    const focused =
+      entityTypeParam && Number.isFinite(entityIdParam)
+        ? rows.find((r) => r.entityType === entityTypeParam && r.entityId === entityIdParam)
+        : null;
+    if (focused) { setSelectedId(focused.id); return; }
+    if (!selectedId || !rows.some((r) => r.id === selectedId)) {
+      setSelectedId(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
+  // Keep selectedRow in sync when rows refresh
+  const selectedRow = useMemo(
+    () => rows.find((r) => r.id === selectedId) ?? null,
+    [rows, selectedId]
+  );
+
+  // Close panel when selected row disappears from results
+  useEffect(() => {
+    if (isPanelOpen && !selectedRow) {
+      setIsPanelOpen(false);
+      window.dispatchEvent(new CustomEvent('close-shipped-details'));
+    }
+  }, [isPanelOpen, selectedRow]);
+
+  const TECH_IDS = [1, 2, 3, 6];
+  const technicianOptions = staff
+    .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
+    .map((m) => ({ id: Number(m.id), name: m.name }))
+    .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id));
+  const packerOptions = staff
+    .filter((m) => m.role === 'packer')
+    .map((m) => ({ id: Number(m.id), name: m.name }));
+
+  const refreshRows = useCallback(async () => {
+    const res = await fetch(
+      `/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`,
+      { cache: 'no-store' }
+    );
+    const json = await res.json();
+    setRows(Array.isArray(json?.rows) ? json.rows : []);
+    setCounts({ ...EMPTY_COUNTS, ...(json?.counts || {}) });
+    window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+  }, [queue, query]);
+
+  const handleRowClick = useCallback((row: WorkOrderRow) => {
+    // Toggle: clicking the active row closes the panel
+    if (selectedId === row.id && isPanelOpen) {
+      setIsPanelOpen(false);
+      setSelectedId(null);
+      window.dispatchEvent(new CustomEvent('close-shipped-details'));
+      return;
+    }
+    setSelectedId(row.id);
+    setIsPanelOpen(true);
+    window.dispatchEvent(new CustomEvent('open-shipped-details'));
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('entityType', row.entityType);
+    params.set('entityId', String(row.entityId));
+    router.replace(`/work-orders?${params.toString()}`);
+  }, [selectedId, isPanelOpen, searchParams, router]);
+
+  const handleClosePanel = useCallback(() => {
+    setIsPanelOpen(false);
+    setSelectedId(null);
+    window.dispatchEvent(new CustomEvent('close-shipped-details'));
+  }, []);
+
+  const handleSaved = useCallback(() => { void refreshRows(); }, [refreshRows]);
+
+  const handleInlineAssign = async (
+    row: WorkOrderRow,
+    type: 'tech' | 'packer',
+    staffId: number
+  ) => {
+    if (savingRowId) return;
+    setSavingRowId(row.id);
+
+    const newTechId = type === 'tech' ? staffId : row.techId;
+    const newPackerId = type === 'packer' ? staffId : row.packerId;
+    // Only advance status when BOTH are now set
+    const newStatus =
+      newTechId && newPackerId && row.status === 'OPEN' ? 'ASSIGNED' : row.status;
+
+    // Optimistic update — UI moves immediately, reverts on error
+    setRows((prev) =>
+      prev.map((r) =>
+        r.id === row.id
+          ? { ...r, techId: newTechId, packerId: newPackerId, status: newStatus }
+          : r
+      )
+    );
+
+    try {
+      const res = await fetch('/api/work-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: row.entityType,
+          entityId: row.entityId,
+          assignedTechId: newTechId,
+          assignedPackerId: newPackerId,
+          status: newStatus,
+          priority: row.priority,
+          deadlineAt: row.deadlineAt,
+          notes: row.notes,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.details || payload?.error || 'Failed to assign');
+      }
+      await refreshRows();
+    } catch (err: any) {
+      // Revert optimistic update on failure
+      setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
+      window.alert(err?.message || 'Failed to assign staff');
+    } finally {
+      setSavingRowId(null);
+    }
+  };
+
+  // Row is "assigned" only when BOTH tech and packer are set
+  const unassignedRows = rows.filter((r) => !r.techId || !r.packerId);
+  const assignedRows = rows.filter((r) => r.techId && r.packerId);
+
+  return (
+    <div className="flex h-full w-full min-w-0 flex-col bg-white">
+      {/* Page header — matches OrderRecordsTable WeekHeader style */}
+      <div className="shrink-0 sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-[13px] font-black uppercase tracking-tight text-slate-900">
+            Work Orders
+          </h1>
+          <span className="text-[11px] font-medium text-slate-400">
+            {counts[queue] ?? rows.length}
+            {query ? ` · "${query}"` : ''}
+          </span>
+        </div>
+        <div className="flex items-center gap-4 shrink-0">
+          {unassignedRows.length > 0 && (
+            <span className="text-[10px] font-black text-orange-500 uppercase tracking-wider">
+              {unassignedRows.length} unassigned
+            </span>
+          )}
+          {assignedRows.length > 0 && (
+            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">
+              {assignedRows.length} assigned
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Table body */}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
+        {loading ? (
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="flex h-full items-center justify-center px-8 text-center">
+            <p className="text-sm font-medium italic text-gray-400 opacity-40">
+              No work orders in this queue
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col w-full">
+
+            {/* ── Unassigned section ── */}
+            {unassignedRows.length > 0 && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50"
+                >
+                  <div className="h-px flex-1 bg-orange-200" />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-orange-500">
+                    {unassignedRows.length} unassigned
+                  </span>
+                  <div className="h-px flex-1 bg-orange-200" />
+                </motion.div>
+                {unassignedRows.map((row) => (
+                  <WorkOrderTableRow
+                    key={row.id}
+                    row={row}
+                    isSelected={selectedId === row.id}
+                    isSaving={savingRowId === row.id}
+                    technicianOptions={technicianOptions}
+                    packerOptions={packerOptions}
+                    getStaffName={getStaffName}
+                    onClick={handleRowClick}
+                    onInlineAssign={handleInlineAssign}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* ── Assigned section ── */}
+            {assignedRows.length > 0 && (
+              <>
+                {unassignedRows.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                    className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50"
+                  >
+                    <div className="h-px flex-1 bg-emerald-200" />
+                    <span className="text-[11px] font-black uppercase tracking-widest text-emerald-600">
+                      {assignedRows.length} assigned
+                    </span>
+                    <div className="h-px flex-1 bg-emerald-200" />
+                  </motion.div>
+                )}
+                {assignedRows.map((row) => (
+                  <WorkOrderTableRow
+                    key={row.id}
+                    row={row}
+                    isSelected={selectedId === row.id}
+                    isSaving={savingRowId === row.id}
+                    technicianOptions={technicianOptions}
+                    packerOptions={packerOptions}
+                    getStaffName={getStaffName}
+                    onClick={handleRowClick}
+                    onInlineAssign={handleInlineAssign}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Slide-in details panel */}
+      <AnimatePresence>
+        {isPanelOpen && selectedRow && (
+          <WorkOrderDetailsPanel
+            key={selectedRow.id}
+            row={selectedRow}
+            onClose={handleClosePanel}
+            onSaved={handleSaved}
+            queue={queue}
+            query={query}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Row sub-component — mirrors OrderRecordsTable's row layout
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface WorkOrderTableRowProps {
+  row: WorkOrderRow;
+  isSelected: boolean;
+  isSaving: boolean;
+  technicianOptions: { id: number; name: string }[];
+  packerOptions: { id: number; name: string }[];
+  getStaffName: (id: number | null | undefined) => string;
+  onClick: (row: WorkOrderRow) => void;
+  onInlineAssign: (row: WorkOrderRow, type: 'tech' | 'packer', staffId: number) => Promise<void>;
+}
+
+function WorkOrderTableRow({
+  row,
+  isSelected,
+  isSaving,
+  technicianOptions,
+  packerOptions,
+  getStaffName,
+  onClick,
+  onInlineAssign,
+}: WorkOrderTableRowProps) {
+  const statusClass = STATUS_COLOR[row.status] || 'text-slate-600 bg-slate-100';
+  // Row is fully unassigned until BOTH tech and packer are set
+  const isUnassigned = !row.techId || !row.packerId;
+
+  const techName = row.techName || (row.techId ? getStaffName(row.techId) : null);
+  const packerName = row.packerName || (row.packerId ? getStaffName(row.packerId) : null);
+
+  // Contextual subtitle: always show tech status, show packer status only after tech set
+  const techLabel = techName ?? (row.techId ? `Tech #${row.techId}` : 'Tech unassigned');
+  const packerLabel = row.techId
+    ? (packerName ?? (row.packerId ? `Pack #${row.packerId}` : 'Packer unassigned'))
+    : null;
+  const assignmentText = [techLabel, packerLabel].filter(Boolean).join(' · ');
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      data-work-order-row-id={row.id}
+      className={`border-b border-gray-50 cursor-pointer transition-colors ${
+        isSelected ? 'bg-blue-50/70' : 'hover:bg-blue-50/30'
+      }`}
+    >
+      {/* Main row — clickable to open panel */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onClick(row)}
+        onKeyDown={(e) => e.key === 'Enter' && onClick(row)}
+        className="grid grid-cols-[1fr_auto] items-start gap-3 px-4 pt-3 pb-1"
+      >
+        {/* Left: title + subtitle */}
+        <div className="min-w-0 flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Status badge — hide OPEN when no tech assigned (implied) */}
+            {(row.techId || row.status !== 'OPEN') && (
+              <span
+                className={`inline-block text-[8px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-sm ${statusClass}`}
+              >
+                {row.status.replace('_', ' ')}
+              </span>
+            )}
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">
+              {row.queueLabel}
+            </span>
+            {row.stockLevel != null && (
+              <span className="text-[8px] font-black text-red-500 uppercase tracking-wide">
+                · Stock {row.stockLevel}
+              </span>
+            )}
+          </div>
+
+          {/* Title */}
+          <p className="text-[12px] font-bold text-gray-900 truncate leading-snug">
+            {row.title}
+          </p>
+
+          {/* Subtitle — tech · packer names from work_assignments + deadline */}
+          <p className={`text-[10px] font-bold uppercase tracking-widest truncate ${
+            isUnassigned ? 'text-orange-400' : 'text-gray-400'
+          }`}>
+            {assignmentText || '—'}
+            {row.deadlineAt ? (
+              <span className="text-gray-400"> · {formatDate(row.deadlineAt)}</span>
+            ) : null}
+          </p>
+        </div>
+
+        {/* Right: record label + priority */}
+        <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
+          <span className="text-[9px] font-black text-gray-500 uppercase tracking-wide">
+            {row.recordLabel}
+          </span>
+          {row.priority < 100 && (
+            <span className="text-[8px] font-black text-red-500">P{row.priority}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Inline assignment buttons — stop propagation */}
+      <div
+        className="px-4 pb-3"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        role="presentation"
+      >
+        {isSaving ? (
+          <div className="flex items-center gap-1.5 py-1">
+            <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
+            <span className="text-[9px] font-bold text-slate-400">Assigning…</span>
+          </div>
+        ) : (
+          <OrderStaffAssignmentButtons
+            testerOptions={technicianOptions}
+            packerOptions={row.techId ? packerOptions : []}
+            testerId={row.techId}
+            packerId={row.packerId}
+            onAssignTester={(id) => void onInlineAssign(row, 'tech', id)}
+            onAssignPacker={(id) => void onInlineAssign(row, 'packer', id)}
+            layout="rows"
+          />
+        )}
+      </div>
+    </motion.div>
+  );
+}
