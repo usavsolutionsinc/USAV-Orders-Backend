@@ -1,0 +1,412 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Loader2,
+  Package,
+  Printer,
+  PackageCheck,
+  Check,
+  RefreshCw,
+  AlertCircle,
+} from '@/components/Icons';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ShipmentItem {
+  id: number;
+  fnsku: string;
+  product_title: string | null;
+  asin: string | null;
+  sku: string | null;
+  expected_qty: number;
+  actual_qty: number;
+  status: string;
+  ready_at: string | null;
+  ready_by_name: string | null;
+}
+
+interface Shipment {
+  id: number;
+  shipment_ref: string;
+  destination_fc: string | null;
+  due_date: string | null;
+  status: string;
+  assigned_packer_name: string | null;
+  ready_items: number;
+  total_items: number;
+}
+
+interface ShipmentWithItems extends Shipment {
+  items: ShipmentItem[];
+}
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    PLANNED: 'bg-gray-100 text-gray-600',
+    READY_TO_GO: 'bg-green-100 text-green-700',
+    LABEL_ASSIGNED: 'bg-blue-100 text-blue-700',
+    SHIPPED: 'bg-purple-100 text-purple-700',
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${map[status] ?? 'bg-gray-100 text-gray-500'}`}
+    >
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
+// ─── Single shipment card ─────────────────────────────────────────────────────
+
+function ShipmentLabelCard({
+  shipment,
+  onPrinted,
+}: {
+  shipment: ShipmentWithItems;
+  onPrinted: (shipmentId: number, itemIds: number[]) => void;
+}) {
+  const printRef = useRef<HTMLDivElement>(null);
+  const [marking, setMarking] = useState(false);
+  const [markedIds, setMarkedIds] = useState<Set<number>>(new Set());
+
+  const readyItems = shipment.items.filter((i) => i.status === 'READY_TO_GO');
+
+  const handlePrint = () => {
+    if (!printRef.current) return;
+    const printContents = printRef.current.innerHTML;
+    const win = window.open('', '_blank', 'width=800,height=600');
+    if (!win) return;
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>FBA Label Queue — ${shipment.shipment_ref}</title>
+          <style>
+            body { font-family: system-ui, sans-serif; padding: 24px; font-size: 11px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
+            th { background: #f9fafb; font-weight: 700; font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; }
+            h2 { font-size: 16px; font-weight: 800; margin: 0 0 4px; }
+            .meta { color: #6b7280; margin: 0 0 16px; font-size: 10px; }
+            .fnsku { font-family: monospace; font-size: 11px; font-weight: 700; }
+          </style>
+        </head>
+        <body>${printContents}</body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+    win.close();
+  };
+
+  const handleMarkPrinted = async () => {
+    if (readyItems.length === 0) return;
+    setMarking(true);
+    const ids: number[] = [];
+    try {
+      for (const item of readyItems) {
+        const res = await fetch(
+          `/api/fba/shipments/${shipment.id}/items/${item.id}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'LABEL_ASSIGNED' }),
+          }
+        );
+        if (res.ok) ids.push(item.id);
+      }
+      setMarkedIds((prev) => new Set(Array.from(prev).concat(ids)));
+      onPrinted(shipment.id, ids);
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  const visibleItems = readyItems.filter((i) => !markedIds.has(i.id));
+
+  if (readyItems.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+    >
+      {/* Card header */}
+      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="p-1.5 bg-blue-100 rounded-xl flex-shrink-0">
+            <Package className="w-4 h-4 text-blue-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-black text-gray-900 truncate">{shipment.shipment_ref}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {shipment.destination_fc && (
+                <span className="text-[10px] text-gray-500 font-bold">FC: {shipment.destination_fc}</span>
+              )}
+              {shipment.due_date && (
+                <span className="text-[10px] text-gray-400">
+                  Due: {new Date(shipment.due_date).toLocaleDateString()}
+                </span>
+              )}
+              <span className="text-[10px] font-black text-green-600">
+                {visibleItems.length} ready to print
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-700 text-white rounded-xl text-[10px] font-black transition-all active:scale-95"
+          >
+            <Printer className="w-3 h-3" />
+            Print
+          </button>
+          <button
+            onClick={handleMarkPrinted}
+            disabled={marking || visibleItems.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black transition-all active:scale-95"
+          >
+            {marking ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Check className="w-3 h-3" />
+            )}
+            Mark Printed
+          </button>
+        </div>
+      </div>
+
+      {/* Printable table area */}
+      <div ref={printRef}>
+        <h2>{shipment.shipment_ref}</h2>
+        <p className="meta">
+          {shipment.destination_fc ? `FC: ${shipment.destination_fc} · ` : ''}
+          {shipment.due_date ? `Due: ${new Date(shipment.due_date).toLocaleDateString()} · ` : ''}
+          {visibleItems.length} item(s) ready to label
+        </p>
+        <table className="w-full text-xs hidden print:table">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="text-left px-3 py-2 text-[9px] font-black uppercase tracking-wider text-gray-500">FNSKU</th>
+              <th className="text-left px-3 py-2 text-[9px] font-black uppercase tracking-wider text-gray-500">Product</th>
+              <th className="text-left px-3 py-2 text-[9px] font-black uppercase tracking-wider text-gray-500">SKU</th>
+              <th className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-wider text-gray-500">Exp</th>
+              <th className="text-center px-3 py-2 text-[9px] font-black uppercase tracking-wider text-gray-500">Act</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleItems.map((item) => (
+              <tr key={item.id}>
+                <td className="px-3 py-2 font-mono text-xs">{item.fnsku}</td>
+                <td className="px-3 py-2">{item.product_title || '—'}</td>
+                <td className="px-3 py-2 text-gray-500">{item.sku || '—'}</td>
+                <td className="px-3 py-2 text-center tabular-nums">{item.expected_qty}</td>
+                <td className="px-3 py-2 text-center tabular-nums font-bold">{item.actual_qty}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* On-screen item rows */}
+      <div className="divide-y divide-gray-50">
+        <AnimatePresence>
+          {visibleItems.map((item) => (
+            <motion.div
+              key={item.id}
+              initial={{ opacity: 1 }}
+              exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+              transition={{ duration: 0.2 }}
+              className="flex items-center gap-3 px-4 py-2.5"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-gray-900 truncate">
+                  {item.product_title || item.fnsku}
+                </p>
+                <div className="flex items-center gap-3 flex-wrap mt-0.5">
+                  <span className="font-mono text-[10px] text-gray-500">{item.fnsku}</span>
+                  {item.sku && (
+                    <span className="text-[10px] text-gray-400">SKU: {item.sku}</span>
+                  )}
+                  {item.ready_by_name && (
+                    <span className="text-[10px] text-gray-400">by {item.ready_by_name}</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="text-right">
+                  <p className="text-xs font-black tabular-nums text-gray-900">
+                    {item.actual_qty}
+                    <span className="text-gray-300 mx-0.5">/</span>
+                    <span className="text-gray-400 font-bold">{item.expected_qty}</span>
+                  </p>
+                  <p className="text-[8px] font-black text-gray-400 uppercase">qty</p>
+                </div>
+                <StatusBadge status={item.status} />
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {visibleItems.length === 0 && readyItems.length > 0 && (
+          <div className="flex items-center gap-2 px-4 py-3 text-green-700">
+            <PackageCheck className="w-4 h-4" />
+            <p className="text-xs font-bold">All items marked as label assigned</p>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export interface FbaLabelQueueProps {
+  refreshTrigger?: number;
+}
+
+export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
+  const [shipments, setShipments] = useState<ShipmentWithItems[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshCount, setRefreshCount] = useState(0);
+
+  const loadQueue = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Fetch shipments that have at least some ready items
+      const shipRes = await fetch(
+        '/api/fba/shipments?status=READY_TO_GO,PLANNED,LABEL_ASSIGNED&limit=50'
+      );
+      const shipData = await shipRes.json();
+      if (!shipData.success) throw new Error(shipData.error || 'Failed to fetch shipments');
+
+      const shipmentList: Shipment[] = shipData.shipments || [];
+
+      // Filter to shipments that have ready_items > 0
+      const relevant = shipmentList.filter(
+        (s) => Number(s.ready_items) > 0
+      );
+
+      // Fetch items for each relevant shipment in parallel
+      const withItems = await Promise.all(
+        relevant.map(async (s) => {
+          const itemRes = await fetch(`/api/fba/shipments/${s.id}/items`);
+          const itemData = await itemRes.json();
+          const items: ShipmentItem[] = (itemData.items || []).filter(
+            (i: ShipmentItem) => i.status === 'READY_TO_GO'
+          );
+          return { ...s, items };
+        })
+      );
+
+      // Only show shipments that actually have READY_TO_GO items
+      setShipments(withItems.filter((s) => s.items.length > 0));
+    } catch (err: any) {
+      setError(err.message || 'Failed to load label queue');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadQueue();
+  }, [loadQueue, refreshTrigger, refreshCount]);
+
+  const handlePrinted = useCallback((shipmentId: number, itemIds: number[]) => {
+    setShipments((prev) =>
+      prev
+        .map((s) => {
+          if (s.id !== shipmentId) return s;
+          return {
+            ...s,
+            items: s.items.map((i) =>
+              itemIds.includes(i.id) ? { ...i, status: 'LABEL_ASSIGNED' } : i
+            ),
+          };
+        })
+        .filter((s) => s.items.some((i) => i.status === 'READY_TO_GO'))
+    );
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-3 p-4 bg-red-50 rounded-2xl border border-red-200 mx-4 my-4">
+        <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+        <p className="text-sm font-bold text-red-700">{error}</p>
+        <button
+          onClick={() => setRefreshCount((c) => c + 1)}
+          className="ml-auto px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-black"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
+        <div className="flex items-center gap-2">
+          <Printer className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-black text-gray-900">Label Queue</span>
+          {shipments.length > 0 && (
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-black">
+              {shipments.reduce((acc, s) => acc + s.items.filter(i => i.status === 'READY_TO_GO').length, 0)} items
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => setRefreshCount((c) => c + 1)}
+          className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+          title="Refresh"
+        >
+          <RefreshCw className="w-4 h-4 text-gray-500" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <AnimatePresence>
+          {shipments.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-16 text-center"
+            >
+              <div className="p-4 bg-gray-100 rounded-2xl mb-4">
+                <PackageCheck className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-sm font-black text-gray-500">No items ready to label</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Items will appear here once they reach READY_TO_GO status
+              </p>
+            </motion.div>
+          ) : (
+            shipments.map((s) => (
+              <ShipmentLabelCard key={s.id} shipment={s} onPrinted={handlePrinted} />
+            ))
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
