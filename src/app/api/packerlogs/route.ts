@@ -87,14 +87,15 @@ export async function GET(req: NextRequest) {
             LEFT JOIN LATERAL (
                 SELECT ord.id
                 FROM orders ord
+                LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
                 WHERE (
                     pl.shipment_id IS NOT NULL
                     AND ord.shipment_id = pl.shipment_id
                 ) OR (
                     COALESCE(stn.tracking_number_raw, pl.scan_ref, '') <> ''
-                    AND ord.shipping_tracking_number IS NOT NULL
-                    AND ord.shipping_tracking_number != ''
-                    AND RIGHT(regexp_replace(UPPER(ord.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) =
+                    AND ord_stn.tracking_number_raw IS NOT NULL
+                    AND ord_stn.tracking_number_raw != ''
+                    AND RIGHT(regexp_replace(UPPER(ord_stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
                         RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, pl.scan_ref, '')), '[^A-Z0-9]', '', 'g'), 18)
                 )
                 ORDER BY

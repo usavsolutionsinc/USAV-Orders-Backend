@@ -23,6 +23,26 @@ export interface RepairQueueItem {
 
 const CLOSED_STATUSES = ['Done', 'Shipped', 'Picked Up'];
 
+async function getRepairWorkAssignmentSelects() {
+  const columns = await pool.query<{ column_name: string }>(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_name = 'work_assignments'
+       AND column_name IN ('out_of_stock', 'repair_outcome')`
+  );
+
+  const present = new Set(columns.rows.map((row) => row.column_name));
+
+  return {
+    outOfStockSelect: present.has('out_of_stock')
+      ? `wa.out_of_stock     AS "outOfStock"`
+      : `NULL::text          AS "outOfStock"`,
+    repairOutcomeSelect: present.has('repair_outcome')
+      ? `wa.repair_outcome   AS "repairOutcome"`
+      : `NULL::text          AS "repairOutcome"`,
+  };
+}
+
 /**
  * GET /api/repair-service/next?techId=<id>
  *
@@ -34,6 +54,7 @@ const CLOSED_STATUSES = ['Done', 'Shipped', 'Picked Up'];
 export async function GET(req: NextRequest) {
   try {
     const techId = req.nextUrl.searchParams.get('techId');
+    const { outOfStockSelect, repairOutcomeSelect } = await getRepairWorkAssignmentSelects();
 
     const closedPlaceholders = CLOSED_STATUSES.map((_, i) => `$${i + 1}`).join(', ');
 
@@ -57,8 +78,8 @@ export async function GET(req: NextRequest) {
           rs.price,
           wa.assigned_tech_id AS "assignedTechId",
           s.name              AS "techName",
-          wa.out_of_stock     AS "outOfStock",
-          wa.repair_outcome   AS "repairOutcome"
+          ${outOfStockSelect},
+          ${repairOutcomeSelect}
         FROM repair_service rs
         LEFT JOIN LATERAL (
           SELECT *
@@ -98,8 +119,8 @@ export async function GET(req: NextRequest) {
           rs.price,
           wa.assigned_tech_id AS "assignedTechId",
           s.name              AS "techName",
-          wa.out_of_stock     AS "outOfStock",
-          wa.repair_outcome   AS "repairOutcome"
+          ${outOfStockSelect},
+          ${repairOutcomeSelect}
         FROM repair_service rs
         LEFT JOIN LATERAL (
           SELECT *
