@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { normalizePSTTimestamp } from '@/utils/date';
 
 /**
  * GET /api/tech/orders-without-manual?techId=3&days=365
@@ -154,9 +155,7 @@ export async function GET(req: NextRequest) {
       condition:                row.condition  ? String(row.condition)   : null,
       is_shipped:               Boolean(row.is_shipped),
       has_manual:               false,
-      test_date_time:           row.test_date_time
-                                  ? new Date(row.test_date_time).toISOString()
-                                  : null,
+      test_date_time:           normalizePSTTimestamp(row.test_date_time),
     }));
 
     return NextResponse.json({ orders, total: orders.length });

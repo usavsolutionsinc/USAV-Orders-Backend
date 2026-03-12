@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { formatPSTTimestamp } from '@/utils/date';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const DEFAULT_LIMIT = 100;
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest) {
         created: 0,
         updated: 0,
         deleted: 0,
-        timestamp: new Date().toISOString(),
+        timestamp: formatPSTTimestamp(),
       });
     }
 
@@ -273,7 +274,7 @@ export async function POST(req: NextRequest) {
       created,
       updated,
       deleted,
-      timestamp: new Date().toISOString(),
+      timestamp: formatPSTTimestamp(),
     });
   } catch (error: any) {
     console.error('Error syncing Ecwid exception tracking:', error);

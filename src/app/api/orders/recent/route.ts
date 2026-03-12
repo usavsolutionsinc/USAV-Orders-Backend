@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { toPSTDateKey } from '@/lib/timezone';
+import { getCurrentPSTDateKey, normalizePSTTimestamp, toPSTDateKey } from '@/utils/date';
 
 interface RecentOrder {
   id: number;
@@ -99,19 +99,19 @@ export async function GET(req: NextRequest) {
       is_shipped: Boolean(row.is_shipped),
       status: row.status ? String(row.status) : null,
       ship_by_date: row.ship_by_date ? String(row.ship_by_date) : null,
-      created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
+      created_at: normalizePSTTimestamp(row.created_at) || '',
       has_manual: Boolean(row.has_manual),
     }));
 
     // Group by PST date
     const grouped = new Map<string, RecentOrder[]>();
     for (const order of orders) {
-      const dateKey = order.created_at ? toPSTDateKey(new Date(order.created_at)) : 'unknown';
+      const dateKey = order.created_at ? toPSTDateKey(order.created_at) : 'unknown';
       if (!grouped.has(dateKey)) grouped.set(dateKey, []);
       grouped.get(dateKey)!.push(order);
     }
 
-    const today = toPSTDateKey(new Date());
+    const today = getCurrentPSTDateKey();
     const yesterday = toPSTDateKey(new Date(Date.now() - 86_400_000));
 
     const groups: DateGroup[] = Array.from(grouped.entries()).map(([date, dateOrders]) => {

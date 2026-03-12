@@ -1,6 +1,7 @@
 import { EbayClient } from './client';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { formatApiInstant, normalizePSTTimestamp } from '@/utils/date';
 
 export interface SyncResult {
   accountName: string;
@@ -231,7 +232,7 @@ export async function syncAccountOrders(accountName: string): Promise<SyncResult
         createdOrders: 0,
         deletedExceptions: 0,
         skippedExistingOrders: 0,
-        lastSyncDate: lastSyncDate ? new Date(lastSyncDate).toISOString() : null,
+        lastSyncDate: normalizePSTTimestamp(lastSyncDate),
       };
     }
 
@@ -239,7 +240,7 @@ export async function syncAccountOrders(accountName: string): Promise<SyncResult
 
     const limitPerPage = 200;
     const maxPages = 50;
-    const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const sinceIso = formatApiInstant(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
     const seenOrderIds = new Set<string>();
 
     outer: for (let page = 0; page < maxPages; page++) {
@@ -353,7 +354,7 @@ export async function syncAccountOrders(accountName: string): Promise<SyncResult
       createdOrders,
       deletedExceptions,
       skippedExistingOrders,
-      lastSyncDate: lastSyncDate ? new Date(lastSyncDate).toISOString() : null,
+      lastSyncDate: normalizePSTTimestamp(lastSyncDate),
       errors: errors.length > 0 ? errors : undefined,
     };
   } catch (error: any) {

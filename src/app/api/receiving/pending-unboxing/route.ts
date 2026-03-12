@@ -72,10 +72,10 @@ export async function GET(request: NextRequest) {
     const availableColumns = new Set<string>(columnsRes.rows.map((r: any) => String(r.column_name)));
     const hasColumn = (name: string) => availableColumns.has(name);
     const receivedAtSelect = hasColumn('received_at')
-      ? "(r.received_at AT TIME ZONE 'America/Los_Angeles')::text AS received_at"
+      ? "to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at"
       : 'NULL::text AS received_at';
     const dateColumnRef = `r.${dateColumn}`;
-    const receivingDateSelect = `(${dateColumnRef} AT TIME ZONE 'America/Los_Angeles')::text AS created_at`;
+    const receivingDateSelect = `to_char(${dateColumnRef}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at`;
 
     // Fetch receiving rows that have at least one line in the target statuses
     // OR have no lines yet but also haven't been unboxed (newly arrived package)
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
               ${receivedAtSelect},
               ${receivingDateSelect},
               r.qa_status,
-              (r.unboxed_at     AT TIME ZONE 'America/Los_Angeles')::text AS unboxed_at,
+              to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS unboxed_at,
               r.unboxed_by,
               r.zoho_purchase_receive_id,
               r.zoho_purchaseorder_id

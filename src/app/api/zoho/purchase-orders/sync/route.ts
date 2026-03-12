@@ -14,7 +14,7 @@
  * {
  *   "status":             "open" | "draft" | "billed" | "cancelled" | "issued",
  *   "vendor_id":          "<zoho vendor id>",
- *   "last_modified_time": "2025-01-01T00:00:00Z",
+ *   "last_modified_time": "<zoho API timestamp>",
  *   "days_back":          90,    // used when last_modified_time absent; 0 = all time
  *   "per_page":           200,
  *   "max_pages":          50,

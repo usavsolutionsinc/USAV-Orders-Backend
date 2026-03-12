@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { EbayClient } from '@/lib/ebay/client';
 import { getZendeskSupportOverview } from '@/lib/zendesk';
+import { formatPSTTimestamp } from '@/utils/date';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,7 +89,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      generatedAt: new Date().toISOString(),
+      generatedAt: formatPSTTimestamp(),
       totals,
       ebayAccounts: accounts,
       zendesk,

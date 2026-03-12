@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { refreshEbayAccessToken } from '@/lib/ebay/token-refresh';
+import { formatPSTTimestamp } from '@/utils/date';
 
 /**
  * POST /api/ebay/refresh-token
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       message: `Token refreshed successfully for ${accountName}`,
-      expiresAt: newExpiresAt.toISOString(),
+      expiresAt: formatPSTTimestamp(newExpiresAt),
       expiresIn,
     });
   } catch (error: any) {

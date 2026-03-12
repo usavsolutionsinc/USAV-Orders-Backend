@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createPurchaseReceive } from '@/lib/zoho';
+import { formatPSTTimestamp, getCurrentPSTDateKey, normalizePSTTimestamp } from '@/utils/date';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // ── 1. Create purchase receive in Zoho ──────────────────────────────────
     const receiveDate =
-      String(body?.receive_date || '').trim() || new Date().toISOString().substring(0, 10);
+      String(body?.receive_date || '').trim() || getCurrentPSTDateKey();
 
     const zohoReceive = await createPurchaseReceive({
       purchaseOrderId,
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
     ).trim();
 
     // ── 2. Persist to local DB ──────────────────────────────────────────────
-    const normalizedDate = `${receiveDate} 00:00:00`;
+    const normalizedDate = normalizePSTTimestamp(`${receiveDate} 00:00:00`, { fallbackToNow: true })!;
 
     await client.query('BEGIN');
 
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
       zoho_purchase_receive_id: purchaseReceiveId || null,
       zoho_warehouse_id: warehouseId,
       notes,
-      updated_at: new Date().toISOString(),
+      updated_at: formatPSTTimestamp(),
     };
 
     if (receivingCols.has('date_time')) {

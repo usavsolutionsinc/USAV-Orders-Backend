@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { formatPSTTimestamp } from '@/utils/date';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const SQUARE_PRODUCTION_BASE_URL = 'https://connect.squareup.com/v2';
@@ -246,7 +247,7 @@ export async function syncEcwidToSquare(options?: { dryRun?: boolean; batchSize?
       skippedSkus,
       warnings,
       errors,
-      timestamp: new Date().toISOString(),
+      timestamp: formatPSTTimestamp(),
     };
   }
 
@@ -291,7 +292,7 @@ export async function syncEcwidToSquare(options?: { dryRun?: boolean; batchSize?
       skippedSkus,
       warnings,
       errors,
-      timestamp: new Date().toISOString(),
+      timestamp: formatPSTTimestamp(),
     };
   }
 
@@ -305,7 +306,7 @@ export async function syncEcwidToSquare(options?: { dryRun?: boolean; batchSize?
     skippedSkus,
     warnings,
     errors,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
   };
 }
 

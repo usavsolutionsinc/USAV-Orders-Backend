@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { formatPSTTimestamp } from '@/utils/date';
 
 type Params = Promise<{ id: string }>;
 
@@ -109,7 +110,7 @@ export async function PATCH(
     if ('assigned_packer_id' in body) setField('assigned_packer_id', body.assigned_packer_id || null);
     if ('status' in body) {
       setField('status', body.status);
-      if (body.status === 'SHIPPED') setField('shipped_at', new Date().toISOString());
+      if (body.status === 'SHIPPED') setField('shipped_at', formatPSTTimestamp());
     }
 
     if (fields.length === 0) {

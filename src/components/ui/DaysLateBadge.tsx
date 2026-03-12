@@ -1,6 +1,6 @@
 'use client';
 
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
 type DaysLateVariant = 'full' | 'number';
 
@@ -56,4 +56,3 @@ export function DaysLateBadge({
     </span>
   );
 }
-

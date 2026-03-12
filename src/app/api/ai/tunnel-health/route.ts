@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getTunnelUrl, invalidateTunnelUrlCache } from '@/lib/ai/tunnel-config';
+import { formatPSTTimestamp } from '@/utils/date';
 
 export const runtime = 'nodejs';
 
@@ -10,7 +11,7 @@ export async function GET() {
     tunnelUrl = await getTunnelUrl();
   } catch (err: any) {
     return NextResponse.json(
-      { ok: false, tunnel_url: null, error: err?.message, timestamp: new Date().toISOString() },
+      { ok: false, tunnel_url: null, error: err?.message, timestamp: formatPSTTimestamp() },
       { status: 503 }
     );
   }
@@ -26,7 +27,7 @@ export async function GET() {
     return NextResponse.json({
       ok: upstream.ok,
       tunnel_url: tunnelUrl,
-      timestamp: new Date().toISOString(),
+      timestamp: formatPSTTimestamp(),
     });
   } catch {
     // If the tunnel is unreachable, invalidate the cache so the next request
@@ -34,7 +35,7 @@ export async function GET() {
     invalidateTunnelUrlCache();
 
     return NextResponse.json(
-      { ok: false, tunnel_url: tunnelUrl, error: 'Tunnel unreachable', timestamp: new Date().toISOString() },
+      { ok: false, tunnel_url: tunnelUrl, error: 'Tunnel unreachable', timestamp: formatPSTTimestamp() },
       { status: 503 }
     );
   }

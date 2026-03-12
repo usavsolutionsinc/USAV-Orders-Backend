@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { normalizePSTTimestamp } from '@/utils/date';
 
 type QueueKey =
   | 'all_unassigned'
@@ -144,6 +145,7 @@ async function getOrders(): Promise<WorkOrderRow[]> {
          AND wa.entity_id = o.id
          AND wa.work_type = 'TEST'
          AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+         AND wa.completed_at IS NULL
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
@@ -159,6 +161,7 @@ async function getOrders(): Promise<WorkOrderRow[]> {
          AND wa.entity_id = o.id
          AND wa.work_type = 'PACK'
          AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+         AND wa.completed_at IS NULL
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
@@ -173,6 +176,17 @@ async function getOrders(): Promise<WorkOrderRow[]> {
      WHERE NOT COALESCE(
              stn.is_carrier_accepted OR stn.is_in_transit
              OR stn.is_out_for_delivery OR stn.is_delivered, false
+           )
+       AND NOT EXISTS (
+             SELECT 1
+             FROM work_assignments wa_done
+             WHERE wa_done.entity_type = 'ORDER'
+               AND wa_done.entity_id = o.id
+               AND wa_done.work_type IN ('TEST', 'PACK')
+               AND (
+                 wa_done.status = 'DONE'
+                 OR wa_done.completed_at IS NOT NULL
+               )
            )
        AND o.shipment_id IS NOT NULL
      ORDER BY COALESCE(test_wa.deadline_at, o.created_at) ASC, o.id ASC
@@ -195,10 +209,10 @@ async function getOrders(): Promise<WorkOrderRow[]> {
     packerName: row.packer_name ? String(row.packer_name) : null,
     status: normalizeStatus(row.test_status),
     priority: Number(row.test_priority || 100),
-    deadlineAt: row.deadline_at ? new Date(row.deadline_at).toISOString() : null,
+    deadlineAt: normalizePSTTimestamp(row.deadline_at),
     notes: (row.test_notes || row.notes) ? String(row.test_notes || row.notes) : null,
-    assignedAt: row.test_assigned_at ? new Date(row.test_assigned_at).toISOString() : null,
-    updatedAt: row.test_updated_at ? new Date(row.test_updated_at).toISOString() : null,
+    assignedAt: normalizePSTTimestamp(row.test_assigned_at),
+    updatedAt: normalizePSTTimestamp(row.test_updated_at),
     primaryAssignmentId: row.test_assignment_id == null ? null : Number(row.test_assignment_id),
     secondaryAssignmentId: row.pack_assignment_id == null ? null : Number(row.pack_assignment_id),
     primaryWorkType: 'TEST' as const,
@@ -283,10 +297,10 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
       packerName: row.packer_name ? String(row.packer_name) : null,
       status: normalizeStatus(row.status),
       priority: Number(row.priority || 100),
-      deadlineAt: row.deadline_at ? new Date(row.deadline_at).toISOString() : null,
+      deadlineAt: normalizePSTTimestamp(row.deadline_at),
       notes: (row.notes || row.receiving_notes) ? String(row.notes || row.receiving_notes) : null,
-      assignedAt: row.assigned_at ? new Date(row.assigned_at).toISOString() : null,
-      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+      assignedAt: normalizePSTTimestamp(row.assigned_at),
+      updatedAt: normalizePSTTimestamp(row.updated_at),
       primaryAssignmentId: row.assignment_id == null ? null : Number(row.assignment_id),
       secondaryAssignmentId: null,
       primaryWorkType: 'TEST' as const,
@@ -321,6 +335,7 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
          AND wa.entity_id = rs.id
          AND wa.work_type = 'REPAIR'
          AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+         AND wa.completed_at IS NULL
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
@@ -331,7 +346,18 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
      ) wa ON TRUE
      LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
-     WHERE COALESCE(rs.status, '') NOT IN ('Shipped', 'Picked Up')
+     WHERE COALESCE(rs.status, '') NOT IN ('Done', 'Shipped', 'Picked Up')
+       AND NOT EXISTS (
+         SELECT 1
+         FROM work_assignments wa_done
+         WHERE wa_done.entity_type = 'REPAIR'
+           AND wa_done.entity_id = rs.id
+           AND wa_done.work_type = 'REPAIR'
+           AND (
+             wa_done.status = 'DONE'
+             OR wa_done.completed_at IS NOT NULL
+           )
+       )
      ORDER BY COALESCE(wa.deadline_at, wa.updated_at) ASC NULLS LAST, rs.id ASC`
   );
 
@@ -352,10 +378,10 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
       packerName: row.packer_name ? String(row.packer_name) : null,
       status: normalizeStatus(row.status),
       priority: Number(row.priority || 100),
-      deadlineAt: row.deadline_at ? new Date(row.deadline_at).toISOString() : null,
+      deadlineAt: normalizePSTTimestamp(row.deadline_at),
       notes: (row.notes || row.repair_notes) ? String(row.notes || row.repair_notes) : null,
-      assignedAt: row.assigned_at ? new Date(row.assigned_at).toISOString() : null,
-      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+      assignedAt: normalizePSTTimestamp(row.assigned_at),
+      updatedAt: normalizePSTTimestamp(row.updated_at),
       primaryAssignmentId: row.assignment_id == null ? null : Number(row.assignment_id),
       secondaryAssignmentId: null,
       primaryWorkType: 'REPAIR' as const,
@@ -422,10 +448,10 @@ async function getFbaShipments(): Promise<WorkOrderRow[]> {
     packerName: row.packer_name ? String(row.packer_name) : null,
     status: normalizeStatus(row.status || (row.native_tech_id ? 'ASSIGNED' : 'OPEN')),
     priority: Number(row.priority || 100),
-    deadlineAt: row.deadline_at ? new Date(row.deadline_at).toISOString() : null,
+    deadlineAt: normalizePSTTimestamp(row.deadline_at),
     notes: (row.notes || row.shipment_notes) ? String(row.notes || row.shipment_notes) : null,
-    assignedAt: row.assigned_at ? new Date(row.assigned_at).toISOString() : null,
-    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+    assignedAt: normalizePSTTimestamp(row.assigned_at),
+    updatedAt: normalizePSTTimestamp(row.updated_at),
     primaryAssignmentId: row.assignment_id == null ? null : Number(row.assignment_id),
     secondaryAssignmentId: null,
     primaryWorkType: 'QA' as const,
@@ -492,10 +518,10 @@ async function getSkuStock(): Promise<WorkOrderRow[]> {
       packerName: row.packer_name ? String(row.packer_name) : null,
       status: normalizeStatus(row.status),
       priority: Number(row.priority || 100),
-      deadlineAt: row.deadline_at ? new Date(row.deadline_at).toISOString() : null,
+      deadlineAt: normalizePSTTimestamp(row.deadline_at),
       notes: row.notes ? String(row.notes) : null,
-      assignedAt: row.assigned_at ? new Date(row.assigned_at).toISOString() : null,
-      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+      assignedAt: normalizePSTTimestamp(row.assigned_at),
+      updatedAt: normalizePSTTimestamp(row.updated_at),
       primaryAssignmentId: row.assignment_id == null ? null : Number(row.assignment_id),
       secondaryAssignmentId: null,
       primaryWorkType: 'STOCK_REPLENISH' as const,
@@ -651,10 +677,7 @@ export async function PATCH(request: NextRequest) {
     const packerIdRaw = Number(body?.assignedPackerId);
     const priorityRaw = Number(body?.priority);
     const status = normalizeStatus(body?.status);
-    const deadlineAt =
-      body?.deadlineAt && !Number.isNaN(Date.parse(String(body.deadlineAt)))
-        ? new Date(String(body.deadlineAt)).toISOString()
-        : null;
+    const deadlineAt = normalizePSTTimestamp(body?.deadlineAt);
     const notes = String(body?.notes || '').trim() || null;
 
     if (!['ORDER', 'REPAIR', 'FBA_SHIPMENT', 'RECEIVING', 'SKU_STOCK'].includes(entityType)) {

@@ -7,7 +7,7 @@ import { PhotoGallery } from './PhotoGallery';
 import { getStaffName } from '@/utils/staff';
 import { getTrackingUrl, getAccountSourceLabel } from '@/utils/order-links';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
-import { formatDateTimePST } from '@/lib/timezone';
+import { formatDateTimePST } from '@/utils/date';
 import { useOrderAssignment } from '@/hooks';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { OrderIdFieldBlock } from '@/components/shipped/details-panel/blocks/OrderIdFieldBlock';

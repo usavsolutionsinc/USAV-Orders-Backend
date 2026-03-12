@@ -3,6 +3,8 @@ import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishPackerLogChanged, publishOrderChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
+import { createStationActivityLog } from '@/lib/station-activity';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
   '1': 4,
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
     }
 
-    const packDate = packDateTime ? new Date(packDateTime) : new Date();
+    const canonicalPackDate = normalizePSTTimestamp(packDateTime, { fallbackToNow: true })!;
 
     const photoUrlList: string[] = Array.isArray(packerPhotosUrl)
       ? packerPhotosUrl.filter((u: any) => typeof u === 'string' && u.trim())
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     console.log('=== DATABASE UPDATE ===');
     console.log('Staff ID:', staffId);
-    console.log('Pack Date:', packDate);
+    console.log('Pack Date:', canonicalPackDate);
     console.log('Photos Count:', photoUrlList.length);
 
     // Begin transaction
@@ -92,10 +94,25 @@ export async function POST(req: NextRequest) {
           packed_by
         ) VALUES ($1, $2, $3, $4, $5)
         RETURNING id
-      `, [resolvedShipmentId, resolvedScanRef, trackingType, packDate, staffId]);
+      `, [resolvedShipmentId, resolvedScanRef, trackingType, canonicalPackDate, staffId]);
 
       const packerLogId = insertResult.rows[0]?.id;
       console.log('Inserted into packer_logs, ID:', packerLogId);
+
+      await createStationActivityLog(client, {
+        station: 'PACK',
+        activityType: 'PACK_COMPLETED',
+        staffId,
+        shipmentId: resolvedShipmentId ?? null,
+        scanRef: resolvedScanRef ?? shippingTrackingNumber,
+        packerLogId,
+        notes: 'Mobile pack scan',
+        metadata: {
+          tracking_type: trackingType,
+          photos_count: photoUrlList.length,
+        },
+        createdAt: canonicalPackDate,
+      });
 
       // 2. Insert photo URLs into the unified photos table
       if (packerLogId && photoUrlList.length > 0) {
@@ -171,7 +188,7 @@ export async function POST(req: NextRequest) {
       const shippedOrderId = updateResult.rows[0]?.id ?? null;  // may be null for unlinked rows
       const packerRow = {
         id: packerLogId,
-        created_at: packDate.toISOString(),
+        created_at: canonicalPackDate,
         shipping_tracking_number: shippingTrackingNumber,
         packed_by: staffId,
         order_id: updateResult.rows[0]?.order_id ?? null,

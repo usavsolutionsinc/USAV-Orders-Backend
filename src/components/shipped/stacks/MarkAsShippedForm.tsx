@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { formatDateTimePST } from '@/lib/timezone';
+import { formatDateTimePST } from '@/utils/date';
 import { getStaffName } from '@/utils/staff';
 
 function toLocalDateTimeInputValue(date: Date): string {

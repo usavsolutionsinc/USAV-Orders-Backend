@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { formatPSTTimestamp } from '@/utils/date';
 
 type Params = Promise<{ id: string; itemId: string }>;
 
@@ -147,13 +148,13 @@ export async function PATCH(
       const staffId = body.staff_id || null;
       if (body.status === 'READY_TO_GO') {
         setField('ready_by_staff_id', staffId);
-        setField('ready_at', new Date().toISOString());
+        setField('ready_at', formatPSTTimestamp());
       } else if (body.status === 'LABEL_ASSIGNED') {
         setField('labeled_by_staff_id', staffId);
-        setField('labeled_at', new Date().toISOString());
+        setField('labeled_at', formatPSTTimestamp());
       } else if (body.status === 'SHIPPED') {
         setField('shipped_by_staff_id', staffId);
-        setField('shipped_at', new Date().toISOString());
+        setField('shipped_at', formatPSTTimestamp());
       }
     }
 

@@ -8,7 +8,7 @@ import { PhotoGallery } from './PhotoGallery';
 import { getStaffName } from '@/utils/staff';
 import { getTrackingUrl, getAccountSourceLabel } from '@/utils/order-links';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
-import { formatDateTimePST } from '@/lib/timezone';
+import { formatDateTimePST } from '@/utils/date';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { OrderIdFieldBlock } from '@/components/shipped/details-panel/blocks/OrderIdFieldBlock';
 import { SerialNumberFieldBlock } from '@/components/shipped/details-panel/blocks/SerialNumberFieldBlock';

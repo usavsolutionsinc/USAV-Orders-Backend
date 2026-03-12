@@ -5,6 +5,7 @@ import {
   getRepairsChannelName,
   getStationChannelName,
 } from '@/lib/realtime/channels';
+import { formatPSTTimestamp } from '@/utils/date';
 
 type OrderChangedPayload = {
   orderIds: number[];
@@ -84,7 +85,7 @@ export async function publishOrderChanged(payload: OrderChangedPayload) {
     type: 'order.changed',
     orderIds: normalizedIds,
     source: payload.source,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
   });
 }
 
@@ -99,7 +100,7 @@ export async function publishOrderTested(payload: OrderTestedPayload) {
     orderId,
     testedBy,
     source: payload.source,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
   });
 }
 
@@ -111,7 +112,7 @@ export async function publishRepairChanged(payload: RepairChangedPayload) {
     type: 'repair.changed',
     repairIds: normalizedIds,
     source: payload.source,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
   });
 }
 
@@ -123,7 +124,7 @@ export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
     prompt: payload.prompt,
     answer: payload.answer,
     model: payload.model,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
   });
 }
 
@@ -135,7 +136,7 @@ export async function publishTechLogChanged(payload: TechLogChangedPayload) {
     rowId: payload.rowId,
     row: payload.row,
     source: payload.source,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
   });
 }
 
@@ -147,7 +148,7 @@ export async function publishPackerLogChanged(payload: PackerLogChangedPayload) 
     packerLogId: payload.packerLogId,
     row: payload.row,
     source: payload.source,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
   });
 }
 
@@ -158,6 +159,6 @@ export async function publishReceivingLogChanged(payload: ReceivingLogChangedPay
     rowId: payload.rowId,
     row: payload.row,
     source: payload.source,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
   });
 }

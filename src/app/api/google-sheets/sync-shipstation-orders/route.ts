@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { toPSTDateKey } from '@/utils/date';
 
 function normalizeHeader(value: unknown) {
   return String(value || '')
@@ -48,10 +49,7 @@ function parseShipDate(value: unknown): string | null {
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return null;
 
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(date.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return toPSTDateKey(date) || null;
 }
 
 function parseCsvLine(line: string): string[] {

@@ -1,4 +1,5 @@
 import pool from '../db';
+import { formatPSTTimestamp } from '@/utils/date';
 
 // Order record with shipping information
 export interface ShippedOrder {
@@ -119,7 +120,7 @@ const ORDER_SERIALS_CTE = `
     SELECT
       o.id,
       o.shipment_id,
-      to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
+      to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
       o.order_id,
       o.product_title,
       o.quantity,
@@ -135,14 +136,14 @@ const ORDER_SERIALS_CTE = `
       stn.latest_status_category AS shipment_status,
       stn.is_delivered,
       stn.carrier,
-      to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+      to_char(o.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
       'order'::text AS row_source,
       NULL::text AS exception_reason,
       NULL::text AS exception_status,
       wa_t.assigned_tech_id   AS tester_id,
       wa_p.assigned_packer_id AS packer_id,
       pl.packed_by,
-      to_char(pl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+      to_char(pl.created_at, 'YYYY-MM-DD HH24:MI:SS') AS pack_date_time,
       pl.packer_photos_url,
       pl.tracking_type,
       COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
@@ -234,7 +235,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         SELECT
           o.id,
           o.shipment_id,
-          to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
+          to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
           o.order_id,
           o.product_title,
           o.quantity,
@@ -250,11 +251,11 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           stn.latest_status_category AS shipment_status,
           stn.is_delivered,
           stn.carrier,
-          to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+          to_char(o.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
           wa_t.assigned_tech_id   AS tester_id,
           wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
-          to_char(pl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+          to_char(pl.created_at, 'YYYY-MM-DD HH24:MI:SS') AS pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
@@ -482,13 +483,13 @@ export async function getActiveOrders(options?: {
          OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
        stn.latest_status_category AS shipment_status,
        stn.carrier,
-       to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
+       to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
        o.out_of_stock,
-       to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
+       to_char(o.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
        wa_t.assigned_tech_id   AS tester_id,
        wa_p.assigned_packer_id AS packer_id,
        pl.packed_by,
-       to_char(pl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+       to_char(pl.created_at, 'YYYY-MM-DD HH24:MI:SS') AS pack_date_time,
        COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
        MIN(tsn.tested_by)::int AS tested_by
      FROM orders o
@@ -740,7 +741,7 @@ export async function deleteOrder(id: number): Promise<boolean> {
  * Skip an order (mark with a skip status in status_history)
  */
 export async function skipOrder(id: number, reason?: string): Promise<boolean> {
-  const now = new Date().toISOString();
+  const now = formatPSTTimestamp();
   const result = await pool.query(
     `UPDATE orders
      SET status_history = COALESCE(status_history, '[]'::jsonb) || $1::jsonb

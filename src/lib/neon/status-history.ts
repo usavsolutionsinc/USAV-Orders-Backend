@@ -1,3 +1,5 @@
+import { formatDateTimePST, formatPSTTimestamp } from '@/utils/date';
+
 export interface StatusHistoryEntry {
   status: string;
   timestamp: string;
@@ -21,7 +23,7 @@ export function appendStatusHistory(
   
   history.push({
     status: newStatus,
-    timestamp: new Date().toISOString(),
+    timestamp: formatPSTTimestamp(),
     previous_status: previousStatus,
   });
   
@@ -55,18 +57,10 @@ export function getLastStatusChange(
 }
 
 /**
- * Format ISO timestamp to readable format
+ * Format PST timestamp to readable format
  */
-export function formatStatusTimestamp(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+export function formatStatusTimestamp(timestamp: string): string {
+  return formatDateTimePST(timestamp);
 }
 
 /**

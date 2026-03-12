@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Loader2, Package, Trash2, X } from '@/components/Icons';
-import { formatDateTimePST } from '@/lib/timezone';
+import { formatDateTimePST } from '@/utils/date';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { PoLinesSection } from './receiving/PoLinesSection';

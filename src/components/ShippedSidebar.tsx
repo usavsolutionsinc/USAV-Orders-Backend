@@ -9,7 +9,7 @@ import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
-import { formatDateTimePST } from '@/lib/timezone';
+import { formatDateTimePST } from '@/utils/date';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { isFbaOrder } from '@/utils/order-platform';

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { formatPSTTimestamp } from '@/utils/date';
 
 export async function POST() {
     const client = await pool.connect();
@@ -374,7 +375,7 @@ export async function POST() {
             tables: tables,
             indexes_created: indexes.length,
             default_staff_inserted: 5,
-            timestamp: new Date().toISOString(),
+            timestamp: formatPSTTimestamp(),
         });
     } catch (error) {
         await client.query('ROLLBACK');

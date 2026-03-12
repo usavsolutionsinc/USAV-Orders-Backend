@@ -15,6 +15,7 @@
 
 import pool from '@/lib/db';
 import { listPurchaseOrders, getPurchaseOrderById } from '@/lib/zoho';
+import { formatApiOffsetTimestamp, formatPSTTimestamp, getCurrentPSTDateKey, normalizePSTTimestamp } from '@/utils/date';
 
 type AnyRow = Record<string, unknown>;
 
@@ -75,7 +76,7 @@ export async function importZohoPurchaseOrderToReceiving(
   const poNumber = asStr(data.purchaseorder_number, data.po_number);
   const vendor = asStr(data.vendor_name);
   const poDate = asStr(data.date, data.purchase_date);
-  const normalizedDate = poDate ? `${poDate.substring(0, 10)} 00:00:00` : new Date().toISOString();
+  const normalizedDate = normalizePSTTimestamp(poDate ? `${poDate.substring(0, 10)} 00:00:00` : `${getCurrentPSTDateKey()} 00:00:00`, { fallbackToNow: true })!;
   const warehouseId = asStr(data.warehouse_id);
   const lineItems = Array.isArray(data.line_items) ? data.line_items : [];
 
@@ -99,7 +100,7 @@ export async function importZohoPurchaseOrderToReceiving(
       is_return: false,
       needs_test: false,
       zoho_warehouse_id: warehouseId,
-      updated_at: new Date().toISOString(),
+      updated_at: formatPSTTimestamp(),
     };
     if (recCols.has('date_time')) recValues.date_time = normalizedDate;
     if (recCols.has('zoho_purchaseorder_id')) recValues.zoho_purchaseorder_id = zohoId;
@@ -268,7 +269,7 @@ export async function syncZohoPurchaseOrdersToReceiving(
   let lastModifiedTime = String(opts.last_modified_time || '').trim() || undefined;
   if (!lastModifiedTime && opts.days_back && Number(opts.days_back) > 0) {
     const cutoff = new Date(Date.now() - Number(opts.days_back) * 24 * 60 * 60 * 1000);
-    lastModifiedTime = cutoff.toISOString().replace(/\.\d{3}Z$/, '+0000');
+    lastModifiedTime = formatApiOffsetTimestamp(cutoff);
   }
 
   const summary: BulkSyncSummary = {

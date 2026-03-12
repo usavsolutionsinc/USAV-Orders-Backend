@@ -7,6 +7,7 @@ import {
   getZohoRefreshTokenFromKv,
   setZohoTokens,
 } from '@/lib/zoho-kv';
+import { getCurrentPSTDateKey } from '@/utils/date';
 
 const ZOHO_ORG_ID = process.env.ZOHO_ORG_ID;
 const ZOHO_DOMAIN = process.env.ZOHO_DOMAIN || 'accounts.zoho.com';
@@ -393,7 +394,7 @@ export async function createPurchaseReceive(params: {
 
   const body = {
     purchaseorder_id: params.purchaseOrderId,
-    date: params.date || new Date().toISOString().substring(0, 10),
+    date: params.date || getCurrentPSTDateKey(),
     warehouse_id: params.warehouseId,
     line_items: params.lineItems.map((l) => ({
       line_item_id: l.line_item_id,

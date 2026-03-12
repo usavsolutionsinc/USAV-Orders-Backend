@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { normalizePSTTimestamp } from '@/utils/date';
 
 export interface RepairQueueItem {
   kind: 'REPAIR';
@@ -88,11 +89,23 @@ export async function GET(req: NextRequest) {
             AND entity_id   = rs.id
             AND work_type   = 'REPAIR'
             AND status      IN ('ASSIGNED', 'IN_PROGRESS')
+            AND completed_at IS NULL
           ORDER BY id DESC
           LIMIT 1
         ) wa ON TRUE
         LEFT JOIN staff s ON s.id = wa.assigned_tech_id
         WHERE rs.status NOT IN (${closedPlaceholders})
+          AND NOT EXISTS (
+            SELECT 1
+            FROM work_assignments wa_done
+            WHERE wa_done.entity_type = 'REPAIR'
+              AND wa_done.entity_id = rs.id
+              AND wa_done.work_type = 'REPAIR'
+              AND (
+                wa_done.status = 'DONE'
+                OR wa_done.completed_at IS NOT NULL
+              )
+          )
           AND (
                wa.id IS NULL
             OR wa.assigned_tech_id IS NULL
@@ -129,11 +142,23 @@ export async function GET(req: NextRequest) {
             AND entity_id   = rs.id
             AND work_type   = 'REPAIR'
             AND status      IN ('ASSIGNED', 'IN_PROGRESS')
+            AND completed_at IS NULL
           ORDER BY id DESC
           LIMIT 1
         ) wa ON TRUE
         LEFT JOIN staff s ON s.id = wa.assigned_tech_id
         WHERE rs.status NOT IN (${closedPlaceholders})
+          AND NOT EXISTS (
+            SELECT 1
+            FROM work_assignments wa_done
+            WHERE wa_done.entity_type = 'REPAIR'
+              AND wa_done.entity_id = rs.id
+              AND wa_done.work_type = 'REPAIR'
+              AND (
+                wa_done.status = 'DONE'
+                OR wa_done.completed_at IS NOT NULL
+              )
+          )
         ORDER BY COALESCE(wa.deadline_at, rs.created_at) ASC NULLS LAST, wa.priority ASC NULLS LAST, rs.id ASC
       `;
       params = [...CLOSED_STATUSES];
@@ -146,7 +171,7 @@ export async function GET(req: NextRequest) {
       repairId:         row.repairId,
       assignmentId:     row.assignmentId ?? null,
       assignmentStatus: row.assignmentStatus ?? null,
-      deadlineAt:       row.deadlineAt ? new Date(row.deadlineAt).toISOString() : null,
+      deadlineAt:       normalizePSTTimestamp(row.deadlineAt),
       ticketNumber:     row.ticketNumber || '',
       productTitle:     row.productTitle || '',
       issue:            row.issue || '',

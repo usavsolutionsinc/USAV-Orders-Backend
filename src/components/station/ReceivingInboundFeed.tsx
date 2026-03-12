@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Package } from '@/components/Icons';
 import { QA_BADGE, COND_LABEL } from './receiving-constants';
-import { formatDateTimePST } from '@/lib/timezone';
+import { formatDateTimePST } from '@/utils/date';
 import type { ReceivingDetailsLog } from './ReceivingDetailsStack';
 
 interface FeedLog extends ReceivingDetailsLog {

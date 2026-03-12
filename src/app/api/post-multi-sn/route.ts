@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { formatPSTTimestamp } from '@/lib/timezone';
+import { formatPSTTimestamp } from '@/utils/date';
 
 export async function POST(request: NextRequest) {
     try {

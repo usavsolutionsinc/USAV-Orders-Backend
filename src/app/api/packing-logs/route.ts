@@ -6,8 +6,9 @@ import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
-import { formatPSTTimestamp } from '@/lib/timezone';
+import { formatPSTTimestamp, normalizePSTTimestamp, getCurrentPSTDateKey } from '@/utils/date';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { createStationActivityLog } from '@/lib/station-activity';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -29,8 +30,7 @@ function resolvePackerStaffId(rawId: string | number | null | undefined): number
 
 /** Compute Mon–Fri PST week range from the current server time. */
 function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
-    const ts = formatPSTTimestamp();
-    const dateKey = ts.substring(0, 10);
+    const dateKey = getCurrentPSTDateKey();
     const [year, month, day] = dateKey.split('-').map(Number);
     const date = new Date(year, month - 1, day);
     const dow = date.getDay();
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
         }
         
-        const packDateTime = normalizeScanTimestamp(timestamp) || formatPSTTimestamp();
+        const packDateTime = normalizePSTTimestamp(normalizeScanTimestamp(timestamp), { fallbackToNow: true })!;
         
         const photoUrls: string[] = Array.isArray(photos) ? photos.filter((u: any) => typeof u === 'string' && u.trim()) : [];
 
@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
             }
 
             if (orderLookup.rows.length === 0) {
-                await upsertOpenOrderException({
+                const upsertResult = await upsertOpenOrderException({
                     shippingTrackingNumber: scanInput,
                     sourceStation: 'packer',
                     staffId,
@@ -204,6 +204,7 @@ export async function POST(req: NextRequest) {
                     reason: 'not_found',
                     notes: 'Packer scan: tracking not found in orders',
                 });
+                const ordersExceptionId = upsertResult.exception?.id ?? null;
 
                 const { shipmentId: nfShipmentId, scanRef: nfScanRef } = await resolveShipmentId(scanInput);
 
@@ -263,6 +264,22 @@ export async function POST(req: NextRequest) {
                     quantity: null,
                     sku: null,
                 };
+
+                await createStationActivityLog(pool, {
+                    station: 'PACK',
+                    activityType: 'PACK_COMPLETED',
+                    staffId,
+                    shipmentId: nfShipmentId ?? null,
+                    scanRef: nfScanRef ?? scanInput,
+                    ordersExceptionId,
+                    packerLogId: notFoundPackerLogId,
+                    notes: 'Pack scan not matched to order',
+                    metadata: {
+                        tracking_type: classification.trackingType,
+                        tracking: scanInput,
+                    },
+                    createdAt: notFoundCreatedAt,
+                });
 
                 await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
                 if (notFoundRecord.id) await prependToPackerLogsCache(staffId, notFoundRecord);
@@ -360,6 +377,21 @@ export async function POST(req: NextRequest) {
                 sku: order.sku ?? null,
             };
 
+            await createStationActivityLog(pool, {
+                station: 'PACK',
+                activityType: 'PACK_COMPLETED',
+                staffId,
+                shipmentId: orderShipmentId,
+                scanRef: order.tracking_number ?? scanInput,
+                packerLogId: foundPackerLogId,
+                notes: 'Order packed successfully',
+                metadata: {
+                    tracking_type: classification.trackingType,
+                    order_id: order.order_id ?? null,
+                },
+                createdAt: foundCreatedAt,
+            });
+
             await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
             if (foundRecord.id) await prependToPackerLogsCache(staffId, foundRecord);
 
@@ -413,6 +445,19 @@ export async function POST(req: NextRequest) {
             quantity: null,
             sku: null,
         };
+
+        await createStationActivityLog(pool, {
+            station: 'PACK',
+            activityType: 'PACK_SCAN',
+            staffId,
+            scanRef: classification.normalizedInput,
+            packerLogId: nonOrderPackerLogId,
+            notes: `Pack ${classification.trackingType} scan`,
+            metadata: {
+                tracking_type: classification.trackingType,
+            },
+            createdAt: nonOrderInsert.rows[0]?.created_at ?? packDateTime,
+        });
 
         let skuUpdated = false;
         if (classification.trackingType === 'SKU' && classification.skuBase) {
@@ -486,7 +531,5 @@ function normalizeScanTimestamp(input: any): string | null {
         if (!m || !d || !y) return null;
         return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(h || 0).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:${String(s || 0).padStart(2, '0')}`;
     }
-    const parsed = new Date(raw);
-    if (isNaN(parsed.getTime())) return null;
-    return formatPSTTimestamp(parsed);
+    return normalizePSTTimestamp(raw);
 }

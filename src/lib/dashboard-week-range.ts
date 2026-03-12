@@ -1,4 +1,4 @@
-import { getCurrentPSTDateKey } from '@/lib/timezone';
+import { getCurrentPSTDateKey } from '@/utils/date';
 
 export function getWeekRangeForOffset(weekOffset: number, anchorDateKey?: string) {
   const baseDateKey = anchorDateKey || getCurrentPSTDateKey();

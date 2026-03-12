@@ -1,4 +1,5 @@
 import pool from '../db';
+import { normalizePSTTimestamp } from '@/utils/date';
 
 export interface ReceivingLog {
   id: number;
@@ -160,7 +161,7 @@ export async function createReceivingLog(params: CreateReceivingLogParams): Prom
     [
       params.trackingNumber,
       params.carrier ?? null,
-      params.receivedAt ?? new Date().toISOString(),
+      normalizePSTTimestamp(params.receivedAt, { fallbackToNow: true }),
       params.qaStatus ?? 'PENDING',
       params.dispositionCode ?? 'HOLD',
       params.conditionGrade ?? 'BRAND_NEW',

@@ -7,6 +7,7 @@ import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { normalizePSTTimestamp } from '@/utils/date';
 import {
     ensureOrdersExceptionsTable,
     getTrackingLast8,
@@ -168,7 +169,7 @@ async function executeSyncTechSerialNumbers() {
                     }
                 }
 
-                const testDateTime = parsedTestDateTime.toISOString();
+                const testDateTime = normalizePSTTimestamp(parsedTestDateTime, { fallbackToNow: true })!;
                 const existingByTestDateTime = await client.query(
                     `SELECT id FROM tech_serial_numbers WHERE created_at = $1::timestamp LIMIT 1`,
                     [testDateTime]
@@ -328,7 +329,7 @@ async function executeSyncPackerLogs() {
                         created_at,
                         packed_by
                     ) VALUES ($1, $2, $3, $4, $5)`,
-                    [plShipmentId, plScanRef, 'ORDERS', packDateTime || null, packerSheet.packedBy]
+                    [plShipmentId, plScanRef, 'ORDERS', normalizePSTTimestamp(packDateTime) ?? null, packerSheet.packedBy]
                 );
 
                 insertedForSheet++;

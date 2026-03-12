@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from '@/components/Icons';
-import { formatDateTimePST } from '@/lib/timezone';
+import { formatDateTimePST } from '@/utils/date';
 
 // Lifecycle row shape (post-migration)
 interface FBAShipmentLifecycleRow {

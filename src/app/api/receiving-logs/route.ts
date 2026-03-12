@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
+import { getCurrentPSTDateKey } from '@/utils/date';
 
 export async function GET(request: NextRequest) {
     try {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
         const needsTestParam = searchParams.get('needs_test');
         const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd, needsTestParam });
 
-        const today = new Date().toISOString().substring(0, 10);
+        const today = getCurrentPSTDateKey();
         const cacheTTL = weekEnd && weekEnd < today ? 86400 : 30;
         const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=15` };
 
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
         const selectFields: string[] = [
             'id',
-            `(${dateColumn} AT TIME ZONE 'America/Los_Angeles')::text AS timestamp`,
+            `to_char(${dateColumn}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp`,
             'receiving_tracking_number AS tracking',
             'carrier AS status',
             `${countExpr} AS count`,
@@ -58,15 +59,15 @@ export async function GET(request: NextRequest) {
             hasColumn('needs_test') ? 'needs_test' : 'FALSE AS needs_test',
             hasColumn('assigned_tech_id') ? 'assigned_tech_id' : 'NULL::int AS assigned_tech_id',
             hasColumn('target_channel') ? 'target_channel' : "NULL::text AS target_channel",
-            hasColumn('received_at') ? "(received_at AT TIME ZONE 'America/Los_Angeles')::text AS received_at" : 'NULL::text AS received_at',
+            hasColumn('received_at') ? "to_char(received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at" : 'NULL::text AS received_at',
             hasColumn('received_by') ? 'received_by' : 'NULL::int AS received_by',
-            hasColumn('unboxed_at') ? "(unboxed_at AT TIME ZONE 'America/Los_Angeles')::text AS unboxed_at" : 'NULL::text AS unboxed_at',
+            hasColumn('unboxed_at') ? "to_char(unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS unboxed_at" : 'NULL::text AS unboxed_at',
             hasColumn('unboxed_by') ? 'unboxed_by' : 'NULL::int AS unboxed_by',
             hasColumn('zoho_purchase_receive_id') ? 'zoho_purchase_receive_id' : "NULL::text AS zoho_purchase_receive_id",
             hasColumn('zoho_warehouse_id') ? 'zoho_warehouse_id' : "NULL::text AS zoho_warehouse_id",
         ];
 
-        // Build optional week pre-filter (UTC ±1 day buffer for PST boundary records).
+        // Build optional week pre-filter with a one-day boundary buffer for edge-case records.
         const queryParams: any[] = [];
         let weekClause = '';
         if (weekStart && weekEnd) {

@@ -4,6 +4,7 @@ import { createAssignment } from '@/lib/neon/assignments-queries';
 import { createZendeskTicket } from '@/lib/zendesk';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
+import { formatPSTTimestamp } from '@/utils/date';
 
 export async function POST(req: NextRequest) {
     try {
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        const isoTimestamp = new Date().toISOString();
+        const postedAt = formatPSTTimestamp();
 
         const productString = normalizedProductTitle;
 
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 
         // Step 2: Insert into repair_service table in NEON DB
         const repairRecord = await createRepair({
-            createdAt: isoTimestamp,
+            createdAt: postedAt,
             ticketNumber: zendeskTicketNumber,
             contactInfo,
             productTitle: productString,
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
             id: dbId,
             receiptData: {
                 rsNumber: finalRSNumber,
-                dropOffDate: isoTimestamp,
+                dropOffDate: postedAt,
                 customer: {
                     name: customer.name,
                     phone: customer.phone,

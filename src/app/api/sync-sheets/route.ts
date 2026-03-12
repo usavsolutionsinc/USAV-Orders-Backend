@@ -4,6 +4,7 @@ import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
 import {
     ensureOrdersExceptionsTable,
     getTrackingLast8,
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
                 ? 'Sync completed with errors'
                 : 'Synced shipped, tech, and packer sheets to Neon DB',
             results,
-            timestamp: new Date().toISOString(),
+            timestamp: formatPSTTimestamp(),
         }, { status: hasErrors ? 500 : 200 });
     } catch (error: any) {
         console.error('Sync error:', error);
@@ -300,7 +301,7 @@ async function syncTechSheets(params: {
                     continue;
                 }
 
-                const testDateTime = parsedTestDateTime.toISOString();
+                const testDateTime = normalizePSTTimestamp(parsedTestDateTime, { fallbackToNow: true })!;
 
                 const cacheKey = getTrackingLast8(shippingTracking) || shippingTracking.toUpperCase();
                 const hasMatchingOrder = orderMatchCache.has(cacheKey)
@@ -510,7 +511,7 @@ async function syncPackerSheets(params: {
                         created_at,
                         packed_by
                     ) VALUES ($1, $2, $3, $4, $5)`,
-                    [plShipmentId, plScanRef, trackingType, packDateTime, packedBy]
+                    [plShipmentId, plScanRef, trackingType, normalizePSTTimestamp(packDateTime) ?? null, packedBy]
                 );
 
                 inserted++;

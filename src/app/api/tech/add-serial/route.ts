@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { toISOStringPST } from '@/lib/timezone';
+import { formatPSTTimestamp } from '@/utils/date';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { createStationActivityLog } from '@/lib/station-activity';
 
 export async function POST(req: NextRequest) {
     try {
@@ -128,8 +129,38 @@ export async function POST(req: NextRequest) {
                 .map((s) => s.trim().toUpperCase())
                 .filter(Boolean);
 
+        const isFbaLikeTracking = /^(X0|B0|FBA)/i.test(scannedTracking);
+        const normalizedFnsku = isFbaLikeTracking ? scannedTracking.toUpperCase() : null;
+        let unmatchedFnskuLog: null | {
+            id: number;
+            fba_shipment_id: number | null;
+            fba_shipment_item_id: number | null;
+        } = null;
+
+        if (normalizedFnsku) {
+            const unmatchedFnskuLogResult = await pool.query(
+                `SELECT l.id, l.fba_shipment_id, l.fba_shipment_item_id
+                 FROM fba_fnsku_logs l
+                 WHERE l.fnsku = $1
+                   AND l.staff_id = $2
+                   AND l.source_stage = 'TECH'
+                   AND l.event_type = 'SCANNED'
+                   AND NOT EXISTS (
+                     SELECT 1
+                     FROM tech_serial_numbers tsn
+                     WHERE tsn.fnsku_log_id = l.id
+                       AND tsn.serial_number IS NOT NULL
+                       AND BTRIM(tsn.serial_number) <> ''
+                   )
+                 ORDER BY l.created_at ASC, l.id ASC
+                 LIMIT 1`,
+                [normalizedFnsku, staffId]
+            );
+            unmatchedFnskuLog = unmatchedFnskuLogResult.rows[0] ?? null;
+        }
+
         // One-row-per-tracking model: append serial to existing row.
-        // Priority: shipment_id FK → scan_ref match → legacy text key-18 match.
+        // Priority: shipment_id FK → exact fnsku match → scan_ref key match.
         let existingRowResult: { rows: Array<{ id: number; serial_number: string }> } = { rows: [] };
 
         if (resolvedScan.shipmentId) {
@@ -142,6 +173,18 @@ export async function POST(req: NextRequest) {
                 [resolvedScan.shipmentId]
             );
             if (byFK.rows.length > 0) existingRowResult = byFK;
+        }
+
+        if (existingRowResult.rows.length === 0 && isFbaLikeTracking) {
+            const byFnsku = await pool.query(
+                `SELECT id, serial_number
+                 FROM tech_serial_numbers
+                 WHERE fnsku = $1
+                 ORDER BY id ASC
+                 LIMIT 1`,
+                [scannedTracking.toUpperCase()]
+            );
+            if (byFnsku.rows.length > 0) existingRowResult = byFnsku;
         }
 
         if (existingRowResult.rows.length === 0) {
@@ -159,13 +202,14 @@ export async function POST(req: NextRequest) {
 
         // Legacy text-match fallback removed — all rows now use shipment_id / scan_ref after migration.
 
-        const isFbaLikeTracking = /^(X0|B0|FBA)/i.test(scannedTracking);
         const shouldAllowDuplicateSerial =
             Boolean(allowFbaDuplicates) || isFbaLikeTracking || order?.account_source === 'fba';
 
         let updatedSerialList: string[] = [];
+        let targetTechSerialId: number | null = null;
         if (existingRowResult.rows.length > 0) {
             const row = existingRowResult.rows[0];
+            targetTechSerialId = Number(row.id);
             const existingSerials = parseSerials(row.serial_number);
 
             if (existingSerials.includes(upperSerial) && !shouldAllowDuplicateSerial) {
@@ -180,9 +224,34 @@ export async function POST(req: NextRequest) {
                 `UPDATE tech_serial_numbers
                  SET serial_number = $1,
                      updated_at = date_trunc('second', NOW()),
-                     tested_by = $2
+                     tested_by = $2,
+                     fnsku = CASE
+                       WHEN $4 THEN COALESCE(fnsku, $5)
+                       ELSE fnsku
+                     END,
+                     fnsku_log_id = CASE
+                       WHEN $4 AND fnsku_log_id IS NULL THEN COALESCE($6, fnsku_log_id)
+                       ELSE fnsku_log_id
+                     END,
+                     fba_shipment_id = CASE
+                       WHEN $4 AND fba_shipment_id IS NULL THEN COALESCE($7, fba_shipment_id)
+                       ELSE fba_shipment_id
+                     END,
+                     fba_shipment_item_id = CASE
+                       WHEN $4 AND fba_shipment_item_id IS NULL THEN COALESCE($8, fba_shipment_item_id)
+                       ELSE fba_shipment_item_id
+                     END
                  WHERE id = $3`,
-                [updatedSerialList.join(', '), staffId, row.id]
+                [
+                    updatedSerialList.join(', '),
+                    staffId,
+                    row.id,
+                    isFbaLikeTracking,
+                    normalizedFnsku,
+                    unmatchedFnskuLog?.id ?? null,
+                    unmatchedFnskuLog?.fba_shipment_id ?? null,
+                    unmatchedFnskuLog?.fba_shipment_item_id ?? null,
+                ]
             );
         } else {
             updatedSerialList = [upperSerial];
@@ -190,24 +259,74 @@ export async function POST(req: NextRequest) {
             if (resolvedScan.shipmentId) {
                 await pool.query(
                     `INSERT INTO tech_serial_numbers
-                     (shipment_id, scan_ref, serial_number, serial_type, tested_by)
-                     VALUES ($1, $2, $3, $4, $5)`,
-                    [resolvedScan.shipmentId, resolvedScan.scanRef ?? null, updatedSerialList.join(', '), serialType, staffId]
+                     (shipment_id, scan_ref, serial_number, serial_type, tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                    [
+                        resolvedScan.shipmentId,
+                        resolvedScan.scanRef ?? null,
+                        updatedSerialList.join(', '),
+                        serialType,
+                        staffId,
+                        normalizedFnsku,
+                        unmatchedFnskuLog?.id ?? null,
+                        unmatchedFnskuLog?.fba_shipment_id ?? null,
+                        unmatchedFnskuLog?.fba_shipment_item_id ?? null,
+                    ]
                 );
+                const insertedRow = await pool.query(
+                    `SELECT id FROM tech_serial_numbers WHERE shipment_id = $1 ORDER BY id DESC LIMIT 1`,
+                    [resolvedScan.shipmentId]
+                );
+                targetTechSerialId = insertedRow.rows[0]?.id ? Number(insertedRow.rows[0].id) : null;
             } else {
                 await pool.query(
                     `INSERT INTO tech_serial_numbers
-                     (scan_ref, serial_number, serial_type, tested_by)
-                     VALUES ($1, $2, $3, $4)`,
-                    [resolvedScan.scanRef ?? scannedTracking, updatedSerialList.join(', '), serialType, staffId]
+                     (scan_ref, serial_number, serial_type, tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [
+                        resolvedScan.scanRef ?? scannedTracking,
+                        updatedSerialList.join(', '),
+                        serialType,
+                        staffId,
+                        normalizedFnsku,
+                        unmatchedFnskuLog?.id ?? null,
+                        unmatchedFnskuLog?.fba_shipment_id ?? null,
+                        unmatchedFnskuLog?.fba_shipment_item_id ?? null,
+                    ]
                 );
+                const insertedRow = await pool.query(
+                    `SELECT id
+                     FROM tech_serial_numbers
+                     WHERE scan_ref = $1
+                     ORDER BY id DESC LIMIT 1`,
+                    [resolvedScan.scanRef ?? scannedTracking]
+                );
+                targetTechSerialId = insertedRow.rows[0]?.id ? Number(insertedRow.rows[0].id) : null;
             }
         }
+
+        await createStationActivityLog(pool, {
+            station: 'TECH',
+            activityType: 'SERIAL_ADDED',
+            staffId,
+            shipmentId: resolvedScan.shipmentId ?? null,
+            scanRef: resolvedScan.scanRef ?? scannedTracking,
+            fnsku: normalizedFnsku,
+            fbaShipmentId: unmatchedFnskuLog?.fba_shipment_id ?? null,
+            fbaShipmentItemId: unmatchedFnskuLog?.fba_shipment_item_id ?? null,
+            techSerialNumberId: targetTechSerialId,
+            notes: `Serial added: ${upperSerial}`,
+            metadata: {
+                serial: upperSerial,
+                serial_type: serialType,
+            },
+            createdAt: formatPSTTimestamp(),
+        });
 
         // Best-effort status history update. Do not fail serial posting if this metadata write fails.
         if (order?.id) {
             try {
-                const isoTimestamp = toISOStringPST(new Date().toISOString());
+                const isoTimestamp = formatPSTTimestamp();
                 await pool.query(`
                     UPDATE orders
                     SET status_history = COALESCE(status_history, '[]'::jsonb) || 

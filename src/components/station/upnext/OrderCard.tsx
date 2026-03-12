@@ -8,7 +8,7 @@ import { ShipByDate } from '@/components/ui/ShipByDate';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getActiveStaff } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';

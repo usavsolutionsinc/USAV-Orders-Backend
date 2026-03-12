@@ -5,9 +5,8 @@ import { motion } from 'framer-motion';
 import { Loader2, Search } from '@/components/Icons';
 import { CopyableText } from '@/components/ui/CopyableText';
 import WeekHeader from '@/components/ui/WeekHeader';
-import { formatDateWithOrdinal } from '@/lib/date-format';
+import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 

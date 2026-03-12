@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
+import { formatPSTTimestamp } from '@/utils/date';
 
 export async function POST() {
   try {
@@ -7,7 +8,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       ...result,
-      timestamp: new Date().toISOString(),
+      timestamp: formatPSTTimestamp(),
     });
   } catch (error: any) {
     console.error('Error syncing orders_exceptions:', error);

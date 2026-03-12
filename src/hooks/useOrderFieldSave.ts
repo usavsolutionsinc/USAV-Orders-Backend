@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { useOrderAssignment } from '@/hooks';
-import { getCurrentPSTDateKey } from '@/lib/timezone';
+import { getCurrentPSTDateKey } from '@/utils/date';
 
 interface UseOrderFieldSaveOptions {
   orderId: number;

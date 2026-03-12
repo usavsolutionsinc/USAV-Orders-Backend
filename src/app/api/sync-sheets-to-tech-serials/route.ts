@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { formatPSTTimestamp } from '@/utils/date';
 
 export const maxDuration = 60;
 
@@ -155,7 +156,7 @@ export async function POST(req: NextRequest) {
                 success: true,
                 message: 'Tech sheets synced to tech_serial_numbers table',
                 results,
-                timestamp: new Date().toISOString()
+                timestamp: formatPSTTimestamp()
             });
 
         } finally {

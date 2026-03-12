@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { syncAllAccounts, getSyncStatus } from '@/lib/ebay/sync';
 import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
+import { formatPSTTimestamp } from '@/utils/date';
 
 /**
  * POST /api/ebay/sync
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
       exceptionsSync,
       results,
       durationMs,
-      timestamp: new Date().toISOString(),
+      timestamp: formatPSTTimestamp(),
     });
   } catch (error: any) {
     const durationMs = Date.now() - startedAt;
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
         runId,
         error: error.message,
         durationMs,
-        timestamp: new Date().toISOString(),
+        timestamp: formatPSTTimestamp(),
       },
       { status: 500 }
     );
@@ -97,7 +98,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       accounts: status,
-      timestamp: new Date().toISOString(),
+      timestamp: formatPSTTimestamp(),
     });
   } catch (error: any) {
     console.error('Error fetching sync status:', error);

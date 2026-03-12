@@ -5,7 +5,7 @@ import { ExternalLink, Check, ChevronUp, ChevronDown, PackageCheck } from '@/com
 import { motion } from 'framer-motion';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
-import { toPSTDateKey } from '@/lib/timezone';
+import { toPSTDateKey } from '@/utils/date';
 import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { dispatchCloseShippedDetails } from '@/utils/events';

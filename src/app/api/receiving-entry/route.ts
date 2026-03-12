@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getCarrier } from '@/utils/tracking';
-import { formatPSTTimestamp } from '@/lib/timezone';
+import { formatPSTTimestamp } from '@/utils/date';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
@@ -437,7 +437,7 @@ export async function GET(req: NextRequest) {
         const result = await pool.query(
             `SELECT
                 id,
-                (${dateColumn} AT TIME ZONE 'America/Los_Angeles')::text AS timestamp,
+                to_char(${dateColumn}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp,
                 receiving_tracking_number AS tracking,
                 carrier,
                 ${countExpr} AS quantity

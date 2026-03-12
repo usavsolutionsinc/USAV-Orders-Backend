@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, Check, Loader2, Package, X } from '@/components/Icons';
-import { formatTimePST } from '@/lib/timezone';
+import { formatTimePST } from '@/utils/date';
 import { invalidateReceivingCache } from '@/lib/receivingCache';
 
 interface ScanEntry {

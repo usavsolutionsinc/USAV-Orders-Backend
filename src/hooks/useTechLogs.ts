@@ -6,6 +6,8 @@ import { useAblyChannel } from './useAblyChannel';
 
 export interface TechRecord {
   id: number;
+  source_row_id?: number;
+  source_kind?: 'tech_serial' | 'fba_scan' | 'tech_scan';
   order_db_id?: number | null;
   shipment_id?: number | null;
   created_at: string;

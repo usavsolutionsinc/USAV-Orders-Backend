@@ -2,7 +2,7 @@
 
 import { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from '../Icons';
-import { getCurrentPSTDateKey } from '@/lib/timezone';
+import { getCurrentPSTDateKey } from '@/utils/date';
 
 interface WeekRange {
   startStr: string;

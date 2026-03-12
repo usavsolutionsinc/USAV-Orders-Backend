@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { syncEcwidToSquare } from '@/lib/ecwid-square/sync';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
+import { formatPSTTimestamp } from '@/utils/date';
 
 /**
  * POST /api/ecwid-square/sync
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
       {
         success: false,
         error: message,
-        timestamp: new Date().toISOString(),
+        timestamp: formatPSTTimestamp(),
       },
       { status: 500 }
     );

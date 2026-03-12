@@ -7,13 +7,13 @@ export const ebayAccounts = pgTable('ebay_accounts', {
   ebayUserId: varchar('ebay_user_id', { length: 100 }),
   accessToken: text('access_token').notNull(),
   refreshToken: text('refresh_token').notNull(),
-  tokenExpiresAt: timestamp('token_expires_at').notNull(),
-  refreshTokenExpiresAt: timestamp('refresh_token_expires_at').notNull(),
+  tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }).notNull(),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }).notNull(),
   marketplaceId: varchar('marketplace_id', { length: 20 }).default('EBAY_US'),
-  lastSyncDate: timestamp('last_sync_date'),
+  lastSyncDate: timestamp('last_sync_date', { withTimezone: true }),
   isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
 // Staff table
@@ -23,7 +23,7 @@ export const staff = pgTable('staff', {
   role: varchar('role', { length: 50 }).notNull(),
   employeeId: varchar('employee_id', { length: 50 }).unique(),
   active: boolean('active').default(true),
-  createdAt: timestamp('created_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
 export const qaStatusEnum = pgEnum('qa_status_enum', [
@@ -113,11 +113,11 @@ export const receivingTasks = pgTable('receiving_tasks', {
   trackingNumber: varchar('tracking_number', { length: 100 }).notNull(),
   orderNumber: varchar('order_number', { length: 100 }),
   status: varchar('status', { length: 20 }).default('pending'),
-  receivedDate: timestamp('received_date'),
-  processedDate: timestamp('processed_date'),
+  receivedDate: timestamp('received_date', { withTimezone: true }),
+  processedDate: timestamp('processed_date', { withTimezone: true }),
   notes: text('notes'),
   staffId: integer('staff_id').references(() => staff.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
 // Source of truth tables - generic columns for all
@@ -149,7 +149,7 @@ export const customers = pgTable('customers', {
   shippingCity: text('shipping_city'),
   shippingState: text('shipping_state'),
   shippingPostalCode: text('shipping_postal_code'),
-  createdAt: timestamp('created_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
 // Orders table - Updated schema (serial tracking moved to tech_serial_numbers)
@@ -173,8 +173,8 @@ export const orders = pgTable('orders', {
   statusHistory: jsonb('status_history').default([]),
   // is_shipped removed from schema — shipped state is derived from shipping_tracking_numbers
   accountSource: text('account_source'),
-  orderDate: timestamp('order_date'),
-  createdAt: timestamp('created_at').defaultNow(),
+  orderDate: timestamp('order_date', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
 // Packer logs - audit trail for all packer scans (orders, SKU, FNSKU, FBA, etc.)
@@ -189,7 +189,28 @@ export const packerLogs = pgTable('packer_logs', {
   scanRef: text('scan_ref'),
   trackingType: varchar('tracking_type', { length: 20 }).notNull(),
   packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Station activity logs - cross-station visibility/query ledger.
+// Fact tables still own specialized writes; this table records operator activity.
+export const stationActivityLogs = pgTable('station_activity_logs', {
+  id: serial('id').primaryKey(),
+  station: varchar('station', { length: 20 }).notNull(),
+  activityType: varchar('activity_type', { length: 30 }).notNull(),
+  shipmentId: bigint('shipment_id', { mode: 'number' }),
+  scanRef: text('scan_ref'),
+  fnsku: text('fnsku').references(() => fbaFnskus.fnsku, { onDelete: 'set null' }),
+  staffId: integer('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  ordersExceptionId: integer('orders_exception_id').references(() => ordersExceptions.id, { onDelete: 'set null' }),
+  fbaShipmentId: integer('fba_shipment_id').references(() => fbaShipments.id, { onDelete: 'set null' }),
+  fbaShipmentItemId: integer('fba_shipment_item_id').references(() => fbaShipmentItems.id, { onDelete: 'set null' }),
+  techSerialNumberId: integer('tech_serial_number_id'),
+  packerLogId: integer('packer_log_id'),
+  notes: text('notes'),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -212,9 +233,9 @@ export const receiving = pgTable('receiving', {
   id: serial('id').primaryKey(),
   receivingTrackingNumber: text('receiving_tracking_number'),
   carrier: text('carrier'),
-  receivedAt: timestamp('received_at'),
+  receivedAt: timestamp('received_at', { withTimezone: true }),
   receivedBy: integer('received_by').references(() => staff.id, { onDelete: 'set null' }),
-  unboxedAt: timestamp('unboxed_at'),
+  unboxedAt: timestamp('unboxed_at', { withTimezone: true }),
   unboxedBy: integer('unboxed_by').references(() => staff.id, { onDelete: 'set null' }),
   qaStatus: qaStatusEnum('qa_status').notNull().default('PENDING'),
   dispositionCode: dispositionEnum('disposition_code').notNull().default('HOLD'),
@@ -337,14 +358,14 @@ export const skuStock = pgTable('sku_stock', {
 });
 export const sku = pgTable('sku', {
   id: serial('id').primaryKey(),
-  dateTime: timestamp('date_time'),
+  dateTime: timestamp('date_time', { withTimezone: true }),
   staticSku: text('static_sku'),
   serialNumber: text('serial_number'),
   shippingTrackingNumber: text('shipping_tracking_number'),
   notes: text('notes'),
   location: text('location'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
 // Repair Service table
@@ -448,7 +469,7 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   fnskuLogId: bigint('fnsku_log_id', { mode: 'number' }),
   fbaShipmentId: integer('fba_shipment_id').references(() => fbaShipments.id, { onDelete: 'set null' }),
   fbaShipmentItemId: integer('fba_shipment_item_id').references(() => fbaShipmentItems.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
@@ -462,8 +483,8 @@ export const ordersExceptions = pgTable('orders_exceptions', {
   exceptionReason: varchar('exception_reason', { length: 50 }).notNull().default('not_found'),
   notes: text('notes'),
   status: varchar('status', { length: 20 }).notNull().default('open'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
 // Type exports

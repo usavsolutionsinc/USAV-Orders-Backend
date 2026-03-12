@@ -3,52 +3,11 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
-import { invalidateCacheTags, createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
-import { formatPSTTimestamp } from '@/lib/timezone';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { formatPSTTimestamp } from '@/utils/date';
 import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
-
-/** Compute Mon–Fri PST week range from the current PST timestamp. */
-function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
-    const ts = formatPSTTimestamp(); // 'YYYY-MM-DDTHH:MM:SS' in PST
-    const dateKey = ts.substring(0, 10);
-    const [year, month, day] = dateKey.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    const dow = date.getDay();
-    const daysFromMonday = dow === 0 ? 6 : dow - 1;
-    const monday = new Date(date);
-    monday.setDate(date.getDate() - daysFromMonday);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    const fmt = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return { startStr: fmt(monday), endStr: fmt(friday) };
-}
-
-/**
- * Prepend a single new TechRecord to the current week's Redis cache entry
- * (keyed by techId + week range) without nuking the whole cache.
- */
-async function prependToTechLogsCache(techId: number, newRecord: Record<string, unknown>) {
-    const { startStr, endStr } = getCurrentPSTWeekRange();
-    const cacheKey = createCacheLookupKey({
-        techId: String(techId),
-        limit: 1000,
-        offset: 0,
-        weekStart: startStr,
-        weekEnd: endStr,
-    });
-    const existing = await getCachedJson<any[]>('api:tech-logs', cacheKey);
-    if (Array.isArray(existing)) {
-        await setCachedJson(
-            'api:tech-logs',
-            cacheKey,
-            [newRecord, ...existing].slice(0, 1000),
-            120,
-            ['tech-logs'],
-        );
-    }
-}
+import { createStationActivityLog } from '@/lib/station-activity';
 
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
@@ -252,9 +211,10 @@ export async function POST(req: NextRequest) {
                 const fnskuFound = isFbaLikeTracking
                     ? await hasMatchingFbaFnsku(scannedTracking, client)
                     : false;
+                let ordersExceptionId: number | null = null;
 
                 if (!isFbaLikeTracking || !fnskuFound) {
-                    await upsertOpenOrderException({
+                    const upsertResult = await upsertOpenOrderException({
                         shippingTrackingNumber: scannedTracking,
                         sourceStation: 'tech',
                         staffId: testedBy,
@@ -264,88 +224,67 @@ export async function POST(req: NextRequest) {
                             ? 'Tech scan: FNSKU not found in fba_fnskus'
                             : 'Tech scan: tracking not found in orders',
                     }, client);
+                    ordersExceptionId = upsertResult.exception?.id ?? null;
                 }
 
-                const exactTrackingRow = await client.query(
-                    `SELECT id, serial_number
-                     FROM tech_serial_numbers
+                const existingScanLog = await client.query(
+                    `SELECT id, created_at::text AS created_at
+                     FROM station_activity_logs
                      WHERE (
                         $1::bigint IS NOT NULL
                         AND shipment_id = $1
                      ) OR (
                         scan_ref = $2
                      )
+                       AND station = 'TECH'
+                       AND activity_type = 'TRACKING_SCANNED'
+                       AND staff_id = $3
                      ORDER BY id ASC
                      LIMIT 1`,
-                    [resolvedScan.shipmentId, resolvedScan.scanRef ?? scannedTracking]
+                    [resolvedScan.shipmentId, resolvedScan.scanRef ?? scannedTracking, testedBy]
                 );
 
-                let techSerialId: number | null = null;
+                let techActivityId: number | null = null;
                 let techTestDateTime: string | null = null;
 
-                if (exactTrackingRow.rows.length === 0) {
-                    const insertResult = await client.query(
-                        `INSERT INTO tech_serial_numbers (
-                            shipment_id, scan_ref, serial_number, tested_by
-                        ) VALUES ($1, $2, $3, $4)
-                        RETURNING id, created_at::text AS created_at`,
-                        [resolvedScan.shipmentId, resolvedScan.scanRef, '', testedBy]
-                    );
-                    techSerialId = insertResult.rows[0]?.id ?? null;
-                    techTestDateTime = insertResult.rows[0]?.created_at ?? null;
+                if (existingScanLog.rows.length === 0) {
+                    techTestDateTime = formatPSTTimestamp();
+                    techActivityId = await createStationActivityLog(client, {
+                        station: 'TECH',
+                        activityType: 'TRACKING_SCANNED',
+                        staffId: testedBy,
+                        shipmentId: resolvedScan.shipmentId ?? null,
+                        scanRef: resolvedScan.scanRef ?? scannedTracking,
+                        ordersExceptionId,
+                        notes: 'Tracking scan without matched order',
+                        metadata: {
+                            order_found: false,
+                            tracking: scannedTracking,
+                        },
+                        createdAt: techTestDateTime,
+                    });
                 } else {
                     const updateResult = await client.query(
-                        `UPDATE tech_serial_numbers
+                        `UPDATE station_activity_logs
                          SET updated_at = date_trunc('second', NOW()),
-                             tested_by = $1
-                         WHERE id = $2
+                             notes = COALESCE(notes, $1),
+                             orders_exception_id = COALESCE($2, orders_exception_id)
+                         WHERE id = $3
                          RETURNING id, created_at::text AS created_at`,
-                        [testedBy, exactTrackingRow.rows[0].id]
+                        ['Tracking scan without matched order', ordersExceptionId, existingScanLog.rows[0].id]
                     );
-                    techSerialId = updateResult.rows[0]?.id ?? exactTrackingRow.rows[0].id ?? null;
+                    techActivityId = updateResult.rows[0]?.id ?? existingScanLog.rows[0].id ?? null;
                     techTestDateTime = updateResult.rows[0]?.created_at ?? null;
                 }
-                const serialSource =
-                    exactTrackingRow.rows[0]?.serial_number ??
-                    existingTracking.rows[0]?.serial_number ??
-                    '';
 
                 await client.query('COMMIT');
                 await invalidateCacheTags(['orders-next', 'tech-logs']); // exceptions upserted above
 
-                if (techSerialId && techTestDateTime && exactTrackingRow.rows.length === 0) {
-                    const newRow = {
-                        id: techSerialId,
-                        order_db_id: null,
-                        created_at: techTestDateTime,
-                        shipping_tracking_number: scannedTracking,
-                        serial_number: '',
-                        tested_by: testedBy,
-                        order_id: null,
-                        product_title: 'Unknown Product',
-                        item_number: null,
-                        sku: null,
-                        condition: null,
-                        notes: null,
-                        account_source: null,
-                        quantity: null,
-                        is_shipped: false,
-                        ship_by_date: null,
-                        out_of_stock: null,
-                    };
-                    await prependToTechLogsCache(testedBy, newRow);
-                    await publishTechLogChanged({
-                        techId: testedBy,
-                        action: 'insert',
-                        rowId: techSerialId,
-                        row: newRow,
-                        source: 'tech.scan-tracking',
-                    });
-                } else if (techSerialId) {
+                if (techActivityId) {
                     await publishTechLogChanged({
                         techId: testedBy,
                         action: 'update',
-                        rowId: techSerialId,
+                        rowId: techActivityId,
                         source: 'tech.scan-tracking',
                     });
                 }
@@ -354,7 +293,8 @@ export async function POST(req: NextRequest) {
                     success: true,
                     found: true,
                     orderFound: false,
-                    techSerialId,
+                    techSerialId: null,
+                    techActivityId,
                     warning: (!isFbaLikeTracking || !fnskuFound)
                         ? 'Tracking number not found in orders. Added to exceptions.'
                         : 'FBA/FNSKU processed without exception.',
@@ -367,7 +307,7 @@ export async function POST(req: NextRequest) {
                         condition: 'N/A',
                         notes: 'Tracking recorded in orders_exceptions for reconciliation',
                         tracking: scannedTracking,
-                        serialNumbers: parseSerials(serialSource),
+                        serialNumbers: [],
                         testDateTime: techTestDateTime,
                         testedBy,
                         accountSource: null,
@@ -385,30 +325,51 @@ export async function POST(req: NextRequest) {
                 });
             }
 
-            // Create tracking row once if missing. This is the single row that serial scans append to.
-            let techSerialId: number | null = null;
+            let techActivityId: number | null = null;
             let techTestDateTime: string | null = null;
 
-            if (existingTracking.rows.length === 0) {
-                const insertResult = await client.query(
-                    `INSERT INTO tech_serial_numbers (
-                        shipment_id, scan_ref, serial_number, tested_by
-                    ) VALUES ($1, $2, $3, $4)
-                    RETURNING id, created_at::text AS created_at`,
-                    [resolvedScan.shipmentId, resolvedScan.scanRef, '', testedBy]
-                );
-                techSerialId = insertResult.rows[0]?.id ?? null;
-                techTestDateTime = insertResult.rows[0]?.created_at ?? null;
+            const existingScanLog = await client.query(
+                `SELECT id, created_at::text AS created_at
+                 FROM station_activity_logs
+                 WHERE (
+                    $1::bigint IS NOT NULL
+                    AND shipment_id = $1
+                 ) OR (
+                    scan_ref = $2
+                 )
+                   AND station = 'TECH'
+                   AND activity_type = 'TRACKING_SCANNED'
+                   AND staff_id = $3
+                 ORDER BY id ASC
+                 LIMIT 1`,
+                [resolvedScan.shipmentId, resolvedScan.scanRef ?? scannedTracking, testedBy]
+            );
+
+            if (existingScanLog.rows.length === 0) {
+                techTestDateTime = formatPSTTimestamp();
+                techActivityId = await createStationActivityLog(client, {
+                    station: 'TECH',
+                    activityType: 'TRACKING_SCANNED',
+                    staffId: testedBy,
+                    shipmentId: resolvedScan.shipmentId ?? null,
+                    scanRef: resolvedScan.scanRef ?? scannedTracking,
+                    metadata: {
+                        order_found: true,
+                        order_id: row.order_id ?? null,
+                        tracking: trackingValue,
+                    },
+                    createdAt: techTestDateTime,
+                });
             } else {
                 const updateResult = await client.query(
-                    `UPDATE tech_serial_numbers
+                    `UPDATE station_activity_logs
                      SET updated_at = date_trunc('second', NOW()),
-                         tested_by = $1
+                         staff_id = $1
                      WHERE id = $2
                      RETURNING id, created_at::text AS created_at`,
-                    [testedBy, existingTracking.rows[0].id]
+                    [testedBy, existingScanLog.rows[0].id]
                 );
-                techSerialId = updateResult.rows[0]?.id ?? existingTracking.rows[0].id ?? null;
+                techActivityId = updateResult.rows[0]?.id ?? existingScanLog.rows[0].id ?? null;
                 techTestDateTime = updateResult.rows[0]?.created_at ?? null;
             }
             const serialNumbers = parseSerials(existingTracking.rows[0]?.serial_number);
@@ -417,39 +378,11 @@ export async function POST(req: NextRequest) {
 
             await invalidateCacheTags(['tech-logs']);
 
-            if (techSerialId && techTestDateTime && existingTracking.rows.length === 0) {
-                const newRow = {
-                    id: techSerialId,
-                    order_db_id: row.id ?? null,
-                    created_at: techTestDateTime,
-                    shipping_tracking_number: trackingValue,
-                    serial_number: '',
-                    tested_by: testedBy,
-                    order_id: row.order_id ?? null,
-                    product_title: row.product_title ?? null,
-                    item_number: row.item_number ?? null,
-                    sku: row.sku ?? null,
-                    condition: row.condition ?? null,
-                    notes: row.notes ?? null,
-                    account_source: row.account_source ?? null,
-                    quantity: row.quantity ?? null,
-                    is_shipped: row.is_shipped ?? false,
-                    ship_by_date: row.ship_by_date ?? null,
-                    out_of_stock: row.out_of_stock ?? null,
-                };
-                await prependToTechLogsCache(testedBy, newRow);
-                await publishTechLogChanged({
-                    techId: testedBy,
-                    action: 'insert',
-                    rowId: techSerialId,
-                    row: newRow,
-                    source: 'tech.scan-tracking',
-                });
-            } else if (techSerialId) {
+            if (techActivityId) {
                 await publishTechLogChanged({
                     techId: testedBy,
                     action: 'update',
-                    rowId: techSerialId,
+                    rowId: techActivityId,
                     source: 'tech.scan-tracking',
                 });
             }
@@ -464,7 +397,8 @@ export async function POST(req: NextRequest) {
                 success: true,
                 found: true,
                 orderFound: true,
-                techSerialId,
+                techSerialId: existingTracking.rows[0]?.id ?? null,
+                techActivityId,
                 order: {
                     id: row.id,
                     shipmentId: resolvedScan.shipmentId ?? null,

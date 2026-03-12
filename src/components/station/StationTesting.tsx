@@ -90,40 +90,44 @@ export default function StationTesting({
       setFbaFeedback(null);
       setFbaError(null);
       try {
-        const res = await fetch('/api/fba/logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fnsku,
-            source_stage: 'TECH',
-            event_type: 'SCANNED',
-            staff_id: Number(userId),
-            station: 'TECH_STATION',
-          }),
-        });
+        const res = await fetch(`/api/tech/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&techId=${encodeURIComponent(userId)}`);
         const data = await res.json();
-        if (!res.ok || !data.success) {
+        if (!res.ok || !data.found) {
           setFbaError(data.error || 'FNSKU scan failed');
           return;
         }
-        // Pull live totals for this FNSKU from the summary endpoint
-        const summaryRes = await fetch(
-          `/api/fba/logs/summary?q=${encodeURIComponent(fnsku)}&limit=1`
-        );
-        const summaryData = await summaryRes.json();
-        const row = summaryData?.rows?.[0];
+
+        setActiveOrder({
+          id: data.order?.id ?? null,
+          orderId: data.order?.orderId ?? 'FNSKU',
+          productTitle: data.order?.productTitle ?? data.order?.tracking ?? fnsku,
+          itemNumber: data.order?.itemNumber ?? null,
+          sku: data.order?.sku ?? 'N/A',
+          condition: data.order?.condition ?? 'N/A',
+          notes: data.order?.notes ?? '',
+          tracking: data.order?.tracking ?? fnsku,
+          serialNumbers: Array.isArray(data.order?.serialNumbers) ? data.order.serialNumbers : [],
+          testDateTime: data.order?.testDateTime ?? null,
+          testedBy: data.order?.testedBy ?? null,
+          quantity: parseInt(String(data.order?.quantity || 1), 10) || 1,
+          shipByDate: data.order?.shipByDate ?? null,
+          createdAt: data.order?.createdAt ?? null,
+          orderFound: data.orderFound !== false,
+        });
+
         setFbaFeedback({
           fnsku,
-          product_title: data.fnsku_meta?.product_title ?? row?.product_title ?? null,
-          asin: data.fnsku_meta?.asin ?? row?.asin ?? null,
-          sku: data.fnsku_meta?.sku ?? row?.sku ?? null,
-          log_id: Number(data.log?.id),
-          tech_scanned_qty: Number(row?.tech_scanned_qty ?? 0),
-          pack_ready_qty: Number(row?.pack_ready_qty ?? 0),
-          shipped_qty: Number(row?.shipped_qty ?? 0),
-          available_to_ship: Number(row?.available_to_ship ?? 0),
-          shipment_ref: row?.shipment_ref ?? null,
+          product_title: data.order?.productTitle ?? null,
+          asin: data.order?.asin ?? null,
+          sku: data.order?.sku ?? null,
+          log_id: Number(data.fnskuLogId ?? 0),
+          tech_scanned_qty: Number(data.summary?.tech_scanned_qty ?? 0),
+          pack_ready_qty: Number(data.summary?.pack_ready_qty ?? 0),
+          shipped_qty: Number(data.summary?.shipped_qty ?? 0),
+          available_to_ship: Number(data.summary?.available_to_ship ?? 0),
+          shipment_ref: data.shipment?.shipment_ref ?? null,
         });
+        triggerGlobalRefresh();
       } catch {
         setFbaError('Network error — FNSKU scan could not be saved');
       } finally {

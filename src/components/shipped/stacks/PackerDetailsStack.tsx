@@ -5,7 +5,7 @@ import { PackageCheck, Trash2 } from '@/components/Icons';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { DetailsStackProps } from './types';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
-import { formatDatePST, formatDateTimePST, toPSTDateKey } from '@/lib/timezone';
+import { formatDatePST, formatDateTimePST, toPSTDateKey } from '@/utils/date';
 import { getStaffName } from '@/utils/staff';
 import { getActiveStaff } from '@/lib/staffCache';
 

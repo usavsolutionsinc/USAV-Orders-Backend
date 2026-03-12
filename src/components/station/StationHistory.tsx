@@ -3,8 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Package, Loader2, List, ChevronRight, Copy, Check, History } from '../Icons';
 import { motion, AnimatePresence } from 'framer-motion';
-import { formatTimePST, toPSTDateKey } from '@/lib/timezone';
-import { formatDateWithOrdinal } from '@/lib/date-format';
+import { formatDateWithOrdinal, formatTimePST, toPSTDateKey } from '@/utils/date';
 
 interface HistoryLog {
     id: string;

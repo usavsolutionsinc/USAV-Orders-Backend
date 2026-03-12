@@ -46,7 +46,7 @@ function detectType(val: string) {
 
   if (input.includes(':')) return 'SKU';
   if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420)/i)) return 'TRACKING';
-  if (input.match(/^X0/i)) return 'FNSKU';
+  if (input.match(/^(X0|B0)/i)) return 'FNSKU';
   if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input.toUpperCase())) return 'COMMAND';
   return 'SERIAL';
 }

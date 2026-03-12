@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { createStationActivityLog } from '@/lib/station-activity';
 
 // Pack-station FNSKU scan.
 // Writes into the shared fba_fnsku_logs ledger and, when an open shipment item
@@ -127,6 +128,23 @@ export async function POST(request: NextRequest) {
         }),
       ]
     );
+
+    await createStationActivityLog(client, {
+      station: 'PACK',
+      activityType: 'FBA_READY',
+      staffId: Number(staff_id),
+      scanRef: normalizedFnsku,
+      fnsku: normalizedFnsku,
+      fbaShipmentId: updatedItem?.shipment_id ?? null,
+      fbaShipmentItemId: updatedItem?.id ?? null,
+      notes: openItem ? 'Pack station FNSKU ready scan' : 'Pack station FNSKU scan without open item',
+      metadata: {
+        fnsku_log_id: Number(fnskuLogRes.rows[0].id),
+        product_title: meta.product_title ?? null,
+        sku: meta.sku ?? null,
+        quantity: 1,
+      },
+    });
 
     const summaryRes = await client.query(
       `SELECT

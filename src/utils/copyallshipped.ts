@@ -1,6 +1,6 @@
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getStaffName } from './staff';
-import { formatDateTimePST } from '@/lib/timezone';
+import { formatDateTimePST } from '@/utils/date';
 
 export function parseShippedDate(dateStr: string): Date {
   if (dateStr.includes('/')) {

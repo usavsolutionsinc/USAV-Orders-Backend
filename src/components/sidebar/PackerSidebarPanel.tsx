@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import StaffSelector from '@/components/StaffSelector';
 import StationPacking from '@/components/station/StationPacking';
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getPackerThemeById } from '@/utils/staff-colors';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useActiveStaffDirectory } from './hooks';

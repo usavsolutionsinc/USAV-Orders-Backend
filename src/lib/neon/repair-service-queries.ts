@@ -1,4 +1,5 @@
 import pool from '../db';
+import { normalizePSTTimestamp } from '@/utils/date';
 
 export interface RSRecord {
   id: number;
@@ -30,8 +31,8 @@ export type RepairStatus = typeof REPAIR_STATUS_OPTIONS[number];
 function mapRepairRow(row: any): RSRecord {
   return {
     id: Number(row.id),
-    created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
-    updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : '',
+    created_at: normalizePSTTimestamp(row.created_at) || '',
+    updated_at: normalizePSTTimestamp(row.updated_at) || '',
     ticket_number: row.ticket_number || '',
     contact_info: row.contact_info || '',
     product_title: row.product_title || '',
@@ -162,7 +163,7 @@ export interface CreateRepairParams {
 }
 
 export async function createRepair(params: CreateRepairParams): Promise<RSRecord> {
-  const createdAt = params.createdAt ?? new Date().toISOString();
+  const createdAt = normalizePSTTimestamp(params.createdAt, { fallbackToNow: true })!;
 
   const result = await pool.query(
     `INSERT INTO repair_service

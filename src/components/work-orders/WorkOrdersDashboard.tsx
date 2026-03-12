@@ -242,8 +242,12 @@ export function WorkOrdersDashboard() {
     }
   }, [refreshRows]);
 
-  // Row is "assigned" only when BOTH tech and packer are set
+  // Row is "assigned" only when BOTH tech and packer are set.
+  // Within the unassigned set, show fully unassigned rows first, then partially assigned rows.
   const unassignedRows = rows.filter((r) => !r.techId || !r.packerId);
+  const fullyUnassignedRows = unassignedRows.filter((r) => !r.techId && !r.packerId);
+  const techAssignedUnassignedRows = unassignedRows.filter((r) => !!r.techId && !r.packerId);
+  const remainingUnassignedRows = unassignedRows.filter((r) => !fullyUnassignedRows.includes(r) && !techAssignedUnassignedRows.includes(r));
   const assignedRows = rows.filter((r) => r.techId && r.packerId);
 
   return (
@@ -303,7 +307,8 @@ export function WorkOrdersDashboard() {
                   </span>
                   <div className="h-px flex-1 bg-orange-200" />
                 </motion.div>
-                {unassignedRows.map((row, i) => (
+
+                {fullyUnassignedRows.map((row, i) => (
                   <WorkOrderTableRow
                     key={row.id}
                     row={row}
@@ -311,6 +316,46 @@ export function WorkOrdersDashboard() {
                     getStaffName={getStaffName}
                     onClick={handleRowClick}
                     onOpenAssign={(r) => setAssigningState({ rows: unassignedRows, startIndex: i })}
+                  />
+                ))}
+
+                {techAssignedUnassignedRows.length > 0 && (
+                  <>
+                    {fullyUnassignedRows.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeOut' }}
+                        className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50"
+                      >
+                        <div className="h-px flex-1 bg-blue-200" />
+                        <span className="text-[11px] font-black uppercase tracking-widest text-blue-600">
+                          {techAssignedUnassignedRows.length} tech assigned
+                        </span>
+                        <div className="h-px flex-1 bg-blue-200" />
+                      </motion.div>
+                    )}
+                    {techAssignedUnassignedRows.map((row, i) => (
+                      <WorkOrderTableRow
+                        key={row.id}
+                        row={row}
+                        isSelected={selectedId === row.id}
+                        getStaffName={getStaffName}
+                        onClick={handleRowClick}
+                        onOpenAssign={(r) => setAssigningState({ rows: unassignedRows, startIndex: fullyUnassignedRows.length + i })}
+                      />
+                    ))}
+                  </>
+                )}
+
+                {remainingUnassignedRows.map((row, i) => (
+                  <WorkOrderTableRow
+                    key={row.id}
+                    row={row}
+                    isSelected={selectedId === row.id}
+                    getStaffName={getStaffName}
+                    onClick={handleRowClick}
+                    onOpenAssign={(r) => setAssigningState({ rows: unassignedRows, startIndex: fullyUnassignedRows.length + techAssignedUnassignedRows.length + i })}
                   />
                 ))}
               </>

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishTechLogChanged } from '@/lib/realtime/publish';
+import { createStationActivityLog } from '@/lib/station-activity';
+import { formatPSTTimestamp } from '@/utils/date';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -50,15 +53,6 @@ export async function GET(req: NextRequest) {
 
     const meta = fnskuResult.rows[0];
 
-    const techLogResult = await client.query(
-      `INSERT INTO tech_serial_numbers
-         (serial_number, serial_type, tested_by, scan_ref, fnsku, notes)
-       VALUES ($1, 'FNSKU', $2, $3, $3, $4)
-       RETURNING id`,
-      [null, testedBy, fnsku, 'Tech FNSKU scan']
-    );
-    const techSerialId = Number(techLogResult.rows[0].id);
-
     const openItemResult = await client.query(
       `SELECT
          fsi.id,
@@ -94,7 +88,7 @@ export async function GET(req: NextRequest) {
       [
         fnsku,
         testedBy,
-        techSerialId,
+        null,
         openItem?.shipment_id ?? null,
         openItem?.id ?? null,
         'Tech FNSKU scan',
@@ -107,14 +101,23 @@ export async function GET(req: NextRequest) {
       ]
     );
 
-    await client.query(
-      `UPDATE tech_serial_numbers
-       SET fnsku_log_id = $1,
-           fba_shipment_id = $2,
-           fba_shipment_item_id = $3
-       WHERE id = $4`,
-      [fnskuLogResult.rows[0].id, openItem?.shipment_id ?? null, openItem?.id ?? null, techSerialId]
-    );
+    await createStationActivityLog(client, {
+      station: 'TECH',
+      activityType: 'FNSKU_SCANNED',
+      staffId: testedBy,
+      scanRef: fnsku,
+      fnsku,
+      fbaShipmentId: openItem?.shipment_id ?? null,
+      fbaShipmentItemId: openItem?.id ?? null,
+      notes: 'Tech FNSKU scan',
+      metadata: {
+        fnsku_log_id: Number(fnskuLogResult.rows[0].id),
+        product_title: meta.product_title ?? null,
+        sku: meta.sku ?? null,
+        asin: meta.asin ?? null,
+      },
+      createdAt: formatPSTTimestamp(),
+    });
 
     const serialsResult = await client.query(
       `SELECT serial_number
@@ -139,6 +142,12 @@ export async function GET(req: NextRequest) {
 
     await client.query('COMMIT');
     await invalidateCacheTags(['tech-logs', 'orders-next']);
+    await publishTechLogChanged({
+      techId: testedBy,
+      action: 'update',
+      rowId: Number(fnskuLogResult.rows[0].id),
+      source: 'tech.scan-fnsku',
+    });
 
     const summary = summaryResult.rows[0] || {
       tech_scanned_qty: 0,
@@ -152,7 +161,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       found: true,
       orderFound: false,
-      techSerialId,
+      techSerialId: null,
       fnskuLogId: Number(fnskuLogResult.rows[0].id),
       summary: {
         tech_scanned_qty: techScannedQty,

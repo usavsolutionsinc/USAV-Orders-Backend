@@ -5,8 +5,7 @@ import { motion } from 'framer-motion';
 import { Loader2 } from './Icons';
 import { CopyableText } from './ui/CopyableText';
 import WeekHeader from './ui/WeekHeader';
-import { formatDateWithOrdinal } from '@/lib/date-format';
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
+import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
@@ -100,7 +99,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       quantity: record.quantity || '1',
       shipment_id: record.shipment_id ?? null,
       status: record.status ?? null,
-      tech_serial_id: record.id,
+      tech_serial_id: record.source_kind === 'tech_serial' ? record.id : undefined,
     };
 
     const detailId = Number(detail.id ?? detail.shipment_id ?? record.id);
@@ -250,7 +249,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                           <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            key={record.id}
+                            key={`${record.source_kind || 'tech'}:${record.source_row_id ?? record.id}`}
                             onClick={() => openDetails(record)}
                             className={`grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
@@ -296,7 +295,13 @@ export function TechTable({ testedBy }: TechTableProps) {
                               <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
                               <CopyableText
                                 text={record.serial_number || ''}
-                                displayText={getLast4Serial(record.serial_number)}
+                                displayText={
+                                  record.serial_number
+                                    ? getLast4Serial(record.serial_number)
+                                    : record.source_kind === 'fba_scan' || record.source_kind === 'tech_scan'
+                                      ? 'SCAN'
+                                      : '---'
+                                }
                                 className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
                                 variant="serial"
                               />

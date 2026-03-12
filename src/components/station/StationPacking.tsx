@@ -4,7 +4,7 @@ import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import { getPackerInputTheme } from '@/utils/staff-colors';
-import { formatPSTTimestamp } from '@/lib/timezone';
+import { formatPSTTimestamp } from '@/utils/date';
 
 interface ActivePackingOrder {
   orderId: string;
