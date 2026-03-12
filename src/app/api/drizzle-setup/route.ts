@@ -177,10 +177,10 @@ export async function POST() {
                 id SERIAL PRIMARY KEY,
                 shipping_tracking_number TEXT NOT NULL,
                 tracking_type VARCHAR(20) NOT NULL,
-                pack_date_time TIMESTAMP,
                 packed_by INTEGER REFERENCES staff(id) ON DELETE SET NULL,
                 packer_photos_url JSONB,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
         tables.push('packer_logs');
@@ -243,7 +243,8 @@ export async function POST() {
                 sku TEXT,
                 status TEXT DEFAULT 'pending',
                 status_history JSONB DEFAULT '[]',
-                test_date_time TEXT
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
         tables.push('shipped');

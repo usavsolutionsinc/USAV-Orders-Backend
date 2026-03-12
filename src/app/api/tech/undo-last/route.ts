@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
          AND tsn.serial_number IS NOT NULL
          AND tsn.serial_number != ''
          ${techFilter}
-       ORDER BY tsn.test_date_time DESC NULLS LAST, tsn.id DESC
+       ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC
        LIMIT 1`,
       latestParams
     );
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
          )
          AND tsn.serial_number IS NOT NULL
          AND tsn.serial_number != ''
-       ORDER BY tsn.test_date_time ASC NULLS LAST, tsn.id ASC`,
+       ORDER BY tsn.created_at ASC NULLS LAST, tsn.id ASC`,
       [resolvedShipmentId, resolvedScanRef ?? tracking]
     );
 

@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
         const result = await pool.query(`
             SELECT
                 pl.id,
-                pl.pack_date_time as timestamp,
+                pl.created_at as timestamp,
                 COALESCE(stn.tracking_number_raw, pl.scan_ref) AS tracking,
                 pl.tracking_type,
                 o.product_title as title
@@ -206,32 +206,55 @@ export async function POST(req: NextRequest) {
                 });
 
                 const { shipmentId: nfShipmentId, scanRef: nfScanRef } = await resolveShipmentId(scanInput);
-                const notFoundInsert = await pool.query(`
-                    INSERT INTO packer_logs (
-                        shipment_id,
-                        scan_ref,
-                        tracking_type,
-                        pack_date_time,
-                        packed_by
-                    ) VALUES ($1, $2, $3, $4, $5)
-                    RETURNING id, pack_date_time::text
-                `, [nfShipmentId, nfScanRef, classification.trackingType, packDateTime, staffId]);
 
-                const notFoundPackerLogId = notFoundInsert.rows[0]?.id ?? null;
+                // Check for an existing row by shipment_id or scan_ref last-8 to avoid duplicates
+                const nfExisting = await pool.query(`
+                    SELECT id, created_at::text
+                    FROM packer_logs
+                    WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
+                       OR (shipment_id IS NULL AND scan_ref IS NOT NULL
+                           AND RIGHT(regexp_replace(UPPER(scan_ref), '[^A-Z0-9]', '', 'g'), 8) = $2)
+                    ORDER BY id DESC LIMIT 1
+                `, [nfShipmentId, trackingLast8]);
+
+                let notFoundPackerLogId: number | null;
+                let notFoundCreatedAt: string;
+                if (nfExisting.rows.length > 0) {
+                    notFoundPackerLogId = nfExisting.rows[0].id;
+                    notFoundCreatedAt = nfExisting.rows[0].created_at ?? packDateTime;
+                    await pool.query(
+                        `UPDATE packer_logs SET updated_at = NOW(), packed_by = $2 WHERE id = $1`,
+                        [notFoundPackerLogId, staffId]
+                    );
+                } else {
+                    const notFoundInsert = await pool.query(`
+                        INSERT INTO packer_logs (
+                            shipment_id,
+                            scan_ref,
+                            tracking_type,
+                            created_at,
+                            packed_by
+                        ) VALUES ($1, $2, $3, $4, $5)
+                        RETURNING id, created_at::text
+                    `, [nfShipmentId, nfScanRef, classification.trackingType, packDateTime, staffId]);
+                    notFoundPackerLogId = notFoundInsert.rows[0]?.id ?? null;
+                    notFoundCreatedAt = notFoundInsert.rows[0]?.created_at ?? packDateTime;
+                }
+
                 if (notFoundPackerLogId && photoUrls.length > 0) {
                     for (const url of photoUrls) {
-                    await pool.query(
-                        `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
-                         VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
-                         ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
-                        [notFoundPackerLogId, url, staffId]
-                    );
+                        await pool.query(
+                            `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
+                             VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
+                             ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
+                            [notFoundPackerLogId, url, staffId]
+                        );
                     }
                 }
 
                 const notFoundRecord = {
                     id: notFoundPackerLogId,
-                    pack_date_time: notFoundInsert.rows[0]?.pack_date_time ?? packDateTime,
+                    created_at: notFoundCreatedAt,
                     tracking_number: scanInput,
                     packed_by: staffId,
                     order_id: null,
@@ -239,7 +262,6 @@ export async function POST(req: NextRequest) {
                     condition: null,
                     quantity: null,
                     sku: null,
-                    packer_photos_url: [],
                 };
 
                 await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
@@ -268,8 +290,6 @@ export async function POST(req: NextRequest) {
             `, [order.id]);
 
             // Upsert a PACK work_assignment as DONE.
-            // If an active (ASSIGNED/IN_PROGRESS) row already exists for this order+PACK it is
-            // completed in-place; otherwise a new DONE row is inserted to record who packed it.
             await pool.query(`
                 INSERT INTO work_assignments
                     (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
@@ -284,18 +304,39 @@ export async function POST(req: NextRequest) {
             `, [order.id, staffId]);
 
             const orderShipmentId: number | null = order.shipment_id ?? null;
-            const foundInsert = await pool.query(`
-                INSERT INTO packer_logs (
-                    shipment_id,
-                    scan_ref,
-                    tracking_type,
-                    pack_date_time,
-                    packed_by
-                ) VALUES ($1, NULL, $2, $3, $4)
-                RETURNING id, pack_date_time::text
-            `, [orderShipmentId, classification.trackingType, packDateTime, staffId]);
 
-            const foundPackerLogId = foundInsert.rows[0]?.id ?? null;
+            // Check for an existing row by shipment_id to avoid duplicate rows on re-scan
+            const foundExisting = await pool.query(`
+                SELECT id, created_at::text
+                FROM packer_logs
+                WHERE shipment_id = $1
+                ORDER BY id DESC LIMIT 1
+            `, [orderShipmentId]);
+
+            let foundPackerLogId: number | null;
+            let foundCreatedAt: string;
+            if (foundExisting.rows.length > 0) {
+                foundPackerLogId = foundExisting.rows[0].id;
+                foundCreatedAt = foundExisting.rows[0].created_at ?? packDateTime;
+                await pool.query(
+                    `UPDATE packer_logs SET updated_at = NOW(), packed_by = $2 WHERE id = $1`,
+                    [foundPackerLogId, staffId]
+                );
+            } else {
+                const foundInsert = await pool.query(`
+                    INSERT INTO packer_logs (
+                        shipment_id,
+                        scan_ref,
+                        tracking_type,
+                        created_at,
+                        packed_by
+                    ) VALUES ($1, NULL, $2, $3, $4)
+                    RETURNING id, created_at::text
+                `, [orderShipmentId, classification.trackingType, packDateTime, staffId]);
+                foundPackerLogId = foundInsert.rows[0]?.id ?? null;
+                foundCreatedAt = foundInsert.rows[0]?.created_at ?? packDateTime;
+            }
+
             if (foundPackerLogId && photoUrls.length > 0) {
                 for (const url of photoUrls) {
                     await pool.query(
@@ -309,7 +350,7 @@ export async function POST(req: NextRequest) {
 
             const foundRecord = {
                 id: foundPackerLogId,
-                pack_date_time: foundInsert.rows[0]?.pack_date_time ?? packDateTime,
+                created_at: foundCreatedAt,
                 tracking_number: order.tracking_number ?? null,
                 packed_by: staffId,
                 order_id: order.order_id ?? null,
@@ -317,7 +358,6 @@ export async function POST(req: NextRequest) {
                 condition: order.condition ?? null,
                 quantity: order.quantity ?? null,
                 sku: order.sku ?? null,
-                packer_photos_url: [],
             };
 
             await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
@@ -344,10 +384,10 @@ export async function POST(req: NextRequest) {
                 scan_ref,
                 shipment_id,
                 tracking_type,
-                pack_date_time,
+                created_at,
                 packed_by
             ) VALUES ($1, NULL, $2, $3, $4)
-            RETURNING id, pack_date_time::text
+            RETURNING id, created_at::text
         `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId]);
 
         const nonOrderPackerLogId = nonOrderInsert.rows[0]?.id ?? null;
@@ -364,7 +404,7 @@ export async function POST(req: NextRequest) {
 
         const nonOrderRecord = {
             id: nonOrderPackerLogId,
-            pack_date_time: nonOrderInsert.rows[0]?.pack_date_time ?? packDateTime,
+            created_at: nonOrderInsert.rows[0]?.created_at ?? packDateTime,
             tracking_number: classification.normalizedInput,
             packed_by: staffId,
             order_id: null,
@@ -372,7 +412,6 @@ export async function POST(req: NextRequest) {
             condition: null,
             quantity: null,
             sku: null,
-            packer_photos_url: [],
         };
 
         let skuUpdated = false;

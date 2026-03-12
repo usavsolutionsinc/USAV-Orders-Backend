@@ -62,6 +62,127 @@ function parseUPSDate(date: string, time: string): string | null {
   }
 }
 
+function firstValue<T>(...values: T[]): T | null {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return null;
+}
+
+function extractUPSMetadata(payload: any, shipment: any, pkg: any, events: CarrierTrackingEvent[]) {
+  const latestEvent = events.find((event) => event.eventOccurredAt) ?? events[0] ?? null;
+  const deliveryDate = Array.isArray(pkg?.deliveryDate)
+    ? pkg.deliveryDate[0]
+    : pkg?.deliveryDate ?? null;
+
+  return {
+    source: 'ups-track-v1',
+    service: firstValue(
+      shipment?.service?.description,
+      shipment?.service?.code,
+      pkg?.service?.description,
+      pkg?.service?.code
+    ),
+    packageCount: Array.isArray(shipment?.package) ? shipment.package.length : null,
+    referenceNumber: firstValue(
+      pkg?.referenceNumber?.[0]?.number,
+      shipment?.referenceNumber?.[0]?.number
+    ),
+    deliveryDate: deliveryDate,
+    signedBy: firstValue(
+      pkg?.deliveryInformation?.receivedBy,
+      payload?.trackResponse?.shipment?.[0]?.deliveryDate?.[0]?.receivedByName
+    ),
+    latestLocation: latestEvent
+      ? {
+          city: latestEvent.city ?? null,
+          state: latestEvent.state ?? null,
+          postalCode: latestEvent.postalCode ?? null,
+          countryCode: latestEvent.countryCode ?? null,
+        }
+      : null,
+    trackingUrl: `https://www.ups.com/track?track=yes&trackNums=${encodeURIComponent(
+      String(pkg?.trackingNumber ?? '')
+    )}&loc=en_US&requester=ST/trackdetails`,
+  };
+}
+
+function buildUPSResultFromPayload(payload: any, shipment: any, pkg: any): CarrierTrackingResult {
+  const trackingNumber = normalizeTrackingNumber(
+    String(
+      pkg?.trackingNumber ??
+      shipment?.inquiryNumber?.value ??
+      shipment?.inquiryNumber?.number ??
+      ''
+    )
+  );
+
+  if (!trackingNumber) {
+    return {
+      carrier: 'UPS',
+      trackingNumberNormalized: '',
+      latestStatusCategory: 'UNKNOWN',
+      metadata: {
+        source: 'ups-track-v1',
+      },
+      events: [],
+      payload,
+    };
+  }
+
+  const currentStatus = pkg?.currentStatus ?? pkg?.activity?.[0]?.status;
+  const latestCategory = normalizeUPSStatus(currentStatus?.type, currentStatus?.code);
+
+  const activities: unknown[] = Array.isArray(pkg?.activity) ? pkg.activity : [];
+  const events: CarrierTrackingEvent[] = activities.map((act: any) => {
+    const status = act?.status ?? {};
+    const addr = act?.location?.address ?? {};
+    const occurredAt = parseUPSDate(act?.date, act?.time);
+
+    return {
+      externalEventId: [status.code ?? null, occurredAt ?? null, addr.city ?? null].filter(Boolean).join(':') || null,
+      externalStatusCode: status.code ?? null,
+      externalStatusLabel: status.type ?? null,
+      externalStatusDescription: status.description ?? null,
+      normalizedStatusCategory: normalizeUPSStatus(status.type, status.code),
+      eventOccurredAt: occurredAt,
+      city: addr.city ?? null,
+      state: addr.stateProvince ?? null,
+      postalCode: addr.postalCode ?? null,
+      countryCode: addr.countryCode ?? null,
+      signedBy: pkg?.deliveryInformation?.receivedBy ?? null,
+      payload: act,
+    };
+  });
+
+  const deliveredEvent = events.find((e) => e.normalizedStatusCategory === 'DELIVERED');
+  const latestEventAt = events.map((e) => e.eventOccurredAt).filter(Boolean).sort().reverse()[0] ?? null;
+
+  return {
+    carrier: 'UPS',
+    trackingNumberNormalized: trackingNumber,
+    latestStatusCategory: latestCategory,
+    latestStatusCode: currentStatus?.code ?? null,
+    latestStatusLabel: currentStatus?.type ?? null,
+    latestStatusDescription: currentStatus?.description ?? null,
+    latestEventAt,
+    deliveredAt: deliveredEvent?.eventOccurredAt ?? null,
+    metadata: extractUPSMetadata(payload, shipment, pkg, events),
+    events,
+    payload,
+  };
+}
+
+export function parseUPSTrackingPayload(payload: any): CarrierTrackingResult | null {
+  const shipment = Array.isArray(payload?.trackResponse?.shipment)
+    ? payload.trackResponse.shipment[0]
+    : payload?.trackResponse?.shipment;
+  const pkg = Array.isArray(shipment?.package) ? shipment.package[0] : shipment?.package;
+
+  if (!shipment || !pkg) return null;
+  return buildUPSResultFromPayload(payload, shipment, pkg);
+}
+
 export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
   const normalized = normalizeTrackingNumber(trackingNumber);
   const token = await getAccessToken();
@@ -87,58 +208,18 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
   }
 
   const payload = await res.json();
-  const shipment = payload?.trackResponse?.shipment?.[0];
-  const pkg = shipment?.package?.[0];
-
-  if (!pkg) {
+  const result = parseUPSTrackingPayload(payload);
+  if (!result) {
     return {
       carrier: 'UPS',
       trackingNumberNormalized: normalized,
       latestStatusCategory: 'UNKNOWN',
+      metadata: {
+        source: 'ups-track-v1',
+      },
       events: [],
       payload,
     };
   }
-
-  const currentStatus = pkg.currentStatus ?? pkg.activity?.[0]?.status;
-  const latestCategory = normalizeUPSStatus(currentStatus?.type, currentStatus?.code);
-
-  const activities: unknown[] = Array.isArray(pkg.activity) ? pkg.activity : [];
-  const events: CarrierTrackingEvent[] = activities.map((act: any) => {
-    const status = act?.status ?? {};
-    const addr = act?.location?.address ?? {};
-    const category = normalizeUPSStatus(status.type, status.code);
-    const occurredAt = parseUPSDate(act.date, act.time);
-
-    return {
-      externalStatusCode: status.code ?? null,
-      externalStatusLabel: status.type ?? null,
-      externalStatusDescription: status.description ?? null,
-      normalizedStatusCategory: category,
-      eventOccurredAt: occurredAt,
-      city: addr.city ?? null,
-      state: addr.stateProvince ?? null,
-      postalCode: addr.postalCode ?? null,
-      countryCode: addr.countryCode ?? null,
-      signedBy: pkg.deliveryInformation?.receivedBy ?? null,
-      payload: act,
-    };
-  });
-
-  // Find delivered_at from the first DELIVERED event
-  const deliveredEvent = events.find((e) => e.normalizedStatusCategory === 'DELIVERED');
-  const latestEventAt = events.map((e) => e.eventOccurredAt).filter(Boolean).sort().reverse()[0] ?? null;
-
-  return {
-    carrier: 'UPS',
-    trackingNumberNormalized: normalized,
-    latestStatusCategory: latestCategory,
-    latestStatusCode: currentStatus?.code ?? null,
-    latestStatusLabel: currentStatus?.type ?? null,
-    latestStatusDescription: currentStatus?.description ?? null,
-    latestEventAt,
-    deliveredAt: deliveredEvent?.eventOccurredAt ?? null,
-    events,
-    payload,
-  };
+  return result;
 }

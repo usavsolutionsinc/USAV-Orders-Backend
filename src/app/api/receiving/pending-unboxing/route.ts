@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
       ? "(r.received_at AT TIME ZONE 'America/Los_Angeles')::text AS received_at"
       : 'NULL::text AS received_at';
     const dateColumnRef = `r.${dateColumn}`;
-    const receivingDateSelect = `(${dateColumnRef} AT TIME ZONE 'America/Los_Angeles')::text AS receiving_date_time`;
+    const receivingDateSelect = `(${dateColumnRef} AT TIME ZONE 'America/Los_Angeles')::text AS created_at`;
 
     // Fetch receiving rows that have at least one line in the target statuses
     // OR have no lines yet but also haven't been unboxed (newly arrived package)
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       receiving_tracking_number: string | null;
       carrier: string | null;
       received_at: string | null;
-      receiving_date_time: string | null;
+      created_at: string | null;
       qa_status: string | null;
       unboxed_at: string | null;
       unboxed_by: number | null;
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
         receiving_id:               Number(r.id),
         tracking_number:            r.receiving_tracking_number ?? null,
         carrier:                    r.carrier ?? null,
-        received_at:                r.received_at ?? r.receiving_date_time ?? null,
+        received_at:                r.received_at ?? r.created_at ?? null,
         qa_status:                  r.qa_status ?? 'PENDING',
         unboxed_at:                 r.unboxed_at ?? null,
         zoho_purchase_receive_id:   r.zoho_purchase_receive_id ?? null,

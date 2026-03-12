@@ -22,20 +22,20 @@ export async function getAllStaffGoalsWithStats(): Promise<StaffGoalWithStats[]>
     `WITH today_counts AS (
       SELECT tested_by AS staff_id, COUNT(*) AS today_count
       FROM tech_serial_numbers
-      WHERE test_date_time::date = CURRENT_DATE AT TIME ZONE 'America/Los_Angeles'
+      WHERE created_at::date = CURRENT_DATE AT TIME ZONE 'America/Los_Angeles'
       GROUP BY tested_by
     ),
     week_counts AS (
       SELECT tested_by AS staff_id, COUNT(*) AS week_count
       FROM tech_serial_numbers
-      WHERE test_date_time >= date_trunc('week', NOW() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles'
+      WHERE created_at >= date_trunc('week', NOW() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles'
       GROUP BY tested_by
     ),
     last7_counts AS (
       SELECT tested_by AS staff_id,
              COUNT(*) / 7.0 AS avg_daily_last_7d
       FROM tech_serial_numbers
-      WHERE test_date_time >= (NOW() AT TIME ZONE 'America/Los_Angeles' - INTERVAL '7 days')
+      WHERE created_at >= (NOW() AT TIME ZONE 'America/Los_Angeles' - INTERVAL '7 days')
       GROUP BY tested_by
     )
     SELECT

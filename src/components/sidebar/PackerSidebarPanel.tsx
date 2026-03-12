@@ -38,7 +38,7 @@ export function PackerSidebarPanel({ packerId }: { packerId: string }) {
     if (history.length === 0) return 0;
     const todayDate = getCurrentPSTDateKey();
     return history.filter(
-      (item) => toPSTDateKey(item.pack_date_time || item.timestamp || item.packedAt || '') === todayDate,
+      (item) => toPSTDateKey(item.created_at || item.timestamp || item.packedAt || '') === todayDate,
     ).length;
   }, [history]);
 

@@ -12,7 +12,7 @@ import pool from '@/lib/db';
  *  - DISTINCT ON (o.id) — one row per order
  *  - NOT EXISTS filter for product_manuals
  *  - Rolling days window (no Mon–Fri weekly slice)
- *  - Sorted ASC by test_date_time (oldest unresolved first)
+ *  - Sorted ASC by created_at (oldest unresolved first)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       FROM (
         SELECT DISTINCT ON (COALESCE(o.id::text, COALESCE(stn.tracking_number_raw, tsn.scan_ref)))
           tsn.id                                        AS tsn_id,
-          tsn.test_date_time,
+          tsn.created_at                                AS test_date_time,
           COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
           tsn.tested_by,
           o.id                                         AS id,
@@ -103,8 +103,8 @@ export async function GET(req: NextRequest) {
         ) o ON true
         LEFT JOIN shipping_tracking_numbers o_stn ON o_stn.id = o.shipment_id
         WHERE tsn.tested_by = $1
-          AND tsn.test_date_time IS NOT NULL
-          AND tsn.test_date_time >= NOW() - ($2 * INTERVAL '1 day')
+          AND tsn.created_at IS NOT NULL
+          AND tsn.created_at >= NOW() - ($2 * INTERVAL '1 day')
           AND COALESCE(
                 CASE
                   WHEN UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%' THEN fba.product_title
@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
           )
         ORDER BY
           COALESCE(o.id::text, COALESCE(stn.tracking_number_raw, tsn.scan_ref)),
-          tsn.test_date_time DESC
+          tsn.created_at DESC
       ) sub
       ORDER BY sub.test_date_time DESC NULLS LAST
       `,

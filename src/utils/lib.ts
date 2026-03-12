@@ -5,6 +5,7 @@ export type ColumnType =
   | 'VARCHAR(50)'
   | 'VARCHAR(100)'
   | 'TIMESTAMP'
+  | 'TIMESTAMPTZ'
   | 'INTEGER'
   | 'JSONB'
   | 'BOOLEAN';

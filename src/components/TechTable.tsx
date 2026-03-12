@@ -86,7 +86,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       sku: record.sku || '',
       tester_id: null,
       tested_by: record.tested_by || null,
-      test_date_time: record.test_date_time || null,
+      test_date_time: record.created_at || null,
       packer_id: null,
       packed_by: null,
       pack_date_time: null,
@@ -162,10 +162,10 @@ export function TechTable({ testedBy }: TechTableProps) {
   // grouping + display filter below gives exact PST-week accuracy).
   const groupedRecords: { [key: string]: TechRecord[] } = {};
   records.forEach(record => {
-    if (!record.test_date_time) return;
+    if (!record.created_at) return;
     let date = '';
     try {
-      date = toPSTDateKey(record.test_date_time) || 'Unknown';
+      date = toPSTDateKey(record.created_at) || 'Unknown';
     } catch (e) {
       date = 'Unknown';
     }
@@ -221,8 +221,8 @@ export function TechTable({ testedBy }: TechTableProps) {
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, dateRecords]) => {
                   const sortedRecords = [...dateRecords].sort((a, b) => {
-                    const timeA = new Date(a.test_date_time || 0).getTime();
-                    const timeB = new Date(b.test_date_time || 0).getTime();
+                    const timeA = new Date(a.created_at || 0).getTime();
+                    const timeB = new Date(b.created_at || 0).getTime();
                     return timeB - timeA;
                   });
                   return (

@@ -47,14 +47,14 @@ export async function GET(req: NextRequest) {
         pl.id,
         COALESCE(stn.tracking_number_raw, pl.scan_ref) AS tracking_number,
         pl.tracking_type,
-        pl.pack_date_time,
+        pl.created_at AS pack_date_time,
         pl.packed_by
       FROM packer_logs pl
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
       WHERE stn.tracking_number_raw ILIKE $1
          OR pl.scan_ref ILIKE $1
          OR RIGHT(COALESCE(stn.tracking_number_raw, ''), 8) = RIGHT($1, 8)
-      ORDER BY pl.pack_date_time DESC NULLS LAST
+      ORDER BY pl.created_at DESC NULLS LAST
       LIMIT 5
     `, [tracking]);
 

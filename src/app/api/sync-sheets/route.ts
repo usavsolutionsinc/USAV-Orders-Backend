@@ -340,7 +340,7 @@ async function syncTechSheets(params: {
                 }
 
                 const existingByTestDateTime = await client.query(
-                    `SELECT id FROM tech_serial_numbers WHERE test_date_time = $1::timestamp LIMIT 1`,
+                    `SELECT id FROM tech_serial_numbers WHERE created_at = $1::timestamp LIMIT 1`,
                     [testDateTime]
                 );
                 if (existingByTestDateTime.rows.length > 0) {
@@ -372,10 +372,9 @@ async function syncTechSheets(params: {
                         scan_ref,
                         serial_number,
                         serial_type,
-                        test_date_time,
                         tested_by
-                    ) VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [tsnShipmentId, tsnScanRef, serialNumber, 'SERIAL', testDateTime, techSheet.testedBy]
+                    ) VALUES ($1, $2, $3, $4, $5)`,
+                    [tsnShipmentId, tsnScanRef, serialNumber, 'SERIAL', techSheet.testedBy]
                 );
 
                 inserted++;
@@ -508,7 +507,7 @@ async function syncPackerSheets(params: {
                         shipment_id,
                         scan_ref,
                         tracking_type,
-                        pack_date_time,
+                        created_at,
                         packed_by
                     ) VALUES ($1, $2, $3, $4, $5)`,
                     [plShipmentId, plScanRef, trackingType, packDateTime, packedBy]

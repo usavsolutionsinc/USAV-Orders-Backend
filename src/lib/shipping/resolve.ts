@@ -1,5 +1,5 @@
 import { detectCarrier, normalizeTrackingNumber } from './normalize';
-import { upsertShipment } from './repository';
+import { registerAndSyncShipment } from './sync-shipment';
 
 /**
  * For a raw scan input, returns:
@@ -20,10 +20,10 @@ export async function resolveShipmentId(rawInput: string): Promise<{
   }
 
   try {
-    const shipment = await upsertShipment({
-      trackingNumberRaw: trimmed,
-      trackingNumberNormalized: normalized,
+    const shipment = await registerAndSyncShipment({
+      trackingNumber: trimmed,
       carrier,
+      sourceSystem: 'scan',
     });
     return { shipmentId: shipment.id, scanRef: null };
   } catch {

@@ -89,7 +89,6 @@ export async function POST(request: NextRequest) {
             [dateColumn]: now,
             receiving_tracking_number: trackingNumber,
             carrier: detectedCarrier,
-            receiving_date_time: now,
             received_at: now,
             condition_grade: conditionGrade,
             qa_status: qaStatus,

@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
           shipment_id,
           scan_ref,
           tracking_type,
-          pack_date_time,
+          created_at,
           packed_by
         ) VALUES ($1, $2, $3, $4, $5)
         RETURNING id
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
       const shippedOrderId = updateResult.rows[0]?.id ?? null;  // may be null for unlinked rows
       const packerRow = {
         id: packerLogId,
-        pack_date_time: packDate.toISOString(),
+        created_at: packDate.toISOString(),
         shipping_tracking_number: shippingTrackingNumber,
         packed_by: staffId,
         order_id: updateResult.rows[0]?.order_id ?? null,
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
         quantity: null,
         condition: null,
         sku: null,
-        packer_photos_url: photoUrlList,
+        photos: photoUrlList,
       };
       await publishPackerLogChanged({
         packerId: staffId,

@@ -150,6 +150,14 @@ npm run dev
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
+### Shipping Carriers
+
+- `CONSUMER_KEY` and `CONSUMER_SECRET` for USPS OAuth
+- `UPS_CLIENT_ID`
+- `UPS_CLIENT_SECRET`
+- `UPS_WEBHOOK_BEARER` or `UPS_WEBHOOK_SECRET` for `/api/webhooks/ups` callback authentication
+- `CRON_SECRET` for `/api/shipping/track/sync-due` if you run scheduled shipment refreshes
+
 ### Realtime / Ably
 
 - `ABLY_API_KEY` (server-only)

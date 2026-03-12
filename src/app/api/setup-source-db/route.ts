@@ -102,7 +102,8 @@ export async function POST() {
                 sku TEXT,
                 status TEXT DEFAULT 'pending',
                 status_history JSONB DEFAULT '[]',
-                test_date_time TEXT
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
 

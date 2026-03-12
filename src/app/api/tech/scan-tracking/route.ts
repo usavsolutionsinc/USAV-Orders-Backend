@@ -286,13 +286,24 @@ export async function POST(req: NextRequest) {
                 if (exactTrackingRow.rows.length === 0) {
                     const insertResult = await client.query(
                         `INSERT INTO tech_serial_numbers (
-                            shipment_id, scan_ref, serial_number, test_date_time, tested_by
-                        ) VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)
-                        RETURNING id, test_date_time::text`,
+                            shipment_id, scan_ref, serial_number, tested_by
+                        ) VALUES ($1, $2, $3, $4)
+                        RETURNING id, created_at::text AS created_at`,
                         [resolvedScan.shipmentId, resolvedScan.scanRef, '', testedBy]
                     );
                     techSerialId = insertResult.rows[0]?.id ?? null;
-                    techTestDateTime = insertResult.rows[0]?.test_date_time ?? null;
+                    techTestDateTime = insertResult.rows[0]?.created_at ?? null;
+                } else {
+                    const updateResult = await client.query(
+                        `UPDATE tech_serial_numbers
+                         SET updated_at = date_trunc('second', NOW()),
+                             tested_by = $1
+                         WHERE id = $2
+                         RETURNING id, created_at::text AS created_at`,
+                        [testedBy, exactTrackingRow.rows[0].id]
+                    );
+                    techSerialId = updateResult.rows[0]?.id ?? exactTrackingRow.rows[0].id ?? null;
+                    techTestDateTime = updateResult.rows[0]?.created_at ?? null;
                 }
                 const serialSource =
                     exactTrackingRow.rows[0]?.serial_number ??
@@ -300,14 +311,13 @@ export async function POST(req: NextRequest) {
                     '';
 
                 await client.query('COMMIT');
-                await invalidateCacheTags(['orders-next']); // exceptions upserted above
+                await invalidateCacheTags(['orders-next', 'tech-logs']); // exceptions upserted above
 
-                // Surgical cache update: only when a new row was actually inserted.
-                if (techSerialId && techTestDateTime) {
+                if (techSerialId && techTestDateTime && exactTrackingRow.rows.length === 0) {
                     const newRow = {
                         id: techSerialId,
                         order_db_id: null,
-                        test_date_time: techTestDateTime,
+                        created_at: techTestDateTime,
                         shipping_tracking_number: scannedTracking,
                         serial_number: '',
                         tested_by: testedBy,
@@ -321,7 +331,6 @@ export async function POST(req: NextRequest) {
                         quantity: null,
                         is_shipped: false,
                         ship_by_date: null,
-                        created_at: null,
                         out_of_stock: null,
                     };
                     await prependToTechLogsCache(testedBy, newRow);
@@ -330,6 +339,13 @@ export async function POST(req: NextRequest) {
                         action: 'insert',
                         rowId: techSerialId,
                         row: newRow,
+                        source: 'tech.scan-tracking',
+                    });
+                } else if (techSerialId) {
+                    await publishTechLogChanged({
+                        techId: testedBy,
+                        action: 'update',
+                        rowId: techSerialId,
                         source: 'tech.scan-tracking',
                     });
                 }
@@ -376,24 +392,36 @@ export async function POST(req: NextRequest) {
             if (existingTracking.rows.length === 0) {
                 const insertResult = await client.query(
                     `INSERT INTO tech_serial_numbers (
-                        shipment_id, scan_ref, serial_number, test_date_time, tested_by
-                    ) VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)
-                    RETURNING id, test_date_time::text`,
+                        shipment_id, scan_ref, serial_number, tested_by
+                    ) VALUES ($1, $2, $3, $4)
+                    RETURNING id, created_at::text AS created_at`,
                     [resolvedScan.shipmentId, resolvedScan.scanRef, '', testedBy]
                 );
                 techSerialId = insertResult.rows[0]?.id ?? null;
-                techTestDateTime = insertResult.rows[0]?.test_date_time ?? null;
+                techTestDateTime = insertResult.rows[0]?.created_at ?? null;
+            } else {
+                const updateResult = await client.query(
+                    `UPDATE tech_serial_numbers
+                     SET updated_at = date_trunc('second', NOW()),
+                         tested_by = $1
+                     WHERE id = $2
+                     RETURNING id, created_at::text AS created_at`,
+                    [testedBy, existingTracking.rows[0].id]
+                );
+                techSerialId = updateResult.rows[0]?.id ?? existingTracking.rows[0].id ?? null;
+                techTestDateTime = updateResult.rows[0]?.created_at ?? null;
             }
             const serialNumbers = parseSerials(existingTracking.rows[0]?.serial_number);
 
             await client.query('COMMIT');
 
-            // Surgical Redis cache update for brand-new rows only.
-            if (techSerialId && techTestDateTime) {
+            await invalidateCacheTags(['tech-logs']);
+
+            if (techSerialId && techTestDateTime && existingTracking.rows.length === 0) {
                 const newRow = {
                     id: techSerialId,
                     order_db_id: row.id ?? null,
-                    test_date_time: techTestDateTime,
+                    created_at: techTestDateTime,
                     shipping_tracking_number: trackingValue,
                     serial_number: '',
                     tested_by: testedBy,
@@ -407,7 +435,6 @@ export async function POST(req: NextRequest) {
                     quantity: row.quantity ?? null,
                     is_shipped: row.is_shipped ?? false,
                     ship_by_date: row.ship_by_date ?? null,
-                    created_at: row.created_at ?? null,
                     out_of_stock: row.out_of_stock ?? null,
                 };
                 await prependToTechLogsCache(testedBy, newRow);
@@ -416,6 +443,13 @@ export async function POST(req: NextRequest) {
                     action: 'insert',
                     rowId: techSerialId,
                     row: newRow,
+                    source: 'tech.scan-tracking',
+                });
+            } else if (techSerialId) {
+                await publishTechLogChanged({
+                    techId: testedBy,
+                    action: 'update',
+                    rowId: techSerialId,
                     source: 'tech.scan-tracking',
                 });
             }
@@ -442,7 +476,7 @@ export async function POST(req: NextRequest) {
                     notes: row.notes || '',
                     tracking: trackingValue,
                     serialNumbers,
-                    testDateTime: null,
+                    testDateTime: techTestDateTime,
                     testedBy,
                     accountSource: row.account_source || null,
                     quantity: row.quantity || 1,

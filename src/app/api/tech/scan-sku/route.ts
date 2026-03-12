@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
           `UPDATE tech_serial_numbers
            SET serial_number = $1,
                serial_type = 'SKU_STATIC',
-               test_date_time = date_trunc('second', NOW()),
+               updated_at = date_trunc('second', NOW()),
                tested_by = $2
            WHERE id = $3`,
           [serialList.join(', '), staffId, existingRow.id]
@@ -170,8 +170,8 @@ export async function POST(req: NextRequest) {
       } else {
         await pool.query(
           `INSERT INTO tech_serial_numbers
-           (shipment_id, scan_ref, serial_number, serial_type, test_date_time, tested_by)
-           VALUES ($1, $2, $3, 'SKU_STATIC', date_trunc('second', NOW()), $4)`,
+           (shipment_id, scan_ref, serial_number, serial_type, tested_by)
+           VALUES ($1, $2, $3, 'SKU_STATIC', $4)`,
           [resolvedShipmentId, resolvedScanRef, serialList.join(', '), staffId]
         );
       }

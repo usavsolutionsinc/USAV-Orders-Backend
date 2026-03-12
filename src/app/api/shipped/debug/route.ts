@@ -43,11 +43,11 @@ export async function GET() {
             FROM orders o
             JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
             LEFT JOIN LATERAL (
-                SELECT packed_by, pack_date_time
+                SELECT packed_by, created_at AS pack_date_time
                 FROM packer_logs
                 WHERE shipment_id = o.shipment_id
                   AND tracking_type = 'ORDERS'
-                ORDER BY pack_date_time DESC NULLS LAST, id DESC
+                ORDER BY created_at DESC NULLS LAST, id DESC
                 LIMIT 1
             ) pl ON true
             WHERE stn.is_carrier_accepted OR stn.is_in_transit

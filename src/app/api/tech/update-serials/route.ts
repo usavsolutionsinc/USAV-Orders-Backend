@@ -51,12 +51,11 @@ export async function POST(req: NextRequest) {
     );
 
     const orderResult = await pool.query(
-      `SELECT account_source
-       FROM orders
-       WHERE shipping_tracking_number IS NOT NULL
-         AND shipping_tracking_number != ''
-         AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-       ORDER BY id DESC
+      `SELECT o.account_source
+       FROM orders o
+       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+       WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) = $1
+       ORDER BY o.id DESC
        LIMIT 1`,
       [key18]
     );
@@ -70,7 +69,7 @@ export async function POST(req: NextRequest) {
         `UPDATE tech_serial_numbers
          SET serial_number = $1,
              serial_type = $2,
-             test_date_time = date_trunc('second', NOW()),
+             updated_at = date_trunc('second', NOW()),
              tested_by = $3
          WHERE id = $4`,
         [
@@ -83,8 +82,8 @@ export async function POST(req: NextRequest) {
     } else if (serialNumbers.length > 0) {
       await pool.query(
         `INSERT INTO tech_serial_numbers
-         (shipment_id, scan_ref, serial_number, serial_type, test_date_time, tested_by)
-         VALUES ($1, $2, $3, $4, date_trunc('second', NOW()), $5)`,
+         (shipment_id, scan_ref, serial_number, serial_type, tested_by)
+         VALUES ($1, $2, $3, $4, $5)`,
         [
           resolvedShipmentId,
           resolvedScanRef,

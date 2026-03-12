@@ -1,8 +1,8 @@
 import { normalizeUSPSStatus, normalizeTrackingNumber } from '../normalize';
 import type { CarrierTrackingEvent, CarrierTrackingResult } from '../types';
 
-const USPS_AUTH_URL = 'https://api.usps.com/oauth2/v3/token';
-const USPS_TRACK_URL = 'https://api.usps.com/tracking/v3/tracking';
+const USPS_AUTH_URL = 'https://apis.usps.com/oauth2/v3/token';
+const USPS_TRACK_URL = 'https://apis.usps.com/tracking/v3/tracking';
 
 interface TokenCache {
   token: string;
@@ -12,27 +12,33 @@ interface TokenCache {
 let tokenCache: TokenCache | null = null;
 
 async function getAccessToken(): Promise<string> {
-  const clientId = process.env.USPS_CLIENT_ID;
-  const clientSecret = process.env.USPS_CLIENT_SECRET;
+  const clientId =
+    process.env.CONSUMER_KEY ||
+    process.env.USPS_CONSUMER_KEY ||
+    process.env.USPS_CLIENT_ID;
+  const clientSecret =
+    process.env.CONSUMER_SECRET ||
+    process.env.USPS_CONSUMER_SECRET ||
+    process.env.USPS_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    throw new Error('USPS_CLIENT_ID and USPS_CLIENT_SECRET are required');
+    throw new Error(
+      'USPS credentials are required. Set CONSUMER_KEY and CONSUMER_SECRET.'
+    );
   }
 
   if (tokenCache && tokenCache.expiresAt > Date.now() + 60_000) {
     return tokenCache.token;
   }
 
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: clientId,
-    client_secret: clientSecret,
-  });
-
   const res = await fetch(USPS_AUTH_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
   });
 
   if (!res.ok) {
@@ -87,6 +93,35 @@ function parseUSPSEvent(raw: any): CarrierTrackingEvent {
   };
 }
 
+function extractUSPSMetadata(payload: any, summary: any, events: CarrierTrackingEvent[]) {
+  const latestEvent = events.find((event) => event.eventOccurredAt) ?? events[0] ?? null;
+  const expectedDelivery =
+    payload?.expectedDeliveryDate ??
+    payload?.ExpectedDeliveryDate ??
+    summary?.expectedDeliveryDate ??
+    summary?.ExpectedDeliveryDate ??
+    null;
+
+  return {
+    source: 'usps-tracking-v3',
+    service: payload?.mailClass ?? payload?.MailClass ?? summary?.mailClass ?? summary?.MailClass ?? null,
+    statusCategory: payload?.statusCategory ?? payload?.StatusCategory ?? null,
+    expectedDeliveryDate: expectedDelivery,
+    latestLocation: latestEvent
+      ? {
+          city: latestEvent.city ?? null,
+          state: latestEvent.state ?? null,
+          postalCode: latestEvent.postalCode ?? null,
+          countryCode: latestEvent.countryCode ?? null,
+        }
+      : null,
+    signedBy: latestEvent?.signedBy ?? null,
+    trackingUrl: `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${encodeURIComponent(
+      String(payload?.trackingNumber ?? payload?.TrackingNumber ?? '')
+    )}`,
+  };
+}
+
 export async function trackByNumber(trackingNumber: string): Promise<CarrierTrackingResult> {
   const normalized = normalizeTrackingNumber(trackingNumber);
   const token = await getAccessToken();
@@ -138,6 +173,7 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
     latestStatusDescription: summary?.event ?? summary?.Event ?? null,
     latestEventAt,
     deliveredAt: deliveredEvent?.eventOccurredAt ?? null,
+    metadata: extractUSPSMetadata(payload, summary, events),
     events,
     payload,
   };

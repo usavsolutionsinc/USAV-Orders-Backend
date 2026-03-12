@@ -6,7 +6,7 @@ import { useAblyChannel } from './useAblyChannel';
 
 export interface PackerRecord {
   id: number;
-  pack_date_time: string;
+  created_at: string;
   scan_ref: string | null;
   shipping_tracking_number: string;
   packed_by: number;
@@ -17,7 +17,7 @@ export interface PackerRecord {
   quantity?: string | null;
   condition: string | null;
   sku: string | null;
-  packer_photos_url: any;
+  packer_photos_url: any[];
 }
 
 export interface UsePackerLogsOptions {

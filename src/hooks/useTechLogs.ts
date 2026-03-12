@@ -8,12 +8,12 @@ export interface TechRecord {
   id: number;
   order_db_id?: number | null;
   shipment_id?: number | null;
-  test_date_time: string;
+  created_at: string;
+  updated_at?: string | null;
   shipping_tracking_number: string;
   serial_number: string;
   tested_by: number;
   ship_by_date?: string | null;
-  created_at?: string | null;
   order_id: string | null;
   item_number?: string | null;
   product_title: string | null;

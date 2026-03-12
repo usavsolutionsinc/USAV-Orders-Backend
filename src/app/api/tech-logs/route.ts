@@ -64,8 +64,8 @@ export async function GET(req: NextRequest) {
         let weekClause = '';
         if (weekStart && weekEnd) {
             weekClause = `
-              AND tsn.test_date_time >= ($${idx}::date - interval '1 day')
-              AND tsn.test_date_time <  ($${idx + 1}::date + interval '2 days')`;
+              AND tsn.created_at >= ($${idx}::date - interval '1 day')
+              AND tsn.created_at <  ($${idx + 1}::date + interval '2 days')`;
             queryParams.push(weekStart, weekEnd);
             idx += 2;
         }
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
         const result = await pool.query(`
             SELECT
                 tsn.id,
-                tsn.test_date_time,
+                tsn.created_at,
                 COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
                 tsn.serial_number,
                 tsn.tested_by,
@@ -149,9 +149,9 @@ export async function GET(req: NextRequest) {
                 LIMIT 1
             ) fba ON tsn.scan_ref IS NOT NULL AND UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%'
             WHERE tsn.tested_by = $1
-              AND tsn.test_date_time IS NOT NULL
+              AND tsn.created_at IS NOT NULL
               ${weekClause}
-            ORDER BY tsn.test_date_time DESC NULLS LAST
+            ORDER BY tsn.created_at DESC NULLS LAST
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
         `, queryParams);
 

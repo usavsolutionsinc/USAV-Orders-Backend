@@ -9,10 +9,10 @@ export interface TechSerialNumber {
   shipment_id: number | null;
   scan_ref: string | null;
   tested_by: number | null;
-  test_date_time: string | null;
+  created_at: string | null;
+  updated_at: string | null;
   fnsku: string | null;
   notes: string | null;
-  created_at: string | null;
 }
 
 export interface TechLogWithOrder extends TechSerialNumber {
@@ -26,7 +26,6 @@ export interface CreateTechLogParams {
   serialNumber: string;
   shippingTrackingNumber?: string | null;
   testedBy?: number | null;
-  testDateTime?: string | null;
   fnsku?: string | null;
   notes?: string | null;
 }
@@ -52,11 +51,11 @@ export async function getTechLogs(options?: {
     params.push(options.techId);
   }
   if (options?.weekStart) {
-    conditions.push(`tsn.test_date_time >= $${idx++}`);
+    conditions.push(`tsn.created_at >= $${idx++}`);
     params.push(options.weekStart);
   }
   if (options?.weekEnd) {
-    conditions.push(`tsn.test_date_time <= $${idx++}`);
+    conditions.push(`tsn.created_at <= $${idx++}`);
     params.push(options.weekEnd);
   }
 
@@ -67,8 +66,8 @@ export async function getTechLogs(options?: {
 
   const result = await pool.query(
     `SELECT
-       tsn.id, tsn.serial_number, tsn.serial_type, tsn.test_date_time,
-       tsn.tested_by, tsn.fnsku, tsn.notes, tsn.created_at,
+       tsn.id, tsn.serial_number, tsn.serial_type, tsn.created_at, tsn.updated_at,
+       tsn.tested_by, tsn.fnsku, tsn.notes,
        tsn.shipment_id, tsn.scan_ref,
        COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
        o.order_id,
@@ -85,7 +84,7 @@ export async function getTechLogs(options?: {
        LIMIT 1
      ) ff ON tsn.fnsku IS NOT NULL
      ${where}
-     ORDER BY tsn.test_date_time DESC NULLS LAST, tsn.id DESC
+     ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC
      LIMIT $${idx++} OFFSET $${idx}`,
     params,
   );
@@ -111,8 +110,8 @@ export async function searchTechLogs(query: string, techId?: number): Promise<Te
 
   const result = await pool.query(
     `SELECT
-       tsn.id, tsn.serial_number, tsn.serial_type, tsn.test_date_time,
-       tsn.tested_by, tsn.fnsku, tsn.notes, tsn.created_at,
+       tsn.id, tsn.serial_number, tsn.serial_type, tsn.created_at, tsn.updated_at,
+       tsn.tested_by, tsn.fnsku, tsn.notes,
        tsn.shipment_id, tsn.scan_ref,
        COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
        o.order_id,
@@ -131,7 +130,7 @@ export async function searchTechLogs(query: string, techId?: number): Promise<Te
        OR tsn.scan_ref ILIKE $1
        OR tsn.fnsku ILIKE $1
      ) ${techCondition}
-     ORDER BY tsn.test_date_time DESC NULLS LAST, tsn.id DESC
+     ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC
      LIMIT 100`,
     params,
   );
@@ -146,15 +145,14 @@ export async function createTechLog(params: CreateTechLogParams): Promise<TechSe
   const { shipmentId, scanRef } = raw ? await resolveShipmentId(raw) : { shipmentId: null, scanRef: null };
   const result = await pool.query(
     `INSERT INTO tech_serial_numbers
-       (serial_number, shipment_id, scan_ref, tested_by, test_date_time, fnsku, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (serial_number, shipment_id, scan_ref, tested_by, fnsku, notes)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
     [
       params.serialNumber,
       shipmentId,
       scanRef,
       params.testedBy ?? null,
-      params.testDateTime ?? new Date().toISOString(),
       params.fnsku ?? null,
       params.notes ?? null,
     ],
@@ -171,7 +169,6 @@ export async function updateTechLog(
     serialNumber: string;
     shippingTrackingNumber: string | null;
     testedBy: number | null;
-    testDateTime: string | null;
     fnsku: string | null;
     notes: string | null;
   }>,
@@ -189,7 +186,6 @@ export async function updateTechLog(
     setClauses.push(`scan_ref = $${idx++}`); params.push(resolved.scanRef);
   }
   if (updates.testedBy !== undefined) { setClauses.push(`tested_by = $${idx++}`); params.push(updates.testedBy); }
-  if (updates.testDateTime !== undefined) { setClauses.push(`test_date_time = $${idx++}`); params.push(updates.testDateTime); }
   if (updates.fnsku !== undefined) { setClauses.push(`fnsku = $${idx++}`); params.push(updates.fnsku); }
   if (updates.notes !== undefined) { setClauses.push(`notes = $${idx++}`); params.push(updates.notes); }
 
@@ -233,7 +229,7 @@ export async function deleteLatestTechLogByTracking(
                         regexp_replace(UPPER(COALESCE(tsn.scan_ref, '')), '[^A-Z0-9]', '', 'g')),
                8) = $1
          ${techCondition}
-       ORDER BY tsn.test_date_time DESC NULLS LAST, tsn.id DESC
+       ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC
        LIMIT 1
      )
      RETURNING id, serial_number`,
@@ -256,7 +252,7 @@ export async function getSerialsByTracking(tracking: string): Promise<string[]> 
              COALESCE(stn.tracking_number_normalized,
                       regexp_replace(UPPER(COALESCE(tsn.scan_ref, '')), '[^A-Z0-9]', '', 'g')),
              8) = $1
-     ORDER BY tsn.test_date_time ASC`,
+     ORDER BY tsn.created_at ASC`,
     [last8],
   );
   return result.rows.map((r) => r.serial_number);

@@ -17,11 +17,11 @@ export interface ShippedOrder {
   /** Staff ID assigned to test — sourced from work_assignments.assigned_tech_id */
   tester_id: number | null;
   tested_by: number | null;
-  test_date_time: string | null;
+  test_date_time: string | null;   // aliased from tsn.created_at
   /** Staff ID assigned to pack — sourced from work_assignments.assigned_packer_id */
   packer_id: number | null;
   packed_by: number | null;
-  pack_date_time: string | null;
+  pack_date_time: string | null;   // aliased from pl.created_at
   packer_photos_url: any;
   tracking_type: string | null;
   account_source: string | null;
@@ -68,7 +68,7 @@ export interface ActiveOrder {
   packer_id: number | null;
   tested_by: number | null;
   packed_by: number | null;
-  pack_date_time: string | null;
+  pack_date_time: string | null;   // aliased from pl.created_at
   serial_number: string | null;
 }
 
@@ -142,12 +142,12 @@ const ORDER_SERIALS_CTE = `
       wa_t.assigned_tech_id   AS tester_id,
       wa_p.assigned_packer_id AS packer_id,
       pl.packed_by,
-      to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+      to_char(pl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
       pl.packer_photos_url,
       pl.tracking_type,
-      COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+      COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
       MIN(tsn.tested_by)::int AS tested_by,
-      MIN(tsn.test_date_time)::text AS test_date_time
+      MIN(tsn.created_at)::text AS test_date_time
     FROM orders o
     ${WA_DEADLINE_LATERAL}
     LEFT JOIN LATERAL (
@@ -168,7 +168,7 @@ const ORDER_SERIALS_CTE = `
     LEFT JOIN LATERAL (
       SELECT
         pl.packed_by,
-        pl.pack_date_time,
+        pl.created_at AS pack_date_time,
         pl.tracking_type,
         COALESCE((
           SELECT jsonb_agg(p.url ORDER BY p.created_at ASC)
@@ -180,7 +180,7 @@ const ORDER_SERIALS_CTE = `
       WHERE pl.shipment_id IS NOT NULL
         AND pl.shipment_id = o.shipment_id
         AND pl.tracking_type = 'ORDERS'
-      ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
+      ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
       LIMIT 1
     ) pl ON true
     LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
@@ -192,7 +192,7 @@ const ORDER_SERIALS_CTE = `
              stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
              stn.latest_status_category, stn.carrier,
              wa_t.assigned_tech_id, wa_p.assigned_packer_id,
-             pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
+             pl.packed_by, pl.created_at, pl.packer_photos_url, pl.tracking_type
   )`;
 
 // ─── Shipped Orders (Read) ────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
        LEFT JOIN staff s1 ON os.tested_by = s1.id
        LEFT JOIN staff s2 ON os.packed_by = s2.id
        LEFT JOIN staff s3 ON os.tester_id = s3.id
-       ORDER BY COALESCE(os.pack_date_time::timestamp, os.created_at::timestamp) DESC NULLS LAST, os.id DESC
+       ORDER BY COALESCE(os.pack_date_time, os.created_at)::timestamp DESC NULLS LAST, os.id DESC
        LIMIT $1 OFFSET $2`,
       [limit, offset],
     );
@@ -254,12 +254,12 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           wa_t.assigned_tech_id   AS tester_id,
           wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
-          to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+          to_char(pl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
           pl.packer_photos_url,
           pl.tracking_type,
-          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+          COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
           MIN(tsn.tested_by)::int AS tested_by,
-          MIN(tsn.test_date_time)::text AS test_date_time
+          MIN(tsn.created_at)::text AS test_date_time
         FROM orders o
         LEFT JOIN LATERAL (
           SELECT wa.deadline_at FROM work_assignments wa
@@ -283,7 +283,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         LEFT JOIN LATERAL (
           SELECT
             pl.packed_by,
-            pl.pack_date_time,
+            pl.created_at AS pack_date_time,
             pl.tracking_type,
             COALESCE((
               SELECT jsonb_agg(p.url ORDER BY p.created_at ASC)
@@ -295,7 +295,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           WHERE pl.shipment_id IS NOT NULL
             AND pl.shipment_id = o.shipment_id
             AND pl.tracking_type = 'ORDERS'
-          ORDER BY pack_date_time DESC NULLS LAST, id DESC LIMIT 1
+          ORDER BY pl.created_at DESC NULLS LAST, id DESC LIMIT 1
         ) pl ON true
         LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
         WHERE o.id = $1
@@ -307,7 +307,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
                  stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
                  stn.latest_status_category, stn.carrier,
                  wa_t.assigned_tech_id, wa_p.assigned_packer_id,
-                 pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
+                 pl.packed_by, pl.created_at, pl.packer_photos_url, pl.tracking_type
       )
       SELECT os.*,
              s1.name AS tested_by_name,
@@ -361,7 +361,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
          )
        ORDER BY
          CASE WHEN os.tracking_number::text = $2 OR os.order_id::text = $2 THEN 1 ELSE 2 END,
-         COALESCE(os.pack_date_time::timestamp, os.created_at::timestamp) DESC NULLS LAST,
+         COALESCE(os.pack_date_time, os.created_at)::timestamp DESC NULLS LAST,
          os.id DESC
        LIMIT 100`,
       [searchTerm, query, last8],
@@ -488,8 +488,8 @@ export async function getActiveOrders(options?: {
        wa_t.assigned_tech_id   AS tester_id,
        wa_p.assigned_packer_id AS packer_id,
        pl.packed_by,
-       to_char(pl.pack_date_time, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
-       COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') AS serial_number,
+       to_char(pl.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS pack_date_time,
+       COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
        MIN(tsn.tested_by)::int AS tested_by
      FROM orders o
      LEFT JOIN LATERAL (
@@ -512,11 +512,11 @@ export async function getActiveOrders(options?: {
      ) wa_p ON true
      LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
      LEFT JOIN LATERAL (
-       SELECT packed_by, pack_date_time FROM packer_logs pl
+       SELECT packed_by, created_at AS pack_date_time FROM packer_logs pl
        WHERE pl.shipment_id IS NOT NULL
          AND pl.shipment_id = o.shipment_id
          AND pl.tracking_type = 'ORDERS'
-       ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC LIMIT 1
+       ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC LIMIT 1
      ) pl ON true
      LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
      WHERE ${conditions.join(' AND ')}

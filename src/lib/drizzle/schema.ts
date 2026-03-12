@@ -153,7 +153,7 @@ export const customers = pgTable('customers', {
 });
 
 // Orders table - Updated schema (serial tracking moved to tech_serial_numbers)
-// Packing completion tracking moved to packer_logs table (packed_by, pack_date_time, packer_photos_url)
+// Packing completion tracking moved to packer_logs table (packed_by); photos in photos table
 // Staff assignment (tester/packer) moved to work_assignments (entity_type='ORDER', entity_id=orders.id)
 // BEFORE DELETE trigger trg_cancel_wa_on_order_delete auto-cancels related work_assignments
 export const orders = pgTable('orders', {
@@ -188,9 +188,9 @@ export const packerLogs = pgTable('packer_logs', {
   /** Raw scan value for non-carrier scans (SKU codes, FNSKUs, garbage) */
   scanRef: text('scan_ref'),
   trackingType: varchar('tracking_type', { length: 20 }).notNull(),
-  packDateTime: timestamp('pack_date_time'),
   packedBy: integer('packed_by').references(() => staff.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
 // Unified photos table — polymorphic: entity_type IN ('PACKER_LOG','RECEIVING')
@@ -210,8 +210,6 @@ export const photos = pgTable('photos', {
 // BEFORE DELETE trigger trg_cancel_wa_on_receiving_delete auto-cancels related work_assignments
 export const receiving = pgTable('receiving', {
   id: serial('id').primaryKey(),
-  dateTime: text('date_time'), // Legacy compatibility column
-  receivingDateTime: timestamp('receiving_date_time').notNull(),
   receivingTrackingNumber: text('receiving_tracking_number'),
   carrier: text('carrier'),
   receivedAt: timestamp('received_at'),
@@ -444,7 +442,6 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   scanRef: text('scan_ref'),
   serialNumber: text('serial_number').notNull(),
   serialType: varchar('serial_type', { length: 20 }).notNull().default('SERIAL'),
-  testDateTime: timestamp('test_date_time').defaultNow(),
   testedBy: integer('tested_by').references(() => staff.id, { onDelete: 'set null' }),
   fnsku: text('fnsku').references(() => fbaFnskus.fnsku, { onDelete: 'set null' }),
   notes: text('notes'),
@@ -452,6 +449,7 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   fbaShipmentId: integer('fba_shipment_id').references(() => fbaShipments.id, { onDelete: 'set null' }),
   fbaShipmentItemId: integer('fba_shipment_item_id').references(() => fbaShipmentItems.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
 // Orders exceptions table - unmatched tracking scans from tech/packer

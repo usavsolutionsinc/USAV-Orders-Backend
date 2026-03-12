@@ -28,12 +28,12 @@ export async function GET(req: NextRequest) {
       FROM orders o
       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       LEFT JOIN LATERAL (
-        SELECT pack_date_time
+        SELECT created_at AS pack_date_time
         FROM packer_logs pl2
         WHERE pl2.shipment_id IS NOT NULL
           AND pl2.shipment_id = o.shipment_id
           AND pl2.tracking_type = 'ORDERS'
-        ORDER BY pack_date_time DESC NULLS LAST, id DESC
+        ORDER BY created_at DESC NULLS LAST, id DESC
         LIMIT 1
       ) pl ON true
       WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8)

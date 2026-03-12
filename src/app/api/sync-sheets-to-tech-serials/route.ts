@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
 
                         // Check if this serial already exists (match by shipment_id or scan_ref)
                         const existingSerial = await client.query(
-                            `SELECT id, test_date_time, tested_by FROM tech_serial_numbers
+                            `SELECT id, created_at, tested_by FROM tech_serial_numbers
                              WHERE (
                                (shipment_id IS NOT NULL AND shipment_id = $1)
                                OR (shipment_id IS NULL AND scan_ref = $2)
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
                         if (existingSerial.rows.length > 0) {
                             await client.query(
                                 `UPDATE tech_serial_numbers
-                                 SET test_date_time = $1,
+                                 SET updated_at = $1,
                                      tested_by = $2
                                  WHERE id = $3`,
                                 [parsedDateTime, staffId, existingSerial.rows[0].id]
@@ -123,9 +123,9 @@ export async function POST(req: NextRequest) {
                         } else {
                             await client.query(
                                 `INSERT INTO tech_serial_numbers
-                                 (shipment_id, scan_ref, serial_number, serial_type, test_date_time, tested_by)
-                                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                                [tsnShipmentId, tsnScanRef, upperSerial, serialType, parsedDateTime, staffId]
+                                 (shipment_id, scan_ref, serial_number, serial_type, tested_by)
+                                 VALUES ($1, $2, $3, $4, $5)`,
+                                [tsnShipmentId, tsnScanRef, upperSerial, serialType, staffId]
                             );
                             insertedCount++;
                         }

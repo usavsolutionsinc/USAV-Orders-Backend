@@ -199,8 +199,9 @@ export async function updateShipmentSummary(
          last_error_code          = NULL,
          last_error_message       = NULL,
          latest_payload           = $21::jsonb,
+         metadata                 = COALESCE(metadata, '{}'::jsonb) || $22::jsonb,
          updated_at               = now()
-       WHERE id = $22`,
+       WHERE id = $23`,
       [
         result.latestStatusCode ?? null,               // $1
         result.latestStatusLabel ?? null,              // $2
@@ -226,7 +227,8 @@ export async function updateShipmentSummary(
         result.latestEventAt ?? null,                  // $19
         nextCheck?.toISOString() ?? null,              // $20
         JSON.stringify(result.payload ?? {}),          // $21
-        shipmentId,                                    // $22
+        JSON.stringify(result.metadata ?? {}),         // $22
+        shipmentId,                                    // $23
       ]
     );
   } finally {

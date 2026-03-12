@@ -135,3 +135,17 @@ export async function registerShipment(params: {
     sourceSystem: params.sourceSystem,
   });
 }
+
+export async function registerAndSyncShipment(params: {
+  trackingNumber: string;
+  carrier?: CarrierCode;
+  sourceSystem?: string;
+}) {
+  const shipment = await registerShipment(params);
+
+  if (!shipment.last_checked_at && !shipment.latest_status_category) {
+    await syncShipment({ shipmentId: shipment.id });
+  }
+
+  return shipment;
+}

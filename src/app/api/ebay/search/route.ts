@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
         o.status,
         COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
           OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
-        COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number
+        COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') as serial_number
       FROM orders o
       LEFT JOIN LATERAL (
         SELECT wa.deadline_at FROM work_assignments wa

@@ -36,6 +36,7 @@ export interface CarrierTrackingResult {
   latestStatusDescription?: string | null;
   latestEventAt?: string | null;
   deliveredAt?: string | null;
+  metadata?: Record<string, unknown>;
   events: CarrierTrackingEvent[];
   payload: unknown;
 }

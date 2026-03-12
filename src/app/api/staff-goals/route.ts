@@ -26,16 +26,16 @@ export async function GET(req: NextRequest) {
       WITH today_counts AS (
         SELECT tested_by AS staff_id, COUNT(*)::int AS today_count
         FROM tech_serial_numbers
-        WHERE tested_by IS NOT NULL AND test_date_time IS NOT NULL
-          AND DATE(test_date_time AT TIME ZONE 'America/Los_Angeles') =
+        WHERE tested_by IS NOT NULL AND created_at IS NOT NULL
+          AND DATE(created_at AT TIME ZONE 'America/Los_Angeles') =
               DATE(NOW() AT TIME ZONE 'America/Los_Angeles')
         GROUP BY tested_by
       ),
       week_counts AS (
         SELECT tested_by AS staff_id, COUNT(*)::int AS week_count
         FROM tech_serial_numbers
-        WHERE tested_by IS NOT NULL AND test_date_time IS NOT NULL
-          AND DATE(test_date_time AT TIME ZONE 'America/Los_Angeles') >=
+        WHERE tested_by IS NOT NULL AND created_at IS NOT NULL
+          AND DATE(created_at AT TIME ZONE 'America/Los_Angeles') >=
               DATE(NOW() AT TIME ZONE 'America/Los_Angeles') - INTERVAL '6 day'
         GROUP BY tested_by
       )

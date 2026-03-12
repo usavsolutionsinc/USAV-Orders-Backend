@@ -42,8 +42,8 @@ export async function GET(req: NextRequest) {
             params.push(weekStart, weekEnd);
             const ws = params.length - 1;
             const we = params.length;
-            conditions.push(`pl.pack_date_time >= ($${ws}::date - interval '1 day')`);
-            conditions.push(`pl.pack_date_time <  ($${we}::date + interval '2 days')`);
+            conditions.push(`pl.created_at >= ($${ws}::date - interval '1 day')`);
+            conditions.push(`pl.created_at <  ($${we}::date + interval '2 days')`);
         }
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
         const query = `
             SELECT
                 pl.id,
-                pl.pack_date_time,
+                pl.created_at,
                 pl.scan_ref,
                 COALESCE(stn.tracking_number_raw, pl.scan_ref) AS shipping_tracking_number,
                 pl.packed_by,
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
             ) order_match ON TRUE
             LEFT JOIN orders o ON o.id = order_match.id
             ${whereClause}
-            ORDER BY pl.pack_date_time DESC NULLS LAST
+            ORDER BY pl.created_at DESC NULLS LAST
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
         `;
 
@@ -126,7 +126,6 @@ export async function POST(req: NextRequest) {
 
         const { shipmentId, scanRef } = await resolveShipmentId(body.shippingTrackingNumber || '');
         const newLog = await db.insert(packerLogs).values({
-            packDateTime: body.packDateTime,
             shipmentId: shipmentId ?? undefined,
             scanRef: scanRef ?? undefined,
             trackingType: body.trackingType || 'ORDERS',

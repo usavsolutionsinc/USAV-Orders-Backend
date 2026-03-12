@@ -5,12 +5,11 @@ export interface PackingLog {
   id: number;
   shipping_tracking_number: string;
   packed_by: number | null;
-  pack_date_time: string | null;
-  packer_photos_url: any;
+  created_at: string | null;
+  updated_at: string | null;
   tracking_type: string | null;
   sku: string | null;
   notes: string | null;
-  created_at: string | null;
 }
 
 export interface PackingPhoto {
@@ -23,8 +22,6 @@ export interface PackingPhoto {
 export interface CreatePackingLogParams {
   shippingTrackingNumber: string;
   packedBy?: number | null;
-  packDateTime?: string | null;
-  packerPhotosUrl?: any;
   trackingType?: string | null;
   sku?: string | null;
   notes?: string | null;
@@ -63,13 +60,13 @@ export async function getPackingLogs(options?: {
   params.push(limit, offset);
 
   const result = await pool.query(
-    `SELECT pl.id, pl.packed_by, pl.pack_date_time, pl.tracking_type, pl.created_at,
+    `SELECT pl.id, pl.packed_by, pl.created_at, pl.updated_at, pl.tracking_type,
             pl.shipment_id, pl.scan_ref,
             COALESCE(stn.tracking_number_raw, pl.scan_ref) AS shipping_tracking_number
      FROM packer_logs pl
      LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
      ${where}
-     ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC
+     ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
      LIMIT $${idx++} OFFSET $${idx}`,
     params,
   );
@@ -90,14 +87,14 @@ export async function getPackingLogById(id: number): Promise<PackingLog | null> 
 export async function getPackingLogByTracking(tracking: string): Promise<PackingLog | null> {
   const last8 = tracking.replace(/\D/g, '').slice(-8);
   const result = await pool.query(
-    `SELECT pl.id, pl.packed_by, pl.pack_date_time, pl.tracking_type, pl.created_at,
+    `SELECT pl.id, pl.packed_by, pl.created_at, pl.updated_at, pl.tracking_type,
             pl.shipment_id, pl.scan_ref,
             COALESCE(stn.tracking_number_raw, pl.scan_ref) AS shipping_tracking_number
      FROM packer_logs pl
      LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
      WHERE RIGHT(COALESCE(stn.tracking_number_normalized,
                           regexp_replace(UPPER(COALESCE(pl.scan_ref,'')), '[^A-Z0-9]', '', 'g')), 8) = $1
-     ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC LIMIT 1`,
+     ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC LIMIT 1`,
     [last8],
   );
   return result.rows[0] ?? null;
@@ -111,14 +108,13 @@ export async function createPackingLog(params: CreatePackingLogParams): Promise<
   const { shipmentId, scanRef } = raw ? await resolveShipmentId(raw) : { shipmentId: null, scanRef: null };
   const result = await pool.query(
     `INSERT INTO packer_logs
-       (shipment_id, scan_ref, packed_by, pack_date_time, tracking_type, notes)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (shipment_id, scan_ref, packed_by, tracking_type, notes)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
     [
       shipmentId,
       scanRef,
       params.packedBy ?? null,
-      params.packDateTime ?? null,
       params.trackingType ?? null,
       params.notes ?? null,
     ],
@@ -133,8 +129,6 @@ export async function updatePackingLog(
   id: number,
   updates: Partial<{
     packedBy: number | null;
-    packDateTime: string | null;
-    packerPhotosUrl: any;
     trackingType: string | null;
     notes: string | null;
   }>,
@@ -144,10 +138,9 @@ export async function updatePackingLog(
   let idx = 1;
 
   if (updates.packedBy !== undefined) { setClauses.push(`packed_by = $${idx++}`); params.push(updates.packedBy); }
-  if (updates.packDateTime !== undefined) { setClauses.push(`pack_date_time = $${idx++}`); params.push(updates.packDateTime); }
-  if (updates.packerPhotosUrl !== undefined) { setClauses.push(`packer_photos_url = $${idx++}`); params.push(updates.packerPhotosUrl); }
   if (updates.trackingType !== undefined) { setClauses.push(`tracking_type = $${idx++}`); params.push(updates.trackingType); }
   if (updates.notes !== undefined) { setClauses.push(`notes = $${idx++}`); params.push(updates.notes); }
+  setClauses.push(`updated_at = NOW()`);
 
   if (setClauses.length === 0) return getPackingLogById(id);
 

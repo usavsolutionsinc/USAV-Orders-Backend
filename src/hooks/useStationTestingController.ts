@@ -394,7 +394,7 @@ export function useStationTestingController({
               id: data.techSerialId,
               order_db_id: data.order.id ?? null,
               shipment_id: data.order.shipmentId ?? null,
-              test_date_time: data.order.testDateTime ?? null,
+              created_at: data.order.testDateTime ?? null,
               shipping_tracking_number: data.order.tracking ?? '',
               serial_number: '',
               tested_by: data.order.testedBy ?? null,
@@ -410,7 +410,6 @@ export function useStationTestingController({
               quantity: String(data.order.quantity || '1'),
               is_shipped: data.order.isShipped ?? false,  // derived from stn in API
               ship_by_date: data.order.shipByDate ?? null,
-              created_at: data.order.createdAt ?? null,
               out_of_stock: null,
             },
           }));

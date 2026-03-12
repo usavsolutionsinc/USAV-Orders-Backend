@@ -144,14 +144,15 @@ export async function POST(req: NextRequest) {
             if (byFK.rows.length > 0) existingRowResult = byFK;
         }
 
-        if (existingRowResult.rows.length === 0 && resolvedScan.scanRef) {
+        if (existingRowResult.rows.length === 0) {
             const byScanRef = await pool.query(
                 `SELECT id, serial_number
                  FROM tech_serial_numbers
-                 WHERE scan_ref IS NOT NULL AND scan_ref != '' AND scan_ref = $1
+                 WHERE scan_ref IS NOT NULL AND scan_ref != ''
+                   AND RIGHT(regexp_replace(UPPER(scan_ref), '[^A-Z0-9]', '', 'g'), 18) = $1
                  ORDER BY id ASC
                  LIMIT 1`,
-                [resolvedScan.scanRef]
+                [key18]
             );
             if (byScanRef.rows.length > 0) existingRowResult = byScanRef;
         }
@@ -178,7 +179,7 @@ export async function POST(req: NextRequest) {
             await pool.query(
                 `UPDATE tech_serial_numbers
                  SET serial_number = $1,
-                     test_date_time = date_trunc('second', NOW()),
+                     updated_at = date_trunc('second', NOW()),
                      tested_by = $2
                  WHERE id = $3`,
                 [updatedSerialList.join(', '), staffId, row.id]
@@ -189,15 +190,15 @@ export async function POST(req: NextRequest) {
             if (resolvedScan.shipmentId) {
                 await pool.query(
                     `INSERT INTO tech_serial_numbers
-                     (shipment_id, scan_ref, serial_number, serial_type, test_date_time, tested_by)
-                     VALUES ($1, $2, $3, $4, date_trunc('second', NOW()), $5)`,
+                     (shipment_id, scan_ref, serial_number, serial_type, tested_by)
+                     VALUES ($1, $2, $3, $4, $5)`,
                     [resolvedScan.shipmentId, resolvedScan.scanRef ?? null, updatedSerialList.join(', '), serialType, staffId]
                 );
             } else {
                 await pool.query(
                     `INSERT INTO tech_serial_numbers
-                     (scan_ref, serial_number, serial_type, test_date_time, tested_by)
-                     VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)`,
+                     (scan_ref, serial_number, serial_type, tested_by)
+                     VALUES ($1, $2, $3, $4)`,
                     [resolvedScan.scanRef ?? scannedTracking, updatedSerialList.join(', '), serialType, staffId]
                 );
             }

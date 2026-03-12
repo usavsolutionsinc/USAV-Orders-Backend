@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
         o.created_at,
         wa_t.assigned_tech_id   AS tester_id,
         wa_p.assigned_packer_id AS packer_id,
-        pl_latest.pack_date_time AS pack_date_time,
+        pl_latest.pack_date_time,
         pl_latest.packed_by AS packed_by,
         tsn_scan.tested_by      AS tested_by,
         tsn_scan.serial_number  AS serial_number,
@@ -109,11 +109,11 @@ export async function GET(req: NextRequest) {
         LIMIT 1
       ) wa_p ON true
       LEFT JOIN LATERAL (
-        SELECT pl.pack_date_time, pl.packed_by
+        SELECT pl.created_at AS pack_date_time, pl.packed_by
         FROM packer_logs pl
         WHERE pl.shipment_id IS NOT NULL
           AND pl.shipment_id = o.shipment_id
-        ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC
+        ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
         LIMIT 1
       ) pl_latest ON true
       LEFT JOIN LATERAL (

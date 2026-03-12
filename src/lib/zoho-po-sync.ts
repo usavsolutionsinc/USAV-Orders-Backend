@@ -90,7 +90,6 @@ export async function importZohoPurchaseOrderToReceiving(
     const recCols = new Set(recColsRes.rows.map((r) => r.column_name));
 
     const recValues: Record<string, unknown> = {
-      receiving_date_time: normalizedDate,
       receiving_tracking_number: poNumber ?? zohoId,
       carrier: 'ZOHO_PO',
       received_at: normalizedDate,

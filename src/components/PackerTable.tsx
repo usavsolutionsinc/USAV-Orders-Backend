@@ -87,14 +87,14 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       test_date_time: null,
       packer_id: record.packed_by || null,
       packed_by: record.packed_by || null,
-      pack_date_time: record.pack_date_time || null,
+      pack_date_time: record.created_at || null,
       packer_photos_url: record.packer_photos_url || [],
       tracking_type: null,
       account_source: null,
       notes: '',
       status_history: [],
       is_shipped: undefined,
-      created_at: record.pack_date_time || null,
+      created_at: record.created_at || null,
       quantity: record.quantity || '1',
       packer_log_id: record.id,
     };
@@ -145,13 +145,21 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, records]);
 
+  // Deduplicate: keep only the latest record per tracking number (highest id)
+  const seenTracking = new Map<string, PackerRecord>();
+  [...records].sort((a, b) => a.id - b.id).forEach(record => {
+    const key = (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
+    seenTracking.set(key, record);
+  });
+  const dedupedRecords = Array.from(seenTracking.values());
+
   // Group records by date
   const groupedRecords: { [key: string]: PackerRecord[] } = {};
-  records.forEach(record => {
-    if (!record.pack_date_time) return;
+  dedupedRecords.forEach(record => {
+    if (!record.created_at) return;
     let date = '';
     try {
-      date = toPSTDateKey(record.pack_date_time) || 'Unknown';
+      date = toPSTDateKey(record.created_at) || 'Unknown';
     } catch (e) {
       date = 'Unknown';
     }
@@ -207,8 +215,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, dateRecords]) => {
                   const sortedRecords = [...dateRecords].sort((a, b) => {
-                    const timeA = new Date(a.pack_date_time || 0).getTime();
-                    const timeB = new Date(b.pack_date_time || 0).getTime();
+                    const timeA = new Date(a.created_at || 0).getTime();
+                    const timeB = new Date(b.created_at || 0).getTime();
                     return timeB - timeA;
                   });
                   return (

@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
 
     const techLogResult = await client.query(
       `INSERT INTO tech_serial_numbers
-         (serial_number, serial_type, test_date_time, tested_by, scan_ref, fnsku, notes)
-       VALUES ($1, 'FNSKU', date_trunc('second', NOW()), $2, $3, $3, $4)
+         (serial_number, serial_type, tested_by, scan_ref, fnsku, notes)
+       VALUES ($1, 'FNSKU', $2, $3, $3, $4)
        RETURNING id`,
       [null, testedBy, fnsku, 'Tech FNSKU scan']
     );

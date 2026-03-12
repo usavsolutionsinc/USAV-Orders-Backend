@@ -120,7 +120,6 @@ export async function POST(request: NextRequest) {
     // Build receiving insert — condition_grade and disposition_code are now nullable
     // (they're per-item on receiving_lines for PO receives; receiving only tracks lifecycle)
     const valuesByColumn: Record<string, unknown> = {
-      receiving_date_time: normalizedDate,
       receiving_tracking_number: purchaseReceiveId || purchaseOrderId,
       carrier: 'ZOHO_PO',
       received_at: normalizedDate,

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
                     o.product_title,
                     wa_test.assigned_tech_id   AS tester_id,
                     wa_pack.assigned_packer_id AS packer_id,
-                    pl.packed_by, pl.pack_date_time
+                    pl.packed_by, pl.created_at AS pack_date_time
              FROM orders o
              JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
              LEFT JOIN LATERAL (
@@ -45,12 +45,12 @@ export async function GET(req: NextRequest) {
                  ORDER BY id DESC LIMIT 1
              ) wa_pack ON TRUE
              LEFT JOIN LATERAL (
-                 SELECT pl.packed_by, pl.pack_date_time
+                 SELECT pl.packed_by, pl.created_at AS pack_date_time
                  FROM packer_logs pl
                  WHERE pl.shipment_id IS NOT NULL
                    AND pl.shipment_id = o.shipment_id
                    AND pl.tracking_type = 'ORDERS'
-                 ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC
+                 ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
                  LIMIT 1
              ) pl ON TRUE
              WHERE stn.tracking_number_raw ILIKE $1`,
@@ -60,12 +60,12 @@ export async function GET(req: NextRequest) {
         // Check in packer_logs table
         const packerLogsResult = await client.query(
             `SELECT COALESCE(stn.tracking_number_raw, pl.scan_ref) AS shipping_tracking_number,
-                    pl.tracking_type, pl.pack_date_time
+                    pl.tracking_type, pl.created_at AS pack_date_time
              FROM packer_logs pl
              LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
              WHERE stn.tracking_number_raw ILIKE $1
                 OR pl.scan_ref ILIKE $1
-             ORDER BY pl.pack_date_time DESC NULLS LAST
+             ORDER BY pl.created_at DESC NULLS LAST
              LIMIT 50`,
             [`%${tracking}%`]
         );

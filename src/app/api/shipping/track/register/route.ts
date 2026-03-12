@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/api-guard';
-import { registerShipment } from '@/lib/shipping/sync-shipment';
+import { registerAndSyncShipment } from '@/lib/shipping/sync-shipment';
 import type { CarrierCode } from '@/lib/shipping/types';
 
 export async function POST(req: NextRequest) {
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     : undefined;
 
   try {
-    const shipment = await registerShipment({
+    const shipment = await registerAndSyncShipment({
       trackingNumber,
       carrier,
       sourceSystem: body.sourceSystem,
