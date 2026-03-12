@@ -160,7 +160,9 @@ async function syncShippedSheet(params: {
             }
 
             const existingOrder = await client.query(
-                'SELECT id FROM orders WHERE shipping_tracking_number = $1 LIMIT 1',
+                `SELECT o.id FROM orders o
+                 JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+                 WHERE stn.tracking_number_raw = $1 LIMIT 1`,
                 [shippingTracking]
             );
             if (existingOrder.rows.length > 0) {
@@ -179,14 +181,12 @@ async function syncShippedSheet(params: {
             const insertedOrder = await client.query(
                 `INSERT INTO orders (
                     order_id, product_title, quantity, condition,
-                    shipping_tracking_number,
-                    sku, notes, is_shipped
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    sku, notes, status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id`,
                 [
                     orderId, productTitle, quantity, condition,
-                    shippingTracking,
-                    sku, notes, true,
+                    sku, notes, 'shipped',
                 ]
             );
 
@@ -576,17 +576,21 @@ async function syncScanFbaInSheet(params: {
         try {
             await client.query(`
                 CREATE TABLE IF NOT EXISTS fba_fnskus (
+                    fnsku TEXT PRIMARY KEY,
                     product_title TEXT,
                     asin TEXT,
                     sku TEXT,
-                    fnsku TEXT
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    last_seen_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             `);
             await client.query(`
                 CREATE INDEX IF NOT EXISTS idx_fba_fnskus_fnsku_normalized
                 ON fba_fnskus (UPPER(TRIM(COALESCE(fnsku, ''))))
             `);
-            await client.query('TRUNCATE TABLE fba_fnskus');
+            await client.query(`UPDATE fba_fnskus SET is_active = FALSE, updated_at = NOW()`);
 
             let inserted = 0;
             const seenFnsku = new Set<string>();
@@ -603,8 +607,16 @@ async function syncScanFbaInSheet(params: {
                 seenFnsku.add(fnsku);
 
                 await client.query(
-                    `INSERT INTO fba_fnskus (product_title, asin, sku, fnsku) VALUES ($1, $2, $3, $4)`,
-                    [productTitle, asin, sku, fnsku]
+                    `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
+                     VALUES ($1, $2, $3, $4, TRUE, NOW(), NOW())
+                     ON CONFLICT (fnsku) DO UPDATE
+                     SET product_title = EXCLUDED.product_title,
+                         asin = EXCLUDED.asin,
+                         sku = EXCLUDED.sku,
+                         is_active = TRUE,
+                         last_seen_at = NOW(),
+                         updated_at = NOW()`,
+                    [fnsku, productTitle, asin, sku]
                 );
                 inserted++;
             }

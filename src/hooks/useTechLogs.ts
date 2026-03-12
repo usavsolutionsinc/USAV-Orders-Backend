@@ -25,7 +25,9 @@ export interface TechRecord {
   account_source?: string | null;
   notes?: string | null;
   out_of_stock?: string | null;
+  /** Derived from shipping_tracking_numbers carrier status */
   is_shipped?: boolean;
+  shipment_status?: string | null;
 }
 
 export interface UseTechLogsOptions {

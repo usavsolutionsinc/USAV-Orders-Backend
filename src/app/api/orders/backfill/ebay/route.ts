@@ -41,22 +41,22 @@ export async function POST(req: NextRequest) {
       condition: string | null;
       quantity: string | null;
       order_date: Date | null;
-      shipping_tracking_number: string | null;
     }>(
-      `SELECT id, order_id, account_source, sku, item_number, product_title,
-              condition, quantity, order_date, shipping_tracking_number
-       FROM orders
-       WHERE is_shipped = FALSE
+      `SELECT o.id, o.order_id, o.account_source, o.sku, o.item_number, o.product_title,
+              o.condition, o.quantity, o.order_date
+       FROM orders o
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+       WHERE NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+               OR stn.is_out_for_delivery OR stn.is_delivered, false)
          AND COALESCE(order_id, '') != ''
          AND (
-           COALESCE(sku, '')                       = '' OR
-           COALESCE(item_number, '')               = '' OR
-           COALESCE(product_title, '')             = '' OR
-           COALESCE(condition, '')                 = '' OR
-           COALESCE(quantity, '')                  = '' OR
-           order_date IS NULL                         OR
-           COALESCE(shipping_tracking_number, '') = ''  OR
-           COALESCE(account_source, '')            = ''
+           COALESCE(sku, '')           = '' OR
+           COALESCE(item_number, '')   = '' OR
+           COALESCE(product_title, '') = '' OR
+           COALESCE(condition, '')     = '' OR
+           COALESCE(quantity, '')      = '' OR
+           order_date IS NULL             OR
+           COALESCE(account_source, '') = ''
          )
        ORDER BY created_at DESC
        LIMIT $1`,
@@ -167,9 +167,6 @@ export async function POST(req: NextRequest) {
         }
         if (!order.order_date && orderDate && !Number.isNaN(orderDate.getTime())) {
           updates.push(`order_date = $${idx++}`); values.push(orderDate);
-        }
-        if (isBlank(order.shipping_tracking_number) && trackingNumber) {
-          updates.push(`shipping_tracking_number = $${idx++}`); values.push(trackingNumber);
         }
         if (isBlank(order.account_source) && matchedAccount) {
           updates.push(`account_source = $${idx++}`); values.push(matchedAccount);

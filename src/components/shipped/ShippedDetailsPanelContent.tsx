@@ -189,7 +189,7 @@ export function ShippedDetailsPanelContent({
           <CopyableValueFieldBlock
             label="Tracking Number"
             value={shipped.shipping_tracking_number || 'Not available'}
-            externalUrl={getTrackingUrl(shipped.shipping_tracking_number)}
+            externalUrl={getTrackingUrl(shipped.shipping_tracking_number || '')}
             externalLabel="Open shipment tracking in new tab"
           />
 

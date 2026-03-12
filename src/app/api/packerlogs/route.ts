@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
             SELECT
                 pl.id,
                 pl.pack_date_time,
+                pl.scan_ref,
                 COALESCE(stn.tracking_number_raw, pl.scan_ref) AS shipping_tracking_number,
                 pl.packed_by,
                 pl.tracking_type,
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest) {
                     '[]'::json
                 ) AS packer_photos_url,
                 o.order_id,
+                o.account_source,
                 COALESCE(
                     (
                         SELECT ss.product_title
@@ -81,7 +83,27 @@ export async function GET(req: NextRequest) {
                 o.sku
             FROM packer_logs pl
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
-            LEFT JOIN orders o ON o.shipment_id = pl.shipment_id AND pl.shipment_id IS NOT NULL
+            -- FK-first order match with text-fallback for legacy rows lacking shipment_id
+            LEFT JOIN LATERAL (
+                SELECT ord.id
+                FROM orders ord
+                WHERE (
+                    pl.shipment_id IS NOT NULL
+                    AND ord.shipment_id = pl.shipment_id
+                ) OR (
+                    COALESCE(stn.tracking_number_raw, pl.scan_ref, '') <> ''
+                    AND ord.shipping_tracking_number IS NOT NULL
+                    AND ord.shipping_tracking_number != ''
+                    AND RIGHT(regexp_replace(UPPER(ord.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) =
+                        RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, pl.scan_ref, '')), '[^A-Z0-9]', '', 'g'), 18)
+                )
+                ORDER BY
+                    CASE WHEN pl.shipment_id IS NOT NULL AND ord.shipment_id = pl.shipment_id THEN 0 ELSE 1 END,
+                    ord.created_at DESC NULLS LAST,
+                    ord.id DESC
+                LIMIT 1
+            ) order_match ON TRUE
+            LEFT JOIN orders o ON o.id = order_match.id
             ${whereClause}
             ORDER BY pl.pack_date_time DESC NULLS LAST
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
@@ -124,7 +146,9 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        await invalidateCacheTags(['packerlogs']);
+        // Bust both packerlogs and orders caches: is_packed is computed in /api/orders,
+        // so creating a new packer log must clear the orders cache too.
+        await invalidateCacheTags(['packerlogs', 'orders']);
         return NextResponse.json(newLog[0]);
     } catch (error: any) {
         console.error('Error creating packer log:', error);

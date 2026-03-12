@@ -27,10 +27,11 @@ export async function GET(req: NextRequest) {
         o.sku,
         o.account_source, 
         o.order_date, 
-        o.shipping_tracking_number,
+        stn.tracking_number_raw AS tracking_number,
         to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
         o.status,
-        o.is_shipped,
+        COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+          OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
         COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.test_date_time), '') as serial_number
       FROM orders o
       LEFT JOIN LATERAL (
@@ -40,9 +41,11 @@ export async function GET(req: NextRequest) {
                  wa.updated_at DESC, wa.id DESC LIMIT 1
       ) wa_deadline ON TRUE
       LEFT JOIN tech_serial_numbers tsn ON o.shipment_id = tsn.shipment_id AND o.shipment_id IS NOT NULL
+      LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       WHERE o.account_source IS NOT NULL
-      GROUP BY o.id, o.order_id, o.product_title, o.sku, o.account_source, o.order_date, 
-               o.shipping_tracking_number, wa_deadline.deadline_at, o.status, o.is_shipped
+      GROUP BY o.id, o.order_id, o.product_title, o.sku, o.account_source, o.order_date,
+               stn.tracking_number_raw, wa_deadline.deadline_at, o.status,
+               stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered
     `;
 
     const params: any[] = [];
@@ -54,7 +57,7 @@ export async function GET(req: NextRequest) {
         o.order_id ILIKE $${paramCount} OR
         o.sku ILIKE $${paramCount} OR
         o.product_title ILIKE $${paramCount} OR
-        o.shipping_tracking_number ILIKE $${paramCount} OR
+        COALESCE(stn.tracking_number_raw, '') ILIKE $${paramCount} OR
         tsn.serial_number ILIKE $${paramCount}
       )`;
       params.push(`%${query.trim()}%`);

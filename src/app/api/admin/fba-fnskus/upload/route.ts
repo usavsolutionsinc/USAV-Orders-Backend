@@ -122,7 +122,15 @@ export async function POST(req: NextRequest) {
       await client.query('BEGIN');
       for (const row of rowsToInsert) {
         await client.query(
-          'INSERT INTO fba_fnskus (product_title, asin, sku, fnsku) VALUES ($1, $2, $3, $4)',
+          `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
+           VALUES ($4, $1, $2, $3, TRUE, NOW(), NOW())
+           ON CONFLICT (fnsku) DO UPDATE
+             SET product_title = EXCLUDED.product_title,
+                 asin = EXCLUDED.asin,
+                 sku = EXCLUDED.sku,
+                 is_active = TRUE,
+                 last_seen_at = NOW(),
+                 updated_at = NOW()`,
           row
         );
       }

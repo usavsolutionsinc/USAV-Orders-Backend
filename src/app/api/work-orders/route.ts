@@ -121,7 +121,7 @@ async function getOrders(): Promise<WorkOrderRow[]> {
        o.order_id,
        o.product_title,
        o.item_number,
-       o.shipping_tracking_number,
+       stn.tracking_number_raw AS tracking_number,
        o.sku,
        o.notes,
        test_wa.id AS test_assignment_id,
@@ -169,8 +169,12 @@ async function getOrders(): Promise<WorkOrderRow[]> {
      ) pack_wa ON TRUE
      LEFT JOIN staff st ON st.id = test_wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = pack_wa.assigned_packer_id
-     WHERE (o.is_shipped = false OR o.is_shipped IS NULL)
-       AND COALESCE(BTRIM(o.shipping_tracking_number), '') <> ''
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+     WHERE NOT COALESCE(
+             stn.is_carrier_accepted OR stn.is_in_transit
+             OR stn.is_out_for_delivery OR stn.is_delivered, false
+           )
+       AND o.shipment_id IS NOT NULL
      ORDER BY COALESCE(test_wa.deadline_at, o.created_at) ASC, o.id ASC
      LIMIT 500`
   );
@@ -182,7 +186,7 @@ async function getOrders(): Promise<WorkOrderRow[]> {
     queueKey: 'orders' as const,
     queueLabel: 'Orders',
     title: String(row.product_title || 'Untitled order'),
-    subtitle: [row.order_id, row.shipping_tracking_number, row.sku].filter(Boolean).join(' • '),
+    subtitle: [row.order_id, row.tracking_number, row.sku].filter(Boolean).join(' • '),
     recordLabel: String(row.order_id || row.item_number || `Order #${row.id}`),
     sourcePath: '/dashboard?pending=',
     techId: row.tech_id == null ? null : Number(row.tech_id),
@@ -298,7 +302,6 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
        rs.product_title,
        rs.issue,
        rs.notes AS repair_notes,
-       rs.repaired_by AS native_tech_id,
        wa.id AS assignment_id,
        wa.assigned_tech_id,
        wa.assigned_packer_id,
@@ -326,18 +329,13 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
        END, wa.updated_at DESC, wa.id DESC
        LIMIT 1
      ) wa ON TRUE
-     LEFT JOIN staff st ON st.id = COALESCE(wa.assigned_tech_id, rs.repaired_by)
+     LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
      WHERE COALESCE(rs.status, '') NOT IN ('Shipped', 'Picked Up')
      ORDER BY COALESCE(wa.deadline_at, wa.updated_at) ASC NULLS LAST, rs.id ASC`
   );
 
   return result.rows.map((row) => {
-    const resolvedTechId =
-      row.assigned_tech_id != null ? Number(row.assigned_tech_id)
-      : row.native_tech_id != null ? Number(row.native_tech_id)
-      : null;
-
     return {
       id: `REPAIR:${row.id}`,
       entityType: 'REPAIR' as const,
@@ -348,7 +346,7 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
       subtitle: String(row.issue || 'Repair work order'),
       recordLabel: String(row.ticket_number || `Repair #${row.id}`),
       sourcePath: '/repair',
-      techId: resolvedTechId,
+      techId: row.assigned_tech_id == null ? null : Number(row.assigned_tech_id),
       techName: row.tech_name ? String(row.tech_name) : null,
       packerId: row.assigned_packer_id == null ? null : Number(row.assigned_packer_id),
       packerName: row.packer_name ? String(row.packer_name) : null,
@@ -669,7 +667,6 @@ export async function PATCH(request: NextRequest) {
     const assignedTechId = Number.isFinite(techIdRaw) && techIdRaw > 0 ? techIdRaw : null;
     const assignedPackerId = Number.isFinite(packerIdRaw) && packerIdRaw > 0 ? packerIdRaw : null;
     const priority = Number.isFinite(priorityRaw) ? Math.max(1, Math.min(priorityRaw, 9999)) : 100;
-    const isShipped = body?.isShipped === true;
 
     if (entityType === 'ORDER') {
       await upsertAssignment({
@@ -695,12 +692,7 @@ export async function PATCH(request: NextRequest) {
         notes,
       });
 
-      if (isShipped) {
-        await pool.query(
-          `UPDATE orders SET is_shipped = true WHERE id = $1`,
-          [entityId]
-        );
-      }
+      // is_shipped is now derived from shipping_tracking_numbers; no direct write needed
     } else {
       const workType: WorkType =
         entityType === 'REPAIR'
@@ -730,15 +722,6 @@ export async function PATCH(request: NextRequest) {
                assigned_packer_id = $2
            WHERE id = $3`,
           [assignedTechId, assignedPackerId, entityId]
-        );
-      }
-
-      if (entityType === 'REPAIR') {
-        await pool.query(
-          `UPDATE repair_service
-           SET repaired_by = $1
-           WHERE id = $2`,
-          [assignedTechId, entityId]
         );
       }
 

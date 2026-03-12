@@ -8,6 +8,7 @@ import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
 import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { WorkOrderAssignmentCard } from './WorkOrderAssignmentCard';
 import {
   type WorkOrderRow,
@@ -200,7 +201,7 @@ export function WorkOrdersDashboard() {
   // Called by the assignment card when user finalises a single row's selection
   const handleAssignConfirm = useCallback(async (
     row: WorkOrderRow,
-    { techId: newTechId, packerId: newPackerId, deadline, status: statusOverride, isShipped }: import('./WorkOrderAssignmentCard').AssignmentConfirmPayload
+    { techId: newTechId, packerId: newPackerId, deadline, status: statusOverride }: import('./WorkOrderAssignmentCard').AssignmentConfirmPayload
   ) => {
     const newStatus =
       statusOverride ??
@@ -228,7 +229,6 @@ export function WorkOrdersDashboard() {
           priority: row.priority,
           deadlineAt: deadline,
           notes: row.notes,
-          isShipped: isShipped ?? false,
         }),
       });
       if (!res.ok) {
@@ -406,13 +406,18 @@ function WorkOrderTableRow({
 
   const techName = row.techName || (row.techId ? getStaffName(row.techId) : null);
   const packerName = row.packerName || (row.packerId ? getStaffName(row.packerId) : null);
+  const techTextClass = row.techId
+    ? stationThemeColors[getStaffThemeById(row.techId, 'technician')].text
+    : 'text-slate-400';
+  const packerTextClass = row.packerId
+    ? stationThemeColors[getStaffThemeById(row.packerId, 'packer')].text
+    : 'text-slate-400';
 
   // Contextual subtitle: always show tech status, show packer status only after tech set
   const techLabel = techName ?? (row.techId ? `Tech #${row.techId}` : 'Tech unassigned');
   const packerLabel = row.techId
     ? (packerName ?? (row.packerId ? `Pack #${row.packerId}` : 'Packer unassigned'))
     : null;
-  const assignmentText = [techLabel, packerLabel].filter(Boolean).join(' · ');
 
   return (
     <motion.div
@@ -458,10 +463,14 @@ function WorkOrderTableRow({
           </p>
 
           {/* Subtitle — tech · packer names from work_assignments + deadline */}
-          <p className={`text-[10px] font-bold uppercase tracking-widest truncate ${
-            isUnassigned ? 'text-orange-400' : 'text-gray-400'
-          }`}>
-            {assignmentText || '—'}
+          <p className="text-[10px] font-bold uppercase tracking-widest truncate text-gray-400">
+            <span className={techTextClass}>{techLabel}</span>
+            {packerLabel ? (
+              <>
+                <span className="text-gray-300"> · </span>
+                <span className={packerTextClass}>{packerLabel}</span>
+              </>
+            ) : null}
             {row.deadlineAt ? (
               <span className="text-gray-400"> · {formatDate(row.deadlineAt)}</span>
             ) : null}

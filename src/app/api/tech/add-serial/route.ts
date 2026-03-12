@@ -4,6 +4,7 @@ import { toISOStringPST } from '@/lib/timezone';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 export async function POST(req: NextRequest) {
     try {
@@ -27,22 +28,36 @@ export async function POST(req: NextRequest) {
             }, { status: 400 });
         }
 
-        // Get order by normalized last-8. If missing, allow exception-backed flow.
-        const orderResult = await pool.query(`
-            SELECT
-                id,
-                shipping_tracking_number,
-                account_source
-            FROM orders
-            WHERE shipping_tracking_number IS NOT NULL
-              AND shipping_tracking_number != ''
-              AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-            ORDER BY id DESC
-            LIMIT 1
-        `, [key18]);
+        // Resolve shipment FK for this tracking number.
+        const resolvedScan = await resolveShipmentId(scannedTracking);
+
+        // Primary: match via shipment_id FK; fallback to text last-18 match.
+        let orderResult = resolvedScan.shipmentId
+            ? await pool.query(`
+                SELECT o.id, o.account_source,
+                       stn.tracking_number_raw AS shipping_tracking_number
+                FROM orders o
+                LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+                WHERE o.shipment_id = $1
+                ORDER BY o.id DESC
+                LIMIT 1
+            `, [resolvedScan.shipmentId])
+            : { rows: [] as any[] };
+
+        if (orderResult.rows.length === 0) {
+            orderResult = await pool.query(`
+                SELECT o.id, stn.tracking_number_raw AS shipping_tracking_number, o.account_source
+                FROM orders o
+                JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+                WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+                ORDER BY o.id DESC
+                LIMIT 1
+            `, [key18]);
+        }
         const order = orderResult.rows[0] || null;
 
         if (!order) {
+            // Allow if an open exception exists for this tracking.
             const exceptionResult = await pool.query(
                 `SELECT id
                  FROM orders_exceptions
@@ -113,25 +128,35 @@ export async function POST(req: NextRequest) {
                 .map((s) => s.trim().toUpperCase())
                 .filter(Boolean);
 
-        // One-row-per-tracking model: append serial to existing row by key-18.
-        const existingExactRowResult = await pool.query(
-            `SELECT id, shipping_tracking_number, serial_number
-             FROM tech_serial_numbers
-             WHERE shipping_tracking_number = $1
-             ORDER BY id ASC
-             LIMIT 1`,
-            [scannedTracking]
-        );
-        const existingRowResult = existingExactRowResult.rows.length > 0
-            ? existingExactRowResult
-            : await pool.query(
-                `SELECT id, shipping_tracking_number, serial_number
+        // One-row-per-tracking model: append serial to existing row.
+        // Priority: shipment_id FK → scan_ref match → legacy text key-18 match.
+        let existingRowResult: { rows: Array<{ id: number; serial_number: string }> } = { rows: [] };
+
+        if (resolvedScan.shipmentId) {
+            const byFK = await pool.query(
+                `SELECT id, serial_number
                  FROM tech_serial_numbers
-                 WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+                 WHERE shipment_id = $1
                  ORDER BY id ASC
                  LIMIT 1`,
-                [key18]
+                [resolvedScan.shipmentId]
             );
+            if (byFK.rows.length > 0) existingRowResult = byFK;
+        }
+
+        if (existingRowResult.rows.length === 0 && resolvedScan.scanRef) {
+            const byScanRef = await pool.query(
+                `SELECT id, serial_number
+                 FROM tech_serial_numbers
+                 WHERE scan_ref IS NOT NULL AND scan_ref != '' AND scan_ref = $1
+                 ORDER BY id ASC
+                 LIMIT 1`,
+                [resolvedScan.scanRef]
+            );
+            if (byScanRef.rows.length > 0) existingRowResult = byScanRef;
+        }
+
+        // Legacy text-match fallback removed — all rows now use shipment_id / scan_ref after migration.
 
         const isFbaLikeTracking = /^(X0|B0|FBA)/i.test(scannedTracking);
         const shouldAllowDuplicateSerial =
@@ -160,12 +185,22 @@ export async function POST(req: NextRequest) {
             );
         } else {
             updatedSerialList = [upperSerial];
-            await pool.query(
-                `INSERT INTO tech_serial_numbers 
-                 (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
-                 VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)`,
-                [scannedTracking, updatedSerialList.join(', '), serialType, staffId]
-            );
+            // Use shipment_id FK when available; fall back to scan_ref / legacy text column.
+            if (resolvedScan.shipmentId) {
+                await pool.query(
+                    `INSERT INTO tech_serial_numbers
+                     (shipment_id, scan_ref, serial_number, serial_type, test_date_time, tested_by)
+                     VALUES ($1, $2, $3, $4, date_trunc('second', NOW()), $5)`,
+                    [resolvedScan.shipmentId, resolvedScan.scanRef ?? null, updatedSerialList.join(', '), serialType, staffId]
+                );
+            } else {
+                await pool.query(
+                    `INSERT INTO tech_serial_numbers
+                     (scan_ref, serial_number, serial_type, test_date_time, tested_by)
+                     VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)`,
+                    [resolvedScan.scanRef ?? scannedTracking, updatedSerialList.join(', '), serialType, staffId]
+                );
+            }
         }
 
         // Best-effort status history update. Do not fail serial posting if this metadata write fails.

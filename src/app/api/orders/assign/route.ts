@@ -122,7 +122,6 @@ export async function POST(req: NextRequest) {
       shipByDate,
       outOfStock,
       notes,
-      shippingTrackingNumber,
       itemNumber,
       condition,
     } = body;
@@ -166,10 +165,6 @@ export async function POST(req: NextRequest) {
     if (notes !== undefined) {
       updates.push(`notes = $${paramCount++}`);
       values.push(notes);
-    }
-    if (shippingTrackingNumber !== undefined) {
-      updates.push(`shipping_tracking_number = $${paramCount++}`);
-      values.push(shippingTrackingNumber || null);
     }
     if (itemNumber !== undefined) {
       updates.push(`item_number = $${paramCount++}`);

@@ -163,7 +163,6 @@ export const orders = pgTable('orders', {
   productTitle: text('product_title'),
   sku: text('sku'),
   condition: text('condition'),
-  shippingTrackingNumber: text('shipping_tracking_number'),
   /** FK to shipping_tracking_numbers — single source of truth for carrier tracking */
   shipmentId: bigint('shipment_id', { mode: 'number' }),
   outOfStock: text('out_of_stock'),
@@ -172,7 +171,7 @@ export const orders = pgTable('orders', {
   customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   status: text('status'),
   statusHistory: jsonb('status_history').default([]),
-  isShipped: boolean('is_shipped').notNull().default(false),
+  // is_shipped removed from schema — shipped state is derived from shipping_tracking_numbers
   accountSource: text('account_source'),
   orderDate: timestamp('order_date'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -315,6 +314,8 @@ export const workAssignments = pgTable('work_assignments', {
   assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
   /** Packer assignee (PACK work type) */
   assignedPackerId: integer('assigned_packer_id').references(() => staff.id, { onDelete: 'set null' }),
+  /** Tech who actually completed the work, if different from the assignee. */
+  completedByTechId: integer('completed_by_tech_id').references(() => staff.id, { onDelete: 'set null' }),
   status: assignmentStatusEnum('status').notNull().default('ASSIGNED'),
   priority: integer('priority').notNull().default(100),
   /** Operational deadline sourced from orders.ship_by_date during migration, then maintained here. */
@@ -358,14 +359,79 @@ export const repairService = pgTable('repair_service', {
   issue: text('issue'),
   serialNumber: text('serial_number'),
   notes: text('notes'),
-  statusHistory: json('status_history').default([]),
   status: text('status').default('Pending Repair'),
-  process: json('process').default([]),
-  dateTime: json('date_time'),
-  repairedBy: integer('repaired_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // Packing data audit trail lives in packer_logs; photos in the unified photos table.
+
+export const fbaFnskus = pgTable('fba_fnskus', {
+  fnsku: text('fnsku').primaryKey(),
+  productTitle: text('product_title'),
+  asin: text('asin'),
+  sku: text('sku'),
+  isActive: boolean('is_active').notNull().default(true),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const fbaShipments = pgTable('fba_shipments', {
+  id: serial('id').primaryKey(),
+  shipmentRef: text('shipment_ref').notNull(),
+  destinationFc: text('destination_fc'),
+  dueDate: date('due_date'),
+  status: text('status').notNull().default('PLANNED'),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
+  assignedPackerId: integer('assigned_packer_id').references(() => staff.id, { onDelete: 'set null' }),
+  readyItemCount: integer('ready_item_count').notNull().default(0),
+  packedItemCount: integer('packed_item_count').notNull().default(0),
+  shippedItemCount: integer('shipped_item_count').notNull().default(0),
+  shippedAt: timestamp('shipped_at', { withTimezone: true }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const fbaShipmentItems = pgTable('fba_shipment_items', {
+  id: serial('id').primaryKey(),
+  shipmentId: integer('shipment_id').notNull().references(() => fbaShipments.id, { onDelete: 'cascade' }),
+  fnsku: text('fnsku').notNull().references(() => fbaFnskus.fnsku, { onDelete: 'restrict' }),
+  productTitle: text('product_title'),
+  asin: text('asin'),
+  sku: text('sku'),
+  expectedQty: integer('expected_qty').notNull().default(0),
+  actualQty: integer('actual_qty').notNull().default(0),
+  status: text('status').notNull().default('PLANNED'),
+  readyByStaffId: integer('ready_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  readyAt: timestamp('ready_at', { withTimezone: true }),
+  verifiedByStaffId: integer('verified_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  labeledByStaffId: integer('labeled_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  labeledAt: timestamp('labeled_at', { withTimezone: true }),
+  shippedByStaffId: integer('shipped_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  shippedAt: timestamp('shipped_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const fbaFnskuLogs = pgTable('fba_fnsku_logs', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  fnsku: text('fnsku').notNull().references(() => fbaFnskus.fnsku, { onDelete: 'restrict' }),
+  sourceStage: text('source_stage').notNull(),
+  eventType: text('event_type').notNull(),
+  staffId: integer('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  techSerialNumberId: bigint('tech_serial_number_id', { mode: 'number' }),
+  fbaShipmentId: integer('fba_shipment_id').references(() => fbaShipments.id, { onDelete: 'set null' }),
+  fbaShipmentItemId: integer('fba_shipment_item_id').references(() => fbaShipmentItems.id, { onDelete: 'set null' }),
+  quantity: integer('quantity').notNull().default(1),
+  station: text('station'),
+  notes: text('notes'),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 // NEW: Tech Serial Numbers table - Individual serial tracking with types
 // shipment_id links carrier-tracking rows to shipping_tracking_numbers
@@ -380,6 +446,11 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   serialType: varchar('serial_type', { length: 20 }).notNull().default('SERIAL'),
   testDateTime: timestamp('test_date_time').defaultNow(),
   testedBy: integer('tested_by').references(() => staff.id, { onDelete: 'set null' }),
+  fnsku: text('fnsku').references(() => fbaFnskus.fnsku, { onDelete: 'set null' }),
+  notes: text('notes'),
+  fnskuLogId: bigint('fnsku_log_id', { mode: 'number' }),
+  fbaShipmentId: integer('fba_shipment_id').references(() => fbaShipments.id, { onDelete: 'set null' }),
+  fbaShipmentItemId: integer('fba_shipment_item_id').references(() => fbaShipmentItems.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -421,6 +492,14 @@ export type Photo = typeof photos.$inferSelect;
 export type NewPhoto = typeof photos.$inferInsert;
 export type RepairService = typeof repairService.$inferSelect;
 export type NewRepairService = typeof repairService.$inferInsert;
+export type FbaFnsku = typeof fbaFnskus.$inferSelect;
+export type NewFbaFnsku = typeof fbaFnskus.$inferInsert;
+export type FbaShipment = typeof fbaShipments.$inferSelect;
+export type NewFbaShipment = typeof fbaShipments.$inferInsert;
+export type FbaShipmentItem = typeof fbaShipmentItems.$inferSelect;
+export type NewFbaShipmentItem = typeof fbaShipmentItems.$inferInsert;
+export type FbaFnskuLog = typeof fbaFnskuLogs.$inferSelect;
+export type NewFbaFnskuLog = typeof fbaFnskuLogs.$inferInsert;
 export type TechSerialNumber = typeof techSerialNumbers.$inferSelect;
 export type NewTechSerialNumber = typeof techSerialNumbers.$inferInsert;
 export type OrdersException = typeof ordersExceptions.$inferSelect;

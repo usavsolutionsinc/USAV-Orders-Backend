@@ -11,7 +11,6 @@ import {
 } from '@/components/Icons';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { TabSwitch } from '@/components/ui/TabSwitch';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 
 interface DashboardManagementPanelProps {
@@ -30,8 +29,6 @@ interface SearchHistory {
   resultCount?: number;
 }
 
-type PendingFilterMode = 'all' | 'pending' | 'stock';
-
 export function DashboardManagementPanel({
   showIntakeForm = false,
   onCloseForm,
@@ -45,7 +42,6 @@ export function DashboardManagementPanel({
   const [manualSheetName, setManualSheetName] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [pendingFilterMode, setPendingFilterMode] = useState<PendingFilterMode>('all');
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -53,14 +49,6 @@ export function DashboardManagementPanel({
   useEffect(() => {
     setSearchQuery(searchValue);
   }, [searchValue]);
-
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent('dashboard-pending-filter', {
-        detail: { mode: pendingFilterMode },
-      })
-    );
-  }, [pendingFilterMode]);
 
   useEffect(() => {
     const focusSearchInput = () => {
@@ -188,12 +176,6 @@ export function DashboardManagementPanel({
   }
 
   const visibleSearchHistory = showAllSearchHistory ? searchHistory : searchHistory.slice(0, 3);
-  const pendingFilterTabs: Array<{ id: PendingFilterMode; label: string; color: 'green' | 'yellow' | 'red' }> = [
-    { id: 'all', label: 'All', color: 'green' },
-    { id: 'pending', label: 'Pending', color: 'yellow' },
-    { id: 'stock', label: 'Stock', color: 'red' },
-  ];
-
   return (
     <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
       {filterControl ? (
@@ -222,13 +204,6 @@ export function DashboardManagementPanel({
                 </button>
               }
                 />
-          </motion.div>
-          <motion.div variants={itemVariants} className="-mt-2">
-            <TabSwitch
-              tabs={pendingFilterTabs}
-              activeTab={pendingFilterMode}
-              onTabChange={(tabId) => setPendingFilterMode(tabId === 'stock' ? 'stock' : tabId === 'pending' ? 'pending' : 'all')}
-            />
           </motion.div>
           <motion.div variants={itemVariants} className="-mt-1">
             <RecentSearchesList

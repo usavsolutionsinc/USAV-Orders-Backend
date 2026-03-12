@@ -18,25 +18,21 @@ export function PlatformExternalChip({
   onOpen,
   className = '',
 }: PlatformExternalChipProps) {
-  const platformLabel = getOrderPlatformLabel(orderId, accountSource) || 'UNKNOWN';
+  const platformLabel = getOrderPlatformLabel(orderId, accountSource) || 'External';
 
   return (
-    <div className={`inline-flex w-fit items-center h-9 pl-3 pr-2 rounded-lg bg-blue-50 border border-blue-100 text-[10px] font-black text-blue-700 ${className}`}>
-      <span className="font-mono uppercase">{platformLabel}</span>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpen();
-        }}
-        disabled={!canOpen}
-        className="ml-1 inline-flex items-center justify-center text-blue-700 disabled:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Open external page"
-        aria-label="Open external page"
-      >
-        <ExternalLink className="w-3.5 h-3.5" />
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (canOpen) onOpen();
+      }}
+      disabled={!canOpen}
+      title={platformLabel}
+      aria-label={`Open on ${platformLabel}`}
+      className={`inline-flex items-center justify-center h-8 w-8 rounded-lg bg-blue-50 border border-blue-100 text-blue-600 hover:bg-blue-100 hover:border-blue-200 disabled:text-gray-300 disabled:bg-gray-50 disabled:border-gray-100 disabled:cursor-not-allowed transition-colors ${className}`}
+    >
+      <ExternalLink className="w-3.5 h-3.5" />
+    </button>
   );
 }
-

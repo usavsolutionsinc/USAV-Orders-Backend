@@ -18,7 +18,6 @@ export interface AssignmentConfirmPayload {
   packerId: number | null;
   deadline: string | null;
   status?: WorkStatus;
-  isShipped?: boolean;
 }
 
 export interface WorkOrderAssignmentCardProps {
@@ -128,7 +127,6 @@ export function WorkOrderAssignmentCard({
       packerId: opts?.packerId !== undefined ? opts.packerId : packerId,
       deadline: opts?.deadline !== undefined ? opts.deadline : (deadline || null),
       status: opts?.status,
-      isShipped: opts?.isShipped,
     });
     advance();
   }, [row, confirmedIds, onConfirm, techId, packerId, deadline, advance]);
@@ -169,7 +167,7 @@ export function WorkOrderAssignmentCard({
   const handlePacker = (id: number) => setPackerId((p) => (p === id ? null : id));
 
   const handleMarkDone = () => commit({ status: 'DONE' });
-  const handleMarkShipped = () => commit({ status: 'DONE', isShipped: true });
+  const handleMarkShipped = () => commit({ status: 'DONE' });
 
   return (
     <>

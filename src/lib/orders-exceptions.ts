@@ -36,17 +36,10 @@ export async function findOrderByTrackingKey(
   const result = await dbClient.query(
     `SELECT
         o.id,
-        COALESCE(stn.tracking_number_raw, o.shipping_tracking_number) AS shipping_tracking_number
+        stn.tracking_number_raw AS shipping_tracking_number
      FROM orders o
-     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-     WHERE (
-        o.shipment_id IS NOT NULL
-        AND RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_normalized, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-     ) OR (
-        o.shipping_tracking_number IS NOT NULL
-        AND o.shipping_tracking_number != ''
-        AND RIGHT(regexp_replace(UPPER(COALESCE(o.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-     )
+     JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+     WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
      ORDER BY o.id DESC
      LIMIT 1`,
     [trackingKey18]
@@ -165,12 +158,11 @@ export async function syncOrderExceptionsToOrders(): Promise<{
     if (!trackingKey18) continue;
 
     const orderMatch = await pool.query(
-      `SELECT id, shipping_tracking_number, is_shipped
-       FROM orders
-       WHERE shipping_tracking_number IS NOT NULL
-         AND shipping_tracking_number != ''
-         AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-       ORDER BY id DESC
+      `SELECT o.id
+       FROM orders o
+       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+       WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+       ORDER BY o.id DESC
        LIMIT 1`,
       [trackingKey18]
     );
@@ -180,27 +172,20 @@ export async function syncOrderExceptionsToOrders(): Promise<{
     matched += 1;
     const order = orderMatch.rows[0];
 
+    // Update status only — shipped state is derived from shipping_tracking_numbers
     await pool.query(
       `UPDATE orders
-       SET shipping_tracking_number = COALESCE(NULLIF(shipping_tracking_number, ''), $1),
-           is_shipped = CASE
+       SET status = CASE
              WHEN EXISTS (
                SELECT 1 FROM packer_logs pl
-               WHERE RIGHT(regexp_replace(UPPER(COALESCE(pl.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $2
-                 AND pl.tracking_type = 'ORDERS'
-             ) THEN true
-             ELSE is_shipped
-           END,
-           status = CASE
-             WHEN EXISTS (
-               SELECT 1 FROM packer_logs pl
-               WHERE RIGHT(regexp_replace(UPPER(COALESCE(pl.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $2
-                 AND pl.tracking_type = 'ORDERS'
+               JOIN   shipping_tracking_numbers stn ON stn.id = pl.shipment_id
+               WHERE  RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_normalized, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+                 AND  pl.tracking_type = 'ORDERS'
              ) THEN 'shipped'
              ELSE status
            END
-       WHERE id = $3`,
-      [String(row.shipping_tracking_number || ''), trackingKey18, order.id]
+       WHERE id = $2`,
+      [trackingKey18, order.id]
     );
 
     const deletedResult = await pool.query(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { searchRepairs } from '@/lib/neon/repair-service-queries';
 
 export async function GET(req: NextRequest) {
     try {
@@ -10,37 +10,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ results: [] });
         }
 
-        const searchTerm = `%${query.trim()}%`;
-
-        // Search through repair_service table
-        const result = await pool.query(`
-            SELECT 
-                id,
-                date_time,
-                ticket_number,
-                contact_info,
-                product_title,
-                price,
-                issue,
-                serial_number,
-                process,
-                status,
-                notes,
-                status_history,
-                repaired_by
-            FROM repair_service
-            WHERE 
-                ticket_number ILIKE $1 OR
-                contact_info ILIKE $1 OR
-                product_title ILIKE $1 OR
-                serial_number ILIKE $1
-            ORDER BY id DESC
-            LIMIT 20
-        `, [searchTerm]);
+        const result = await searchRepairs(query.trim());
 
         return NextResponse.json({
-            results: result.rows,
-            count: result.rows.length
+            results: result,
+            count: result.length
         });
 
     } catch (error: any) {

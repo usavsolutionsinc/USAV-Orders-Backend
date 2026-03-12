@@ -101,10 +101,10 @@ export function RepairTable({ filter }: RepairTableProps) {
 
   const groupedRepairs: { [key: string]: RSRecord[] } = {};
   filteredRepairs.forEach(record => {
-    if (!record.date_time) return;
+    if (!record.created_at) return;
     let date = '';
     try {
-      date = new Date(record.date_time).toISOString().split('T')[0];
+      date = new Date(record.created_at).toISOString().split('T')[0];
     } catch (e) { date = 'Unknown'; }
     if (!groupedRepairs[date]) groupedRepairs[date] = [];
     groupedRepairs[date].push(record);

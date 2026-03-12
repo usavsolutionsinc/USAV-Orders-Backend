@@ -166,11 +166,12 @@ export async function POST(req: NextRequest) {
                     o.sku,
                     o.condition,
                     o.notes,
-                    COALESCE(stn.tracking_number_raw, o.shipping_tracking_number) AS shipping_tracking_number,
+                    stn.tracking_number_raw AS shipping_tracking_number,
                     o.account_source,
                     o.status,
                     o.status_history,
-                    o.is_shipped,
+                    COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+                      OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
                     o.out_of_stock,
                     to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
                     o.order_date,
@@ -210,9 +211,8 @@ export async function POST(req: NextRequest) {
                     $1::bigint IS NOT NULL
                     AND o.shipment_id = $1
                 ) OR (
-                    o.shipping_tracking_number IS NOT NULL
-                    AND o.shipping_tracking_number != ''
-                    AND RIGHT(regexp_replace(UPPER(o.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) = $2
+                    stn.id IS NOT NULL
+                    AND RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $2
                 )
                 ORDER BY
                     CASE WHEN $1::bigint IS NOT NULL AND o.shipment_id = $1 THEN 0 ELSE 1 END,

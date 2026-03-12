@@ -21,6 +21,10 @@ interface ActiveFbaScan {
   actualQty: number;
   expectedQty: number;
   status: string;
+  techScannedQty: number;
+  packReadyQty: number;
+  shippedQty: number;
+  availableToShip: number;
   isNew: boolean;  // true if no existing fba_shipment_items row was found (added on-the-fly)
 }
 
@@ -91,6 +95,10 @@ export default function StationPacking({
             actualQty: data.actual_qty ?? 0,
             expectedQty: data.expected_qty ?? 0,
             status: data.status || 'READY_TO_GO',
+            techScannedQty: Number(data?.summary?.tech_scanned_qty ?? 0),
+            packReadyQty: Number(data?.summary?.pack_ready_qty ?? 0),
+            shippedQty: Number(data?.summary?.shipped_qty ?? 0),
+            availableToShip: Number(data?.summary?.available_to_ship ?? 0),
             isNew: !!data.is_new,
           });
           onComplete?.();
@@ -255,6 +263,24 @@ export default function StationPacking({
                   <div className={`rounded-xl px-3 py-2 border ${FBA_STATUS_STYLES[activeFba.status] || 'bg-gray-50 text-gray-600'} border-current/20`}>
                     <p className="text-[9px] font-black uppercase tracking-wider mb-1">Status</p>
                     <p className="text-[10px] font-black uppercase truncate">{activeFba.status.replace('_', ' ')}</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-4 gap-3">
+                  <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Tech</p>
+                    <p className="text-xs font-bold text-gray-800 tabular-nums">{activeFba.techScannedQty}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-100">
+                    <p className="text-[9px] font-black text-emerald-500 uppercase tracking-wider mb-1">Ready</p>
+                    <p className="text-xs font-bold text-emerald-700 tabular-nums">{activeFba.packReadyQty}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-xl px-3 py-2 border border-blue-100">
+                    <p className="text-[9px] font-black text-blue-500 uppercase tracking-wider mb-1">Avail</p>
+                    <p className="text-xs font-bold text-blue-700 tabular-nums">{activeFba.availableToShip}</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl px-3 py-2 border border-purple-100">
+                    <p className="text-[9px] font-black text-purple-500 uppercase tracking-wider mb-1">Shipped</p>
+                    <p className="text-xs font-bold text-purple-700 tabular-nums">{activeFba.shippedQty}</p>
                   </div>
                 </div>
               </motion.div>

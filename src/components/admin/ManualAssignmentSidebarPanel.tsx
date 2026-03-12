@@ -22,7 +22,7 @@ interface RecentOrder {
   sku: string;
   quantity: string | number | null;
   shipping_tracking_number: string | null;
-  is_shipped: boolean;
+  is_shipped?: boolean; // derived from shipping_tracking_numbers
   has_manual: boolean;
 }
 

@@ -74,8 +74,8 @@ export async function GET(req: NextRequest) {
         const offsetIdx = idx + 1;
 
         // Query tech serial logs joined to the best matching order.
-        // Prefer shipment_id, but fall back to the legacy orders.shipping_tracking_number
-        // so older rows still hydrate correctly in TechTable.
+        // Prefer shipment_id FK; the text fallback matches via shipping_tracking_numbers
+        // (orders no longer carries a shipping_tracking_number text column).
         const result = await pool.query(`
             SELECT
                 tsn.id,
@@ -107,7 +107,8 @@ export async function GET(req: NextRequest) {
                 o.account_source,
                 o.notes,
                 o.out_of_stock,
-                o.is_shipped
+                COALESCE(o_stn.is_carrier_accepted OR o_stn.is_in_transit
+                  OR o_stn.is_out_for_delivery OR o_stn.is_delivered, false) AS is_shipped
             FROM tech_serial_numbers tsn
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
             LEFT JOIN LATERAL (
@@ -115,14 +116,15 @@ export async function GET(req: NextRequest) {
                     o_match.id,
                     o_match.shipment_id
                 FROM orders o_match
+                LEFT JOIN shipping_tracking_numbers o_match_stn ON o_match_stn.id = o_match.shipment_id
                 WHERE (
                     tsn.shipment_id IS NOT NULL
                     AND o_match.shipment_id = tsn.shipment_id
                 ) OR (
                     COALESCE(tsn.scan_ref, stn.tracking_number_raw, '') <> ''
-                    AND o_match.shipping_tracking_number IS NOT NULL
-                    AND o_match.shipping_tracking_number != ''
-                    AND RIGHT(regexp_replace(UPPER(o_match.shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) =
+                    AND o_match_stn.tracking_number_raw IS NOT NULL
+                    AND o_match_stn.tracking_number_raw != ''
+                    AND RIGHT(regexp_replace(UPPER(o_match_stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
                         RIGHT(regexp_replace(UPPER(COALESCE(tsn.scan_ref, stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
                 )
                 ORDER BY
@@ -132,6 +134,7 @@ export async function GET(req: NextRequest) {
                 LIMIT 1
             ) order_match ON TRUE
             LEFT JOIN orders o ON o.id = order_match.id
+            LEFT JOIN shipping_tracking_numbers o_stn ON o_stn.id = o.shipment_id
             LEFT JOIN LATERAL (
                 SELECT wa.deadline_at
                 FROM work_assignments wa

@@ -44,11 +44,10 @@ export async function hasOrderByTracking(client: any, shippingTracking: string):
   const trackingLast8 = getTrackingLast8(tracking);
   if (trackingLast8.length === 8) {
     const result = await client.query(
-      `SELECT id
-       FROM orders
-       WHERE shipping_tracking_number IS NOT NULL
-         AND shipping_tracking_number != ''
-         AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
+      `SELECT o.id
+       FROM orders o
+       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+       WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
        LIMIT 1`,
       [trackingLast8]
     );
@@ -56,9 +55,10 @@ export async function hasOrderByTracking(client: any, shippingTracking: string):
   }
 
   const fallback = await client.query(
-    `SELECT id
-     FROM orders
-     WHERE UPPER(TRIM(COALESCE(shipping_tracking_number, ''))) = UPPER(TRIM($1))
+    `SELECT o.id
+     FROM orders o
+     JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+     WHERE UPPER(TRIM(stn.tracking_number_raw)) = UPPER(TRIM($1))
      LIMIT 1`,
     [tracking]
   );

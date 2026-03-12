@@ -70,17 +70,17 @@ export async function POST(req: NextRequest) {
 
       const key18MatchResult = await client.query(
         `SELECT
-            id,
-            order_id,
-            product_title,
-            condition,
-            shipping_tracking_number,
-            is_shipped
-         FROM orders
-         WHERE shipping_tracking_number IS NOT NULL
-           AND shipping_tracking_number != ''
-           AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-         ORDER BY id DESC
+            o.id,
+            o.order_id,
+            o.product_title,
+            o.condition,
+            stn.tracking_number_raw AS tracking_number,
+            COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+              OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped
+         FROM orders o
+         JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+         WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+         ORDER BY o.id DESC
          LIMIT 1`,
         [trackingKey18]
       );
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
             orderId: row.order_id || 'N/A',
             productTitle: row.product_title || 'Unknown Product',
             condition: row.condition || '',
-            tracking: row.shipping_tracking_number || rawTracking,
+            tracking: row.tracking_number || rawTracking,
             shipped: Boolean(row.is_shipped),
           },
         });
@@ -114,9 +114,13 @@ export async function POST(req: NextRequest) {
 
       if (upsertResult.matchedOrderId) {
         const matched = await client.query(
-          `SELECT id, order_id, product_title, condition, shipping_tracking_number, is_shipped
-           FROM orders
-           WHERE id = $1
+          `SELECT o.id, o.order_id, o.product_title, o.condition,
+                  stn.tracking_number_raw AS tracking_number,
+                  COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+                    OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped
+           FROM orders o
+           LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+           WHERE o.id = $1
            LIMIT 1`,
           [upsertResult.matchedOrderId]
         );
@@ -131,7 +135,7 @@ export async function POST(req: NextRequest) {
               orderId: row.order_id || 'N/A',
               productTitle: row.product_title || 'Unknown Product',
               condition: row.condition || '',
-              tracking: row.shipping_tracking_number || rawTracking,
+              tracking: row.tracking_number || rawTracking,
               shipped: Boolean(row.is_shipped),
             },
           });

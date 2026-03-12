@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronLeft, LayoutDashboard, Menu, X } from '@/components/Icons';
+import { ChevronLeft, LayoutDashboard, Menu, X, Zap } from '@/components/Icons';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 import BarcodeSidebar from '@/components/BarcodeSidebar';
@@ -31,6 +31,8 @@ import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 
 type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
+
+const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
 const ORDER_VIEW_OPTIONS: Array<{ value: DashboardOrderView; label: string }> = [
   { value: 'unshipped', label: 'Unshipped Orders' },
@@ -77,8 +79,111 @@ function getSidebarTitle(pathname: string | null) {
     'previous-quarters': 'Quarters',
     admin: 'Admin',
     manuals: 'Manuals',
+    ai: 'AI Chat',
   };
   return titles[routeKey] ?? 'Home';
+}
+
+// ---------------------------------------------------------------------------
+// AI Chat sidebar panel
+// ---------------------------------------------------------------------------
+function AiSidebarPanel() {
+  const [connectionOk, setConnectionOk] = useState<boolean | null>(null);
+  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
+
+  const checkHealth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/ai/tunnel-health');
+      const data = await res.json();
+      setConnectionOk(!!data.ok);
+      setTunnelUrl(data.tunnel_url ?? null);
+    } catch {
+      setConnectionOk(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkHealth();
+    const id = setInterval(checkHealth, 30_000);
+    return () => clearInterval(id);
+  }, [checkHealth]);
+
+  const handleNewChat = () => {
+    window.dispatchEvent(new CustomEvent('ai-new-chat'));
+  };
+
+  return (
+    <div className="h-full overflow-y-auto px-4 py-4 space-y-3">
+      {/* Connection status card */}
+      <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700">
+            <Zap className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">AI Assistant</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-gray-400">Ollama via Tunnel</p>
+          </div>
+        </div>
+
+        {/* Status indicator */}
+        <div className="flex items-center gap-2 rounded-2xl border border-gray-100 bg-gray-50 px-3 py-2">
+          {connectionOk === null && (
+            <span className="inline-block h-2 w-2 rounded-full bg-gray-300 animate-pulse" />
+          )}
+          {connectionOk === true && (
+            <span className="relative flex h-2 w-2 flex-shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+          )}
+          {connectionOk === false && (
+            <span className="inline-block h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
+          )}
+          <span className={`text-[9px] font-black uppercase tracking-[0.25em] ${
+            connectionOk === true ? 'text-emerald-600' :
+            connectionOk === false ? 'text-red-500' : 'text-gray-400'
+          }`}>
+            {connectionOk === null ? 'Checking…' :
+             connectionOk ? 'Backend online' : 'Backend offline'}
+          </span>
+        </div>
+
+        {tunnelUrl && (
+          <p className="mt-2 text-[9px] font-medium text-gray-400 truncate" title={tunnelUrl}>
+            {tunnelUrl}
+          </p>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={handleNewChat}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-white transition-colors hover:bg-black"
+        >
+          New Chat
+        </button>
+        <button
+          type="button"
+          onClick={checkHealth}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-600 transition-colors hover:bg-gray-50"
+        >
+          Refresh Status
+        </button>
+      </div>
+
+      {/* Info */}
+      <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+        <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1.5">How it works</p>
+        <p className="text-[10px] font-medium leading-relaxed text-gray-500">
+          Messages are proxied through this server to the home computer running
+          Ollama over a Cloudflare tunnel. The tunnel URL is read from the database.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function SidebarContextPanel() {
@@ -260,6 +365,7 @@ function SidebarContextPanel() {
     );
   }
 
+  if (routeKey === 'ai') return <AiSidebarPanel />;
   if (routeKey === 'support') return <SupportSidebarPanel />;
   if (routeKey === 'receiving') return <ReceivingSidebarPanel />;
   if (routeKey === 'fba') return <FbaSidebarPanel />;
@@ -341,9 +447,22 @@ export default function DashboardSidebar() {
   const searchParams = useSearchParams();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(false);
+  const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
   const [showHomeNavigation, setShowHomeNavigation] = useState(false);
   const [lastTechHref, setLastTechHref] = useState('/tech?staffId=1');
   const [lastPackerHref, setLastPackerHref] = useState('/packer?staffId=4');
+
+  useEffect(() => {
+    const syncMobileSidebarAvailability = () => {
+      const nextCanShow = window.innerWidth >= MOBILE_SIDEBAR_MIN_WIDTH && window.innerWidth < 768;
+      setCanShowMobileSidebar(nextCanShow);
+      if (!nextCanShow) setIsMobileOpen(false);
+    };
+
+    syncMobileSidebarAvailability();
+    window.addEventListener('resize', syncMobileSidebarAvailability);
+    return () => window.removeEventListener('resize', syncMobileSidebarAvailability);
+  }, []);
 
   useEffect(() => {
     const savedTechHref = localStorage.getItem('last-tech-station-href');
@@ -488,16 +607,18 @@ export default function DashboardSidebar() {
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={() => setIsMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-slate-900/10 flex items-center justify-center"
-        aria-label="Open sidebar"
-      >
-        <Menu className="w-5 h-5" />
-      </button>
+      {canShowMobileSidebar && (
+        <button
+          type="button"
+          onClick={() => setIsMobileOpen(true)}
+          className="md:hidden fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-slate-900/10 flex items-center justify-center"
+          aria-label="Open sidebar"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
 
-      {isMobileOpen && (
+      {canShowMobileSidebar && isMobileOpen && (
         <div className="md:hidden fixed inset-0 z-[100]">
           <button type="button" className="absolute inset-0 bg-slate-900/35" onClick={() => setIsMobileOpen(false)} aria-label="Close sidebar overlay" />
           <div className="relative h-full max-w-[94vw]">{shell}</div>

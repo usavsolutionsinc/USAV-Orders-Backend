@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Order, RepairQueueItem, FBAQueueItem, ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
 
 interface UseUpNextDataOptions {
@@ -17,7 +17,7 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   const [allCompletedToday, setAllCompletedToday] = useState(false);
 
   const hasTrackingNumber = (order: Order) =>
-    String(order.shipping_tracking_number || '').trim().length > 0;
+    String(order.shipping_tracking_number || (order as any).tracking_number || '').trim().length > 0;
 
   const fetchFbaShipments = async () => {
     try {
@@ -95,7 +95,7 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   const fetchOrders = async () => {
     try {
       const [currentRes, stockRes, repairRes] = await Promise.all([
-        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=false&assignedOnly=true`),
+        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=false&assignedOnly=false`),
         fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=true&assignedOnly=false`),
         fetch(`/api/repair-service/next?techId=${techId}`),
       ]);
@@ -135,12 +135,29 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
     fetchReceivingQueue();
   };
 
+  // Keep a stable ref so event listeners always call the latest refresh without
+  // needing to re-register on every render.
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, 30000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techId]);
+
+  // Mirror the real-time update strategy from PendingOrdersTable: respond to
+  // broadcast refresh events so data stays in sync without waiting for the poll.
+  useEffect(() => {
+    const handleRefresh = () => refreshRef.current();
+    window.addEventListener('usav-refresh-data', handleRefresh);
+    window.addEventListener('dashboard-refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('usav-refresh-data', handleRefresh);
+      window.removeEventListener('dashboard-refresh', handleRefresh);
+    };
+  }, []);
 
   return {
     allOrders,

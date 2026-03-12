@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 function normalizeSerialList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -37,25 +38,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid tracking number' }, { status: 400 });
     }
 
-    const existingExactRow = await pool.query(
+    const { shipmentId: resolvedShipmentId, scanRef: resolvedScanRef } = await resolveShipmentId(tracking);
+
+    const existingRowResult = await pool.query(
       `SELECT id, serial_type, tested_by
        FROM tech_serial_numbers
-       WHERE shipping_tracking_number = $1
+       WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
+          OR (shipment_id IS NULL AND scan_ref IS NOT NULL AND scan_ref = $2)
        ORDER BY id ASC
        LIMIT 1`,
-      [tracking]
+      [resolvedShipmentId, resolvedScanRef]
     );
-
-    const existingRowResult = existingExactRow.rows.length > 0
-      ? existingExactRow
-      : await pool.query(
-          `SELECT id, serial_type, tested_by
-           FROM tech_serial_numbers
-           WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-           ORDER BY id ASC
-           LIMIT 1`,
-          [key18]
-        );
 
     const orderResult = await pool.query(
       `SELECT account_source
@@ -90,10 +83,11 @@ export async function POST(req: NextRequest) {
     } else if (serialNumbers.length > 0) {
       await pool.query(
         `INSERT INTO tech_serial_numbers
-         (shipping_tracking_number, serial_number, serial_type, test_date_time, tested_by)
-         VALUES ($1, $2, $3, date_trunc('second', NOW()), $4)`,
+         (shipment_id, scan_ref, serial_number, serial_type, test_date_time, tested_by)
+         VALUES ($1, $2, $3, $4, date_trunc('second', NOW()), $5)`,
         [
-          tracking,
+          resolvedShipmentId,
+          resolvedScanRef,
           joinedSerials,
           detectSerialType(serialNumbers, null, orderResult.rows[0]?.account_source),
           techId,

@@ -20,9 +20,9 @@ export function FbaItemCard({ item }: FbaItemCardProps) {
   return (
     <motion.div
       key={`fba-item-${item.item_id}`}
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       className="border-b-2 px-0 py-3 transition-colors relative bg-white border-purple-300 hover:border-purple-500 cursor-default"
     >
       <div className="flex items-center justify-between mb-4 px-3">

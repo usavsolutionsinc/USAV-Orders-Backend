@@ -17,14 +17,17 @@ export async function GET(req: NextRequest) {
     const client = await pool.connect();
     
     try {
-        // Check in orders table; packer_id / tester_id now live in work_assignments.
+        // Check in orders table via shipping_tracking_numbers join (shipment_id FK).
         const ordersResult = await client.query(
-            `SELECT o.id, o.order_id, o.shipping_tracking_number, o.is_shipped,
+            `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number,
+                    COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+                      OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
                     o.product_title,
                     wa_test.assigned_tech_id   AS tester_id,
                     wa_pack.assigned_packer_id AS packer_id,
                     pl.packed_by, pl.pack_date_time
              FROM orders o
+             JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
              LEFT JOIN LATERAL (
                  SELECT assigned_tech_id
                  FROM work_assignments
@@ -50,7 +53,7 @@ export async function GET(req: NextRequest) {
                  ORDER BY pl.pack_date_time DESC NULLS LAST, pl.id DESC
                  LIMIT 1
              ) pl ON TRUE
-             WHERE o.shipping_tracking_number LIKE $1`,
+             WHERE stn.tracking_number_raw ILIKE $1`,
             [`%${tracking}%`]
         );
 

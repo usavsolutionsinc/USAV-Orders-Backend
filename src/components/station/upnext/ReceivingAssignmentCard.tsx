@@ -42,9 +42,9 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
   return (
     <motion.div
       key={`recv-${item.assignment_id}`}
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       onClick={openReceiving}
       className="border-b-2 px-0 py-3 border-teal-300 bg-white hover:border-teal-500 transition-colors cursor-pointer"
     >

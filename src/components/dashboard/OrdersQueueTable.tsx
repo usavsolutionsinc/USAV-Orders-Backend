@@ -6,53 +6,51 @@ import { Loader2, Search } from '@/components/Icons';
 import { CopyableText } from '@/components/ui/CopyableText';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal } from '@/lib/date-format';
-import { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
-import { dispatchCloseShippedDetails } from '@/utils/events';
-import { isFbaOrder } from '@/utils/order-platform';
-import { DateGroupHeader } from './DateGroupHeader';
+import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 
 interface WeekRange {
   startStr: string;
   endStr: string;
 }
 
-interface OrderRecordsTableProps {
+interface OrdersQueueTableProps {
   records: ShippedOrder[];
   loading: boolean;
   isRefreshing: boolean;
   searchValue: string;
-  ordersOnly?: boolean;
-  hideLeadingIndicators?: boolean;
-  showWeekControls?: boolean;
   weekRange?: WeekRange;
   weekOffset?: number;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
   onResetWeek?: () => void;
+  showWeekControls?: boolean;
   onClearSearch: () => void;
-  emptyMessage?: string;
+  emptyMessage: string;
+  onOpenRecord?: (record: ShippedOrder) => void;
+  onCloseRecord?: (record: ShippedOrder | null) => void;
 }
 
-export function OrderRecordsTable({
+export function OrdersQueueTable({
   records,
   loading,
   isRefreshing,
   searchValue,
-  ordersOnly = false,
-  hideLeadingIndicators = false,
-  showWeekControls = false,
   weekRange,
   weekOffset = 0,
   onPrevWeek,
   onNextWeek,
   onResetWeek,
+  showWeekControls = false,
   onClearSearch,
   emptyMessage,
-}: OrderRecordsTableProps) {
+  onOpenRecord,
+  onCloseRecord,
+}: OrdersQueueTableProps) {
   const { getStaffName } = useStaffNameMap();
-  const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<ShippedOrder | null>(null);
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -60,45 +58,28 @@ export function OrderRecordsTable({
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
   useEffect(() => {
-    if (!selectedShipped) return;
-    const nextSelected = records.find((record) => Number(record.id) === Number(selectedShipped.id));
-    if (nextSelected && nextSelected !== selectedShipped) {
-      setSelectedShipped(nextSelected);
-    }
-  }, [records, selectedShipped]);
+    if (!selectedRecord) return;
+    const nextSelected = records.find((record) => Number(record.id) === Number(selectedRecord.id));
+    if (nextSelected && nextSelected !== selectedRecord) setSelectedRecord(nextSelected);
+  }, [records, selectedRecord]);
 
   const handleRowClick = useCallback((record: ShippedOrder) => {
-    if (selectedShipped && Number(selectedShipped.id) === Number(record.id)) {
-      dispatchCloseShippedDetails();
-      setSelectedShipped(null);
+    if (selectedRecord && Number(selectedRecord.id) === Number(record.id)) {
+      onCloseRecord?.(selectedRecord);
+      setSelectedRecord(null);
       return;
     }
-
-    window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: record }));
-    setSelectedShipped(record);
-  }, [selectedShipped]);
-
-  const scrollRowIntoView = useCallback((orderId: number | string | null | undefined) => {
-    if (orderId == null) return;
-    window.setTimeout(() => {
-      const targetEl = scrollRef.current?.querySelector(`[data-order-row-id="${String(orderId)}"]`) as HTMLElement | null;
-      targetEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 0);
-  }, []);
+    onOpenRecord?.(record);
+    setSelectedRecord(record);
+  }, [onCloseRecord, onOpenRecord, selectedRecord]);
 
   useEffect(() => {
     const handleOpen = (e: CustomEvent<ShippedOrder>) => {
-      if (e.detail) {
-        setSelectedShipped(e.detail);
-      }
+      if (e.detail) setSelectedRecord(e.detail);
     };
-    const handleClose = () => {
-      setSelectedShipped(null);
-    };
-
+    const handleClose = () => setSelectedRecord(null);
     window.addEventListener('open-shipped-details' as any, handleOpen as any);
     window.addEventListener('close-shipped-details' as any, handleClose as any);
-
     return () => {
       window.removeEventListener('open-shipped-details' as any, handleOpen as any);
       window.removeEventListener('close-shipped-details' as any, handleClose as any);
@@ -107,13 +88,12 @@ export function OrderRecordsTable({
 
   const groupedRecords: Record<string, ShippedOrder[]> = {};
   records.forEach((record) => {
-    const dateSource = ordersOnly ? (record.ship_by_date || record.created_at) : record.pack_date_time;
+    const dateSource = record.deadline_at || record.created_at;
     if (!dateSource || dateSource === '1') return;
 
     let date = '';
     try {
-      date = toPSTDateKey(String(dateSource));
-      if (!date) date = 'Unknown';
+      date = toPSTDateKey(String(dateSource)) || 'Unknown';
     } catch {
       date = 'Unknown';
     }
@@ -123,74 +103,15 @@ export function OrderRecordsTable({
   });
 
   const displayedRecords = Object.entries(groupedRecords)
-    .sort((a, b) => (ordersOnly ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])))
+    .sort((a, b) => a[0].localeCompare(b[0]))
     .flatMap(([_, dayRecords]) => {
       const sortedRecords = [...dayRecords].sort((a, b) => {
-        const aSource = ordersOnly ? (a.ship_by_date || a.created_at) : (a.pack_date_time || a.created_at);
-        const bSource = ordersOnly ? (b.ship_by_date || b.created_at) : (b.pack_date_time || b.created_at);
-        const timeA = new Date(aSource || 0).getTime();
-        const timeB = new Date(bSource || 0).getTime();
-        return ordersOnly ? timeA - timeB : timeB - timeA;
+        const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
+        const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
+        return timeA - timeB;
       });
-
       return sortedRecords;
     });
-
-  useEffect(() => {
-    if (!ordersOnly) return;
-
-    const isUnassignedRecord = (record: ShippedOrder) => {
-      return (record as any).tester_id == null && (record as any).packer_id == null;
-    };
-
-    const handleNavigate = (e: any) => {
-      const direction = e?.detail?.direction === 'up' ? 'up' : e?.detail?.direction === 'down' ? 'down' : null;
-      if (!direction || displayedRecords.length === 0) return;
-
-      const currentOrderId = Number(e?.detail?.currentOrderId ?? selectedShipped?.id);
-      const currentIndex = displayedRecords.findIndex((record) => Number(record.id) === currentOrderId);
-      const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
-      const nextIndex =
-        direction === 'up'
-          ? Math.max(0, safeCurrentIndex - 1)
-          : Math.min(displayedRecords.length - 1, safeCurrentIndex + 1);
-
-      const nextRecord = displayedRecords[nextIndex];
-      if (!nextRecord || nextRecord.id === selectedShipped?.id) return;
-
-      handleRowClick(nextRecord);
-      scrollRowIntoView(nextRecord.id);
-    };
-
-    const handleNavigateNextUnassigned = (e: any) => {
-      if (displayedRecords.length === 0) return;
-
-      const currentOrderId = Number(e?.detail?.currentOrderId ?? selectedShipped?.id);
-      const currentIndex = displayedRecords.findIndex((record) => Number(record.id) === currentOrderId);
-      const safeCurrentIndex = currentIndex >= 0 ? currentIndex : -1;
-
-      const nextRecord =
-        displayedRecords.find((record, index) => index > safeCurrentIndex && isUnassignedRecord(record)) ||
-        displayedRecords.find((record) => isUnassignedRecord(record));
-
-      if (!nextRecord || nextRecord.id === selectedShipped?.id) {
-        dispatchCloseShippedDetails();
-        setSelectedShipped(null);
-        return;
-      }
-
-      handleRowClick(nextRecord);
-      scrollRowIntoView(nextRecord.id);
-    };
-
-    window.addEventListener('navigate-dashboard-order' as any, handleNavigate as any);
-    window.addEventListener('navigate-dashboard-next-unassigned' as any, handleNavigateNextUnassigned as any);
-
-    return () => {
-      window.removeEventListener('navigate-dashboard-order' as any, handleNavigate as any);
-      window.removeEventListener('navigate-dashboard-next-unassigned' as any, handleNavigateNextUnassigned as any);
-    };
-  }, [displayedRecords, handleRowClick, ordersOnly, scrollRowIntoView, selectedShipped?.id]);
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -219,7 +140,6 @@ export function OrderRecordsTable({
       container.addEventListener('scroll', handleScroll);
       window.setTimeout(() => handleScroll(), 100);
     }
-
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, records]);
 
@@ -229,29 +149,30 @@ export function OrderRecordsTable({
     const raw = String(value || '');
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
   };
-  const getDaysLateNumber = (shipByDate: string | null | undefined, fallbackDateValue?: string | null | undefined) => {
-    const shipByKey = toPSTDateKey(shipByDate) || toPSTDateKey(fallbackDateValue);
+  const getDaysLateNumber = (deadlineAt: string | null | undefined): number | null => {
+    const deadlineKey = toPSTDateKey(deadlineAt);
+    if (!deadlineKey) return null;
     const todayKey = getCurrentPSTDateKey();
-    if (!shipByKey || !todayKey) return 0;
-    const [sy, sm, sd] = shipByKey.split('-').map(Number);
+    if (!todayKey) return null;
+    const [dy, dm, dd] = deadlineKey.split('-').map(Number);
     const [ty, tm, td] = todayKey.split('-').map(Number);
-    const shipByIndex = Math.floor(Date.UTC(sy, sm - 1, sd) / 86400000);
+    const deadlineIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
     const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
-    return Math.max(0, todayIndex - shipByIndex);
+    return Math.max(0, todayIndex - deadlineIndex);
   };
-  const getDaysLateTone = (daysLate: number) => {
+  const getDaysLateTone = (daysLate: number | null) => {
+    if (daysLate === null) return 'text-gray-300';
     if (daysLate > 1) return 'text-red-600';
     if (daysLate === 1) return 'text-yellow-600';
     return 'text-emerald-600';
   };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">
-            {ordersOnly ? 'Loading order records...' : 'Loading shipped records...'}
-          </p>
+          <p className="text-sm font-semibold text-gray-600">Loading order records...</p>
         </div>
       </div>
     );
@@ -274,11 +195,7 @@ export function OrderRecordsTable({
           rightSlot={
             showWeekControls
               ? undefined
-              : (
-                <div className="min-w-[18px] flex items-center justify-end">
-                  {isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}
-                </div>
-              )
+              : <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}</div>
           }
         />
 
@@ -304,9 +221,7 @@ export function OrderRecordsTable({
                 </div>
               ) : (
                 <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                  <p className="text-gray-500 font-medium italic opacity-20">
-                    {emptyMessage || (ordersOnly ? 'No order records found' : 'No shipped records for this view')}
-                  </p>
+                  <p className="text-gray-500 font-medium italic opacity-20">{emptyMessage}</p>
                   {showWeekControls && weekOffset > 0 && onResetWeek ? (
                     <button
                       type="button"
@@ -322,14 +237,12 @@ export function OrderRecordsTable({
           ) : (
             <div className="flex flex-col w-full">
               {Object.entries(groupedRecords)
-                .sort((a, b) => (ordersOnly ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])))
+                .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([date, dayRecords]) => {
                   const sortedRecords = [...dayRecords].sort((a, b) => {
-                    const aSource = ordersOnly ? (a.ship_by_date || a.created_at) : (a.pack_date_time || a.created_at);
-                    const bSource = ordersOnly ? (b.ship_by_date || b.created_at) : (b.pack_date_time || b.created_at);
-                    const timeA = new Date(aSource || 0).getTime();
-                    const timeB = new Date(bSource || 0).getTime();
-                    return ordersOnly ? timeA - timeB : timeB - timeA;
+                    const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
+                    const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
+                    return timeA - timeB;
                   });
 
                   return (
@@ -348,14 +261,8 @@ export function OrderRecordsTable({
                           getStaffName((record as any).packer_id);
                         const outOfStockValue = String((record as any).out_of_stock || '').trim();
                         const hasOutOfStock = outOfStockValue !== '';
-                        const testedByValue = (record as any).tested_by;
-                        const hasTestedBy =
-                          testedByValue !== null &&
-                          testedByValue !== undefined &&
-                          String(testedByValue).trim() !== '' &&
-                          Number.isFinite(Number(testedByValue));
                         const hasTechScan = Boolean((record as any).has_tech_scan);
-                        const isFba = isFbaOrder(record.order_id, record.account_source);
+                        const defaultDaysLate = getDaysLateNumber(record.deadline_at as any);
 
                         return (
                           <motion.div
@@ -364,27 +271,19 @@ export function OrderRecordsTable({
                             key={record.id}
                             onClick={() => handleRowClick(record)}
                             data-order-row-id={String(record.id)}
-                            className={`grid ${ordersOnly ? 'grid-cols-[1fr_auto]' : 'grid-cols-[1fr_auto_70px]'} items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
-                              selectedShipped?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+                            className={`grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                              selectedRecord?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                             }`}
                           >
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
-                                {ordersOnly && !hideLeadingIndicators ? (
-                                  hasOutOfStock ? (
-                                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
-                                  ) : hasTechScan ? (
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
-                                  ) : (
-                                    <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
-                                  )
-                                ) : null}
-                                {isFba && !hideLeadingIndicators ? (
-                                  <span
-                                    className="h-2.5 w-2.5 shrink-0 rounded-full bg-purple-500"
-                                    title="FBA"
-                                  />
-                                ) : null}
+                                {hasOutOfStock ? (
+                                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
+                                ) : hasTechScan ? (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
+                                ) : (
+                                  <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
+                                )}
                                 <div className="text-[12px] font-bold text-gray-900 truncate">
                                   {record.product_title || 'Unknown Product'}
                                 </div>
@@ -408,20 +307,16 @@ export function OrderRecordsTable({
                                   {testerName}
                                   {' • '}
                                   {packerName}
-                                  {ordersOnly ? (
+                                  {defaultDaysLate !== null ? (
                                     <>
                                       {' • '}
-                                      <span className={getDaysLateTone(getDaysLateNumber(record.ship_by_date as any, record.created_at as any))}>
-                                        {getDaysLateNumber(record.ship_by_date as any, record.created_at as any)}
-                                      </span>
-                                      {hasOutOfStock ? (
-                                        <>
-                                          {' • '}
-                                          <span className="text-red-600">
-                                            {outOfStockValue}
-                                          </span>
-                                        </>
-                                      ) : null}
+                                      <span className={getDaysLateTone(defaultDaysLate)}>{defaultDaysLate}</span>
+                                    </>
+                                  ) : null}
+                                  {hasOutOfStock ? (
+                                    <>
+                                      {' • '}
+                                      <span className="text-red-600">{outOfStockValue}</span>
                                     </>
                                   ) : null}
                                 </div>
@@ -440,26 +335,15 @@ export function OrderRecordsTable({
                               </div>
 
                               <div className="flex flex-col w-[60px]">
-                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
+                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Track</span>
                                 <CopyableText
-                                  text={record.shipping_tracking_number || ''}
-                                  displayText={getLast4(record.shipping_tracking_number)}
+                                  text={(record as any).tracking_number || record.shipping_tracking_number || ''}
+                                  displayText={getLast4((record as any).tracking_number || record.shipping_tracking_number)}
                                   className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
-                                  variant="tracking"
+                                  variant="default"
                                 />
                               </div>
                             </div>
-
-                            {ordersOnly ? null : (
-                              <div className="flex flex-col w-[70px]">
-                                <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
-                                <CopyableText
-                                  text={record.serial_number || ''}
-                                  className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
-                                  variant="serial"
-                                />
-                              </div>
-                            )}
                           </motion.div>
                         );
                       })}

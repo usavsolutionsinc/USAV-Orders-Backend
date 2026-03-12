@@ -29,6 +29,12 @@ function compactUpdateValues(values: Record<string, unknown>) {
     );
 }
 
+function getTodayDate() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+}
+
 async function upsertOrderDeadline(orderId: number, deadlineAt: Date | null) {
     const existing = await pool.query(
         `SELECT id
@@ -38,7 +44,7 @@ async function upsertOrderDeadline(orderId: number, deadlineAt: Date | null) {
            AND work_type   = 'TEST'
            AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
          ORDER BY
-           CASE status WHEN 'ASSIGNED' THEN 1 WHEN 'IN_PROGRESS' THEN 2 WHEN 'OPEN' THEN 3 END,
+           CASE status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 END,
            id DESC
          LIMIT 1`,
         [orderId]
@@ -223,7 +229,6 @@ async function runTransferOrders(manualSheetName?: string) {
                     condition: ordersTable.condition,
                     notes: ordersTable.notes,
                     customerId: ordersTable.customerId,
-                    shippingTrackingNumber: ordersTable.shippingTrackingNumber,
                     shipmentId: ordersTable.shipmentId,
                     createdAt: ordersTable.createdAt,
                 })
@@ -244,7 +249,6 @@ async function runTransferOrders(manualSheetName?: string) {
                     condition: ordersTable.condition,
                     notes: ordersTable.notes,
                     customerId: ordersTable.customerId,
-                    shippingTrackingNumber: ordersTable.shippingTrackingNumber,
                     shipmentId: ordersTable.shipmentId,
                     createdAt: ordersTable.createdAt,
                 })
@@ -253,26 +257,19 @@ async function runTransferOrders(manualSheetName?: string) {
                 .orderBy(desc(ordersTable.createdAt))
             : [];
 
-        const sourceLegacyOrdersByTracking = sourceTrackings.length > 0
-            ? await db
-                .select({
-                    orderId: ordersTable.orderId,
-                    id: ordersTable.id,
-                    itemNumber: ordersTable.itemNumber,
-                    productTitle: ordersTable.productTitle,
-                    quantity: ordersTable.quantity,
-                    sku: ordersTable.sku,
-                    condition: ordersTable.condition,
-                    notes: ordersTable.notes,
-                    customerId: ordersTable.customerId,
-                    shippingTrackingNumber: ordersTable.shippingTrackingNumber,
-                    shipmentId: ordersTable.shipmentId,
-                    createdAt: ordersTable.createdAt,
-                })
-                .from(ordersTable)
-                .where(inArray(ordersTable.shippingTrackingNumber, sourceTrackings))
-                .orderBy(desc(ordersTable.createdAt))
-            : [];
+        const sourceLegacyOrdersByTracking: Array<{
+            orderId: string | null;
+            id: number;
+            itemNumber: string | null;
+            productTitle: string | null;
+            quantity: string | null;
+            sku: string | null;
+            condition: string | null;
+            notes: string | null;
+            customerId: number | null;
+            shipmentId: number | null;
+            createdAt: Date | null;
+        }> = [];
 
         const sourceCustomers = sourceOrderIds.length > 0
             ? await db
@@ -302,8 +299,7 @@ async function runTransferOrders(manualSheetName?: string) {
         sourceOrdersByOrderId.forEach(order => {
             const key = String(order.orderId || '').trim();
             const tracking = normalizeTracking(
-                (order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined)
-                || order.shippingTrackingNumber
+                order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined
             );
             const id = Number(order.id);
             if (!key || tracking || Number.isNaN(id) || latestBlankTrackingOrderByOrderId.has(key)) return;
@@ -337,8 +333,7 @@ async function runTransferOrders(manualSheetName?: string) {
         }>();
         [...sourceOrdersByShipmentId, ...sourceLegacyOrdersByTracking].forEach(order => {
             const tracking = normalizeTracking(
-                (order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined)
-                || order.shippingTrackingNumber
+                order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined
             );
             const trackingKey = normalizeTrackingNumber(tracking) || tracking;
             const id = Number(order.id);
@@ -411,6 +406,7 @@ async function runTransferOrders(manualSheetName?: string) {
             const rawShipByDate = row[colIndices.shipByDate] || '';
             const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
             const sheetShipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
+            const effectiveShipByDate = sheetShipByDate ?? getTodayDate();
             const sheetItemNumber = String(row[colIndices.itemNumber] || '').trim();
             const sheetProductTitle = String(row[colIndices.itemTitle] || '').trim();
             const sheetQuantity = String(row[colIndices.quantity] || '').trim() || '1';
@@ -447,13 +443,11 @@ async function runTransferOrders(manualSheetName?: string) {
                 if (Object.keys(compactedUpdateValues).length > 0) {
                     ordersToBackfill.push({ id: existingOrder.id, values: compactedUpdateValues });
                 }
-                if (sheetShipByDate) {
-                    orderDeadlinesToUpsert.push({ id: existingOrder.id, shipByDate: sheetShipByDate });
-                }
+                orderDeadlinesToUpsert.push({ id: existingOrder.id, shipByDate: effectiveShipByDate });
             } else {
                 const shipmentId = sheetTracking ? await ensureShipmentId(sheetTracking) : null;
                 ordersToInsert.push({
-                    shipByDate: sheetShipByDate,
+                    shipByDate: effectiveShipByDate,
                     values: {
                         orderId,
                         itemNumber: sheetItemNumber || '',
@@ -466,7 +460,6 @@ async function runTransferOrders(manualSheetName?: string) {
                         notes: sheetNotes || '',
                         status: 'unassigned',
                         statusHistory: [],
-                        isShipped: false,
                         customerId,
                     },
                 });

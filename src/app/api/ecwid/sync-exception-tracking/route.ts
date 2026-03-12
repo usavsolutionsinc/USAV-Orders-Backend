@@ -145,14 +145,13 @@ async function upsertEcwidOrder(params: {
         sku,
         status,
         status_history,
-        is_shipped,
         notes,
         quantity,
         out_of_stock,
         account_source,
         order_date
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13
+        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12
       )`,
       [
         orderId || null,
@@ -162,7 +161,6 @@ async function upsertEcwidOrder(params: {
         sku || null,
         'shipped',
         JSON.stringify([]),
-        true,
         '',
         quantity,
         '',
@@ -184,7 +182,6 @@ async function upsertEcwidOrder(params: {
          quantity = COALESCE(NULLIF(quantity, ''), $5),
          account_source = COALESCE(NULLIF(account_source, ''), 'ecwid'),
          order_date = COALESCE(order_date, $6),
-         is_shipped = true,
          status = CASE
            WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
            ELSE status

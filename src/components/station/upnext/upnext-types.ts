@@ -44,7 +44,14 @@ export interface Order {
   status: string;
   shipping_tracking_number: string;
   out_of_stock: string | null;
-  is_shipped: boolean;
+  /** Staff id from work_assignments; null means unassigned (visible to all techs) */
+  tester_id?: number | null;
+  /** Display name of the assigned tester */
+  tester_name?: string | null;
+  /** True when a tech_serial_numbers scan exists for this shipment_id (order already processed) */
+  has_tech_scan?: boolean;
+  /** Derived from shipping_tracking_numbers carrier status */
+  is_shipped?: boolean;
 }
 
 export interface RepairQueueItem {
@@ -52,6 +59,7 @@ export interface RepairQueueItem {
   repairId: number;
   assignmentId: number | null;
   assignmentStatus: string | null;
+  deadlineAt: string | null;
   ticketNumber: string;
   productTitle: string;
   issue: string;
@@ -62,6 +70,8 @@ export interface RepairQueueItem {
   price: string;
   assignedTechId: number | null;
   techName: string | null;
+  outOfStock: string | null;
+  repairOutcome: string | null;
 }
 
 export const FBA_ITEM_STATUS_BADGE: Record<string, string> = {

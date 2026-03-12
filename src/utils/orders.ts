@@ -10,7 +10,7 @@ export default defineSchema('orders', [
   { name: 'sku', type: 'TEXT' },
   { name: 'status', type: 'TEXT' },
   { name: 'status_history', type: 'JSONB' },
-  { name: 'is_shipped', type: 'BOOLEAN', notNull: true, default: 'false' },
+  // is_shipped removed — derived from shipping_tracking_numbers carrier status
   { name: 'packer_id', type: 'INTEGER', default: '5' },
   { name: 'notes', type: 'TEXT' },
   { name: 'quantity', type: 'TEXT', default: '1' },

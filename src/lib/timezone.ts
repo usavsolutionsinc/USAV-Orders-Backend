@@ -37,9 +37,9 @@ export function getCurrentPSTTime(): Date {
 }
 
 /**
- * Format a date as MM/DD/YYYY HH:mm:ss in PST timezone
- * @param date Optional date to format (defaults to current PST time)
- * @returns Formatted date string in PST
+ * Format a date as YYYY-MM-DD HH:mm:ss in PST/PDT wall time.
+ * This returns a timezone-naive string on purpose so callers can store the
+ * exact Los Angeles local timestamp without a UTC conversion round trip.
  */
 export function formatPSTTimestamp(date?: Date): string {
   const base = date ?? new Date();
@@ -66,7 +66,7 @@ export function formatPSTTimestamp(date?: Date): string {
     return base.toISOString().replace('T', ' ').slice(0, 19);
   }
 
-  return `${month}/${day}/${year} ${hour}:${minute}:${second}`;
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
 /**

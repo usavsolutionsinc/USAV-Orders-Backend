@@ -31,14 +31,14 @@ export async function GET(req: NextRequest) {
       `
       SELECT *
       FROM (
-        SELECT DISTINCT ON (COALESCE(o.id::text, tsn.shipping_tracking_number))
+        SELECT DISTINCT ON (COALESCE(o.id::text, COALESCE(stn.tracking_number_raw, tsn.scan_ref)))
           tsn.id                                        AS tsn_id,
           tsn.test_date_time,
-          tsn.shipping_tracking_number,
+          COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
           tsn.tested_by,
           o.id                                         AS id,
           CASE
-            WHEN UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, ''))) LIKE 'X00%' THEN 'FBA'
+            WHEN UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%' THEN 'FBA'
             ELSE o.order_id
           END                                          AS order_id,
           o.ship_by_date,
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
           o.item_number,
           COALESCE(
             CASE
-              WHEN UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, ''))) LIKE 'X00%' THEN fba.product_title
+              WHEN UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%' THEN fba.product_title
               ELSE NULL
             END,
             o.product_title
@@ -57,14 +57,16 @@ export async function GET(req: NextRequest) {
           o.account_source,
           o.notes,
           o.out_of_stock,
-          COALESCE(o.is_shipped, false)                AS is_shipped
+          COALESCE(o_stn.is_carrier_accepted OR o_stn.is_in_transit
+            OR o_stn.is_out_for_delivery OR o_stn.is_delivered, false) AS is_shipped
         FROM tech_serial_numbers tsn
+        LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
         LEFT JOIN LATERAL (
           SELECT product_title
           FROM fba_fnskus
-          WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, '')))
+          WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = UPPER(TRIM(COALESCE(tsn.scan_ref, tsn.fnsku, '')))
           LIMIT 1
-        ) fba ON true
+        ) fba ON tsn.scan_ref IS NOT NULL AND UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%'
         LEFT JOIN LATERAL (
           SELECT
             id,
@@ -85,25 +87,34 @@ export async function GET(req: NextRequest) {
             account_source,
             notes,
             out_of_stock,
-            is_shipped
+            shipment_id
           FROM orders
-          WHERE RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) =
-                RIGHT(regexp_replace(COALESCE(tsn.shipping_tracking_number, ''), '\\D', '', 'g'), 8)
+          WHERE (
+            tsn.shipment_id IS NOT NULL AND shipment_id = tsn.shipment_id
+          ) OR (
+            COALESCE(stn.tracking_number_raw, '') <> ''
+            AND shipping_tracking_number IS NOT NULL
+            AND shipping_tracking_number != ''
+            AND RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) =
+                RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
+          )
+          ORDER BY CASE WHEN shipment_id IS NOT NULL AND shipment_id = tsn.shipment_id THEN 0 ELSE 1 END
           LIMIT 1
         ) o ON true
+        LEFT JOIN shipping_tracking_numbers o_stn ON o_stn.id = o.shipment_id
         WHERE tsn.tested_by = $1
           AND tsn.test_date_time IS NOT NULL
           AND tsn.test_date_time >= NOW() - ($2 * INTERVAL '1 day')
           AND COALESCE(
                 CASE
-                  WHEN UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, ''))) LIKE 'X00%' THEN fba.product_title
+                  WHEN UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%' THEN fba.product_title
                   ELSE NULL
                 END,
                 o.product_title
               ) IS NOT NULL
           AND TRIM(COALESCE(
                 CASE
-                  WHEN UPPER(TRIM(COALESCE(tsn.shipping_tracking_number, ''))) LIKE 'X00%' THEN fba.product_title
+                  WHEN UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%' THEN fba.product_title
                   ELSE NULL
                 END,
                 o.product_title,
@@ -121,7 +132,7 @@ export async function GET(req: NextRequest) {
               )
           )
         ORDER BY
-          COALESCE(o.id::text, tsn.shipping_tracking_number),
+          COALESCE(o.id::text, COALESCE(stn.tracking_number_raw, tsn.scan_ref)),
           tsn.test_date_time DESC
       ) sub
       ORDER BY sub.test_date_time DESC NULLS LAST

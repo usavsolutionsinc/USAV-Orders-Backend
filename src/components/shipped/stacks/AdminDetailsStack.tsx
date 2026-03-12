@@ -23,7 +23,7 @@ interface AdminOrder {
   packer_id: number | null;
   out_of_stock: string | null;
   notes?: string | null;
-  is_shipped: boolean;
+  is_shipped?: boolean; // derived from shipping_tracking_numbers
   created_at: string | null;
 }
 

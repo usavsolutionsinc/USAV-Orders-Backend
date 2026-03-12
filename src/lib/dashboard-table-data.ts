@@ -6,11 +6,16 @@ import { isFbaOrder } from '@/utils/order-platform';
 function toOrderRecord(order: any): ShippedOrder {
   return {
     ...order,
-    pack_date_time: order.ship_by_date || null,
+    deadline_at: order.deadline_at || null,
+    shipment_id: order.shipment_id ?? null,
+    pack_date_time: order.pack_date_time || null,
     packed_by: order.packer_id ?? null,
     tested_by: order.tested_by ?? null,
-    serial_number: '',
+    serial_number: order.serial_number || '',
     condition: order.condition || '',
+    // API returns tracking_number_raw aliased as tracking_number; map to the
+    // canonical ShippedOrder field so details-panel and all consumers work.
+    shipping_tracking_number: order.shipping_tracking_number || order.tracking_number || null,
   };
 }
 
@@ -22,19 +27,20 @@ export async function fetchPendingOrdersData({
   searchQuery = '',
   packedBy,
   testedBy,
-  pendingOnly = false,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
-  pendingOnly?: boolean;
 }) {
   const params = new URLSearchParams();
-  if (searchQuery.trim()) params.set('q', searchQuery.trim());
-  if (searchQuery.trim()) params.set('includeShipped', 'true');
+  if (searchQuery.trim()) {
+    params.set('q', searchQuery.trim());
+  }
+  // Pending view: only show orders with a shipment link that are not shipped and do not
+  // have a matching packer_logs row by shipment_id.
+  params.set('excludePacked', 'true');
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
-  if (pendingOnly) params.set('pendingOnly', 'true');
 
   const url = params.toString() ? `/api/orders?${params.toString()}` : '/api/orders';
   const res = await fetch(url, { cache: 'no-store' });
@@ -43,9 +49,12 @@ export async function fetchPendingOrdersData({
   }
 
   const data = await res.json();
-  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[])
-    .filter((record) => String(record.shipping_tracking_number || '').trim().length > 0)
-    .filter(isNonFbaRecord);
+  const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  // When searching, return all matches regardless of shipment_id so an order
+  // with no label is still discoverable from the pending view search bar.
+  // Without a search query the view is scoped to label-assigned orders only
+  // (those with a shipment_id); no-label orders belong in the unshipped view.
+  return searchQuery.trim() ? records : records.filter((record) => record.shipment_id != null);
 }
 
 export async function fetchUnshippedOrdersData({
@@ -58,7 +67,6 @@ export async function fetchUnshippedOrdersData({
   testedBy?: number;
 }) {
   const params = new URLSearchParams();
-  params.set('missingTrackingOnly', 'true');
   if (searchQuery.trim()) params.set('q', searchQuery.trim());
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
@@ -69,9 +77,10 @@ export async function fetchUnshippedOrdersData({
   }
 
   const data = await res.json();
-  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[])
-    .filter((record) => String(record.shipping_tracking_number || '').trim().length === 0)
-    .filter(isNonFbaRecord);
+  const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  // When searching, lift the shipment_id == null restriction so orders with a
+  // label can still be found from the unshipped tab's search bar.
+  return searchQuery.trim() ? records : records.filter((record) => record.shipment_id == null);
 }
 
 export async function fetchDashboardShippedData({
@@ -88,8 +97,8 @@ export async function fetchDashboardShippedData({
   weekEnd?: string;
 }) {
   const params = new URLSearchParams();
-  params.set('shippedOnly', 'true');
-  params.set('includeShipped', 'true');
+  // Packed & shipped view: show only orders with a matching packer_log (scanned by packer).
+  params.set('packedOnly', 'true');
   if (searchQuery.trim()) {
     params.set('q', searchQuery.trim());
   } else {

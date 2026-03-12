@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishPackerLogChanged, publishOrderChanged } from '@/lib/realtime/publish';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
   '1': 4,
@@ -20,8 +21,8 @@ function resolvePackerStaffId(rawId: string | number | null | undefined): number
 }
 
 /**
- * Update packer_logs table and set orders.is_shipped to true
- * Called from mobile app after photos are uploaded
+ * Update packer_logs table (mobile app after photos are uploaded).
+ * Shipped state is now derived from shipping_tracking_numbers, not stored on orders.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -79,16 +80,19 @@ export async function POST(req: NextRequest) {
     try {
       await client.query('BEGIN');
 
-      // 1. Insert into packer_logs table
+      // 1. Resolve shipment_id, then insert into packer_logs
+      const { shipmentId: resolvedShipmentId, scanRef: resolvedScanRef } =
+        await resolveShipmentId(shippingTrackingNumber);
       const insertResult = await client.query(`
         INSERT INTO packer_logs (
-          shipping_tracking_number,
+          shipment_id,
+          scan_ref,
           tracking_type,
           pack_date_time,
           packed_by
-        ) VALUES ($1, $2, $3, $4)
+        ) VALUES ($1, $2, $3, $4, $5)
         RETURNING id
-      `, [shippingTrackingNumber, trackingType, packDate, staffId]);
+      `, [resolvedShipmentId, resolvedScanRef, trackingType, packDate, staffId]);
 
       const packerLogId = insertResult.rows[0]?.id;
       console.log('Inserted into packer_logs, ID:', packerLogId);
@@ -106,62 +110,44 @@ export async function POST(req: NextRequest) {
         console.log(`Inserted ${photoUrlList.length} photo(s) into photos table`);
       }
 
-      // 3. First check if order exists and its current state
-      const checkResult = await client.query(`
-        SELECT id, order_id, shipping_tracking_number, is_shipped, status
-        FROM orders
-        WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
-        AND shipping_tracking_number IS NOT NULL
-        AND shipping_tracking_number != ''
-        LIMIT 1
-      `, [shippingTrackingNumber]);
-
-      console.log('=== ORDERS TABLE CHECK ===');
-      if (checkResult.rows.length === 0) {
-        console.error('❌ NO ORDER FOUND with last 8 digits:', shippingTrackingNumber.slice(-8));
-        console.error('   Full tracking sent:', shippingTrackingNumber);
-      } else {
-        const orderState = checkResult.rows[0];
-        console.log('✅ Order found in database:');
-        console.log('   Order ID:', orderState.order_id);
-        console.log('   DB Tracking:', orderState.shipping_tracking_number);
-        console.log('   Current is_shipped:', orderState.is_shipped);
-        console.log('   Current status:', orderState.status);
-        console.log('   Sent tracking last 8:', shippingTrackingNumber.slice(-8));
-        console.log('   DB tracking last 8:', orderState.shipping_tracking_number.slice(-8));
-      }
-
-      // 3. Update orders table - set is_shipped to true only if not already shipped.
-      // packer_id is no longer a column on orders; assignment recorded in work_assignments below.
+      // 3. Update orders table — mark status only; shipped state derived from stn carrier status
       const updateResult = await client.query(`
         UPDATE orders
-        SET
-          is_shipped = true,
-          status = 'shipped'
-        WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
-        AND shipping_tracking_number IS NOT NULL
-        AND shipping_tracking_number != ''
-        AND is_shipped = false
+        SET status = 'shipped'
+        WHERE shipment_id = $1
+          AND (status IS NULL OR status != 'shipped')
         RETURNING id, order_id, shipping_tracking_number
-      `, [shippingTrackingNumber]);
+      `, [resolvedShipmentId]);
 
       console.log('=== UPDATE RESULT ===');
       if (updateResult.rows.length === 0) {
-        console.warn('⚠️  NO ROWS UPDATED');
-        if (checkResult.rows.length > 0 && checkResult.rows[0].is_shipped === true) {
-          console.warn('   Reason: Order was already marked as shipped');
-        } else {
-          console.warn('   Reason: No matching order found or other constraint failed');
+        // Fallback: match by last-8 text for legacy unlinked rows
+        const fallbackUpdate = await client.query(`
+          UPDATE orders
+          SET status = 'shipped'
+          WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
+            AND shipping_tracking_number IS NOT NULL
+            AND shipping_tracking_number != ''
+            AND (status IS NULL OR status != 'shipped')
+          RETURNING id, order_id, shipping_tracking_number
+        `, [shippingTrackingNumber]);
+        if (fallbackUpdate.rows.length > 0) {
+          const orderId = fallbackUpdate.rows[0].id;
+          await client.query(`
+            INSERT INTO work_assignments
+                (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
+            VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
+            ON CONFLICT (entity_type, entity_id, work_type)
+                WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
+            DO UPDATE
+                SET assigned_packer_id = EXCLUDED.assigned_packer_id,
+                    status             = 'DONE',
+                    completed_at       = NOW(),
+                    updated_at         = NOW()
+          `, [orderId, staffId]);
         }
       } else {
-        console.log('✅ Updated orders table successfully');
-        console.log('   Order ID:', updateResult.rows[0].order_id);
-        console.log('   DB Tracking:', updateResult.rows[0].shipping_tracking_number);
-        console.log('   Set is_shipped = true');
-        console.log('   Set status = shipped');
-        console.log('   Set packer_id (work_assignments) =', staffId);
-
-        // Record packer assignment in work_assignments
+        console.log('✅ Updated orders table status = shipped');
         const orderId = updateResult.rows[0].id;
         await client.query(`
           INSERT INTO work_assignments
@@ -182,7 +168,7 @@ export async function POST(req: NextRequest) {
       await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
 
       // Build packer-log row for live surgical insert on all subscribed web sessions.
-      const shippedOrderId = updateResult.rows[0]?.id ?? null;
+      const shippedOrderId = updateResult.rows[0]?.id ?? null;  // may be null for unlinked rows
       const packerRow = {
         id: packerLogId,
         pack_date_time: packDate.toISOString(),

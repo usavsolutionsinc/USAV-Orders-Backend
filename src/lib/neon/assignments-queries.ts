@@ -11,6 +11,7 @@ export interface WorkAssignment {
   work_type: WorkType;
   assigned_tech_id: number | null;
   assigned_packer_id: number | null;
+  completed_by_tech_id: number | null;
   status: AssignmentStatus;
   notes: string | null;
   created_at: string;
@@ -31,6 +32,7 @@ export interface UpdateAssignmentParams {
   status?: AssignmentStatus;
   assignedTechId?: number | null;
   assignedPackerId?: number | null;
+  completedByTechId?: number | null;
   notes?: string | null;
 }
 
@@ -179,6 +181,7 @@ export async function updateAssignment(id: number, updates: UpdateAssignmentPara
   if (updates.status !== undefined) { setClauses.push(`status = $${idx++}`); params.push(updates.status); }
   if (updates.assignedTechId !== undefined) { setClauses.push(`assigned_tech_id = $${idx++}`); params.push(updates.assignedTechId); }
   if (updates.assignedPackerId !== undefined) { setClauses.push(`assigned_packer_id = $${idx++}`); params.push(updates.assignedPackerId); }
+  if (updates.completedByTechId !== undefined) { setClauses.push(`completed_by_tech_id = $${idx++}`); params.push(updates.completedByTechId); }
   if (updates.notes !== undefined) { setClauses.push(`notes = $${idx++}`); params.push(updates.notes); }
 
   params.push(id);

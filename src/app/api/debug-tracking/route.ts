@@ -14,24 +14,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Tracking number required' }, { status: 400 });
     }
 
-    console.log('=== DEBUG TRACKING CHECK ===');
-    console.log('Input tracking:', tracking);
-    console.log('Input length:', tracking.length);
-    console.log('Last 8 digits:', tracking.slice(-8));
-
-    // Check if any orders match last 8 digits.
-    // packer_id is sourced from work_assignments (removed from orders table).
+    // Check if any orders match via shipment_id → shipping_tracking_numbers join.
     const matchResult = await pool.query(`
       SELECT
         o.id,
         o.order_id,
-        o.shipping_tracking_number,
-        o.is_shipped,
+        stn.tracking_number_raw AS tracking_number,
+        COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+          OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
+        stn.latest_status_category AS shipment_status,
         o.status,
         wa_pack.assigned_packer_id AS packer_id,
-        LENGTH(o.shipping_tracking_number) AS tracking_length,
-        RIGHT(o.shipping_tracking_number, 8) AS db_last8
+        LENGTH(stn.tracking_number_raw) AS tracking_length,
+        RIGHT(stn.tracking_number_raw, 8) AS db_last8
       FROM orders o
+      JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       LEFT JOIN LATERAL (
         SELECT assigned_packer_id
         FROM work_assignments
@@ -40,23 +37,24 @@ export async function GET(req: NextRequest) {
           AND work_type   = 'PACK'
         ORDER BY id DESC LIMIT 1
       ) wa_pack ON TRUE
-      WHERE RIGHT(o.shipping_tracking_number, 8) = RIGHT($1, 8)
-        AND o.shipping_tracking_number IS NOT NULL
-        AND o.shipping_tracking_number != ''
+      WHERE RIGHT(stn.tracking_number_raw, 8) = RIGHT($1, 8)
       ORDER BY o.created_at DESC
     `, [tracking]);
 
     // Also check packer_logs
     const packerLogsResult = await pool.query(`
-      SELECT 
-        id,
-        shipping_tracking_number,
-        tracking_type,
-        pack_date_time,
-        packed_by
-      FROM packer_logs
-      WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
-      ORDER BY pack_date_time DESC NULLS LAST
+      SELECT
+        pl.id,
+        COALESCE(stn.tracking_number_raw, pl.scan_ref) AS tracking_number,
+        pl.tracking_type,
+        pl.pack_date_time,
+        pl.packed_by
+      FROM packer_logs pl
+      LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
+      WHERE stn.tracking_number_raw ILIKE $1
+         OR pl.scan_ref ILIKE $1
+         OR RIGHT(COALESCE(stn.tracking_number_raw, ''), 8) = RIGHT($1, 8)
+      ORDER BY pl.pack_date_time DESC NULLS LAST
       LIMIT 5
     `, [tracking]);
 
@@ -68,7 +66,7 @@ export async function GET(req: NextRequest) {
       orders: matchResult.rows.map(row => ({
         id: row.id,
         order_id: row.order_id,
-        tracking: row.shipping_tracking_number,
+        tracking: row.tracking_number,
         trackingLength: row.tracking_length,
         dbLast8: row.db_last8,
         isShipped: row.is_shipped,
@@ -81,9 +79,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error in debug-tracking:', error);
-    return NextResponse.json({ 
-      error: 'Failed to debug tracking', 
-      details: error.message 
+    return NextResponse.json({
+      error: 'Failed to debug tracking',
+      details: error.message
     }, { status: 500 });
   }
 }

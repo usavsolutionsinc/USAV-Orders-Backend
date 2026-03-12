@@ -46,27 +46,20 @@ export async function POST(req: NextRequest) {
 
 async function executeCheckShippedOrders() {
     // Find orders where a packer log exists via the shipment_id FK
+    // Shipped state is now derived from shipping_tracking_numbers carrier status;
+    // no direct write to orders.is_shipped is needed.
     const shippedResult = await pool.query(
         `SELECT DISTINCT o.id
          FROM orders o
          INNER JOIN packer_logs pl ON pl.shipment_id = o.shipment_id
-         WHERE o.is_shipped = false
-           AND o.shipment_id IS NOT NULL
+         WHERE o.shipment_id IS NOT NULL
            AND pl.tracking_type = 'ORDERS'`
     );
-    const ordersToUpdate: number[] = shippedResult.rows.map((r: any) => Number(r.id));
-    
-    // Update orders to mark as shipped
-    if (ordersToUpdate.length > 0) {
-        await db
-            .update(orders)
-            .set({ isShipped: true })
-            .where(inArray(orders.id, ordersToUpdate));
-    }
-    
+    const packedCount = shippedResult.rows.length;
+
     return NextResponse.json({
         success: true,
-        message: `Checked orders via shipment_id FK. Updated ${ordersToUpdate.length} orders to shipped status.`,
+        message: `Found ${packedCount} orders with packer logs linked via shipment_id. Shipped state is derived from carrier tracking — no boolean update needed.`,
     });
 }
 

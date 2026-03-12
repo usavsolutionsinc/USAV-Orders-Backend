@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishTechLogChanged } from '@/lib/realtime/publish';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,23 +20,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid tracking number' }, { status: 400 });
     }
 
-    const params: any[] = [key18];
+    const { shipmentId: resolvedShipmentId, scanRef: resolvedScanRef } = await resolveShipmentId(tracking);
+
     let techFilter = '';
+    const latestParams: any[] = [resolvedShipmentId, resolvedScanRef ?? tracking];
     if (techId) {
-      params.push(techId);
-      techFilter = ` AND tested_by = $${params.length} `;
+      latestParams.push(techId);
+      techFilter = ` AND tsn.tested_by = $${latestParams.length} `;
     }
 
     const latestResult = await pool.query(
-      `SELECT id, serial_number
-       FROM tech_serial_numbers
-       WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-         AND serial_number IS NOT NULL
-         AND serial_number != ''
+      `SELECT tsn.id, tsn.serial_number
+       FROM tech_serial_numbers tsn
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+       WHERE (
+           (tsn.shipment_id IS NOT NULL AND tsn.shipment_id = $1)
+           OR (tsn.shipment_id IS NULL AND tsn.scan_ref = $2)
+           OR (stn.tracking_number_normalized IS NOT NULL
+               AND RIGHT(stn.tracking_number_normalized, 18) = RIGHT(regexp_replace(UPPER($2::text), '[^A-Z0-9]', '', 'g'), 18))
+         )
+         AND tsn.serial_number IS NOT NULL
+         AND tsn.serial_number != ''
          ${techFilter}
-       ORDER BY test_date_time DESC NULLS LAST, id DESC
+       ORDER BY tsn.test_date_time DESC NULLS LAST, tsn.id DESC
        LIMIT 1`,
-      params
+      latestParams
     );
 
     if (latestResult.rows.length === 0) {
@@ -55,13 +64,19 @@ export async function POST(req: NextRequest) {
     }
 
     const remainingResult = await pool.query(
-      `SELECT serial_number
-       FROM tech_serial_numbers
-       WHERE RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-         AND serial_number IS NOT NULL
-         AND serial_number != ''
-       ORDER BY test_date_time ASC NULLS LAST, id ASC`,
-      [key18]
+      `SELECT tsn.serial_number
+       FROM tech_serial_numbers tsn
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+       WHERE (
+           (tsn.shipment_id IS NOT NULL AND tsn.shipment_id = $1)
+           OR (tsn.shipment_id IS NULL AND tsn.scan_ref = $2)
+           OR (stn.tracking_number_normalized IS NOT NULL
+               AND RIGHT(stn.tracking_number_normalized, 18) = RIGHT(regexp_replace(UPPER($2::text), '[^A-Z0-9]', '', 'g'), 18))
+         )
+         AND tsn.serial_number IS NOT NULL
+         AND tsn.serial_number != ''
+       ORDER BY tsn.test_date_time ASC NULLS LAST, tsn.id ASC`,
+      [resolvedShipmentId, resolvedScanRef ?? tracking]
     );
 
     return NextResponse.json({

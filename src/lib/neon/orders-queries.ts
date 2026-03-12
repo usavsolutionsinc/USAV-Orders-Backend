@@ -3,13 +3,15 @@ import pool from '../db';
 // Order record with shipping information
 export interface ShippedOrder {
   id: number;
-  ship_by_date: string;
+  deadline_at?: string | null;
+  ship_by_date?: string | null;
   order_id: string;
   product_title: string;
   quantity?: string | null;
   item_number?: string | null;
   condition: string;
-  shipping_tracking_number: string;
+  shipment_id?: number | string | null;
+  shipping_tracking_number?: string | null;
   serial_number: string; // Aggregated from tech_serial_numbers
   sku: string;
   /** Staff ID assigned to test — sourced from work_assignments.assigned_tech_id */
@@ -25,7 +27,11 @@ export interface ShippedOrder {
   account_source: string | null;
   notes: string;
   status_history: any;
+  /** Derived from shipping_tracking_numbers carrier status — not stored on orders */
   is_shipped?: boolean;
+  shipment_status?: string | null;
+  is_delivered?: boolean;
+  carrier?: string | null;
   created_at: string | null;
   tested_by_name?: string | null;
   packed_by_name?: string | null;
@@ -37,18 +43,25 @@ export interface ShippedOrder {
 
 export interface ActiveOrder {
   id: number;
+  shipment_id: number | null;
   order_id: string;
   product_title: string;
   quantity: string | null;
   item_number: string | null;
   condition: string;
-  shipping_tracking_number: string | null;
+  /** Sourced from shipping_tracking_numbers.tracking_number_raw via shipment_id join */
+  tracking_number?: string | null;
+  shipping_tracking_number?: string | null;
   sku: string | null;
   account_source: string | null;
   notes: string | null;
   status_history: any;
+  /** Derived from shipping_tracking_numbers carrier status */
   is_shipped: boolean;
-  ship_by_date: string | null;
+  shipment_status?: string | null;
+  carrier?: string | null;
+  deadline_at?: string | null;
+  ship_by_date?: string | null;
   out_of_stock: string | null;
   created_at: string | null;
   tester_id: number | null;
@@ -62,7 +75,6 @@ export interface ActiveOrder {
 export interface CreateOrderParams {
   orderId: string;
   productTitle: string;
-  shippingTrackingNumber?: string | null;
   sku?: string | null;
   accountSource?: string | null;
   condition?: string;
@@ -70,7 +82,6 @@ export interface CreateOrderParams {
   itemNumber?: string | null;
   shipByDate?: string | null;
   notes?: string | null;
-  isShipped?: boolean;
 }
 
 // ─── Shared CTE fragments ─────────────────────────────────────────────────────
@@ -107,18 +118,23 @@ const ORDER_SERIALS_CTE = `
   order_serials AS (
     SELECT
       o.id,
+      o.shipment_id,
       to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
       o.order_id,
       o.product_title,
       o.quantity,
       o.item_number,
       o.condition,
-      o.shipping_tracking_number,
+      stn.tracking_number_raw AS tracking_number,
       o.sku,
       o.account_source,
       o.notes,
       o.status_history,
-      o.is_shipped,
+      COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+        OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
+      stn.latest_status_category AS shipment_status,
+      stn.is_delivered,
+      stn.carrier,
       to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
       'order'::text AS row_source,
       NULL::text AS exception_reason,
@@ -148,6 +164,7 @@ const ORDER_SERIALS_CTE = `
         AND status IN ('ASSIGNED', 'IN_PROGRESS')
       ORDER BY created_at DESC LIMIT 1
     ) wa_p ON true
+    LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
     LEFT JOIN LATERAL (
       SELECT
         pl.packed_by,
@@ -160,18 +177,20 @@ const ORDER_SERIALS_CTE = `
             AND p.entity_id = pl.id
         ), '[]'::jsonb) AS packer_photos_url
       FROM packer_logs pl
-      WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
-            RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+      WHERE pl.shipment_id IS NOT NULL
+        AND pl.shipment_id = o.shipment_id
+        AND pl.tracking_type = 'ORDERS'
       ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC
       LIMIT 1
     ) pl ON true
-    LEFT JOIN tech_serial_numbers tsn
-      ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
-         RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
-    WHERE COALESCE(o.is_shipped, false) = true
-    GROUP BY o.id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity, o.condition,
-             o.item_number, o.shipping_tracking_number, o.sku,
-             o.account_source, o.notes, o.status_history, o.is_shipped,
+    LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
+    WHERE COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+            OR stn.is_out_for_delivery OR stn.is_delivered, false)
+    GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
+             o.condition, o.item_number, stn.tracking_number_raw, o.sku,
+             o.account_source, o.notes, o.status_history,
+             stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
+             stn.latest_status_category, stn.carrier,
              wa_t.assigned_tech_id, wa_p.assigned_packer_id,
              pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
   )`;
@@ -214,18 +233,23 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
       `WITH order_serials AS (
         SELECT
           o.id,
+          o.shipment_id,
           to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
           o.order_id,
           o.product_title,
           o.quantity,
           o.item_number,
           o.condition,
-          o.shipping_tracking_number,
+          stn.tracking_number_raw AS tracking_number,
           o.sku,
           o.account_source,
           o.notes,
           o.status_history,
-          o.is_shipped,
+          COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+            OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
+          stn.latest_status_category AS shipment_status,
+          stn.is_delivered,
+          stn.carrier,
           to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
           wa_t.assigned_tech_id   AS tester_id,
           wa_p.assigned_packer_id AS packer_id,
@@ -255,6 +279,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
             AND status IN ('ASSIGNED', 'IN_PROGRESS')
           ORDER BY created_at DESC LIMIT 1
         ) wa_p ON true
+        LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
         LEFT JOIN LATERAL (
           SELECT
             pl.packed_by,
@@ -267,14 +292,20 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
                 AND p.entity_id = pl.id
             ), '[]'::jsonb) AS packer_photos_url
           FROM packer_logs pl
-          WHERE shipping_tracking_number = o.shipping_tracking_number
+          WHERE pl.shipment_id IS NOT NULL
+            AND pl.shipment_id = o.shipment_id
+            AND pl.tracking_type = 'ORDERS'
           ORDER BY pack_date_time DESC NULLS LAST, id DESC LIMIT 1
         ) pl ON true
-        LEFT JOIN tech_serial_numbers tsn ON o.shipping_tracking_number = tsn.shipping_tracking_number
-        WHERE o.id = $1 AND COALESCE(o.is_shipped, false) = true
-        GROUP BY o.id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity, o.condition,
-                 o.item_number, o.shipping_tracking_number, o.sku,
-                 o.account_source, o.notes, o.status_history, o.is_shipped,
+        LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
+        WHERE o.id = $1
+          AND COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+                OR stn.is_out_for_delivery OR stn.is_delivered, false)
+        GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
+                 o.condition, o.item_number, stn.tracking_number_raw, o.sku,
+                 o.account_source, o.notes, o.status_history,
+                 stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
+                 stn.latest_status_category, stn.carrier,
                  wa_t.assigned_tech_id, wa_p.assigned_packer_id,
                  pl.packed_by, pl.pack_date_time, pl.packer_photos_url, pl.tracking_type
       )
@@ -315,21 +346,21 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
        LEFT JOIN staff s2 ON os.packed_by = s2.id
        LEFT JOIN staff s3 ON os.tester_id = s3.id
        WHERE
-         os.shipping_tracking_number::text = $2
+         os.tracking_number::text = $2
          OR os.order_id::text = $2
-         OR os.shipping_tracking_number::text ILIKE $1
+         OR os.tracking_number::text ILIKE $1
          OR os.order_id::text ILIKE $1
          OR os.product_title::text ILIKE $1
          OR os.sku::text ILIKE $1
          OR os.serial_number::text ILIKE $1
          OR (
            $3 != '' AND LENGTH($3) >= 8 AND (
-             RIGHT(regexp_replace(os.shipping_tracking_number::text, '\\D', '', 'g'), 8) = $3
+             RIGHT(regexp_replace(COALESCE(os.tracking_number::text, ''), '\\D', '', 'g'), 8) = $3
              OR RIGHT(os.order_id::text, 8) = $3
            )
          )
        ORDER BY
-         CASE WHEN os.shipping_tracking_number::text = $2 OR os.order_id::text = $2 THEN 1 ELSE 2 END,
+         CASE WHEN os.tracking_number::text = $2 OR os.order_id::text = $2 THEN 1 ELSE 2 END,
          COALESCE(os.pack_date_time::timestamp, os.created_at::timestamp) DESC NULLS LAST,
          os.id DESC
        LIMIT 100`,
@@ -359,7 +390,7 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
        LEFT JOIN staff s1 ON os.tested_by = s1.id
        LEFT JOIN staff s2 ON os.packed_by = s2.id
        LEFT JOIN staff s3 ON os.tester_id = s3.id
-       WHERE RIGHT(os.shipping_tracking_number, 8) = $1
+       WHERE RIGHT(COALESCE(os.tracking_number, ''), 8) = $1
        LIMIT 1`,
       [last8],
     );
@@ -376,7 +407,11 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
 export async function getShippedOrdersCount(): Promise<number> {
   try {
     const result = await pool.query(
-      `SELECT COUNT(DISTINCT id) AS count FROM orders WHERE COALESCE(is_shipped, false) = true`,
+      `SELECT COUNT(DISTINCT o.id) AS count
+       FROM orders o
+       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+       WHERE stn.is_carrier_accepted OR stn.is_in_transit
+          OR stn.is_out_for_delivery OR stn.is_delivered`,
     );
     return parseInt(result.rows[0].count);
   } catch (error) {
@@ -396,17 +431,20 @@ export async function getActiveOrders(options?: {
   assignedPackerId?: number;
   weekStart?: string;
   weekEnd?: string;
-  missingTrackingOnly?: boolean;
+  missingShipmentOnly?: boolean;
   pendingOnly?: boolean;
   limit?: number;
   offset?: number;
 }): Promise<ActiveOrder[]> {
-  const conditions: string[] = ['COALESCE(o.is_shipped, false) = false'];
+  const conditions: string[] = [
+    `NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+       OR stn.is_out_for_delivery OR stn.is_delivered, false)`,
+  ];
   const params: any[] = [];
   let idx = 1;
 
-  if (options?.missingTrackingOnly) {
-    conditions.push(`(o.shipping_tracking_number IS NULL OR o.shipping_tracking_number = '')`);
+  if (options?.missingShipmentOnly) {
+    conditions.push(`o.shipment_id IS NULL`);
   }
   if (options?.weekStart) { conditions.push(`wa_deadline.deadline_at >= $${idx++}`); params.push(options.weekStart); }
   if (options?.weekEnd) { conditions.push(`wa_deadline.deadline_at <= $${idx++}`); params.push(options.weekEnd); }
@@ -429,17 +467,21 @@ export async function getActiveOrders(options?: {
   const result = await pool.query(
     `SELECT
        o.id,
+       o.shipment_id,
        o.order_id,
        o.product_title,
        o.quantity,
        o.item_number,
        o.condition,
-       o.shipping_tracking_number,
+       stn.tracking_number_raw AS tracking_number,
        o.sku,
        o.account_source,
        o.notes,
        o.status_history,
-       COALESCE(o.is_shipped, false) AS is_shipped,
+       COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+         OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
+       stn.latest_status_category AS shipment_status,
+       stn.carrier,
        to_char(wa_deadline.deadline_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS ship_by_date,
        o.out_of_stock,
        to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at,
@@ -468,19 +510,21 @@ export async function getActiveOrders(options?: {
          AND status IN ('ASSIGNED', 'IN_PROGRESS')
        ORDER BY created_at DESC LIMIT 1
      ) wa_p ON true
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
      LEFT JOIN LATERAL (
        SELECT packed_by, pack_date_time FROM packer_logs pl
-       WHERE RIGHT(regexp_replace(pl.shipping_tracking_number, '\\D', '', 'g'), 8) =
-             RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+       WHERE pl.shipment_id IS NOT NULL
+         AND pl.shipment_id = o.shipment_id
+         AND pl.tracking_type = 'ORDERS'
        ORDER BY pack_date_time DESC NULLS LAST, pl.id DESC LIMIT 1
      ) pl ON true
-     LEFT JOIN tech_serial_numbers tsn
-       ON RIGHT(regexp_replace(tsn.shipping_tracking_number, '\\D', '', 'g'), 8) =
-          RIGHT(regexp_replace(o.shipping_tracking_number, '\\D', '', 'g'), 8)
+     LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
      WHERE ${conditions.join(' AND ')}
-     GROUP BY o.id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity, o.condition,
-              o.item_number, o.shipping_tracking_number, o.sku, o.out_of_stock,
-              o.account_source, o.notes, o.status_history, o.is_shipped,
+     GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
+              o.condition, o.item_number, stn.tracking_number_raw, o.sku, o.out_of_stock,
+              o.account_source, o.notes, o.status_history,
+              stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
+              stn.latest_status_category, stn.carrier,
               wa_t.assigned_tech_id, wa_p.assigned_packer_id,
               pl.packed_by, pl.pack_date_time
      ORDER BY wa_deadline.deadline_at ASC NULLS LAST, o.id ASC
@@ -496,7 +540,7 @@ export async function getActiveOrders(options?: {
  * Update a specific field in a shipped order
  */
 export async function updateShippedOrderField(id: number, field: string, value: any): Promise<void> {
-  const allowedFields = ['notes', 'is_shipped', 'status_history'];
+  const allowedFields = ['notes', 'status_history'];
   if (!allowedFields.includes(field)) {
     throw new Error(
       `Field '${field}' cannot be updated here. ` +
@@ -506,7 +550,13 @@ export async function updateShippedOrderField(id: number, field: string, value: 
   }
   try {
     await pool.query(
-      `UPDATE orders SET ${field} = $1 WHERE id = $2 AND COALESCE(is_shipped, false) = true`,
+      `UPDATE orders o
+       SET ${field} = $1
+       FROM shipping_tracking_numbers stn
+       WHERE o.id = $2
+         AND stn.id = o.shipment_id
+         AND (stn.is_carrier_accepted OR stn.is_in_transit
+              OR stn.is_out_for_delivery OR stn.is_delivered)`,
       [value, id],
     );
   } catch (error) {
@@ -525,21 +575,19 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
 
     const result = await client.query(
       `INSERT INTO orders
-         (order_id, product_title, shipping_tracking_number, sku, account_source,
-          condition, quantity, item_number, notes, is_shipped)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (order_id, product_title, sku, account_source,
+          condition, quantity, item_number, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         params.orderId,
         params.productTitle,
-        params.shippingTrackingNumber ?? null,
         params.sku ?? null,
         params.accountSource ?? 'Manual',
         params.condition ?? 'Good',
         params.quantity ?? null,
         params.itemNumber ?? null,
         params.notes ?? null,
-        params.isShipped ?? false,
       ],
     );
 
@@ -566,13 +614,15 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
 }
 
 /**
- * Check if a tracking number already exists in orders (last-8 match)
+ * Check if a tracking number already exists (last-8 match via shipping_tracking_numbers)
  */
 export async function trackingNumberExists(trackingNumber: string): Promise<boolean> {
   const last8 = trackingNumber.replace(/\D/g, '').slice(-8);
   const result = await pool.query(
-    `SELECT 1 FROM orders
-     WHERE RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
+    `SELECT 1
+     FROM orders o
+     JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+     WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
      LIMIT 1`,
     [last8],
   );
@@ -586,14 +636,12 @@ export async function updateOrder(
   id: number,
   updates: Partial<{
     productTitle: string;
-    shippingTrackingNumber: string | null;
     sku: string | null;
     condition: string;
     quantity: string | null;
     itemNumber: string | null;
     shipByDate: string | null;
     notes: string | null;
-    isShipped: boolean;
     outOfStock: string | null;
     statusHistory: any;
     accountSource: string | null;
@@ -601,13 +649,11 @@ export async function updateOrder(
 ): Promise<ActiveOrder | null> {
   const columnMap: Record<string, string> = {
     productTitle: 'product_title',
-    shippingTrackingNumber: 'shipping_tracking_number',
     sku: 'sku',
     condition: 'condition',
     quantity: 'quantity',
     itemNumber: 'item_number',
     notes: 'notes',
-    isShipped: 'is_shipped',
     outOfStock: 'out_of_stock',
     statusHistory: 'status_history',
     accountSource: 'account_source',

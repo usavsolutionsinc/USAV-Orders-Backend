@@ -31,8 +31,8 @@ export async function GET(
     // Format date
     let startDateTime = '';
     try {
-      if (repair.date_time) {
-        const date = new Date(repair.date_time);
+      if (repair.created_at) {
+        const date = new Date(repair.created_at);
         startDateTime = date.toLocaleString('en-US', { 
           month: '2-digit', 
           day: '2-digit', 

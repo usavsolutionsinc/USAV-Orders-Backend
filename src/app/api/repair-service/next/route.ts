@@ -6,6 +6,7 @@ export interface RepairQueueItem {
   repairId: number;
   assignmentId: number | null;
   assignmentStatus: 'ASSIGNED' | 'IN_PROGRESS' | null;
+  deadlineAt: string | null;
   ticketNumber: string;
   productTitle: string;
   issue: string;
@@ -16,6 +17,8 @@ export interface RepairQueueItem {
   price: string;
   assignedTechId: number | null;
   techName: string | null;
+  outOfStock: string | null;
+  repairOutcome: string | null;
 }
 
 const CLOSED_STATUSES = ['Done', 'Shipped', 'Picked Up'];
@@ -48,11 +51,14 @@ export async function GET(req: NextRequest) {
           rs.issue,
           rs.serial_number    AS "serialNumber",
           rs.contact_info     AS "contactInfo",
-          rs.date_time        AS "dateTime",
+          wa.deadline_at      AS "deadlineAt",
+          rs.created_at       AS "dateTime",
           rs.status           AS "repairStatus",
           rs.price,
           wa.assigned_tech_id AS "assignedTechId",
-          s.name              AS "techName"
+          s.name              AS "techName",
+          wa.out_of_stock     AS "outOfStock",
+          wa.repair_outcome   AS "repairOutcome"
         FROM repair_service rs
         LEFT JOIN LATERAL (
           SELECT *
@@ -71,7 +77,7 @@ export async function GET(req: NextRequest) {
             OR wa.assigned_tech_id IS NULL
             OR wa.assigned_tech_id = $${CLOSED_STATUSES.length + 1}
           )
-        ORDER BY wa.priority ASC NULLS LAST, rs.id ASC
+        ORDER BY COALESCE(wa.deadline_at, rs.created_at) ASC NULLS LAST, wa.priority ASC NULLS LAST, rs.id ASC
       `;
       params = [...CLOSED_STATUSES, Number(techId)];
     } else {
@@ -86,11 +92,14 @@ export async function GET(req: NextRequest) {
           rs.issue,
           rs.serial_number    AS "serialNumber",
           rs.contact_info     AS "contactInfo",
-          rs.date_time        AS "dateTime",
+          wa.deadline_at      AS "deadlineAt",
+          rs.created_at       AS "dateTime",
           rs.status           AS "repairStatus",
           rs.price,
           wa.assigned_tech_id AS "assignedTechId",
-          s.name              AS "techName"
+          s.name              AS "techName",
+          wa.out_of_stock     AS "outOfStock",
+          wa.repair_outcome   AS "repairOutcome"
         FROM repair_service rs
         LEFT JOIN LATERAL (
           SELECT *
@@ -104,7 +113,7 @@ export async function GET(req: NextRequest) {
         ) wa ON TRUE
         LEFT JOIN staff s ON s.id = wa.assigned_tech_id
         WHERE rs.status NOT IN (${closedPlaceholders})
-        ORDER BY wa.priority ASC NULLS LAST, rs.id ASC
+        ORDER BY COALESCE(wa.deadline_at, rs.created_at) ASC NULLS LAST, wa.priority ASC NULLS LAST, rs.id ASC
       `;
       params = [...CLOSED_STATUSES];
     }
@@ -116,6 +125,7 @@ export async function GET(req: NextRequest) {
       repairId:         row.repairId,
       assignmentId:     row.assignmentId ?? null,
       assignmentStatus: row.assignmentStatus ?? null,
+      deadlineAt:       row.deadlineAt ? new Date(row.deadlineAt).toISOString() : null,
       ticketNumber:     row.ticketNumber || '',
       productTitle:     row.productTitle || '',
       issue:            row.issue || '',
@@ -126,6 +136,8 @@ export async function GET(req: NextRequest) {
       price:            row.price || '',
       assignedTechId:   row.assignedTechId ?? null,
       techName:         row.techName ?? null,
+      outOfStock:       row.outOfStock ?? null,
+      repairOutcome:    row.repairOutcome ?? null,
     }));
 
     return NextResponse.json({ repairs, count: repairs.length });

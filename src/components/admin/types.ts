@@ -21,6 +21,7 @@ export interface Order {
   packer_id: number | null;
   out_of_stock: string | null;
   notes: string | null;
-  is_shipped: boolean;
+  /** Derived from shipping_tracking_numbers carrier status */
+  is_shipped?: boolean;
   created_at: string | null;
 }

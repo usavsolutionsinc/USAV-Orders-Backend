@@ -3,7 +3,8 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { OrderRecordsTable } from '@/components/shipped/OrderRecordsTable';
+import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
+import { dispatchCloseShippedDetails } from '@/utils/events';
 import { fetchUnshippedOrdersData } from '@/lib/dashboard-table-data';
 
 export interface UnshippedTableProps {
@@ -18,10 +19,9 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
     packerId,
     testerName,
     packerName,
-    shipByDate,
+    deadlineAt,
     outOfStock,
     notes,
-    shippingTrackingNumber,
     itemNumber,
     condition,
   } = detail || {};
@@ -36,10 +36,9 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
     patched.packer_name = packerName ?? null;
     patched.packed_by_name = packerName ?? null;
   }
-  if (shipByDate !== undefined) patched.ship_by_date = shipByDate;
+  if (deadlineAt !== undefined) patched.deadline_at = deadlineAt;
   if (outOfStock !== undefined) patched.out_of_stock = outOfStock;
   if (notes !== undefined) patched.notes = notes;
-  if (shippingTrackingNumber !== undefined) patched.shipping_tracking_number = shippingTrackingNumber;
   if (itemNumber !== undefined) patched.item_number = itemNumber;
   if (condition !== undefined) patched.condition = condition;
 
@@ -77,10 +76,9 @@ export function UnshippedTable({
       const hasAnyChange =
         detail.testerId !== undefined ||
         detail.packerId !== undefined ||
-        detail.shipByDate !== undefined ||
+        detail.deadlineAt !== undefined ||
         detail.outOfStock !== undefined ||
         detail.notes !== undefined ||
-        detail.shippingTrackingNumber !== undefined ||
         detail.itemNumber !== undefined ||
         detail.condition !== undefined;
       if (!hasAnyChange) return;
@@ -121,14 +119,19 @@ export function UnshippedTable({
   };
 
   return (
-    <OrderRecordsTable
+    <OrdersQueueTable
       records={query.data || []}
       loading={query.isLoading}
       isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}
-      ordersOnly
       onClearSearch={clearSearch}
       emptyMessage="No unshipped order records found"
+      onOpenRecord={(record) => {
+        window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: record }));
+      }}
+      onCloseRecord={() => {
+        dispatchCloseShippedDetails();
+      }}
     />
   );
 }

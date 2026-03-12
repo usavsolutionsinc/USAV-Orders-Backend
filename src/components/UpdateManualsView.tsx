@@ -16,7 +16,7 @@ interface OrderWithoutManual {
   quantity: string | null;
   condition: string | null;
   shipping_tracking_number: string | null;
-  is_shipped: boolean;
+  is_shipped?: boolean; // derived from shipping_tracking_numbers
   has_manual: boolean;
   test_date_time: string | null;
 }

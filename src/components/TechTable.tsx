@@ -10,7 +10,7 @@ import { getCurrentPSTDateKey, toPSTDateKey } from '@/lib/timezone';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
-import { isFbaOrder } from '@/utils/order-platform';
+import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { useTechLogs, TechRecord } from '@/hooks/useTechLogs';
 
 interface TechTableProps {
@@ -119,9 +119,16 @@ export function TechTable({ testedBy }: TechTableProps) {
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
   };
 
-  const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
+  // serial_number may be a CSV string aggregated via STRING_AGG (e.g. "SN1, SN2").
+  // Parse it, take the last individual serial, then show its last 4 chars.
+  const getLast4Serial = (value: string | null | undefined) => {
+    const raw = String(value || '').trim();
+    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    const last = parts.length > 0 ? parts[parts.length - 1] : '';
+    return last.length > 4 ? last.slice(-4) : last || '---';
+  };
 
-  const getSourceDotClass = (fba: boolean) => (fba ? 'bg-purple-500' : 'bg-emerald-500');
+  const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -235,7 +242,10 @@ export function TechTable({ testedBy }: TechTableProps) {
                           condition: record.condition,
                           trackingNumber: record.shipping_tracking_number,
                         });
-                        const isFba = isFbaOrder(record.order_id, record.account_source);
+                        const dotType = getSourceDotType({
+                          orderId: record.order_id,
+                          accountSource: record.account_source,
+                        });
                         return (
                           <motion.div
                             initial={{ opacity: 0 }}
@@ -249,8 +259,8 @@ export function TechTable({ testedBy }: TechTableProps) {
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span
-                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${getSourceDotClass(isFba)}`}
-                                  title={isFba ? 'FBA' : 'Orders'}
+                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
+                                  title={SOURCE_DOT_LABEL[dotType]}
                                 />
                                 <div className="text-[11px] font-bold text-gray-900 truncate">
                                   {record.product_title || 'Unknown Product'}
@@ -273,7 +283,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                                 />
                               </div>
                               <div className="flex flex-col w-[60px]">
-                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
+                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Track</span>
                                 <CopyableText
                                   text={record.shipping_tracking_number || ''}
                                   displayText={getLast4(record.shipping_tracking_number)}
@@ -286,6 +296,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                               <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
                               <CopyableText
                                 text={record.serial_number || ''}
+                                displayText={getLast4Serial(record.serial_number)}
                                 className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
                                 variant="serial"
                               />

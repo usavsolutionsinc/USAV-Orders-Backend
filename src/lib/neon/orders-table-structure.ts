@@ -22,16 +22,18 @@ export interface OrderRecord {
   order_id: string | null;
   product_title: string | null;
   condition: string | null;
-  shipping_tracking_number: string | null;
   sku: string | null;
+  status: string | null;
   status_history: any;
-  is_shipped: boolean;
   notes: string | null;
   quantity: string | null;
-  customer_id: number | null;
   out_of_stock: string | null;
   account_source: string | null;
   order_date: Date | null;
+  created_at: Date | null;
+  item_number: string | null;
+  customer_id: number | null;
+  shipment_id: number | null;
 }
 
 /**
@@ -40,7 +42,6 @@ export interface OrderRecord {
  * work_assignments to provide backward-compatible assignment data.
  */
 export interface OrderWithDerived extends OrderRecord {
-  status?: string;
   /** Derived from work_assignments.deadline_at and returned as ship_by_date for compat. */
   ship_by_date?: string | null;
   /** Sourced from work_assignments (work_type=TEST, assigned_tech_id) */
@@ -62,20 +63,22 @@ export interface OrderWithDerived extends OrderRecord {
  * Only columns that actually exist on the orders table are listed.
  */
 export const ORDER_COLUMNS = {
-  ID:                        'id',
-  ORDER_ID:                  'order_id',
-  PRODUCT_TITLE:             'product_title',
-  CONDITION:                 'condition',
-  SHIPPING_TRACKING_NUMBER:  'shipping_tracking_number',
-  SKU:                       'sku',
-  STATUS_HISTORY:            'status_history',
-  IS_SHIPPED:                'is_shipped',
-  NOTES:                     'notes',
-  QUANTITY:                  'quantity',
-  CUSTOMER_ID:               'customer_id',
-  OUT_OF_STOCK:              'out_of_stock',
-  ACCOUNT_SOURCE:            'account_source',
-  ORDER_DATE:                'order_date',
+  ID:             'id',
+  ORDER_ID:       'order_id',
+  PRODUCT_TITLE:  'product_title',
+  CONDITION:      'condition',
+  SKU:            'sku',
+  STATUS:         'status',
+  STATUS_HISTORY: 'status_history',
+  NOTES:          'notes',
+  QUANTITY:       'quantity',
+  OUT_OF_STOCK:   'out_of_stock',
+  ACCOUNT_SOURCE: 'account_source',
+  ORDER_DATE:     'order_date',
+  CREATED_AT:     'created_at',
+  ITEM_NUMBER:    'item_number',
+  CUSTOMER_ID:    'customer_id',
+  SHIPMENT_ID:    'shipment_id',
 } as const;
 
 /**
@@ -85,7 +88,6 @@ export const ORDER_COLUMNS = {
  */
 export const UPDATABLE_ORDER_FIELDS = [
   ORDER_COLUMNS.NOTES,
-  ORDER_COLUMNS.IS_SHIPPED,
   ORDER_COLUMNS.STATUS_HISTORY,
   ORDER_COLUMNS.CUSTOMER_ID,
   ORDER_COLUMNS.OUT_OF_STOCK,

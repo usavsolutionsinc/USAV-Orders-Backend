@@ -4,12 +4,13 @@ import { toPSTDateKey } from '@/lib/timezone';
 
 interface RecentOrder {
   id: number;
+  shipment_id: number | null;
   order_id: string;
   product_title: string;
   item_number: string | null;
   sku: string;
   quantity: string | number | null;
-  shipping_tracking_number: string | null;
+  tracking_number: string | null;
   is_shipped: boolean;
   status: string | null;
   ship_by_date: string | null;
@@ -37,13 +38,15 @@ export async function GET(req: NextRequest) {
     let sql = `
       SELECT
         o.id,
+        o.shipment_id,
         o.order_id,
         o.product_title,
         o.item_number,
         o.sku,
         o.quantity,
-        o.shipping_tracking_number,
-        COALESCE(o.is_shipped, false) AS is_shipped,
+        stn.tracking_number_raw AS tracking_number,
+        COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+          OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
         o.status,
         to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
         o.created_at,
@@ -62,6 +65,7 @@ export async function GET(req: NextRequest) {
         ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
                  wa.updated_at DESC, wa.id DESC LIMIT 1
       ) wa_deadline ON TRUE
+      LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       WHERE o.created_at >= NOW() - INTERVAL '${days} days'
     `;
 
@@ -74,7 +78,7 @@ export async function GET(req: NextRequest) {
         OR o.product_title ILIKE $${paramCount}
         OR o.item_number ILIKE $${paramCount}
         OR o.sku ILIKE $${paramCount}
-        OR o.shipping_tracking_number ILIKE $${paramCount}
+        OR COALESCE(stn.tracking_number_raw, '') ILIKE $${paramCount}
       )`;
       params.push(`%${query.trim()}%`);
       paramCount++;
@@ -85,14 +89,13 @@ export async function GET(req: NextRequest) {
     const result = await pool.query(sql, params);
     const orders: RecentOrder[] = result.rows.map((row) => ({
       id: Number(row.id),
+      shipment_id: row.shipment_id ? Number(row.shipment_id) : null,
       order_id: String(row.order_id || ''),
       product_title: String(row.product_title || ''),
       item_number: row.item_number ? String(row.item_number) : null,
       sku: String(row.sku || ''),
       quantity: row.quantity,
-      shipping_tracking_number: row.shipping_tracking_number
-        ? String(row.shipping_tracking_number)
-        : null,
+      tracking_number: row.tracking_number ? String(row.tracking_number) : null,
       is_shipped: Boolean(row.is_shipped),
       status: row.status ? String(row.status) : null,
       ship_by_date: row.ship_by_date ? String(row.ship_by_date) : null,

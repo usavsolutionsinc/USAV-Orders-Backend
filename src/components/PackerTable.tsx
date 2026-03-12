@@ -11,6 +11,7 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getPackerThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { usePackerLogs, PackerRecord } from '@/hooks/usePackerLogs';
 
 interface PackerTableProps {
@@ -92,7 +93,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       account_source: null,
       notes: '',
       status_history: [],
-      is_shipped: true,
+      is_shipped: undefined,
       created_at: record.pack_date_time || null,
       quantity: record.quantity || '1',
       packer_log_id: record.id,
@@ -227,6 +228,12 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                           condition: record.condition,
                           trackingNumber: record.shipping_tracking_number,
                         });
+                        const dotType = getSourceDotType({
+                          orderId: record.order_id,
+                          accountSource: record.account_source,
+                          trackingType: record.tracking_type,
+                          scanRef: record.scan_ref,
+                        });
                         return (
                           <motion.div
                             initial={{ opacity: 0 }}
@@ -238,8 +245,14 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                             }`}
                           >
                             <div className="flex flex-col min-w-0">
-                              <div className="text-[11px] font-bold text-gray-900 truncate">
-                                {record.product_title || 'Unknown Product'}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
+                                  title={SOURCE_DOT_LABEL[dotType]}
+                                />
+                                <div className="text-[11px] font-bold text-gray-900 truncate">
+                                  {record.product_title || 'Unknown Product'}
+                                </div>
                               </div>
                               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
@@ -248,7 +261,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                               </div>
                             </div>
                             <div className="flex items-start justify-end gap-1.5">
-                              <div className="flex flex-col w-[94px]">
+                              <div className="flex flex-col w-[60px]">
                                 <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
                                 <CopyableText
                                   text={record.order_id || 'N/A'}
@@ -257,7 +270,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                                   variant="order"
                                 />
                               </div>
-                              <div className="flex flex-col w-[94px]">
+                              <div className="flex flex-col w-[60px]">
                                 <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
                                 <CopyableText
                                   text={record.shipping_tracking_number || ''}

@@ -11,6 +11,7 @@ import {
   Tool,
   User,
   Wrench,
+  Zap,
 } from '@/components/Icons';
 
 export type SidebarRouteKey =
@@ -26,6 +27,7 @@ export type SidebarRouteKey =
   | 'previous-quarters'
   | 'admin'
   | 'manuals'
+  | 'ai'
   | 'unknown';
 
 export type SidebarIconComponent = (props: { className?: string }) => JSX.Element;
@@ -42,15 +44,16 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, kind: 'main' },
   { id: 'fba', label: 'FBA', href: '/fba', icon: Package, kind: 'main' },
   { id: 'repair', label: 'Repair', href: '/repair', icon: Tool, kind: 'main' },
-  { id: 'sku-stock', label: 'Sku Stock', href: '/sku-stock', icon: Box, kind: 'main' },
+  { id: 'work-orders', label: 'Work Orders', href: '/work-orders', icon: PackageCheck, kind: 'main' },
   { id: 'receiving', label: 'Receiving', href: '/receiving', icon: ClipboardList, kind: 'station' },
   { id: 'tech', label: 'Technicians', href: '/tech?staffId=1', icon: Wrench, kind: 'station' },
   { id: 'packer', label: 'Packers', href: '/packer?staffId=4', icon: User, kind: 'station' },
-  { id: 'work-orders', label: 'Work Orders', href: '/work-orders', icon: PackageCheck, kind: 'bottom' },
+  { id: 'sku-stock', label: 'Sku Stock', href: '/sku-stock', icon: Box, kind: 'station' },
   { id: 'manuals', label: 'Manuals', href: '/manuals', icon: FileText, kind: 'bottom' },
   { id: 'support', label: 'Support', href: '/support', icon: AlertCircle, kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters', href: '/previous-quarters', icon: Calendar, kind: 'bottom' },
   { id: 'admin', label: 'Admin', href: '/admin', icon: ShieldCheck, kind: 'bottom' },
+  { id: 'ai', label: 'AI Chat', href: '/ai', icon: Zap, kind: 'bottom' },
 ];
 
 export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
@@ -67,6 +70,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
   if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'manuals';
+  if (pathname === '/ai' || pathname.startsWith('/ai/')) return 'ai';
   return 'unknown';
 }
 

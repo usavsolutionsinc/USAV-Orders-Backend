@@ -32,13 +32,14 @@ export async function GET() {
         const tech1ValidTracking = await client.query(`
             SELECT t.shipping_tracking_number, t.date_time
             FROM tech_1 t
-            LEFT JOIN orders o ON t.shipping_tracking_number = o.shipping_tracking_number
+            LEFT JOIN shipping_tracking_numbers stn ON stn.tracking_number_raw = t.shipping_tracking_number
+            LEFT JOIN orders o ON o.shipment_id = stn.id
             WHERE t.shipping_tracking_number NOT LIKE 'X00%'
                 AND t.shipping_tracking_number IS NOT NULL
                 AND t.shipping_tracking_number != ''
                 AND t.date_time IS NOT NULL
                 AND t.date_time != ''
-                AND o.shipping_tracking_number IS NULL
+                AND o.id IS NULL
             LIMIT 10
         `);
         
@@ -49,11 +50,11 @@ export async function GET() {
         
         // Check orders table tracking numbers
         const ordersStats = await client.query(`
-            SELECT 
+            SELECT
                 COUNT(*) as total_orders,
-                COUNT(DISTINCT shipping_tracking_number) as unique_tracking_numbers,
-                COUNT(*) FILTER (WHERE shipping_tracking_number IS NULL OR shipping_tracking_number = '') as null_tracking
-            FROM orders
+                COUNT(DISTINCT o.shipment_id) as unique_tracking_numbers,
+                COUNT(*) FILTER (WHERE o.shipment_id IS NULL) as null_tracking
+            FROM orders o
         `);
         
         diagnostics.orders = ordersStats.rows[0];
@@ -62,7 +63,8 @@ export async function GET() {
         const tech1Matches = await client.query(`
             SELECT COUNT(*) as match_count
             FROM tech_1 t
-            INNER JOIN orders o ON t.shipping_tracking_number = o.shipping_tracking_number
+            INNER JOIN shipping_tracking_numbers stn ON stn.tracking_number_raw = t.shipping_tracking_number
+            INNER JOIN orders o ON o.shipment_id = stn.id
             WHERE t.shipping_tracking_number NOT LIKE 'X00%'
                 AND t.shipping_tracking_number IS NOT NULL
                 AND t.shipping_tracking_number != ''
@@ -88,10 +90,9 @@ export async function GET() {
         
         // Sample orders tracking numbers
         const ordersSamples = await client.query(`
-            SELECT shipping_tracking_number
-            FROM orders
-            WHERE shipping_tracking_number IS NOT NULL
-                AND shipping_tracking_number != ''
+            SELECT stn.tracking_number_raw AS tracking_number
+            FROM orders o
+            JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
             LIMIT 20
         `);
         

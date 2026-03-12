@@ -4,6 +4,7 @@ import { classifyScan } from '@/utils/packer';
 import { normalizeSku } from '@/utils/sku';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { normalizeTrackingLast8 } from '@/lib/tracking-format';
+import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp } from '@/lib/timezone';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
@@ -141,8 +142,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
         }
         
-        const now = new Date();
-        const packDateTime = parseScanTimestamp(timestamp) || now;
+        const packDateTime = normalizeScanTimestamp(timestamp) || formatPSTTimestamp();
         
         const photoUrls: string[] = Array.isArray(photos) ? photos.filter((u: any) => typeof u === 'string' && u.trim()) : [];
 
@@ -170,16 +170,30 @@ export async function POST(req: NextRequest) {
             if (!trackingLast8 || trackingLast8.length < 8) {
                 return NextResponse.json({ error: 'Invalid tracking number' }, { status: 400 });
             }
-            const orderLookup = await pool.query(
-                `SELECT id, order_id, shipping_tracking_number, shipment_id, product_title, condition, quantity, sku
-                 FROM orders
-                 WHERE shipping_tracking_number IS NOT NULL
-                   AND shipping_tracking_number != ''
-                   AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '\\D', '', 'g'), 8) = $1
-                 ORDER BY id DESC
+            const normalizedInput = normalizeTrackingNumber(scanInput);
+            // Primary: match via shipment_id FK (exact, fast)
+            let orderLookup = await pool.query(
+                `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number, o.shipment_id,
+                        o.product_title, o.condition, o.quantity, o.sku
+                 FROM   orders o
+                 JOIN   shipping_tracking_numbers stn ON stn.id = o.shipment_id
+                 WHERE  stn.tracking_number_normalized = $1
+                 ORDER BY o.id DESC
                  LIMIT 1`,
-                [trackingLast8]
+                [normalizedInput]
             );
+            if (orderLookup.rows.length === 0) {
+                orderLookup = await pool.query(
+                    `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number, o.shipment_id,
+                            o.product_title, o.condition, o.quantity, o.sku
+                     FROM   orders o
+                     JOIN   shipping_tracking_numbers stn ON stn.id = o.shipment_id
+                     WHERE  RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
+                     ORDER BY o.id DESC
+                     LIMIT 1`,
+                    [trackingLast8]
+                );
+            }
 
             if (orderLookup.rows.length === 0) {
                 await upsertOpenOrderException({
@@ -218,7 +232,7 @@ export async function POST(req: NextRequest) {
                 const notFoundRecord = {
                     id: notFoundPackerLogId,
                     pack_date_time: notFoundInsert.rows[0]?.pack_date_time ?? packDateTime,
-                    shipping_tracking_number: scanInput,
+                    tracking_number: scanInput,
                     packed_by: staffId,
                     order_id: null,
                     product_title: null,
@@ -245,13 +259,12 @@ export async function POST(req: NextRequest) {
 
             const order = orderLookup.rows[0];
 
-            // Mark the order shipped
+            // Update status only — shipped state is derived from shipping_tracking_numbers
             await pool.query(`
                 UPDATE orders
-                SET is_shipped = true,
-                    status = 'shipped'
+                SET status = 'shipped'
                 WHERE id = $1
-                  AND is_shipped = false
+                  AND (status IS NULL OR status != 'shipped')
             `, [order.id]);
 
             // Upsert a PACK work_assignment as DONE.
@@ -270,11 +283,7 @@ export async function POST(req: NextRequest) {
                         updated_at         = NOW()
             `, [order.id, staffId]);
 
-            let orderShipmentId: number | null = order.shipment_id ?? null;
-            if (!orderShipmentId && order.shipping_tracking_number) {
-                const resolved = await resolveShipmentId(order.shipping_tracking_number);
-                orderShipmentId = resolved.shipmentId;
-            }
+            const orderShipmentId: number | null = order.shipment_id ?? null;
             const foundInsert = await pool.query(`
                 INSERT INTO packer_logs (
                     shipment_id,
@@ -301,7 +310,7 @@ export async function POST(req: NextRequest) {
             const foundRecord = {
                 id: foundPackerLogId,
                 pack_date_time: foundInsert.rows[0]?.pack_date_time ?? packDateTime,
-                shipping_tracking_number: order.shipping_tracking_number,
+                tracking_number: order.tracking_number ?? null,
                 packed_by: staffId,
                 order_id: order.order_id ?? null,
                 product_title: order.product_title ?? null,
@@ -320,7 +329,7 @@ export async function POST(req: NextRequest) {
                 orderId: order.order_id,
                 productTitle: order.product_title,
                 condition: order.condition,
-                shippingTrackingNumber: order.shipping_tracking_number,
+                trackingNumber: order.tracking_number ?? null,
                 packedBy: staffId,
                 packDateTime,
                 packerRecord: foundRecord,
@@ -356,7 +365,7 @@ export async function POST(req: NextRequest) {
         const nonOrderRecord = {
             id: nonOrderPackerLogId,
             pack_date_time: nonOrderInsert.rows[0]?.pack_date_time ?? packDateTime,
-            shipping_tracking_number: classification.normalizedInput,
+            tracking_number: classification.normalizedInput,
             packed_by: staffId,
             order_id: null,
             product_title: null,
@@ -420,10 +429,15 @@ export async function POST(req: NextRequest) {
     }
 }
 
-function parseScanTimestamp(input: any): Date | null {
+function normalizeScanTimestamp(input: any): string | null {
     if (!input) return null;
     const raw = String(input).trim();
     if (!raw) return null;
+
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)) {
+        return raw;
+    }
+
     if (raw.includes('/')) {
         const cleaned = raw.replace(',', '');
         const [datePart, timePart] = cleaned.split(' ');
@@ -431,8 +445,9 @@ function parseScanTimestamp(input: any): Date | null {
         const [m, d, y] = datePart.split('/').map(Number);
         const [h, min, s] = timePart.split(':').map(Number);
         if (!m || !d || !y) return null;
-        return new Date(y, m - 1, d, h || 0, min || 0, s || 0);
+        return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')} ${String(h || 0).padStart(2, '0')}:${String(min || 0).padStart(2, '0')}:${String(s || 0).padStart(2, '0')}`;
     }
     const parsed = new Date(raw);
-    return isNaN(parsed.getTime()) ? null : parsed;
+    if (isNaN(parsed.getTime())) return null;
+    return formatPSTTimestamp(parsed);
 }

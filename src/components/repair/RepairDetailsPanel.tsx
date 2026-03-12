@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Check, Clock, Pencil } from '../Icons';
+import { X, Clock, Pencil } from '../Icons';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
-import { formatStatusTimestamp } from '@/lib/neon/status-history';
 
 interface RepairDetailsPanelProps {
   repair: RSRecord;
@@ -313,49 +312,25 @@ export function RepairDetailsPanel({
           </div>
         </section>
         
-        {/* Status History */}
-        {repair.status_history && repair.status_history.length > 0 && (
-          <section>
-            <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-              Status History
-            </h3>
-            <div className="space-y-2">
-              {repair.status_history.slice().reverse().map((entry, idx) => {
-                const isDone = entry.status === 'Done';
-                
-                return (
-                  <div 
-                    key={idx} 
-                    className={`flex items-start gap-3 p-3 rounded-lg ${
-                      isDone ? 'bg-emerald-50 border border-emerald-200' : 'bg-gray-50'
-                    }`}
-                  >
-                    <div className={`mt-0.5 ${isDone ? 'text-emerald-600' : 'text-blue-600'}`}>
-                      {isDone ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <Clock className="w-4 h-4" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`font-bold text-sm ${isDone ? 'text-emerald-900' : 'text-gray-900'}`}>
-                        {entry.status}
-                      </p>
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        {formatStatusTimestamp(entry.timestamp)}
-                      </p>
-                      {entry.previous_status && (
-                        <p className="text-[10px] text-gray-500 mt-1">
-                          From: {entry.previous_status}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+        <section>
+          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
+            Record
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <span className="text-xs text-gray-500 font-semibold block mb-1">Created</span>
+              <p className="font-semibold text-sm text-gray-900">
+                {repair.created_at ? new Date(repair.created_at).toLocaleString() : 'Unknown'}
+              </p>
             </div>
-          </section>
-        )}
+            <div>
+              <span className="text-xs text-gray-500 font-semibold block mb-1">Updated</span>
+              <p className="font-semibold text-sm text-gray-900">
+                {repair.updated_at ? new Date(repair.updated_at).toLocaleString() : 'Unknown'}
+              </p>
+            </div>
+          </div>
+        </section>
         
         {/* Editable Notes */}
         <section>

@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
         // Step 2: Insert into repair_service table in NEON DB
         const repairRecord = await createRepair({
-            dateTime: isoTimestamp,
+            createdAt: isoTimestamp,
             ticketNumber: zendeskTicketNumber,
             contactInfo,
             productTitle: productString,
@@ -83,7 +83,6 @@ export async function POST(req: NextRequest) {
             issue: issueString,
             serialNumber: normalizedSerialNumber,
             notes: normalizedNotes || null,
-            repairedBy: techId,
         });
 
         const dbId = repairRecord.id;

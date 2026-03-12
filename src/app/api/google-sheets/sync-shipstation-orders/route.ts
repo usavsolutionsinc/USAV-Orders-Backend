@@ -208,12 +208,14 @@ export async function POST(req: NextRequest) {
         const existing = await client.query(
           `SELECT
              o.id,
-             o.shipping_tracking_number,
+             stn.tracking_number_raw AS tracking_number,
              o.order_date,
              wa_deadline.deadline_at AS ship_by_date,
-             o.is_shipped,
+             COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+               OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
              o.status
            FROM orders o
+           LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
            LEFT JOIN LATERAL (
              SELECT wa.deadline_at
              FROM work_assignments wa
@@ -235,22 +237,18 @@ export async function POST(req: NextRequest) {
           const inserted_row = await client.query(
             `INSERT INTO orders (
               order_id,
-              shipping_tracking_number,
               order_date,
               status,
               status_history,
-              is_shipped,
               account_source,
               created_at
-            ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, timezone('America/Los_Angeles', now()))
+            ) VALUES ($1, $2, $3, $4::jsonb, $5, timezone('America/Los_Angeles', now()))
             RETURNING id`,
             [
               orderId,
-              payload.tracking,
               payload.orderDate,
               'shipped',
               JSON.stringify([]),
-              true,
               'shipstation',
             ]
           );
@@ -258,16 +256,12 @@ export async function POST(req: NextRequest) {
           inserted++;
         } else {
           const needsUpdate = existing.rows.some((row: any) => {
-            const currentTracking = String(row.shipping_tracking_number || '').trim();
             const hasOrderDate = !!row.order_date;
             const hasShipByDate = !!row.ship_by_date;
-            const isShipped = !!row.is_shipped;
             const status = String(row.status || '').trim().toLowerCase();
             return (
-              currentTracking !== payload.tracking ||
               (!hasOrderDate && payload.orderDate) ||
               (!hasShipByDate && payload.shipByDate) ||
-              !isShipped ||
               status === '' ||
               status === 'unassigned'
             );
@@ -280,15 +274,13 @@ export async function POST(req: NextRequest) {
           } else {
             await client.query(
               `UPDATE orders
-               SET shipping_tracking_number = $2,
-                   order_date = COALESCE($3, order_date),
-                   is_shipped = true,
+               SET order_date = COALESCE($2, order_date),
                    status = CASE
                      WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
                      ELSE status
                    END
                WHERE order_id = $1`,
-              [orderId, payload.tracking, payload.orderDate]
+              [orderId, payload.orderDate]
             );
             updated++;
           }

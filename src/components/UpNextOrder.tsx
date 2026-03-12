@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Check, Package } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
@@ -35,10 +35,11 @@ function getOrderBucket(order: { order_id: string; account_source: string | null
   return 'orders';
 }
 
-function getRepairSortValue(dateTime: string | null | undefined): number {
-  if (!dateTime) return Number.POSITIVE_INFINITY;
+function getRepairSortValue(deadlineAt: string | null | undefined, fallbackDateTime?: string | null | undefined): number {
+  const source = deadlineAt || fallbackDateTime;
+  if (!source) return Number.POSITIVE_INFINITY;
   try {
-    const parsed = typeof dateTime === 'string' && dateTime.startsWith('"') ? JSON.parse(dateTime) : dateTime;
+    const parsed = typeof source === 'string' && source.startsWith('"') ? JSON.parse(source) : source;
     const value = typeof parsed === 'object' && parsed?.start ? parsed.start : parsed;
     const timestamp = new Date(value).getTime();
     return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
@@ -60,8 +61,13 @@ type CombinedCardItem =
   | { type: 'receiving'; key: string; sortValue: number; item: any };
 
 
+const TAB_ORDER: TabId[] = ['all', 'orders', 'returns', 'fba', 'repair', 'test', 'stock', 'receiving'];
+
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
+  const [prevTabIndex, setPrevTabIndex] = useState(0);
+  const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
+  const prefersReducedMotion = useReducedMotion();
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
   const hasCelebratedRef = useRef(false);
@@ -71,9 +77,10 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
 
   const stockOrders   = allOrders.filter(isOutOfStock);
-  const nonStockOrders = allOrders.filter((o) => !isOutOfStock(o));
+  // Exclude orders already processed by a tech scan (shipment_id matched in tech_serial_numbers)
+  const nonStockOrders = allOrders.filter((o) => !isOutOfStock(o) && !o.has_tech_scan);
   const sortedRepairs = [...allRepairs].sort(
-    (a, b) => getRepairSortValue(a.dateTime) - getRepairSortValue(b.dateTime)
+    (a, b) => getRepairSortValue(a.deadlineAt, a.dateTime) - getRepairSortValue(b.deadlineAt, b.dateTime)
   );
   const activeFbaItems = fbaItems.filter((i) => i.status !== 'SHIPPED');
 
@@ -100,7 +107,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     ...sortedRepairs.map((repair) => ({
       type: 'repair' as const,
       key: `repair-${repair.repairId}`,
-      sortValue: getRepairSortValue(repair.dateTime),
+      sortValue: getRepairSortValue(repair.deadlineAt, repair.dateTime),
       repair,
     })),
     ...activeFbaItems.map((item) => ({
@@ -117,26 +124,71 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     })),
   ].sort((a, b) => a.sortValue - b.sortValue);
 
-  const visibleTabs: Array<{ id: TabId; label: string; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal' }> = [
-    { id: 'all',       label: 'All',       color: 'green' },
-    { id: 'orders',    label: 'Orders',    color: 'green' },
-    ...(tabCounts.returns   > 0 ? [{ id: 'returns'   as const, label: 'Returns',   color: 'yellow' as const }] : []),
-    ...(tabCounts.fba       > 0 ? [{ id: 'fba'       as const, label: 'FBA',       color: 'purple' as const }] : []),
-    ...(tabCounts.repair    > 0 ? [{ id: 'repair'    as const, label: 'Repair',    color: 'orange' as const }] : []),
-    ...(tabCounts.test      > 0 ? [{ id: 'test'      as const, label: 'Test',      color: 'gray'   as const }] : []),
-    ...(tabCounts.stock     > 0 ? [{ id: 'stock'     as const, label: 'Stock',     color: 'red'    as const }] : []),
-    ...(tabCounts.receiving > 0 ? [{ id: 'receiving' as const, label: 'Receiving', color: 'teal'   as const }] : []),
+  const visibleTabs: Array<{ id: TabId; label: string; count?: number; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal' }> = [
+    { id: 'all',       label: 'All',       color: 'green',  count: tabCounts.all       || undefined },
+    { id: 'orders',    label: 'Orders',    color: 'green',  count: tabCounts.orders    || undefined },
+    ...(tabCounts.returns   > 0 ? [{ id: 'returns'   as const, label: 'Returns',   color: 'yellow' as const, count: tabCounts.returns   }] : []),
+    ...(tabCounts.fba       > 0 ? [{ id: 'fba'       as const, label: 'FBA',       color: 'purple' as const, count: tabCounts.fba       }] : []),
+    ...(tabCounts.repair    > 0 ? [{ id: 'repair'    as const, label: 'Repair',    color: 'orange' as const, count: tabCounts.repair    }] : []),
+    ...(tabCounts.test      > 0 ? [{ id: 'test'      as const, label: 'Test',      color: 'gray'   as const, count: tabCounts.test      }] : []),
+    ...(tabCounts.stock     > 0 ? [{ id: 'stock'     as const, label: 'Stock',     color: 'red'    as const, count: tabCounts.stock     }] : []),
+    ...(tabCounts.receiving > 0 ? [{ id: 'receiving' as const, label: 'Receiving', color: 'teal'   as const, count: tabCounts.receiving }] : []),
   ];
 
   const activeTabVisible = visibleTabs.some((tab) => tab.id === activeTab);
   const effectiveTab     = activeTabVisible ? activeTab : visibleTabs[0]?.id || 'orders';
   const orders           = nonStockOrders.filter((order) => getOrderBucket(order) === effectiveTab);
   const preferred: TabId[] = ['all', 'orders', 'returns', 'fba', 'repair', 'test', 'stock', 'receiving'];
+
+  // Urgency breakdown for the summary bar (orders tab only)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const lateCount = nonStockOrders.filter((o) => {
+    const d = o.ship_by_date ? new Date(o.ship_by_date) : null;
+    return d && d < today;
+  }).length;
+  const dueTodayCount = nonStockOrders.filter((o) => {
+    const d = o.ship_by_date ? new Date(o.ship_by_date) : null;
+    if (!d) return false;
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === today.getTime();
+  }).length;
+  const openOrderCount = nonStockOrders.filter((o) => o.tester_id == null).length;
+
+  const currentTabIndex = TAB_ORDER.indexOf(effectiveTab);
+  const slideDirection  = currentTabIndex >= prevTabIndex ? 1 : -1;
+
+  // True swipe: new panel enters from the leading edge, old exits to trailing edge.
+  // "55%" gives a clear directional feel without over-travelling on small screens.
+  const tabContentVariants = {
+    enter: (dir: number) => ({
+      x: prefersReducedMotion ? 0 : (dir > 0 ? '55%' : '-55%'),
+      opacity: prefersReducedMotion ? 0 : 1,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (dir: number) => ({
+      x: prefersReducedMotion ? 0 : (dir > 0 ? '-28%' : '28%'),
+      opacity: 0,
+    }),
+  };
   const shouldShowStockSection = stockOrders.length > 0 && effectiveTab !== 'stock';
 
   useEffect(() => {
     if (!activeTabVisible && effectiveTab !== activeTab) setActiveTab(effectiveTab);
   }, [activeTabVisible, effectiveTab, activeTab]);
+
+  useEffect(() => {
+    setPrevTabIndex(TAB_ORDER.indexOf(effectiveTab));
+  }, [effectiveTab]);
+
+  useEffect(() => {
+    setExpandedItemKey(null);
+    setShowMissingPartsInput(null);
+    setMissingPartsReason('');
+  }, [effectiveTab]);
 
   useEffect(() => {
     // Only auto-switch if the current tab is empty. For non-order tabs (repair/fba/receiving)
@@ -192,6 +244,35 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     }
   };
 
+  const toggleExpandedItem = (key: string) => {
+    setExpandedItemKey((current) => current === key ? null : key);
+    if (showMissingPartsInput !== null) {
+      setShowMissingPartsInput(null);
+      setMissingPartsReason('');
+    }
+  };
+
+  const renderOrderCard = (order: any, key?: string, effectiveOrderTab?: 'orders' | 'returns' | 'test' | 'stock') => (
+    <OrderCard
+      key={key || order.id}
+      order={order}
+      effectiveTab={effectiveOrderTab || effectiveTab}
+      techId={techId}
+      showMissingPartsInput={showMissingPartsInput}
+      missingPartsReason={missingPartsReason}
+      onStart={handleStart}
+      onMissingPartsToggle={(id) => {
+        setExpandedItemKey(key || `order-${order.id}`);
+        setShowMissingPartsInput(showMissingPartsInput === id ? null : id);
+      }}
+      onMissingPartsReasonChange={setMissingPartsReason}
+      onMissingPartsSubmit={handleMissingParts}
+      onMissingPartsCancel={() => setShowMissingPartsInput(null)}
+      isExpanded={expandedItemKey === (key || `order-${order.id}`)}
+      onToggleExpand={() => toggleExpandedItem(key || `order-${order.id}`)}
+    />
+  );
+
   if (loading) {
     return (
       <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200 animate-pulse">
@@ -207,152 +288,205 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           tabs={visibleTabs}
           activeTab={effectiveTab}
           onTabChange={(tab) => setActiveTab(tab as TabId)}
+          scrollable
         />
 
-        {/* ── Primary tab content ── */}
-        {effectiveTab === 'stock' ? (
-          stockOrders.length === 0 ? (
-            <EmptySlate label="No out-of-stock orders" color="red" />
-          ) : (
-            <div className="flex flex-col">
-              <AnimatePresence mode="popLayout">
-                {stockOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    effectiveTab="stock"
-                    techId={techId}
-                    showMissingPartsInput={showMissingPartsInput}
-                    missingPartsReason={missingPartsReason}
-                    onStart={handleStart}
-                    onMissingPartsToggle={(id) => setShowMissingPartsInput(showMissingPartsInput === id ? null : id)}
-                    onMissingPartsReasonChange={setMissingPartsReason}
-                    onMissingPartsSubmit={handleMissingParts}
-                    onMissingPartsCancel={() => setShowMissingPartsInput(null)}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
-          )
-
-        ) : effectiveTab === 'all' ? (
-          allItems.length === 0 ? (
-            <EmptySlate label="No current work" color="green" />
-          ) : (
-            <div className="flex flex-col">
-              <AnimatePresence mode="popLayout">
-                {allItems.map((item) => {
-                  if (item.type === 'order') {
-                    return (
-                      <OrderCard
-                        key={item.key}
-                        order={item.order}
-                        effectiveTab={item.effectiveTab}
-                        techId={techId}
-                        showMissingPartsInput={showMissingPartsInput}
-                        missingPartsReason={missingPartsReason}
-                        onStart={handleStart}
-                        onMissingPartsToggle={(id) => setShowMissingPartsInput(showMissingPartsInput === id ? null : id)}
-                        onMissingPartsReasonChange={setMissingPartsReason}
-                        onMissingPartsSubmit={handleMissingParts}
-                        onMissingPartsCancel={() => setShowMissingPartsInput(null)}
-                      />
-                    );
-                  }
-                  if (item.type === 'repair') return <RepairCard key={item.key} repair={item.repair} />;
-                  if (item.type === 'fba') return <FbaItemCard key={item.key} item={item.item} />;
-                  return <ReceivingAssignmentCard key={item.key} item={item.item} />;
-                })}
-              </AnimatePresence>
-            </div>
-          )
-
-        ) : allCompletedToday && effectiveTab === 'orders' && stockOrders.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-emerald-50 rounded-2xl p-5 border-2 border-emerald-200 text-center space-y-3"
-          >
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2">
-              <Check className="w-8 h-8 text-emerald-600" />
-            </div>
-            <h3 className="text-sm font-black text-emerald-900 uppercase tracking-widest leading-tight">
-              All orders have been completed today!
-            </h3>
-            <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest">Great job!</p>
-          </motion.div>
-
-        ) : effectiveTab === 'repair' ? (
-          sortedRepairs.length === 0 ? (
-            <EmptySlate label="No repairs in queue" />
-          ) : (
-            <div className="flex flex-col">
-              {/* Unassigned notice */}
-              {sortedRepairs.some((r) => r.assignedTechId === null) && (
-                <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
-                  <div className="h-px flex-1 bg-red-100" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-red-400">
-                    {sortedRepairs.filter((r) => r.assignedTechId === null).length} unassigned
+        {/* ── Urgency summary bar ── */}
+        <AnimatePresence initial={false}>
+          {tabCounts.all > 0 && (lateCount > 0 || dueTodayCount > 0 || openOrderCount > 0) && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-center gap-2 px-1 pt-0.5">
+                {lateCount > 0 && (
+                  <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-red-500">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+                    {lateCount} late
                   </span>
-                  <div className="h-px flex-1 bg-red-100" />
+                )}
+                {lateCount > 0 && dueTodayCount > 0 && (
+                  <span className="text-gray-200 text-[9px]">·</span>
+                )}
+                {dueTodayCount > 0 && (
+                  <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-500">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    {dueTodayCount} due today
+                  </span>
+                )}
+                {openOrderCount > 0 && (lateCount > 0 || dueTodayCount > 0) && (
+                  <span className="text-gray-200 text-[9px]">·</span>
+                )}
+                {openOrderCount > 0 && (
+                  <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-600">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    {openOrderCount} open
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Primary tab content ── */}
+        <div className="relative overflow-hidden">
+        <AnimatePresence mode="wait" initial={false} custom={slideDirection}>
+          <motion.div
+            key={effectiveTab}
+            custom={slideDirection}
+            variants={tabContentVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              x: { type: 'spring', stiffness: 340, damping: 32, mass: 0.9 },
+              opacity: { duration: 0.16, ease: 'easeOut' },
+            }}
+          >
+            {effectiveTab === 'stock' ? (
+              stockOrders.length === 0 ? (
+                <EmptySlate label="No out-of-stock orders" color="red" />
+              ) : (
+                <div className="flex flex-col">
+                  <AnimatePresence mode="popLayout">
+                    {stockOrders.map((order) => (
+                      renderOrderCard(order, `stock-${order.id}`, 'stock')
+                    ))}
+                  </AnimatePresence>
                 </div>
-              )}
-              <AnimatePresence mode="popLayout">
-                {sortedRepairs.map((repair) => <RepairCard key={repair.repairId} repair={repair} />)}
-              </AnimatePresence>
-            </div>
-          )
+              )
 
-        ) : effectiveTab === 'fba' ? (
-          fbaItems.filter((i) => i.status !== 'SHIPPED').length === 0 ? (
-            <EmptySlate label="No active FBA items" color="purple" />
-          ) : (
-            <div className="flex flex-col">
-              <AnimatePresence mode="popLayout">
-                {fbaItems.filter((i) => i.status !== 'SHIPPED').map((item) => (
-                  <FbaItemCard key={item.item_id} item={item} />
-                ))}
-              </AnimatePresence>
-            </div>
-          )
+            ) : effectiveTab === 'all' ? (
+              allItems.length === 0 ? (
+                <EmptySlate label="No current work" color="green" />
+              ) : (
+                <div className="flex flex-col">
+                  <AnimatePresence mode="popLayout">
+                    {allItems.map((item) => {
+                      if (item.type === 'order') {
+                        return renderOrderCard(item.order, item.key, item.effectiveTab);
+                      }
+                      if (item.type === 'repair') {
+                        return (
+                          <RepairCard
+                            key={item.key}
+                            repair={item.repair}
+                            isExpanded={expandedItemKey === item.key}
+                            onToggleExpand={() => toggleExpandedItem(item.key)}
+                          />
+                        );
+                      }
+                      if (item.type === 'fba') return <FbaItemCard key={item.key} item={item.item} />;
+                      return <ReceivingAssignmentCard key={item.key} item={item.item} />;
+                    })}
+                  </AnimatePresence>
+                </div>
+              )
 
-        ) : effectiveTab === 'receiving' ? (
-          receivingItems.length === 0 ? (
-            <EmptySlate label="No receiving items assigned" color="teal" />
-          ) : (
-            <div className="flex flex-col">
-              <AnimatePresence mode="popLayout">
-                {receivingItems.map((item) => (
-                  <ReceivingAssignmentCard key={item.assignment_id} item={item} />
-                ))}
-              </AnimatePresence>
-            </div>
-          )
+            ) : allCompletedToday && effectiveTab === 'orders' && stockOrders.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                className="bg-emerald-50 rounded-2xl p-5 border-2 border-emerald-200 text-center space-y-3"
+              >
+                <motion.div
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.12, type: 'spring', stiffness: 340, damping: 22 }}
+                  className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2"
+                >
+                  <Check className="w-8 h-8 text-emerald-600" />
+                </motion.div>
+                <motion.h3
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  className="text-sm font-black text-emerald-900 uppercase tracking-widest leading-tight"
+                >
+                  All orders have been completed today!
+                </motion.h3>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.32, duration: 0.25 }}
+                  className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest"
+                >
+                  Great job!
+                </motion.p>
+              </motion.div>
 
-        ) : orders.length === 0 ? (
-          <EmptySlate label="No current orders" color="green" />
+            ) : effectiveTab === 'repair' ? (
+              sortedRepairs.length === 0 ? (
+                <EmptySlate label="No repairs in queue" />
+              ) : (
+                <div className="flex flex-col">
+                  {sortedRepairs.some((r) => r.assignedTechId === null) && (
+                    <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
+                      <div className="h-px flex-1 bg-red-100" />
+                      <span className="text-[9px] font-black uppercase tracking-widest text-red-400">
+                        {sortedRepairs.filter((r) => r.assignedTechId === null).length} unassigned
+                      </span>
+                      <div className="h-px flex-1 bg-red-100" />
+                    </div>
+                  )}
+                  <AnimatePresence mode="popLayout">
+                    {sortedRepairs.map((repair) => (
+                      <RepairCard
+                        key={repair.repairId}
+                        repair={repair}
+                        isExpanded={expandedItemKey === `repair-${repair.repairId}`}
+                        onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )
 
-        ) : (
-          <div className="flex flex-col">
-            <AnimatePresence mode="popLayout">
-              {orders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  effectiveTab={effectiveTab}
-                  techId={techId}
-                  showMissingPartsInput={showMissingPartsInput}
-                  missingPartsReason={missingPartsReason}
-                  onStart={handleStart}
-                  onMissingPartsToggle={(id) => setShowMissingPartsInput(showMissingPartsInput === id ? null : id)}
-                  onMissingPartsReasonChange={setMissingPartsReason}
-                  onMissingPartsSubmit={handleMissingParts}
-                  onMissingPartsCancel={() => setShowMissingPartsInput(null)}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
+            ) : effectiveTab === 'fba' ? (
+              fbaItems.filter((i) => i.status !== 'SHIPPED').length === 0 ? (
+                <EmptySlate label="No active FBA items" color="purple" />
+              ) : (
+                <div className="flex flex-col">
+                  <AnimatePresence mode="popLayout">
+                    {fbaItems.filter((i) => i.status !== 'SHIPPED').map((item) => (
+                      <FbaItemCard key={item.item_id} item={item} />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )
+
+            ) : effectiveTab === 'receiving' ? (
+              receivingItems.length === 0 ? (
+                <EmptySlate label="No receiving items assigned" color="teal" />
+              ) : (
+                <div className="flex flex-col">
+                  <AnimatePresence mode="popLayout">
+                    {receivingItems.map((item) => (
+                      <ReceivingAssignmentCard key={item.assignment_id} item={item} />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )
+
+            ) : orders.length === 0 ? (
+              <EmptySlate label="No current orders" color="green" />
+
+            ) : (
+              <div className="flex flex-col">
+                <AnimatePresence mode="popLayout">
+                  {orders.map((order) => (
+                    renderOrderCard(order)
+                  ))}
+                </AnimatePresence>
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+        </div>
 
         {shouldShowStockSection && (
           <div className="mt-3">
@@ -366,19 +500,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
             <div className="flex flex-col">
               <AnimatePresence mode="popLayout">
                 {stockOrders.map((order) => (
-                  <OrderCard
-                    key={`stock-${order.id}`}
-                    order={order}
-                    effectiveTab="stock"
-                    techId={techId}
-                    showMissingPartsInput={showMissingPartsInput}
-                    missingPartsReason={missingPartsReason}
-                    onStart={handleStart}
-                    onMissingPartsToggle={(id) => setShowMissingPartsInput(showMissingPartsInput === id ? null : id)}
-                    onMissingPartsReasonChange={setMissingPartsReason}
-                    onMissingPartsSubmit={handleMissingParts}
-                    onMissingPartsCancel={() => setShowMissingPartsInput(null)}
-                  />
+                  renderOrderCard(order, `stock-${order.id}`, 'stock')
                 ))}
               </AnimatePresence>
             </div>
@@ -394,11 +516,16 @@ function EmptySlate({ label, color = 'gray' }: { label: string; color?: 'gray' |
   const text = color === 'green' ? 'text-emerald-500' : color === 'purple' ? 'text-purple-400' : color === 'teal' ? 'text-teal-400' : color === 'red' ? 'text-red-400' : 'text-gray-400';
   const icon = color === 'green' ? 'text-emerald-300' : color === 'purple' ? 'text-purple-200' : color === 'teal' ? 'text-teal-200' : color === 'red' ? 'text-red-200' : 'text-gray-300';
   return (
-    <div className={`rounded-2xl px-4 py-3 border ${bg}`}>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      className={`rounded-2xl px-4 py-3 border ${bg}`}
+    >
       <div className="flex items-center justify-between gap-3">
         <p className={`text-xs font-bold uppercase tracking-widest ${text}`}>{label}</p>
         <Package className={`w-5 h-5 flex-shrink-0 ${icon}`} />
       </div>
-    </div>
+    </motion.div>
   );
 }

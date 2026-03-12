@@ -13,7 +13,8 @@ interface SearchResult {
     order_id: string;
     serial_number: string;
     notes: string;
-    is_shipped: boolean;
+    /** Derived from shipping_tracking_numbers carrier status */
+    is_shipped?: boolean;
 }
 
 export default function TechSearchPanel() {

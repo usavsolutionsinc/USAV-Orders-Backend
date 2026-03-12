@@ -20,9 +20,12 @@ export async function GET(req: NextRequest) {
     // Query orders table for matching order_id (shipped orders only)
     // Return product_title
     const result = await pool.query(
-      `SELECT product_title
-       FROM orders
-       WHERE order_id = $1 AND is_shipped = true
+      `SELECT o.product_title
+       FROM orders o
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+       WHERE o.order_id = $1
+         AND COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+               OR stn.is_out_for_delivery OR stn.is_delivered, false)
        LIMIT 1`,
       [orderId]
     );

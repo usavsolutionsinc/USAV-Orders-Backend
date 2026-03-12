@@ -300,10 +300,12 @@ export function useStationTestingController({
       });
 
       const serialCount = data.order.serialNumbers?.length || 0;
+      const techCount = Number(data?.summary?.tech_scanned_qty ?? 0);
+      const packCount = Number(data?.summary?.pack_ready_qty ?? 0);
       if (serialCount > 0) {
-        setSuccessMessage(`FNSKU loaded: ${serialCount} serial${serialCount !== 1 ? 's' : ''} already scanned`);
+        setSuccessMessage(`FNSKU loaded: ${serialCount} serial${serialCount !== 1 ? 's' : ''} on file · tech ${techCount} · ready ${packCount}`);
       } else {
-        setSuccessMessage('FNSKU loaded - ready to scan serials');
+        setSuccessMessage(`FNSKU loaded - tech ${techCount} · ready ${packCount}`);
       }
 
       if (data.orderFound === false) {
@@ -406,7 +408,7 @@ export function useStationTestingController({
               notes: data.order.notes ?? null,
               account_source: data.order.accountSource ?? null,
               quantity: String(data.order.quantity || '1'),
-              is_shipped: data.order.isShipped ?? false,
+              is_shipped: data.order.isShipped ?? false,  // derived from stn in API
               ship_by_date: data.order.shipByDate ?? null,
               created_at: data.order.createdAt ?? null,
               out_of_stock: null,

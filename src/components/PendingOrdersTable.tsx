@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { OrderRecordsTable } from '@/components/shipped/OrderRecordsTable';
+import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
+import { dispatchCloseShippedDetails } from '@/utils/events';
 import { fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
@@ -12,8 +13,6 @@ export interface PendingOrdersTableProps {
   testedBy?: number;
 }
 
-type FilterMode = 'all' | 'pending' | 'stock';
-
 function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
   const patched = { ...row };
   const {
@@ -21,10 +20,9 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
     packerId,
     testerName,
     packerName,
-    shipByDate,
+    deadlineAt,
     outOfStock,
     notes,
-    shippingTrackingNumber,
     itemNumber,
     condition,
   } = detail || {};
@@ -39,10 +37,9 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
     patched.packer_name = packerName ?? null;
     patched.packed_by_name = packerName ?? null;
   }
-  if (shipByDate !== undefined) patched.ship_by_date = shipByDate;
+  if (deadlineAt !== undefined) patched.deadline_at = deadlineAt;
   if (outOfStock !== undefined) patched.out_of_stock = outOfStock;
   if (notes !== undefined) patched.notes = notes;
-  if (shippingTrackingNumber !== undefined) patched.shipping_tracking_number = shippingTrackingNumber;
   if (itemNumber !== undefined) patched.item_number = itemNumber;
   if (condition !== undefined) patched.condition = condition;
 
@@ -56,14 +53,9 @@ export default function PendingOrdersTable({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
-
-  // 'pending' mode fetches server-filtered data (SQL: no out_of_stock + not in tech_serial_numbers).
-  // 'all' and 'stock' share the same base fetch and filter client-side for 'stock'.
-  const isPendingMode = filterMode === 'pending';
-  const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy, isPendingMode }] as const;
+  const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy }] as const;
 
   const query = useQuery({
     queryKey,
@@ -71,7 +63,6 @@ export default function PendingOrdersTable({
       searchQuery,
       packedBy,
       testedBy,
-      pendingOnly: isPendingMode,
     }),
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
@@ -116,30 +107,21 @@ export default function PendingOrdersTable({
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
     };
-    const handlePendingFilter = (e: any) => {
-      const mode = String(e?.detail?.mode || 'all').toLowerCase();
-      if (mode === 'stock') setFilterMode('stock');
-      else if (mode === 'pending') setFilterMode('pending');
-      else setFilterMode('all');
-    };
 
-    // Patch order fields directly into cached rows when an assignment succeeds —
-    // no full refetch needed, bypasses the Upstash cache.
-    // ship_by_date is now sourced from work_assignments.deadline_at so we patch
-    // it here too to keep the table in sync without a round-trip.
+    // Patch order fields directly into cached rows when an assignment succeeds
+    // so the deadline-driven pending view stays in sync without a round-trip.
     const handleAssignmentUpdated = (e: any) => {
       const {
         orderIds,
         testerId, packerId, testerName, packerName,
-        shipByDate, outOfStock, notes, shippingTrackingNumber, itemNumber, condition,
+        deadlineAt, outOfStock, notes, itemNumber, condition,
       } = e?.detail || {};
       if (!Array.isArray(orderIds) || orderIds.length === 0) return;
 
       const hasAnyChange =
         testerId !== undefined || packerId !== undefined ||
-        shipByDate !== undefined || outOfStock !== undefined ||
-        notes !== undefined || shippingTrackingNumber !== undefined ||
-        itemNumber !== undefined || condition !== undefined;
+        deadlineAt !== undefined || outOfStock !== undefined ||
+        notes !== undefined || itemNumber !== undefined || condition !== undefined;
       if (!hasAnyChange) return;
 
       const idSet = new Set<number>(orderIds.map(Number));
@@ -161,13 +143,11 @@ export default function PendingOrdersTable({
 
     window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
     window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
-    window.addEventListener('dashboard-pending-filter' as any, handlePendingFilter as any);
     window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
 
     return () => {
       window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
       window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
-      window.removeEventListener('dashboard-pending-filter' as any, handlePendingFilter as any);
       window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
     };
   }, [queryClient]);
@@ -180,21 +160,20 @@ export default function PendingOrdersTable({
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
   };
 
-  // 'pending' is already filtered server-side. 'stock' is a simple client-side check.
-  const records = (query.data || []).filter((record) => {
-    if (filterMode === 'stock') return String((record as any).out_of_stock || '').trim() !== '';
-    return true;
-  });
-
   return (
-    <OrderRecordsTable
-      records={records}
+    <OrdersQueueTable
+      records={query.data || []}
       loading={query.isLoading}
       isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}
-      ordersOnly
       onClearSearch={clearSearch}
       emptyMessage="No pending order records found"
+      onOpenRecord={(record) => {
+        window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: record }));
+      }}
+      onCloseRecord={() => {
+        dispatchCloseShippedDetails();
+      }}
     />
   );
 }

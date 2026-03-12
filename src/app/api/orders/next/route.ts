@@ -5,9 +5,10 @@ import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/
 /**
  * GET /api/orders/next - Get next order(s) for a tech.
  * Rules:
- *  - orders.shipping_tracking_number must be present
- *  - orders.is_shipped must be false/null
- *  - order must be assigned via work_assignments.assigned_tech_id (staff.id)
+ *  - orders.shipment_id must be set (linked to shipping_tracking_numbers)
+ *  - order must NOT be carrier-accepted/in-transit/delivered
+ *  - order must be assigned to this tech (wa.assigned_tech_id) OR have no active test assignment
+ *    (unassigned orders are visible to all techs)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -15,13 +16,11 @@ export async function GET(req: NextRequest) {
     const techId     = searchParams.get('techId');
     const getAll     = searchParams.get('all') === 'true';
     const outOfStock = searchParams.get('outOfStock');
-    const assignedOnly = searchParams.get('assignedOnly') === 'true';
 
     const cacheLookup = createCacheLookupKey({
       techId:     techId || '',
       all:        getAll,
       outOfStock: outOfStock || '',
-      assignedOnly,
     });
 
     const cached = await getCachedJson<any>('api:orders-next', cacheLookup);
@@ -59,6 +58,8 @@ export async function GET(req: NextRequest) {
     const techIdScope = Array.from(
       new Set([techIdNum, resolvedStaffId].filter((v): v is number => Number.isFinite(v as number)))
     );
+
+    // $1 = techIdScope array — used for the assignment visibility filter throughout
     const noTechScanClause = `
       NOT EXISTS (
         SELECT 1
@@ -68,57 +69,74 @@ export async function GET(req: NextRequest) {
       )
     `;
 
-    // 1. Count total pending orders for the requested scope.
-    const countWhere: string[] = [
-      "o.is_shipped IS NOT TRUE",
-      "COALESCE(BTRIM(o.shipping_tracking_number), '') <> ''",
+    // Joins shared by both the count query and the main query
+    const sharedJoins = `
+      LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      LEFT JOIN LATERAL (
+        SELECT assigned_tech_id
+        FROM work_assignments
+        WHERE entity_type = 'ORDER'
+          AND entity_id   = o.id
+          AND work_type   = 'TEST'
+          AND status IN ('ASSIGNED', 'IN_PROGRESS')
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) wa_t ON true
+      LEFT JOIN LATERAL (
+        SELECT wa.deadline_at FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+        ORDER BY
+          CASE wa.status
+            WHEN 'IN_PROGRESS' THEN 1
+            WHEN 'ASSIGNED'    THEN 2
+            WHEN 'OPEN'        THEN 3
+            WHEN 'DONE'        THEN 4
+            ELSE 5
+          END,
+          wa.updated_at DESC, wa.id DESC
+        LIMIT 1
+      ) wa_deadline ON TRUE
+      LEFT JOIN staff staff_t ON staff_t.id = wa_t.assigned_tech_id
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS scan_count
+        FROM tech_serial_numbers tsn
+        WHERE tsn.shipment_id IS NOT NULL
+          AND tsn.shipment_id = o.shipment_id
+      ) tsn_scan ON true
+    `;
+
+    // Base WHERE — applies to both count and main query.
+    // Assignment rule: show orders assigned to this tech OR that have no active test assignment.
+    const baseConditions: string[] = [
+      `NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+         OR stn.is_out_for_delivery OR stn.is_delivered, false)`,
+      `o.shipment_id IS NOT NULL`,
+      `(wa_t.assigned_tech_id IS NULL OR wa_t.assigned_tech_id = ANY($1::int[]))`,
     ];
-    const countJoins: string[] = [];
-    if (assignedOnly) {
-      countJoins.push(
-        `INNER JOIN work_assignments wa
-           ON wa.entity_id = o.id`,
-        `INNER JOIN staff s
-           ON s.id = wa.assigned_tech_id`
-      );
-      countWhere.unshift(
-        "wa.entity_type = 'ORDER'",
-        "wa.work_type = 'TEST'",
-        "wa.assigned_tech_id = ANY($1::int[])"
-      );
-    }
+
+    const countConditions = [...baseConditions];
     if (outOfStock === 'true') {
-      countWhere.push("COALESCE(BTRIM(o.out_of_stock), '') <> ''");
+      countConditions.push(`COALESCE(BTRIM(o.out_of_stock), '') <> ''`);
     } else if (outOfStock === 'false') {
-      countWhere.push("COALESCE(BTRIM(o.out_of_stock), '') = ''");
-      countWhere.push(noTechScanClause);
+      countConditions.push(`COALESCE(BTRIM(o.out_of_stock), '') = ''`);
+      countConditions.push(noTechScanClause);
     }
 
     const totalPendingResult = await pool.query(
       `SELECT COUNT(DISTINCT o.id) AS count
        FROM orders o
-       ${countJoins.join('\n')}
-       WHERE ${countWhere.join(' AND ')}`,
-      assignedOnly ? [techIdScope] : []
+       ${sharedJoins}
+       WHERE ${countConditions.join(' AND ')}`,
+      [techIdScope],
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
-    // 2. Build main query
-    const params: any[] = assignedOnly ? [techIdScope] : [];
-    const where: string[] = [...countWhere];
-    const mainJoins: string[] = [];
-    if (assignedOnly) {
-      mainJoins.push(
-        `INNER JOIN work_assignments wa
-          ON wa.entity_id = o.id`,
-        `INNER JOIN staff s
-          ON s.id = wa.assigned_tech_id`
-      );
-    }
+    const mainConditions = [...countConditions];
 
-    let query = `
+    const mainQuery = `
       SELECT DISTINCT ON (o.id)
         o.id,
+        o.shipment_id,
         to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
         o.created_at,
         o.order_id,
@@ -128,31 +146,21 @@ export async function GET(req: NextRequest) {
         o.account_source,
         o.quantity,
         o.condition,
-        o.shipping_tracking_number,
-        o.out_of_stock
+        stn.tracking_number_raw AS shipping_tracking_number,
+        o.out_of_stock,
+        wa_t.assigned_tech_id AS tester_id,
+        staff_t.name          AS tester_name,
+        (COALESCE(tsn_scan.scan_count, 0) > 0) AS has_tech_scan
       FROM orders o
-      LEFT JOIN LATERAL (
-        SELECT wa.deadline_at FROM work_assignments wa
-        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
-        ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
-                 wa.updated_at DESC, wa.id DESC LIMIT 1
-      ) wa_deadline ON TRUE
-      ${mainJoins.join('\n')}
-      WHERE ${where.join(' AND ')}
-    `;
-
-    query += `
+      ${sharedJoins}
+      WHERE ${mainConditions.join(' AND ')}
       ORDER BY
         o.id,
-        ${assignedOnly ? 'wa.assigned_at DESC,' : ''}
         COALESCE(wa_deadline.deadline_at, o.created_at) ASC
+      ${!getAll ? 'LIMIT 1' : ''}
     `;
 
-    if (!getAll) {
-      query += ` LIMIT 1 `;
-    }
-
-    const result = await pool.query(query, params);
+    const result = await pool.query(mainQuery, [techIdScope]);
 
     if (result.rows.length === 0) {
       const payload = { order: null, orders: [], all_completed: totalPending === 0 };

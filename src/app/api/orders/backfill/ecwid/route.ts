@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
 
         if (orderId) {
           const byOrderId = await pool.query(
-            `SELECT id, order_id, account_source, order_date, sku, item_number, shipping_tracking_number, product_title, quantity
+            `SELECT id, order_id, account_source, order_date, sku, item_number, product_title, quantity
              FROM orders
              WHERE order_id = $1
              ORDER BY created_at DESC NULLS LAST, id DESC
@@ -117,12 +117,11 @@ export async function POST(req: NextRequest) {
           const last8 = getLastEightDigits(trackingNumber);
           if (last8) {
             const byTracking = await pool.query(
-              `SELECT id, order_id, account_source, order_date, sku, item_number, shipping_tracking_number, product_title, quantity
-               FROM orders
-               WHERE shipping_tracking_number IS NOT NULL
-                 AND shipping_tracking_number != ''
-                 AND RIGHT(regexp_replace(shipping_tracking_number, '\\D', '', 'g'), 8) = $1
-               ORDER BY created_at DESC NULLS LAST, id DESC
+              `SELECT o.id, o.order_id, o.account_source, o.order_date, o.sku, o.item_number, o.product_title, o.quantity
+               FROM orders o
+               JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+               WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
+               ORDER BY o.created_at DESC NULLS LAST, o.id DESC
                LIMIT 1`,
               [last8]
             );
@@ -160,10 +159,6 @@ export async function POST(req: NextRequest) {
         if (isBlank(current.item_number) && sku) {
           updates.push(`item_number = $${idx++}`);
           values.push(sku);
-        }
-        if (isBlank(current.shipping_tracking_number) && trackingNumber) {
-          updates.push(`shipping_tracking_number = $${idx++}`);
-          values.push(trackingNumber);
         }
         if (isBlank(current.product_title) && productTitle) {
           updates.push(`product_title = $${idx++}`);
