@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import StaffSelector from '@/components/StaffSelector';
 import StationPacking from '@/components/station/StationPacking';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -55,7 +56,7 @@ export function PackerSidebarPanel({ packerId }: { packerId: string }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="border-b border-gray-200 bg-white">
+      <div className={sidebarHeaderBandClass}>
         <div className="grid grid-cols-1">
           <StaffSelector
             role="all"

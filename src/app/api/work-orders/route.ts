@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { normalizePSTTimestamp } from '@/utils/date';
 
 type QueueKey =
+  | 'all'
   | 'all_unassigned'
   | 'all_assigned'
   | 'orders'
@@ -21,7 +22,7 @@ interface WorkOrderRow {
   id: string;
   entityType: EntityType;
   entityId: number;
-  queueKey: Exclude<QueueKey, 'all_unassigned' | 'all_assigned'>;
+  queueKey: Exclude<QueueKey, 'all' | 'all_unassigned' | 'all_assigned'>;
   queueLabel: string;
   title: string;
   subtitle: string;
@@ -46,6 +47,7 @@ interface WorkOrderRow {
 function normalizeQueue(raw: string | null): QueueKey {
   const value = String(raw || '').trim().toLowerCase();
   const allowed: QueueKey[] = [
+    'all',
     'all_unassigned',
     'all_assigned',
     'orders',
@@ -56,7 +58,7 @@ function normalizeQueue(raw: string | null): QueueKey {
     'local_pickups',
     'stock_replenish',
   ];
-  return allowed.includes(value as QueueKey) ? (value as QueueKey) : 'all_unassigned';
+  return allowed.includes(value as QueueKey) ? (value as QueueKey) : 'all';
 }
 
 function normalizeStatus(raw: unknown): WorkStatus {
@@ -87,6 +89,7 @@ function matchesSearch(row: WorkOrderRow, query: string): boolean {
 }
 
 function matchesQueue(row: WorkOrderRow, queue: QueueKey): boolean {
+  if (queue === 'all') return true;
   if (queue === 'all_unassigned') return !isAssignedRow(row);
   if (queue === 'all_assigned') return isAssignedRow(row);
   return row.queueKey === queue;
@@ -642,6 +645,7 @@ export async function GET(request: NextRequest) {
     const allRows = [...orders, ...receiving, ...repairs, ...fbaShipments, ...skuStock];
 
     const counts: Record<QueueKey, number> = {
+      all: allRows.length,
       all_unassigned: allRows.filter((row) => matchesQueue(row, 'all_unassigned')).length,
       all_assigned: allRows.filter((row) => matchesQueue(row, 'all_assigned')).length,
       orders: allRows.filter((row) => row.queueKey === 'orders').length,

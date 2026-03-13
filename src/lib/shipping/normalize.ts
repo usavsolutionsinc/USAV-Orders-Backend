@@ -26,10 +26,47 @@ const UPS_STATUS_TYPE_MAP: Record<string, NormalizedShipmentStatus> = {
 
 export function normalizeUPSStatus(
   statusType: string | null | undefined,
-  _statusCode?: string | null
+  _statusCode?: string | null,
+  statusDescription?: string | null
 ): NormalizedShipmentStatus {
-  if (!statusType) return 'UNKNOWN';
-  return UPS_STATUS_TYPE_MAP[statusType.toUpperCase()] ?? 'UNKNOWN';
+  if (statusType) {
+    const mapped = UPS_STATUS_TYPE_MAP[statusType.toUpperCase()];
+    if (mapped) return mapped;
+  }
+  if (statusDescription) return normalizeUPSByText(statusDescription);
+  return 'UNKNOWN';
+}
+
+function normalizeUPSByText(description: string): NormalizedShipmentStatus {
+  const text = description.toUpperCase();
+  if (text.includes('DELIVERED')) return 'DELIVERED';
+  if (text.includes('OUT FOR DELIVERY')) return 'OUT_FOR_DELIVERY';
+  if (
+    text.includes('PICKUP') ||
+    text.includes('PICKED UP') ||
+    text.includes('ORIGIN SCAN') ||
+    text.includes('ACCEPTED')
+  ) return 'ACCEPTED';
+  if (text.includes('RETURN')) return 'RETURNED';
+  if (
+    text.includes('EXCEPTION') ||
+    text.includes('DELAY') ||
+    text.includes('RESCHEDULED') ||
+    text.includes('HOLD')
+  ) return 'EXCEPTION';
+  if (
+    text.includes('IN TRANSIT') ||
+    text.includes('ON THE WAY') ||
+    text.includes('ARRIVED') ||
+    text.includes('DEPARTED') ||
+    text.includes('PROCESSING')
+  ) return 'IN_TRANSIT';
+  if (
+    text.includes('LABEL CREATED') ||
+    text.includes('SHIPMENT READY') ||
+    text.includes('SHIPPER CREATED')
+  ) return 'LABEL_CREATED';
+  return 'UNKNOWN';
 }
 
 // ─── USPS status mapping ─────────────────────────────────────────────────────
@@ -120,10 +157,27 @@ const FEDEX_EVENT_TYPE_MAP: Record<string, NormalizedShipmentStatus> = {
 };
 
 export function normalizeFedExStatus(
-  eventType: string | null | undefined
+  eventType: string | null | undefined,
+  description?: string | null
 ): NormalizedShipmentStatus {
-  if (!eventType) return 'UNKNOWN';
-  return FEDEX_EVENT_TYPE_MAP[eventType.toUpperCase()] ?? 'UNKNOWN';
+  if (eventType) {
+    const mapped = FEDEX_EVENT_TYPE_MAP[eventType.toUpperCase()];
+    if (mapped) return mapped;
+  }
+  if (description) return normalizeFedExByText(description);
+  return 'UNKNOWN';
+}
+
+function normalizeFedExByText(description: string): NormalizedShipmentStatus {
+  const text = description.toUpperCase();
+  if (text.includes('DELIVERED')) return 'DELIVERED';
+  if (text.includes('OUT FOR DELIVERY') || text.includes('ON FEDEX VEHICLE FOR DELIVERY')) return 'OUT_FOR_DELIVERY';
+  if (text.includes('PICKED UP') || text.includes('ACCEPTED')) return 'ACCEPTED';
+  if (text.includes('RETURN')) return 'RETURNED';
+  if (text.includes('EXCEPTION') || text.includes('DELAY') || text.includes('HELD')) return 'EXCEPTION';
+  if (text.includes('IN TRANSIT') || text.includes('AT LOCAL FEDEX FACILITY') || text.includes('ARRIVED')) return 'IN_TRANSIT';
+  if (text.includes('LABEL CREATED') || text.includes('SHIPMENT INFORMATION SENT')) return 'LABEL_CREATED';
+  return 'UNKNOWN';
 }
 
 // ─── Carrier auto-detection ──────────────────────────────────────────────────

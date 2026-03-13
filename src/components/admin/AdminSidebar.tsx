@@ -4,6 +4,8 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from './admin-sections';
 import { ManualAssignmentSidebarPanel } from './ManualAssignmentSidebarPanel';
+import { ConnectionsSidebarPanel } from '@/components/sidebar/ConnectionsSidebarPanel';
+import { GoalsSidebarPanel } from '@/components/sidebar/GoalsSidebarPanel';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -29,6 +31,14 @@ export function AdminSidebar({
       {activeSection === 'manuals' ? (
         <div className="flex-1 overflow-hidden">
           <ManualAssignmentSidebarPanel />
+        </div>
+      ) : activeSection === 'goals' ? (
+        <div className="flex-1 overflow-hidden">
+          <GoalsSidebarPanel />
+        </div>
+      ) : activeSection === 'connections' ? (
+        <div className="flex-1 overflow-hidden">
+          <ConnectionsSidebarPanel />
         </div>
       ) : (
         <div className="flex h-[calc(100%-56px)] flex-col overflow-hidden px-6 pb-6 pt-4">

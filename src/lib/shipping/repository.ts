@@ -66,16 +66,31 @@ export async function getShipmentByTracking(
   }
 }
 
-export async function getDueShipments(limit: number = 50): Promise<ShipmentRow[]> {
+export async function getDueShipments(
+  limit: number = 50,
+  carriers?: CarrierCode[]
+): Promise<ShipmentRow[]> {
   const client = await pool.connect();
   try {
+    const params: Array<number | string[]> = [];
+    const where: string[] = [
+      `is_terminal = false`,
+      `(next_check_at IS NULL OR next_check_at <= now())`,
+    ];
+
+    if (carriers && carriers.length > 0) {
+      params.push(carriers);
+      where.push(`carrier = ANY($${params.length}::text[])`);
+    }
+
+    params.push(limit);
+
     const result = await client.query<ShipmentRow>(
       `SELECT * FROM shipping_tracking_numbers
-       WHERE is_terminal = false
-         AND (next_check_at IS NULL OR next_check_at <= now())
+       WHERE ${where.join('\n         AND ')}
        ORDER BY next_check_at ASC NULLS FIRST
-       LIMIT $1`,
-      [limit]
+       LIMIT $${params.length}`,
+      params
     );
     return result.rows;
   } finally {

@@ -19,6 +19,8 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   const hasTrackingNumber = (order: Order) =>
     String(order.shipping_tracking_number || (order as any).tracking_number || '').trim().length > 0;
 
+  const isPendingByShipmentState = (order: Order) => order.is_shipped === false;
+
   const fetchFbaShipments = async () => {
     try {
       const res = await fetch('/api/fba/items/queue?limit=100');
@@ -100,22 +102,24 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
         fetch(`/api/repair-service/next?techId=${techId}`),
       ]);
 
-      if (currentRes.ok) {
-        const currentData = await currentRes.json();
-        const currentOrders = (currentData.orders || []).filter(
-          (order: Order) => !order.is_shipped && hasTrackingNumber(order)
-        );
-        const stockData = stockRes.ok ? await stockRes.json() : { orders: [] };
-        const stockOrders = (stockData.orders || []).filter(
-          (order: Order) => !order.is_shipped && hasTrackingNumber(order)
-        );
-        const merged = [...currentOrders, ...stockOrders];
-        const deduped = merged.filter((row: Order, idx: number, arr: Order[]) =>
-          arr.findIndex((cand: Order) => Number(cand.id) === Number(row.id)) === idx
-        );
-        setAllOrders(deduped);
-        setAllCompletedToday(currentData.all_completed || false);
-        if (currentData.all_completed && onAllCompleted) onAllCompleted();
+      const currentData = currentRes.ok ? await currentRes.json() : { orders: [], all_completed: false };
+      const stockData = stockRes.ok ? await stockRes.json() : { orders: [] };
+
+      const currentOrders = (currentData.orders || []).filter(
+        (order: Order) => isPendingByShipmentState(order) && hasTrackingNumber(order)
+      );
+      const stockOrders = (stockData.orders || []).filter(
+        (order: Order) => !!String(order.out_of_stock || '').trim()
+      );
+      const merged = [...currentOrders, ...stockOrders];
+      const deduped = merged.filter((row: Order, idx: number, arr: Order[]) =>
+        arr.findIndex((cand: Order) => Number(cand.id) === Number(row.id)) === idx
+      );
+
+      setAllOrders(deduped);
+      setAllCompletedToday(Boolean(currentData.all_completed));
+      if (currentData.all_completed && onAllCompleted) {
+        onAllCompleted();
       }
 
       if (repairRes.ok) {

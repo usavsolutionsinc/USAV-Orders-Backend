@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { RefreshCw } from '@/components/Icons';
 
-export function BackfillCard() {
+export function BackfillCard({ embedded = false }: { embedded?: boolean }) {
   const ebayBackfillMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/orders/backfill/ebay', {
@@ -32,8 +32,8 @@ export function BackfillCard() {
   });
 
   return (
-    <div className="space-y-4 p-5 bg-white rounded-3xl border border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
+    <div className={embedded ? 'space-y-4' : 'space-y-4 border border-gray-200 bg-white p-5'}>
+      <div className={`flex items-center justify-between gap-3 ${embedded ? 'border-b border-gray-200 pb-3' : ''}`}>
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Orders Backfill</h2>
           <p className="text-[9px] font-bold text-gray-500 mt-1">Backfill only empty columns in orders table from marketplace APIs</p>
@@ -59,7 +59,7 @@ export function BackfillCard() {
       </div>
 
       {ebayBackfillMutation.isSuccess && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-green-50 border border-green-200 rounded-2xl">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="border-l-2 border-l-green-500 p-4 bg-green-50/70">
           <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
             eBay: Updated {ebayBackfillMutation.data?.totals?.updated || 0} • Matched {ebayBackfillMutation.data?.totals?.matched || 0} • Resolved {ebayBackfillMutation.data?.totals?.resolvedExceptions || 0} • Unmatched {ebayBackfillMutation.data?.totals?.unmatched || 0}
           </div>
@@ -67,7 +67,7 @@ export function BackfillCard() {
       )}
 
       {ebayBackfillMutation.isError && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="border-l-2 border-l-red-500 p-4 bg-red-50/70">
           <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">
             {(ebayBackfillMutation.error as Error)?.message || 'eBay backfill failed'}
           </div>
@@ -75,7 +75,7 @@ export function BackfillCard() {
       )}
 
       {ecwidBackfillMutation.isSuccess && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-green-50 border border-green-200 rounded-2xl">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="border-l-2 border-l-green-500 p-4 bg-green-50/70">
           <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
             Ecwid: Updated {ecwidBackfillMutation.data?.totals?.updated || 0} • Matched {ecwidBackfillMutation.data?.totals?.matched || 0} • Unmatched {ecwidBackfillMutation.data?.totals?.unmatched || 0}
           </div>
@@ -83,7 +83,7 @@ export function BackfillCard() {
       )}
 
       {ecwidBackfillMutation.isError && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="border-l-2 border-l-red-500 p-4 bg-red-50/70">
           <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">
             {(ecwidBackfillMutation.error as Error)?.message || 'Ecwid backfill failed'}
           </div>

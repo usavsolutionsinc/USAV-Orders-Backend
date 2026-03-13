@@ -131,7 +131,11 @@ function buildUPSResultFromPayload(payload: any, shipment: any, pkg: any): Carri
   }
 
   const currentStatus = pkg?.currentStatus ?? pkg?.activity?.[0]?.status;
-  const latestCategory = normalizeUPSStatus(currentStatus?.type, currentStatus?.code);
+  const latestCategory = normalizeUPSStatus(
+    currentStatus?.type,
+    currentStatus?.code,
+    currentStatus?.description
+  );
 
   const activities: unknown[] = Array.isArray(pkg?.activity) ? pkg.activity : [];
   const events: CarrierTrackingEvent[] = activities.map((act: any) => {
@@ -144,7 +148,7 @@ function buildUPSResultFromPayload(payload: any, shipment: any, pkg: any): Carri
       externalStatusCode: status.code ?? null,
       externalStatusLabel: status.type ?? null,
       externalStatusDescription: status.description ?? null,
-      normalizedStatusCategory: normalizeUPSStatus(status.type, status.code),
+      normalizedStatusCategory: normalizeUPSStatus(status.type, status.code, status.description),
       eventOccurredAt: occurredAt,
       city: addr.city ?? null,
       state: addr.stateProvince ?? null,

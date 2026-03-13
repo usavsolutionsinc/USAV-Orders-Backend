@@ -76,7 +76,7 @@ export function ShippedDetailsPanel({
       _onUpdate();
     } catch (error) {
       console.error('Failed to delete shipped order:', error);
-      window.alert('Failed to delete shipped order. Please try again.');
+      window.alert('Failed to permanently delete order. Please try again.');
     }
   };
 
@@ -174,7 +174,7 @@ export function ShippedDetailsPanel({
                 ? 'Deleting...'
                 : isDeleteArmed
                   ? 'Click Again To Confirm'
-                  : 'Delete Shipped Order'}
+                  : 'Delete Permanently'}
             </button>
           </section>
         )}

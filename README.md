@@ -156,6 +156,9 @@ npm run dev
 - `UPS_CLIENT_ID`
 - `UPS_CLIENT_SECRET`
 - `UPS_WEBHOOK_BEARER` or `UPS_WEBHOOK_SECRET` for `/api/webhooks/ups` callback authentication
+- `FEDEX_CLIENT_ID`
+- `FEDEX_CLIENT_SECRET`
+- `FEDEX_ENV` (`production` or unset for sandbox)
 - `CRON_SECRET` for `/api/shipping/track/sync-due` if you run scheduled shipment refreshes
 
 ### Realtime / Ably
@@ -184,6 +187,11 @@ npm run dev
 npm run dev
 npm run build
 npm run start
+npm run desktop:dev
+npm run desktop:start
+npm run desktop:dist
+npm run desktop:dist:mac
+npm run desktop:dist:win
 npm run lint
 npm run db:studio
 npm run db:generate
@@ -192,6 +200,30 @@ npm run db:push
 
 Notes:
 - `sync:packer-logs` and `sync:packer-logs:preview` exist in `package.json`, but currently point to missing files.
+
+## Desktop App (Electron Wrapper)
+
+The desktop app is configured as a thin Electron shell around the hosted web app, not a bundled offline copy of the Next.js backend.
+
+- Electron entry point: `electron/main.js`
+- Secure preload bridge: `electron/preload.js`
+- Dev launcher: `scripts/electron-dev.js`
+- Packaged output directory: `desktop-dist/`
+
+Behavior:
+- `npm run desktop:dev` starts Next.js locally, waits for `http://127.0.0.1:3000`, then opens Electron against that local URL.
+- `npm run desktop:start` launches Electron directly against the configured remote URL.
+- `npm run desktop:dist:mac` builds a macOS `.dmg`.
+- `npm run desktop:dist:win` builds a Windows `.exe` installer.
+
+Configuration:
+- Production desktop URL defaults to `https://usav-orders-backend.vercel.app`
+- Override with `ELECTRON_START_URL` when needed
+- External domains open in the system browser instead of navigating inside the app window
+
+Important:
+- Do not ship backend secrets inside Electron
+- Package builds require network access because `electron-builder` downloads platform binaries during packaging
 
 ## Database Initialization / Migration Endpoints
 

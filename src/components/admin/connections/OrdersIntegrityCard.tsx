@@ -16,10 +16,10 @@ function StatusBanner({ status }: { status: { type: 'success' | 'error'; message
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border px-4 py-3 text-[10px] font-black uppercase tracking-widest ${
+      className={`border-l-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest ${
         status.type === 'success'
-          ? 'bg-green-50 border-green-200 text-green-700'
-          : 'bg-red-50 border-red-200 text-red-700'
+          ? 'border-l-green-500 bg-green-50/70 text-green-700'
+          : 'border-l-red-500 bg-red-50/70 text-red-700'
       }`}
     >
       {status.message}
@@ -27,7 +27,7 @@ function StatusBanner({ status }: { status: { type: 'success' | 'error'; message
   );
 }
 
-export function OrdersIntegrityCard() {
+export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const [isShipStationSyncing, setIsShipStationSyncing] = useState(false);
   const [isShipStationInfoOpen, setIsShipStationInfoOpen] = useState(false);
@@ -139,7 +139,7 @@ export function OrdersIntegrityCard() {
   const anyPending = isFullSyncRunning || ebaySyncMutation.isPending || exceptionsSyncMutation.isPending || isShipStationSyncing || ecwidExceptionTrackingMutation.isPending;
 
   return (
-    <div className="space-y-4 px-5 pb-5 pt-0 bg-white rounded-3xl border border-gray-200 shadow-sm">
+    <div className={embedded ? 'space-y-4' : 'space-y-4 border border-gray-200 bg-white px-5 pb-5 pt-0'}>
       <input
         ref={shipStationFileInputRef}
         type="file"
@@ -148,7 +148,7 @@ export function OrdersIntegrityCard() {
         onChange={(e) => handleShipStationFileChange(e.target.files?.[0] || null)}
       />
 
-      <div>
+      <div className={embedded ? 'border-b border-gray-200 pb-3' : ''}>
         <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Orders Integrity</h2>
         <p className="text-[9px] font-bold text-gray-500 mt-1">Primary flow: eBay tracking-match sync, Ecwid exception sync, then exception reconciliation</p>
       </div>
@@ -205,10 +205,10 @@ export function OrdersIntegrityCard() {
       </div>
 
       {/* Token refresh row */}
-      <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+      <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-t border-gray-100 pt-4">
         <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Token Refresh</div>
         {tokenAccounts.length === 0 ? (
-          <div className="text-[9px] font-bold uppercase tracking-widest text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
+          <div className="text-[9px] font-bold uppercase tracking-widest text-green-700 bg-green-50 border border-green-200 px-2 py-1">
             All Tokens Healthy
           </div>
         ) : (
@@ -221,7 +221,7 @@ export function OrdersIntegrityCard() {
                 key={account.id}
                 onClick={() => refreshTokenMutation.mutate(account.account_name)}
                 disabled={refreshTokenMutation.isPending}
-                className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.5 rounded-lg border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.5 border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
               >
                 <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
                 {account.account_name}
@@ -236,17 +236,17 @@ export function OrdersIntegrityCard() {
       {isShipStationInfoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button className="absolute inset-0 bg-black/30" onClick={() => setIsShipStationInfoOpen(false)} aria-label="Close" />
-          <div className="relative w-full max-w-md bg-white rounded-2xl border border-gray-200 shadow-xl p-5 space-y-4">
+          <div className="relative w-full max-w-md bg-white border border-gray-200 shadow-xl p-5 space-y-4">
             <div>
               <h3 className="text-xs font-black uppercase tracking-widest text-gray-900">ShipStation CSV Upload</h3>
               <p className="text-[10px] font-bold text-gray-600 mt-2">Upload a ShipStation CSV export to import orders and update tracking data. This action requires selecting a local CSV file.</p>
             </div>
             <div className="flex items-center justify-end gap-2">
-              <button onClick={() => setIsShipStationInfoOpen(false)} className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200">Cancel</button>
+              <button onClick={() => setIsShipStationInfoOpen(false)} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200">Cancel</button>
               <button
                 onClick={() => { setIsShipStationInfoOpen(false); shipStationFileInputRef.current?.click(); }}
                 disabled={anyPending}
-                className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+                className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
               >
                 {isShipStationSyncing ? 'Uploading...' : 'Choose CSV'}
               </button>

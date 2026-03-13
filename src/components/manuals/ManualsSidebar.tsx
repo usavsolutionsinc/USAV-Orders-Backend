@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { FileText, ExternalLink } from '@/components/Icons';
 
@@ -142,13 +143,14 @@ export function ManualsSidebar() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="border-b border-gray-200 bg-white px-3 py-2">
+      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
         <SearchBar
           value={localSearch}
           onChange={handleSearchChange}
           onClear={() => handleSearchChange('')}
           placeholder="Search product name..."
           variant="blue"
+          size="compact"
           isSearching={isLoading}
         />
       </div>
@@ -184,7 +186,7 @@ export function ManualsSidebar() {
         )}
       </div>
 
-      <div className="border-t border-gray-100 px-3 py-2 bg-white">
+      <div className="border-t border-gray-100 bg-white px-3 py-2">
         <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400">
           {manuals.length} manual{manuals.length !== 1 ? 's' : ''}
           {localSearch.trim() ? ` for "${localSearch.trim()}"` : ' total'}

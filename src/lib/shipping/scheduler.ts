@@ -11,12 +11,13 @@ export interface SchedulerResult {
 export async function runDueShipments(options?: {
   limit?: number;
   concurrency?: number;
+  carriers?: Array<'UPS' | 'USPS' | 'FEDEX'>;
 }): Promise<SchedulerResult> {
   const limit = options?.limit ?? 50;
   const concurrency = options?.concurrency ?? 5;
   const start = Date.now();
 
-  const due = await getDueShipments(limit);
+  const due = await getDueShipments(limit, options?.carriers);
 
   if (due.length === 0) {
     return { synced: 0, terminal: 0, errors: 0, durationMs: Date.now() - start };

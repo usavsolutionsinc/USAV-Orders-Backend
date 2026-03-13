@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from '../Icons';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { getCurrentPSTDateKey } from '@/utils/date';
 
 interface WeekRange {
@@ -46,7 +47,8 @@ export default function WeekHeader({
   };
 
   return (
-    <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
+    <div className={mainStickyHeaderClass}>
+      <div className={mainStickyHeaderRowClass}>
       <div className="flex items-center gap-2">
         <p className="text-[11px] font-black text-gray-900 tracking-tight">
           {stickyDate || getTodayPSTDisplay()}
@@ -81,6 +83,7 @@ export default function WeekHeader({
             </button>
           </div>
         ) : null}
+      </div>
       </div>
     </div>
   );

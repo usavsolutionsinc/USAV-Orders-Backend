@@ -12,7 +12,7 @@ function normalizeTrackingNumber(raw) {
     .replace(/[^A-Z0-9]/g, '');
 }
 
-function normalizeUPSStatus(statusType) {
+function normalizeUPSStatus(statusType, statusDescription) {
   const statusMap = {
     M: 'LABEL_CREATED',
     P: 'ACCEPTED',
@@ -25,8 +25,18 @@ function normalizeUPSStatus(statusType) {
     NA: 'UNKNOWN',
   };
 
-  if (!statusType) return 'UNKNOWN';
-  return statusMap[String(statusType).toUpperCase()] || 'UNKNOWN';
+  if (statusType && statusMap[String(statusType).toUpperCase()]) {
+    return statusMap[String(statusType).toUpperCase()];
+  }
+  const text = String(statusDescription || '').toUpperCase();
+  if (text.includes('DELIVERED')) return 'DELIVERED';
+  if (text.includes('OUT FOR DELIVERY')) return 'OUT_FOR_DELIVERY';
+  if (text.includes('PICKUP') || text.includes('PICKED UP') || text.includes('ORIGIN SCAN') || text.includes('ACCEPTED')) return 'ACCEPTED';
+  if (text.includes('RETURN')) return 'RETURNED';
+  if (text.includes('EXCEPTION') || text.includes('DELAY') || text.includes('RESCHEDULED') || text.includes('HOLD')) return 'EXCEPTION';
+  if (text.includes('IN TRANSIT') || text.includes('ON THE WAY') || text.includes('ARRIVED') || text.includes('DEPARTED') || text.includes('PROCESSING')) return 'IN_TRANSIT';
+  if (text.includes('LABEL CREATED') || text.includes('SHIPMENT READY') || text.includes('SHIPPER CREATED')) return 'LABEL_CREATED';
+  return 'UNKNOWN';
 }
 
 function computeNextCheckAt(status) {
@@ -142,7 +152,7 @@ async function fetchTracking(token, trackingNumber) {
       externalStatusCode: status.code ?? null,
       externalStatusLabel: status.type ?? null,
       externalStatusDescription: status.description ?? null,
-      normalizedStatusCategory: normalizeUPSStatus(status.type),
+      normalizedStatusCategory: normalizeUPSStatus(status.type, status.description),
       eventOccurredAt: occurredAt,
       city: addr.city ?? null,
       state: addr.stateProvince ?? null,
@@ -162,7 +172,7 @@ async function fetchTracking(token, trackingNumber) {
     normalized,
     payload,
     events,
-    latestStatusCategory: normalizeUPSStatus(currentStatus?.type),
+      latestStatusCategory: normalizeUPSStatus(currentStatus?.type, currentStatus?.description),
     latestStatusCode: currentStatus?.code ?? null,
     latestStatusLabel: currentStatus?.type ?? null,
     latestStatusDescription: currentStatus?.description ?? null,

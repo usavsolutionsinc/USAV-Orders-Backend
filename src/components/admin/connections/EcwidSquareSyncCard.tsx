@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { RefreshCw } from '@/components/Icons';
 
-export function EcwidSquareSyncCard() {
+export function EcwidSquareSyncCard({ embedded = false }: { embedded?: boolean }) {
   const syncMutation = useMutation({
     mutationFn: async ({ dryRun = false, batchSize }: { dryRun?: boolean; batchSize?: number }) => {
       const res = await fetch('/api/ecwid-square/sync', {
@@ -21,8 +21,8 @@ export function EcwidSquareSyncCard() {
   const counts = syncMutation.data?.counts;
 
   return (
-    <div className="space-y-4 p-5 bg-white rounded-3xl border border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
+    <div className={embedded ? 'space-y-4' : 'space-y-4 border border-gray-200 bg-white p-5'}>
+      <div className={`flex items-center justify-between gap-3 ${embedded ? 'border-b border-gray-200 pb-3' : ''}`}>
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Ecwid to Square Catalog</h2>
           <p className="text-[9px] font-bold text-gray-500 mt-1">One-way sync for enabled Ecwid products only</p>
@@ -47,7 +47,7 @@ export function EcwidSquareSyncCard() {
       </div>
 
       {syncMutation.isSuccess && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-green-50 border border-green-200 rounded-2xl space-y-2">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="border-l-2 border-l-green-500 p-4 bg-green-50/70 space-y-2">
           <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">
             {syncMutation.data?.dryRun ? 'Dry run completed' : 'Sync completed'}
           </div>
@@ -66,7 +66,7 @@ export function EcwidSquareSyncCard() {
       )}
 
       {syncMutation.isError && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="border-l-2 border-l-red-500 p-4 bg-red-50/70">
           <div className="text-[10px] font-black text-red-700 uppercase tracking-widest">
             {(syncMutation.error as Error)?.message || 'Sync failed'}
           </div>

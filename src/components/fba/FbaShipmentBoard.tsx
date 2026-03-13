@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Package } from '@/components/Icons';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 
 interface FbaSummaryRow {
   fnsku: string;
@@ -135,11 +136,13 @@ export function FbaShipmentBoard({ refreshTrigger, searchQuery }: FbaShipmentBoa
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
-      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-6 py-3">
-        <span className="text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">
-          {rows.length} FNSKU row{rows.length !== 1 ? 's' : ''}
-          {searchQuery ? <span className="text-purple-500"> · filtered</span> : null}
-        </span>
+      <div className={mainStickyHeaderClass}>
+        <div className={`${mainStickyHeaderRowClass} px-6`}>
+          <span className="text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">
+            {rows.length} FNSKU row{rows.length !== 1 ? 's' : ''}
+            {searchQuery ? <span className="text-purple-500"> · filtered</span> : null}
+          </span>
+        </div>
       </div>
       {rows.map((row) => (
         <SummaryRow key={row.fnsku} row={row} />

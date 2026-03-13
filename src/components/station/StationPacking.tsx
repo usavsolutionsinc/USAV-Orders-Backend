@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import { getPackerInputTheme } from '@/utils/staff-colors';
 import { formatPSTTimestamp } from '@/utils/date';
+import StationGoalBar from './StationGoalBar';
 
 interface ActivePackingOrder {
   orderId: string;
@@ -60,9 +61,6 @@ export default function StationPacking({
   const [activeFba, setActiveFba] = useState<ActiveFbaScan | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const safeGoal = Math.max(1, Number(goal) || 1);
-  const goalProgressPercent = Math.min((todayCount / safeGoal) * 100, 100);
-  const remainingToGoal = Math.max(safeGoal - todayCount, 0);
   const activeColor = getPackerInputTheme(themeColor);
 
   const handleSubmit = async (event?: React.FormEvent) => {
@@ -166,19 +164,12 @@ export default function StationPacking({
             </div>
           </div>
 
-          <div className="space-y-2 px-1">
-            <div className="flex items-center justify-between">
-              <p className={`text-[9px] font-black ${activeColor.text} tabular-nums`}>{todayCount}/{safeGoal} PACKED</p>
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{remainingToGoal} Left</p>
-            </div>
-            <div className="h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${goalProgressPercent}%` }}
-                className={`h-full ${activeColor.bg} rounded-full shadow-sm`}
-              />
-            </div>
-          </div>
+          <StationGoalBar
+            count={todayCount}
+            goal={goal}
+            label="PACKED"
+            colorClass={activeColor.text}
+          />
 
           <form onSubmit={handleSubmit} className="relative group">
             <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${activeColor.text}`}>

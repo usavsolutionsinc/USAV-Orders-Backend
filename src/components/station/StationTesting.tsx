@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
 import { Barcode, AlertCircle, Loader2, Search, Package } from '../Icons';
 import ActiveStationOrderCard from './ActiveStationOrderCard';
+import StationGoalBar from './StationGoalBar';
 import { useStationTestingController } from '@/hooks/useStationTestingController';
 
 // FNSKUs start with X0, B0, or are exactly 10 alphanumeric chars — Amazon barcode pattern
@@ -51,9 +52,6 @@ export default function StationTesting({
   onViewManual,
 }: StationTestingProps) {
   const router = useRouter();
-  const safeGoal = Math.max(1, Number(goal) || 1);
-  const goalProgressPercent = Math.min((todayCount / safeGoal) * 100, 100);
-  const remainingToGoal = Math.max(safeGoal - todayCount, 0);
 
   const [fbaFeedback, setFbaFeedback] = useState<FbaFeedback | null>(null);
   const [fbaError, setFbaError] = useState<string | null>(null);
@@ -173,19 +171,12 @@ export default function StationTesting({
             </div>
           </div>
 
-          <div className="space-y-1.5 px-1">
-            <div className="flex items-center justify-between">
-              <p className={`text-[9px] font-black ${activeColor.text} tabular-nums`}>{todayCount}/{safeGoal} - TODAY'S GOAL </p>
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{remainingToGoal} Left</p>
-            </div>
-            <div className="h-2 bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${goalProgressPercent}%` }}
-                className={`h-full ${activeColor.bg} rounded-full shadow-sm`}
-              />
-            </div>
-          </div>
+          <StationGoalBar
+            count={todayCount}
+            goal={goal}
+            label="- TODAY'S GOAL"
+            colorClass={activeColor.text}
+          />
 
           {/* ── ORDERS mode scan input ── */}
           <motion.div

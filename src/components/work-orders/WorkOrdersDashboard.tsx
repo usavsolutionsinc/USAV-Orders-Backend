@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
@@ -252,28 +253,29 @@ export function WorkOrdersDashboard() {
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col bg-white">
-      {/* Page header — matches OrderRecordsTable WeekHeader style */}
-      <div className="shrink-0 sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-4 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-[13px] font-black uppercase tracking-tight text-slate-900">
-            Work Orders
-          </h1>
-          <span className="text-[11px] font-medium text-slate-400">
-            {counts[queue] ?? rows.length}
-            {query ? ` · "${query}"` : ''}
-          </span>
-        </div>
-        <div className="flex items-center gap-4 shrink-0">
-          {unassignedRows.length > 0 && (
-            <span className="text-[10px] font-black text-orange-500 uppercase tracking-wider">
-              {unassignedRows.length} unassigned
+      <div className={mainStickyHeaderClass}>
+        <div className={mainStickyHeaderRowClass}>
+          <div className="flex min-w-0 items-center gap-3">
+            <h1 className="text-[13px] font-black uppercase tracking-tight text-slate-900">
+              Work Orders
+            </h1>
+            <span className="text-[11px] font-medium text-slate-400">
+              {counts[queue] ?? rows.length}
+              {query ? ` · "${query}"` : ''}
             </span>
-          )}
-          {assignedRows.length > 0 && (
-            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">
-              {assignedRows.length} assigned
-            </span>
-          )}
+          </div>
+          <div className="flex shrink-0 items-center gap-4">
+            {unassignedRows.length > 0 && (
+              <span className="text-[10px] font-black uppercase tracking-wider text-orange-500">
+                {unassignedRows.length} unassigned
+              </span>
+            )}
+            {assignedRows.length > 0 && (
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">
+                {assignedRows.length} assigned
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

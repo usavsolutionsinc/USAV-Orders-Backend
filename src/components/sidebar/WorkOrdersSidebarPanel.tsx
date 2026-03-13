@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import {
   type QueueKey,
@@ -58,7 +59,7 @@ export function WorkOrdersSidebarPanel() {
 
   return (
     <div className="font-dm-sans flex h-full flex-col overflow-hidden bg-white">
-      <div className="shrink-0 border-b border-gray-100 px-3 py-3">
+      <div className={sidebarHeaderRowClass}>
         <SearchBar
           value={localSearch}
           onChange={setLocalSearch}

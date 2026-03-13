@@ -3,17 +3,18 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Play, Settings } from '@/components/Icons';
+import { Check, ChevronDown, Copy, ExternalLink, Pencil, Play, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
-import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
+import { getTrackingUrl } from '@/utils/order-links';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getActiveStaff } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { Order } from './upnext-types';
+import { UpNextActionButton } from './UpNextActionButton';
 
 const TECH_IDS = [1, 2, 3, 6];
 
@@ -47,6 +48,12 @@ function getOrderIdLast4(orderId: string) {
   const digits = String(orderId || '').replace(/\D/g, '');
   if (digits.length >= 4) return digits.slice(-4);
   return String(orderId || '').slice(-4);
+}
+
+function getTrackingLast4(tracking: string) {
+  const digits = String(tracking || '').replace(/\D/g, '');
+  if (digits.length >= 4) return digits.slice(-4);
+  return String(tracking || '').slice(-4);
 }
 
 function getDisplayShipByDate(order: Order) {
@@ -119,13 +126,33 @@ export function OrderCard({
   const [technicianOptions, setTechnicianOptions] = useState<StaffOption[]>([]);
   const [packerOptions, setPackerOptions]         = useState<StaffOption[]>([]);
   const [mounted, setMounted]                     = useState(false);
+  const [copiedTracking, setCopiedTracking]       = useState(false);
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    if (showMissingPartsInput === order.id) {
+      onMissingPartsReasonChange(String(order.out_of_stock || ''));
+    }
+  }, [showMissingPartsInput, order.id, order.out_of_stock, onMissingPartsReasonChange]);
 
   const showActions   = effectiveTab !== 'stock';
   const isStockTab    = effectiveTab === 'stock';
   const hasOutOfStock = String(order.out_of_stock || '').trim() !== '';
   const quantity      = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
   const daysLate      = getDaysLateNumber(order.ship_by_date, order.created_at);
+  const trackingNumber = String(order.shipping_tracking_number || '').trim();
+  const trackingUrl = getTrackingUrl(trackingNumber);
+
+  const handleCopyTracking = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!trackingNumber) return;
+    try {
+      await navigator.clipboard.writeText(trackingNumber);
+      setCopiedTracking(true);
+      window.setTimeout(() => setCopiedTracking(false), 1500);
+    } catch {
+      // noop
+    }
+  };
 
   const openAssignment = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -240,72 +267,107 @@ export function OrderCard({
           <h4 className="text-base font-black text-gray-900 leading-tight">{order.product_title}</h4>
         </div>
 
-        {/* ── Action buttons — always visible ── */}
-        {showActions && (
-          <div className="px-3 mt-2.5 flex flex-col gap-2">
-            {!hasOutOfStock ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onMissingPartsToggle(order.id); }}
-                  className="flex-1 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-                >
-                  Out of Stock
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onStart(order); }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  Start
-                </button>
-              </div>
-            ) : (
+        {hasOutOfStock && (
+          <div className="mt-2 border-t border-red-100 px-3 pt-2">
+            <div className="flex items-center justify-end">
               <button
-                onClick={(e) => { e.stopPropagation(); onStart(order); }}
-                className="w-full flex items-center justify-center gap-1.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/20"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMissingPartsToggle(order.id);
+                }}
+                className="flex-shrink-0 text-gray-400 transition-colors hover:text-emerald-600"
+                aria-label="Edit out of stock note"
               >
-                <Play className="w-3.5 h-3.5" />
-                Start
+                <Pencil className="w-3.5 h-3.5" />
               </button>
-            )}
+            </div>
+            <div className="-mt-3 text-center">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-red-600 [font-family:var(--font-dm-sans)]">
+                Out Of Stock
+              </div>
+              <p className="mt-1 text-sm font-medium text-gray-700 leading-relaxed">
+                {String(order.out_of_stock || '')}
+              </p>
+            </div>
+          </div>
+        )}
 
+        {/* ── Action buttons / editors ── */}
+        {(showActions || hasOutOfStock || showMissingPartsInput === order.id) && (
+          <div className="px-3 mt-2.5 flex flex-col gap-2">
             <AnimatePresence initial={false}>
               {showMissingPartsInput === order.id && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  className="overflow-hidden pt-0.5"
                 >
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-2 rounded-xl border border-orange-200 bg-orange-50/40 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),inset_0_0_0_1px_rgba(251,146,60,0.06)]">
                     <input
                       type="text"
                       value={missingPartsReason}
                       onChange={(e) => onMissingPartsReasonChange(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
                       placeholder="What parts are missing?"
-                      className="w-full px-3 py-2 bg-white border border-orange-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 placeholder:text-gray-400"
+                      className="w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] outline-none transition-[border-color,box-shadow] placeholder:text-gray-400 focus:border-orange-400 focus:shadow-[inset_0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(251,146,60,0.18)]"
                       autoFocus
                     />
                     <div className="flex gap-2">
-                      <button
+                      <UpNextActionButton
                         onClick={(e) => { e.stopPropagation(); onMissingPartsCancel(); }}
-                        className="flex-1 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
-                      >
-                        Cancel
-                      </button>
-                      <button
+                        label="Cancel"
+                        tone="gray"
+                        size="sm"
+                        fullWidth
+                        className="flex-1"
+                      />
+                      <UpNextActionButton
                         onClick={(e) => { e.stopPropagation(); onMissingPartsSubmit(order.id); }}
                         disabled={!missingPartsReason.trim()}
-                        className="flex-1 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-[9px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                      >
-                        Submit
-                      </button>
+                        label="Submit"
+                        tone="orange"
+                        size="sm"
+                        fullWidth
+                        className="flex-1 !border-orange-600 !bg-orange-600 !text-white hover:!bg-orange-700"
+                      />
                     </div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {!hasOutOfStock ? (
+              showActions && (
+                <div className="flex items-center gap-2">
+                  <UpNextActionButton
+                    onClick={(e) => { e.stopPropagation(); onMissingPartsToggle(order.id); }}
+                    label="Out of Stock"
+                    tone="orange"
+                    fullWidth
+                    className="flex-1"
+                  />
+                  <UpNextActionButton
+                    onClick={(e) => { e.stopPropagation(); onStart(order); }}
+                    label="Start"
+                    icon={<Play className="w-3.5 h-3.5" />}
+                    tone="emerald"
+                    fullWidth
+                    className="flex-1"
+                  />
+                </div>
+              )
+            ) : (
+              <UpNextActionButton
+                onClick={(e) => { e.stopPropagation(); onStart(order); }}
+                label="Start"
+                icon={<Play className="w-3.5 h-3.5" />}
+                tone="emerald"
+                fullWidth
+              />
+            )}
           </div>
         )}
 
@@ -355,16 +417,38 @@ export function OrderCard({
                   </div>
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
                     <div className="mb-1 text-gray-400">Tracking</div>
-                    <div className="text-[11px] text-gray-900 normal-case tracking-normal font-mono">
-                      {getOrderIdLast4(order.shipping_tracking_number || order.order_id)}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                        {trackingNumber ? getTrackingLast4(trackingNumber) : 'Not available'}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={handleCopyTracking}
+                          disabled={!trackingNumber}
+                          className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={copiedTracking ? 'Tracking copied' : 'Copy tracking number'}
+                        >
+                          {copiedTracking ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (trackingUrl) window.open(trackingUrl, '_blank', 'noopener,noreferrer');
+                          }}
+                          disabled={!trackingUrl}
+                          className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label="Open tracking in external tab"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
                 </div>
 
-                {hasOutOfStock && (
-                  <OutOfStockField value={String(order.out_of_stock || '')} className="mt-3" />
-                )}
               </div>
             </motion.div>
           )}

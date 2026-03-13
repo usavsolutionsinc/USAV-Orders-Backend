@@ -5,7 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { RefreshCw } from '@/components/Icons';
 
-export function ZohoSyncCard() {
+export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [purchaseReceiveId, setPurchaseReceiveId] = useState('');
 
@@ -87,8 +87,8 @@ export function ZohoSyncCard() {
   const anyPending = zohoRefreshMutation.isPending || zohoSyncMutation.isPending || zohoImportOneMutation.isPending;
 
   return (
-    <div className="space-y-4 p-5 bg-white rounded-3xl border border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
+    <div className={embedded ? 'space-y-4' : 'space-y-4 border border-gray-200 bg-white p-5'}>
+      <div className={`flex items-center justify-between gap-3 ${embedded ? 'border-b border-gray-200 pb-3' : ''}`}>
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Zoho Receiving Sync</h2>
           <p className="text-[9px] font-bold text-gray-500 mt-1">Refresh Zoho token, then sync purchase receives into receiving + receiving_lines</p>
@@ -133,8 +133,8 @@ export function ZohoSyncCard() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`rounded-2xl border px-4 py-3 text-[10px] font-black uppercase tracking-widest ${
-            status.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'
+          className={`border-l-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest ${
+            status.type === 'success' ? 'border-l-green-500 bg-green-50/70 text-green-700' : 'border-l-red-500 bg-red-50/70 text-red-700'
           }`}
         >
           {status.message}

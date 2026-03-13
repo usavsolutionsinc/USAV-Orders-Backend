@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FileText, ExternalLink } from '@/components/Icons';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 
 interface ProductManual {
   id: number;
@@ -35,7 +36,8 @@ function ManualDetailPanel({ manual }: { manual: ProductManual }) {
 
   return (
     <div className="h-full flex flex-col bg-white">
-      <div className="border-b border-gray-100 px-6 py-4 flex items-start justify-between gap-4">
+      <div className={mainStickyHeaderClass}>
+        <div className={`${mainStickyHeaderRowClass} items-start px-6`}>
         <div className="min-w-0">
           <p className="text-[9px] font-black uppercase tracking-[0.3em] text-blue-600 mb-1">Product Manual</p>
           <h2 className="text-lg font-black tracking-tight text-gray-900 leading-tight">{title}</h2>
@@ -68,6 +70,7 @@ function ManualDetailPanel({ manual }: { manual: ProductManual }) {
             Open
           </a>
         )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden">

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
+import { sidebarHeaderBandClass, sidebarHeaderControlClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
@@ -128,7 +129,7 @@ export function ReceivingSidebarPanel() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Staff + mode selector */}
-      <div className="border-b border-gray-200 bg-white">
+      <div className={sidebarHeaderBandClass}>
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
           <div className="min-w-0">
             <StaffSelector
@@ -144,7 +145,7 @@ export function ReceivingSidebarPanel() {
               value={mode}
               onChange={(nextMode) => updateMode(nextMode as ReceivingMode)}
               variant="boxy"
-              buttonClassName="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none text-left"
+              buttonClassName={sidebarHeaderControlClass}
               optionClassName="text-[10px] font-black tracking-wider"
             />
           </div>
@@ -152,7 +153,7 @@ export function ReceivingSidebarPanel() {
       </div>
 
       {/* Search bar */}
-      <div className="border-b border-gray-200 bg-white px-3 py-2">
+      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
         <SearchBar
           value={bulkTracking}
           onChange={setBulkTracking}
@@ -160,13 +161,14 @@ export function ReceivingSidebarPanel() {
           onClear={() => setBulkTracking('')}
           placeholder="Scan or enter tracking…"
           variant="blue"
+          size="compact"
           isSearching={bulkSubmitting}
         />
       </div>
 
       {/* Carrier slider — bulk scan only */}
       {mode === 'bulk' && (
-        <div className="border-b border-gray-100 bg-white px-3 py-2">
+        <div className={`${sidebarHeaderBandClass} px-3 py-2`}>
           <div
             ref={carrierScrollRef}
             onWheel={handleCarrierWheel}

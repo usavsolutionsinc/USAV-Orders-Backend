@@ -1,8 +1,12 @@
 import { normalizeFedExStatus, normalizeTrackingNumber } from '../normalize';
 import type { CarrierTrackingEvent, CarrierTrackingResult } from '../types';
 
-const FEDEX_AUTH_URL = 'https://apis.fedex.com/oauth/token';
-const FEDEX_TRACK_URL = 'https://apis.fedex.com/track/v1/trackingnumbers';
+const FEDEX_BASE_URL =
+  process.env.FEDEX_ENV === 'production'
+    ? 'https://apis.fedex.com'
+    : 'https://apis-sandbox.fedex.com';
+const FEDEX_AUTH_URL = `${FEDEX_BASE_URL}/oauth/token`;
+const FEDEX_TRACK_URL = `${FEDEX_BASE_URL}/track/v1/trackingnumbers`;
 
 interface TokenCache {
   token: string;
@@ -98,14 +102,20 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
   }
 
   const latestStatus = trackResult.latestStatusDetail ?? {};
-  const latestCategory = normalizeFedExStatus(latestStatus.code ?? latestStatus.derivedCode);
+  const latestCategory = normalizeFedExStatus(
+    latestStatus.code ?? latestStatus.derivedCode,
+    latestStatus.description ?? latestStatus.statusByLocale
+  );
 
   const scanEvents: unknown[] = Array.isArray(trackResult.scanEvents)
     ? trackResult.scanEvents
     : [];
 
   const events: CarrierTrackingEvent[] = scanEvents.map((scan: any) => {
-    const category = normalizeFedExStatus(scan?.eventType ?? scan?.derivedStatusCode);
+    const category = normalizeFedExStatus(
+      scan?.eventType ?? scan?.derivedStatusCode,
+      scan?.eventDescription ?? scan?.derivedStatus
+    );
     const loc = scan?.scanLocation ?? {};
 
     return {
@@ -149,6 +159,24 @@ export async function trackByNumber(trackingNumber: string): Promise<CarrierTrac
     latestStatusDescription: latestStatus.description ?? null,
     latestEventAt,
     deliveredAt,
+    metadata: {
+      source: 'fedex-track-v1',
+      environment: process.env.FEDEX_ENV === 'production' ? 'production' : 'sandbox',
+      service: trackResult.serviceDetail?.description ?? trackResult.serviceType ?? null,
+      estimatedDelivery:
+        trackResult.estimatedDeliveryTimeWindow?.window?.ends ??
+        trackResult.estimatedDeliveryTimeWindow?.window?.begins ??
+        null,
+      latestLocation: latestStatus.scanLocation
+        ? {
+            city: latestStatus.scanLocation.city ?? null,
+            state: latestStatus.scanLocation.stateOrProvinceCode ?? null,
+            postalCode: latestStatus.scanLocation.postalCode ?? null,
+            countryCode: latestStatus.scanLocation.countryCode ?? null,
+          }
+        : null,
+      trackingUrl: `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(normalized)}`,
+    },
     events,
     payload,
   };

@@ -71,11 +71,68 @@ export async function GET(request: NextRequest) {
     );
     const availableColumns = new Set<string>(columnsRes.rows.map((r: any) => String(r.column_name)));
     const hasColumn = (name: string) => availableColumns.has(name);
+    const lineColumnsRes = await pool.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_name = 'receiving_lines'`
+    );
+    const availableLineColumns = new Set<string>(lineColumnsRes.rows.map((r: any) => String(r.column_name)));
+    const hasLineColumn = (name: string) => availableLineColumns.has(name);
     const receivedAtSelect = hasColumn('received_at')
       ? "to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at"
       : 'NULL::text AS received_at';
     const dateColumnRef = `r.${dateColumn}`;
     const receivingDateSelect = `to_char(${dateColumnRef}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at`;
+    const workflowFilterClause = hasLineColumn('workflow_status')
+      ? `EXISTS (
+             SELECT 1 FROM receiving_lines rl
+             WHERE rl.receiving_id = r.id
+               AND rl.workflow_status = ANY($1::inbound_workflow_status_enum[])
+           )`
+      : `EXISTS (
+             SELECT 1 FROM receiving_lines rl
+             WHERE rl.receiving_id = r.id
+           )`;
+    const workflowStatusSelect = hasLineColumn('workflow_status')
+      ? 'rl.workflow_status'
+      : "'MATCHED'::text AS workflow_status";
+    const zohoPurchaseOrderIdSelect = hasLineColumn('zoho_purchaseorder_id')
+      ? 'rl.zoho_purchaseorder_id'
+      : 'NULL::text AS zoho_purchaseorder_id';
+    const zohoPurchaseReceiveIdSelect = hasLineColumn('zoho_purchase_receive_id')
+      ? 'rl.zoho_purchase_receive_id'
+      : 'NULL::text AS zoho_purchase_receive_id';
+    const zohoLineItemIdSelect = hasLineColumn('zoho_line_item_id')
+      ? 'rl.zoho_line_item_id'
+      : 'NULL::text AS zoho_line_item_id';
+    const qaStatusSelect = hasLineColumn('qa_status')
+      ? 'rl.qa_status'
+      : "'PENDING'::text AS qa_status";
+    const conditionGradeSelect = hasLineColumn('condition_grade')
+      ? 'rl.condition_grade'
+      : "'BRAND_NEW'::text AS condition_grade";
+    const needsTestSelect = hasLineColumn('needs_test')
+      ? 'COALESCE(rl.needs_test, false) AS needs_test'
+      : 'false AS needs_test';
+    const assignedTechIdSelect = hasLineColumn('assigned_tech_id')
+      ? 'rl.assigned_tech_id'
+      : 'NULL::int AS assigned_tech_id';
+    const assignedTechJoin = hasLineColumn('assigned_tech_id')
+      ? 'rl.assigned_tech_id'
+      : 'NULL::int';
+    const notesSelect = hasLineColumn('notes')
+      ? 'rl.notes'
+      : 'NULL::text AS notes';
+    const quantityExpectedSelect = hasLineColumn('quantity_expected')
+      ? 'rl.quantity_expected'
+      : hasLineColumn('quantity')
+        ? 'rl.quantity AS quantity_expected'
+        : 'NULL::int AS quantity_expected';
+    const quantityReceivedSelect = hasLineColumn('quantity_received')
+      ? 'COALESCE(rl.quantity_received, 0) AS quantity_received'
+      : hasLineColumn('quantity')
+        ? 'COALESCE(rl.quantity, 0) AS quantity_received'
+        : '0::int AS quantity_received';
 
     // Fetch receiving rows that have at least one line in the target statuses
     // OR have no lines yet but also haven't been unboxed (newly arrived package)
@@ -104,11 +161,7 @@ export async function GET(request: NextRequest) {
        FROM receiving r
        WHERE r.unboxed_at IS NULL
          AND (
-           EXISTS (
-             SELECT 1 FROM receiving_lines rl
-             WHERE rl.receiving_id = r.id
-               AND rl.workflow_status = ANY($1::inbound_workflow_status_enum[])
-           )
+           ${workflowFilterClause}
            OR NOT EXISTS (
              SELECT 1 FROM receiving_lines rl2
              WHERE rl2.receiving_id = r.id
@@ -148,20 +201,20 @@ export async function GET(request: NextRequest) {
               rl.receiving_id,
               rl.item_name,
               rl.sku,
-              rl.zoho_purchaseorder_id,
-              rl.zoho_purchase_receive_id,
-              rl.zoho_line_item_id,
-              rl.quantity_expected,
-              COALESCE(rl.quantity_received, 0) AS quantity_received,
-              rl.workflow_status,
-              rl.qa_status,
-              rl.condition_grade,
-              rl.needs_test,
-              rl.assigned_tech_id,
+              ${zohoPurchaseOrderIdSelect},
+              ${zohoPurchaseReceiveIdSelect},
+              ${zohoLineItemIdSelect},
+              ${quantityExpectedSelect},
+              ${quantityReceivedSelect},
+              ${workflowStatusSelect},
+              ${qaStatusSelect},
+              ${conditionGradeSelect},
+              ${needsTestSelect},
+              ${assignedTechIdSelect},
               st.name AS assigned_tech_name,
-              rl.notes
+              ${notesSelect}
        FROM receiving_lines rl
-       LEFT JOIN staff st ON st.id = rl.assigned_tech_id
+       LEFT JOIN staff st ON st.id = ${assignedTechJoin}
        WHERE rl.receiving_id = ANY($1::int[])
        ORDER BY rl.receiving_id, rl.id`,
       [receivingIds]

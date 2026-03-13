@@ -1,4 +1,5 @@
 export type QueueKey =
+  | 'all'
   | 'all_unassigned'
   | 'all_assigned'
   | 'orders'
@@ -16,7 +17,7 @@ export interface WorkOrderRow {
   id: string;
   entityType: EntityType;
   entityId: number;
-  queueKey: Exclude<QueueKey, 'all_unassigned' | 'all_assigned'>;
+  queueKey: Exclude<QueueKey, 'all' | 'all_unassigned' | 'all_assigned'>;
   queueLabel: string;
   title: string;
   subtitle: string;
@@ -36,6 +37,7 @@ export interface WorkOrderRow {
 }
 
 export interface QueueCounts {
+  all: number;
   all_unassigned: number;
   all_assigned: number;
   orders: number;
@@ -48,6 +50,7 @@ export interface QueueCounts {
 }
 
 export const EMPTY_COUNTS: QueueCounts = {
+  all: 0,
   all_unassigned: 0,
   all_assigned: 0,
   orders: 0,
@@ -70,6 +73,7 @@ export const STATUS_COLOR: Record<WorkStatus, string> = {
 };
 
 export const QUEUE_ITEMS: Array<{ key: QueueKey; label: string }> = [
+  { key: 'all', label: 'All' },
   { key: 'all_unassigned', label: 'Unassigned' },
   { key: 'all_assigned', label: 'Assigned' },
   { key: 'orders', label: 'Orders' },
@@ -83,7 +87,7 @@ export const QUEUE_ITEMS: Array<{ key: QueueKey; label: string }> = [
 
 export function normalizeQueue(raw: string | null): QueueKey {
   const value = String(raw || '').trim().toLowerCase();
-  return (QUEUE_ITEMS.find((item) => item.key === value)?.key || 'all_unassigned') as QueueKey;
+  return (QUEUE_ITEMS.find((item) => item.key === value)?.key || 'all') as QueueKey;
 }
 
 export function formatDate(value: string | null) {

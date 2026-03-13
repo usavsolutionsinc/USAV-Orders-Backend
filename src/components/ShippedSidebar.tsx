@@ -276,16 +276,18 @@ Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'N
                             variant="blue"
                             rightElement={
                                 <button
-                                    onClick={() => handleSearch(searchQuery)}
-                                    disabled={isSearching || !searchQuery.trim()}
-                                    className="p-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10 disabled:cursor-not-allowed"
-                                    title="Search"
+                                    type="button"
+                                    onClick={() => {
+                                        const params = new URLSearchParams(searchParams.toString());
+                                        params.set('new', 'true');
+                                        const nextSearch = params.toString();
+                                        router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
+                                    }}
+                                    className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                                    title="New Order Entry"
+                                    aria-label="Open new order entry form"
                                 >
-                                    {isSearching ? (
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    ) : (
-                                        <Search className="w-4 h-4" />
-                                    )}
+                                    <Plus className="w-4 h-4" />
                                 </button>
                             }
                         />

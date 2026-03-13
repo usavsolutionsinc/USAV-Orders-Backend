@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { sidebarHeaderBandClass, sidebarHeaderControlClass } from '@/components/layout/header-shell';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
 import StationTesting from '@/components/station/StationTesting';
@@ -59,7 +60,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
     if (history.length === 0) return 0;
     const todayDate = getCurrentPSTDateKey();
     return history.filter(
-      (item) => toPSTDateKey(item.test_date_time || item.timestamp || '') === todayDate,
+      (item) => toPSTDateKey(item.created_at || item.test_date_time || item.timestamp || '') === todayDate,
     ).length;
   }, [history]);
 
@@ -88,7 +89,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="border-b border-gray-200 bg-white">
+      <div className={sidebarHeaderBandClass}>
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
           <div className="min-w-0">
             <StaffSelector
@@ -104,7 +105,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
               value={viewMode}
               onChange={(nextView) => updateViewMode(nextView as TechViewMode)}
               variant="boxy"
-              buttonClassName="h-full w-full appearance-none text-[10px] font-black uppercase tracking-wider text-gray-700 bg-white px-3 py-3 pr-8 hover:bg-gray-50 transition-all rounded-none outline-none text-left"
+              buttonClassName={sidebarHeaderControlClass}
               optionClassName="text-[10px] font-black tracking-wider"
             />
           </div>

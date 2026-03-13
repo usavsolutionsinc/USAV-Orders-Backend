@@ -1,12 +1,13 @@
 'use client';
 
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Check,
   Database,
   Loader2,
-  Search,
+  Plus,
   X,
 } from '@/components/Icons';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
@@ -38,6 +39,9 @@ export function DashboardManagementPanel({
   searchValue = '',
   onSearchChange,
 }: DashboardManagementPanelProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isTransferring, setIsTransferring] = useState(false);
   const [manualSheetName, setManualSheetName] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -119,6 +123,13 @@ export function DashboardManagementPanel({
     localStorage.removeItem('dashboard_search_history');
   };
 
+  const handleOpenIntakeForm = () => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('new', 'true');
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
+  };
+
   const handleTransfer = async () => {
     setIsTransferring(true);
     setStatus(null);
@@ -196,14 +207,16 @@ export function DashboardManagementPanel({
               variant="blue"
               rightElement={
                 <button
-                  onClick={() => handleSearch(searchQuery)}
-                  className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
-                  title="Search"
+                  type="button"
+                  onClick={handleOpenIntakeForm}
+                  className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                  title="New Order Entry"
+                  aria-label="Open new order entry form"
                 >
-                  <Search className="w-4 h-4" />
+                  <Plus className="w-4 h-4" />
                 </button>
               }
-                />
+            />
           </motion.div>
           <motion.div variants={itemVariants} className="-mt-1">
             <RecentSearchesList

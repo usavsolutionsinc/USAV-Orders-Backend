@@ -12,6 +12,7 @@ interface SearchBarProps {
     isSearching?: boolean;
     className?: string;
     variant?: 'blue' | 'orange' | 'emerald' | 'purple' | 'red';
+    size?: 'default' | 'compact';
     rightElement?: React.ReactNode;
 }
 
@@ -25,6 +26,7 @@ export function SearchBar({
     isSearching = false,
     className = "",
     variant = 'blue',
+    size = 'default',
     rightElement
 }: SearchBarProps) {
     const focusRingColor = {
@@ -51,6 +53,18 @@ export function SearchBar({
         red: 'text-red-600',
     }[variant];
 
+    const sizeClasses = size === 'compact'
+        ? {
+            icon: 'left-3.5',
+            input: 'pl-10 pr-9 py-2.5 text-[10px] rounded-xl',
+            clear: 'right-2.5',
+          }
+        : {
+            icon: 'left-4',
+            input: 'pl-11 pr-10 py-3 text-[11px] rounded-2xl',
+            clear: 'right-3',
+          };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (onSearch) onSearch(value);
@@ -64,7 +78,7 @@ export function SearchBar({
     return (
         <div className={`flex items-center gap-2 ${className}`}>
             <form onSubmit={handleSubmit} className="relative group flex-1">
-                <div className={`absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 ${iconColor} transition-colors`}>
+                <div className={`absolute ${sizeClasses.icon} top-1/2 -translate-y-1/2 text-gray-400 ${iconColor} transition-colors`}>
                     <Search className="w-4 h-4" />
                 </div>
                 <input 
@@ -73,9 +87,9 @@ export function SearchBar({
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder={placeholder}
-                    className={`w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[11px] font-bold ${focusRingColor} outline-none transition-all shadow-inner`}
+                    className={`w-full border border-gray-100 bg-gray-50 font-bold ${focusRingColor} outline-none transition-all shadow-inner ${sizeClasses.input}`}
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <div className={`absolute ${sizeClasses.clear} top-1/2 -translate-y-1/2 flex items-center gap-1`}>
                     {isSearching ? (
                         <Loader2 className={`w-4 h-4 animate-spin ${loaderColor}`} />
                     ) : value && (

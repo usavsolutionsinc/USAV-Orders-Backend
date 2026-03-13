@@ -339,6 +339,8 @@ export const workAssignments = pgTable('work_assignments', {
   priority: integer('priority').notNull().default(100),
   /** Operational deadline sourced from orders.ship_by_date during migration, then maintained here. */
   deadlineAt: timestamp('deadline_at', { withTimezone: true }),
+  outOfStock: text('out_of_stock'),
+  repairOutcome: text('repair_outcome'),
   notes: text('notes'),
   assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
   startedAt: timestamp('started_at', { withTimezone: true }),

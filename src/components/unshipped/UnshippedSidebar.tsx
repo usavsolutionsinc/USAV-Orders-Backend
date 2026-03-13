@@ -1,9 +1,10 @@
 'use client';
 
 import { ReactNode, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
-import { Package, RotateCcw, Search } from '@/components/Icons';
+import { Package, Plus, RotateCcw } from '@/components/Icons';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
@@ -26,6 +27,9 @@ interface SearchHistory {
 }
 
 export default function UnshippedSidebar(props: UnshippedSidebarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const {
     showIntakeForm = false,
     onCloseForm,
@@ -84,6 +88,13 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     setSearchHistory([]);
     setShowAllSearchHistory(false);
     localStorage.removeItem('dashboard_search_history');
+  };
+
+  const handleOpenIntakeForm = () => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('new', 'true');
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
   };
 
   if (showIntakeForm) {
@@ -153,13 +164,15 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
             variant="blue"
             rightElement={
               <button
-                onClick={() => handleSearch(searchQuery)}
-                className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
-                title="Search"
+                type="button"
+                onClick={handleOpenIntakeForm}
+                className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                title="New Order Entry"
+                aria-label="Open new order entry form"
               >
-                <Search className="w-4 h-4" />
+                <Plus className="w-4 h-4" />
               </button>
-              }
+            }
           />
           <RecentSearchesList
             items={visibleSearchHistory}

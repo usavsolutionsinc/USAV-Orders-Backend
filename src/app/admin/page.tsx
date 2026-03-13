@@ -30,7 +30,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   return (
     <div className={`flex h-full w-full bg-gray-50 ${isManuals ? 'overflow-hidden' : ''}`}>
-      <div className={`flex-1 min-w-0 ${isManuals ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
+      <div className={`flex-1 min-w-0 ${isManuals ? 'overflow-hidden flex flex-col' : 'overflow-hidden'}`}>
         {isManuals ? (
           <ManualAssignmentTab
             manualMode={manualMode}
@@ -38,12 +38,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             orderId={orderId}
             searchValue={sidebarSearch}
           />
+        ) : activeTab === 'connections' || activeTab === 'goals' ? (
+          <div className="h-full min-h-0 w-full">
+            {activeTab === 'connections' ? <ConnectionsManagementTab /> : <GoalsAnalyticsTab />}
+          </div>
         ) : (
-          <div className="min-h-full p-4">
+          <div className="h-full min-h-0 p-4">
             {activeTab === 'staff' ? (
               <StaffManagementTab />
-            ) : activeTab === 'connections' ? (
-              <ConnectionsManagementTab />
             ) : activeTab === 'fba' ? (
               <FBAManagementTab searchTerm={sidebarSearch} />
             ) : (

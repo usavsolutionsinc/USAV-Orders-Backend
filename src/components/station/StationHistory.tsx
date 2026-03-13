@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Package, Loader2, List, ChevronRight, Copy, Check, History } from '../Icons';
 import { motion, AnimatePresence } from 'framer-motion';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { formatDateWithOrdinal, formatTimePST, toPSTDateKey } from '@/utils/date';
 
 interface HistoryLog {
@@ -184,7 +185,8 @@ export default function StationHistory({
     return (
         <div className="flex flex-col h-full w-full bg-white relative overflow-hidden">
             {/* Sticky Header */}
-            <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
+            <div className={mainStickyHeaderClass}>
+                <div className={mainStickyHeaderRowClass}>
                 <div className="flex items-center gap-2">
                     <p className="text-[11px] font-black text-gray-900 tracking-tight">
                         {stickyDate || (history.length > 0 ? formatDate(history[0].timestamp || (history[0] as any).packedAt) : 'Today')}
@@ -193,6 +195,7 @@ export default function StationHistory({
                     <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
                         Count: {currentCount || history.length}
                     </p>
+                </div>
                 </div>
             </div>
 

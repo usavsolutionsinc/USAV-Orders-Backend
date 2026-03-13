@@ -374,6 +374,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                           <RepairCard
                             key={item.key}
                             repair={item.repair}
+                            techId={techId}
                             isExpanded={expandedItemKey === item.key}
                             onToggleExpand={() => toggleExpandedItem(item.key)}
                           />
@@ -438,6 +439,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                       <RepairCard
                         key={repair.repairId}
                         repair={repair}
+                        techId={techId}
                         isExpanded={expandedItemKey === `repair-${repair.repairId}`}
                         onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
                       />

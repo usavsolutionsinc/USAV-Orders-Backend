@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { Calendar, ExternalLink } from '@/components/Icons';
 import { type FBAQueueItem, FBA_ITEM_STATUS_BADGE } from './upnext-types';
+import { UpNextActionButton } from './UpNextActionButton';
 
 interface FbaItemCardProps {
   item: FBAQueueItem;
@@ -80,14 +81,12 @@ export function FbaItemCard({ item }: FbaItemCardProps) {
         <span className={`text-[9px] font-black uppercase tracking-widest border rounded-lg px-2 py-0.5 ${badgeCls}`}>
           {item.status.replace('_', ' ')}
         </span>
-        <button
-          type="button"
-          className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+        <UpNextActionButton
           onClick={(e) => e.stopPropagation()}
-        >
-          <ExternalLink className="w-3 h-3" />
-          Open
-        </button>
+          label="Open"
+          icon={<ExternalLink className="w-3 h-3" />}
+          tone="purple"
+        />
       </div>
     </motion.div>
   );

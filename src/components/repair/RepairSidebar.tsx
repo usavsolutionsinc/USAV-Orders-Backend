@@ -141,12 +141,15 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
           onClear={handleClearSearch}
           placeholder="Search repairs..."
           variant="orange"
+          size="compact"
           rightElement={
             <button
+              type="button"
               onClick={() => setShowIntakeForm(true)}
               disabled={isSubmitting}
-              className="p-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-gray-900/10 group"
+              className="rounded-xl bg-orange-500 p-2.5 text-white transition-all active:scale-95 disabled:bg-gray-300 hover:bg-orange-600 shadow-lg shadow-orange-500/20 group"
               title="New Repair Order"
+              aria-label="Open new repair order form"
             >
               <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
             </button>

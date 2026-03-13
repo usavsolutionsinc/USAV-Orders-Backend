@@ -12,6 +12,8 @@ interface StaffMember {
 
 interface FbaSidebarProps {
   onShipmentCreated: () => void;
+  showCreateForm: boolean;
+  onCreateFormChange: (nextValue: boolean) => void;
 }
 
 interface CreateShipmentForm {
@@ -34,8 +36,7 @@ const EMPTY_FORM: CreateShipmentForm = {
   items: [{ fnsku: '', expected_qty: '' }],
 };
 
-export function FbaSidebar({ onShipmentCreated }: FbaSidebarProps) {
-  const [showCreateForm, setShowCreateForm] = useState(false);
+export function FbaSidebar({ onShipmentCreated, showCreateForm, onCreateFormChange }: FbaSidebarProps) {
   const [form, setForm] = useState<CreateShipmentForm>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -101,7 +102,7 @@ export function FbaSidebar({ onShipmentCreated }: FbaSidebarProps) {
       if (!res.ok) { setSubmitError(data?.error || 'Failed to create shipment'); return; }
       setSubmitSuccess(true);
       setForm(EMPTY_FORM);
-      setShowCreateForm(false);
+      onCreateFormChange(false);
       onShipmentCreated();
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (err: any) {
@@ -148,19 +149,6 @@ export function FbaSidebar({ onShipmentCreated }: FbaSidebarProps) {
           ))}
         </div>
       </div>
-
-      {/* New shipment button */}
-      <div className="px-4 py-3 border-b border-gray-100">
-        <button
-          type="button"
-          onClick={() => { setShowCreateForm(!showCreateForm); setSubmitError(null); }}
-          className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-600/20"
-        >
-          <Plus className="w-4 h-4" />
-          New Shipment
-        </button>
-      </div>
-
       {/* Create form */}
       <AnimatePresence>
         {showCreateForm && (
@@ -173,7 +161,7 @@ export function FbaSidebar({ onShipmentCreated }: FbaSidebarProps) {
             <div className="px-4 py-3 space-y-3 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <p className="text-[9px] font-black uppercase tracking-widest text-purple-600">New Shipment</p>
-                <button type="button" onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-gray-600">
+                <button type="button" onClick={() => onCreateFormChange(false)} className="text-gray-400 hover:text-gray-600">
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>

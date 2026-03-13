@@ -35,8 +35,8 @@ export function DeleteOrderControl({ orderId, onDeleted }: DeleteOrderControlPro
       await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderId });
       onDeleted();
     } catch (error) {
-      console.error('Failed to cancel order:', error);
-      window.alert('Failed to cancel order. Please try again.');
+      console.error('Failed to permanently delete order:', error);
+      window.alert('Failed to permanently delete order. Please try again.');
     }
   };
 
@@ -47,7 +47,7 @@ export function DeleteOrderControl({ orderId, onDeleted }: DeleteOrderControlPro
       disabled={deleteOrderMutation.isPending}
       className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
     >
-      {deleteOrderMutation.isPending ? 'Cancelling...' : isDeleteArmed ? 'Click Again To Confirm' : 'Cancel/Delete Order'}
+      {deleteOrderMutation.isPending ? 'Deleting...' : isDeleteArmed ? 'Click Again To Confirm' : 'Delete Permanently'}
     </button>
   );
 }

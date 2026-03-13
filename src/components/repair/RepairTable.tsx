@@ -7,6 +7,7 @@ import { Loader2, Search, X, Printer, AlertTriangle } from '../Icons';
 import { CopyableText } from '../ui/CopyableText';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { useRepairs } from '@/hooks/useRepairs';
 
@@ -119,7 +120,8 @@ export function RepairTable({ filter }: RepairTableProps) {
     <div className="flex h-full w-full bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex-shrink-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2 py-1 flex items-center justify-between shadow-sm">
+        <div className={mainStickyHeaderClass}>
+          <div className={mainStickyHeaderRowClass}>
           <div className="flex items-center gap-2">
             <p className="text-[11px] font-black text-gray-900 tracking-tight">
               {stickyDate || formatHeaderDate()}
@@ -150,6 +152,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                 Close Panel
               </button>
             )}
+          </div>
           </div>
         </div>
 
