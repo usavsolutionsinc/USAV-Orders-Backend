@@ -1,5 +1,6 @@
 export type QueueKey =
   | 'all'
+  | 'done'
   | 'all_unassigned'
   | 'all_assigned'
   | 'orders'
@@ -33,11 +34,21 @@ export interface WorkOrderRow {
   notes: string | null;
   assignedAt: string | null;
   updatedAt: string | null;
+  orderId?: string | null;
+  trackingNumber?: string | null;
+  itemNumber?: string | null;
+  sku?: string | null;
+  condition?: string | null;
+  shipmentId?: number | string | null;
+  accountSource?: string | null;
+  quantity?: string | null;
+  createdAt?: string | null;
   stockLevel?: number | null;
 }
 
 export interface QueueCounts {
   all: number;
+  done: number;
   all_unassigned: number;
   all_assigned: number;
   orders: number;
@@ -51,6 +62,7 @@ export interface QueueCounts {
 
 export const EMPTY_COUNTS: QueueCounts = {
   all: 0,
+  done: 0,
   all_unassigned: 0,
   all_assigned: 0,
   orders: 0,
@@ -74,6 +86,7 @@ export const STATUS_COLOR: Record<WorkStatus, string> = {
 
 export const QUEUE_ITEMS: Array<{ key: QueueKey; label: string }> = [
   { key: 'all', label: 'All' },
+  { key: 'done', label: 'Done' },
   { key: 'all_unassigned', label: 'Unassigned' },
   { key: 'all_assigned', label: 'Assigned' },
   { key: 'orders', label: 'Orders' },

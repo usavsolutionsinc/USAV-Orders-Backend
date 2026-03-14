@@ -4,6 +4,7 @@ import { normalizePSTTimestamp } from '@/utils/date';
 
 type QueueKey =
   | 'all'
+  | 'done'
   | 'all_unassigned'
   | 'all_assigned'
   | 'orders'
@@ -41,6 +42,15 @@ interface WorkOrderRow {
   primaryAssignmentId: number | null;
   secondaryAssignmentId: number | null;
   primaryWorkType: WorkType;
+  orderId?: string | null;
+  trackingNumber?: string | null;
+  itemNumber?: string | null;
+  sku?: string | null;
+  condition?: string | null;
+  shipmentId?: number | string | null;
+  accountSource?: string | null;
+  quantity?: string | null;
+  createdAt?: string | null;
   stockLevel?: number | null;
 }
 
@@ -48,6 +58,7 @@ function normalizeQueue(raw: string | null): QueueKey {
   const value = String(raw || '').trim().toLowerCase();
   const allowed: QueueKey[] = [
     'all',
+    'done',
     'all_unassigned',
     'all_assigned',
     'orders',
@@ -68,7 +79,7 @@ function normalizeStatus(raw: unknown): WorkStatus {
 }
 
 function isAssignedRow(row: WorkOrderRow): boolean {
-  return row.techId != null && row.packerId != null;
+  return row.techId != null || row.packerId != null;
 }
 
 function matchesSearch(row: WorkOrderRow, query: string): boolean {
@@ -90,6 +101,7 @@ function matchesSearch(row: WorkOrderRow, query: string): boolean {
 
 function matchesQueue(row: WorkOrderRow, queue: QueueKey): boolean {
   if (queue === 'all') return true;
+  if (queue === 'done') return row.status === 'DONE';
   if (queue === 'all_unassigned') return !isAssignedRow(row);
   if (queue === 'all_assigned') return isAssignedRow(row);
   return row.queueKey === queue;
@@ -125,9 +137,14 @@ async function getOrders(): Promise<WorkOrderRow[]> {
        o.order_id,
        o.product_title,
        o.item_number,
+       o.shipment_id,
        stn.tracking_number_raw AS tracking_number,
        o.sku,
+       o.condition,
+       o.account_source,
+       o.quantity,
        o.notes,
+       o.created_at,
        test_wa.id AS test_assignment_id,
        test_wa.assigned_tech_id AS tech_id,
        st.name AS tech_name,
@@ -147,13 +164,13 @@ async function getOrders(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'ORDER'
          AND wa.entity_id = o.id
          AND wa.work_type = 'TEST'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
-         AND wa.completed_at IS NULL
+         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
          WHEN 'OPEN' THEN 3
-         ELSE 4
+         WHEN 'DONE' THEN 4
+         ELSE 5
        END, wa.updated_at DESC, wa.id DESC
        LIMIT 1
      ) test_wa ON TRUE
@@ -163,13 +180,13 @@ async function getOrders(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'ORDER'
          AND wa.entity_id = o.id
          AND wa.work_type = 'PACK'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
-         AND wa.completed_at IS NULL
+         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
          WHEN 'OPEN' THEN 3
-         ELSE 4
+         WHEN 'DONE' THEN 4
+         ELSE 5
        END, wa.updated_at DESC, wa.id DESC
        LIMIT 1
      ) pack_wa ON TRUE
@@ -179,17 +196,6 @@ async function getOrders(): Promise<WorkOrderRow[]> {
      WHERE NOT COALESCE(
              stn.is_carrier_accepted OR stn.is_in_transit
              OR stn.is_out_for_delivery OR stn.is_delivered, false
-           )
-       AND NOT EXISTS (
-             SELECT 1
-             FROM work_assignments wa_done
-             WHERE wa_done.entity_type = 'ORDER'
-               AND wa_done.entity_id = o.id
-               AND wa_done.work_type IN ('TEST', 'PACK')
-               AND (
-                 wa_done.status = 'DONE'
-                 OR wa_done.completed_at IS NOT NULL
-               )
            )
        AND o.shipment_id IS NOT NULL
      ORDER BY COALESCE(test_wa.deadline_at, o.created_at) ASC, o.id ASC
@@ -219,6 +225,15 @@ async function getOrders(): Promise<WorkOrderRow[]> {
     primaryAssignmentId: row.test_assignment_id == null ? null : Number(row.test_assignment_id),
     secondaryAssignmentId: row.pack_assignment_id == null ? null : Number(row.pack_assignment_id),
     primaryWorkType: 'TEST' as const,
+    orderId: row.order_id ? String(row.order_id) : null,
+    trackingNumber: row.tracking_number ? String(row.tracking_number) : null,
+    itemNumber: row.item_number ? String(row.item_number) : null,
+    sku: row.sku ? String(row.sku) : null,
+    condition: row.condition ? String(row.condition) : null,
+    shipmentId: row.shipment_id ?? null,
+    accountSource: row.account_source ? String(row.account_source) : null,
+    quantity: row.quantity ? String(row.quantity) : null,
+    createdAt: normalizePSTTimestamp(row.created_at),
   }));
 }
 
@@ -249,12 +264,13 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'RECEIVING'
          AND wa.entity_id = r.id
          AND wa.work_type = 'TEST'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
          WHEN 'OPEN' THEN 3
-         ELSE 4
+         WHEN 'DONE' THEN 4
+         ELSE 5
        END, wa.updated_at DESC, wa.id DESC
        LIMIT 1
      ) wa ON TRUE
@@ -337,30 +353,19 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'REPAIR'
          AND wa.entity_id = rs.id
          AND wa.work_type = 'REPAIR'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
-         AND wa.completed_at IS NULL
+         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
          WHEN 'OPEN' THEN 3
-         ELSE 4
+         WHEN 'DONE' THEN 4
+         ELSE 5
        END, wa.updated_at DESC, wa.id DESC
        LIMIT 1
      ) wa ON TRUE
      LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
      WHERE COALESCE(rs.status, '') NOT IN ('Done', 'Shipped', 'Picked Up')
-       AND NOT EXISTS (
-         SELECT 1
-         FROM work_assignments wa_done
-         WHERE wa_done.entity_type = 'REPAIR'
-           AND wa_done.entity_id = rs.id
-           AND wa_done.work_type = 'REPAIR'
-           AND (
-             wa_done.status = 'DONE'
-             OR wa_done.completed_at IS NOT NULL
-           )
-       )
      ORDER BY COALESCE(wa.deadline_at, wa.updated_at) ASC NULLS LAST, rs.id ASC`
   );
 
@@ -396,7 +401,6 @@ async function getFbaShipments(): Promise<WorkOrderRow[]> {
   const result = await pool.query(
     `SELECT
        fs.id,
-       fs.shipment_id,
        fs.shipment_ref,
        fs.notes AS shipment_notes,
        fs.assigned_tech_id AS native_tech_id,
@@ -419,12 +423,13 @@ async function getFbaShipments(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'FBA_SHIPMENT'
          AND wa.entity_id = fs.id
          AND wa.work_type = 'QA'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
          WHEN 'OPEN' THEN 3
-         ELSE 4
+         WHEN 'DONE' THEN 4
+         ELSE 5
        END, wa.updated_at DESC, wa.id DESC
        LIMIT 1
      ) wa ON TRUE
@@ -441,9 +446,9 @@ async function getFbaShipments(): Promise<WorkOrderRow[]> {
     entityId: Number(row.id),
     queueKey: 'fba_shipments' as const,
     queueLabel: 'FBA Shipments',
-    title: String(row.shipment_ref || row.shipment_id || `FBA #${row.id}`),
-    subtitle: String(row.shipment_id || 'Amazon shipment'),
-    recordLabel: String(row.shipment_ref || row.shipment_id || `FBA #${row.id}`),
+    title: String(row.shipment_ref || `FBA #${row.id}`),
+    subtitle: `Shipment #${row.id}`,
+    recordLabel: String(row.shipment_ref || `FBA #${row.id}`),
     sourcePath: '/fba',
     techId: row.assigned_tech_id == null ? (row.native_tech_id == null ? null : Number(row.native_tech_id)) : Number(row.assigned_tech_id),
     techName: row.tech_name ? String(row.tech_name) : null,
@@ -462,13 +467,16 @@ async function getFbaShipments(): Promise<WorkOrderRow[]> {
 }
 
 async function getSkuStock(): Promise<WorkOrderRow[]> {
+  // Only return rows with an assigned/in-progress/done work assignment.
+  // Unassigned sku_stock rows (no WA, or WA status = OPEN) are intentionally
+  // excluded — use /api/assignments/sku-search to search then assign them.
   const result = await pool.query(
     `SELECT
        ss.id,
        ss.sku,
        ss.product_title,
        ss.stock,
-       wa.id AS assignment_id,
+       wa.id          AS assignment_id,
        wa.assigned_tech_id,
        wa.assigned_packer_id,
        wa.status,
@@ -477,29 +485,35 @@ async function getSkuStock(): Promise<WorkOrderRow[]> {
        wa.notes,
        wa.assigned_at,
        wa.updated_at,
-       st.name AS tech_name,
-       sp.name AS packer_name
+       st.name        AS tech_name,
+       sp.name        AS packer_name
      FROM sku_stock ss
-     LEFT JOIN LATERAL (
+     INNER JOIN LATERAL (
        SELECT *
-       FROM work_assignments wa
-       WHERE wa.entity_type = 'SKU_STOCK'
-         AND wa.entity_id = ss.id
-         AND wa.work_type = 'STOCK_REPLENISH'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
-       ORDER BY CASE wa.status
+       FROM work_assignments
+       WHERE entity_type = 'SKU_STOCK'
+         AND entity_id   = ss.id
+         AND work_type   = 'STOCK_REPLENISH'
+         AND status IN ('ASSIGNED', 'IN_PROGRESS', 'DONE')
+       ORDER BY CASE status
          WHEN 'IN_PROGRESS' THEN 1
-         WHEN 'ASSIGNED' THEN 2
-         WHEN 'OPEN' THEN 3
+         WHEN 'ASSIGNED'    THEN 2
+         WHEN 'DONE'        THEN 3
          ELSE 4
-       END, wa.updated_at DESC, wa.id DESC
+       END, updated_at DESC, id DESC
        LIMIT 1
      ) wa ON TRUE
      LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
-     ORDER BY COALESCE(NULLIF(regexp_replace(COALESCE(ss.stock, ''), '[^0-9-]+', '', 'g'), ''), '0')::int ASC,
-              COALESCE(ss.product_title, '') ASC,
-              ss.id DESC
+     ORDER BY CASE wa.status
+       WHEN 'IN_PROGRESS' THEN 1
+       WHEN 'ASSIGNED'    THEN 2
+       WHEN 'DONE'        THEN 3
+       ELSE 4
+     END,
+     wa.priority ASC,
+     COALESCE(NULLIF(regexp_replace(COALESCE(ss.stock, ''), '[^0-9-]+', '', 'g'), ''), '0')::int ASC,
+     ss.id DESC
      LIMIT 500`
   );
 
@@ -517,8 +531,8 @@ async function getSkuStock(): Promise<WorkOrderRow[]> {
       sourcePath: '/sku-stock',
       techId: row.assigned_tech_id == null ? null : Number(row.assigned_tech_id),
       techName: row.tech_name ? String(row.tech_name) : null,
-      packerId: row.assigned_packer_id == null ? null : Number(row.assigned_packer_id),
-      packerName: row.packer_name ? String(row.packer_name) : null,
+      packerId: null,
+      packerName: null,
       status: normalizeStatus(row.status),
       priority: Number(row.priority || 100),
       deadlineAt: normalizePSTTimestamp(row.deadline_at),
@@ -539,6 +553,7 @@ async function upsertAssignment(params: {
   workType: WorkType;
   assignedTechId: number | null;
   assignedPackerId: number | null;
+  completedByPackerId?: number | null;
   status: WorkStatus;
   priority: number;
   deadlineAt: string | null;
@@ -582,6 +597,7 @@ async function upsertAssignment(params: {
            notes = $6,
            started_at = CASE WHEN $3::text = 'IN_PROGRESS' THEN COALESCE(started_at, NOW()) ELSE started_at END,
            completed_at = CASE WHEN $3::text IN ('DONE', 'CANCELED') THEN COALESCE(completed_at, NOW()) ELSE NULL END,
+           completed_by_packer_id = CASE WHEN $3::text = 'DONE' THEN COALESCE($8, completed_by_packer_id) ELSE completed_by_packer_id END,
            updated_at = NOW()
        WHERE id = $7`,
       [
@@ -592,6 +608,7 @@ async function upsertAssignment(params: {
         params.deadlineAt,
         params.notes,
         existing.rows[0].id,
+        params.completedByPackerId ?? null,
       ]
     );
     return existing.rows[0].id;
@@ -601,8 +618,9 @@ async function upsertAssignment(params: {
 
   const inserted = await pool.query<{ id: number }>(
     `INSERT INTO work_assignments
-       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, priority, deadline_at, notes)
-     VALUES ($1, $2, $3, $4, $5, $6::assignment_status_enum, $7, $8, $9)
+       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id,
+        completed_by_packer_id, status, priority, deadline_at, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::assignment_status_enum, $8, $9, $10)
      RETURNING id`,
     [
       params.entityType,
@@ -610,6 +628,7 @@ async function upsertAssignment(params: {
       params.workType,
       params.assignedTechId,
       params.assignedPackerId,
+      params.completedByPackerId ?? null,
       params.status,
       params.priority,
       params.deadlineAt,
@@ -646,6 +665,7 @@ export async function GET(request: NextRequest) {
 
     const counts: Record<QueueKey, number> = {
       all: allRows.length,
+      done: allRows.filter((row) => matchesQueue(row, 'done')).length,
       all_unassigned: allRows.filter((row) => matchesQueue(row, 'all_unassigned')).length,
       all_assigned: allRows.filter((row) => matchesQueue(row, 'all_assigned')).length,
       orders: allRows.filter((row) => row.queueKey === 'orders').length,
@@ -684,6 +704,12 @@ export async function PATCH(request: NextRequest) {
     const deadlineAt = normalizePSTTimestamp(body?.deadlineAt);
     const notes = String(body?.notes || '').trim() || null;
 
+    // Track whether assignedPackerId was explicitly included in the request body.
+    // When it is absent (undefined) the caller is doing a tech-only partial save and
+    // we must NOT touch the PACK work-assignment — otherwise we would null-out any
+    // packer that was already saved, causing the "packer disappears" bug.
+    const packerIdProvided = 'assignedPackerId' in (body ?? {});
+
     if (!['ORDER', 'REPAIR', 'FBA_SHIPMENT', 'RECEIVING', 'SKU_STOCK'].includes(entityType)) {
       return NextResponse.json({ error: 'Invalid entityType' }, { status: 400 });
     }
@@ -696,6 +722,7 @@ export async function PATCH(request: NextRequest) {
     const priority = Number.isFinite(priorityRaw) ? Math.max(1, Math.min(priorityRaw, 9999)) : 100;
 
     if (entityType === 'ORDER') {
+      // TEST row owns the technician slot; never write packer here.
       await upsertAssignment({
         entityType: 'ORDER',
         entityId,
@@ -707,17 +734,26 @@ export async function PATCH(request: NextRequest) {
         deadlineAt,
         notes,
       });
-      await upsertAssignment({
-        entityType: 'ORDER',
-        entityId,
-        workType: 'PACK',
-        assignedTechId: null,
-        assignedPackerId,
-        status,
-        priority,
-        deadlineAt: null,
-        notes,
-      });
+
+      // PACK row owns the packer slot.  Only upsert it when the caller explicitly
+      // included assignedPackerId in the request body — either to set a new packer
+      // (non-null) or to intentionally clear one (null).  Skipping this call on
+      // tech-only partial saves prevents the PACK WA from being null-wiped.
+      if (packerIdProvided) {
+        await upsertAssignment({
+          entityType: 'ORDER',
+          entityId,
+          workType: 'PACK',
+          assignedTechId: null,
+          assignedPackerId,
+          completedByPackerId: status === 'DONE' ? (assignedPackerId ?? null) : null,
+          status,
+          priority,
+          deadlineAt: null,
+          notes,
+          allowInsertWhenEmpty: assignedPackerId != null,
+        });
+      }
 
       // is_shipped is now derived from shipping_tracking_numbers; no direct write needed
     } else {
