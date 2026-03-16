@@ -5,7 +5,7 @@ export interface ProductManual {
   sku: string | null;
   item_number: string | null;
   product_title: string | null;
-  google_doc_id: string | null;
+  google_file_id: string | null;
   type: string | null;
   is_active: boolean;
   updated_at: string | null;
@@ -35,7 +35,7 @@ export async function getAllProductManuals(options?: { limit?: number; offset?: 
   const limit = Math.min(options?.limit ?? 5000, 10000);
   const offset = options?.offset ?? 0;
   const result = await pool.query(
-    `SELECT id, sku, item_number, product_title, google_doc_id, type, is_active, updated_at, created_at
+    `SELECT id, sku, item_number, product_title, google_file_id, type, is_active, updated_at, created_at
      FROM product_manuals
      WHERE is_active = TRUE
      ORDER BY updated_at DESC NULLS LAST, id DESC
@@ -58,7 +58,7 @@ export async function getProductManualById(id: number): Promise<ProductManual | 
  */
 export async function searchProductManuals(query: string, limit = 20): Promise<ProductManual[]> {
   const result = await pool.query(
-    `SELECT id, sku, item_number, product_title, google_doc_id, type, is_active, updated_at
+    `SELECT id, sku, item_number, product_title, google_file_id, type, is_active, updated_at
      FROM product_manuals
      WHERE is_active = TRUE
        AND (
@@ -80,7 +80,7 @@ export async function searchProductManuals(query: string, limit = 20): Promise<P
  */
 export async function getProductManualsByCategory(category: string, limit = 100): Promise<ProductManual[]> {
   const result = await pool.query(
-    `SELECT id, sku, item_number, product_title, google_doc_id, type, updated_at
+    `SELECT id, sku, item_number, product_title, google_file_id, type, updated_at
      FROM product_manuals
      WHERE is_active = TRUE AND type ILIKE $1
      ORDER BY product_title ASC
@@ -95,7 +95,7 @@ export async function getProductManualsByCategory(category: string, limit = 100)
  */
 export async function getRecentProductManuals(limit = 10): Promise<ProductManual[]> {
   const result = await pool.query(
-    `SELECT id, sku, item_number, product_title, google_doc_id, type, updated_at
+    `SELECT id, sku, item_number, product_title, google_file_id, type, updated_at
      FROM product_manuals
      WHERE is_active = TRUE
      ORDER BY updated_at DESC NULLS LAST, id DESC
@@ -110,7 +110,7 @@ export async function getRecentProductManuals(limit = 10): Promise<ProductManual
  */
 export async function resolveManualByOrderId(orderId: string): Promise<ProductManual | null> {
   const result = await pool.query(
-    `SELECT pm.id, pm.sku, pm.item_number, pm.product_title, pm.google_doc_id, pm.type, pm.updated_at
+     `SELECT pm.id, pm.sku, pm.item_number, pm.product_title, pm.google_file_id, pm.type, pm.updated_at
      FROM product_manuals pm
      JOIN orders o ON (
        (o.item_number IS NOT NULL AND o.item_number != ''
@@ -175,7 +175,7 @@ export async function upsertProductManual(params: UpsertProductManualParams): Pr
     // Insert new active record
     const insertResult = await client.query(
       `INSERT INTO product_manuals
-         (sku, item_number, product_title, google_doc_id, type, is_active, updated_at)
+         (sku, item_number, product_title, google_file_id, type, is_active, updated_at)
        VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
        RETURNING *`,
       [

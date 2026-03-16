@@ -24,11 +24,11 @@ export async function GET(req: NextRequest) {
         stn.tracking_number_raw AS tracking,
         COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
           OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
-        pl.pack_date_time
+        pl.packed_at
       FROM orders o
       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       LEFT JOIN LATERAL (
-        SELECT created_at AS pack_date_time
+        SELECT created_at AS packed_at
         FROM packer_logs pl2
         WHERE pl2.shipment_id IS NOT NULL
           AND pl2.shipment_id = o.shipment_id
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
       productTitle: row.product_title || 'Unknown Product',
       condition: row.condition || '',
       tracking: row.tracking,
-      packed: row.pack_date_time ? true : false,
+      packed: row.packed_at ? true : false,
       shipped: row.is_shipped || false
     });
   } catch (error: any) {

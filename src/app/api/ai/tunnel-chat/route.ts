@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTunnelUrl } from '@/lib/ai/tunnel-config';
+import { buildContextBlock } from '@/lib/ai/context-fetchers';
+import { detectIntents, extractParams } from '@/lib/ai/intent-router';
 import { checkRateLimit } from '@/lib/api-guard';
 
 export const runtime = 'nodejs';
@@ -38,6 +40,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'message is required' }, { status: 400 });
     }
 
+    const trimmedMessage = message.trim();
+    const intents = detectIntents(trimmedMessage);
+    const params = extractParams(trimmedMessage, intents);
+
+    let enrichedMessage = trimmedMessage;
+    if (intents.length > 0) {
+      try {
+        const contextBlock = await buildContextBlock(intents, params);
+        if (contextBlock) {
+          enrichedMessage =
+            `[Live USAV data - ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PST]\n` +
+            contextBlock +
+            `\n\nUser question: ${trimmedMessage}`;
+        }
+      } catch (err) {
+        console.error('[tunnel-chat] context fetch error (non-fatal):', err);
+      }
+    }
+
     const tunnelUrl = await getTunnelUrl();
     const apiKey = process.env.AI_API_KEY;
 
@@ -51,7 +72,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
       },
-      body: JSON.stringify({ session_id: sessionId, message: message.trim() }),
+      body: JSON.stringify({ session_id: sessionId, message: enrichedMessage }),
     });
 
     const data = await upstream.json();

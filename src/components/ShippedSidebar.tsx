@@ -48,7 +48,7 @@ function getStaffName(staffId: number | null | undefined): string {
 function toShippedOrder(order: any): ShippedOrder {
     return {
         ...order,
-        pack_date_time: order.ship_by_date || null,
+        packed_at: order.ship_by_date || null,
         packed_by: order.packer_id ?? null,
         tested_by: order.tested_by ?? null,
         serial_number: '',
@@ -99,6 +99,27 @@ export default function ShippedSidebar({
         };
     }, []);
 
+    useEffect(() => {
+        const handleNavigateDetails = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
+            if (!selectedShipped || results.length === 0) return;
+
+            const currentIndex = results.findIndex((record) => Number(record.id) === Number(selectedShipped.id));
+            if (currentIndex < 0) return;
+
+            const step = e.detail?.direction === 'up' ? -1 : 1;
+            const nextRecord = results[currentIndex + step];
+            if (!nextRecord) return;
+
+            setSelectedShipped(nextRecord);
+            window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: nextRecord }));
+        };
+
+        window.addEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
+        return () => {
+            window.removeEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
+        };
+    }, [results, selectedShipped]);
+
     const openDetails = (result: ShippedOrder) => {
         if (selectedShipped && Number(selectedShipped.id) === Number(result.id)) {
             dispatchCloseShippedDetails();
@@ -122,7 +143,7 @@ Product: ${result.product_title || 'N/A'}
 Condition: ${result.condition || 'N/A'}
 Tested By: ${getStaffName(result.tested_by)}
 Packed By: ${getStaffName(result.packed_by)}
-Shipped: ${result.pack_date_time ? formatDateTimePST(result.pack_date_time) : 'Not Shipped'}`;
+Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped'}`;
         
         navigator.clipboard.writeText(text);
         setCopiedId(result.id);

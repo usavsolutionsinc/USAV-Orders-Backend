@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
         pl.id,
         COALESCE(stn.tracking_number_raw, pl.scan_ref) AS tracking_number,
         pl.tracking_type,
-        pl.created_at AS pack_date_time,
+        pl.created_at AS packed_at,
         pl.packed_by
       FROM packer_logs pl
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id

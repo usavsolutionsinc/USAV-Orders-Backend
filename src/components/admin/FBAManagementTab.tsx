@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2, Plus } from '@/components/Icons';
+import { Check, Loader2 } from '@/components/Icons';
 
 interface FbaFnskuRow {
   product_title: string | null;
@@ -92,8 +92,19 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
     }
   };
 
+  useEffect(() => {
+    const openAdd = () => setIsAddOpen(true);
+    const openUpload = () => setIsUploadInfoOpen(true);
+    window.addEventListener('admin-fba-open-add', openAdd as EventListener);
+    window.addEventListener('admin-fba-open-upload', openUpload as EventListener);
+    return () => {
+      window.removeEventListener('admin-fba-open-add', openAdd as EventListener);
+      window.removeEventListener('admin-fba-open-upload', openUpload as EventListener);
+    };
+  }, []);
+
   return (
-    <div className="space-y-4">
+    <section className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]">
       <input
         ref={fileInputRef}
         type="file"
@@ -104,36 +115,38 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
           if (file) uploadMutation.mutate(file);
         }}
       />
-      <div className="flex items-center gap-3">
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsAddOpen(true)}
-            className="inline-flex h-10 items-center gap-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-widest"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsUploadInfoOpen(true)}
-            disabled={uploadMutation.isPending}
-            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
-            title="Upload CSV"
-            aria-label="Upload CSV"
-          >
-            {uploadMutation.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 4v12m0-12l-4 4m4-4l4 4" />
-              </svg>
-            )}
-          </button>
+      <div className="border-b border-gray-200 bg-white/90 px-6 py-5 backdrop-blur">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div className="max-w-2xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Catalog Mapping Surface</p>
+            <h2 className="mt-2 text-lg font-black uppercase tracking-[0.18em] text-slate-900">Admin FBA Directory</h2>
+            <p className="mt-2 text-[12px] font-bold leading-relaxed text-slate-500">
+              Use the sidebar to search, add, and import FNSKU mappings. This board stays focused on the actual catalog rows.
+            </p>
+          </div>
+
+          <div className="grid min-w-[280px] flex-1 gap-3 sm:grid-cols-3">
+            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Visible Rows</p>
+              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{rows.length}</p>
+            </div>
+            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Search Query</p>
+              <p className="mt-2 truncate text-sm font-black uppercase tracking-[0.14em] text-slate-900">{searchTerm || 'All rows'}</p>
+            </div>
+            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Upload State</p>
+              <div className="mt-2 flex items-center gap-2 text-sm font-black uppercase tracking-[0.14em] text-slate-900">
+                {uploadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin text-emerald-600" /> : null}
+                <span>{uploadMutation.isPending ? 'Uploading' : 'Ready'}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden px-6 py-6">
+      <div className="h-full overflow-hidden border border-gray-200 bg-white">
         <div className="grid grid-cols-[minmax(0,1fr)_92px_92px_120px] gap-0 px-4 py-3 border-b border-gray-100 bg-gray-50">
           <div className="min-w-0 pr-3 text-[10px] font-black uppercase tracking-widest text-gray-500 truncate">Product Title</div>
           <div className="pr-3 text-[10px] font-black uppercase tracking-widest text-gray-500 text-right">ASIN</div>
@@ -146,7 +159,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
         ) : rows.length === 0 ? (
           <div className="px-4 py-8 text-sm font-bold text-gray-500">No FBA rows found.</div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="h-[calc(100%-49px)] overflow-y-auto divide-y divide-gray-100">
             {rows.map((row, index) => (
               <div key={`${row.fnsku || 'row'}-${index}`} className="grid grid-cols-[minmax(0,1fr)_92px_92px_132px] gap-0 px-4 py-3 items-center">
                 <button
@@ -201,8 +214,9 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
           </div>
         )}
       </div>
+      </div>
       {copiedValue && (
-        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+        <div className="mx-6 mb-6 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-black uppercase tracking-widest text-emerald-700">
           <Check className="w-3 h-3" />
           Copied
         </div>
@@ -312,6 +326,6 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

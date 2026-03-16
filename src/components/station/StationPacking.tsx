@@ -112,7 +112,7 @@ export default function StationPacking({
             photos: [],
             packerId: String(userId),
             packerName: userName,
-            timestamp: formatPSTTimestamp(),
+            createdAt: formatPSTTimestamp(),
           }),
         });
         const data = await res.json();

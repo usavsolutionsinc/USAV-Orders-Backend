@@ -279,7 +279,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
                 <UpNextActionButton
                   onClick={(e) => { stopProp(e); setShowRepairedInput(false); setShowOosInput(true); }}
                   label="Out of Stock"
-                  tone="orange"
+                  tone="red"
                   fullWidth
                 />
               )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from '@/components/Icons';
 import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
@@ -75,7 +75,9 @@ export function WorkOrderAssignmentCard({
 }: WorkOrderAssignmentCardProps) {
   const [index, setIndex] = useState(() => Math.min(startIndex, rows.length - 1));
   const [direction, setDirection] = useState<'next' | 'prev'>('next');
-  const [confirmedIds] = useState(() => new Set<string>());
+  // Use a separate ref for mutation + counter state to drive re-renders
+  const confirmedIdsRef = useRef(new Set<string>());
+  const [confirmedCount, setConfirmedCount] = useState(0);
 
   const row = rows[index];
   const [techId, setTechId] = useState<number | null>(row?.techId ?? null);
@@ -100,15 +102,16 @@ export function WorkOrderAssignmentCard({
   const findNextIndex = useCallback((from: number, dir: 'next' | 'prev') => {
     if (dir === 'next') {
       for (let i = from + 1; i < rows.length; i++) {
-        if (!confirmedIds.has(rows[i].id)) return i;
+        if (!confirmedIdsRef.current.has(rows[i].id)) return i;
       }
       return null;
     }
     for (let i = from - 1; i >= 0; i--) {
-      if (!confirmedIds.has(rows[i].id)) return i;
+      if (!confirmedIdsRef.current.has(rows[i].id)) return i;
     }
     return null;
-  }, [rows, confirmedIds]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, confirmedCount]);
 
   const advance = useCallback(() => {
     const next = findNextIndex(index, 'next');
@@ -119,9 +122,24 @@ export function WorkOrderAssignmentCard({
     }
   }, [findNextIndex, index, onClose]);
 
+  // Silent save — persists current state without navigating away.
+  // Used by the auto-save debounce so that selecting tech then packer
+  // with >450ms between taps doesn't accidentally advance to the next row.
+  const save = useCallback((opts?: Partial<AssignmentConfirmPayload>) => {
+    if (!row) return;
+    onConfirm(row, {
+      techId: opts?.techId !== undefined ? opts.techId : techId,
+      packerId: opts?.packerId !== undefined ? opts.packerId : packerId,
+      deadline: opts?.deadline !== undefined ? opts.deadline : (deadline || null),
+      status: opts?.status,
+    });
+  }, [row, onConfirm, techId, packerId, deadline]);
+
+  // Explicit confirm — marks item done in this session and advances to the next.
   const commit = useCallback((opts?: Partial<AssignmentConfirmPayload>) => {
     if (!row) return;
-    confirmedIds.add(row.id);
+    confirmedIdsRef.current.add(row.id);
+    setConfirmedCount((c) => c + 1);
     onConfirm(row, {
       techId: opts?.techId !== undefined ? opts.techId : techId,
       packerId: opts?.packerId !== undefined ? opts.packerId : packerId,
@@ -129,14 +147,16 @@ export function WorkOrderAssignmentCard({
       status: opts?.status,
     });
     advance();
-  }, [row, confirmedIds, onConfirm, techId, packerId, deadline, advance]);
+  }, [row, onConfirm, techId, packerId, deadline, advance]);
 
-  // Auto-save on any staff/deadline change — debounced 450ms
+  // Auto-save on any staff/deadline change — silent only, never closes the card.
+  // Commit (save + close) is handled directly inside handleTech/handlePacker below
+  // so the new values are passed explicitly — no stale-closure risk.
   useEffect(() => {
     if (!changed) return;
-    const timer = setTimeout(() => commit(), 450);
+    const timer = setTimeout(() => save(), 450);
     return () => clearTimeout(timer);
-  }, [techId, packerId, deadline, changed, commit]);
+  }, [techId, packerId, deadline, changed, save]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -161,13 +181,46 @@ export function WorkOrderAssignmentCard({
 
   const hasPrev = findNextIndex(index, 'prev') !== null;
   const hasNext = findNextIndex(index, 'next') !== null;
-  const remaining = rows.filter((r) => !confirmedIds.has(r.id)).length;
+  // confirmedCount in the dep ensures this recomputes after each commit()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const remaining = rows.filter((r) => !confirmedIdsRef.current.has(r.id)).length;
 
-  const handleTech   = (id: number) => setTechId((p) => (p === id ? null : id));
-  const handlePacker = (id: number) => setPackerId((p) => (p === id ? null : id));
+  const handleTech = (id: number) => {
+    const next = techId === id ? null : id;
+    setTechId(next);
+    // If packer is already chosen, both slots are now filled → commit immediately.
+    // Values are passed explicitly to avoid any stale-closure issues.
+    if (next !== null && packerId !== null) {
+      setTimeout(() => {
+        if (!row) return;
+        confirmedIdsRef.current.add(row.id);
+        setConfirmedCount((c) => c + 1);
+        onConfirm(row, { techId: next, packerId, deadline: deadline || null });
+        advance();
+      }, 350);
+    }
+  };
+
+  const handlePacker = (id: number) => {
+    const next = packerId === id ? null : id;
+    setPackerId(next);
+    // If tech is already chosen, both slots are now filled → commit immediately.
+    if (techId !== null && next !== null) {
+      setTimeout(() => {
+        if (!row) return;
+        confirmedIdsRef.current.add(row.id);
+        setConfirmedCount((c) => c + 1);
+        onConfirm(row, { techId, packerId: next, deadline: deadline || null });
+        advance();
+      }, 350);
+    }
+  };
 
   const handleMarkDone = () => commit({ status: 'DONE' });
-  const handleMarkShipped = () => commit({ status: 'DONE' });
+  // Mark as Shipped: confirms the packing/shipping work is complete.
+  // For ORDER entities the WA status becomes DONE (shipping state is derived
+  // from carrier tracking numbers, not from this enum).
+  const handleMarkShipped = () => commit({ status: 'DONE', packerId: packerId ?? null });
 
   return (
     <>

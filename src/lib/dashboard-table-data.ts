@@ -8,7 +8,7 @@ function toOrderRecord(order: any): ShippedOrder {
     ...order,
     deadline_at: order.deadline_at || null,
     shipment_id: order.shipment_id ?? null,
-    pack_date_time: order.pack_date_time || null,
+    packed_at: order.packed_at || null,
     packed_by: order.packer_id ?? null,
     tested_by: order.tested_by ?? null,
     serial_number: order.serial_number || '',

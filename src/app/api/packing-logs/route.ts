@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { trackingNumber, photos, packerId, timestamp, packerName } = body;
+        const { trackingNumber, photos, packerId, createdAt, timestamp, packerName } = body;
         const scanInput = String(trackingNumber || '').trim();
         if (!scanInput) {
             return NextResponse.json({ error: 'trackingNumber is required' }, { status: 400 });
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
             trackingNumber,
             photosCount: photos?.length,
             packerId,
-            timestamp
+            createdAt: createdAt ?? timestamp,
         });
         const staffId = resolvePackerStaffId(packerId);
 
@@ -142,7 +142,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
         }
         
-        const packDateTime = normalizePSTTimestamp(normalizeScanTimestamp(timestamp), { fallbackToNow: true })!;
+        // createdAt is preferred (explicit packer_logs.created_at); timestamp is the legacy field name
+        const packDateTime = normalizePSTTimestamp(normalizeScanTimestamp(createdAt ?? timestamp), { fallbackToNow: true })!;
         
         const photoUrls: string[] = Array.isArray(photos) ? photos.filter((u: any) => typeof u === 'string' && u.trim()) : [];
 
@@ -307,17 +308,20 @@ export async function POST(req: NextRequest) {
             `, [order.id]);
 
             // Upsert a PACK work_assignment as DONE.
+            // completed_by_packer_id records the scanner-station actor (staffId).
             await pool.query(`
                 INSERT INTO work_assignments
-                    (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
-                VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, 'Auto-completed on pack scan', NOW())
+                    (entity_type, entity_id, work_type, assigned_packer_id,
+                     completed_by_packer_id, status, priority, notes, completed_at)
+                VALUES ('ORDER', $1, 'PACK', $2, $2, 'DONE', 100, 'Auto-completed on pack scan', NOW())
                 ON CONFLICT (entity_type, entity_id, work_type)
                     WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
                 DO UPDATE
-                    SET assigned_packer_id = EXCLUDED.assigned_packer_id,
-                        status             = 'DONE',
-                        completed_at       = NOW(),
-                        updated_at         = NOW()
+                    SET assigned_packer_id     = EXCLUDED.assigned_packer_id,
+                        completed_by_packer_id = EXCLUDED.completed_by_packer_id,
+                        status                 = 'DONE',
+                        completed_at           = NOW(),
+                        updated_at             = NOW()
             `, [order.id, staffId]);
 
             const orderShipmentId: number | null = order.shipment_id ?? null;

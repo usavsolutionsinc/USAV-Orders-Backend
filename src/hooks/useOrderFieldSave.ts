@@ -6,6 +6,7 @@ import { getCurrentPSTDateKey } from '@/utils/date';
 
 interface UseOrderFieldSaveOptions {
   orderId: number;
+  initialOrderNumber?: string;
   initialItemNumber?: string;
   initialTrackingNumber?: string;
   onUpdate?: () => void;
@@ -13,6 +14,7 @@ interface UseOrderFieldSaveOptions {
 
 export function useOrderFieldSave({
   orderId,
+  initialOrderNumber = '',
   initialItemNumber = '',
   initialTrackingNumber = '',
   onUpdate,
@@ -21,12 +23,15 @@ export function useOrderFieldSave({
   const [isSavingOutOfStock, setIsSavingOutOfStock]   = useState(false);
   const [isSavingNotes, setIsSavingNotes]             = useState(false);
   const [isSavingShipByDate, setIsSavingShipByDate]   = useState(false);
+  const [isSavingInlineFields, setIsSavingInlineFields] = useState(false);
 
   const isSavingInlineFieldsRef     = useRef(false);
+  const lastSavedOrderNumberRef     = useRef(String(initialOrderNumber).trim());
   const lastSavedItemNumberRef      = useRef(String(initialItemNumber).trim());
   const lastSavedTrackingNumberRef  = useRef(String(initialTrackingNumber).trim());
 
-  const resetRefs = useCallback((itemNumber: string, trackingNumber: string) => {
+  const resetRefs = useCallback((orderNumber: string, itemNumber: string, trackingNumber: string) => {
+    lastSavedOrderNumberRef.current    = String(orderNumber).trim();
     lastSavedItemNumberRef.current     = String(itemNumber).trim();
     lastSavedTrackingNumberRef.current = String(trackingNumber).trim();
   }, []);
@@ -75,21 +80,26 @@ export function useOrderFieldSave({
     }
   };
 
-  const saveInlineFields = useCallback(async (itemNumber: string, trackingNumber: string) => {
+  const saveInlineFields = useCallback(async (orderNumber: string, itemNumber: string, trackingNumber: string) => {
     if (isSavingInlineFieldsRef.current) return;
+    const nextOrderNumber = orderNumber.trim();
     const nextItemNumber    = itemNumber.trim();
     const nextTrackingNumber = trackingNumber.trim();
+    const orderChanged    = nextOrderNumber    !== lastSavedOrderNumberRef.current;
     const itemChanged     = nextItemNumber     !== lastSavedItemNumberRef.current;
     const trackingChanged = nextTrackingNumber !== lastSavedTrackingNumberRef.current;
-    if (!itemChanged && !trackingChanged) return;
+    if (!orderChanged && !itemChanged && !trackingChanged) return;
 
     isSavingInlineFieldsRef.current = true;
+    setIsSavingInlineFields(true);
     try {
       await orderAssignmentMutation.mutateAsync({
         orderId,
+        ...(orderChanged    ? { orderNumber: nextOrderNumber }             : {}),
         ...(itemChanged     ? { itemNumber: nextItemNumber }              : {}),
         ...(trackingChanged ? { shippingTrackingNumber: nextTrackingNumber } : {}),
       });
+      if (orderChanged)    lastSavedOrderNumberRef.current    = nextOrderNumber;
       if (itemChanged)     lastSavedItemNumberRef.current     = nextItemNumber;
       if (trackingChanged) lastSavedTrackingNumberRef.current = nextTrackingNumber;
       onUpdate?.();
@@ -97,6 +107,7 @@ export function useOrderFieldSave({
       console.error(error);
     } finally {
       isSavingInlineFieldsRef.current = false;
+      setIsSavingInlineFields(false);
     }
   }, [orderId, onUpdate, orderAssignmentMutation]);
 
@@ -104,6 +115,7 @@ export function useOrderFieldSave({
     isSavingOutOfStock,
     isSavingNotes,
     isSavingShipByDate,
+    isSavingInlineFields,
     saveOutOfStock,
     saveNotes,
     saveShipByDate,

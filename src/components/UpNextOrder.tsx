@@ -11,7 +11,7 @@ import { RepairCard } from './station/upnext/RepairCard';
 import { FbaItemCard } from './station/upnext/FbaItemCard';
 import { ReceivingAssignmentCard } from './station/upnext/ReceivingAssignmentCard';
 
-type TabId = 'all' | 'orders' | 'returns' | 'repair' | 'fba' | 'test' | 'stock' | 'receiving';
+type TabId = 'all' | 'orders' | 'repair' | 'fba' | 'stock' | 'receiving';
 
 interface UpNextOrderProps {
   techId: string;
@@ -22,17 +22,6 @@ interface UpNextOrderProps {
 
 function isOutOfStock(order: { out_of_stock: string | null }): boolean {
   return !!String(order.out_of_stock || '').trim();
-}
-
-function getOrderBucket(order: { order_id: string; account_source: string | null; status: string; sku: string; out_of_stock: string | null }): TabId {
-  const orderId       = String(order.order_id || '').toLowerCase();
-  const accountSource = String(order.account_source || '').toLowerCase();
-  const status        = String(order.status || '').toLowerCase();
-  const sku           = String(order.sku || '').toLowerCase();
-  const haystack      = `${orderId} ${accountSource} ${status} ${sku}`;
-  if (/\b(return|returns|rma)\b/.test(haystack)) return 'returns';
-  if (/\b(test|testing|qa|sample)\b/.test(haystack)) return 'test';
-  return 'orders';
 }
 
 function getRepairSortValue(deadlineAt: string | null | undefined, fallbackDateTime?: string | null | undefined): number {
@@ -55,13 +44,13 @@ function getDateSortValue(value: string | null | undefined): number {
 }
 
 type CombinedCardItem =
-  | { type: 'order'; key: string; sortValue: number; order: any; effectiveTab: 'orders' | 'returns' | 'test' | 'stock' }
+  | { type: 'order'; key: string; sortValue: number; order: any; effectiveTab: 'orders' | 'stock' }
   | { type: 'repair'; key: string; sortValue: number; repair: any }
   | { type: 'fba'; key: string; sortValue: number; item: any }
   | { type: 'receiving'; key: string; sortValue: number; item: any };
 
 
-const TAB_ORDER: TabId[] = ['all', 'orders', 'returns', 'fba', 'repair', 'test', 'stock', 'receiving'];
+const TAB_ORDER: TabId[] = ['all', 'orders', 'fba', 'repair', 'stock', 'receiving'];
 
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
@@ -75,20 +64,25 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const { allOrders, allRepairs, fbaItems, receivingItems, loading, allCompletedToday, fetchOrders } =
     useUpNextData({ techId, onAllCompleted });
 
+  const techIdNum = Number(techId);
+  const assignedOrders = allOrders.filter((order) => {
+    if (!Number.isFinite(techIdNum)) return true;
+    return Number(order.tester_id) === techIdNum;
+  });
+  const visibleAssignedOrders = assignedOrders.filter((order) => !order.has_tech_scan);
 
-  const stockOrders   = allOrders.filter(isOutOfStock);
-  // Exclude orders already processed by a tech scan (shipment_id matched in tech_serial_numbers)
-  const nonStockOrders = allOrders.filter((o) => !isOutOfStock(o) && !o.has_tech_scan);
+  // Hide orders already completed at the testing station. `has_tech_scan` comes
+  // from a shipment_id match in tech_serial_numbers.
+  const stockOrders = visibleAssignedOrders.filter(isOutOfStock);
+  // Match the pending orders source data and only split out stock blockers here.
+  const nonStockOrders = visibleAssignedOrders.filter((order) => !isOutOfStock(order));
   const sortedRepairs = [...allRepairs].sort(
     (a, b) => getRepairSortValue(a.deadlineAt, a.dateTime) - getRepairSortValue(b.deadlineAt, b.dateTime)
   );
   const activeFbaItems = fbaItems.filter((i) => i.status !== 'SHIPPED');
 
-  const tabCounts = {
-    ...nonStockOrders.reduce(
-      (acc, order) => { acc[getOrderBucket(order)] += 1; return acc; },
-      { all: 0, orders: 0, returns: 0, repair: 0, fba: 0, test: 0, stock: 0, receiving: 0 } as Record<TabId, number>
-    ),
+  const tabCounts: Record<TabId, number> = {
+    orders:    nonStockOrders.length,
     stock:     stockOrders.length,
     repair:    sortedRepairs.length,
     fba:       activeFbaItems.length,
@@ -102,7 +96,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       key: `order-${order.id}`,
       sortValue: getDateSortValue(order.ship_by_date || order.created_at),
       order,
-      effectiveTab: getOrderBucket(order) as 'orders' | 'returns' | 'test',
+      effectiveTab: 'orders' as const,
     })),
     ...sortedRepairs.map((repair) => ({
       type: 'repair' as const,
@@ -127,18 +121,16 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const visibleTabs: Array<{ id: TabId; label: string; count?: number; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal' }> = [
     { id: 'all',       label: 'All',       color: 'green',  count: tabCounts.all       || undefined },
     { id: 'orders',    label: 'Orders',    color: 'green',  count: tabCounts.orders    || undefined },
-    ...(tabCounts.returns   > 0 ? [{ id: 'returns'   as const, label: 'Returns',   color: 'yellow' as const, count: tabCounts.returns   }] : []),
     ...(tabCounts.fba       > 0 ? [{ id: 'fba'       as const, label: 'FBA',       color: 'purple' as const, count: tabCounts.fba       }] : []),
     ...(tabCounts.repair    > 0 ? [{ id: 'repair'    as const, label: 'Repair',    color: 'orange' as const, count: tabCounts.repair    }] : []),
-    ...(tabCounts.test      > 0 ? [{ id: 'test'      as const, label: 'Test',      color: 'gray'   as const, count: tabCounts.test      }] : []),
     ...(tabCounts.stock     > 0 ? [{ id: 'stock'     as const, label: 'Stock',     color: 'red'    as const, count: tabCounts.stock     }] : []),
     ...(tabCounts.receiving > 0 ? [{ id: 'receiving' as const, label: 'Receiving', color: 'teal'   as const, count: tabCounts.receiving }] : []),
   ];
 
   const activeTabVisible = visibleTabs.some((tab) => tab.id === activeTab);
   const effectiveTab     = activeTabVisible ? activeTab : visibleTabs[0]?.id || 'orders';
-  const orders           = nonStockOrders.filter((order) => getOrderBucket(order) === effectiveTab);
-  const preferred: TabId[] = ['all', 'orders', 'returns', 'fba', 'repair', 'test', 'stock', 'receiving'];
+  const orders           = nonStockOrders;
+  const preferred: TabId[] = ['all', 'orders', 'fba', 'repair', 'stock', 'receiving'];
 
   // Urgency breakdown for the summary bar (orders tab only)
   const today = new Date();
@@ -153,8 +145,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     d.setHours(0, 0, 0, 0);
     return d.getTime() === today.getTime();
   }).length;
-  const openOrderCount = nonStockOrders.filter((o) => o.tester_id == null).length;
-
   const currentTabIndex = TAB_ORDER.indexOf(effectiveTab);
   const slideDirection  = currentTabIndex >= prevTabIndex ? 1 : -1;
 
@@ -198,7 +188,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     const next = preferred.find((id) => tabCounts[id] > 0);
     if (next && next !== activeTab) setActiveTab(next);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveTab, activeTab, tabCounts.orders, tabCounts.returns, tabCounts.repair, tabCounts.fba, tabCounts.test, tabCounts.stock, tabCounts.receiving]);
+  }, [effectiveTab, activeTab, tabCounts.orders, tabCounts.repair, tabCounts.fba, tabCounts.stock, tabCounts.receiving]);
 
   useEffect(() => {
     if (effectiveTab === 'orders' && allCompletedToday && stockOrders.length === 0 && !hasCelebratedRef.current) {
@@ -252,7 +242,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     }
   };
 
-  const renderOrderCard = (order: any, key?: string, effectiveOrderTab?: 'orders' | 'returns' | 'test' | 'stock') => (
+  const renderOrderCard = (order: any, key?: string, effectiveOrderTab?: 'orders' | 'stock') => (
     <OrderCard
       key={key || order.id}
       order={order}
@@ -293,7 +283,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
         {/* ── Urgency summary bar ── */}
         <AnimatePresence initial={false}>
-          {tabCounts.all > 0 && (lateCount > 0 || dueTodayCount > 0 || openOrderCount > 0) && (
+          {tabCounts.all > 0 && (lateCount > 0 || dueTodayCount > 0) && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -315,15 +305,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                   <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-500">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
                     {dueTodayCount} due today
-                  </span>
-                )}
-                {openOrderCount > 0 && (lateCount > 0 || dueTodayCount > 0) && (
-                  <span className="text-gray-200 text-[9px]">·</span>
-                )}
-                {openOrderCount > 0 && (
-                  <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-600">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    {openOrderCount} open
                   </span>
                 )}
               </div>

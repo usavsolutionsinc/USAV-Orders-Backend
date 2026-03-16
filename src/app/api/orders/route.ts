@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
     }
 
-    // Lateral subqueries pull the active assignment for each order from work_assignments.
+    // Lateral subqueries pull the latest assignment IDs for each order from work_assignments.
     // The alias columns (tester_id / packer_id) preserve backward-compat with client consumers.
     let sql = `
       SELECT
@@ -72,15 +72,15 @@ export async function GET(req: NextRequest) {
         o.created_at,
         wa_t.assigned_tech_id   AS tester_id,
         wa_p.assigned_packer_id AS packer_id,
-        pl_latest.pack_date_time,
+        pl_latest.packed_at,
         pl_latest.packed_by AS packed_by,
-        tsn_scan.tested_by      AS tested_by,
-        tsn_scan.serial_number  AS serial_number,
+        NULL::int AS tested_by,
+        ''::text AS serial_number,
         staff_test_assignee.name AS tester_name,
-        staff_tested_by.name     AS tested_by_name,
+        NULL::text AS tested_by_name,
         staff_pack_assignee.name AS packer_name,
         staff_packed_by.name     AS packed_by_name,
-        (COALESCE(tsn_scan.scan_count, 0) > 0) AS has_tech_scan
+        (COALESCE(sal_scan.scan_count, 0) > 0) AS has_tech_scan
       FROM orders o
       LEFT JOIN LATERAL (
         SELECT wa.deadline_at FROM work_assignments wa
@@ -94,8 +94,9 @@ export async function GET(req: NextRequest) {
         WHERE entity_type = 'ORDER'
           AND entity_id   = o.id
           AND work_type   = 'TEST'
-          AND status IN ('ASSIGNED', 'IN_PROGRESS')
-        ORDER BY created_at DESC
+          AND assigned_tech_id IS NOT NULL
+          AND status <> 'CANCELED'
+        ORDER BY updated_at DESC, id DESC
         LIMIT 1
       ) wa_t ON true
       LEFT JOIN LATERAL (
@@ -104,32 +105,28 @@ export async function GET(req: NextRequest) {
         WHERE entity_type = 'ORDER'
           AND entity_id   = o.id
           AND work_type   = 'PACK'
-          AND status IN ('ASSIGNED', 'IN_PROGRESS')
-        ORDER BY created_at DESC
+          AND assigned_packer_id IS NOT NULL
+          AND status <> 'CANCELED'
+        ORDER BY updated_at DESC, id DESC
         LIMIT 1
       ) wa_p ON true
       LEFT JOIN LATERAL (
-        SELECT pl.created_at AS pack_date_time, pl.packed_by
+        SELECT pl.created_at AS packed_at, pl.packed_by
         FROM packer_logs pl
         WHERE pl.shipment_id IS NOT NULL
           AND pl.shipment_id = o.shipment_id
         ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
         LIMIT 1
       ) pl_latest ON true
+      LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       LEFT JOIN LATERAL (
-        SELECT
-          MIN(tsn.tested_by)::int AS tested_by,
-          COUNT(*)::int AS scan_count,
-          STRING_AGG(DISTINCT NULLIF(BTRIM(tsn.serial_number), ''), ', ' ORDER BY NULLIF(BTRIM(tsn.serial_number), '')) AS serial_number
-        FROM tech_serial_numbers tsn
-        WHERE tsn.shipment_id IS NOT NULL
-          AND tsn.shipment_id = o.shipment_id
-      ) tsn_scan ON true
+        SELECT COUNT(*)::int AS scan_count
+        FROM station_activity_logs sal
+        WHERE sal.shipment_id = o.shipment_id
+      ) sal_scan ON true
       LEFT JOIN staff staff_test_assignee ON staff_test_assignee.id = wa_t.assigned_tech_id
       LEFT JOIN staff staff_packed_by ON staff_packed_by.id = wa_p.assigned_packer_id
-      LEFT JOIN staff staff_tested_by ON staff_tested_by.id = tsn_scan.tested_by
       LEFT JOIN staff staff_pack_assignee ON staff_pack_assignee.id = wa_p.assigned_packer_id
-      LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -145,17 +142,13 @@ export async function GET(req: NextRequest) {
 
     if (packedOnly) {
       sql += ` AND EXISTS (
-        SELECT 1
-        FROM packer_logs pl
-        WHERE pl.shipment_id IS NOT NULL
-          AND pl.shipment_id = o.shipment_id
+        SELECT 1 FROM packer_logs pl
+        WHERE pl.shipment_id IS NOT NULL AND pl.shipment_id = o.shipment_id
       )`;
     } else if (excludePacked) {
       sql += ` AND NOT EXISTS (
-        SELECT 1
-        FROM packer_logs pl
-        WHERE pl.shipment_id IS NOT NULL
-          AND pl.shipment_id = o.shipment_id
+        SELECT 1 FROM packer_logs pl
+        WHERE pl.shipment_id IS NOT NULL AND pl.shipment_id = o.shipment_id
       )`;
     }
 

@@ -5,10 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus } from '@/components/Icons';
 import { sidebarHeaderBandClass, sidebarHeaderControlClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { TabSwitch } from '@/components/ui/TabSwitch';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { FbaSidebar } from '@/components/fba/FbaSidebar';
 
 type FbaStatus = 'ALL' | 'PLANNED' | 'READY_TO_GO' | 'LABEL_ASSIGNED' | 'SHIPPED';
+type FbaTab = 'summary' | 'labels';
 
 const FBA_STATUS_OPTIONS: Array<{ value: FbaStatus; label: string }> = [
   { value: 'ALL', label: 'All' },
@@ -22,10 +24,11 @@ export function FbaSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeStatus = (searchParams.get('status')?.toUpperCase() || 'ALL') as FbaStatus;
+  const activeTab: FbaTab = searchParams.get('tab') === 'labels' ? 'labels' : 'summary';
   const [localSearch, setLocalSearch] = useState(searchParams.get('q') || '');
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  const updateFbaParams = (patch: { status?: FbaStatus; q?: string; r?: string }) => {
+  const updateFbaParams = (patch: { status?: FbaStatus; q?: string; r?: string; tab?: FbaTab }) => {
     const params = new URLSearchParams(searchParams.toString());
     if (patch.status !== undefined) {
       if (patch.status === 'ALL') params.delete('status');
@@ -34,6 +37,10 @@ export function FbaSidebarPanel() {
     if (patch.q !== undefined) {
       if (patch.q.trim()) params.set('q', patch.q.trim());
       else params.delete('q');
+    }
+    if (patch.tab !== undefined) {
+      if (patch.tab === 'summary') params.delete('tab');
+      else params.set('tab', patch.tab);
     }
     if (patch.r !== undefined) params.set('r', patch.r);
     router.replace(`/fba?${params.toString()}`);
@@ -85,6 +92,17 @@ export function FbaSidebarPanel() {
               <Plus className="w-4 h-4" />
             </button>
           }
+        />
+      </div>
+
+      <div className={`${sidebarHeaderBandClass} px-4 py-3`}>
+        <TabSwitch
+          tabs={[
+            { id: 'summary', label: 'Summary', color: 'purple' },
+            { id: 'labels', label: 'Label Queue', color: 'purple' },
+          ]}
+          activeTab={activeTab}
+          onTabChange={(tab) => updateFbaParams({ tab: tab as FbaTab })}
         />
       </div>
 

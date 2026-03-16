@@ -1,40 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getTunnelUrl } from '@/lib/ai/tunnel-config';
+import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs';
 
+/**
+ * Generates a new chat session ID server-side.
+ * The ID is a standard UUID — no round-trip to the chatbot backend needed.
+ * The backend stores messages keyed by whatever session_id the client sends,
+ * so any unique string works.
+ */
 export async function POST() {
-  try {
-    const tunnelUrl = await getTunnelUrl();
-    const apiKey = process.env.AI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json({ error: 'AI_API_KEY not configured on server' }, { status: 500 });
-    }
-
-    const upstream = await fetch(`${tunnelUrl}/chat/session`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
-    });
-
-    const data = await upstream.json();
-
-    if (!upstream.ok) {
-      return NextResponse.json(
-        { error: data?.error ?? 'Chatbot backend error' },
-        { status: upstream.status }
-      );
-    }
-
-    return NextResponse.json(data);
-  } catch (err: any) {
-    console.error('[tunnel-session] Error:', err?.message);
-    return NextResponse.json(
-      { error: err?.message ?? 'Failed to create chat session' },
-      { status: 503 }
-    );
-  }
+  return NextResponse.json({ session_id: randomUUID() });
 }

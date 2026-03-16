@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     // to avoid downloading thousands of all-time records).
     if (weekStart && weekEnd) {
       shipped = shipped.filter((r) => {
-        const dateKey = (r.pack_date_time || r.created_at || '').substring(0, 10);
+        const dateKey = (r.packed_at || r.created_at || '').substring(0, 10);
         return dateKey >= weekStart && dateKey <= weekEnd;
       });
     }

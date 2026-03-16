@@ -65,7 +65,7 @@ function normalizeRow(row: any) {
     sku: row.sku || null,
     item_number: row.item_number || null,
     product_title: row.product_title || null,
-    google_doc_id: String(row.google_file_id || ''),
+    google_file_id: String(row.google_file_id || ''),
     type: row.type || null,
     updated_at: row.updated_at || null,
   };

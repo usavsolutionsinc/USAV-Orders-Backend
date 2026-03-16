@@ -2,21 +2,38 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { Plus } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { TabSwitch } from '@/components/ui/TabSwitch';
-import { RepairIntakeForm, type RepairFormData } from '@/components/repair';
+import {
+  RepairIntakeForm,
+  type RepairFormData,
+} from '@/components/repair';
+import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
+import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 
 type RepairTab = 'active' | 'done';
 
-interface RepairSidebarProps {
+interface RepairSidebarPanelProps {
   embedded?: boolean;
   hideSectionHeader?: boolean;
 }
 
-export function RepairSidebar({ embedded = false, hideSectionHeader = false }: RepairSidebarProps) {
+function buildDraftFromFavorite(favorite: FavoriteSkuRecord): Partial<RepairFormData> {
+  return {
+    product: {
+      type: 'Other',
+      model: favorite.productTitle || favorite.label || favorite.sku,
+    },
+    repairReasons: [],
+    repairNotes: favorite.issueTemplate || '',
+    price: favorite.defaultPrice || '130',
+    notes: favorite.notes || '',
+  };
+}
+
+export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false }: RepairSidebarPanelProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -24,6 +41,7 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
+  const [intakeDraft, setIntakeDraft] = useState<Partial<RepairFormData> | undefined>(undefined);
 
   const activeTab: RepairTab = searchParams.get('tab') === 'done' ? 'done' : 'active';
 
@@ -43,9 +61,7 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
   }, [pathname, router, searchParams]);
 
   useEffect(() => {
-    if (!isMounted) return;
-    if (!showIntakeForm) return;
-
+    if (!isMounted || !showIntakeForm) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
@@ -69,6 +85,7 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
 
   const handleCloseForm = () => {
     setShowIntakeForm(false);
+    setIntakeDraft(undefined);
   };
 
   const handleSubmitForm = async (data: RepairFormData) => {
@@ -84,110 +101,108 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
 
       if (result.success) {
         setShowIntakeForm(false);
+        setIntakeDraft(undefined);
         window.open(`/api/repair-service/print/${result.id}`, '_blank');
       } else {
-        alert('Failed to submit repair form. Please try again.');
+        window.alert('Failed to submit repair form. Please try again.');
       }
     } catch (_error) {
-      alert('Error submitting repair form. Please try again.');
+      window.alert('Error submitting repair form. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-        delayChildren: 0.05,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, x: -20, filter: 'blur(4px)' },
-    visible: {
-      opacity: 1,
-      x: 0,
-      filter: 'blur(0px)',
-      transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 },
-    },
+  const handleUseFavorite = (favorite: FavoriteSkuRecord) => {
+    setIntakeDraft(buildDraftFromFavorite(favorite));
+    setShowIntakeForm(true);
   };
 
   const content = (
-    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="px-6 py-4 space-y-6 h-full flex flex-col overflow-y-auto">
-      {!hideSectionHeader ? (
-        <motion.header variants={itemVariants}>
-          <h2 className="text-2xl font-black tracking-tighter text-gray-900 uppercase leading-none">Repairs</h2>
-          <p className="text-[10px] font-bold text-orange-600 uppercase tracking-[0.3em] mt-2">USAV Repair Service</p>
-        </motion.header>
-      ) : null}
+    <div className="flex h-full flex-col overflow-hidden bg-white">
+      <div className="border-b border-gray-100 px-4 py-4">
+        {!hideSectionHeader ? (
+          <div className="mb-4">
+            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-orange-500">Repair Service</p>
+            <h2 className="mt-1 text-xl font-black tracking-tight text-gray-900">Repairs</h2>
+          </div>
+        ) : null}
 
-      <motion.div variants={itemVariants} className="space-y-4">
         <SearchBar
           value={searchValue}
           onChange={setSearchValue}
           onSearch={() =>
             updateParams((params) => {
-              if (searchValue.trim()) {
-                params.set('search', searchValue.trim());
-              } else {
-                params.delete('search');
-              }
+              if (searchValue.trim()) params.set('search', searchValue.trim());
+              else params.delete('search');
             })
           }
           onClear={handleClearSearch}
-          placeholder="Search repairs..."
+          placeholder="Search repairs, tickets, SKU…"
           variant="orange"
           size="compact"
           rightElement={
             <button
               type="button"
-              onClick={() => setShowIntakeForm(true)}
+              onClick={() => {
+                setIntakeDraft(undefined);
+                setShowIntakeForm(true);
+              }}
               disabled={isSubmitting}
-              className="rounded-xl bg-orange-500 p-2.5 text-white transition-all active:scale-95 disabled:bg-gray-300 hover:bg-orange-600 shadow-lg shadow-orange-500/20 group"
-              title="New Repair Order"
+              className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-300"
+              title="New repair"
               aria-label="Open new repair order form"
             >
-              <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+              <Plus className="h-5 w-5" />
             </button>
           }
         />
-        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Repairs sorted by most urgent</p>
 
-        <TabSwitch
-          tabs={[
-            { id: 'active', label: 'Active', color: 'blue' },
-            { id: 'done', label: 'Done', color: 'emerald' },
-          ]}
-          activeTab={activeTab}
-          onTabChange={(tab) =>
-            updateParams((params) => {
-              if (tab === 'done') {
-                params.set('tab', 'done');
-              } else {
-                params.delete('tab');
-              }
-            })
-          }
+        <div className="mt-3">
+          <TabSwitch
+            tabs={[
+              { id: 'active', label: 'Active', color: 'orange' },
+              { id: 'done', label: 'Done', color: 'orange' },
+            ]}
+            activeTab={activeTab}
+            onTabChange={(tab) =>
+              updateParams((params) => {
+                if (tab === 'done') params.set('tab', 'done');
+                else params.delete('tab');
+              })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <FavoritesWorkspaceSection
+          workspaceKey="repair"
+          accent="orange"
+          title="Favorites"
+          description=""
+          emptyLabel="No repair favorites yet"
+          useLabel="Start Repair"
+          allowRepairDefaults
+          inlineRows
+          buttonAccent="blue"
+          onUseFavorite={handleUseFavorite}
         />
-      </motion.div>
-
-      <motion.div variants={itemVariants} className="mt-auto pt-6 border-t border-gray-100 text-center">
-        <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">Repair Module v2.1</p>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 
   const intakeOverlay =
     isMounted && showIntakeForm
       ? createPortal(
           <div className="fixed inset-0 z-[130] bg-white">
-            <RepairIntakeForm onClose={handleCloseForm} onSubmit={handleSubmitForm} />
+            <RepairIntakeForm
+              onClose={handleCloseForm}
+              onSubmit={handleSubmitForm}
+              initialData={intakeDraft}
+            />
           </div>,
-          document.body
+          document.body,
         )
       : null;
 
@@ -202,7 +217,7 @@ export function RepairSidebar({ embedded = false, hideSectionHeader = false }: R
 
   return (
     <>
-      <aside className="bg-white text-gray-900 flex-shrink-0 h-full overflow-hidden border-r border-gray-200 relative">{content}</aside>
+      <aside className="h-full overflow-hidden border-r border-gray-200 bg-white">{content}</aside>
       {intakeOverlay}
     </>
   );

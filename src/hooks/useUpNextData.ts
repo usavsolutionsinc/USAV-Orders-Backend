@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Order, RepairQueueItem, FBAQueueItem, ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
+import { fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 
 interface UseUpNextDataOptions {
   techId: string;
@@ -15,11 +16,6 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   const [receivingItems, setReceivingItems] = useState<ReceivingQueueItem[]>([]);
   const [loading, setLoading]               = useState(true);
   const [allCompletedToday, setAllCompletedToday] = useState(false);
-
-  const hasTrackingNumber = (order: Order) =>
-    String(order.shipping_tracking_number || (order as any).tracking_number || '').trim().length > 0;
-
-  const isPendingByShipmentState = (order: Order) => order.is_shipped === false;
 
   const fetchFbaShipments = async () => {
     try {
@@ -96,29 +92,40 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
 
   const fetchOrders = async () => {
     try {
-      const [currentRes, stockRes, repairRes] = await Promise.all([
-        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=false&assignedOnly=false`),
-        fetch(`/api/orders/next?techId=${techId}&all=true&outOfStock=true&assignedOnly=false`),
+      const [pendingOrders, repairRes] = await Promise.all([
+        fetchPendingOrdersData({ testedBy: Number(techId) }),
         fetch(`/api/repair-service/next?techId=${techId}`),
       ]);
 
-      const currentData = currentRes.ok ? await currentRes.json() : { orders: [], all_completed: false };
-      const stockData = stockRes.ok ? await stockRes.json() : { orders: [] };
+      const normalizedOrders: Order[] = pendingOrders.map((row: any) => ({
+        id: Number(row.id),
+        ship_by_date: row.ship_by_date ?? row.deadline_at ?? null,
+        created_at: row.created_at ?? null,
+        order_id: String(row.order_id || ''),
+        product_title: String(row.product_title || ''),
+        item_number: row.item_number ?? null,
+        account_source: row.account_source ?? null,
+        sku: String(row.sku || ''),
+        condition: row.condition ?? null,
+        quantity: row.quantity ?? null,
+        status: String(row.status || ''),
+        shipping_tracking_number: String(row.shipping_tracking_number || row.tracking_number || ''),
+        out_of_stock: row.out_of_stock ?? null,
+        tester_id: row.tester_id ?? null,
+        tester_name: row.tester_name ?? null,
+        has_tech_scan: Boolean(row.has_tech_scan),
+        is_shipped: Boolean(row.is_shipped),
+      }));
 
-      const currentOrders = (currentData.orders || []).filter(
-        (order: Order) => isPendingByShipmentState(order) && hasTrackingNumber(order)
+      const deduped = normalizedOrders.filter((row, idx, arr) =>
+        arr.findIndex((cand) => Number(cand.id) === Number(row.id)) === idx
       );
-      const stockOrders = (stockData.orders || []).filter(
-        (order: Order) => !!String(order.out_of_stock || '').trim()
-      );
-      const merged = [...currentOrders, ...stockOrders];
-      const deduped = merged.filter((row: Order, idx: number, arr: Order[]) =>
-        arr.findIndex((cand: Order) => Number(cand.id) === Number(row.id)) === idx
-      );
+      const currentOrders = deduped.filter((order: Order) => !String(order.out_of_stock || '').trim());
+      const allCompleted = currentOrders.length === 0;
 
       setAllOrders(deduped);
-      setAllCompletedToday(Boolean(currentData.all_completed));
-      if (currentData.all_completed && onAllCompleted) {
+      setAllCompletedToday(allCompleted);
+      if (allCompleted && onAllCompleted) {
         onAllCompleted();
       }
 

@@ -9,6 +9,7 @@ import { CustomerInfoForm } from './CustomerInfoForm';
 interface RepairIntakeFormProps {
     onClose: () => void;
     onSubmit: (data: RepairFormData) => void;
+    initialData?: Partial<RepairFormData>;
 }
 
 export interface RepairFormData {
@@ -37,22 +38,33 @@ interface TechStaff {
 
 type FormStep = 'product' | 'customer';
 
-export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
+function buildInitialFormData(initialData?: Partial<RepairFormData>): RepairFormData {
+    return {
+        product: {
+            type: initialData?.product?.type || '',
+            model: initialData?.product?.model || '',
+        },
+        repairReasons: Array.isArray(initialData?.repairReasons) ? initialData!.repairReasons : [],
+        repairNotes: initialData?.repairNotes || '',
+        customer: {
+            name: initialData?.customer?.name || '',
+            phone: initialData?.customer?.phone || '',
+            email: initialData?.customer?.email || '',
+        },
+        serialNumber: initialData?.serialNumber || '',
+        price: initialData?.price || '130',
+        notes: initialData?.notes || '',
+        assignedTechId: initialData?.assignedTechId ?? null,
+        assignedTechName: initialData?.assignedTechName || '',
+    };
+}
+
+export function RepairIntakeForm({ onClose, onSubmit, initialData }: RepairIntakeFormProps) {
     const [currentStep, setCurrentStep] = useState<FormStep>('product');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const reasonRef = useRef<HTMLDivElement>(null);
 
-    const [formData, setFormData] = useState<RepairFormData>({
-        product: { type: '', model: '' },
-        repairReasons: [],
-        repairNotes: '',
-        customer: { name: '', phone: '', email: '' },
-        serialNumber: '',
-        price: '130',
-        notes: '',
-        assignedTechId: null,
-        assignedTechName: '',
-    });
+    const [formData, setFormData] = useState<RepairFormData>(() => buildInitialFormData(initialData));
 
     const [techs, setTechs] = useState<TechStaff[]>([]);
     const [loadingTechs, setLoadingTechs] = useState(true);
@@ -64,6 +76,10 @@ export function RepairIntakeForm({ onClose, onSubmit }: RepairIntakeFormProps) {
             .catch(() => setTechs([]))
             .finally(() => setLoadingTechs(false));
     }, []);
+
+    useEffect(() => {
+        setFormData(buildInitialFormData(initialData));
+    }, [initialData]);
 
     const productSelected = !!(formData.product.type && formData.product.model);
 

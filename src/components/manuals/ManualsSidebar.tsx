@@ -11,7 +11,7 @@ interface ProductManual {
   sku: string | null;
   item_number: string | null;
   product_title: string | null;
-  google_doc_id: string;
+  google_file_id: string;
   type: string | null;
   updated_at: string | null;
 }
@@ -58,9 +58,9 @@ function ManualRow({
             </p>
           )}
         </div>
-        {manual.google_doc_id && (
+        {manual.google_file_id && (
           <a
-            href={`https://docs.google.com/document/d/${manual.google_doc_id}`}
+            href={`https://docs.google.com/document/d/${manual.google_file_id}`}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}

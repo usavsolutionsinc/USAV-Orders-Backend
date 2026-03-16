@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 export type OrderAssignPayload = {
   orderId?: number;
   orderIds?: number[];
+  orderNumber?: string | null;
   testerId?: number | null;
   packerId?: number | null;
   testerName?: string | null;
@@ -53,6 +54,10 @@ export function useOrderAssignment() {
       if (payload.shipByDate !== undefined) {
         next.ship_by_date = payload.shipByDate;
         next.shipByDate = payload.shipByDate;
+      }
+      if (payload.orderNumber !== undefined) {
+        next.order_id = payload.orderNumber;
+        next.orderId = payload.orderNumber;
       }
       if (payload.outOfStock !== undefined) {
         next.out_of_stock = payload.outOfStock;
@@ -139,6 +144,7 @@ export function useOrderAssignment() {
             packerId: payload.packerId,
             testerName: payload.testerName,
             packerName: payload.packerName,
+            orderNumber: payload.orderNumber,
             shipByDate: payload.shipByDate,
             outOfStock: payload.outOfStock,
             notes: payload.notes,

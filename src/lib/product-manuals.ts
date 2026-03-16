@@ -8,7 +8,7 @@ export interface LegacyProductManualRecord {
   sku: string | null;
   item_number: string | null;
   product_title: string | null;
-  google_doc_id: string;
+  google_file_id: string;
   type: string | null;
   updated_at: string | null;
 }
@@ -56,7 +56,7 @@ function toLegacyManualRecord(row: any): LegacyProductManualRecord {
     sku: row.sku ? String(row.sku) : null,
     item_number: row.item_number ? String(row.item_number) : null,
     product_title: row.product_title ? String(row.product_title) : null,
-    google_doc_id: String(row.google_file_id || row.google_doc_id || ''),
+    google_file_id: String(row.google_file_id || row.google_file_id || ''),
     type: row.type ? String(row.type) : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
   };

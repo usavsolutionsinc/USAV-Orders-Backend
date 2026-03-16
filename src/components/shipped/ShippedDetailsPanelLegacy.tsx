@@ -216,7 +216,7 @@ export function ShippedDetailsPanel({
             <div className="pt-4 border-t border-orange-100/50">
               <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
               <p className="text-xs font-bold text-gray-600">
-                {shipped.pack_date_time && shipped.pack_date_time !== '1' ? formatDateTimePST(shipped.pack_date_time) : 'N/A'}
+                {shipped.packed_at && shipped.packed_at !== '1' ? formatDateTimePST(shipped.packed_at) : 'N/A'}
               </p>
             </div>
           </div>

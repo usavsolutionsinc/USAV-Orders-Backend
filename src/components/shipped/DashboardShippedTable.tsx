@@ -137,7 +137,7 @@ export function DashboardShippedTable({
 
   const groupedRecords: Record<string, ShippedOrder[]> = {};
   records.forEach((record) => {
-    const dateSource = record.pack_date_time || record.created_at;
+    const dateSource = record.packed_at || record.created_at;
     if (!dateSource || dateSource === '1') return;
 
     let date = '';
@@ -150,6 +150,37 @@ export function DashboardShippedTable({
     if (!groupedRecords[date]) groupedRecords[date] = [];
     groupedRecords[date].push(record);
   });
+
+  const orderedRecords = Object.entries(groupedRecords)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .flatMap(([, dayRecords]) =>
+      [...dayRecords].sort((a, b) => {
+        const timeA = new Date(a.packed_at || a.created_at || 0).getTime();
+        const timeB = new Date(b.packed_at || b.created_at || 0).getTime();
+        return timeB - timeA;
+      })
+    );
+
+  useEffect(() => {
+    const handleNavigate = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
+      if (!selectedShipped || orderedRecords.length === 0) return;
+
+      const currentIndex = orderedRecords.findIndex((record) => Number(record.id) === Number(selectedShipped.id));
+      if (currentIndex < 0) return;
+
+      const step = e.detail?.direction === 'up' ? -1 : 1;
+      const nextRecord = orderedRecords[currentIndex + step];
+      if (!nextRecord) return;
+
+      window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: nextRecord }));
+      setSelectedShipped(nextRecord);
+    };
+
+    window.addEventListener('navigate-shipped-details' as any, handleNavigate as any);
+    return () => {
+      window.removeEventListener('navigate-shipped-details' as any, handleNavigate as any);
+    };
+  }, [orderedRecords, selectedShipped]);
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -265,8 +296,8 @@ export function DashboardShippedTable({
                   .sort((a, b) => b[0].localeCompare(a[0]))
                   .map(([date, dayRecords]) => {
                     const sortedRecords = [...dayRecords].sort((a, b) => {
-                      const timeA = new Date(a.pack_date_time || a.created_at || 0).getTime();
-                      const timeB = new Date(b.pack_date_time || b.created_at || 0).getTime();
+                      const timeA = new Date(a.packed_at || a.created_at || 0).getTime();
+                      const timeB = new Date(b.packed_at || b.created_at || 0).getTime();
                       return timeB - timeA;
                     });
 

@@ -10,7 +10,7 @@ import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/adm
 import BarcodeSidebar from '@/components/BarcodeSidebar';
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
-import { RepairSidebar } from '@/components/repair';
+import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
 import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
@@ -344,7 +344,6 @@ function SidebarContextPanel() {
   if (routeKey === 'admin') {
     const activeSection = (searchParams.get('section') as AdminSection) || 'goals';
     const validSection = ADMIN_SECTION_OPTIONS.some((item) => item.value === activeSection) ? activeSection : 'goals';
-    const sidebarSearch = searchParams.get('search') || '';
 
     return (
       <div className="h-full overflow-hidden">
@@ -352,13 +351,6 @@ function SidebarContextPanel() {
           activeSection={validSection}
           onSectionChange={(nextSection) =>
             updateSearch((params) => { params.set('section', nextSection); }, '/admin')
-          }
-          searchValue={sidebarSearch}
-          onSearchChange={(nextValue) =>
-            updateSearch((params) => {
-              if (nextValue.trim()) params.set('search', nextValue);
-              else params.delete('search');
-            }, '/admin')
           }
         />
       </div>
@@ -371,7 +363,7 @@ function SidebarContextPanel() {
   if (routeKey === 'fba') return <FbaSidebarPanel />;
   if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
   if (routeKey === 'sku-stock') return <BarcodeSidebar embedded />;
-  if (routeKey === 'repair') return <RepairSidebar embedded hideSectionHeader />;
+  if (routeKey === 'repair') return <RepairSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;
   if (routeKey === 'manuals') return <ManualsSidebar />;
 

@@ -7,6 +7,7 @@ import { Check, ChevronDown, Copy, ExternalLink, Pencil, Play, Settings } from '
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
+import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { getTrackingUrl } from '@/utils/order-links';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getActiveStaff } from '@/lib/staffCache';
@@ -298,44 +299,16 @@ export function OrderCard({
           <div className="px-3 mt-2.5 flex flex-col gap-2">
             <AnimatePresence initial={false}>
               {showMissingPartsInput === order.id && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                  className="overflow-hidden pt-0.5"
-                >
-                  <div className="flex flex-col gap-2 rounded-xl border border-orange-200 bg-orange-50/40 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),inset_0_0_0_1px_rgba(251,146,60,0.06)]">
-                    <input
-                      type="text"
-                      value={missingPartsReason}
-                      onChange={(e) => onMissingPartsReasonChange(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      placeholder="What parts are missing?"
-                      className="w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] outline-none transition-[border-color,box-shadow] placeholder:text-gray-400 focus:border-orange-400 focus:shadow-[inset_0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(251,146,60,0.18)]"
-                      autoFocus
-                    />
-                    <div className="flex gap-2">
-                      <UpNextActionButton
-                        onClick={(e) => { e.stopPropagation(); onMissingPartsCancel(); }}
-                        label="Cancel"
-                        tone="gray"
-                        size="sm"
-                        fullWidth
-                        className="flex-1"
-                      />
-                      <UpNextActionButton
-                        onClick={(e) => { e.stopPropagation(); onMissingPartsSubmit(order.id); }}
-                        disabled={!missingPartsReason.trim()}
-                        label="Submit"
-                        tone="orange"
-                        size="sm"
-                        fullWidth
-                        className="flex-1 !border-orange-600 !bg-orange-600 !text-white hover:!bg-orange-700"
-                      />
-                    </div>
-                  </div>
-                </motion.div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <OutOfStockEditorBlock
+                    value={missingPartsReason}
+                    onChange={onMissingPartsReasonChange}
+                    onCancel={onMissingPartsCancel}
+                    onSubmit={() => onMissingPartsSubmit(order.id)}
+                    autoFocus
+                    className="pt-0.5"
+                  />
+                </div>
               )}
             </AnimatePresence>
 
@@ -345,7 +318,7 @@ export function OrderCard({
                   <UpNextActionButton
                     onClick={(e) => { e.stopPropagation(); onMissingPartsToggle(order.id); }}
                     label="Out of Stock"
-                    tone="orange"
+                    tone="red"
                     fullWidth
                     className="flex-1"
                   />

@@ -38,19 +38,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             orderId={orderId}
             searchValue={sidebarSearch}
           />
-        ) : activeTab === 'connections' || activeTab === 'goals' ? (
+        ) : activeTab === 'connections' || activeTab === 'goals' || activeTab === 'staff' || activeTab === 'fba' ? (
           <div className="h-full min-h-0 w-full">
-            {activeTab === 'connections' ? <ConnectionsManagementTab /> : <GoalsAnalyticsTab />}
+            {activeTab === 'connections' ? (
+              <ConnectionsManagementTab />
+            ) : activeTab === 'goals' ? (
+              <GoalsAnalyticsTab />
+            ) : activeTab === 'staff' ? (
+              <StaffManagementTab />
+            ) : (
+              <FBAManagementTab searchTerm={sidebarSearch} />
+            )}
           </div>
         ) : (
           <div className="h-full min-h-0 p-4">
-            {activeTab === 'staff' ? (
-              <StaffManagementTab />
-            ) : activeTab === 'fba' ? (
-              <FBAManagementTab searchTerm={sidebarSearch} />
-            ) : (
-              <GoalsAnalyticsTab />
-            )}
+            <GoalsAnalyticsTab />
           </div>
         )}
       </div>

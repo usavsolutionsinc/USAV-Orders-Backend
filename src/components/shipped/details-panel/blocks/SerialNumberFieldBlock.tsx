@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Edit, Plus, X } from '@/components/Icons';
+import { Check, Pencil, Plus, X } from '@/components/Icons';
 import { CopyableValueFieldBlock } from './CopyableValueFieldBlock';
 
 interface SerialNumberFieldBlockProps {
@@ -12,6 +12,7 @@ interface SerialNumberFieldBlockProps {
   techId?: number | null;
   onUpdate?: () => void;
   onSerialNumberChange?: (nextSerialNumber: string) => void;
+  variant?: 'card' | 'flat';
 }
 
 function parseSerialRows(value: string | null | undefined): string[] {
@@ -61,6 +62,7 @@ export function SerialNumberFieldBlock({
   techId = null,
   onUpdate,
   onSerialNumberChange,
+  variant = 'card',
 }: SerialNumberFieldBlockProps) {
   const queryClient = useQueryClient();
   const [displaySerialNumber, setDisplaySerialNumber] = useState(serialNumber || '');
@@ -178,6 +180,7 @@ export function SerialNumberFieldBlock({
         label="Serial Number"
         value={displaySerialNumber || 'N/A'}
         twoLineValue
+        variant={variant}
         trailingActions={
           <button
             type="button"
@@ -191,11 +194,11 @@ export function SerialNumberFieldBlock({
                 setError(null);
               }
             }}
-            className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-gray-300 hover:text-blue-600"
+            className={`transition-all text-gray-400 hover:text-gray-900 ${variant === 'flat' ? '' : 'rounded-lg p-1.5 hover:bg-white hover:shadow-sm'}`}
             title={isEditing ? 'Cancel serial edit' : 'Edit serial numbers'}
             aria-label={isEditing ? 'Cancel serial edit' : 'Edit serial numbers'}
           >
-            <Edit className="w-3.5 h-3.5" />
+            <Pencil className="w-3.5 h-3.5" />
           </button>
         }
       />

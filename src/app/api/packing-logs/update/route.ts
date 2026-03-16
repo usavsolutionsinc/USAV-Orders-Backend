@@ -152,15 +152,17 @@ export async function POST(req: NextRequest) {
           const orderId = fallbackUpdate.rows[0].id;
           await client.query(`
             INSERT INTO work_assignments
-                (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
-            VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
+                (entity_type, entity_id, work_type, assigned_packer_id,
+                 completed_by_packer_id, status, priority, notes, completed_at)
+            VALUES ('ORDER', $1, 'PACK', $2, $2, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
             ON CONFLICT (entity_type, entity_id, work_type)
                 WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
             DO UPDATE
-                SET assigned_packer_id = EXCLUDED.assigned_packer_id,
-                    status             = 'DONE',
-                    completed_at       = NOW(),
-                    updated_at         = NOW()
+                SET assigned_packer_id     = EXCLUDED.assigned_packer_id,
+                    completed_by_packer_id = EXCLUDED.completed_by_packer_id,
+                    status                 = 'DONE',
+                    completed_at           = NOW(),
+                    updated_at             = NOW()
           `, [orderId, staffId]);
         }
       } else {
@@ -168,15 +170,17 @@ export async function POST(req: NextRequest) {
         const orderId = updateResult.rows[0].id;
         await client.query(`
           INSERT INTO work_assignments
-              (entity_type, entity_id, work_type, assigned_packer_id, status, priority, notes, completed_at)
-          VALUES ('ORDER', $1, 'PACK', $2, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
+              (entity_type, entity_id, work_type, assigned_packer_id,
+               completed_by_packer_id, status, priority, notes, completed_at)
+          VALUES ('ORDER', $1, 'PACK', $2, $2, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
           ON CONFLICT (entity_type, entity_id, work_type)
               WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
           DO UPDATE
-              SET assigned_packer_id = EXCLUDED.assigned_packer_id,
-                  status             = 'DONE',
-                  completed_at       = NOW(),
-                  updated_at         = NOW()
+              SET assigned_packer_id     = EXCLUDED.assigned_packer_id,
+                  completed_by_packer_id = EXCLUDED.completed_by_packer_id,
+                  status                 = 'DONE',
+                  completed_at           = NOW(),
+                  updated_at             = NOW()
         `, [orderId, staffId]);
       }
 

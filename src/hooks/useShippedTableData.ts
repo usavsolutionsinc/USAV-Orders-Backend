@@ -66,7 +66,7 @@ async function fetchShippedData(options: UseShippedTableDataOptions): Promise<Sh
   if (ordersOnly) {
     records = (data.orders || []).map((order: any) => ({
       ...order,
-      pack_date_time: order.ship_by_date || null,
+      packed_at: order.ship_by_date || null,
       packed_by: order.packer_id ?? null,
       tested_by: order.tester_id ?? null,
       serial_number: '',

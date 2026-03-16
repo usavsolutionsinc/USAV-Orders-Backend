@@ -137,26 +137,26 @@ export async function getZendeskSupportOverview(limit = 10): Promise<ZendeskSupp
 }
 
 /**
- * Calculates a date that is 5 business days (Mon-Fri) from the current date.
+ * Returns a Date that is `businessDays` business days (Mon-Fri) from startDate.
+ * Exported so callers can derive a deadline_at value independently of Zendesk.
  */
-function calculateDueDate(startDate: Date): string {
-    let date = new Date(startDate);
-    let businessDaysAdded = 0;
-
-    while (businessDaysAdded < 5) {
+export function addBusinessDays(startDate: Date, businessDays = 5): Date {
+    const date = new Date(startDate);
+    let added = 0;
+    while (added < businessDays) {
         date.setDate(date.getDate() + 1);
-        const dayOfWeek = date.getDay();
-        // 0 is Sunday, 6 is Saturday
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            businessDaysAdded++;
-        }
+        const dow = date.getDay();
+        if (dow !== 0 && dow !== 6) added++;
     }
+    return date;
+}
 
+/** Returns the repair due date as a MM/DD/YYYY string for display in tickets. */
+function calculateDueDate(startDate: Date): string {
+    const date = addBusinessDays(startDate, 5);
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    const year = date.getFullYear();
-    
-    return `${month}/${day}/${year}`;
+    return `${month}/${day}/${date.getFullYear()}`;
 }
 
 /**

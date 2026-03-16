@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setZohoTokens, clearZohoTokens } from '@/lib/zoho-kv';
+import { setZohoTokens, clearZohoTokens, getZohoRefreshTokenFromKv } from '@/lib/zoho-kv';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,6 +118,20 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const existingRefreshToken = await getZohoRefreshTokenFromKv();
+  if (!refreshToken && !existingRefreshToken) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Zoho did not return a refresh_token.',
+        description:
+          'Refresh tokens are only issued on an offline consent grant. Retry /api/zoho/oauth/authorize and approve the consent screen again.',
+        accounts_server: accountsServer,
+      },
+      { status: 502 }
+    );
+  }
+
   // Clear any stale tokens, then persist fresh ones to the DB (ebay_accounts ZOHO_MAIN row)
   await clearZohoTokens();
   await setZohoTokens({ accessToken, refreshToken: refreshToken || undefined, expiresIn });
@@ -125,10 +139,15 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     success: true,
     message: 'Zoho OAuth connected successfully. Tokens saved to database (ebay_accounts).',
-    ...(refreshToken && {
-      refresh_token: refreshToken,
-      tip: 'Tokens are stored in the database. No env var update needed.',
-    }),
+    refresh_token_received: Boolean(refreshToken),
+    ...(refreshToken
+      ? {
+          refresh_token: refreshToken,
+          tip: 'Tokens are stored in the database. No env var update needed.',
+        }
+      : {
+          tip: 'Zoho did not rotate the refresh token, so the previously stored refresh token was kept.',
+        }),
     scopes: tokenData.scope ?? null,
     token_type: tokenData.token_type ?? 'Bearer',
     api_domain: tokenData.api_domain ?? null,

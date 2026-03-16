@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus } from '@/components/Icons';
 import type { Staff } from './types';
 
 export function StaffManagementTab() {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
@@ -88,23 +89,89 @@ export function StaffManagementTab() {
     setEditActive(Boolean(member.active));
   };
 
+  useEffect(() => {
+    const handleOpenAdd = () => setIsAddingStaff(true);
+    window.addEventListener('admin-staff-open-add', handleOpenAdd as EventListener);
+    return () => window.removeEventListener('admin-staff-open-add', handleOpenAdd as EventListener);
+  }, []);
+
+  const searchTerm = (searchParams.get('search') || '').trim().toLowerCase();
+  const staffView = searchParams.get('staffView') || 'all';
+
+  const filteredStaff = useMemo(() => {
+    return staff.filter((member) => {
+      const matchesSearch =
+        !searchTerm ||
+        member.name.toLowerCase().includes(searchTerm) ||
+        (member.employee_id || '').toLowerCase().includes(searchTerm);
+
+      const matchesView =
+        staffView === 'active'
+          ? Boolean(member.active)
+          : staffView === 'inactive'
+            ? !member.active
+            : staffView === 'technician'
+              ? member.role === 'technician'
+              : staffView === 'packer'
+                ? member.role === 'packer'
+                : true;
+
+      return matchesSearch && matchesView;
+    });
+  }, [searchTerm, staff, staffView]);
+
+  const summary = useMemo(() => {
+    return filteredStaff.reduce(
+      (acc, member) => {
+        acc.total += 1;
+        if (member.active) acc.active += 1;
+        else acc.inactive += 1;
+        if (member.role === 'technician') acc.technicians += 1;
+        if (member.role === 'packer') acc.packers += 1;
+        return acc;
+      },
+      { total: 0, active: 0, inactive: 0, technicians: 0, packers: 0 }
+    );
+  }, [filteredStaff]);
+
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Active Personnel</h2>
-        <button
-          onClick={() => setIsAddingStaff(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" /> New Staff
-        </button>
+    <section className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]">
+      <div className="border-b border-gray-200 bg-white/90 px-6 py-5 backdrop-blur">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div className="max-w-2xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Personnel Control Room</p>
+            <h2 className="mt-2 text-lg font-black uppercase tracking-[0.18em] text-slate-900">Staff Directory</h2>
+            <p className="mt-2 text-[12px] font-bold leading-relaxed text-slate-500">
+              Use the sidebar to search, segment, and add team members. This board stays focused on personnel records and editing.
+            </p>
+          </div>
+
+          <div className="grid min-w-[280px] flex-1 gap-3 sm:grid-cols-4">
+            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Visible Staff</p>
+              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{summary.total}</p>
+            </div>
+            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Active</p>
+              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{summary.active}</p>
+            </div>
+            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Technicians</p>
+              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{summary.technicians}</p>
+            </div>
+            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Packers</p>
+              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{summary.packers}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {isAddingStaff && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-6 bg-white rounded-3xl border border-gray-200 shadow-sm space-y-4"
+          className="mx-6 mt-6 border border-gray-200 bg-white p-6 shadow-sm space-y-4"
         >
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -171,11 +238,12 @@ export function StaffManagementTab() {
         </motion.div>
       )}
 
-      <div className="grid gap-3">
-        {staff.map((member) => (
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <div className="grid gap-3">
+        {filteredStaff.map((member) => (
           <div
             key={member.id}
-            className={`p-5 rounded-3xl bg-white border border-gray-200 transition-all group hover:shadow-sm ${!member.active && 'opacity-40 grayscale'}`}
+            className={`p-5 bg-white border border-gray-200 transition-all group hover:shadow-sm ${!member.active && 'opacity-50 grayscale-[0.15]'}`}
           >
             {editingStaffId === member.id ? (
               <div className="space-y-3">
@@ -272,7 +340,16 @@ export function StaffManagementTab() {
             )}
           </div>
         ))}
+        {filteredStaff.length === 0 && (
+          <div className="border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">No Staff Matched</p>
+            <p className="mt-2 text-[12px] font-bold text-slate-500">
+              Adjust the staff sidebar filters or add a new team member.
+            </p>
+          </div>
+        )}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

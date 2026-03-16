@@ -7,6 +7,8 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { useEffect, useState } from 'react';
 import type { SkuView } from '@/components/sku/SkuBrowser';
+import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
+import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 
 interface BarcodeSidebarProps {
     embedded?: boolean;
@@ -64,6 +66,15 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
         },
     };
 
+    const handleUseFavorite = (favorite: FavoriteSkuRecord) => {
+        const nextSearchValue = favorite.sku || favorite.label;
+        setSearchInput(nextSearchValue);
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set('search', nextSearchValue);
+        const nextSearch = nextParams.toString();
+        router.replace(nextSearch ? `/sku-stock?${nextSearch}` : '/sku-stock');
+    };
+
     const content = (
         <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
             <motion.div variants={itemVariants} className="border-b border-gray-200 bg-white">
@@ -108,7 +119,16 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
                     variant="blue"
                 />
             </motion.div>
-            <motion.div variants={itemVariants} className="flex-1 overflow-y-auto scrollbar-hide">
+            <motion.div variants={itemVariants} className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4 space-y-4">
+                <FavoritesWorkspaceSection
+                    workspaceKey="sku-stock"
+                    accent="blue"
+                    title="SKU Stock Favorites"
+                    description="Keep common stock SKUs pinned so anyone can jump straight to the right inventory record."
+                    emptyLabel="No SKU stock favorites yet"
+                    useLabel="Search SKU"
+                    onUseFavorite={handleUseFavorite}
+                />
                 <MultiSkuSnBarcode />
             </motion.div>
             <motion.footer variants={itemVariants} className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">

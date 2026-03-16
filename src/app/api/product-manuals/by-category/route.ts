@@ -12,7 +12,7 @@ interface ProductWithManual {
   item_number: string;
   product_title: string;
   category: string;
-  google_doc_id: string;
+  google_file_id: string;
 }
 
 /**
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     const itemNumbers = ecwidRows.map((r) => r.item_number);
     const placeholders = itemNumbers.map((_, i) => `$${i + 1}`).join(', ');
     const dbResult = await pool.query(
-      `SELECT item_number, google_file_id AS google_doc_id
+      `SELECT item_number, google_file_id AS google_file_id
        FROM product_manuals
        WHERE is_active = TRUE
          AND item_number IN (${placeholders})`,
@@ -82,13 +82,13 @@ export async function GET(request: NextRequest) {
     // Build O(1) lookup
     const manualMap = new Map<string, string>();
     for (const row of dbResult.rows) {
-      if (row.item_number) manualMap.set(String(row.item_number), String(row.google_doc_id || ''));
+      if (row.item_number) manualMap.set(String(row.item_number), String(row.google_file_id || ''));
     }
 
     // Merge
     const products: ProductWithManual[] = ecwidRows.map((r) => ({
       ...r,
-      google_doc_id: manualMap.get(r.item_number) || '',
+      google_file_id: manualMap.get(r.item_number) || '',
     }));
 
     const payload = { success: true, products };

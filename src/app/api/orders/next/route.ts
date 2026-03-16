@@ -7,7 +7,7 @@ import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/
  * Rules:
  *  - orders.shipment_id must be set (linked to shipping_tracking_numbers)
  *  - order must NOT be carrier-accepted/in-transit/delivered
- *  - order must be assigned to this tech (wa.assigned_tech_id) OR have no active test assignment
+ *  - order must be assigned to this tech (wa.assigned_tech_id) OR have no test assignment
  *    (unassigned orders are visible to all techs)
  */
 export async function GET(req: NextRequest) {
@@ -63,9 +63,8 @@ export async function GET(req: NextRequest) {
     const noTechScanClause = `
       NOT EXISTS (
         SELECT 1
-        FROM tech_serial_numbers tsn
-        WHERE tsn.shipment_id IS NOT NULL
-          AND tsn.shipment_id = o.shipment_id
+        FROM station_activity_logs sal
+        WHERE sal.shipment_id = o.shipment_id
       )
     `;
 
@@ -78,22 +77,22 @@ export async function GET(req: NextRequest) {
         WHERE entity_type = 'ORDER'
           AND entity_id   = o.id
           AND work_type   = 'TEST'
-          AND status IN ('ASSIGNED', 'IN_PROGRESS')
-          AND completed_at IS NULL
-        ORDER BY created_at DESC
+          AND assigned_tech_id IS NOT NULL
+          AND status <> 'CANCELED'
+        ORDER BY updated_at DESC, id DESC
         LIMIT 1
       ) wa_t ON true
       LEFT JOIN LATERAL (
         SELECT wa.deadline_at FROM work_assignments wa
         WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
-          AND wa.completed_at IS NULL
-          AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+          AND wa.status <> 'CANCELED'
         ORDER BY
           CASE wa.status
             WHEN 'IN_PROGRESS' THEN 1
             WHEN 'ASSIGNED'    THEN 2
             WHEN 'OPEN'        THEN 3
-            ELSE 4
+            WHEN 'DONE'        THEN 4
+            ELSE 5
           END,
           wa.updated_at DESC, wa.id DESC
         LIMIT 1
@@ -101,26 +100,13 @@ export async function GET(req: NextRequest) {
       LEFT JOIN staff staff_t ON staff_t.id = wa_t.assigned_tech_id
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS scan_count
-        FROM tech_serial_numbers tsn
-        WHERE tsn.shipment_id IS NOT NULL
-          AND tsn.shipment_id = o.shipment_id
-      ) tsn_scan ON true
+        FROM station_activity_logs sal
+        WHERE sal.shipment_id = o.shipment_id
+      ) sal_scan ON true
     `;
 
     // Base WHERE — applies to both count and main query.
-    const baseConditions: string[] = [
-      `NOT EXISTS (
-        SELECT 1
-        FROM work_assignments wa_done
-        WHERE wa_done.entity_type = 'ORDER'
-          AND wa_done.entity_id = o.id
-          AND wa_done.work_type IN ('TEST', 'PACK')
-          AND (
-            wa_done.status = 'DONE'
-            OR wa_done.completed_at IS NOT NULL
-          )
-      )`,
-    ];
+    const baseConditions: string[] = [];
 
     const countConditions = [...baseConditions];
     if (outOfStock === 'true') {
@@ -171,7 +157,7 @@ export async function GET(req: NextRequest) {
         o.out_of_stock,
         wa_t.assigned_tech_id AS tester_id,
         staff_t.name          AS tester_name,
-        (COALESCE(tsn_scan.scan_count, 0) > 0) AS has_tech_scan
+        (COALESCE(sal_scan.scan_count, 0) > 0) AS has_tech_scan
       FROM orders o
       ${sharedJoins}
       WHERE ${mainConditions.join(' AND ')}

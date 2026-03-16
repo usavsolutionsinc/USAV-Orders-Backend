@@ -18,7 +18,7 @@ export function formatShippedDateTime(dateStr: string | null | undefined): strin
 }
 
 export function buildShippedCopyInfo(shipped: ShippedOrder): string {
-  const formattedDateTime = formatShippedDateTime(shipped.pack_date_time);
+  const formattedDateTime = formatShippedDateTime(shipped.packed_at);
   return `Serial: ${shipped.serial_number || 'N/A'}
 Order ID: ${shipped.order_id || 'Not available'}
 Tracking: ${shipped.shipping_tracking_number || 'Not available'}

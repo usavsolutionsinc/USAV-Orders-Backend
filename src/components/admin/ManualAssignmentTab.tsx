@@ -11,7 +11,7 @@ interface CategoryProductRow {
   id?: number | string;
   item_number: string;
   product_title: string;
-  google_doc_id?: string;
+  google_file_id?: string;
 }
 
 interface RecentOrder {
@@ -66,7 +66,7 @@ function buildRows(products: CategoryProductRow[]): ManualAssignmentRow[] {
     .map((product) => ({
       itemNumber: String(product.item_number || '').trim(),
       productTitle: String(product.product_title || '').trim() || '-',
-      googleDocId: String(product.google_doc_id || '').trim(),
+      googleDocId: String(product.google_file_id || '').trim(),
     }))
     .filter((row) => row.itemNumber.length > 0)
     .sort((a, b) => a.itemNumber.localeCompare(b.itemNumber));
@@ -153,7 +153,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
         productTitle: row.productTitle || null,
         product_title: row.productTitle || null,
         googleDocId: docId,
-        google_doc_id: docId,
+        google_file_id: docId,
       };
       const res = await fetch('/api/product-manuals/assign', {
         method: 'POST',
@@ -162,7 +162,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setSaveError(data?.error || `Failed (HTTP ${res.status})`); return; }
-      const savedId = String(data?.manual?.google_doc_id || docId).trim();
+      const savedId = String(data?.manual?.google_file_id || docId).trim();
       setDraft(savedId);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);

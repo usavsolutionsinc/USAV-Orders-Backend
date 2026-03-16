@@ -38,12 +38,12 @@ export async function GET() {
                 stn.latest_status_category AS shipment_status,
                 stn.is_delivered,
                 pl.packed_by,
-                pl.pack_date_time,
+                pl.packed_at,
                 o.product_title
             FROM orders o
             JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
             LEFT JOIN LATERAL (
-                SELECT packed_by, created_at AS pack_date_time
+                SELECT packed_by, created_at AS packed_at
                 FROM packer_logs
                 WHERE shipment_id = o.shipment_id
                   AND tracking_type = 'ORDERS'

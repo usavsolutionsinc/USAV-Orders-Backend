@@ -26,6 +26,34 @@ export const staff = pgTable('staff', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+export const favoriteSkus = pgTable('favorite_skus', {
+  id: serial('id').primaryKey(),
+  ecwidProductId: varchar('ecwid_product_id', { length: 64 }),
+  sku: varchar('sku', { length: 255 }).notNull(),
+  skuNormalized: varchar('sku_normalized', { length: 255 }).notNull().unique(),
+  label: text('label').notNull(),
+  productTitle: text('product_title'),
+  issueTemplate: text('issue_template'),
+  defaultPrice: text('default_price'),
+  notes: text('notes'),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  updatedByStaffId: integer('updated_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const favoriteSkuWorkspaces = pgTable('favorite_sku_workspaces', {
+  favoriteId: integer('favorite_id').notNull().references(() => favoriteSkus.id, { onDelete: 'cascade' }),
+  workspaceKey: varchar('workspace_key', { length: 32 }).notNull(),
+  sortOrder: integer('sort_order').notNull().default(100),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.favoriteId, table.workspaceKey] }),
+}));
+
 export const qaStatusEnum = pgEnum('qa_status_enum', [
   'PENDING',
   'PASSED',
@@ -335,6 +363,8 @@ export const workAssignments = pgTable('work_assignments', {
   assignedPackerId: integer('assigned_packer_id').references(() => staff.id, { onDelete: 'set null' }),
   /** Tech who actually completed the work, if different from the assignee. */
   completedByTechId: integer('completed_by_tech_id').references(() => staff.id, { onDelete: 'set null' }),
+  /** Packer who completed (shipped) this PACK assignment via the management UI. */
+  completedByPackerId: integer('completed_by_packer_id').references(() => staff.id, { onDelete: 'set null' }),
   status: assignmentStatusEnum('status').notNull().default('ASSIGNED'),
   priority: integer('priority').notNull().default(100),
   /** Operational deadline sourced from orders.ship_by_date during migration, then maintained here. */

@@ -10,7 +10,7 @@ interface ProductManual {
   sku: string | null;
   item_number: string | null;
   product_title: string | null;
-  google_doc_id: string;
+  google_file_id: string;
   type: string | null;
   updated_at: string | null;
 }
@@ -30,8 +30,8 @@ function formatDate(raw: string | null): string {
 
 function ManualDetailPanel({ manual }: { manual: ProductManual }) {
   const title = manual.product_title || manual.sku || manual.item_number || `Manual #${manual.id}`;
-  const docUrl = manual.google_doc_id
-    ? `https://docs.google.com/document/d/${manual.google_doc_id}/preview`
+  const docUrl = manual.google_file_id
+    ? `https://docs.google.com/document/d/${manual.google_file_id}/preview`
     : null;
 
   return (
@@ -59,9 +59,9 @@ function ManualDetailPanel({ manual }: { manual: ProductManual }) {
             )}
           </div>
         </div>
-        {manual.google_doc_id && (
+        {manual.google_file_id && (
           <a
-            href={`https://docs.google.com/document/d/${manual.google_doc_id}`}
+            href={`https://docs.google.com/document/d/${manual.google_file_id}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-wider hover:bg-black transition-colors"
@@ -163,9 +163,9 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
                   <span className="text-[10px] font-medium text-gray-400">{formatDate(manual.updated_at)}</span>
                 </td>
                 <td className="px-4 py-3">
-                  {manual.google_doc_id ? (
+                  {manual.google_file_id ? (
                     <a
-                      href={`https://docs.google.com/document/d/${manual.google_doc_id}`}
+                      href={`https://docs.google.com/document/d/${manual.google_file_id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}

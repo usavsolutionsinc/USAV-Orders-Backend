@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
             const result = await client.query(`
                 SELECT
                     o.id,
+                    o.shipment_id,
                     o.order_id,
                     o.product_title,
                     o.item_number,
@@ -201,6 +202,7 @@ export async function POST(req: NextRequest) {
             );
 
             const row = result.rows[0] || null;
+            const matchedShipmentId = row?.shipment_id != null ? Number(row.shipment_id) : (resolvedScan.shipmentId ?? null);
             const trackingValue =
                 row?.shipping_tracking_number ||
                 existingTracking.rows[0]?.shipping_tracking_number ||
@@ -230,18 +232,16 @@ export async function POST(req: NextRequest) {
                 const existingScanLog = await client.query(
                     `SELECT id, created_at::text AS created_at
                      FROM station_activity_logs
-                     WHERE (
-                        $1::bigint IS NOT NULL
-                        AND shipment_id = $1
-                     ) OR (
-                        scan_ref = $2
-                     )
-                       AND station = 'TECH'
+                     WHERE station = 'TECH'
                        AND activity_type = 'TRACKING_SCANNED'
                        AND staff_id = $3
+                       AND (
+                         ($1::bigint IS NOT NULL AND shipment_id = $1)
+                         OR RIGHT(regexp_replace(UPPER(COALESCE(scan_ref, metadata->>'tracking', '')), '[^A-Z0-9]', '', 'g'), 18) = $2
+                       )
                      ORDER BY id ASC
                      LIMIT 1`,
-                    [resolvedScan.shipmentId, resolvedScan.scanRef ?? scannedTracking, testedBy]
+                    [resolvedScan.shipmentId, key18, testedBy]
                 );
 
                 let techActivityId: number | null = null;
@@ -267,18 +267,19 @@ export async function POST(req: NextRequest) {
                     const updateResult = await client.query(
                         `UPDATE station_activity_logs
                          SET updated_at = date_trunc('second', NOW()),
+                             shipment_id = COALESCE(shipment_id, $2),
                              notes = COALESCE(notes, $1),
-                             orders_exception_id = COALESCE($2, orders_exception_id)
-                         WHERE id = $3
+                             orders_exception_id = COALESCE($3, orders_exception_id)
+                         WHERE id = $4
                          RETURNING id, created_at::text AS created_at`,
-                        ['Tracking scan without matched order', ordersExceptionId, existingScanLog.rows[0].id]
+                        ['Tracking scan without matched order', resolvedScan.shipmentId ?? null, ordersExceptionId, existingScanLog.rows[0].id]
                     );
                     techActivityId = updateResult.rows[0]?.id ?? existingScanLog.rows[0].id ?? null;
                     techTestDateTime = updateResult.rows[0]?.created_at ?? null;
                 }
 
                 await client.query('COMMIT');
-                await invalidateCacheTags(['orders-next', 'tech-logs']); // exceptions upserted above
+                await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']); // exceptions upserted above
 
                 if (techActivityId) {
                     await publishTechLogChanged({
@@ -331,18 +332,16 @@ export async function POST(req: NextRequest) {
             const existingScanLog = await client.query(
                 `SELECT id, created_at::text AS created_at
                  FROM station_activity_logs
-                 WHERE (
-                    $1::bigint IS NOT NULL
-                    AND shipment_id = $1
-                 ) OR (
-                    scan_ref = $2
-                 )
-                   AND station = 'TECH'
+                 WHERE station = 'TECH'
                    AND activity_type = 'TRACKING_SCANNED'
                    AND staff_id = $3
+                   AND (
+                     ($1::bigint IS NOT NULL AND shipment_id = $1)
+                     OR RIGHT(regexp_replace(UPPER(COALESCE(scan_ref, metadata->>'tracking', '')), '[^A-Z0-9]', '', 'g'), 18) = $2
+                   )
                  ORDER BY id ASC
                  LIMIT 1`,
-                [resolvedScan.shipmentId, resolvedScan.scanRef ?? scannedTracking, testedBy]
+                [matchedShipmentId, key18, testedBy]
             );
 
             if (existingScanLog.rows.length === 0) {
@@ -351,7 +350,7 @@ export async function POST(req: NextRequest) {
                     station: 'TECH',
                     activityType: 'TRACKING_SCANNED',
                     staffId: testedBy,
-                    shipmentId: resolvedScan.shipmentId ?? null,
+                    shipmentId: matchedShipmentId,
                     scanRef: resolvedScan.scanRef ?? scannedTracking,
                     metadata: {
                         order_found: true,
@@ -364,10 +363,11 @@ export async function POST(req: NextRequest) {
                 const updateResult = await client.query(
                     `UPDATE station_activity_logs
                      SET updated_at = date_trunc('second', NOW()),
-                         staff_id = $1
-                     WHERE id = $2
+                         staff_id = $1,
+                         shipment_id = COALESCE(shipment_id, $2)
+                     WHERE id = $3
                      RETURNING id, created_at::text AS created_at`,
-                    [testedBy, existingScanLog.rows[0].id]
+                    [testedBy, matchedShipmentId, existingScanLog.rows[0].id]
                 );
                 techActivityId = updateResult.rows[0]?.id ?? existingScanLog.rows[0].id ?? null;
                 techTestDateTime = updateResult.rows[0]?.created_at ?? null;
@@ -376,7 +376,7 @@ export async function POST(req: NextRequest) {
 
             await client.query('COMMIT');
 
-            await invalidateCacheTags(['tech-logs']);
+            await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']);
 
             if (techActivityId) {
                 await publishTechLogChanged({
@@ -401,7 +401,7 @@ export async function POST(req: NextRequest) {
                 techActivityId,
                 order: {
                     id: row.id,
-                    shipmentId: resolvedScan.shipmentId ?? null,
+                    shipmentId: matchedShipmentId,
                     orderId: row.order_id || 'N/A',
                     productTitle: row.product_title || 'Unknown Product',
                     itemNumber: row.item_number || null,

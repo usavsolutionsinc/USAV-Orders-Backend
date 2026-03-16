@@ -112,6 +112,27 @@ export function OrdersQueueTable({
       return sortedRecords;
     });
 
+  useEffect(() => {
+    const handleNavigate = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
+      if (!selectedRecord || displayedRecords.length === 0) return;
+
+      const currentIndex = displayedRecords.findIndex((record) => Number(record.id) === Number(selectedRecord.id));
+      if (currentIndex < 0) return;
+
+      const step = e.detail?.direction === 'up' ? -1 : 1;
+      const nextRecord = displayedRecords[currentIndex + step];
+      if (!nextRecord) return;
+
+      onOpenRecord?.(nextRecord);
+      setSelectedRecord(nextRecord);
+    };
+
+    window.addEventListener('navigate-shipped-details' as any, handleNavigate as any);
+    return () => {
+      window.removeEventListener('navigate-shipped-details' as any, handleNavigate as any);
+    };
+  }, [displayedRecords, onOpenRecord, selectedRecord]);
+
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollTop } = scrollRef.current;

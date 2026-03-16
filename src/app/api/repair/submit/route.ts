@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRepair } from '@/lib/neon/repair-service-queries';
 import { createAssignment } from '@/lib/neon/assignments-queries';
-import { createZendeskTicket } from '@/lib/zendesk';
+import { addBusinessDays, createZendeskTicket } from '@/lib/zendesk';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 import { formatPSTTimestamp } from '@/utils/date';
@@ -43,6 +43,10 @@ export async function POST(req: NextRequest) {
         }
 
         const postedAt = formatPSTTimestamp();
+
+        // Calculate the 5-business-day repair deadline (same value sent to Zendesk).
+        // Stored as an ISO date string so PostgreSQL coerces it to TIMESTAMPTZ at midnight.
+        const deadlineAt = addBusinessDays(new Date(), 5).toISOString().slice(0, 10);
 
         const productString = normalizedProductTitle;
 
@@ -89,7 +93,8 @@ export async function POST(req: NextRequest) {
         const dbId = repairRecord.id;
         const finalRSNumber = repairRecord.ticket_number;
 
-        // Insert into work_assignments so the repair appears in the Up Next queue
+        // Insert into work_assignments so the repair appears in the Up Next queue.
+        // deadline_at mirrors the due date already sent to Zendesk (5 business days out).
         try {
             await createAssignment({
                 entityType: 'REPAIR',
@@ -97,6 +102,7 @@ export async function POST(req: NextRequest) {
                 workType: 'REPAIR',
                 assignedTechId: techId,
                 status: 'ASSIGNED',
+                deadlineAt,
             });
         } catch (waErr) {
             console.warn('work_assignments insert skipped (constraint or missing):', waErr);

@@ -26,6 +26,7 @@ export interface CreateAssignmentParams {
   assignedPackerId?: number | null;
   status?: AssignmentStatus;
   notes?: string | null;
+  deadlineAt?: string | null;
 }
 
 export interface UpdateAssignmentParams {
@@ -33,6 +34,7 @@ export interface UpdateAssignmentParams {
   assignedTechId?: number | null;
   assignedPackerId?: number | null;
   completedByTechId?: number | null;
+  completedByPackerId?: number | null;
   notes?: string | null;
 }
 
@@ -125,8 +127,8 @@ export async function getNextUnassignedEntityId(
 export async function createAssignment(params: CreateAssignmentParams): Promise<WorkAssignment> {
   const result = await pool.query(
     `INSERT INTO work_assignments
-       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes, deadline_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
     [
       params.entityType,
@@ -136,6 +138,7 @@ export async function createAssignment(params: CreateAssignmentParams): Promise<
       params.assignedPackerId ?? null,
       params.status ?? 'ASSIGNED',
       params.notes ?? null,
+      params.deadlineAt ?? null,
     ],
   );
   return result.rows[0];
@@ -147,14 +150,15 @@ export async function createAssignment(params: CreateAssignmentParams): Promise<
 export async function upsertAssignment(params: CreateAssignmentParams): Promise<WorkAssignment> {
   const result = await pool.query(
     `INSERT INTO work_assignments
-       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes, deadline_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (entity_type, entity_id, work_type)
      DO UPDATE SET
        assigned_tech_id   = EXCLUDED.assigned_tech_id,
        assigned_packer_id = EXCLUDED.assigned_packer_id,
        status             = EXCLUDED.status,
        notes              = EXCLUDED.notes,
+       deadline_at        = EXCLUDED.deadline_at,
        updated_at         = NOW()
      RETURNING *`,
     [
@@ -165,6 +169,7 @@ export async function upsertAssignment(params: CreateAssignmentParams): Promise<
       params.assignedPackerId ?? null,
       params.status ?? 'ASSIGNED',
       params.notes ?? null,
+      params.deadlineAt ?? null,
     ],
   );
   return result.rows[0];
@@ -182,6 +187,7 @@ export async function updateAssignment(id: number, updates: UpdateAssignmentPara
   if (updates.assignedTechId !== undefined) { setClauses.push(`assigned_tech_id = $${idx++}`); params.push(updates.assignedTechId); }
   if (updates.assignedPackerId !== undefined) { setClauses.push(`assigned_packer_id = $${idx++}`); params.push(updates.assignedPackerId); }
   if (updates.completedByTechId !== undefined) { setClauses.push(`completed_by_tech_id = $${idx++}`); params.push(updates.completedByTechId); }
+  if (updates.completedByPackerId !== undefined) { setClauses.push(`completed_by_packer_id = $${idx++}`); params.push(updates.completedByPackerId); }
   if (updates.notes !== undefined) { setClauses.push(`notes = $${idx++}`); params.push(updates.notes); }
 
   params.push(id);

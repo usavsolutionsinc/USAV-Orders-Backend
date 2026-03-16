@@ -70,8 +70,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
-  const openDetails = (record: PackerRecord) => {
-    const detail: ShippedOrder & { packer_log_id?: number } = {
+  const toDetailRecord = (record: PackerRecord) => {
+    return {
       id: record.id,
       ship_by_date: '',
       order_id: record.order_id || '',
@@ -86,7 +86,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       test_date_time: null,
       packer_id: record.packed_by || null,
       packed_by: record.packed_by || null,
-      pack_date_time: record.created_at || null,
+      packed_at: record.created_at || null,
       packer_photos_url: record.packer_photos_url || [],
       tracking_type: null,
       account_source: null,
@@ -97,8 +97,14 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       quantity: record.quantity || '1',
       packer_log_id: record.id,
     };
+  };
 
-    const detailId = Number(detail.id);
+  const getDetailId = (record: PackerRecord) => Number(toDetailRecord(record).id);
+
+  const openDetails = (record: PackerRecord) => {
+    const detail = toDetailRecord(record);
+
+    const detailId = getDetailId(record);
     if (selectedDetailId !== null && detailId === selectedDetailId) {
       dispatchCloseShippedDetails();
       setSelectedDetailId(null);
@@ -169,6 +175,38 @@ export function PackerTable({ packedBy }: PackerTableProps) {
   const filteredGroupedRecords = Object.fromEntries(
     Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
   );
+
+  const orderedRecords = Object.entries(filteredGroupedRecords)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .flatMap(([, dateRecords]) =>
+      [...dateRecords].sort((a, b) => {
+        const timeA = new Date(a.created_at || 0).getTime();
+        const timeB = new Date(b.created_at || 0).getTime();
+        return timeB - timeA;
+      })
+    );
+
+  useEffect(() => {
+    const handleNavigateDetails = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
+      if (selectedDetailId === null || orderedRecords.length === 0) return;
+
+      const currentIndex = orderedRecords.findIndex((record) => getDetailId(record) === selectedDetailId);
+      if (currentIndex < 0) return;
+
+      const step = e.detail?.direction === 'up' ? -1 : 1;
+      const nextRecord = orderedRecords[currentIndex + step];
+      if (!nextRecord) return;
+
+      const nextDetail = toDetailRecord(nextRecord);
+      window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: nextDetail }));
+      setSelectedDetailId(getDetailId(nextRecord));
+    };
+
+    window.addEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
+    return () => {
+      window.removeEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
+    };
+  }, [orderedRecords, selectedDetailId]);
 
   const getWeekCount = () =>
     Object.values(filteredGroupedRecords).reduce((sum, recs) => sum + recs.length, 0);

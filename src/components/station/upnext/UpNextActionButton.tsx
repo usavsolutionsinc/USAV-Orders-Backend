@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import type { ReactNode, MouseEvent } from 'react';
 
-type Tone = 'gray' | 'orange' | 'emerald' | 'purple';
+type Tone = 'gray' | 'red' | 'orange' | 'emerald' | 'purple';
 type Size = 'sm' | 'md';
 
 interface UpNextActionButtonProps {
@@ -20,6 +20,7 @@ interface UpNextActionButtonProps {
 
 const TONE_CLASSES: Record<Tone, string> = {
   gray: 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100',
+  red: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100',
   orange: 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100',
   emerald: 'border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(6,95,70,0.34)]',
   purple: 'border-purple-700 bg-purple-600 text-white hover:bg-purple-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(88,28,135,0.34)]',

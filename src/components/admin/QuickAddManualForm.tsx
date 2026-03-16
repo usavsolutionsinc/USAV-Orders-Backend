@@ -98,7 +98,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
         setError(data?.error || `Save failed (HTTP ${res.status})`);
         return;
       }
-      const resolved = String(data?.manual?.google_doc_id || fileId);
+      const resolved = String(data?.manual?.google_file_id || fileId);
       setSavedFileId(resolved);
       setGoogleInput('');
       onSaved?.(resolved);

@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     const manual = await upsertProductManual({
       sku: String(body?.sku || ''),
       itemNumber: String(body?.itemNumber || body?.item_number || ''),
-      googleDocIdOrUrl: String(body?.googleDocId || body?.google_doc_id || body?.googleLinkOrFileId || ''),
+      googleDocIdOrUrl: String(body?.googleDocId || body?.google_file_id || body?.googleLinkOrFileId || ''),
       type: body?.type,
     });
 

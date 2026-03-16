@@ -49,7 +49,7 @@ export interface OrderWithDerived extends OrderRecord {
   /** Sourced from work_assignments (work_type=PACK, assigned_packer_id) */
   packer_id?: number | null;
   packed_by?: number | null;
-  pack_date_time?: string | null;
+  packed_at?: string | null;       // packer_logs.created_at (scan timestamp)
   packer_photos_url?: any;
   serial_number?: string;
   test_date_time?: string | null;

@@ -1,13 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Check, ChevronUp, ChevronDown, PackageCheck } from '@/components/Icons';
+import { Check } from '@/components/Icons';
 import { motion } from 'framer-motion';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { toPSTDateKey } from '@/utils/date';
-import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
+import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getActiveStaff } from '@/lib/staffCache';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
@@ -21,34 +21,28 @@ export function DashboardDetailsStack({
   onCopyAll,
   onUpdate,
   mode = 'dashboard',
-  showAssignmentButton = true,
 }: DetailsStackProps) {
   const [staffOptions, setStaffOptions] = useState<Array<{ id: number; name: string; role: string }>>([]);
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
   const [notes, setNotes] = useState(shipped.notes || '');
   const [shipByDate, setShipByDate] = useState(''); // MM-DD-YY
+  const [orderNumber, setOrderNumber] = useState(shipped.order_id || '');
   const [itemNumber, setItemNumber] = useState(shipped.item_number || '');
   const [shippingTrackingNumber, setShippingTrackingNumber] = useState(shipped.shipping_tracking_number || '');
   const [isUndoing, setIsUndoing] = useState(false);
   const [isMarkAsShippedOpen, setIsMarkAsShippedOpen] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
-  const [assignedTesterId, setAssignedTesterId] = useState<number | null>((shipped as any).tester_id ?? null);
-  const [assignedPackerId, setAssignedPackerId] = useState<number | null>((shipped as any).packer_id ?? null);
   const hasOutOfStockValue = outOfStock.trim().length > 0;
-  const testerIdOrder = [1, 2, 3, 6];
   const packerIdOrder = [4, 5];
 
   const fieldSave = useOrderFieldSave({
     orderId: shipped.id,
+    initialOrderNumber: shipped.order_id || '',
     initialItemNumber: shipped.item_number || '',
     initialTrackingNumber: shipped.shipping_tracking_number || '',
     onUpdate,
   });
 
-  const testerOptions = testerIdOrder
-    .map((id) => staffOptions.find((member) => member.role === 'technician' && member.id === id))
-    .filter((member): member is { id: number; name: string; role: string } => Boolean(member))
-    .map((member) => ({ id: member.id, name: member.name }));
   const packerOptions = packerIdOrder
     .map((id) => staffOptions.find((member) => member.role === 'packer' && member.id === id))
     .filter((member): member is { id: number; name: string; role: string } => Boolean(member))
@@ -76,21 +70,19 @@ export function DashboardDetailsStack({
       ? (shipped.ship_by_date as any)
       : shipped.created_at;
     setShipByDate(toMonthDayYearCurrent(preferredDate));
+    setOrderNumber(shipped.order_id || '');
     setItemNumber(shipped.item_number || '');
     setShippingTrackingNumber(shipped.shipping_tracking_number || '');
-    setAssignedTesterId((shipped as any).tester_id ?? null);
-    setAssignedPackerId((shipped as any).packer_id ?? null);
     setActiveInput('none');
     setIsMarkAsShippedOpen(false);
-    fieldSave.resetRefs(shipped.item_number || '', shipped.shipping_tracking_number || '');
+    fieldSave.resetRefs(shipped.order_id || '', shipped.item_number || '', shipped.shipping_tracking_number || '');
   }, [
     shipped.id,
+    shipped.order_id,
     (shipped as any).out_of_stock,
     shipped.notes,
     shipped.shipping_tracking_number,
     shipped.item_number,
-    (shipped as any).tester_id,
-    (shipped as any).packer_id,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -101,9 +93,32 @@ export function DashboardDetailsStack({
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    const handlePanelAction = (e: CustomEvent<{ action?: string }>) => {
+      switch (e.detail?.action) {
+        case 'status':
+          setIsMarkAsShippedOpen((prev) => !prev);
+          break;
+        case 'out_of_stock':
+          setActiveInput((prev) => prev === 'out_of_stock' ? 'none' : 'out_of_stock');
+          break;
+        case 'notes':
+          setActiveInput((prev) => prev === 'notes' ? 'none' : 'notes');
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('shipped-panel-action' as any, handlePanelAction as any);
+    return () => {
+      window.removeEventListener('shipped-panel-action' as any, handlePanelAction as any);
+    };
+  }, []);
+
   const saveInlineFields = useCallback(async () => {
-    await fieldSave.saveInlineFields(itemNumber, shippingTrackingNumber);
-  }, [fieldSave, itemNumber, shippingTrackingNumber]);
+    await fieldSave.saveInlineFields(orderNumber, itemNumber, shippingTrackingNumber);
+  }, [fieldSave, itemNumber, orderNumber, shippingTrackingNumber]);
 
   useEffect(() => {
     const handleClose = () => { void saveInlineFields(); };
@@ -174,40 +189,6 @@ export function DashboardDetailsStack({
       className="pb-8 pt-4 space-y-4"
     >
       <motion.section variants={itemVariants} className="mx-8 space-y-2">
-        <section>
-          <div className="px-0 pt-1 pb-0.5 border-b border-gray-200">
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
-              Update Item Number
-            </p>
-            <div className="mt-0.5 flex items-end">
-              <input
-                type="text"
-                value={itemNumber}
-                onChange={(e) => setItemNumber(e.target.value)}
-                onBlur={() => void saveInlineFields()}
-                placeholder="Enter Item Number"
-                className="flex-1 min-w-0 border-0 bg-transparent px-0 pb-0.5 pt-2 text-[11px] font-bold leading-none text-gray-900 outline-none focus:ring-0"
-              />
-            </div>
-          </div>
-
-          <div className="px-0 pt-1 pb-0.5 border-b border-gray-200">
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">
-              Update Tracking Number
-            </p>
-            <div className="mt-0.5 flex items-end">
-              <input
-                type="text"
-                value={shippingTrackingNumber}
-                onChange={(e) => setShippingTrackingNumber(e.target.value)}
-                onBlur={() => void saveInlineFields()}
-                placeholder="Enter Tracking Number"
-                className="flex-1 min-w-0 border-0 bg-transparent px-0 pb-0.5 pt-2 text-[11px] font-bold leading-none text-gray-900 outline-none focus:ring-0"
-              />
-            </div>
-          </div>
-        </section>
-
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
             <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
@@ -220,114 +201,32 @@ export function DashboardDetailsStack({
               {isUndoing ? 'Undoing...' : 'Undo Last Scan'}
             </button>
           </div>
-        ) : (
-          <div className="flex w-full items-stretch gap-2">
-            <div className="flex-1 min-w-0 h-12 flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
-              <DaysLateBadge
-                shipByDate={shipped.ship_by_date}
-                fallbackDate={shipped.created_at}
-                variant="number"
-              />
-              <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Ship By Date</span>
-              <input
-                type="text"
-                value={shipByDate}
-                onChange={(e) => setShipByDate(e.target.value)}
-                placeholder="MM-DD-YY"
-                maxLength={8}
-                className="flex-1 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[10px] font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-              />
-              <button
-                type="button"
-                onClick={() => void fieldSave.saveShipByDate(shipByDate)}
-              disabled={fieldSave.isSavingShipByDate}
-              className="h-8 px-2.5 inline-flex items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
-            >
-              <Check className="w-3 h-3" />
-              {fieldSave.isSavingShipByDate ? 'Saving' : 'Save'}
-              </button>
-            </div>
-          </div>
+        ) : null}
+
+        {isMarkAsShippedOpen && (
+          <MarkAsShippedForm
+            shippingTrackingNumber={shippingTrackingNumber || shipped.shipping_tracking_number || ''}
+            packerOptions={packerOptions}
+            onSuccess={() => { setIsMarkAsShippedOpen(false); onUpdate?.(); }}
+          />
         )}
 
-        <div className={`grid gap-2 ${showAssignmentButton ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          {showAssignmentButton && (
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = `/admin?orderId=${shipped.id}`;
-              }}
-              className="h-9 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black uppercase tracking-wider"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Goals
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setActiveInput(activeInput === 'out_of_stock' ? 'none' : 'out_of_stock')}
-            className="h-9 inline-flex items-center justify-center rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-[9px] font-black uppercase tracking-wider"
-          >
-            Out Of Stock
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveInput(activeInput === 'notes' ? 'none' : 'notes')}
-            className="h-9 inline-flex items-center justify-center rounded-xl bg-gray-50 border border-gray-200 text-gray-700 text-[9px] font-black uppercase tracking-wider"
-          >
-            Notes
-          </button>
-        </div>
-        <div className="flex items-stretch gap-2">
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-order', { detail: { direction: 'up' } }))}
-              className="h-8 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              aria-label="Previous order"
-            >
-              <ChevronUp className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-order', { detail: { direction: 'down' } }))}
-              className="h-8 w-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              aria-label="Next order"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex-1 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700">Work Orders</p>
-                <p className="mt-1 text-[10px] font-bold text-emerald-950">
-                  Tech: {testerOptions.find((member) => member.id === assignedTesterId)?.name || 'Unassigned'}
-                </p>
-                <p className="mt-0.5 text-[10px] font-bold text-emerald-950">
-                  Packer: {packerOptions.find((member) => member.id === assignedPackerId)?.name || 'Optional'}
-                </p>
-              </div>
-              <a
-                href={`/work-orders?queue=orders&entityType=ORDER&entityId=${shipped.id}`}
-                className="inline-flex h-9 items-center justify-center rounded-xl bg-emerald-700 px-3 text-[9px] font-black uppercase tracking-[0.18em] text-white hover:bg-emerald-800"
-              >
-                Open
-              </a>
-            </div>
-          </div>
-        </div>
-
         {(activeInput === 'out_of_stock' || hasOutOfStockValue) && (
-          <OutOfStockField
-            value={outOfStock}
-            editable
-            onChange={setOutOfStock}
-            onCancel={() => setActiveInput('none')}
-            onSubmit={() => void fieldSave.saveOutOfStock(outOfStock)}
-            isSaving={fieldSave.isSavingOutOfStock}
-            autoFocus={activeInput === 'out_of_stock'}
-          />
+          activeInput === 'out_of_stock' ? (
+            <OutOfStockEditorBlock
+              value={outOfStock}
+              onChange={setOutOfStock}
+              onCancel={() => {
+                setOutOfStock((shipped as any).out_of_stock || '');
+                setActiveInput('none');
+              }}
+              onSubmit={() => void fieldSave.saveOutOfStock(outOfStock)}
+              isSaving={fieldSave.isSavingOutOfStock}
+              autoFocus
+            />
+          ) : (
+            <OutOfStockField value={outOfStock} />
+          )
         )}
 
         {activeInput === 'notes' && (
@@ -364,37 +263,37 @@ export function DashboardDetailsStack({
 
       <motion.div variants={itemVariants}>
         <ShippedDetailsPanelContent
-          shipped={shipped}
+          shipped={{
+            ...shipped,
+            order_id: orderNumber,
+            item_number: itemNumber,
+            shipping_tracking_number: shippingTrackingNumber,
+          }}
           durationData={durationData}
           copiedAll={copiedAll}
           onCopyAll={onCopyAll}
           onUpdate={onUpdate}
-          productDetailsFirst
+          editableShippingFields={{
+            orderNumber,
+            itemNumber,
+            trackingNumber: shippingTrackingNumber,
+            shipByDate,
+            isSaving: fieldSave.isSavingInlineFields,
+            isSavingShipByDate: fieldSave.isSavingShipByDate,
+            onOrderNumberChange: setOrderNumber,
+            onItemNumberChange: setItemNumber,
+            onTrackingNumberChange: setShippingTrackingNumber,
+            onShipByDateChange: setShipByDate,
+            onBlur: () => { void saveInlineFields(); },
+            onShipByDateBlur: () => { void fieldSave.saveShipByDate(shipByDate); },
+          }}
+          productDetailsFirst={false}
           showPackingPhotos={false}
           showPackingInformation={false}
           showTestingInformation={false}
-          showSerialNumber={false}
+          showSerialNumber
         />
       </motion.div>
-
-      <motion.section variants={itemVariants} className="mx-8 space-y-2">
-        <button
-          type="button"
-          onClick={() => setIsMarkAsShippedOpen((prev) => !prev)}
-          className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider"
-        >
-          <PackageCheck className="w-3.5 h-3.5" />
-          Mark As Shipped
-        </button>
-
-        {isMarkAsShippedOpen && (
-          <MarkAsShippedForm
-            shippingTrackingNumber={shippingTrackingNumber || shipped.shipping_tracking_number || ''}
-            packerOptions={packerOptions}
-            onSuccess={() => { setIsMarkAsShippedOpen(false); onUpdate?.(); }}
-          />
-        )}
-      </motion.section>
 
       <motion.section variants={itemVariants} className="mx-8 pt-2">
         <DeleteOrderControl orderId={shipped.id} onDeleted={() => onUpdate?.()} />
