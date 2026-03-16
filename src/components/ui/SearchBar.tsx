@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, X, Loader2 } from '../Icons';
+import { Search, X, Loader2, Clipboard } from '../Icons';
 
 interface SearchBarProps {
     value: string;
@@ -75,6 +75,16 @@ export function SearchBar({
         if (onClear) onClear();
     };
 
+    const handlePaste = async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            const trimmed = text.trim();
+            if (trimmed) onChange(trimmed);
+        } catch {
+            // clipboard permission denied
+        }
+    };
+
     return (
         <div className={`flex items-center gap-2 ${className}`}>
             <form onSubmit={handleSubmit} className="relative group flex-1">
@@ -92,13 +102,25 @@ export function SearchBar({
                 <div className={`absolute ${sizeClasses.clear} top-1/2 -translate-y-1/2 flex items-center gap-1`}>
                     {isSearching ? (
                         <Loader2 className={`w-4 h-4 animate-spin ${loaderColor}`} />
-                    ) : value && (
+                    ) : value ? (
                         <button 
                             type="button"
                             onClick={handleClear}
                             className="p-1 hover:bg-gray-200 rounded-lg transition-all text-gray-400"
+                            title="Clear search"
+                            aria-label="Clear search"
                         >
                             <X className="w-3 h-3" />
+                        </button>
+                    ) : (
+                        <button 
+                            type="button"
+                            onClick={handlePaste}
+                            className="p-1 hover:bg-gray-200 rounded-lg transition-all text-gray-400"
+                            title="Paste from clipboard"
+                            aria-label="Paste from clipboard"
+                        >
+                            <Clipboard className="w-3 h-3" />
                         </button>
                     )}
                 </div>

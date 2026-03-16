@@ -1,5 +1,6 @@
 import pool from '../db';
 import { formatPSTTimestamp } from '@/utils/date';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 // Order record with shipping information
 export interface ShippedOrder {
@@ -19,10 +20,16 @@ export interface ShippedOrder {
   tester_id: number | null;
   tested_by: number | null;
   test_date_time: string | null;   // aliased from tsn.created_at
+  test_activity_at?: string | null;
+  next_test_activity_at?: string | null;
   /** Staff ID assigned to pack — sourced from work_assignments.assigned_packer_id */
   packer_id: number | null;
   packed_by: number | null;
   packed_at: string | null;        // packer_logs.created_at (scan timestamp)
+  pack_activity_at?: string | null;
+  next_pack_activity_at?: string | null;
+  pack_duration?: string | null;
+  test_duration?: string | null;
   packer_photos_url: any;
   tracking_type: string | null;
   account_source: string | null;
@@ -144,11 +151,13 @@ const ORDER_SERIALS_CTE = `
       wa_p.assigned_packer_id AS packer_id,
       pl.packed_by,
       to_char(pl.packed_at, 'YYYY-MM-DD HH24:MI:SS') AS packed_at,
+      to_char(pack_sal.created_at, 'YYYY-MM-DD HH24:MI:SS') AS pack_activity_at,
       pl.packer_photos_url,
       pl.tracking_type,
       COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
       MIN(tsn.tested_by)::int AS tested_by,
-      MIN(tsn.created_at)::text AS test_date_time
+      MIN(tsn.created_at)::text AS test_date_time,
+      to_char(test_sal.created_at, 'YYYY-MM-DD HH24:MI:SS') AS test_activity_at
     FROM orders o
     ${WA_DEADLINE_LATERAL}
     LEFT JOIN LATERAL (
@@ -184,6 +193,26 @@ const ORDER_SERIALS_CTE = `
       ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
       LIMIT 1
     ) pl ON true
+    LEFT JOIN LATERAL (
+      SELECT sal.created_at
+      FROM station_activity_logs sal
+      WHERE sal.station = 'PACK'
+        AND sal.shipment_id IS NOT NULL
+        AND sal.shipment_id = o.shipment_id
+        AND sal.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+      ORDER BY sal.created_at DESC NULLS LAST, sal.id DESC
+      LIMIT 1
+    ) pack_sal ON true
+    LEFT JOIN LATERAL (
+      SELECT sal.created_at
+      FROM station_activity_logs sal
+      WHERE sal.station = 'TECH'
+        AND sal.shipment_id IS NOT NULL
+        AND sal.shipment_id = o.shipment_id
+        AND sal.activity_type = 'SERIAL_ADDED'
+      ORDER BY sal.created_at DESC NULLS LAST, sal.id DESC
+      LIMIT 1
+    ) test_sal ON true
     LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
     WHERE COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
             OR stn.is_out_for_delivery OR stn.is_delivered, false)
@@ -193,7 +222,8 @@ const ORDER_SERIALS_CTE = `
              stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
              stn.latest_status_category, stn.carrier,
              wa_t.assigned_tech_id, wa_p.assigned_packer_id,
-             pl.packed_by, pl.packed_at, pl.packer_photos_url, pl.tracking_type
+             pl.packed_by, pl.packed_at, pl.packer_photos_url, pl.tracking_type,
+             pack_sal.created_at, test_sal.created_at
   )`;
 
 // ─── Shipped Orders (Read) ────────────────────────────────────────────────────
@@ -256,11 +286,13 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           wa_p.assigned_packer_id AS packer_id,
           pl.packed_by,
           to_char(pl.packed_at, 'YYYY-MM-DD HH24:MI:SS') AS packed_at,
+          to_char(pack_sal.created_at, 'YYYY-MM-DD HH24:MI:SS') AS pack_activity_at,
           pl.packer_photos_url,
           pl.tracking_type,
           COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
           MIN(tsn.tested_by)::int AS tested_by,
-          MIN(tsn.created_at)::text AS test_date_time
+          MIN(tsn.created_at)::text AS test_date_time,
+          to_char(test_sal.created_at, 'YYYY-MM-DD HH24:MI:SS') AS test_activity_at
         FROM orders o
         LEFT JOIN LATERAL (
           SELECT wa.deadline_at FROM work_assignments wa
@@ -298,6 +330,24 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
             AND pl.tracking_type = 'ORDERS'
           ORDER BY pl.created_at DESC NULLS LAST, id DESC LIMIT 1
         ) pl ON true
+        LEFT JOIN LATERAL (
+          SELECT sal.created_at
+          FROM station_activity_logs sal
+          WHERE sal.station = 'PACK'
+            AND sal.shipment_id IS NOT NULL
+            AND sal.shipment_id = o.shipment_id
+            AND sal.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+          ORDER BY sal.created_at DESC NULLS LAST, sal.id DESC LIMIT 1
+        ) pack_sal ON true
+        LEFT JOIN LATERAL (
+          SELECT sal.created_at
+          FROM station_activity_logs sal
+          WHERE sal.station = 'TECH'
+            AND sal.shipment_id IS NOT NULL
+            AND sal.shipment_id = o.shipment_id
+            AND sal.activity_type = 'SERIAL_ADDED'
+          ORDER BY sal.created_at DESC NULLS LAST, sal.id DESC LIMIT 1
+        ) test_sal ON true
         LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
         WHERE o.id = $1
           AND COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
@@ -308,7 +358,8 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
                  stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
                  stn.latest_status_category, stn.carrier,
                  wa_t.assigned_tech_id, wa_p.assigned_packer_id,
-                 pl.packed_by, pl.packed_at, pl.packer_photos_url, pl.tracking_type
+                 pl.packed_by, pl.packed_at, pl.packer_photos_url, pl.tracking_type,
+                 pack_sal.created_at, test_sal.created_at
       )
       SELECT os.*,
              s1.name AS tested_by_name,
@@ -328,13 +379,25 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
 }
 
 /**
- * Search shipped orders by tracking number, order ID, product title, or serial number
+ * Search shipped orders by tracking number, order ID, product title, or serial number.
+ * Uses ORDER_SERIALS_CTE (carrier-shipped only). For packed-but-not-yet-carrier-shipped
+ * orders, use searchPackedOrders as fallback.
  */
 export async function searchShippedOrders(query: string): Promise<ShippedOrder[]> {
   try {
     const searchTerm = `%${query}%`;
     const digitsOnly = query.replace(/\D/g, '');
-    const last8 = digitsOnly.slice(-8);
+    const last8 = digitsOnly.length >= 8 ? digitsOnly.slice(-8) : '';
+    const key18 = normalizeTrackingKey18(query);
+    const params: any[] = [searchTerm, query, last8];
+    const key18Clause = key18
+      ? ` OR os.shipment_id IN (
+          SELECT s.id FROM shipping_tracking_numbers s
+          WHERE RIGHT(regexp_replace(UPPER(COALESCE(s.tracking_number_normalized, '')), '[^A-Z0-9]', '', 'g'), 18) = $4
+        )`
+      : '';
+    if (key18) params.push(key18);
+
     const result = await pool.query(
       `WITH ${ORDER_SERIALS_CTE}
        SELECT
@@ -356,16 +419,16 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
          OR os.serial_number::text ILIKE $1
          OR (
            $3 != '' AND LENGTH($3) >= 8 AND (
-             RIGHT(regexp_replace(COALESCE(os.tracking_number::text, ''), '\\D', '', 'g'), 8) = $3
-             OR RIGHT(os.order_id::text, 8) = $3
+             RIGHT(regexp_replace(COALESCE(os.tracking_number::text, ''), '[^0-9]', '', 'g'), 8) = $3
+             OR RIGHT(regexp_replace(COALESCE(os.order_id::text, ''), '[^0-9]', '', 'g'), 8) = $3
            )
-         )
+         )${key18Clause}
        ORDER BY
          CASE WHEN os.tracking_number::text = $2 OR os.order_id::text = $2 THEN 1 ELSE 2 END,
          COALESCE(os.packed_at, os.created_at)::timestamp DESC NULLS LAST,
          os.id DESC
        LIMIT 100`,
-      [searchTerm, query, last8],
+      params,
     );
     return result.rows;
   } catch (error) {

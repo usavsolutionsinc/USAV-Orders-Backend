@@ -14,7 +14,7 @@ import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
 import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { TabSwitch } from '@/components/ui/TabSwitch';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
@@ -29,15 +29,16 @@ import {
 } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails } from '@/utils/events';
+import { resolveOrderSearchView } from '@/lib/order-search-resolver';
 
 type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
 
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
-const ORDER_VIEW_OPTIONS: Array<{ value: DashboardOrderView; label: string }> = [
-  { value: 'unshipped', label: 'Unshipped Orders' },
-  { value: 'pending', label: 'Pending Orders' },
-  { value: 'shipped', label: 'Shipped Orders' },
+const DASHBOARD_TABS = [
+  { id: 'pending',   label: 'Pending',  color: 'blue' as const },
+  { id: 'shipped',   label: 'Shipped',  color: 'blue' as const },
+  { id: 'unshipped', label: 'Awaiting', color: 'blue' as const },
 ];
 
 function getOrderViewFromSearch(searchParams: { has: (key: string) => boolean }): DashboardOrderView {
@@ -200,21 +201,6 @@ function SidebarContextPanel() {
     router.replace(nextSearch ? `${targetPath}?${nextSearch}` : targetPath);
   };
 
-  const findShippedMatches = async (query: string) => {
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) return [];
-
-    const params = new URLSearchParams({
-      q: trimmedQuery,
-      shippedOnly: 'true',
-      includeShipped: 'true',
-    });
-    const response = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
-    if (!response.ok) return [];
-    const json = await response.json();
-    return Array.isArray(json?.orders) ? json.orders : [];
-  };
-
   const handleDashboardOrderSearch = async (nextValue: string) => {
     const trimmed = nextValue.trim();
     if (!trimmed) {
@@ -226,12 +212,12 @@ function SidebarContextPanel() {
     }
 
     try {
-      const shippedMatches = await findShippedMatches(trimmed);
-      if (shippedMatches.length > 0) {
+      const result = await resolveOrderSearchView(trimmed);
+      if (result.view === 'shipped' || result.view === 'pending') {
         updateSearch((params) => {
-          normalizeOrderViewParams(params, 'shipped');
+          normalizeOrderViewParams(params, result.view!);
           params.set('search', trimmed);
-          if (shippedMatches.length === 1) params.set('openOrderId', String(shippedMatches[0].id));
+          if (result.firstOrderId) params.set('openOrderId', String(result.firstOrderId));
           else params.delete('openOrderId');
         }, '/dashboard');
         return;
@@ -287,16 +273,19 @@ function SidebarContextPanel() {
   if (routeKey === 'dashboard') {
     const orderView = getOrderViewFromSearch(searchParams);
     const dashboardSearch = searchParams.get('search') || '';
+    const activeTabId: string = orderView;
     const filterControl = (
-      <ViewDropdown
-        options={ORDER_VIEW_OPTIONS}
-        value={orderView}
-        onChange={(nextView) =>
-          updateSearch((params) => {
-            normalizeOrderViewParams(params, nextView);
-          }, '/dashboard')
-        }
-      />
+      <div className="border-b border-gray-100 px-4 py-3">
+        <TabSwitch
+          tabs={DASHBOARD_TABS}
+          activeTab={activeTabId}
+          onTabChange={(tab) =>
+            updateSearch((params) => {
+              normalizeOrderViewParams(params, tab as DashboardOrderView);
+            }, '/dashboard')
+          }
+        />
+      </div>
     );
 
     if (orderView === 'shipped') {

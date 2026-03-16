@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ManualAssignmentTable, type ManualAssignmentRow } from './admin/ManualAssignmentTable';
 import { InlineManualForm } from './admin/ManualAssignmentTab';
+import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { RefreshCw } from './Icons';
 
 interface OrderWithoutManual {
@@ -141,32 +142,29 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
     <div className="flex h-full min-h-0 flex-col bg-white">
 
       {/* ── Header ── */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-6 py-4">
-        <div>
-          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
-            Update Manuals
-          </p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-2xl font-black text-gray-900">{missingCount}</p>
-            <p className="text-sm font-semibold text-gray-400">
+      <div className={sidebarHeaderBandClass}>
+        <div className="flex min-h-[44px] items-center justify-between gap-3 px-3">
+          <div className="min-w-0 flex items-baseline gap-2">
+            <p className="text-[12px] font-semibold tracking-tight text-slate-950">{missingCount}</p>
+            <p className="truncate text-[11px] font-medium tracking-tight text-slate-500">
               {missingCount === 1 ? 'order' : 'orders'} without a manual
             </p>
           </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setLastRefresh((n) => n + 1)}
-          disabled={loading}
-          className="p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-500 transition-all disabled:opacity-40"
-          title="Refresh"
-        >
-          <motion.div
-            animate={loading ? { rotate: 360 } : { rotate: 0 }}
-            transition={loading ? { repeat: Infinity, duration: 0.8, ease: 'linear' } : {}}
+          <button
+            type="button"
+            onClick={() => setLastRefresh((n) => n + 1)}
+            disabled={loading}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-40"
+            title="Refresh"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </motion.div>
-        </button>
+            <motion.div
+              animate={loading ? { rotate: 360 } : { rotate: 0 }}
+              transition={loading ? { repeat: Infinity, duration: 0.8, ease: 'linear' } : {}}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </motion.div>
+          </button>
+        </div>
       </div>
 
       {/* ── Error banner ── */}

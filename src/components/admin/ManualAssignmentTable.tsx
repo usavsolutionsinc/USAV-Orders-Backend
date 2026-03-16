@@ -58,7 +58,7 @@ export function ManualAssignmentTable({
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="sticky top-0 z-10 grid grid-cols-[1fr_2fr_auto] gap-3 bg-gray-50/90 backdrop-blur-sm border-b border-gray-200 px-5 py-2.5">
+      <div className="sticky top-0 z-10 grid min-h-[44px] grid-cols-[1fr_2fr_auto] items-end gap-3 border-b border-gray-200 bg-gray-50/90 px-5 pb-2.5 pt-3 backdrop-blur-sm">
         <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Item #</p>
         <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Product</p>
         <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Manual</p>

@@ -14,7 +14,7 @@ export function StationDetailsHandler({
     viewMode = 'history',
     stationRole = 'tech',
 }: {
-    viewMode?: 'history' | 'pending' | 'manual';
+    viewMode?: 'history' | 'pending' | 'shipped' | 'manual';
     stationRole?: 'tech' | 'packer';
 }) {
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
@@ -45,7 +45,7 @@ export function StationDetailsHandler({
                 <ShippedDetailsPanel 
                     key="station-details-panel"
                     shipped={selectedShipped}
-                    context={viewMode === 'pending' ? 'dashboard' : (stationRole === 'packer' ? 'packer' : 'station')}
+                    context={viewMode === 'pending' || viewMode === 'shipped' ? 'dashboard' : (stationRole === 'packer' ? 'packer' : 'station')}
                     onClose={() => {
                         setSelectedShipped(null);
                         dispatchCloseShippedDetails();

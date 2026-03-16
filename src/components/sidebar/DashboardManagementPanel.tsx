@@ -1,8 +1,9 @@
 'use client';
 
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Check,
   Database,
@@ -13,6 +14,9 @@ import {
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
+import type { WorkOrderRow } from '@/components/work-orders/types';
+import { getActiveStaff } from '@/lib/staffCache';
 
 interface DashboardManagementPanelProps {
   showIntakeForm?: boolean;
@@ -50,6 +54,77 @@ export function DashboardManagementPanel({
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [assigningState, setAssigningState] = useState<{ rows: WorkOrderRow[]; startIndex: number } | null>(null);
+  const [isLoadingAssignment, setIsLoadingAssignment] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => { setIsMounted(true); }, []);
+  const [technicianOptions, setTechnicianOptions] = useState<{ id: number; name: string }[]>([]);
+  const [packerOptions, setPackerOptions] = useState<{ id: number; name: string }[]>([]);
+
+  const TECH_IDS = [1, 2, 3, 6];
+
+  const handleOpenNextUnassigned = useCallback(async () => {
+    setIsLoadingAssignment(true);
+    try {
+      const [workRes, staffMembers] = await Promise.all([
+        fetch('/api/work-orders?queue=orders', { cache: 'no-store' }),
+        getActiveStaff(),
+      ]);
+      const workJson = workRes.ok ? await workRes.json() : {};
+      const allRows: WorkOrderRow[] = Array.isArray(workJson?.rows) ? workJson.rows : [];
+      const rows = allRows.filter(
+        (r) => r.entityType === 'ORDER' && (r.status === 'OPEN' || r.status === 'ASSIGNED'),
+      );
+      if (!rows.length) {
+        setStatus({ type: 'success', message: 'No unassigned orders found.' });
+        return;
+      }
+      const techs = staffMembers
+        .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
+        .map((m) => ({ id: Number(m.id), name: m.name }))
+        .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id));
+      const packers = staffMembers
+        .filter((m) => m.role === 'packer')
+        .map((m) => ({ id: Number(m.id), name: m.name }));
+      setTechnicianOptions(techs);
+      setPackerOptions(packers);
+      setAssigningState({ rows, startIndex: 0 });
+    } catch {
+      setStatus({ type: 'error', message: 'Failed to load unassigned orders.' });
+    } finally {
+      setIsLoadingAssignment(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAssignConfirm = useCallback(async (row: WorkOrderRow, payload: AssignmentConfirmPayload) => {
+    const { techId: newTechId, packerId: newPackerId, deadline, status: statusOverride } = payload;
+    const newStatus =
+      statusOverride ??
+      (newTechId && newPackerId && row.status === 'OPEN' ? 'ASSIGNED' : row.status);
+    try {
+      await fetch('/api/work-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: row.entityType,
+          entityId: row.entityId,
+          assignedTechId: newTechId,
+          assignedPackerId: newPackerId,
+          status: newStatus,
+          priority: row.priority,
+          deadlineAt: deadline,
+          notes: row.notes,
+        }),
+      });
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch {
+      // Silent — the card already optimistically updated; a full refresh will reconcile.
+    }
+  }, []);
 
   useEffect(() => {
     setSearchQuery(searchValue);
@@ -286,9 +361,11 @@ export function DashboardManagementPanel({
               {showNextUnassignedButton ? (
                 <button
                   type="button"
-                  onClick={() => window.dispatchEvent(new CustomEvent('navigate-dashboard-next-unassigned'))}
-                  className="w-full py-3 bg-gray-900 hover:bg-black text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center"
+                  onClick={handleOpenNextUnassigned}
+                  disabled={isLoadingAssignment}
+                  className="w-full py-3 bg-gray-900 hover:bg-black disabled:bg-gray-400 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
+                  {isLoadingAssignment && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Next Unassigned Order
                 </button>
               ) : null}
@@ -316,6 +393,20 @@ export function DashboardManagementPanel({
           <p className="text-[7px] font-mono uppercase tracking-[0.2em] text-gray-500">USAV INFRASTRUCTURE</p>
         </motion.footer>
       </div>
+
+      {isMounted && assigningState && createPortal(
+        <AnimatePresence>
+          <WorkOrderAssignmentCard
+            rows={assigningState.rows}
+            startIndex={assigningState.startIndex}
+            technicianOptions={technicianOptions}
+            packerOptions={packerOptions}
+            onConfirm={handleAssignConfirm}
+            onClose={() => setAssigningState(null)}
+          />
+        </AnimatePresence>,
+        document.body
+      )}
     </motion.div>
   );
 }

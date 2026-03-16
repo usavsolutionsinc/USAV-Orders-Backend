@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TechTable } from './TechTable';
 import PendingOrdersTable from './PendingOrdersTable';
+import { DashboardShippedTable } from './shipped';
 import UpdateManualsView from './UpdateManualsView';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
 import ProductManualViewer from './station/ProductManualViewer';
@@ -14,6 +15,7 @@ import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/Recei
 import { RepairDetailsPanel } from './repair/RepairDetailsPanel';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { Search, X } from '@/components/Icons';
+import { resolveOrderSearchView } from '@/lib/order-search-resolver';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import type { ResolvedProductManual } from '@/hooks/useStationTestingController';
 
@@ -39,13 +41,15 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     const searchOpen = searchParams.get('searchOpen') === '1';
     const rightViewMode = rawView === 'pending'
         ? 'pending'
-        : rawView === 'manual'
-            ? 'manual'
-            : rawView === 'update-manuals'
-                ? 'update-manuals'
-                : rawView === 'receiving'
-                    ? 'receiving'
-                    : 'history';
+        : rawView === 'shipped'
+            ? 'shipped'
+            : rawView === 'manual'
+                ? 'manual'
+                : rawView === 'update-manuals'
+                    ? 'update-manuals'
+                    : rawView === 'receiving'
+                        ? 'receiving'
+                        : 'history';
 
     const [lastManuals, setLastManuals] = useState<ResolvedProductManual[]>([]);
     const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);
@@ -114,12 +118,12 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         return () => window.removeEventListener('receiving-select-log', handleSelectLog);
     }, []);
 
-    const showPendingSearch = rightViewMode === 'pending' && (searchOpen || Boolean(currentSearch));
+    const showPendingSearch = (rightViewMode === 'pending' || rightViewMode === 'shipped') && (searchOpen || Boolean(currentSearch));
 
-    const updatePendingSearch = (value: string, keepOpen = true) => {
+    const updatePendingSearch = (value: string, keepOpen = true, resolvedView?: 'pending' | 'shipped') => {
         const nextParams = new URLSearchParams(searchParams.toString());
         nextParams.set('staffId', techId);
-        nextParams.set('view', 'pending');
+        nextParams.set('view', resolvedView ?? 'pending');
         if (value.trim()) nextParams.set('search', value.trim());
         else nextParams.delete('search');
         if (keepOpen) nextParams.set('searchOpen', '1');
@@ -128,13 +132,37 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
     };
 
+    const applySearchWithResolvedView = async (value: string, keepOpen: boolean) => {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            clearPendingSearch();
+            return;
+        }
+        try {
+            const result = await resolveOrderSearchView(trimmed);
+            const view = result.view ?? 'pending';
+            const nextParams = new URLSearchParams(searchParams.toString());
+            nextParams.set('staffId', techId);
+            nextParams.set('view', view);
+            nextParams.set('search', trimmed);
+            if (keepOpen) nextParams.set('searchOpen', '1');
+            else nextParams.delete('searchOpen');
+            if (result.firstOrderId) nextParams.set('openOrderId', String(result.firstOrderId));
+            else nextParams.delete('openOrderId');
+            router.replace(`/tech?${nextParams.toString()}`);
+        } catch {
+            updatePendingSearch(trimmed, keepOpen, 'pending');
+        }
+    };
+
     const clearPendingSearch = () => {
         setSearchInput('');
         const nextParams = new URLSearchParams(searchParams.toString());
         nextParams.set('staffId', techId);
         nextParams.delete('search');
         nextParams.delete('searchOpen');
-        if (rightViewMode === 'pending') {
+        nextParams.delete('openOrderId');
+        if (rightViewMode === 'pending' || rightViewMode === 'shipped') {
             nextParams.delete('view');
         }
         const nextSearch = nextParams.toString();
@@ -151,15 +179,15 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     };
 
     useEffect(() => {
-        if (!showPendingSearch || rightViewMode !== 'pending') return;
+        if (!showPendingSearch) return;
         const timeoutId = window.setTimeout(() => {
             const normalizedCurrent = currentSearch.trim();
             const normalizedNext = searchInput.trim();
-            if (rightViewMode === 'pending' && normalizedCurrent === normalizedNext) return;
-            updatePendingSearch(searchInput, true);
+            if (normalizedCurrent === normalizedNext) return;
+            applySearchWithResolvedView(searchInput, true);
         }, 180);
         return () => window.clearTimeout(timeoutId);
-    }, [searchInput, currentSearch, rightViewMode, showPendingSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [searchInput, currentSearch, showPendingSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (!showPendingSearch) return;
@@ -197,6 +225,8 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                     </div>
                 ) : rightViewMode === 'pending' ? (
                     <PendingOrdersTable />
+                ) : rightViewMode === 'shipped' ? (
+                    <DashboardShippedTable testedBy={parseInt(techId)} />
                 ) : rightViewMode === 'update-manuals' ? (
                     <UpdateManualsView techId={techId} days={30} />
                 ) : rightViewMode === 'receiving' ? (

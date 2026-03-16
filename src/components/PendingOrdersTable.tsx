@@ -121,8 +121,7 @@ export default function PendingOrdersTable({
       try {
         const params = new URLSearchParams({
           q: searchQuery,
-          shippedOnly: 'true',
-          includeShipped: 'true',
+          packedOnly: 'true',
         });
         const response = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
         if (!response.ok || cancelled) return;
@@ -217,6 +216,7 @@ export default function PendingOrdersTable({
       searchValue={searchQuery}
       onClearSearch={clearSearch}
       emptyMessage="No pending order records found"
+      useWaForDisplay
       onOpenRecord={(record) => {
         window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: record }));
       }}

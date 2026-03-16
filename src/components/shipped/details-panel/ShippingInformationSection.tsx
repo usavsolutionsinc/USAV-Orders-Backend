@@ -25,6 +25,13 @@ export interface EditableShippingFields {
   onShipByDateBlur: () => void;
 }
 
+interface ShippingMetaFields {
+  packedByName: string;
+  packingDuration: string;
+  testedByName: string;
+  testingDuration: string;
+}
+
 function getDaysLateNumber(deadlineAt: string | null | undefined): number {
   const deadlineKey = toPSTDateKey(deadlineAt);
   if (!deadlineKey) return 0;
@@ -362,6 +369,7 @@ interface ShippingInformationSectionProps {
   showSerialNumber?: boolean;
   showShippingTimestamp?: boolean;
   editableShippingFields?: EditableShippingFields;
+  metaFields?: ShippingMetaFields;
 }
 
 export function ShippingInformationSection({
@@ -372,6 +380,7 @@ export function ShippingInformationSection({
   showSerialNumber = true,
   showShippingTimestamp = false,
   editableShippingFields,
+  metaFields,
 }: ShippingInformationSectionProps) {
   const { getExternalUrlByItemNumber } = useExternalItemUrl();
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
@@ -407,16 +416,18 @@ export function ShippingInformationSection({
       </div>
 
       <div className="space-y-0">
+        {showShippingTimestamp && (
+          <DetailsPanelRow label="Shipped">
+            <p className="text-sm font-bold text-gray-900">
+              {shipped.packed_at && shipped.packed_at !== '1'
+                ? formatDateTimePST(shipped.packed_at)
+                : 'N/A'}
+            </p>
+          </DetailsPanelRow>
+        )}
+
         {editableShippingFields ? (
           <>
-            <ShippingEditableRow
-              label="Tracking Number"
-              value={editableShippingFields.trackingNumber}
-              placeholder="Enter tracking number"
-              onChange={editableShippingFields.onTrackingNumberChange}
-              onBlur={editableShippingFields.onBlur}
-              externalUrl={getTrackingUrl(editableShippingFields.trackingNumber)}
-            />
             <ShippingEditableRow
               label="Ship By Date"
               headerAccessory={String(daysLate)}
@@ -425,6 +436,14 @@ export function ShippingInformationSection({
               placeholder="MM-DD-YY"
               onChange={editableShippingFields.onShipByDateChange}
               onBlur={editableShippingFields.onShipByDateBlur}
+            />
+            <ShippingEditableRow
+              label="Tracking Number"
+              value={editableShippingFields.trackingNumber}
+              placeholder="Enter tracking number"
+              onChange={editableShippingFields.onTrackingNumberChange}
+              onBlur={editableShippingFields.onBlur}
+              externalUrl={getTrackingUrl(editableShippingFields.trackingNumber)}
             />
             <ShippingEditableRow
               label="Order ID"
@@ -448,16 +467,16 @@ export function ShippingInformationSection({
         ) : (
           <>
             <CopyableValueFieldBlock
+              label="Ship By Date"
+              value={String(shipped.ship_by_date || '').trim() || 'N/A'}
+              headerAccessory={<span className={daysLateClassName}>{daysLate}</span>}
+              variant="flat"
+            />
+            <CopyableValueFieldBlock
               label="Tracking Number"
               value={shipped.shipping_tracking_number || 'Not available'}
               externalUrl={getTrackingUrl(shipped.shipping_tracking_number || '')}
               externalLabel="Open shipment tracking in new tab"
-              variant="flat"
-            />
-            <CopyableValueFieldBlock
-              label="Ship By Date"
-              value={String(shipped.ship_by_date || '').trim() || 'N/A'}
-              headerAccessory={<span className={daysLateClassName}>{daysLate}</span>}
               variant="flat"
             />
             <CopyableValueFieldBlock
@@ -488,6 +507,23 @@ export function ShippingInformationSection({
           />
         ) : null}
 
+        {metaFields ? (
+          <>
+            <DetailsPanelRow label="Packed By">
+              <div className="flex items-center justify-between gap-3">
+                <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
+                <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.packingDuration}</p>
+              </div>
+            </DetailsPanelRow>
+            <DetailsPanelRow label="Tested By">
+              <div className="flex items-center justify-between gap-3">
+                <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
+                <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.testingDuration}</p>
+              </div>
+            </DetailsPanelRow>
+          </>
+        ) : null}
+
         {editableShippingFields?.isSaving ? (
           <p className="pt-2 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving shipping updates...</p>
         ) : null}
@@ -495,17 +531,6 @@ export function ShippingInformationSection({
           <p className="pt-1 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving ship by date...</p>
         ) : null}
       </div>
-
-      {showShippingTimestamp && (
-        <div>
-          <span className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400">Shipped Date & Time</span>
-          <p className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-900">
-            {shipped.packed_at && shipped.packed_at !== '1'
-              ? formatDateTimePST(shipped.packed_at)
-              : 'N/A'}
-          </p>
-        </div>
-      )}
     </section>
   );
 }

@@ -158,6 +158,13 @@ export function WorkOrderAssignmentCard({
     return () => clearTimeout(timer);
   }, [techId, packerId, deadline, changed, save]);
 
+  const navigate = useCallback((dir: 'next' | 'prev') => {
+    const next = findNextIndex(index, dir);
+    if (next === null) return;
+    setDirection(dir);
+    setIndex(next);
+  }, [index, findNextIndex]);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -167,15 +174,7 @@ export function WorkOrderAssignmentCard({
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose]);
-
-  const navigate = useCallback((dir: 'next' | 'prev') => {
-    const next = findNextIndex(index, dir);
-    if (next === null) return;
-    setDirection(dir);
-    setIndex(next);
-  }, [index, findNextIndex]);
+  }, [navigate, onClose]);
 
   if (!row) return null;
 
@@ -284,7 +283,7 @@ export function WorkOrderAssignmentCard({
                 <p className="text-[9px] font-black uppercase tracking-[0.26em] text-emerald-600">
                   {getSourceLabel(row)}
                 </p>
-                <h3 className="mt-1.5 line-clamp-3 h-[5rem] text-[22px] font-black leading-[1.15] tracking-tight text-slate-950">
+                <h3 className="mt-1.5 max-h-[5rem] overflow-y-auto text-[22px] font-black leading-[1.15] tracking-tight text-slate-950 scrollbar-hide">
                   {row.title}
                 </h3>
                 {row.subtitle && (

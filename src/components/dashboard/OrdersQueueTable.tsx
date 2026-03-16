@@ -30,6 +30,8 @@ interface OrdersQueueTableProps {
   emptyMessage: string;
   onOpenRecord?: (record: ShippedOrder) => void;
   onCloseRecord?: (record: ShippedOrder | null) => void;
+  /** When true, display tester/packer from work_assignments (tester_id, packer_id) only */
+  useWaForDisplay?: boolean;
 }
 
 export function OrdersQueueTable({
@@ -47,6 +49,7 @@ export function OrdersQueueTable({
   emptyMessage,
   onOpenRecord,
   onCloseRecord,
+  useWaForDisplay = false,
 }: OrdersQueueTableProps) {
   const { getStaffName } = useStaffNameMap();
   const [selectedRecord, setSelectedRecord] = useState<ShippedOrder | null>(null);
@@ -269,19 +272,22 @@ export function OrdersQueueTable({
                     <div key={date} className="flex flex-col">
                       <DateGroupHeader date={date} total={dayRecords.length} formatDate={formatDate} />
                       {sortedRecords.map((record, index) => {
-                        const testerName =
-                          (record as any).tested_by_name ||
-                          (record as any).tester_name ||
-                          getStaffName((record as any).tested_by) ||
-                          getStaffName((record as any).tester_id);
-                        const packerName =
-                          (record as any).packed_by_name ||
-                          (record as any).packer_name ||
-                          getStaffName((record as any).packed_by) ||
-                          getStaffName((record as any).packer_id);
+                        const testerName = useWaForDisplay
+                          ? getStaffName((record as any).tester_id)
+                          : (record as any).tested_by_name ||
+                            (record as any).tester_name ||
+                            getStaffName((record as any).tested_by) ||
+                            getStaffName((record as any).tester_id);
+                        const packerName = useWaForDisplay
+                          ? getStaffName((record as any).packer_id)
+                          : (record as any).packed_by_name ||
+                            (record as any).packer_name ||
+                            getStaffName((record as any).packed_by) ||
+                            getStaffName((record as any).packer_id);
                         const outOfStockValue = String((record as any).out_of_stock || '').trim();
                         const hasOutOfStock = outOfStockValue !== '';
-                        const hasTechScan = Boolean((record as any).has_tech_scan) || Boolean((record as any).tested_by);
+                        // Match UpNextOrder: only an actual tech scan marks the row as tested.
+                        const hasTechScan = Boolean((record as any).has_tech_scan);
                         const defaultDaysLate = getDaysLateNumber(record.deadline_at as any);
 
                         return (

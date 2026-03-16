@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, FileText, Flag, Package, PackageCheck, Trash2, X } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -15,6 +15,8 @@ import { useDeleteOrderRow } from '@/hooks';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
 import { getStaffName } from '@/utils/staff';
+import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
+import { toPSTDateKey } from '@/utils/date';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -34,12 +36,16 @@ export function ShippedDetailsPanel({
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
+  const [shipByDate, setShipByDate] = useState('');
+  const [orderNumber, setOrderNumber] = useState(initialShipped.order_id || '');
+  const [itemNumber, setItemNumber] = useState(initialShipped.item_number || '');
+  const [shippingTrackingNumber, setShippingTrackingNumber] = useState(initialShipped.shipping_tracking_number || '');
   const deleteOrderMutation = useDeleteOrderRow();
   const isDeletingOrder = deleteOrderMutation.isPending;
   const outOfStockValue = String((shipped as any).out_of_stock || '').trim();
   const hasOutOfStock = outOfStockValue !== '';
-  const testedById = shipped.tested_by ?? shipped.tester_id ?? null;
-  const hasTechScan = Boolean((shipped as any).has_tech_scan) || Boolean(testedById);
+  const testedById = shipped.tested_by ?? null;
+  const hasTechScan = Boolean((shipped as any).has_tech_scan);
   const statusToneClass = hasTechScan
     ? 'bg-emerald-50 text-emerald-700'
     : hasOutOfStock
@@ -81,10 +87,46 @@ export function ShippedDetailsPanel({
       toneClassName: 'text-gray-600',
     },
   ];
+  const fieldSave = useOrderFieldSave({
+    orderId: shipped.id,
+    initialOrderNumber: initialShipped.order_id || '',
+    initialItemNumber: initialShipped.item_number || '',
+    initialTrackingNumber: initialShipped.shipping_tracking_number || '',
+    onUpdate: _onUpdate,
+  });
+  const {
+    isSavingInlineFields,
+    isSavingShipByDate,
+    saveInlineFields: persistInlineFields,
+    saveShipByDate,
+    resetRefs,
+  } = fieldSave;
+
+  const toMonthDayYearCurrent = useCallback((value: string | null | undefined) => {
+    if (!value) return '';
+    const pstDateKey = toPSTDateKey(value);
+    if (!pstDateKey) return '';
+    const [year, month, day] = pstDateKey.split('-').map(Number);
+    return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${String(year % 100).padStart(2, '0')}`;
+  }, []);
 
   useEffect(() => {
     setShipped(initialShipped);
-  }, [initialShipped]);
+    const preferredDate = String(initialShipped.ship_by_date || '').trim() || initialShipped.created_at || '';
+    setShipByDate(toMonthDayYearCurrent(preferredDate));
+    setOrderNumber(initialShipped.order_id || '');
+    setItemNumber(initialShipped.item_number || '');
+    setShippingTrackingNumber(initialShipped.shipping_tracking_number || '');
+    resetRefs(
+      initialShipped.order_id || '',
+      initialShipped.item_number || '',
+      initialShipped.shipping_tracking_number || ''
+    );
+  }, [initialShipped, resetRefs, toMonthDayYearCurrent]);
+
+  const saveInlineFields = useCallback(async () => {
+    await persistInlineFields(orderNumber, itemNumber, shippingTrackingNumber);
+  }, [itemNumber, orderNumber, persistInlineFields, shippingTrackingNumber]);
 
   const handleCopyAll = () => {
     const allInfo = buildShippedCopyInfo(shipped);
@@ -214,11 +256,30 @@ export function ShippedDetailsPanel({
             />
           ) : (
             <ShippedDetailsPanelContent
-              shipped={shipped}
+              shipped={{
+                ...shipped,
+                order_id: orderNumber,
+                item_number: itemNumber,
+                shipping_tracking_number: shippingTrackingNumber,
+              }}
               durationData={durationData}
               copiedAll={copiedAll}
               onCopyAll={handleCopyAll}
               onUpdate={_onUpdate}
+              editableShippingFields={{
+                orderNumber,
+                itemNumber,
+                trackingNumber: shippingTrackingNumber,
+                shipByDate,
+                isSaving: isSavingInlineFields,
+                isSavingShipByDate,
+                onOrderNumberChange: setOrderNumber,
+                onItemNumberChange: setItemNumber,
+                onTrackingNumberChange: setShippingTrackingNumber,
+                onShipByDateChange: setShipByDate,
+                onBlur: () => { void saveInlineFields(); },
+                onShipByDateBlur: () => { void saveShipByDate(shipByDate); },
+              }}
               showShippingTimestamp={context === 'shipped'}
             />
           )}

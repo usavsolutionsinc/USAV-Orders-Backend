@@ -1,16 +1,27 @@
 'use client';
 
-import { Package, Wrench } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { PhotoGallery } from './PhotoGallery';
 import { getStaffName } from '@/utils/staff';
-import { formatDateTimePST } from '@/utils/date';
 import { ShippingInformationSection, type EditableShippingFields } from '@/components/shipped/details-panel/ShippingInformationSection';
 import { ProductDetailsSection } from '@/components/shipped/details-panel/ProductDetailsSection';
 
 interface DurationData {
   boxingDuration?: string;
   testingDuration?: string;
+}
+
+function formatElapsedDuration(startAt: string | null | undefined, endAt: string | null | undefined): string {
+  if (!startAt || !endAt) return '';
+
+  const startMs = new Date(startAt).getTime();
+  const endMs = new Date(endAt).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return '';
+
+  const totalSeconds = Math.floor((endMs - startMs) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 interface ShippedDetailsPanelContentProps {
@@ -43,6 +54,24 @@ export function ShippedDetailsPanelContent({
   editableShippingFields
 }: ShippedDetailsPanelContentProps) {
   const productDetailsSection = <ProductDetailsSection shipped={shipped} />;
+  const packedById = shipped.packed_by ?? null;
+  const testedById = shipped.tested_by ?? null;
+  const derivedPackingDuration = String(shipped.pack_duration || '').trim()
+    || (formatElapsedDuration(
+      shipped.pack_activity_at || shipped.packed_at || null,
+      shipped.next_pack_activity_at || null,
+    ));
+  const derivedTestingDuration = String(shipped.test_duration || '').trim()
+    || (formatElapsedDuration(
+      shipped.test_activity_at || shipped.test_date_time || null,
+      shipped.next_test_activity_at || null,
+    ));
+  const packingMetaValue = String(durationData.boxingDuration || '').trim()
+    || derivedPackingDuration
+    || '--:--';
+  const testingMetaValue = String(durationData.testingDuration || '').trim()
+    || derivedTestingDuration
+    || '--:--';
 
   return (
     <div className="px-8 pb-8 pt-0.5 space-y-10">
@@ -73,73 +102,15 @@ export function ShippedDetailsPanelContent({
         showShippingTimestamp={showShippingTimestamp}
         showSerialNumber={showSerialNumber}
         editableShippingFields={editableShippingFields}
+        metaFields={{
+          packedByName: getStaffName(packedById),
+          packingDuration: packingMetaValue,
+          testedByName: getStaffName(testedById),
+          testingDuration: testingMetaValue,
+        }}
       />
 
       {!productDetailsFirst && productDetailsSection}
-
-      {showPackingInformation && (
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
-              <Package className="w-4 h-4" />
-            </div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Packing Information</h3>
-          </div>
-
-          <div className="space-y-4 bg-orange-50/30 rounded-[2rem] p-6 border border-orange-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Packed By</span>
-                <p className="font-black text-sm text-gray-900">{getStaffName(shipped.packed_by)}</p>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Duration</span>
-                <p className="font-mono text-sm font-black text-orange-600">{durationData.boxingDuration || '--:--'}</p>
-              </div>
-            </div>
-            <div className="pt-4 border-t border-orange-100/50">
-              <span className="text-[10px] text-orange-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
-              <p className="text-xs font-bold text-gray-600">
-                {shipped.packed_at && shipped.packed_at !== '1'
-                  ? formatDateTimePST(shipped.packed_at)
-                  : 'N/A'}
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {showTestingInformation && (
-        <section className="space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-              <Wrench className="w-4 h-4" />
-            </div>
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Testing Information</h3>
-          </div>
-
-          <div className="space-y-4 bg-purple-50/30 rounded-[2rem] p-6 border border-purple-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Tested By</span>
-                <p className="font-black text-sm text-gray-900">{getStaffName(shipped.tested_by)}</p>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Duration</span>
-                <p className="font-mono text-sm font-black text-purple-600">{durationData.testingDuration || '--:--'}</p>
-              </div>
-            </div>
-            <div className="pt-4 border-t border-purple-100/50">
-              <span className="text-[10px] text-purple-600/60 font-black uppercase tracking-widest block mb-1">Timestamp</span>
-              <p className="text-xs font-bold text-gray-600">
-                {shipped.test_date_time && shipped.test_date_time !== ''
-                  ? formatDateTimePST(shipped.test_date_time)
-                  : 'N/A'}
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
     </div>
   );
 }

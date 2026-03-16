@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { classifyScan } from '@/utils/packer';
 import { normalizeSku } from '@/utils/sku';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
-import { normalizeTrackingLast8 } from '@/lib/tracking-format';
+import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp, normalizePSTTimestamp, getCurrentPSTDateKey } from '@/utils/date';
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({ error: 'Invalid tracking number' }, { status: 400 });
             }
             const normalizedInput = normalizeTrackingNumber(scanInput);
-            // Primary: match via shipment_id FK (exact, fast)
+            // Primary: exact normalized match via shipment_id FK (fast)
             let orderLookup = await pool.query(
                 `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number, o.shipment_id,
                         o.product_title, o.condition, o.quantity, o.sku
@@ -183,16 +183,33 @@ export async function POST(req: NextRequest) {
                  LIMIT 1`,
                 [normalizedInput]
             );
+
+            // Fallback 1: last-8 digit suffix match (handles barcode with 420-zip prefix, etc.)
             if (orderLookup.rows.length === 0) {
                 orderLookup = await pool.query(
                     `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number, o.shipment_id,
                             o.product_title, o.condition, o.quantity, o.sku
                      FROM   orders o
                      JOIN   shipping_tracking_numbers stn ON stn.id = o.shipment_id
-                     WHERE  RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
+                     WHERE  RIGHT(regexp_replace(stn.tracking_number_normalized, '[^0-9]', '', 'g'), 8) = $1
                      ORDER BY o.id DESC
                      LIMIT 1`,
                     [trackingLast8]
+                );
+            }
+
+            // Fallback 2: independent stn lookup so orders with shipment_id=NULL are
+            // also found when their tracking exists in shipping_tracking_numbers
+            if (orderLookup.rows.length === 0) {
+                orderLookup = await pool.query(
+                    `SELECT o.id, o.order_id, s.tracking_number_raw AS tracking_number, o.shipment_id,
+                            o.product_title, o.condition, o.quantity, o.sku
+                     FROM   shipping_tracking_numbers s
+                     JOIN   orders o ON o.shipment_id = s.id
+                     WHERE  RIGHT(regexp_replace(UPPER(s.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+                     ORDER BY o.id DESC
+                     LIMIT 1`,
+                    [normalizeTrackingKey18(scanInput)]
                 );
             }
 

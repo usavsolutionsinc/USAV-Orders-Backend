@@ -43,11 +43,38 @@ const COMPLETED_ORDER_AUTO_HIDE_MS = 2 * 60 * 1000;
 
 function detectType(val: string) {
   const input = val.trim();
+  if (!input) return 'SERIAL';
 
+  // SKU scan (colon-separated, e.g. "SKU:ABC123")
   if (input.includes(':')) return 'SKU';
-  if (input.match(/^(1Z|42|93|96|JJD|JD|94|92|JVGL|420)/i)) return 'TRACKING';
-  if (input.match(/^(X0|B0)/i)) return 'FNSKU';
+
+  // FNSKU — Amazon FBA barcodes (X0… / B0… prefix)
+  if (/^(X0|B0)/i.test(input)) return 'FNSKU';
+
+  // Operator commands
   if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input.toUpperCase())) return 'COMMAND';
+
+  // Carrier-detection: strip everything except A–Z 0–9 (mirrors normalizeTrackingCanonical)
+  const norm = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  // UPS — 1Z + 16 alphanumeric chars (18 total)
+  if (/^1Z[A-Z0-9]{16}$/.test(norm)) return 'TRACKING';
+
+  // USPS — starts with 9 + 15–21 more digits (covers 91, 92, 93, 94, 95, 96, 98, 99…)
+  if (/^9\d{15,21}$/.test(norm)) return 'TRACKING';
+
+  // USPS / DHL — legacy prefix patterns
+  if (/^(42|420|93|96|94|92|JJD|JD|JVGL)/i.test(norm)) return 'TRACKING';
+
+  // FedEx Ground / Express — exactly 12 or 15 digits
+  if (/^\d{12}$/.test(norm) || /^\d{15}$/.test(norm)) return 'TRACKING';
+
+  // FedEx / USPS 22-digit formats (FedEx SmartPost, USPS IMpb)
+  if (/^\d{20,22}$/.test(norm)) return 'TRACKING';
+
+  // Amazon Logistics — TBA + at least 9 digits
+  if (/^TBA\d{9,}$/.test(norm)) return 'TRACKING';
+
   return 'SERIAL';
 }
 
@@ -347,11 +374,22 @@ export function useStationTestingController({
         });
         const data = await res.json();
 
-        if (!data.found) {
-          setTrackingNotFoundAlert('Tracking number not found. Logged to orders exceptions.');
+        if (!res.ok || !data.found) {
+          // Distinguish between a genuine API/network error and a real not-found
+          const msg = data?.error
+            ? `Scan error: ${data.error}`
+            : 'Tracking number not found — logged to exceptions queue.';
+          setTrackingNotFoundAlert(msg);
           syncActiveOrderState(null);
           setResolvedManuals([]);
           return;
+        }
+
+        // Tracking scan was processed but the order isn't in the system yet
+        if (data.orderFound === false) {
+          setTrackingNotFoundAlert(
+            data.warning || 'Order not in system — tracking logged for reconciliation.'
+          );
         }
 
         syncActiveOrderState({
@@ -554,7 +592,8 @@ export function useStationTestingController({
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) {
+    const raw = searchQuery.trim();
+    if (!raw) {
       setSearchResults([]);
       setShowSearchResults(false);
       return;
@@ -562,11 +601,19 @@ export function useStationTestingController({
 
     setIsSearching(true);
     try {
-      const normalizedQuery = normalizeTrackingQuery(searchQuery);
-      const res = await fetch(`/api/shipped?q=${encodeURIComponent(normalizedQuery)}`);
+      // Only apply last-8-digit normalization when the query looks like a
+      // pure tracking number (all digits/alphanumeric, no spaces).
+      // Product-title and SKU searches should be passed as-is so that letters
+      // are not stripped.
+      const digitsOnly = raw.replace(/\D/g, '');
+      const looksLikeTracking = digitsOnly.length >= 8 && digitsOnly.length === raw.replace(/\s/g, '').length;
+      const searchValue = looksLikeTracking ? normalizeTrackingQuery(raw) : raw;
+
+      const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(searchValue)}`);
+      if (!res.ok) throw new Error(`Search failed: ${res.status}`);
       const data = await res.json();
 
-      if (data.results) {
+      if (Array.isArray(data.results)) {
         setSearchResults(data.results);
         setShowSearchResults(true);
       }

@@ -70,36 +70,49 @@ export async function GET(req: NextRequest) {
         ) fba ON tsn.scan_ref IS NOT NULL AND UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%'
         LEFT JOIN LATERAL (
           SELECT
-            id,
-            order_id,
+            o_match.id,
+            o_match.shipment_id
+          FROM orders o_match
+          LEFT JOIN shipping_tracking_numbers o_match_stn ON o_match_stn.id = o_match.shipment_id
+          WHERE (
+            tsn.shipment_id IS NOT NULL
+            AND o_match.shipment_id = tsn.shipment_id
+          ) OR (
+            COALESCE(stn.tracking_number_raw, '') <> ''
+            AND o_match_stn.tracking_number_raw IS NOT NULL
+            AND o_match_stn.tracking_number_raw != ''
+            AND RIGHT(regexp_replace(UPPER(o_match_stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
+                RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
+          )
+          ORDER BY
+            CASE WHEN tsn.shipment_id IS NOT NULL AND o_match.shipment_id = tsn.shipment_id THEN 0 ELSE 1 END,
+            o_match.created_at DESC NULLS LAST,
+            o_match.id DESC
+          LIMIT 1
+        ) order_match ON true
+        LEFT JOIN LATERAL (
+          SELECT
+            o.id,
+            o.order_id,
             (
               SELECT wa.deadline_at
               FROM work_assignments wa
-              WHERE wa.entity_type = 'ORDER' AND wa.entity_id = orders.id AND wa.work_type = 'TEST'
+              WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
               ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
                        wa.updated_at DESC, wa.id DESC LIMIT 1
             ) AS ship_by_date,
-            created_at,
-            item_number,
-            product_title,
-            quantity,
-            condition,
-            sku,
-            account_source,
-            notes,
-            out_of_stock,
-            shipment_id
-          FROM orders
-          WHERE (
-            tsn.shipment_id IS NOT NULL AND shipment_id = tsn.shipment_id
-          ) OR (
-            COALESCE(stn.tracking_number_raw, '') <> ''
-            AND shipping_tracking_number IS NOT NULL
-            AND shipping_tracking_number != ''
-            AND RIGHT(regexp_replace(UPPER(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 18) =
-                RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
-          )
-          ORDER BY CASE WHEN shipment_id IS NOT NULL AND shipment_id = tsn.shipment_id THEN 0 ELSE 1 END
+            o.created_at,
+            o.item_number,
+            o.product_title,
+            o.quantity,
+            o.condition,
+            o.sku,
+            o.account_source,
+            o.notes,
+            o.out_of_stock,
+            o.shipment_id
+          FROM orders o
+          WHERE o.id = order_match.id
           LIMIT 1
         ) o ON true
         LEFT JOIN shipping_tracking_numbers o_stn ON o_stn.id = o.shipment_id

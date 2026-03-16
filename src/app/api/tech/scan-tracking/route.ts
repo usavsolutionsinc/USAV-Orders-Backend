@@ -126,12 +126,15 @@ export async function POST(req: NextRequest) {
                     o.sku,
                     o.condition,
                     o.notes,
-                    stn.tracking_number_raw AS shipping_tracking_number,
+                    COALESCE(stn.tracking_number_raw, stn_any.tracking_number_raw) AS shipping_tracking_number,
                     o.account_source,
                     o.status,
                     o.status_history,
-                    COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
-                      OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
+                    COALESCE(
+                        stn.is_carrier_accepted OR stn.is_in_transit OR stn.is_out_for_delivery OR stn.is_delivered,
+                        stn_any.is_carrier_accepted OR stn_any.is_in_transit OR stn_any.is_out_for_delivery OR stn_any.is_delivered,
+                        false
+                    ) AS is_shipped,
                     o.out_of_stock,
                     to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
                     o.order_date,
@@ -141,6 +144,17 @@ export async function POST(req: NextRequest) {
                     wa_pack.assigned_packer_id AS packer_id
                 FROM orders o
                 LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+                -- Fallback join: find any stn row matching key18 in case the order's
+                -- shipment_id is null or points to a different (legacy) row
+                LEFT JOIN LATERAL (
+                    SELECT s.id, s.tracking_number_raw,
+                           s.is_carrier_accepted, s.is_in_transit,
+                           s.is_out_for_delivery, s.is_delivered
+                    FROM shipping_tracking_numbers s
+                    WHERE RIGHT(regexp_replace(UPPER(s.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $2
+                    ORDER BY s.id DESC
+                    LIMIT 1
+                ) stn_any ON TRUE
                 LEFT JOIN LATERAL (
                     SELECT wa.deadline_at FROM work_assignments wa
                     WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
@@ -168,14 +182,22 @@ export async function POST(req: NextRequest) {
                     LIMIT 1
                 ) wa_pack ON TRUE
                 WHERE (
+                    -- Direct match via resolved shipment ID
                     $1::bigint IS NOT NULL
                     AND o.shipment_id = $1
                 ) OR (
+                    -- Order's linked stn row matches key18
                     stn.id IS NOT NULL
                     AND RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $2
+                ) OR (
+                    -- Independent stn lookup matched and this order's shipment_id points to it
+                    stn_any.id IS NOT NULL
+                    AND o.shipment_id = stn_any.id
                 )
                 ORDER BY
-                    CASE WHEN $1::bigint IS NOT NULL AND o.shipment_id = $1 THEN 0 ELSE 1 END,
+                    CASE WHEN $1::bigint IS NOT NULL AND o.shipment_id = $1 THEN 0
+                         WHEN stn.id IS NOT NULL THEN 1
+                         ELSE 2 END,
                     o.id DESC
                 LIMIT 1
             `, [resolvedScan.shipmentId, key18]);
@@ -202,7 +224,11 @@ export async function POST(req: NextRequest) {
             );
 
             const row = result.rows[0] || null;
-            const matchedShipmentId = row?.shipment_id != null ? Number(row.shipment_id) : (resolvedScan.shipmentId ?? null);
+            // Prefer the order's own shipment_id, then fall back to resolvedScan
+            const matchedShipmentId =
+                row?.shipment_id != null
+                    ? Number(row.shipment_id)
+                    : (resolvedScan.shipmentId ?? null);
             const trackingValue =
                 row?.shipping_tracking_number ||
                 existingTracking.rows[0]?.shipping_tracking_number ||

@@ -36,10 +36,23 @@ export async function findOrderByTrackingKey(
   const result = await dbClient.query(
     `SELECT
         o.id,
-        stn.tracking_number_raw AS shipping_tracking_number
+        COALESCE(stn.tracking_number_raw, s2.tracking_number_raw) AS shipping_tracking_number
      FROM orders o
-     JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-     WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+     -- Independent lookup: find any stn row matching key18 (handles orders where
+     -- shipment_id is null or points to a different legacy row)
+     LEFT JOIN LATERAL (
+         SELECT s.tracking_number_raw, s.id
+         FROM shipping_tracking_numbers s
+         WHERE RIGHT(regexp_replace(UPPER(s.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+         ORDER BY s.id DESC LIMIT 1
+     ) s2 ON TRUE
+     WHERE (
+         stn.id IS NOT NULL
+         AND RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+     ) OR (
+         s2.id IS NOT NULL AND o.shipment_id = s2.id
+     )
      ORDER BY o.id DESC
      LIMIT 1`,
     [trackingKey18]

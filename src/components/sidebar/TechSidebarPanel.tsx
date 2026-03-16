@@ -13,12 +13,13 @@ import { useActiveStaffDirectory } from './hooks';
 
 const TECH_VIEW_OPTIONS = [
   { value: 'history', label: 'Tech History' },
+  { value: 'shipped', label: 'Shipped Orders' },
   { value: 'pending', label: 'Pending Orders' },
   { value: 'manual', label: 'Last Order Manual' },
   { value: 'update-manuals', label: 'Update Manuals' },
 ] as const;
 
-type TechViewMode = 'history' | 'pending' | 'manual' | 'update-manuals';
+type TechViewMode = 'history' | 'shipped' | 'pending' | 'manual' | 'update-manuals';
 
 export function TechSidebarPanel({ techId }: { techId: string }) {
   const router = useRouter();
@@ -34,11 +35,13 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
   const viewMode: TechViewMode =
     rawView === 'pending'
       ? 'pending'
-      : rawView === 'manual'
-        ? 'manual'
-        : rawView === 'update-manuals'
-          ? 'update-manuals'
-          : 'history';
+      : rawView === 'shipped'
+        ? 'shipped'
+        : rawView === 'manual'
+          ? 'manual'
+          : rawView === 'update-manuals'
+            ? 'update-manuals'
+            : 'history';
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -72,7 +75,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
     } else {
       nextParams.set('view', nextView);
     }
-    if (nextView !== 'pending') {
+    if (nextView !== 'pending' && nextView !== 'shipped') {
       nextParams.delete('search');
       nextParams.delete('searchOpen');
     }

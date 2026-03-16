@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 /**
  * GET /api/orders - Fetch all pending orders with optional filters.
@@ -73,11 +74,17 @@ export async function GET(req: NextRequest) {
         wa_t.assigned_tech_id   AS tester_id,
         wa_p.assigned_packer_id AS packer_id,
         pl_latest.packed_at,
-        pl_latest.packed_by AS packed_by,
-        NULL::int AS tested_by,
+        COALESCE(pack_activity.staff_id, pl_latest.packed_by) AS packed_by,
+        to_char(pack_activity.created_at, 'YYYY-MM-DD HH24:MI:SS') AS pack_activity_at,
+        to_char(next_pack_activity.created_at, 'YYYY-MM-DD HH24:MI:SS') AS next_pack_activity_at,
+        pack_duration.duration AS pack_duration,
+        test_activity.staff_id AS tested_by,
+        to_char(test_activity.created_at, 'YYYY-MM-DD HH24:MI:SS') AS test_activity_at,
+        to_char(next_test_activity.created_at, 'YYYY-MM-DD HH24:MI:SS') AS next_test_activity_at,
+        test_duration.duration AS test_duration,
         ''::text AS serial_number,
         staff_test_assignee.name AS tester_name,
-        NULL::text AS tested_by_name,
+        staff_test_assignee.name AS tested_by_name,
         staff_pack_assignee.name AS packer_name,
         staff_packed_by.name     AS packed_by_name,
         (COALESCE(sal_scan.scan_count, 0) > 0) AS has_tech_scan
@@ -118,14 +125,84 @@ export async function GET(req: NextRequest) {
         ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
         LIMIT 1
       ) pl_latest ON true
+      LEFT JOIN LATERAL (
+        SELECT sal.created_at, sal.staff_id
+        FROM station_activity_logs sal
+        WHERE sal.station = 'PACK'
+          AND sal.shipment_id = o.shipment_id
+          AND sal.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+        ORDER BY sal.created_at DESC NULLS LAST, sal.id DESC
+        LIMIT 1
+      ) pack_activity ON true
+      LEFT JOIN LATERAL (
+        SELECT sal.created_at
+        FROM station_activity_logs sal
+        WHERE sal.station = 'PACK'
+          AND pack_activity.staff_id IS NOT NULL
+          AND sal.staff_id = pack_activity.staff_id
+          AND sal.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+          AND pack_activity.created_at IS NOT NULL
+          AND sal.created_at > pack_activity.created_at
+        ORDER BY sal.created_at ASC, sal.id ASC
+        LIMIT 1
+      ) next_pack_activity ON true
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      LEFT JOIN LATERAL (
+        SELECT sal.created_at, sal.staff_id
+        FROM station_activity_logs sal
+        WHERE sal.station = 'TECH'
+          AND sal.shipment_id = o.shipment_id
+          AND sal.activity_type = 'TRACKING_SCANNED'
+        ORDER BY sal.created_at DESC NULLS LAST, sal.id DESC
+        LIMIT 1
+      ) test_activity ON true
+      LEFT JOIN LATERAL (
+        SELECT sal.created_at
+        FROM station_activity_logs sal
+        WHERE sal.station = 'TECH'
+          AND test_activity.staff_id IS NOT NULL
+          AND sal.staff_id = test_activity.staff_id
+          AND sal.activity_type = 'TRACKING_SCANNED'
+          AND test_activity.created_at IS NOT NULL
+          AND sal.created_at > test_activity.created_at
+        ORDER BY sal.created_at ASC, sal.id ASC
+        LIMIT 1
+      ) next_test_activity ON true
+      LEFT JOIN LATERAL (
+        SELECT
+          CASE
+            WHEN MIN(sal.created_at) IS NOT NULL AND MAX(sal.created_at) > MIN(sal.created_at)
+            THEN LPAD((EXTRACT(EPOCH FROM (MAX(sal.created_at) - MIN(sal.created_at)))::int / 60)::text, 2, '0')
+                 || ':' ||
+                 LPAD((EXTRACT(EPOCH FROM (MAX(sal.created_at) - MIN(sal.created_at)))::int % 60)::text, 2, '0')
+            ELSE NULL
+          END AS duration
+        FROM station_activity_logs sal
+        WHERE sal.station = 'PACK' AND sal.shipment_id = o.shipment_id
+          AND sal.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+          AND (pack_activity.staff_id IS NULL OR sal.staff_id = pack_activity.staff_id)
+      ) pack_duration ON true
+      LEFT JOIN LATERAL (
+        SELECT
+          CASE
+            WHEN MIN(sal.created_at) IS NOT NULL AND MAX(sal.created_at) > MIN(sal.created_at)
+            THEN LPAD((EXTRACT(EPOCH FROM (MAX(sal.created_at) - MIN(sal.created_at)))::int / 60)::text, 2, '0')
+                 || ':' ||
+                 LPAD((EXTRACT(EPOCH FROM (MAX(sal.created_at) - MIN(sal.created_at)))::int % 60)::text, 2, '0')
+            ELSE NULL
+          END AS duration
+        FROM station_activity_logs sal
+        WHERE sal.station = 'TECH' AND sal.shipment_id = o.shipment_id
+          AND sal.activity_type = 'TRACKING_SCANNED'
+          AND (test_activity.staff_id IS NULL OR sal.staff_id = test_activity.staff_id)
+      ) test_duration ON true
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS scan_count
         FROM station_activity_logs sal
         WHERE sal.shipment_id = o.shipment_id
       ) sal_scan ON true
-      LEFT JOIN staff staff_test_assignee ON staff_test_assignee.id = wa_t.assigned_tech_id
-      LEFT JOIN staff staff_packed_by ON staff_packed_by.id = wa_p.assigned_packer_id
+      LEFT JOIN staff staff_test_assignee ON staff_test_assignee.id = test_activity.staff_id
+      LEFT JOIN staff staff_packed_by ON staff_packed_by.id = COALESCE(pack_activity.staff_id, pl_latest.packed_by)
       LEFT JOIN staff staff_pack_assignee ON staff_pack_assignee.id = wa_p.assigned_packer_id
       WHERE 1=1
     `;
@@ -203,11 +280,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const normalizedDigits = query.replace(/\D/g, '');
+    const trimmedQuery = query.trim();
+    const normalizedDigits = trimmedQuery.replace(/\D/g, '');
     const last8 = normalizedDigits.length >= 8 ? normalizedDigits.slice(-8) : '';
+    const key18 = normalizeTrackingKey18(trimmedQuery);
 
-    if (query.trim()) {
-      const trimmedQuery = query.trim();
+    if (trimmedQuery) {
       const likeValue = `%${trimmedQuery}%`;
       sql += ` AND (
         o.product_title ILIKE $${paramCount}
@@ -226,13 +304,22 @@ export async function GET(req: NextRequest) {
       paramCount++;
 
       if (last8) {
-        sql += ` OR RIGHT(regexp_replace(COALESCE(o.order_id, ''), '\\D', '', 'g'), 8) = $${paramCount}
-          OR RIGHT(regexp_replace(COALESCE(stn.tracking_number_normalized, ''), '\\D', '', 'g'), 8) = $${paramCount}`;
+        sql += ` OR RIGHT(regexp_replace(COALESCE(o.order_id, ''), '[^0-9]', '', 'g'), 8) = $${paramCount}
+          OR RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_normalized, '')), '[^A-Z0-9]', '', 'g'), 8) = $${paramCount}`;
         params.push(last8);
         paramCount++;
       }
 
-      if (/^\d+$/.test(trimmedQuery)) {
+      if (key18) {
+        sql += ` OR o.shipment_id IN (
+          SELECT s.id FROM shipping_tracking_numbers s
+          WHERE RIGHT(regexp_replace(UPPER(COALESCE(s.tracking_number_normalized, '')), '[^A-Z0-9]', '', 'g'), 18) = $${paramCount}
+        )`;
+        params.push(key18);
+        paramCount++;
+      }
+
+      if (/^\d+$/.test(trimmedQuery) && trimmedQuery.length <= 10) {
         sql += ` OR o.id = $${paramCount}
           OR COALESCE(o.customer_id, -1) = $${paramCount}`;
         params.push(Number(trimmedQuery));

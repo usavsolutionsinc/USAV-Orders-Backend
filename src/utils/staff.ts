@@ -5,6 +5,7 @@ export const STAFF_NAMES: { [key: number]: string } = {
   4: 'Tuan',
   5: 'Thuy',
   6: 'Cuong',
+  7: 'Kai',
 };
 
 export function getStaffName(staffId: number | null | undefined): string {
