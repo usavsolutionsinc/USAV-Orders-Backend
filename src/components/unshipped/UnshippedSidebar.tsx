@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
@@ -44,6 +44,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setSearchQuery(searchValue);
@@ -76,13 +77,22 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     localStorage.setItem('dashboard_search_history', JSON.stringify(newHistory));
   };
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = useCallback(async (query: string) => {
     const trimmedQuery = query.trim();
     if (trimmedQuery) {
       saveSearchHistory(trimmedQuery);
     }
     await onSearchChange?.(trimmedQuery);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onSearchChange]);
+
+  const handleInputChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      handleSearch(value);
+    }, 400);
+  }, [handleSearch]);
 
   const clearSearchHistory = () => {
     setSearchHistory([]);
@@ -156,9 +166,9 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         <motion.div variants={itemVariants} className={`${hideSectionHeader ? '' : 'mt-4'} space-y-4`}>
           <SearchBar
             value={searchQuery}
-            onChange={setSearchQuery}
+            onChange={handleInputChange}
             onSearch={handleSearch}
-            onClear={() => handleSearch('')}
+            onClear={() => { setSearchQuery(''); handleSearch(''); }}
             inputRef={searchInputRef}
             placeholder="Search orders, serials..."
             variant="blue"

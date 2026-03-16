@@ -41,9 +41,9 @@ const ORDER_VIEW_OPTIONS: Array<{ value: DashboardOrderView; label: string }> = 
 ];
 
 function getOrderViewFromSearch(searchParams: { has: (key: string) => boolean }): DashboardOrderView {
+  if (searchParams.has('shipped')) return 'shipped';
   if (searchParams.has('unshipped')) return 'unshipped';
   if (searchParams.has('pending')) return 'pending';
-  if (searchParams.has('shipped')) return 'shipped';
   return 'pending';
 }
 

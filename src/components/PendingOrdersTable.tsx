@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
@@ -55,6 +55,7 @@ export default function PendingOrdersTable({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
+  const shippedRedirectAttemptRef = useRef<string>('');
   const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy }] as const;
 
   const query = useQuery({
@@ -102,6 +103,54 @@ export default function PendingOrdersTable({
     },
     true,
   );
+
+  useEffect(() => {
+    if ((pathname || '/dashboard') !== '/dashboard') return;
+    if (!searchQuery) {
+      shippedRedirectAttemptRef.current = '';
+      return;
+    }
+    if (query.isLoading || query.isFetching) return;
+    if ((query.data || []).length > 0) return;
+    if (shippedRedirectAttemptRef.current === searchQuery) return;
+
+    let cancelled = false;
+
+    const redirectToShippedIfNeeded = async () => {
+      shippedRedirectAttemptRef.current = searchQuery;
+      try {
+        const params = new URLSearchParams({
+          q: searchQuery,
+          shippedOnly: 'true',
+          includeShipped: 'true',
+        });
+        const response = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
+        if (!response.ok || cancelled) return;
+        const json = await response.json();
+        const records = Array.isArray(json?.orders) ? json.orders : [];
+        if (!records.length || cancelled) return;
+
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.delete('pending');
+        nextParams.delete('unshipped');
+        nextParams.set('shipped', '');
+        nextParams.set('search', searchQuery);
+        if (records.length === 1) nextParams.set('openOrderId', String(records[0].id));
+        else nextParams.delete('openOrderId');
+
+        const nextSearch = nextParams.toString();
+        router.replace(nextSearch ? `/dashboard?${nextSearch}` : '/dashboard');
+      } catch {
+        // Leave the pending empty state in place if the shipped lookup fails.
+      }
+    };
+
+    void redirectToShippedIfNeeded();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, query.data, query.isFetching, query.isLoading, router, searchParams, searchQuery]);
 
   useEffect(() => {
     const handleRefresh = () => {

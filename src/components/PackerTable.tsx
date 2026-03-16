@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Loader2 } from './Icons';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Loader2, Search, X } from './Icons';
 import { CopyableText } from './ui/CopyableText';
+import { SearchBar } from './ui/SearchBar';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -38,19 +40,31 @@ function computeWeekRange(weekOffset: number) {
 }
 
 export function PackerTable({ packedBy }: PackerTableProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefersReducedMotion = useReducedMotion();
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
+  const [searchInput, setSearchInput] = useState(String(searchParams.get('search') || ''));
   const scrollRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const packerTheme = getPackerThemeById(packedBy);
   const counterColorClass = stationThemeColors[packerTheme].text;
+  const currentSearch = String(searchParams.get('search') || '');
+  const searchOpen = searchParams.get('searchOpen') === '1';
+  const showSearch = searchOpen || Boolean(currentSearch);
 
   // Compute week range before calling the hook so it feeds into the query key.
   const weekRange = computeWeekRange(weekOffset);
   const { data: records = [], isLoading, isFetching } = usePackerLogs(packedBy, { weekOffset, weekRange });
   const loading = isLoading && records.length === 0;
   const isRefreshing = isFetching && !isLoading;
+
+  useEffect(() => {
+    setSearchInput(currentSearch);
+  }, [currentSearch]);
 
   useEffect(() => {
     const handleOpenDetails = (e: any) => {
@@ -150,6 +164,55 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [handleScroll, records]);
 
+  const updateSearch = (value: string, keepOpen = true) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('staffId', String(packedBy));
+    if (value.trim()) nextParams.set('search', value.trim());
+    else nextParams.delete('search');
+    if (keepOpen) nextParams.set('searchOpen', '1');
+    else nextParams.delete('searchOpen');
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `/packer?${nextSearch}` : '/packer');
+  };
+
+  const openSearch = () => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('staffId', String(packedBy));
+    nextParams.set('searchOpen', '1');
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `/packer?${nextSearch}` : '/packer');
+  };
+
+  const clearSearch = () => {
+    setSearchInput('');
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('staffId', String(packedBy));
+    nextParams.delete('search');
+    nextParams.delete('searchOpen');
+    const nextSearch = nextParams.toString();
+    router.replace(nextSearch ? `/packer?${nextSearch}` : '/packer');
+  };
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const timeoutId = window.setTimeout(() => {
+      const normalizedCurrent = currentSearch.trim();
+      const normalizedNext = searchInput.trim();
+      if (normalizedCurrent === normalizedNext) return;
+      updateSearch(searchInput, true);
+    }, 180);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput, currentSearch, showSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const timeoutId = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }, 40);
+    return () => window.clearTimeout(timeoutId);
+  }, [showSearch]);
+
   // Deduplicate: keep only the latest record per tracking number (highest id)
   const seenTracking = new Map<string, PackerRecord>();
   [...records].sort((a, b) => a.id - b.id).forEach(record => {
@@ -157,10 +220,27 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     seenTracking.set(key, record);
   });
   const dedupedRecords = Array.from(seenTracking.values());
+  const normalizedSearch = currentSearch.trim().toLowerCase();
+  const visibleRecords = normalizedSearch
+    ? dedupedRecords.filter((record) => {
+        const haystack = [
+          record.product_title,
+          record.order_id,
+          record.shipping_tracking_number,
+          record.scan_ref,
+          record.sku,
+          record.condition,
+          record.account_source,
+        ]
+          .map((value) => String(value || '').toLowerCase())
+          .join(' ');
+        return haystack.includes(normalizedSearch);
+      })
+    : dedupedRecords;
 
   // Group records by date
   const groupedRecords: { [key: string]: PackerRecord[] } = {};
-  dedupedRecords.forEach(record => {
+  visibleRecords.forEach(record => {
     if (!record.created_at) return;
     let date = '';
     try {
@@ -210,6 +290,10 @@ export function PackerTable({ packedBy }: PackerTableProps) {
 
   const getWeekCount = () =>
     Object.values(filteredGroupedRecords).reduce((sum, recs) => sum + recs.length, 0);
+
+  const searchOverlayTransition = prefersReducedMotion
+    ? { duration: 0.01 }
+    : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
 
   if (loading) {
     return (
@@ -335,6 +419,63 @@ export function PackerTable({ packedBy }: PackerTableProps) {
           )}
         </div>
       </div>
+      <AnimatePresence initial={false} mode="wait">
+        {showSearch ? (
+          <motion.div
+            key="packer-search-bar"
+            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scaleX: 0.2, y: 6 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scaleX: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scaleX: 0.88, y: 4 }}
+            transition={searchOverlayTransition}
+            style={{ transformOrigin: 'left center' }}
+            className="absolute bottom-3 left-3 z-30 w-[320px] will-change-transform"
+          >
+            <motion.div
+              initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0.84 }}
+              animate={{ opacity: 1 }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0.78 }}
+              transition={searchOverlayTransition}
+            >
+              <SearchBar
+                value={searchInput}
+                onChange={setSearchInput}
+                inputRef={searchInputRef}
+                placeholder="Search packed orders"
+                variant="blue"
+                size="compact"
+                className="w-full"
+                onClear={clearSearch}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+                    aria-label="Close packer search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                }
+              />
+            </motion.div>
+          </motion.div>
+        ) : (
+          <motion.button
+            key="packer-search-trigger"
+            type="button"
+            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.9, y: 6 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: 4 }}
+            whileHover={prefersReducedMotion ? undefined : { scale: 1.04 }}
+            whileTap={prefersReducedMotion ? undefined : { scale: 0.96 }}
+            transition={searchOverlayTransition}
+            onClick={openSearch}
+            className="absolute bottom-3 left-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 will-change-transform transition hover:bg-blue-500"
+            aria-label="Open packer search"
+          >
+            <Search className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

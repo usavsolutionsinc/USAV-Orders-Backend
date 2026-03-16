@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TechTable } from './TechTable';
 import PendingOrdersTable from './PendingOrdersTable';
 import UpdateManualsView from './UpdateManualsView';
@@ -12,6 +12,8 @@ import ProductManualViewer from './station/ProductManualViewer';
 import { ReceivingInboundFeed } from './station/ReceivingInboundFeed';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
 import { RepairDetailsPanel } from './repair/RepairDetailsPanel';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { Search, X } from '@/components/Icons';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import type { ResolvedProductManual } from '@/hooks/useStationTestingController';
 
@@ -26,10 +28,15 @@ interface TechDashboardProps {
 }
 
 export default function TechDashboard({ techId }: TechDashboardProps) {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
+    const prefersReducedMotion = useReducedMotion();
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
 
     const rawView = searchParams.get('view');
+    const currentSearch = String(searchParams.get('search') || '');
+    const searchOpen = searchParams.get('searchOpen') === '1';
     const rightViewMode = rawView === 'pending'
         ? 'pending'
         : rawView === 'manual'
@@ -42,12 +49,17 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
 
     const [lastManuals, setLastManuals] = useState<ResolvedProductManual[]>([]);
     const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);
+    const [searchInput, setSearchInput] = useState(currentSearch);
     const [repairPanel, setRepairPanel] = useState<{
         record: RSRecord;
         assignmentId: number | null;
         assignedTechId: number | null;
     } | null>(null);
     const [loadingRepair, setLoadingRepair] = useState(false);
+
+    useEffect(() => {
+        setSearchInput(currentSearch);
+    }, [currentSearch]);
 
     useEffect(() => {
         const storageKey = `usav:last-manual:tech:${techId}`;
@@ -102,6 +114,62 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         return () => window.removeEventListener('receiving-select-log', handleSelectLog);
     }, []);
 
+    const showPendingSearch = rightViewMode === 'pending' && (searchOpen || Boolean(currentSearch));
+
+    const updatePendingSearch = (value: string, keepOpen = true) => {
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set('staffId', techId);
+        nextParams.set('view', 'pending');
+        if (value.trim()) nextParams.set('search', value.trim());
+        else nextParams.delete('search');
+        if (keepOpen) nextParams.set('searchOpen', '1');
+        else nextParams.delete('searchOpen');
+        const nextSearch = nextParams.toString();
+        router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
+    };
+
+    const clearPendingSearch = () => {
+        setSearchInput('');
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set('staffId', techId);
+        nextParams.delete('search');
+        nextParams.delete('searchOpen');
+        if (rightViewMode === 'pending') {
+            nextParams.delete('view');
+        }
+        const nextSearch = nextParams.toString();
+        router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
+    };
+
+    const openPendingSearch = () => {
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set('staffId', techId);
+        nextParams.set('view', 'pending');
+        nextParams.set('searchOpen', '1');
+        const nextSearch = nextParams.toString();
+        router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
+    };
+
+    useEffect(() => {
+        if (!showPendingSearch || rightViewMode !== 'pending') return;
+        const timeoutId = window.setTimeout(() => {
+            const normalizedCurrent = currentSearch.trim();
+            const normalizedNext = searchInput.trim();
+            if (rightViewMode === 'pending' && normalizedCurrent === normalizedNext) return;
+            updatePendingSearch(searchInput, true);
+        }, 180);
+        return () => window.clearTimeout(timeoutId);
+    }, [searchInput, currentSearch, rightViewMode, showPendingSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!showPendingSearch) return;
+        const timeoutId = window.setTimeout(() => {
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select();
+        }, 40);
+        return () => window.clearTimeout(timeoutId);
+    }, [showPendingSearch]);
+
     const handleLogUpdated = () => {
         setSelectedLog(null);
         queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
@@ -116,9 +184,13 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
     };
 
+    const searchOverlayTransition = prefersReducedMotion
+        ? { duration: 0.01 }
+        : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
+
     return (
         <div className="flex h-full w-full relative">
-            <div className="flex-1 overflow-hidden">
+            <div className="relative flex-1 overflow-hidden">
                 {rightViewMode === 'manual' ? (
                     <div className="h-full w-full bg-gray-50 p-4">
                         <ProductManualViewer manuals={lastManuals} className="h-full" />
@@ -132,6 +204,68 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                 ) : (
                     <TechTable testedBy={parseInt(techId)} />
                 )}
+
+                <AnimatePresence initial={false} mode="wait">
+                    {showPendingSearch && (
+                        <motion.div
+                            key="pending-search-bar"
+                            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scaleX: 0.2, y: 6 }}
+                            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scaleX: 1, y: 0 }}
+                            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scaleX: 0.88, y: 4 }}
+                            transition={searchOverlayTransition}
+                            style={{ transformOrigin: 'left center' }}
+                            className="absolute bottom-3 left-3 z-30 w-[320px] will-change-transform"
+                        >
+                            <motion.div
+                                initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0.84 }}
+                                animate={{ opacity: 1 }}
+                                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0.78 }}
+                                transition={searchOverlayTransition}
+                            >
+                                <SearchBar
+                                    value={searchInput}
+                                    onChange={setSearchInput}
+                                    inputRef={searchInputRef}
+                                    placeholder="Search pending orders"
+                                    variant="blue"
+                                    size="compact"
+                                    className="w-full"
+                                    onClear={clearPendingSearch}
+                                    rightElement={
+                                        <button
+                                            type="button"
+                                            onClick={clearPendingSearch}
+                                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+                                            aria-label="Close pending order search"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    }
+                                />
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <AnimatePresence initial={false} mode="wait">
+                    {!showPendingSearch && rightViewMode === 'history' && (
+                        <motion.button
+                            key="pending-search-trigger"
+                            type="button"
+                            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.9, y: 6 }}
+                            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+                            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: 4 }}
+                            whileHover={prefersReducedMotion ? undefined : { scale: 1.04 }}
+                            whileTap={prefersReducedMotion ? undefined : { scale: 0.96 }}
+                            transition={searchOverlayTransition}
+                            onClick={openPendingSearch}
+                            className="absolute bottom-3 left-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 will-change-transform transition hover:bg-blue-500"
+                            aria-label="Open pending order search"
+                        >
+                            <Search className="h-4 w-4" />
+                        </motion.button>
+                    )}
+                </AnimatePresence>
             </div>
 
             <StationDetailsHandler viewMode={rightViewMode === 'update-manuals' || rightViewMode === 'receiving' ? 'history' : rightViewMode} />

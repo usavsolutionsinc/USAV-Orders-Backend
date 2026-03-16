@@ -22,9 +22,9 @@ type DashboardOrderView = 'pending' | 'unshipped' | 'shipped' | 'fba';
 
 const getOrderViewFromSearch = (search: string): DashboardOrderView => {
     const params = new URLSearchParams(search);
+    if (params.has('shipped')) return 'shipped';
     if (params.has('unshipped')) return 'unshipped';
     if (params.has('pending')) return 'pending';
-    if (params.has('shipped')) return 'shipped';
     if (params.has('fba')) return 'fba';
     return 'pending';
 };

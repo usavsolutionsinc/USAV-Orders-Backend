@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -78,6 +78,7 @@ export default function ShippedSidebar({
     const [copiedId, setCopiedId] = useState<number | null>(null);
     const { normalizeTrackingQuery } = useLast8TrackingSearch();
     const searchHistoryStorageKey = embedded && hideSectionHeader ? 'dashboard_search_history' : 'shipped_search_history';
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Listen for custom events to coordinate details panel
     useEffect(() => {
@@ -173,7 +174,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
     };
 
     // Handle search
-    const handleSearch = async (query: string) => {
+    const handleSearch = useCallback(async (query: string) => {
         const trimmedQuery = query.trim();
         if (!trimmedQuery) {
             setResults([]);
@@ -235,7 +236,16 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
         } finally {
             setIsSearching(false);
         }
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname, searchParams, router, normalizeTrackingQuery]);
+
+    const handleInputChange = useCallback((value: string) => {
+        setSearchQuery(value);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            handleSearch(value);
+        }, 400);
+    }, [handleSearch]);
 
     const clearSearchHistory = () => {
         setSearchHistory([]);
@@ -290,7 +300,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                         {/* Search Bar */}
                         <SearchBar
                             value={searchQuery}
-                            onChange={setSearchQuery}
+                            onChange={handleInputChange}
                             onSearch={handleSearch}
                             placeholder="Order ID, Tracking, or Serial..."
                             isSearching={isSearching}
