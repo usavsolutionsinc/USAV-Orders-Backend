@@ -5,7 +5,7 @@ import { X } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
-import { QuickAddManualForm } from '@/components/admin/QuickAddManualForm';
+import { ContextualManualLinkRow } from '@/components/shipped/details-panel/blocks/ContextualManualLinkRow';
 import { toPSTDateKey } from '@/utils/date';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 
@@ -134,7 +134,7 @@ export function TechDetailsStack({
 
   return (
     <div className="pb-8 pt-4 space-y-4">
-      <QuickAddManualForm
+      <ContextualManualLinkRow
         sku={shipped.sku}
         itemNumber={shipped.item_number}
       />

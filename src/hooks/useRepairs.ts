@@ -4,9 +4,11 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { useAblyChannel } from './useAblyChannel';
+import { getDbTableChannelName } from '@/lib/realtime/channels';
 
 const REPAIRS_CHANNEL =
   process.env.NEXT_PUBLIC_ABLY_CHANNEL_REPAIR_CHANGES || 'repair:changes';
+const REPAIR_DB_CHANNEL = getDbTableChannelName('public', 'repair_service');
 
 export function useRepairs(search?: string | null) {
   const queryClient = useQueryClient();
@@ -31,6 +33,10 @@ export function useRepairs(search?: string | null) {
 
   // Live invalidation via Ably whenever any repair row changes.
   useAblyChannel(REPAIRS_CHANNEL, 'repair.changed', () => {
+    queryClient.invalidateQueries({ queryKey: ['repairs'] });
+  });
+
+  useAblyChannel(REPAIR_DB_CHANNEL, 'db.row.changed', () => {
     queryClient.invalidateQueries({ queryKey: ['repairs'] });
   });
 

@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ChevronDown, Settings, Wrench } from '@/components/Icons';
+import { Check, ChevronDown, Settings } from '@/components/Icons';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
+import { ShipByDate } from '@/components/ui/ShipByDate';
 import { getActiveStaff } from '@/lib/staffCache';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { WorkOrderAssignmentCard } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
@@ -13,21 +15,6 @@ import type { RepairQueueItem } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';
 
 const TECH_IDS = [1, 2, 3, 6];
-
-function getRepairAge(dateTime: string): string {
-  if (!dateTime) return '';
-  try {
-    const parsed = typeof dateTime === 'string' && dateTime.startsWith('"') ? JSON.parse(dateTime) : dateTime;
-    const dt = typeof parsed === 'object' && parsed?.start ? parsed.start : parsed;
-    const ms = Date.now() - new Date(dt).getTime();
-    const days = Math.floor(ms / 86400000);
-    if (days === 0) return 'Today';
-    if (days === 1) return '1 day ago';
-    return `${days}d ago`;
-  } catch {
-    return '';
-  }
-}
 
 function buildWorkOrderRow(repair: RepairQueueItem): WorkOrderRow {
   return {
@@ -51,6 +38,27 @@ function buildWorkOrderRow(repair: RepairQueueItem): WorkOrderRow {
     assignedAt:   null,
     updatedAt:    null,
   };
+}
+
+function getRepairDisplayDate(repair: RepairQueueItem) {
+  return repair.deadlineAt || repair.dateTime || null;
+}
+
+function getDaysLateNumber(deadlineAt: string | null | undefined, fallbackDate?: string | null) {
+  const dueKey = toPSTDateKey(deadlineAt) || toPSTDateKey(fallbackDate);
+  const todayKey = getCurrentPSTDateKey();
+  if (!dueKey || !todayKey) return 0;
+  const [dy, dm, dd] = dueKey.split('-').map(Number);
+  const [ty, tm, td] = todayKey.split('-').map(Number);
+  const dueIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
+  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
+  return Math.max(0, todayIndex - dueIndex);
+}
+
+function getDaysLateTone(daysLate: number) {
+  if (daysLate > 1) return 'text-red-600';
+  if (daysLate === 1) return 'text-yellow-600';
+  return 'text-emerald-600';
 }
 
 interface StaffOption { id: number; name: string; }
@@ -84,9 +92,8 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
   const ticketShort    = repair.ticketNumber ? repair.ticketNumber.slice(-4) : '????';
   const customerName   = repair.contactInfo ? repair.contactInfo.split(',')[0]?.trim() : '';
   const customerPhone  = repair.contactInfo ? repair.contactInfo.split(',')[1]?.trim() : '';
-  const age            = getRepairAge(repair.deadlineAt || repair.dateTime);
+  const daysLate       = getDaysLateNumber(repair.deadlineAt, repair.dateTime);
   const isUnassigned   = repair.assignedTechId === null;
-  const repairAgeLabel = age || 'Repair';
   const hasOutOfStock  = !!repair.outOfStock;
   const hasOutcome     = !!repair.repairOutcome;
   // ── Assignment overlay ──────────────────────────────────────────────────────
@@ -221,10 +228,20 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
       >
         {/* ── Header ── */}
         <div className="mb-3 flex items-center justify-between px-3">
-          <span className="inline-flex items-center gap-1 text-[14px] font-black text-gray-900">
-            <Wrench className="w-4 h-4 text-orange-600" />
-            {repairAgeLabel}
-          </span>
+          <div className="flex items-center gap-2">
+            <ShipByDate
+              date={getRepairDisplayDate(repair)}
+              showPrefix={false}
+              showYear={false}
+              icon={Settings}
+              iconClassName="w-4 h-4 text-orange-600"
+              textClassName="text-[14px] font-black text-blue-700"
+              className=""
+            />
+            <span className={`text-[14px] font-black ${getDaysLateTone(daysLate)}`}>
+              {daysLate}
+            </span>
+          </div>
           <motion.span
             animate={{ rotate: isExpanded ? 180 : 0 }}
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}

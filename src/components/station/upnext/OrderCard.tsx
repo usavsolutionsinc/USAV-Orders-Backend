@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, ChevronDown, Copy, ExternalLink, Pencil, Play, Settings } from '@/components/Icons';
+import { Check, ChevronDown, Copy, ExternalLink, Play, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
+import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { getTrackingUrl } from '@/utils/order-links';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getActiveStaff } from '@/lib/staffCache';
@@ -227,6 +228,7 @@ export function OrderCard({
             <ShipByDate
               date={getDisplayShipByDate(order) || ''}
               showPrefix={false}
+              showYear={false}
               className="[&>span]:text-[14px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4"
             />
             <span className={`text-[14px] font-black ${getDaysLateTone(daysLate)}`}>
@@ -270,26 +272,13 @@ export function OrderCard({
 
         {hasOutOfStock && (
           <div className="mt-2 border-t border-red-100 px-3 pt-2">
-            <div className="flex items-center justify-end">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMissingPartsToggle(order.id);
-                }}
-                className="flex-shrink-0 text-gray-400 transition-colors hover:text-emerald-600"
-                aria-label="Edit out of stock note"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="-mt-3 text-center">
-              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-red-600 [font-family:var(--font-dm-sans)]">
-                Out Of Stock
-              </div>
-              <p className="mt-1 text-sm font-medium text-gray-700 leading-relaxed">
-                {String(order.out_of_stock || '')}
-              </p>
+            <div onClick={(e) => e.stopPropagation()}>
+              <OutOfStockField
+                value={String(order.out_of_stock || '')}
+                onEdit={() => onMissingPartsToggle(order.id)}
+                className="-mt-1"
+                dividerClassName="border-0"
+              />
             </div>
           </div>
         )}

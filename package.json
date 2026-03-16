@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build --webpack",
     "start": "next start",
+    "vercel:env:push": "node scripts/push-vercel-env.js",
     "desktop:dev": "node scripts/electron-dev.js",
     "desktop:start": "electron .",
     "desktop:dist": "electron-builder",
@@ -16,6 +17,7 @@
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "realtime:relay": "node scripts/realtime-outbox-relay.js",
     "sync:packer-logs": "node sync-packer-sheets-to-logs.js",
     "sync:packer-logs:preview": "node sync-packer-sheets-to-logs-dry-run.js"
   },

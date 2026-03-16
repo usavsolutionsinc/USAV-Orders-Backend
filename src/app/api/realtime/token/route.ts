@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Ably from 'ably';
 import {
   getAiAssistChannelName,
+  getDbChannelPrefix,
   getOrdersChannelName,
   getRepairsChannelName,
   getStationChannelName,
@@ -47,6 +48,7 @@ async function createTokenRequest(req: NextRequest) {
     [getRepairsChannelName()]: ['subscribe'],
     [getAiAssistChannelName()]: ['subscribe'],
     [getStationChannelName()]: ['subscribe'],
+    [`${getDbChannelPrefix()}:*`]: ['subscribe'],
   };
 
   if (aiSessionChannel) {

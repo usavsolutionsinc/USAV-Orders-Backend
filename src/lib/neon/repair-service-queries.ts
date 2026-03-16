@@ -3,6 +3,7 @@ import { normalizePSTTimestamp } from '@/utils/date';
 
 export interface RSRecord {
   id: number;
+  version?: number;
   created_at: string;
   updated_at: string;
   ticket_number: string;
@@ -31,6 +32,7 @@ export type RepairStatus = typeof REPAIR_STATUS_OPTIONS[number];
 function mapRepairRow(row: any): RSRecord {
   return {
     id: Number(row.id),
+    version: row.version == null ? undefined : Number(row.version),
     created_at: normalizePSTTimestamp(row.created_at) || '',
     updated_at: normalizePSTTimestamp(row.updated_at) || '',
     ticket_number: row.ticket_number || '',

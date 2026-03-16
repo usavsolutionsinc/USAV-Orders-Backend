@@ -281,7 +281,7 @@ export function OrdersQueueTable({
                           getStaffName((record as any).packer_id);
                         const outOfStockValue = String((record as any).out_of_stock || '').trim();
                         const hasOutOfStock = outOfStockValue !== '';
-                        const hasTechScan = Boolean((record as any).has_tech_scan);
+                        const hasTechScan = Boolean((record as any).has_tech_scan) || Boolean((record as any).tested_by);
                         const defaultDaysLate = getDaysLateNumber(record.deadline_at as any);
 
                         return (
@@ -297,10 +297,10 @@ export function OrdersQueueTable({
                           >
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
-                                {hasOutOfStock ? (
-                                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
-                                ) : hasTechScan ? (
+                                {hasTechScan ? (
                                   <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
+                                ) : hasOutOfStock ? (
+                                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
                                 ) : (
                                   <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
                                 )}

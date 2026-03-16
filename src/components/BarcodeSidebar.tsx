@@ -123,10 +123,12 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
                 <FavoritesWorkspaceSection
                     workspaceKey="sku-stock"
                     accent="blue"
-                    title="SKU Stock Favorites"
-                    description="Keep common stock SKUs pinned so anyone can jump straight to the right inventory record."
+                    title="Favorites"
+                    description=""
                     emptyLabel="No SKU stock favorites yet"
                     useLabel="Search SKU"
+                    inlineRows
+                    buttonAccent="blue"
                     onUseFavorite={handleUseFavorite}
                 />
                 <MultiSkuSnBarcode />

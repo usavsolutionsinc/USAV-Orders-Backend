@@ -2,6 +2,7 @@ export const DEFAULT_ORDERS_CHANNEL = 'orders:changes';
 export const DEFAULT_REPAIRS_CHANNEL = 'repair:changes';
 export const DEFAULT_AI_ASSIST_CHANNEL = 'ai:assist';
 export const DEFAULT_STATION_CHANNEL = 'station:changes';
+export const DEFAULT_DB_CHANNEL_PREFIX = 'db';
 
 export const getOrdersChannelName = () =>
   process.env.ABLY_CHANNEL_ORDERS_CHANGES ||
@@ -26,3 +27,14 @@ export const getStationChannelName = () =>
   process.env.ABLY_CHANNEL_STATION_CHANGES ||
   process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES ||
   DEFAULT_STATION_CHANNEL;
+
+export const getDbChannelPrefix = () =>
+  process.env.ABLY_CHANNEL_DB_PREFIX ||
+  process.env.NEXT_PUBLIC_ABLY_CHANNEL_DB_PREFIX ||
+  DEFAULT_DB_CHANNEL_PREFIX;
+
+export const getDbTableChannelName = (schema: string, table: string) =>
+  `${getDbChannelPrefix()}:${schema}:${table}`;
+
+export const getDbRowChannelName = (schema: string, table: string, rowId: string | number) =>
+  `${getDbTableChannelName(schema, table)}:${rowId}`;

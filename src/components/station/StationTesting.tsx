@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
-import { Barcode, AlertCircle, Loader2, Search, Package } from '../Icons';
+import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import ActiveStationOrderCard from './ActiveStationOrderCard';
 import StationGoalBar from './StationGoalBar';
 import { useStationTestingController } from '@/hooks/useStationTestingController';
@@ -51,8 +50,6 @@ export default function StationTesting({
   embedded = false,
   onViewManual,
 }: StationTestingProps) {
-  const router = useRouter();
-
   const [fbaFeedback, setFbaFeedback] = useState<FbaFeedback | null>(null);
   const [fbaError, setFbaError] = useState<string | null>(null);
   const [isFbaLoading, setIsFbaLoading] = useState(false);
@@ -156,18 +153,6 @@ export default function StationTesting({
           <div className="space-y-0.5">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  sessionStorage.setItem('dashboard-focus-search', '1');
-                  router.push('/dashboard?pending');
-                }}
-                className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-blue-600/10"
-                title="Go to Dashboard"
-                aria-label="Go to Dashboard"
-              >
-                <Search className="w-4 h-4" />
-              </button>
             </div>
           </div>
 

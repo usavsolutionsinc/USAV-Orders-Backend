@@ -1,0 +1,24 @@
+:root {
+  --ds-color-text-primary: #0f172a;
+  --ds-color-text-secondary: #475569;
+  --ds-color-background-canvas: #f8fafc;
+  --ds-color-background-surface: #ffffff;
+  --ds-color-border-subtle: #e2e8f0;
+  --ds-font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
+  --ds-font-mono: 'SFMono-Regular', 'SF Mono', Consolas, monospace;
+  --ds-radius-lg: 0.75rem;
+  --ds-radius-xl: 1rem;
+  --ds-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --ds-shadow-md: 0 12px 24px rgba(15, 23, 42, 0.08);
+  --ds-motion-fast: 150ms;
+  --ds-motion-normal: 220ms;
+  --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-theme='dark'] {
+  --ds-color-text-primary: #f8fafc;
+  --ds-color-text-secondary: #cbd5e1;
+  --ds-color-background-canvas: #020617;
+  --ds-color-background-surface: #0f172a;
+  --ds-color-border-subtle: #1e293b;
+}

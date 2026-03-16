@@ -40,16 +40,21 @@ export function ShippedDetailsPanel({
   const hasOutOfStock = outOfStockValue !== '';
   const testedById = shipped.tested_by ?? shipped.tester_id ?? null;
   const hasTechScan = Boolean((shipped as any).has_tech_scan) || Boolean(testedById);
-  const statusToneClass = hasOutOfStock
-    ? 'bg-red-50 text-red-700'
-    : hasTechScan
-      ? 'bg-emerald-50 text-emerald-700'
+  const statusToneClass = hasTechScan
+    ? 'bg-emerald-50 text-emerald-700'
+    : hasOutOfStock
+      ? 'bg-red-50 text-red-700'
       : 'bg-yellow-50 text-yellow-700';
-  const statusLabel = hasOutOfStock
-    ? outOfStockValue
-    : hasTechScan
-      ? `Tested by ${getStaffName(testedById)}`
+  const statusLabel = hasTechScan
+    ? `Tested by ${getStaffName(testedById)}`
+    : hasOutOfStock
+      ? outOfStockValue
       : 'Pending';
+  const statusDotClass = hasTechScan
+    ? 'bg-emerald-500'
+    : hasOutOfStock
+      ? 'bg-red-500'
+      : 'bg-yellow-400';
   const panelActions = [
     {
       label: 'Goals',
@@ -154,7 +159,7 @@ export function ShippedDetailsPanel({
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <QtyBadge quantity={(shipped as any).quantity} />
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-black tracking-[0.04em] ${statusToneClass}`}>
-                    <span className={`h-2 w-2 rounded-full ${hasOutOfStock ? 'bg-red-500' : hasTechScan ? 'bg-emerald-500' : 'bg-yellow-400'}`} />
+                    <span className={`h-2 w-2 rounded-full ${statusDotClass}`} />
                     {statusLabel}
                   </span>
                 </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { DetailLineRow } from '@/design-system/components';
 
 interface DetailsPanelRowProps {
   label: ReactNode;
@@ -22,15 +23,15 @@ export function DetailsPanelRow({
   dividerClassName = 'border-b border-gray-100',
 }: DetailsPanelRowProps) {
   return (
-    <div className={`${dividerClassName} py-3 ${className}`.trim()}>
-      <div className="mb-1 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</span>
-          {headerAccessory}
-        </div>
-        {actions}
-      </div>
-      <div className={contentClassName}>{children}</div>
-    </div>
+    <DetailLineRow
+      label={label}
+      headerAccessory={headerAccessory}
+      actions={actions}
+      className={className}
+      contentClassName={contentClassName}
+      dividerClassName={dividerClassName}
+    >
+      {children}
+    </DetailLineRow>
   );
 }
