@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { AlertTriangle, FileText, Flag, Package, PackageCheck, Trash2, X } from '../Icons';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertTriangle, FileText, Flag, Package, PackageCheck, Settings, Trash2, X } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { DashboardDetailsStack } from './stacks/DashboardDetailsStack';
@@ -17,12 +17,48 @@ import { dispatchNavigateShippedDetails } from '@/utils/events';
 import { getStaffName } from '@/utils/staff';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { toPSTDateKey } from '@/utils/date';
+import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
+import type { WorkOrderRow } from '@/components/work-orders/types';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
   onClose: () => void;
   onUpdate: () => void;
   context?: 'dashboard' | 'shipped' | 'station' | 'packer';
+}
+
+function buildAssignmentRow(shipped: ShippedOrder): WorkOrderRow {
+  return {
+    id: `ORDER:${shipped.id}`,
+    entityType: 'ORDER',
+    entityId: Number(shipped.id),
+    queueKey: 'orders',
+    queueLabel: 'Orders',
+    title: shipped.product_title || 'Untitled order',
+    subtitle: [shipped.order_id, shipped.shipping_tracking_number, shipped.sku].filter(Boolean).join(' • '),
+    recordLabel: shipped.order_id || shipped.item_number || `Order #${shipped.id}`,
+    sourcePath: '/dashboard',
+    techId: shipped.tester_id ?? null,
+    techName: shipped.tester_name || null,
+    packerId: shipped.packer_id ?? null,
+    packerName: shipped.packed_by_name || null,
+    status: 'ASSIGNED',
+    priority: 100,
+    deadlineAt: shipped.ship_by_date || shipped.deadline_at || null,
+    notes: shipped.notes || null,
+    assignedAt: null,
+    updatedAt: shipped.created_at || null,
+    orderId: shipped.order_id || null,
+    trackingNumber: shipped.shipping_tracking_number || null,
+    itemNumber: shipped.item_number || null,
+    sku: shipped.sku || null,
+    condition: shipped.condition || null,
+    shipmentId: shipped.shipment_id ?? null,
+    accountSource: shipped.account_source || null,
+    quantity: shipped.quantity || null,
+    createdAt: shipped.created_at || null,
+  };
 }
 
 export function ShippedDetailsPanel({
@@ -40,11 +76,14 @@ export function ShippedDetailsPanel({
   const [orderNumber, setOrderNumber] = useState(initialShipped.order_id || '');
   const [itemNumber, setItemNumber] = useState(initialShipped.item_number || '');
   const [shippingTrackingNumber, setShippingTrackingNumber] = useState(initialShipped.shipping_tracking_number || '');
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [showAssignmentCard, setShowAssignmentCard] = useState(false);
   const deleteOrderMutation = useDeleteOrderRow();
   const isDeletingOrder = deleteOrderMutation.isPending;
   const outOfStockValue = String((shipped as any).out_of_stock || '').trim();
   const hasOutOfStock = outOfStockValue !== '';
   const testedById = shipped.tested_by ?? null;
+  const canEditAssignment = Number(shipped.id) > 0 && (shipped as any).row_source !== 'exception';
   const hasTechScan = Boolean((shipped as any).has_tech_scan);
   const statusToneClass = hasTechScan
     ? 'bg-emerald-50 text-emerald-700'
@@ -61,32 +100,6 @@ export function ShippedDetailsPanel({
     : hasOutOfStock
       ? 'bg-red-500'
       : 'bg-yellow-400';
-  const panelActions = [
-    {
-      label: 'Goals',
-      onClick: () => { window.location.href = `/admin?orderId=${shipped.id}`; },
-      icon: <Flag className="h-3.5 w-3.5" />,
-      toneClassName: 'text-blue-600',
-    },
-    {
-      label: 'Status',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'status' } })); },
-      icon: <PackageCheck className="h-3.5 w-3.5" />,
-      toneClassName: 'text-emerald-600',
-    },
-    {
-      label: 'Out of stock',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'out_of_stock' } })); },
-      icon: <AlertTriangle className="h-3.5 w-3.5" />,
-      toneClassName: 'text-orange-600',
-    },
-    {
-      label: 'Notes',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'notes' } })); },
-      icon: <FileText className="h-3.5 w-3.5" />,
-      toneClassName: 'text-gray-600',
-    },
-  ];
   const fieldSave = useOrderFieldSave({
     orderId: shipped.id,
     initialOrderNumber: initialShipped.order_id || '',
@@ -127,6 +140,98 @@ export function ShippedDetailsPanel({
   const saveInlineFields = useCallback(async () => {
     await persistInlineFields(orderNumber, itemNumber, shippingTrackingNumber);
   }, [itemNumber, orderNumber, persistInlineFields, shippingTrackingNumber]);
+
+  const TECH_IDS = [1, 2, 3, 6];
+  const technicianOptions = staff
+    .filter((member) => member.role === 'technician' && TECH_IDS.includes(Number(member.id)))
+    .map((member) => ({ id: Number(member.id), name: member.name }))
+    .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id));
+  const packerOptions = staff
+    .filter((member) => member.role === 'packer')
+    .map((member) => ({ id: Number(member.id), name: member.name }));
+
+  const openAssignmentCard = useCallback(async () => {
+    try {
+      const members = await getActiveStaff();
+      setStaff(members);
+      setShowAssignmentCard(true);
+    } catch {
+      window.alert('Failed to load staff.');
+    }
+  }, []);
+
+  const handleAssignmentConfirm = useCallback(async (row: WorkOrderRow, payload: AssignmentConfirmPayload) => {
+    const nextStatus =
+      payload.status ??
+      (payload.techId && payload.packerId ? 'ASSIGNED' : 'OPEN');
+
+    try {
+      const res = await fetch('/api/work-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: row.entityType,
+          entityId: row.entityId,
+          assignedTechId: payload.techId,
+          assignedPackerId: payload.packerId,
+          status: nextStatus,
+          priority: row.priority,
+          deadlineAt: payload.deadline,
+          notes: row.notes,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.details || data?.error || 'Failed to save assignment');
+      }
+
+      setShipped((current) => ({
+        ...current,
+        tester_id: payload.techId,
+        packer_id: payload.packerId,
+        ship_by_date: payload.deadline ?? current.ship_by_date,
+        deadline_at: payload.deadline ?? current.deadline_at,
+      }));
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      _onUpdate();
+    } catch (error: any) {
+      window.alert(error?.message || 'Failed to save assignment');
+    }
+  }, [_onUpdate]);
+
+  const panelActions = [
+    ...(canEditAssignment ? [{
+      label: 'Assignment',
+      onClick: () => { void openAssignmentCard(); },
+      icon: <Settings className="h-3.5 w-3.5" />,
+      toneClassName: 'text-slate-600',
+    }] : []),
+    {
+      label: 'Goals',
+      onClick: () => { window.location.href = `/admin?orderId=${shipped.id}`; },
+      icon: <Flag className="h-3.5 w-3.5" />,
+      toneClassName: 'text-blue-600',
+    },
+    {
+      label: 'Status',
+      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'status' } })); },
+      icon: <PackageCheck className="h-3.5 w-3.5" />,
+      toneClassName: 'text-emerald-600',
+    },
+    {
+      label: 'Out of stock',
+      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'out_of_stock' } })); },
+      icon: <AlertTriangle className="h-3.5 w-3.5" />,
+      toneClassName: 'text-orange-600',
+    },
+    {
+      label: 'Notes',
+      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'notes' } })); },
+      icon: <FileText className="h-3.5 w-3.5" />,
+      toneClassName: 'text-gray-600',
+    },
+  ];
 
   const handleCopyAll = () => {
     const allInfo = buildShippedCopyInfo(shipped);
@@ -303,6 +408,19 @@ export function ShippedDetailsPanel({
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {showAssignmentCard && canEditAssignment ? (
+          <WorkOrderAssignmentCard
+            rows={[buildAssignmentRow(shipped)]}
+            startIndex={0}
+            technicianOptions={technicianOptions}
+            packerOptions={packerOptions}
+            onConfirm={handleAssignmentConfirm}
+            onClose={() => setShowAssignmentCard(false)}
+          />
+        ) : null}
+      </AnimatePresence>
     </motion.div>
   );
 }

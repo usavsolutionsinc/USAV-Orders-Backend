@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizePSTTimestamp } from '@/utils/date';
+import { parsePositiveInt } from '@/utils/number';
 
 export interface RepairQueueItem {
   kind: 'REPAIR';
@@ -54,15 +55,20 @@ async function getRepairWorkAssignmentSelects() {
  */
 export async function GET(req: NextRequest) {
   try {
-    const techId = req.nextUrl.searchParams.get('techId');
+    const techIdParam = req.nextUrl.searchParams.get('techId');
+    const techId = techIdParam ? parsePositiveInt(techIdParam) : null;
     const { outOfStockSelect, repairOutcomeSelect } = await getRepairWorkAssignmentSelects();
+
+    if (techIdParam && techId === null) {
+      return NextResponse.json({ error: 'techId must be a positive integer' }, { status: 400 });
+    }
 
     const closedPlaceholders = CLOSED_STATUSES.map((_, i) => `$${i + 1}`).join(', ');
 
     let query: string;
     let params: (string | number)[];
 
-    if (techId) {
+    if (techId !== null) {
       query = `
         SELECT
           rs.id               AS "repairId",
@@ -113,7 +119,7 @@ export async function GET(req: NextRequest) {
           )
         ORDER BY COALESCE(wa.deadline_at, rs.created_at) ASC NULLS LAST, wa.priority ASC NULLS LAST, rs.id ASC
       `;
-      params = [...CLOSED_STATUSES, Number(techId)];
+      params = [...CLOSED_STATUSES, techId];
     } else {
       // No techId — return all unresolved repairs (assigned or not)
       query = `

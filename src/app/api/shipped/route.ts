@@ -21,7 +21,19 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const weekStart = searchParams.get('weekStart') || '';
     const weekEnd = searchParams.get('weekEnd') || '';
-    const cacheLookup = createCacheLookupKey({ query: query || '', page, limit, weekStart, weekEnd });
+    const packedBy = searchParams.get('packedBy') || '';
+    const testedBy = searchParams.get('testedBy') || '';
+    const missingTrackingOnly = searchParams.get('missingTrackingOnly') === 'true';
+    const cacheLookup = createCacheLookupKey({
+      query: query || '',
+      page,
+      limit,
+      weekStart,
+      weekEnd,
+      packedBy,
+      testedBy,
+      missingTrackingOnly,
+    });
 
     const cached = await getCachedJson<any>('api:shipped', cacheLookup);
     if (cached) {
@@ -29,7 +41,20 @@ export async function GET(req: NextRequest) {
     }
 
     if (query) {
-      const results = await searchShippedOrders(query);
+      let results = await searchShippedOrders(query);
+      const packedById = packedBy ? Number(packedBy) : null;
+      const testedById = testedBy ? Number(testedBy) : null;
+
+      if (packedById != null && Number.isFinite(packedById)) {
+        results = results.filter((record) => Number(record.packed_by) === packedById);
+      }
+      if (testedById != null && Number.isFinite(testedById)) {
+        results = results.filter((record) => Number(record.tested_by) === testedById);
+      }
+      if (missingTrackingOnly) {
+        results = results.filter((record) => !String(record.shipping_tracking_number || '').trim());
+      }
+
       const payload = {
         shipped: results,
         results,
@@ -41,7 +66,8 @@ export async function GET(req: NextRequest) {
     }
 
     const offset = (page - 1) * limit;
-    let shipped = await getAllShippedOrders(limit, offset);
+    const needsExpandedFetch = Boolean(weekStart || weekEnd || packedBy || testedBy || missingTrackingOnly);
+    let shipped = await getAllShippedOrders(needsExpandedFetch ? 5000 : limit, needsExpandedFetch ? 0 : offset);
 
     // Apply server-side week filtering when requested (dashboard view uses this
     // to avoid downloading thousands of all-time records).
@@ -50,6 +76,25 @@ export async function GET(req: NextRequest) {
         const dateKey = (r.packed_at || r.created_at || '').substring(0, 10);
         return dateKey >= weekStart && dateKey <= weekEnd;
       });
+    }
+    if (packedBy) {
+      const packedById = Number(packedBy);
+      if (Number.isFinite(packedById)) {
+        shipped = shipped.filter((record) => Number(record.packed_by) === packedById);
+      }
+    }
+    if (testedBy) {
+      const testedById = Number(testedBy);
+      if (Number.isFinite(testedById)) {
+        shipped = shipped.filter((record) => Number(record.tested_by) === testedById);
+      }
+    }
+    if (missingTrackingOnly) {
+      shipped = shipped.filter((record) => !String(record.shipping_tracking_number || '').trim());
+    }
+
+    if (needsExpandedFetch) {
+      shipped = shipped.slice(offset, offset + limit);
     }
 
     const payload = {

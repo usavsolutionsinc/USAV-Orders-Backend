@@ -48,10 +48,10 @@ function getStaffName(staffId: number | null | undefined): string {
 function toShippedOrder(order: any): ShippedOrder {
     return {
         ...order,
-        packed_at: order.ship_by_date || null,
-        packed_by: order.packer_id ?? null,
+        packed_at: order.packed_at || null,
+        packed_by: order.packed_by ?? null,
         tested_by: order.tested_by ?? null,
-        serial_number: '',
+        serial_number: order.serial_number || '',
         condition: order.condition || '',
     };
 }
@@ -187,14 +187,14 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
         setHasSearched(true);
         try {
             const runSearch = async (value: string) => {
-                const params = new URLSearchParams({
-                    q: value,
-                    shippedOnly: 'true',
-                    includeShipped: 'true',
-                });
-                const res = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
+                const params = new URLSearchParams({ q: value });
+                const res = await fetch(`/api/shipped?${params.toString()}`, { cache: 'no-store' });
                 const data = await res.json();
-                const orders = Array.isArray(data?.orders) ? data.orders : [];
+                const orders = Array.isArray(data?.results)
+                    ? data.results
+                    : Array.isArray(data?.shipped)
+                        ? data.shipped
+                        : [];
                 return orders
                     .map(toShippedOrder)
                     .filter((record: ShippedOrder) => !isFbaOrder(record.order_id, record.account_source));

@@ -1,4 +1,5 @@
 import Ably from 'ably';
+import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import {
   getAiAssistSessionChannelName,
   getOrdersChannelName,
@@ -57,7 +58,7 @@ type ReceivingLogChangedPayload = {
 let ablyRestClient: Ably.Rest | null = null;
 
 function getAblyRestClient() {
-  const key = process.env.ABLY_API_KEY;
+  const key = getValidatedAblyApiKey();
   if (!key) return null;
 
   if (!ablyRestClient) {

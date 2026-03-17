@@ -32,19 +32,19 @@ async function fetchShippedData(options: UseShippedTableDataOptions): Promise<Sh
 
   let url: string;
   if (!ordersOnly) {
-    if (search) {
-      url = `/api/shipped?q=${encodeURIComponent(search)}`;
-    } else if (weekRange) {
-      // Fetch only the target week's records instead of all-time data.
-      const params = new URLSearchParams({
-        weekStart: weekRange.startStr,
-        weekEnd: weekRange.endStr,
-        limit: '1000',
-      });
-      url = `/api/shipped?${params}`;
+    const params = new URLSearchParams();
+    if (search.trim()) params.set('q', search.trim());
+    if (weekRange) {
+      params.set('weekStart', weekRange.startStr);
+      params.set('weekEnd', weekRange.endStr);
+      params.set('limit', '1000');
     } else {
-      url = '/api/shipped?limit=5000';
+      params.set('limit', '5000');
     }
+    if (missingTrackingOnly) params.set('missingTrackingOnly', 'true');
+    if (packedBy !== undefined) params.set('packedBy', String(packedBy));
+    if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+    url = `/api/shipped?${params.toString()}`;
   } else {
     const params = new URLSearchParams();
     if (weekRange) {
@@ -67,8 +67,8 @@ async function fetchShippedData(options: UseShippedTableDataOptions): Promise<Sh
     records = (data.orders || []).map((order: any) => ({
       ...order,
       packed_at: order.ship_by_date || null,
-      packed_by: order.packer_id ?? null,
-      tested_by: order.tester_id ?? null,
+      packed_by: order.packed_by ?? null,
+      tested_by: order.tested_by ?? null,
       serial_number: '',
       condition: order.condition || '',
     }));

@@ -119,14 +119,15 @@ export default function PendingOrdersTable({
     const redirectToShippedIfNeeded = async () => {
       shippedRedirectAttemptRef.current = searchQuery;
       try {
-        const params = new URLSearchParams({
-          q: searchQuery,
-          packedOnly: 'true',
-        });
-        const response = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
+        const params = new URLSearchParams({ q: searchQuery });
+        const response = await fetch(`/api/shipped?${params.toString()}`, { cache: 'no-store' });
         if (!response.ok || cancelled) return;
         const json = await response.json();
-        const records = Array.isArray(json?.orders) ? json.orders : [];
+        const records = Array.isArray(json?.results)
+          ? json.results
+          : Array.isArray(json?.shipped)
+            ? json.shipped
+            : [];
         if (!records.length || cancelled) return;
 
         const nextParams = new URLSearchParams(searchParams.toString());

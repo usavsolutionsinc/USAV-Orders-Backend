@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Order, RepairQueueItem, FBAQueueItem, ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
 import { fetchPendingOrdersData } from '@/lib/dashboard-table-data';
+import { parsePositiveInt } from '@/utils/number';
 
 interface UseUpNextDataOptions {
   techId: string;
@@ -16,6 +17,7 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   const [receivingItems, setReceivingItems] = useState<ReceivingQueueItem[]>([]);
   const [loading, setLoading]               = useState(true);
   const [allCompletedToday, setAllCompletedToday] = useState(false);
+  const parsedTechId = parsePositiveInt(techId);
 
   const fetchFbaShipments = async () => {
     try {
@@ -30,10 +32,10 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   };
 
   const fetchReceivingQueue = async () => {
-    if (!techId) return;
+    if (parsedTechId === null) return;
     try {
       const res = await fetch(
-        `/api/assignments?entity_type=RECEIVING&work_type=TEST&assigned_tech_id=${techId}&limit=50`
+        `/api/assignments?entity_type=RECEIVING&work_type=TEST&assigned_tech_id=${parsedTechId}&limit=50`
       );
       if (!res.ok) return;
       const data = await res.json();
@@ -93,8 +95,8 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   const fetchOrders = async () => {
     try {
       const [pendingOrders, repairRes] = await Promise.all([
-        fetchPendingOrdersData({ testedBy: Number(techId) }),
-        fetch(`/api/repair-service/next?techId=${techId}`),
+        fetchPendingOrdersData({ testedBy: parsedTechId ?? undefined }),
+        fetch(parsedTechId === null ? '/api/repair-service/next' : `/api/repair-service/next?techId=${parsedTechId}`),
       ]);
 
       const normalizedOrders: Order[] = pendingOrders.map((row: any) => ({

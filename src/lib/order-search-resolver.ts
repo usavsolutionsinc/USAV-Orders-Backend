@@ -22,15 +22,15 @@ export async function resolveOrderSearchView(query: string): Promise<OrderSearch
   }
 
   try {
-    // Check shipped (packed) first
-    const shippedParams = new URLSearchParams({
-      q: trimmed,
-      packedOnly: 'true',
-    });
-    const shippedRes = await fetch(`/api/orders?${shippedParams.toString()}`, { cache: 'no-store' });
+    const shippedParams = new URLSearchParams({ q: trimmed });
+    const shippedRes = await fetch(`/api/shipped?${shippedParams.toString()}`, { cache: 'no-store' });
     if (shippedRes.ok) {
       const shippedJson = await shippedRes.json();
-      const shippedOrders = Array.isArray(shippedJson?.orders) ? shippedJson.orders : [];
+      const shippedOrders = Array.isArray(shippedJson?.results)
+        ? shippedJson.results
+        : Array.isArray(shippedJson?.shipped)
+          ? shippedJson.shipped
+          : [];
       if (shippedOrders.length > 0) {
         return {
           view: 'shipped',

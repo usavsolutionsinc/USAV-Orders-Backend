@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Ably from 'ably';
+import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import {
   getAiAssistChannelName,
   getDbChannelPrefix,
@@ -20,7 +21,7 @@ function sanitizeSessionId(value: string | null | undefined): string | null {
 }
 
 function getAblyRestClient() {
-  const key = process.env.ABLY_API_KEY;
+  const key = getValidatedAblyApiKey();
   if (!key) return null;
 
   if (!ablyRestClient) {

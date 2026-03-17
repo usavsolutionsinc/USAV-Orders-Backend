@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { parsePositiveInt } from '@/utils/number';
 
 const ENTITY_TYPES = new Set(['ORDER', 'REPAIR', 'FBA_SHIPMENT', 'RECEIVING', 'SKU_STOCK']);
 const WORK_TYPES = new Set(['TEST', 'PACK', 'REPAIR', 'QA', 'RECEIVE', 'STOCK_REPLENISH']);
@@ -14,8 +15,10 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     // Accept both new specific params and a generic staff_id fallback
-    const assignedTechIdRaw   = Number(searchParams.get('assigned_tech_id'));
-    const assignedPackerIdRaw = Number(searchParams.get('assigned_packer_id'));
+    const assignedTechIdParam = searchParams.get('assigned_tech_id');
+    const assignedPackerIdParam = searchParams.get('assigned_packer_id');
+    const assignedTechId = assignedTechIdParam ? parsePositiveInt(assignedTechIdParam) : null;
+    const assignedPackerId = assignedPackerIdParam ? parsePositiveInt(assignedPackerIdParam) : null;
     const entityType  = String(searchParams.get('entity_type') || '').trim().toUpperCase();
     const workType    = String(searchParams.get('work_type')   || '').trim().toUpperCase();
     const status      = String(searchParams.get('status')      || '').trim().toUpperCase();
@@ -23,15 +26,22 @@ export async function GET(request: NextRequest) {
     const limitRaw    = Number(searchParams.get('limit') || 100);
     const limit       = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 100;
 
+    if (assignedTechIdParam && assignedTechId === null) {
+      return NextResponse.json({ success: false, error: 'assigned_tech_id must be a positive integer' }, { status: 400 });
+    }
+    if (assignedPackerIdParam && assignedPackerId === null) {
+      return NextResponse.json({ success: false, error: 'assigned_packer_id must be a positive integer' }, { status: 400 });
+    }
+
     const where: string[] = [];
     const params: any[] = [];
 
-    if (Number.isFinite(assignedTechIdRaw) && assignedTechIdRaw > 0) {
-      params.push(assignedTechIdRaw);
+    if (assignedTechId !== null) {
+      params.push(assignedTechId);
       where.push(`wa.assigned_tech_id = $${params.length}`);
     }
-    if (Number.isFinite(assignedPackerIdRaw) && assignedPackerIdRaw > 0) {
-      params.push(assignedPackerIdRaw);
+    if (assignedPackerId !== null) {
+      params.push(assignedPackerId);
       where.push(`wa.assigned_packer_id = $${params.length}`);
     }
     if (ENTITY_TYPES.has(entityType)) {
@@ -78,7 +88,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const entityType  = String(body?.entity_type || '').trim().toUpperCase();
-    const entityId    = Number(body?.entity_id);
+    const entityId    = parsePositiveInt(body?.entity_id);
     const workType    = String(body?.work_type   || '').trim().toUpperCase();
     const statusRaw   = String(body?.status || 'ASSIGNED').trim().toUpperCase();
     const priorityRaw = Number(body?.priority);
@@ -87,7 +97,7 @@ export async function POST(request: NextRequest) {
     if (!ENTITY_TYPES.has(entityType)) {
       return NextResponse.json({ success: false, error: 'Invalid entity_type' }, { status: 400 });
     }
-    if (!Number.isFinite(entityId) || entityId <= 0) {
+    if (entityId === null) {
       return NextResponse.json({ success: false, error: 'Valid entity_id is required' }, { status: 400 });
     }
     if (!WORK_TYPES.has(workType)) {
@@ -96,8 +106,7 @@ export async function POST(request: NextRequest) {
 
     // Route the staff id to the appropriate column based on work_type
     const col = assigneeColumn(workType);
-    const rawStaffId = Number(body?.assigned_tech_id ?? body?.assigned_packer_id ?? body?.assignee_staff_id);
-    const staffId = Number.isFinite(rawStaffId) && rawStaffId > 0 ? rawStaffId : null;
+    const staffId = parsePositiveInt(body?.assigned_tech_id ?? body?.assigned_packer_id ?? body?.assignee_staff_id);
 
     const status   = STATUSES.has(statusRaw) ? statusRaw : 'ASSIGNED';
     const priority = Number.isFinite(priorityRaw) ? Math.max(1, Math.min(9999, priorityRaw)) : 100;
@@ -151,8 +160,8 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    const id = Number(body?.id);
-    if (!Number.isFinite(id) || id <= 0) {
+    const id = parsePositiveInt(body?.id);
+    if (id === null) {
       return NextResponse.json({ success: false, error: 'Valid id is required' }, { status: 400 });
     }
 
@@ -160,13 +169,11 @@ export async function PATCH(request: NextRequest) {
     const params: any[]     = [];
 
     if (body?.assigned_tech_id !== undefined) {
-      const raw = Number(body.assigned_tech_id);
-      params.push(Number.isFinite(raw) && raw > 0 ? raw : null);
+      params.push(parsePositiveInt(body.assigned_tech_id));
       updates.push(`assigned_tech_id = $${params.length}`);
     }
     if (body?.assigned_packer_id !== undefined) {
-      const raw = Number(body.assigned_packer_id);
-      params.push(Number.isFinite(raw) && raw > 0 ? raw : null);
+      params.push(parsePositiveInt(body.assigned_packer_id));
       updates.push(`assigned_packer_id = $${params.length}`);
     }
     if (body?.status !== undefined) {
@@ -221,8 +228,8 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = Number(searchParams.get('id'));
-    if (!Number.isFinite(id) || id <= 0) {
+    const id = parsePositiveInt(searchParams.get('id'));
+    if (id === null) {
       return NextResponse.json({ success: false, error: 'Valid id is required' }, { status: 400 });
     }
 

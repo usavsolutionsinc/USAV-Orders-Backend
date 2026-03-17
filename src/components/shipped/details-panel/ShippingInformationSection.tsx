@@ -509,18 +509,22 @@ export function ShippingInformationSection({
 
         {metaFields ? (
           <>
-            <DetailsPanelRow label="Packed By">
-              <div className="flex items-center justify-between gap-3">
-                <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
-                <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.packingDuration}</p>
-              </div>
-            </DetailsPanelRow>
-            <DetailsPanelRow label="Tested By">
-              <div className="flex items-center justify-between gap-3">
-                <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
-                <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.testingDuration}</p>
-              </div>
-            </DetailsPanelRow>
+            {metaFields.packedByName ? (
+              <DetailsPanelRow label="Packed By">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
+                  <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.packingDuration}</p>
+                </div>
+              </DetailsPanelRow>
+            ) : null}
+            {metaFields.testedByName ? (
+              <DetailsPanelRow label="Tested By">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
+                  <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.testingDuration}</p>
+                </div>
+              </DetailsPanelRow>
+            ) : null}
           </>
         ) : null}
 

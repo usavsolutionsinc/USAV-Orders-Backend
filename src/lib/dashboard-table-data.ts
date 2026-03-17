@@ -9,7 +9,7 @@ function toOrderRecord(order: any): ShippedOrder {
     deadline_at: order.deadline_at || null,
     shipment_id: order.shipment_id ?? null,
     packed_at: order.packed_at || null,
-    packed_by: order.packer_id ?? null,
+    packed_by: order.packed_by ?? null,
     tested_by: order.tested_by ?? null,
     serial_number: order.serial_number || '',
     condition: order.condition || '',
@@ -97,8 +97,6 @@ export async function fetchDashboardShippedData({
   weekEnd?: string;
 }) {
   const params = new URLSearchParams();
-  // Packed & shipped view: show only orders with a matching packer_log (scanned by packer).
-  params.set('packedOnly', 'true');
   if (searchQuery.trim()) {
     params.set('q', searchQuery.trim());
   } else {
@@ -108,12 +106,19 @@ export async function fetchDashboardShippedData({
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
 
-  const url = `/api/orders?${params.toString()}`;
+  const url = `/api/shipped?${params.toString()}`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error('Failed to fetch shipped orders');
   }
 
   const data = await res.json();
-  return ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  const shipped = Array.isArray(data.orders)
+    ? data.orders
+    : Array.isArray(data.shipped)
+      ? data.shipped
+      : Array.isArray(data.results)
+        ? data.results
+        : [];
+  return ((shipped || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
 }

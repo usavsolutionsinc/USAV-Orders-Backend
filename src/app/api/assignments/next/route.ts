@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { parsePositiveInt } from '@/utils/number';
 
 const WORK_TYPES = new Set(['TEST', 'PACK', 'REPAIR', 'QA', 'RECEIVE']);
 
@@ -8,8 +9,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     // Accept either the specific new column params or the legacy staff_id param
-    const assignedTechIdRaw   = Number(searchParams.get('assigned_tech_id')   ?? searchParams.get('staff_id'));
-    const assignedPackerIdRaw = Number(searchParams.get('assigned_packer_id') ?? searchParams.get('staff_id'));
+    const assignedTechId = parsePositiveInt(searchParams.get('assigned_tech_id') ?? searchParams.get('staff_id'));
+    const assignedPackerId = parsePositiveInt(searchParams.get('assigned_packer_id') ?? searchParams.get('staff_id'));
     const workType = String(searchParams.get('work_type') || '').trim().toUpperCase();
 
     if (!WORK_TYPES.has(workType)) {
@@ -17,10 +18,10 @@ export async function GET(request: NextRequest) {
     }
 
     const isPackWork = workType === 'PACK';
-    const staffId    = isPackWork ? assignedPackerIdRaw : assignedTechIdRaw;
+    const staffId    = isPackWork ? assignedPackerId : assignedTechId;
     const col        = isPackWork ? 'assigned_packer_id' : 'assigned_tech_id';
 
-    if (!Number.isFinite(staffId) || staffId <= 0) {
+    if (staffId === null) {
       return NextResponse.json(
         { success: false, error: `Valid ${col} is required` },
         { status: 400 }

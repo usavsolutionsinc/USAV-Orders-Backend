@@ -1,4 +1,5 @@
 import Ably from 'ably';
+import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import { getDbRowChannelName, getDbTableChannelName } from '@/lib/realtime/channels';
 
 export type RealtimeDbEvent = {
@@ -17,7 +18,7 @@ export type RealtimeDbEvent = {
 let ablyRestClient: Ably.Rest | null = null;
 
 function getAblyRestClient() {
-  const key = process.env.ABLY_API_KEY;
+  const key = getValidatedAblyApiKey();
   if (!key) return null;
 
   if (!ablyRestClient) {

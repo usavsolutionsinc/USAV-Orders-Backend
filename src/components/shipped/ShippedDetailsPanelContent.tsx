@@ -72,6 +72,8 @@ export function ShippedDetailsPanelContent({
   const testingMetaValue = String(durationData.testingDuration || '').trim()
     || derivedTestingDuration
     || '--:--';
+  const packedByName = packedById ? getStaffName(packedById) : '';
+  const testedByName = testedById ? getStaffName(testedById) : '';
 
   return (
     <div className="px-8 pb-8 pt-0.5 space-y-10">
@@ -102,12 +104,16 @@ export function ShippedDetailsPanelContent({
         showShippingTimestamp={showShippingTimestamp}
         showSerialNumber={showSerialNumber}
         editableShippingFields={editableShippingFields}
-        metaFields={{
-          packedByName: getStaffName(packedById),
-          packingDuration: packingMetaValue,
-          testedByName: getStaffName(testedById),
-          testingDuration: testingMetaValue,
-        }}
+        metaFields={
+          packedByName || testedByName
+            ? {
+                packedByName,
+                packingDuration: packingMetaValue,
+                testedByName,
+                testingDuration: testingMetaValue,
+              }
+            : undefined
+        }
       />
 
       {!productDetailsFirst && productDetailsSection}
