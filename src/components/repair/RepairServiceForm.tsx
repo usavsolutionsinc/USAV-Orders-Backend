@@ -1,8 +1,11 @@
-// RepairServiceForm.tsx
-import React from 'react'
+'use client'
+
+import React, { useEffect, useRef } from 'react'
+import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode'
 
 type RepairServiceFormProps = {
-  ticketNumber: string | number
+  repairServiceId: string | number
+  ticketNumber?: string | number
   productTitle: string
   issue: string
   serialNumber: string
@@ -13,6 +16,7 @@ type RepairServiceFormProps = {
 }
 
 const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
+  repairServiceId,
   ticketNumber,
   productTitle,
   issue,
@@ -22,8 +26,36 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
   price,
   startDateTime
 }) => {
+  const barcodeRef = useRef<HTMLCanvasElement>(null)
+  const repairServiceCode = `RS-${String(repairServiceId || '').trim()}`
+
   // Format contact display as "Name, Phone, Email"
   const contactDisplay = [name, contact].filter(Boolean).join(', ')
+  const externalTicket = String(ticketNumber || '').trim()
+
+  useEffect(() => {
+    const value = repairServiceCode
+    if (!value) return
+
+    let active = true
+
+    loadBarcodeLibrary()
+      .then(() => {
+        if (!active) return
+        renderBarcode(barcodeRef.current, value, {
+          width: 1.6,
+          height: 42,
+          margin: 0,
+        })
+      })
+      .catch((error) => {
+        console.warn('Failed to render repair barcode:', error)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [repairServiceCode])
   
   return (
     <div className="w-[8.5in] min-h-[11in] mx-auto bg-white text-gray-900 font-sans p-8 print:p-6">
@@ -37,9 +69,18 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
       </div>
 
       {/* Title and Ticket Number */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Repair Service</h1>
-        <p className="text-lg font-semibold">{ticketNumber} - Repair Ticket Number</p>
+      <div className="mb-6 flex items-start justify-between gap-6">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-bold mb-2">Repair Service</h1>
+          <p className="text-lg font-semibold">{repairServiceCode} - Repair Service Number</p>
+          {externalTicket && !/^RS-\d+$/i.test(externalTicket) && (
+            <p className="text-sm font-medium text-gray-600">Ticket #: {externalTicket}</p>
+          )}
+        </div>
+        <div className="flex flex-col items-end">
+          <canvas ref={barcodeRef} aria-label={`Barcode for repair service ${repairServiceCode}`} />
+          <p className="mt-1 text-xs font-semibold tracking-[0.2em] text-gray-500">RS ID</p>
+        </div>
       </div>
 
       {/* Information Table */}

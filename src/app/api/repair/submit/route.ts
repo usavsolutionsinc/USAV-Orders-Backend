@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRepair } from '@/lib/neon/repair-service-queries';
+import { createRepair, updateRepairField } from '@/lib/neon/repair-service-queries';
 import { createAssignment } from '@/lib/neon/assignments-queries';
 import { addBusinessDays, createZendeskTicket } from '@/lib/zendesk';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -58,10 +58,27 @@ export async function POST(req: NextRequest) {
         // Format issue (repair reasons + repair notes from step 2)
         const issueString = normalizedReasons.join(', ') + (normalizedRepairNotes ? `${normalizedReasons.length ? ' - ' : ''}${normalizedRepairNotes}` : '');
 
-        // Step 1: Create Zendesk ticket via GAS Web App
+        // Step 1: Create repair row first so the Zendesk ticket can reference the canonical RS id.
+        const repairRecord = await createRepair({
+            createdAt: postedAt,
+            ticketNumber: null,
+            contactInfo,
+            productTitle: productString,
+            price: normalizedPrice,
+            issue: issueString,
+            serialNumber: normalizedSerialNumber,
+            notes: normalizedNotes || null,
+        });
+
+        const dbId = repairRecord.id;
+        const finalRSNumber = repairRecord.ticket_number;
+
+        // Step 2: Create Zendesk ticket via GAS Web App
         let zendeskTicketNumber: string | null = null;
         try {
             zendeskTicketNumber = await createZendeskTicket({
+                repairServiceId: dbId,
+                repairServiceNumber: finalRSNumber,
                 customerName: customer.name,
                 customerPhone: customer.phone,
                 customerEmail: customer.email || '', // Optional
@@ -73,25 +90,13 @@ export async function POST(req: NextRequest) {
                 notes: normalizedNotes // Optional notes from step 3
             });
             console.log('Zendesk ticket created:', zendeskTicketNumber ?? 'missing ticket number');
+            if (zendeskTicketNumber) {
+                await updateRepairField(dbId, 'ticket_number', zendeskTicketNumber);
+            }
         } catch (error: any) {
             console.error('Failed to create Zendesk ticket:', error);
             // Continue with DB insert even if Zendesk fails
         }
-
-        // Step 2: Insert into repair_service table in NEON DB
-        const repairRecord = await createRepair({
-            createdAt: postedAt,
-            ticketNumber: zendeskTicketNumber,
-            contactInfo,
-            productTitle: productString,
-            price: normalizedPrice,
-            issue: issueString,
-            serialNumber: normalizedSerialNumber,
-            notes: normalizedNotes || null,
-        });
-
-        const dbId = repairRecord.id;
-        const finalRSNumber = repairRecord.ticket_number;
 
         // Insert into work_assignments so the repair appears in the Up Next queue.
         // deadline_at mirrors the due date already sent to Zendesk (5 business days out).
@@ -117,6 +122,7 @@ export async function POST(req: NextRequest) {
             success: true,
             rsNumber: finalRSNumber,
             id: dbId,
+            zendeskTicketNumber,
             receiptData: {
                 rsNumber: finalRSNumber,
                 dropOffDate: postedAt,

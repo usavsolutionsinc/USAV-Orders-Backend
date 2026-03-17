@@ -178,7 +178,7 @@ export default function StationTesting({
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Scan Tracking, SKU, SN, or FNSKU..."
+                placeholder="Scan Tracking, RS ID, SKU, SN, or FNSKU..."
                 className={`w-full pl-11 pr-14 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
                 autoFocus
               />

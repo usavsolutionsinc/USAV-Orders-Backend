@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { RSRecord } from '@/lib/neon/repair-service-queries';
+import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { useAblyChannel } from './useAblyChannel';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
 
@@ -10,16 +10,16 @@ const REPAIRS_CHANNEL =
   process.env.NEXT_PUBLIC_ABLY_CHANNEL_REPAIR_CHANGES || 'repair:changes';
 const REPAIR_DB_CHANNEL = getDbTableChannelName('public', 'repair_service');
 
-export function useRepairs(search?: string | null) {
+export function useRepairs(search?: string | null, tab: RepairTab = 'active') {
   const queryClient = useQueryClient();
-  const queryKey = ['repairs', search || ''] as const;
+  const queryKey = ['repairs', search || '', tab] as const;
 
   const query = useQuery<RSRecord[]>({
     queryKey,
     queryFn: async () => {
       const url = search
-        ? `/api/repair-service?q=${encodeURIComponent(search)}`
-        : '/api/repair-service';
+        ? `/api/repair-service?q=${encodeURIComponent(search)}&tab=${encodeURIComponent(tab)}`
+        : `/api/repair-service?tab=${encodeURIComponent(tab)}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch repairs');
       const data = await res.json();

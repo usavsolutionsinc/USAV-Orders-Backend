@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllRepairs, updateRepairStatus, updateRepairNotes, updateRepairField, searchRepairs } from '@/lib/neon/repair-service-queries';
+import { getAllRepairs, updateRepairStatus, updateRepairNotes, updateRepairField, searchRepairs, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 
@@ -16,7 +16,9 @@ export async function GET(req: NextRequest) {
     const query = searchParams.get('q');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
-    const cacheLookup = createCacheLookupKey({ query: query || '', page, limit });
+    const tabParam = searchParams.get('tab');
+    const tab: RepairTab = tabParam === 'incoming' ? 'incoming' : tabParam === 'done' ? 'done' : 'active';
+    const cacheLookup = createCacheLookupKey({ query: query || '', page, limit, tab });
 
     const cached = await getCachedJson<any>(REPAIR_CACHE_NS, cacheLookup);
     if (cached) {
@@ -24,15 +26,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (query) {
-      const repairs = await searchRepairs(query);
-      const payload = { repairs, count: repairs.length, query };
+      const repairs = await searchRepairs(query, { tab });
+      const payload = { repairs, count: repairs.length, query, tab };
       await setCachedJson(REPAIR_CACHE_NS, cacheLookup, payload, REPAIR_TTL, REPAIR_TAGS);
       return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
     }
 
     const offset = (page - 1) * limit;
-    const repairs = await getAllRepairs(limit, offset);
-    const payload = { repairs, page, limit, count: repairs.length };
+    const repairs = await getAllRepairs(limit, offset, { tab });
+    const payload = { repairs, page, limit, count: repairs.length, tab };
     await setCachedJson(REPAIR_CACHE_NS, cacheLookup, payload, REPAIR_TTL, REPAIR_TAGS);
     return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {

@@ -51,18 +51,13 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const { allOrders, allRepairs, fbaItems, receivingItems, loading, allCompletedToday, fetchOrders } =
     useUpNextData({ techId, onAllCompleted });
 
-  const techIdNum = Number(techId);
-  const techScopedOrders = allOrders.filter((order) => {
-    if (!Number.isFinite(techIdNum)) return true;
-    return Number(order.tester_id) === techIdNum;
-  });
-  const pendingTechScopedOrders = techScopedOrders.filter((order) => !order.has_tech_scan);
+  const pendingVisibleOrders = allOrders.filter((order) => !order.has_tech_scan);
 
   // Hide orders already completed at the testing station. `has_tech_scan` comes
   // from a shipment_id match in tech_serial_numbers.
-  const stockOrders = pendingTechScopedOrders.filter(isOutOfStock);
+  const stockOrders = pendingVisibleOrders.filter(isOutOfStock);
   // Match the pending orders source data and only split out stock blockers here.
-  const nonStockOrders = pendingTechScopedOrders.filter((order) => !isOutOfStock(order));
+  const nonStockOrders = pendingVisibleOrders.filter((order) => !isOutOfStock(order));
   const sortedRepairs = [...allRepairs].sort(
     (a, b) => getRepairSortValue(a.deadlineAt, a.dateTime) - getRepairSortValue(b.deadlineAt, b.dateTime)
   );

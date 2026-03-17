@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     const { shipmentId: resolvedShipmentId, scanRef: resolvedScanRef } = await resolveShipmentId(tracking);
 
-    const existingRowResult = await pool.query(
+    let existingRowResult = await pool.query(
       `SELECT id, serial_type, tested_by
        FROM tech_serial_numbers
        WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
@@ -59,6 +59,27 @@ export async function POST(req: NextRequest) {
        LIMIT 1`,
       [key18]
     );
+    const exceptionResult = await pool.query(
+      `SELECT id
+       FROM orders_exceptions
+       WHERE status = 'open'
+         AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [key18]
+    );
+    const ordersExceptionId = exceptionResult.rows[0]?.id ? Number(exceptionResult.rows[0].id) : null;
+
+    if (existingRowResult.rows.length === 0 && ordersExceptionId) {
+      existingRowResult = await pool.query(
+        `SELECT id, serial_type, tested_by
+         FROM tech_serial_numbers
+         WHERE orders_exception_id = $1
+         ORDER BY id ASC
+         LIMIT 1`,
+        [ordersExceptionId]
+      );
+    }
 
     const joinedSerials = serialNumbers.join(', ');
 
@@ -70,22 +91,28 @@ export async function POST(req: NextRequest) {
          SET serial_number = $1,
              serial_type = $2,
              updated_at = date_trunc('second', NOW()),
-             tested_by = $3
+             tested_by = $3,
+             orders_exception_id = CASE
+               WHEN $5::int IS NOT NULL THEN COALESCE(orders_exception_id, $5)
+               ELSE orders_exception_id
+             END
          WHERE id = $4`,
         [
           joinedSerials,
           detectSerialType(serialNumbers, row.serial_type, orderResult.rows[0]?.account_source),
           nextTestedBy,
           row.id,
+          ordersExceptionId,
         ]
       );
     } else if (serialNumbers.length > 0) {
       await pool.query(
         `INSERT INTO tech_serial_numbers
-         (shipment_id, scan_ref, serial_number, serial_type, tested_by)
-         VALUES ($1, $2, $3, $4, $5)`,
+         (shipment_id, orders_exception_id, scan_ref, serial_number, serial_type, tested_by)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           resolvedShipmentId,
+          ordersExceptionId,
           resolvedScanRef,
           joinedSerials,
           detectSerialType(serialNumbers, null, orderResult.rows[0]?.account_source),

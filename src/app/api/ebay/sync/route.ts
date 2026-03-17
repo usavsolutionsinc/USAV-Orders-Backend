@@ -1,86 +1,45 @@
 import { NextResponse } from 'next/server';
-import { syncAllAccounts, getSyncStatus } from '@/lib/ebay/sync';
-import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
+import { getSyncStatus } from '@/lib/ebay/sync';
+import { runEbaySync } from '@/lib/jobs/ebay-sync';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
-import { formatPSTTimestamp } from '@/utils/date';
+import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
 
-/**
- * POST /api/ebay/sync
- * Trigger manual sync for all active eBay accounts
- */
 export async function POST(req: Request) {
-  const startedAt = Date.now();
-  const runId = `ebay-sync-${startedAt}`;
-  try {
-    const origin = req.headers.get('origin');
-    if (!isAllowedAdminOrigin(req)) {
-      return NextResponse.json(
-        { success: false, error: `Origin not allowed: ${origin}`, runId },
-        { status: 403 }
-      );
-    }
+  const origin = req.headers.get('origin');
+  if (!isAllowedAdminOrigin(req)) {
+    return NextResponse.json(
+      { success: false, error: `Origin not allowed: ${origin}` },
+      { status: 403 }
+    );
+  }
 
+  try {
     const url = new URL(req.url);
     const reconcileParam = url.searchParams.get('reconcileExceptions');
     const reconcileExceptions = reconcileParam === null ? true : reconcileParam === 'true';
-
-    console.log(`[${runId}] Manual eBay sync triggered via API. reconcileExceptions=${reconcileExceptions}`);
-    const results = await syncAllAccounts();
-
-    const successCount = results.filter((r) => r.status === 'fulfilled').length;
-    const failureCount = results.filter((r) => r.status === 'rejected').length;
-
-    const totals = results.reduce(
-      (acc, row) => {
-        const data = row.data;
-        acc.fetchedOrders += data?.fetchedOrders || 0;
-        acc.scannedTracking += data?.scannedTracking || 0;
-        acc.matchedExceptions += data?.matchedExceptions || 0;
-        acc.createdOrders += data?.createdOrders || 0;
-        acc.deletedExceptions += data?.deletedExceptions || 0;
-        acc.skippedExistingOrders += data?.skippedExistingOrders || 0;
-        acc.errors += data?.errors?.length || 0;
-        return acc;
-      },
-      {
-        fetchedOrders: 0,
-        scannedTracking: 0,
-        matchedExceptions: 0,
-        createdOrders: 0,
-        deletedExceptions: 0,
-        skippedExistingOrders: 0,
-        errors: 0,
-      }
-    );
-
-    let exceptionsSync: { scanned: number; matched: number; deleted: number } | null = null;
-    if (reconcileExceptions) {
-      exceptionsSync = await syncOrderExceptionsToOrders();
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const enqueue = body?.enqueue === true || url.searchParams.get('enqueue') === 'true';
+    if (enqueue) {
+      const result = await enqueueQStashJson({
+        path: '/api/qstash/ebay/sync',
+        body: { reconcileExceptions },
+        retries: 3,
+        timeout: 300,
+        label: 'ebay-sync',
+      });
+      return NextResponse.json({
+        success: true,
+        queued: true,
+        messageId: getQStashResultIdentifier(result),
+      });
     }
-
-    const durationMs = Date.now() - startedAt;
-
-    return NextResponse.json({
-      success: true,
-      runId,
-      message: `eBay tracking-match sync completed: ${successCount} account(s) succeeded, ${failureCount} failed`,
-      reconcileExceptions,
-      totals,
-      exceptionsSync,
-      results,
-      durationMs,
-      timestamp: formatPSTTimestamp(),
-    });
+    return NextResponse.json(await runEbaySync({ reconcileExceptions }));
   } catch (error: any) {
-    const durationMs = Date.now() - startedAt;
-    console.error(`[${runId}] Error in sync endpoint:`, error);
+    const payload = error?.cause;
     return NextResponse.json(
-      {
+      payload ?? {
         success: false,
-        runId,
-        error: error.message,
-        durationMs,
-        timestamp: formatPSTTimestamp(),
+        error: error?.message || 'Internal error',
       },
       { status: 500 }
     );
@@ -98,7 +57,6 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       accounts: status,
-      timestamp: formatPSTTimestamp(),
     });
   } catch (error: any) {
     console.error('Error fetching sync status:', error);

@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
             `, [key18]);
         }
         const order = orderResult.rows[0] || null;
+        let ordersExceptionId: number | null = null;
 
         if (!order) {
             // Allow if an open exception exists for this tracking.
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
                     error: 'Tracking not found in orders or orders_exceptions'
                 }, { status: 404 });
             }
+            ordersExceptionId = Number(exceptionResult.rows[0].id);
         }
         
         // Determine serial type based on pattern
@@ -175,6 +177,18 @@ export async function POST(req: NextRequest) {
             if (byFK.rows.length > 0) existingRowResult = byFK;
         }
 
+        if (existingRowResult.rows.length === 0 && ordersExceptionId) {
+            const byOrdersException = await pool.query(
+                `SELECT id, serial_number
+                 FROM tech_serial_numbers
+                 WHERE orders_exception_id = $1
+                 ORDER BY id ASC
+                 LIMIT 1`,
+                [ordersExceptionId]
+            );
+            if (byOrdersException.rows.length > 0) existingRowResult = byOrdersException;
+        }
+
         if (existingRowResult.rows.length === 0 && isFbaLikeTracking) {
             const byFnsku = await pool.query(
                 `SELECT id, serial_number
@@ -225,6 +239,10 @@ export async function POST(req: NextRequest) {
                  SET serial_number = $1,
                      updated_at = date_trunc('second', NOW()),
                      tested_by = $2,
+                     orders_exception_id = CASE
+                       WHEN $9::int IS NOT NULL THEN COALESCE(orders_exception_id, $9)
+                       ELSE orders_exception_id
+                     END,
                      fnsku = CASE
                        WHEN $4 THEN COALESCE(fnsku, $5)
                        ELSE fnsku
@@ -251,6 +269,7 @@ export async function POST(req: NextRequest) {
                     unmatchedFnskuLog?.id ?? null,
                     unmatchedFnskuLog?.fba_shipment_id ?? null,
                     unmatchedFnskuLog?.fba_shipment_item_id ?? null,
+                    ordersExceptionId,
                 ]
             );
         } else {
@@ -259,10 +278,11 @@ export async function POST(req: NextRequest) {
             if (resolvedScan.shipmentId) {
                 await pool.query(
                     `INSERT INTO tech_serial_numbers
-                     (shipment_id, scan_ref, serial_number, serial_type, tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                     (shipment_id, orders_exception_id, scan_ref, serial_number, serial_type, tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
                     [
                         resolvedScan.shipmentId,
+                        ordersExceptionId,
                         resolvedScan.scanRef ?? null,
                         updatedSerialList.join(', '),
                         serialType,
@@ -281,9 +301,10 @@ export async function POST(req: NextRequest) {
             } else {
                 await pool.query(
                     `INSERT INTO tech_serial_numbers
-                     (scan_ref, serial_number, serial_type, tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                     (orders_exception_id, scan_ref, serial_number, serial_type, tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
                     [
+                        ordersExceptionId,
                         resolvedScan.scanRef ?? scannedTracking,
                         updatedSerialList.join(', '),
                         serialType,

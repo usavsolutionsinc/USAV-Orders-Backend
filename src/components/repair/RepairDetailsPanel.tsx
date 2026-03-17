@@ -81,7 +81,8 @@ export function RepairDetailsPanel({
   };
 
   const zendeskTicketUrl = ticketNumber.trim()
-    ? `https://usav.zendesk.com/agent/tickets/${encodeURIComponent(ticketNumber.trim())}`
+    && !/^RS-\d+$/i.test(ticketNumber.trim())
+    ? `https://usav.zendesk.com/agent/tickets/${encodeURIComponent(ticketNumber.trim().replace(/^#/, ''))}`
     : null;
 
   const handleSaveNotes = async () => {

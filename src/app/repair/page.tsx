@@ -8,7 +8,8 @@ import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 
 function RepairPageContent() {
     const searchParams = useSearchParams();
-    const activeTab = searchParams.get('tab') === 'done' ? 'done' : 'active';
+    const rawTab = searchParams.get('tab');
+    const activeTab = rawTab === 'incoming' ? 'incoming' : rawTab === 'done' ? 'done' : 'active';
     useRealtimeInvalidation({ repair: true });
     
     return (

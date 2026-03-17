@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { formatPSTTimestamp } from '@/utils/date';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishRepairChanged } from '@/lib/realtime/publish';
+import { upsertEcwidIncomingRepair } from '@/lib/neon/repair-service-queries';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const DEFAULT_LIMIT = 100;
@@ -202,6 +205,20 @@ async function upsertEcwidOrder(params: {
   return 'updated';
 }
 
+function findRepairItem(order: any): any | null {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  return items.find((item: any) => String(item?.sku || '').trim().toUpperCase().endsWith('-RS')) || null;
+}
+
+function extractEcwidContactInfo(order: any): string {
+  const parts = [
+    String(order?.shippingPerson?.name || order?.billingPerson?.name || order?.email || '').trim(),
+    String(order?.shippingPerson?.phone || order?.billingPerson?.phone || '').trim(),
+    String(order?.email || '').trim(),
+  ].filter(Boolean);
+  return parts.join(', ');
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -238,6 +255,7 @@ export async function POST(req: NextRequest) {
     let created = 0;
     let updated = 0;
     let deleted = 0;
+    const touchedRepairIds = new Set<number>();
 
     for (const order of ecwidOrders) {
       const trackingNumbers = extractEcwidTrackingNumbers(order);
@@ -251,9 +269,24 @@ export async function POST(req: NextRequest) {
         const entry = exceptionMap.get(trackingKey18);
         if (!entry || entry.ids.length === 0) continue;
 
-        const result = await upsertEcwidOrder({ order, trackingNumber });
-        if (result === 'created') created += 1;
-        else updated += 1;
+        const repairItem = findRepairItem(order);
+        if (repairItem) {
+          const repair = await upsertEcwidIncomingRepair({
+            orderId: String(order?.orderNumber ?? order?.id ?? '').trim() || null,
+            trackingNumber,
+            sku: String(repairItem?.sku || '').trim() || null,
+            productTitle: String(repairItem?.name || '').trim() || null,
+            contactInfo: extractEcwidContactInfo(order) || null,
+            orderDate: parseEcwidOrderDate(order?.createDate ?? order?.created ?? order?.date)?.toISOString() ?? null,
+            notes: String(order?.customerComments || order?.orderComments || '').trim() || null,
+          });
+          touchedRepairIds.add(repair.id);
+          updated += 1;
+        } else {
+          const result = await upsertEcwidOrder({ order, trackingNumber });
+          if (result === 'created') created += 1;
+          else updated += 1;
+        }
 
         const placeholders = entry.ids.map((_, i) => `$${i + 1}`).join(', ');
         const deleteResult = await pool.query(
@@ -267,6 +300,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (touchedRepairIds.size > 0) {
+      await invalidateCacheTags(['repair-service']);
+      await publishRepairChanged({
+        repairIds: Array.from(touchedRepairIds),
+        source: 'ecwid.sync-exception-tracking',
+      });
+    }
+
     return NextResponse.json({
       success: true,
       scanned,
@@ -274,6 +315,7 @@ export async function POST(req: NextRequest) {
       created,
       updated,
       deleted,
+      repairs: touchedRepairIds.size,
       timestamp: formatPSTTimestamp(),
     });
   } catch (error: any) {

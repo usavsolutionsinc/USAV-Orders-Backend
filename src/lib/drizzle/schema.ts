@@ -411,6 +411,16 @@ export const repairService = pgTable('repair_service', {
   serialNumber: text('serial_number'),
   notes: text('notes'),
   status: text('status').default('Pending Repair'),
+  sourceSystem: text('source_system'),
+  sourceOrderId: text('source_order_id'),
+  sourceTrackingNumber: text('source_tracking_number'),
+  sourceSku: text('source_sku'),
+  intakeChannel: text('intake_channel'),
+  incomingStatus: text('incoming_status'),
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+  receivedAt: timestamp('received_at', { withTimezone: true }),
+  intakeConfirmedAt: timestamp('intake_confirmed_at', { withTimezone: true }),
+  receivedByStaffId: integer('received_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -491,6 +501,8 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   id: serial('id').primaryKey(),
   /** FK to shipping_tracking_numbers for carrier-tracking rows */
   shipmentId: bigint('shipment_id', { mode: 'number' }),
+  /** FK to orders_exceptions for unmatched carrier scans */
+  ordersExceptionId: integer('orders_exception_id').references(() => ordersExceptions.id, { onDelete: 'set null' }),
   /** Raw scan value for non-carrier rows (FNSKU, etc.) */
   scanRef: text('scan_ref'),
   serialNumber: text('serial_number').notNull(),

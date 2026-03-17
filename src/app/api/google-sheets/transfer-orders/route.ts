@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
+import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
 
 export const dynamic = 'force-dynamic';
 
@@ -680,6 +681,20 @@ async function runTransferOrders(manualSheetName?: string) {
 export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const manualSheetName = body?.manualSheetName;
+    if (body?.enqueue === true) {
+        const result = await enqueueQStashJson({
+            path: '/api/google-sheets/transfer-orders',
+            body: { manualSheetName },
+            retries: 3,
+            timeout: 300,
+            label: 'google-sheets-transfer-orders',
+        });
+        return NextResponse.json({
+            success: true,
+            queued: true,
+            messageId: getQStashResultIdentifier(result),
+        });
+    }
     return runTransferOrders(manualSheetName);
 }
 
@@ -688,5 +703,16 @@ export async function GET(req: NextRequest) {
     if (!isCronAuthorized(req)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return runTransferOrders(undefined);
+    const result = await enqueueQStashJson({
+        path: '/api/google-sheets/transfer-orders',
+        body: {},
+        retries: 3,
+        timeout: 300,
+        label: 'google-sheets-transfer-orders',
+    });
+    return NextResponse.json({
+        success: true,
+        queued: true,
+        messageId: getQStashResultIdentifier(result),
+    });
 }

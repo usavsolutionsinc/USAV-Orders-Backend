@@ -12,8 +12,7 @@ import {
 } from '@/components/repair';
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
-
-type RepairTab = 'active' | 'done';
+import type { RepairTab } from '@/lib/neon/repair-service-queries';
 
 interface RepairSidebarPanelProps {
   embedded?: boolean;
@@ -43,7 +42,8 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
   const [intakeDraft, setIntakeDraft] = useState<Partial<RepairFormData> | undefined>(undefined);
 
-  const activeTab: RepairTab = searchParams.get('tab') === 'done' ? 'done' : 'active';
+  const rawTab = searchParams.get('tab');
+  const activeTab: RepairTab = rawTab === 'incoming' ? 'incoming' : rawTab === 'done' ? 'done' : 'active';
 
   useEffect(() => {
     setIsMounted(true);
@@ -158,20 +158,39 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           }
         />
 
-        <div className="mt-3">
+        <div className="mt-4 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 via-amber-50 to-white p-2 shadow-[0_18px_40px_-28px_rgba(234,88,12,0.45)]">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <p className="text-[9px] font-black uppercase tracking-[0.28em] text-orange-600">Repair Flow</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-gray-400">Incoming first</p>
+          </div>
           <TabSwitch
             tabs={[
+              { id: 'incoming', label: 'Incoming', color: 'orange' },
               { id: 'active', label: 'Active', color: 'orange' },
               { id: 'done', label: 'Done', color: 'orange' },
             ]}
             activeTab={activeTab}
             onTabChange={(tab) =>
               updateParams((params) => {
-                if (tab === 'done') params.set('tab', 'done');
-                else params.delete('tab');
+                if (tab === 'active') params.delete('tab');
+                else params.set('tab', tab);
               })
             }
           />
+          <div className="mt-2 grid grid-cols-1 gap-2 px-1 sm:grid-cols-3">
+            <div className={`rounded-xl border px-2 py-2 transition-colors ${activeTab === 'incoming' ? 'border-orange-300 bg-white text-orange-700' : 'border-transparent bg-white/70 text-gray-500'}`}>
+              <p className="text-[8px] font-black uppercase tracking-[0.22em]">Incoming</p>
+              <p className="mt-1 text-[10px] font-bold leading-tight">Shipment arrivals and newly synced repair intake.</p>
+            </div>
+            <div className={`rounded-xl border px-2 py-2 transition-colors ${activeTab === 'active' ? 'border-orange-300 bg-white text-orange-700' : 'border-transparent bg-white/70 text-gray-500'}`}>
+              <p className="text-[8px] font-black uppercase tracking-[0.22em]">Active</p>
+              <p className="mt-1 text-[10px] font-bold leading-tight">Repairs currently moving through diagnosis and work.</p>
+            </div>
+            <div className={`rounded-xl border px-2 py-2 transition-colors ${activeTab === 'done' ? 'border-orange-300 bg-white text-orange-700' : 'border-transparent bg-white/70 text-gray-500'}`}>
+              <p className="text-[8px] font-black uppercase tracking-[0.22em]">Done</p>
+              <p className="mt-1 text-[10px] font-bold leading-tight">Completed, shipped, or customer pickup records.</p>
+            </div>
+          </div>
         </div>
       </div>
 

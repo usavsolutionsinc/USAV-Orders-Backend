@@ -28,6 +28,10 @@ function parseEcwidOrderDate(value: unknown): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function isRepairServiceSku(value: unknown): boolean {
+  return String(value || '').trim().toUpperCase().endsWith('-RS');
+}
+
 async function fetchEcwidOrders(storeId: string, token: string, maxPages: number): Promise<any[]> {
   const items: any[] = [];
   let offset = 0;
@@ -82,6 +86,7 @@ export async function POST(req: NextRequest) {
     let unchanged = 0;
     let unmatched = 0;
     let errors = 0;
+    let skippedRepairs = 0;
 
     for (const order of ecwidOrders) {
       scanned++;
@@ -98,6 +103,11 @@ export async function POST(req: NextRequest) {
         const sku = String(firstItem?.sku || '').trim();
         const productTitle = String(firstItem?.name || '').trim();
         const quantity = firstItem?.quantity ? String(firstItem.quantity).trim() : '';
+
+        if (isRepairServiceSku(sku)) {
+          skippedRepairs++;
+          continue;
+        }
 
         let existingRows: any[] = [];
 
@@ -188,7 +198,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Ecwid backfill completed: updated ${updated} order(s).`,
-      totals: { scanned, matched, updated, unchanged, unmatched, errors },
+      totals: { scanned, matched, updated, unchanged, unmatched, errors, skippedRepairs },
       pagination: { maxPages, pageSize: DEFAULT_LIMIT },
     });
   } catch (error: any) {

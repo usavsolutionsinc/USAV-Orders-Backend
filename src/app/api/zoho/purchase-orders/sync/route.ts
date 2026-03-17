@@ -23,38 +23,56 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { syncZohoPurchaseOrdersToReceiving } from '@/lib/zoho-po-sync';
+import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
+async function runZohoPurchaseOrdersSync(body: Record<string, unknown> = {}) {
+  const daysBackRaw = Number(body?.days_back ?? 0);
+  const daysBack = Number.isFinite(daysBackRaw) && daysBackRaw >= 0 ? daysBackRaw : 0;
+
+  const summary = await syncZohoPurchaseOrdersToReceiving({
+    status: String(body?.status || '').trim() || undefined,
+    vendor_id: String(body?.vendor_id || '').trim() || undefined,
+    last_modified_time: String(body?.last_modified_time || '').trim() || undefined,
+    days_back: daysBack,
+    per_page: Number(body?.per_page) || 200,
+    max_pages: Number(body?.max_pages) || 50,
+    max_items: Number(body?.max_items) || 5000,
+  });
+
+  return {
+    success: true,
+    message: 'Zoho purchase orders sync completed.',
+    totals: {
+      processed: summary.processed,
+      created: summary.created,
+      updated: summary.updated,
+      failed: summary.failed,
+    },
+    errors: summary.errors.slice(0, 25),
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-
-    const daysBackRaw = Number(body?.days_back ?? 0);
-    const daysBack = Number.isFinite(daysBackRaw) && daysBackRaw >= 0 ? daysBackRaw : 0;
-
-    const summary = await syncZohoPurchaseOrdersToReceiving({
-      status: String(body?.status || '').trim() || undefined,
-      vendor_id: String(body?.vendor_id || '').trim() || undefined,
-      last_modified_time: String(body?.last_modified_time || '').trim() || undefined,
-      days_back: daysBack,
-      per_page: Number(body?.per_page) || 200,
-      max_pages: Number(body?.max_pages) || 50,
-      max_items: Number(body?.max_items) || 5000,
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: 'Zoho purchase orders sync completed.',
-      totals: {
-        processed: summary.processed,
-        created: summary.created,
-        updated: summary.updated,
-        failed: summary.failed,
-      },
-      errors: summary.errors.slice(0, 25),
-    });
+    if (body?.enqueue === true) {
+      const result = await enqueueQStashJson({
+        path: '/api/zoho/purchase-orders/sync',
+        body: { ...body, enqueue: false },
+        retries: 3,
+        timeout: 300,
+        label: 'zoho-purchase-orders-sync',
+      });
+      return NextResponse.json({
+        success: true,
+        queued: true,
+        messageId: getQStashResultIdentifier(result),
+      });
+    }
+    return NextResponse.json(await runZohoPurchaseOrdersSync(body));
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : 'Failed to sync Zoho purchase orders';

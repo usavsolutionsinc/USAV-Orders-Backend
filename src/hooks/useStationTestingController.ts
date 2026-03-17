@@ -38,6 +38,13 @@ export interface ResolvedProductManual {
   downloadUrl: string;
 }
 
+function parseRepairServiceId(value: string): number | null {
+  const match = value.trim().toUpperCase().match(/^RS-(\d+)$/);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 const LAST_MANUAL_STORAGE_PREFIX = 'usav:last-manual:tech:';
 const COMPLETED_ORDER_AUTO_HIDE_MS = 2 * 60 * 1000;
 
@@ -47,6 +54,8 @@ function detectType(val: string) {
 
   // SKU scan (colon-separated, e.g. "SKU:ABC123")
   if (input.includes(':')) return 'SKU';
+
+  if (/^RS-\d+$/i.test(input)) return 'REPAIR';
 
   // FNSKU — Amazon FBA barcodes (X0… / B0… prefix)
   if (/^(X0|B0)/i.test(input)) return 'FNSKU';
@@ -100,6 +109,7 @@ export function useStationTestingController({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [activeOrder, setActiveOrder] = useState<ActiveStationOrder | null>(null);
+  const lastScannedOrderRef = useRef<ActiveStationOrder | null>(null);
   const [isActiveOrderVisible, setIsActiveOrderVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -138,6 +148,7 @@ export function useStationTestingController({
       return;
     }
 
+    lastScannedOrderRef.current = nextOrder;
     const shouldShow = options?.preserveHidden ? isActiveOrderVisible : true;
     setIsActiveOrderVisible(shouldShow);
     clearCompletedOrderHideTimer();
@@ -147,6 +158,15 @@ export function useStationTestingController({
         setIsActiveOrderVisible(false);
       }, COMPLETED_ORDER_AUTO_HIDE_MS);
     }
+  };
+
+  const getScanContextOrder = () => activeOrder ?? lastScannedOrderRef.current;
+
+  const reopenScanContextOrder = () => {
+    const contextOrder = getScanContextOrder();
+    if (!contextOrder) return null;
+    syncActiveOrderState(contextOrder);
+    return contextOrder;
   };
 
   const publishLastManual = (manuals: ResolvedProductManual[]) => {
@@ -352,6 +372,45 @@ export function useStationTestingController({
     }
   };
 
+  const handleRepairScan = async (repairScan: string) => {
+    const repairId = parseRepairServiceId(repairScan);
+    if (!repairId) {
+      setErrorMessage('Invalid repair service barcode');
+      setInputValue('');
+      inputRef.current?.focus();
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/repair-service/${repairId}`);
+      const data = await res.json();
+
+      if (!res.ok || !(data?.id || data?.repair?.id)) {
+        setErrorMessage(data?.error || 'Repair not found');
+        return;
+      }
+
+      const repair = data?.repair ?? data;
+      window.dispatchEvent(new CustomEvent('open-repair-details', {
+        detail: {
+          repairId: Number(repair.id),
+          assignmentId: null,
+          assignedTechId: null,
+        },
+      }));
+      setSuccessMessage(`Repair loaded: RS-${repair.id}`);
+      setResolvedManuals([]);
+    } catch (error) {
+      console.error('Repair scan failed:', error);
+      setErrorMessage('Failed to load repair');
+    } finally {
+      setIsLoading(false);
+      setInputValue('');
+      inputRef.current?.focus();
+    }
+  };
+
   const handleSubmit = async (e?: React.FormEvent, manualValue?: string) => {
     if (e) e.preventDefault();
     const input = (manualValue || inputValue).trim();
@@ -363,7 +422,9 @@ export function useStationTestingController({
 
     const type = detectType(input);
 
-    if (type === 'TRACKING') {
+    if (type === 'REPAIR') {
+      await handleRepairScan(input);
+    } else if (type === 'TRACKING') {
       if (onTrackingScan) onTrackingScan();
       setIsLoading(true);
       try {
@@ -463,7 +524,14 @@ export function useStationTestingController({
       }
     } else if (type === 'FNSKU') {
       await handleFnskuScan(input);
-    } else if (type === 'SKU' && activeOrder) {
+    } else if (type === 'SKU' && getScanContextOrder()) {
+      const contextOrder = reopenScanContextOrder();
+      if (!contextOrder) {
+        setErrorMessage('Please scan a tracking number first');
+        setInputValue('');
+        inputRef.current?.focus();
+        return;
+      }
       const skuCode = input;
 
       setIsLoading(true);
@@ -473,7 +541,7 @@ export function useStationTestingController({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             skuCode,
-            tracking: activeOrder.tracking,
+            tracking: contextOrder.tracking,
             techId: userId,
           }),
         });
@@ -490,7 +558,7 @@ export function useStationTestingController({
         }
 
         syncActiveOrderState({
-          ...activeOrder,
+          ...contextOrder,
           serialNumbers: data.updatedSerials,
         });
 
@@ -509,9 +577,16 @@ export function useStationTestingController({
       }
     } else if (type === 'SKU' && !activeOrder) {
       setErrorMessage('Please scan a tracking number first');
-    } else if (type === 'SERIAL' && activeOrder) {
+    } else if (type === 'SERIAL' && getScanContextOrder()) {
+      const contextOrder = reopenScanContextOrder();
+      if (!contextOrder) {
+        setErrorMessage('Please scan a tracking number first');
+        setInputValue('');
+        inputRef.current?.focus();
+        return;
+      }
       const finalSerial = input.toUpperCase();
-      const isFbaDuplicateAllowedTracking = /^(X0|B0|FBA)/i.test(String(activeOrder.tracking || '').trim());
+      const isFbaDuplicateAllowedTracking = /^(X0|B0|FBA)/i.test(String(contextOrder.tracking || '').trim());
 
       setIsLoading(true);
       try {
@@ -519,7 +594,7 @@ export function useStationTestingController({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            tracking: activeOrder.tracking,
+            tracking: contextOrder.tracking,
             serial: finalSerial,
             techId: userId,
             allowFbaDuplicates: isFbaDuplicateAllowedTracking,
@@ -534,7 +609,7 @@ export function useStationTestingController({
         }
 
         syncActiveOrderState({
-          ...activeOrder,
+          ...contextOrder,
           serialNumbers: data.serialNumbers,
         });
 

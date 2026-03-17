@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Order, RepairQueueItem, FBAQueueItem, ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
-import { fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 import { parsePositiveInt } from '@/utils/number';
 
 interface UseUpNextDataOptions {
@@ -98,11 +97,18 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
         parsedTechId === null
           ? Promise.resolve(null)
           : fetch(`/api/repair-service/next?techId=${parsedTechId}`);
+      const ordersRequest =
+        parsedTechId === null
+          ? Promise.resolve(null)
+          : fetch(`/api/orders/next?techId=${parsedTechId}&all=true&outOfStock=false`, { cache: 'no-store' });
 
-      const [pendingOrders, repairRes] = await Promise.all([
-        fetchPendingOrdersData({ testedBy: parsedTechId ?? undefined }),
+      const [ordersRes, repairRes] = await Promise.all([
+        ordersRequest,
         repairRequest,
       ]);
+
+      const ordersData = ordersRes?.ok ? await ordersRes.json() : null;
+      const pendingOrders = Array.isArray(ordersData?.orders) ? ordersData.orders : [];
 
       const normalizedOrders: Order[] = pendingOrders.map((row: any) => ({
         id: Number(row.id),

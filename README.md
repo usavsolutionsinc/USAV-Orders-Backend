@@ -64,19 +64,27 @@ The app has many route handlers under `src/app/api`. Core groups include:
 - integrations: `ebay/*`, `ecwid-square/sync`, `google-sheets/*`, `manuals/resolve`, `orders-exceptions/*`
 - realtime/ai: `realtime/token`, `ai/chat`, `ai/search`, `ai/health`
 
-## Cron Jobs (Vercel)
+## Schedules
 
-Configured in `vercel.json`. All schedules are UTC.
+Lightweight recurring jobs stay in `vercel.json`. API-heavy jobs are scheduled through QStash and delivered to signed worker routes.
 
 | Path | Schedule (UTC) | Purpose |
 |------|----------------|---------|
 | `/api/shipping/track/sync-due` | Every 2 hours | Sync USPS/UPS/FedEx tracking for due shipments |
 | `/api/ebay/refresh-tokens` | Every hour | Refresh eBay tokens expiring within 30 minutes |
-| `/api/google-sheets/transfer-orders` | 16:30 daily | 8:30 AM PST – transfer orders from Google Sheet |
-| `/api/google-sheets/transfer-orders` | 18:00 Mon–Fri | 10 AM PST weekdays |
-| `/api/google-sheets/transfer-orders` | 00:00 Tue–Sat | 4 PM PST weekdays (Mon–Fri) |
 
-Set `CRON_SECRET` in Vercel env; Vercel sends `Authorization: Bearer <CRON_SECRET>` on cron invocations. The manual Transfer button in the dashboard continues to work via POST (no cron auth).
+Set `CRON_SECRET` in Vercel env; Vercel sends `Authorization: Bearer <CRON_SECRET>` on cron invocations.
+
+Heavy QStash-backed jobs:
+
+| Worker Path | Suggested Schedule (UTC) | Purpose |
+|------|----------------|---------|
+| `/api/google-sheets/transfer-orders` | 16:30 daily, 18:00 Mon-Fri, 00:00 Tue-Sat | Transfer Google Sheet orders |
+| `/api/qstash/ebay/sync` | `10,25,40,55 * * * *` | Exceptions-first eBay sync |
+| `/api/zoho/purchase-orders/sync` | `20,50 * * * *` | Bulk Zoho purchase order sync |
+| `/api/zoho/purchase-receives/sync` | `25,55 * * * *` | Zoho purchase receive line sync |
+
+Bootstrap or update those schedules with `POST /api/qstash/schedules/bootstrap` using either an allowed admin origin or `Authorization: Bearer <CRON_SECRET>`.
 
 *Note: Schedules use PST (UTC-8). During PDT (daylight saving), subtract 1 hour from Pacific times (e.g. 16:30 UTC = 9:30 AM PDT).*
 
@@ -176,6 +184,14 @@ npm run dev
 - `FEDEX_CLIENT_SECRET`
 - `FEDEX_ENV` (`production` or unset for sandbox)
 - `CRON_SECRET` for cron endpoints: `/api/shipping/track/sync-due` (carrier sync) and `/api/ebay/refresh-tokens` (eBay token refresh)
+
+### QStash
+
+- `QSTASH_TOKEN`
+- `QSTASH_URL` (optional override)
+- `QSTASH_CURRENT_SIGNING_KEY`
+- `QSTASH_NEXT_SIGNING_KEY`
+- `APP_URL` or `NEXT_PUBLIC_APP_URL` or `VERCEL_URL` so worker routes can be addressed correctly
 
 ### Realtime / Ably
 

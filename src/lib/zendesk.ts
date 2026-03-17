@@ -3,6 +3,8 @@
  */
 
 interface RepairTicketData {
+    repairServiceId: number;
+    repairServiceNumber: string;
     customerName: string;
     customerPhone: string;
     customerEmail: string;
@@ -164,6 +166,8 @@ function calculateDueDate(startDate: Date): string {
  */
 export async function createZendeskTicket(data: RepairTicketData): Promise<string | null> {
     const { 
+        repairServiceId,
+        repairServiceNumber,
         customerName, 
         customerPhone, 
         customerEmail, 
@@ -200,7 +204,7 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
     const formattedPrice = price.startsWith('$') ? price : `$${price}`;
 
     // 4. Build JSON payload - Format like repair service paper
-    let description = `Product Title: ${productTitle}\n\nSN & Issue: ${serialNumber}, ${issue}\n\nContact Info: ${contactInfo}\n\nDue Date: ${dueDate}`;
+    let description = `RS Table ID: ${repairServiceId}\nRS Number: ${repairServiceNumber}\n\nProduct Title: ${productTitle}\n\nSN & Issue: ${serialNumber}, ${issue}\n\nContact Info: ${contactInfo}\n\nDue Date: ${dueDate}`;
     
     // Add notes at the end if present
     if (notes) {
@@ -208,7 +212,7 @@ export async function createZendeskTicket(data: RepairTicketData): Promise<strin
     }
     
     const payload = {
-        subject: `Repair: Walk-in ${customerName} - ${customerPhone} - Due Date: ${dueDate}`,
+        subject: `Repair RS ${repairServiceId}: Walk-in ${customerName} - ${customerPhone} - Due Date: ${dueDate}`,
         description: description,
         customerName: customerName,
         customerEmail: customerEmail || ''

@@ -55,7 +55,10 @@ export async function GET(
       });
     }
 
-    const ticketNumber = repair.ticket_number || repair.id.toString();
+    const repairServiceId = repair.id.toString();
+    const repairServiceCode = `RS-${repairServiceId}`;
+    const ticketNumber = repair.ticket_number || '';
+    const externalTicketNumber = ticketNumber && ticketNumber !== repairServiceCode ? ticketNumber : '';
     const productTitle = repair.product_title || '';
     const issue = repair.issue || '';
     const serialNumber = repair.serial_number || '';
@@ -98,9 +101,16 @@ export async function GET(
         </div>
 
         <!-- Title and Ticket Number -->
-        <div class="mb-6">
-          <h1 class="text-3xl font-bold mb-2">Repair Service</h1>
-          <p class="text-lg font-semibold">${ticketNumber} - Repair Ticket Number</p>
+        <div class="mb-6 flex items-start justify-between gap-6">
+          <div>
+            <h1 class="text-3xl font-bold mb-2">Repair Service</h1>
+            <p class="text-lg font-semibold">${repairServiceCode} - Repair Service Number</p>
+            ${externalTicketNumber ? `<p class="text-sm font-medium text-gray-600">Ticket #: ${externalTicketNumber}</p>` : ''}
+          </div>
+          <div class="flex flex-col items-end">
+            <svg id="rs-barcode"></svg>
+            <p class="mt-1 text-xs font-semibold tracking-[0.2em] text-gray-500">RS ID</p>
+          </div>
         </div>
 
         <!-- Information Table -->
@@ -179,8 +189,9 @@ export async function GET(
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Repair Service - ${ticketNumber}</title>
+  <title>Repair Service - ${repairServiceCode}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -208,6 +219,19 @@ export async function GET(
   </style>
   <script>
     window.onload = function() {
+      if (window.JsBarcode) {
+        try {
+          window.JsBarcode("#rs-barcode", "${repairServiceCode}", {
+            format: "CODE128",
+            width: 1.6,
+            height: 42,
+            displayValue: false,
+            margin: 0
+          });
+        } catch (error) {
+          console.warn('Repair barcode render failed', error);
+        }
+      }
       window.print();
     }
   </script>

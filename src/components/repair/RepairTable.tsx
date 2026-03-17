@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Search, X, Printer, AlertTriangle } from '../Icons';
 import { CopyableText } from '../ui/CopyableText';
-import { RSRecord } from '@/lib/neon/repair-service-queries';
+import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
@@ -22,7 +22,7 @@ const formatPhoneNumber = (phone: string): string => {
 };
 
 interface RepairTableProps {
-  filter: 'active' | 'done';
+  filter: RepairTab;
 }
 
 export function RepairTable({ filter }: RepairTableProps) {
@@ -33,7 +33,7 @@ export function RepairTable({ filter }: RepairTableProps) {
   const [currentCount, setCurrentCount] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: repairs = [], isLoading: loading } = useRepairs(search);
+  const { data: repairs = [], isLoading: loading } = useRepairs(search, filter);
 
   const getOrdinal = (n: number) => {
     const s = ["th", "st", "nd", "rd"];
@@ -96,9 +96,7 @@ export function RepairTable({ filter }: RepairTableProps) {
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
   };
 
-  const filteredRepairs = repairs.filter(repair =>
-    filter === 'done' ? repair.status === 'Done' : repair.status !== 'Done'
-  );
+  const filteredRepairs = repairs;
 
   const groupedRepairs: { [key: string]: RSRecord[] } = {};
   filteredRepairs.forEach(record => {
@@ -132,6 +130,12 @@ export function RepairTable({ filter }: RepairTableProps) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <div className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 shadow-sm">
+              <span className="text-[9px] font-black uppercase tracking-[0.24em] text-gray-400">View</span>
+              <span className="ml-2 text-[10px] font-black uppercase tracking-[0.22em] text-orange-600">
+                {filter === 'incoming' ? 'Incoming' : filter === 'done' ? 'Done' : 'Active'}
+              </span>
+            </div>
             {search && (
               <div className="flex items-center gap-2 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
                 <Search className="w-3 h-3" />
@@ -209,7 +213,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                             {repair.product_title || 'Unknown Product'}
                           </div>
                           <div className="text-[11px] font-black text-gray-700 truncate leading-tight">
-                            {repair.issue || 'No issue specified'}
+                            {repair.issue || repair.source_tracking_number || 'No issue specified'}
                           </div>
                           <div className="flex items-center gap-3 mt-0.5">
                             <div className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
@@ -230,7 +234,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                               })()}
                             </div>
                             <div className="text-[8px] font-bold text-gray-900 lowercase truncate">
-                              {(() => {
+                              {repair.source_tracking_number || (() => {
                                 if (!repair.contact_info) return '';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[2] || '';
@@ -239,6 +243,11 @@ export function RepairTable({ filter }: RepairTableProps) {
                           </div>
                         </div>
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          {repair.intake_channel && (
+                            <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-orange-700">
+                              {repair.intake_channel}
+                            </span>
+                          )}
                           <div className="flex flex-col">
                             <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
                             <CopyableText
