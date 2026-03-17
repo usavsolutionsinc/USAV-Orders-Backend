@@ -94,9 +94,14 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
 
   const fetchOrders = async () => {
     try {
+      const repairRequest =
+        parsedTechId === null
+          ? Promise.resolve(null)
+          : fetch(`/api/repair-service/next?techId=${parsedTechId}`);
+
       const [pendingOrders, repairRes] = await Promise.all([
         fetchPendingOrdersData({ testedBy: parsedTechId ?? undefined }),
-        fetch(parsedTechId === null ? '/api/repair-service/next' : `/api/repair-service/next?techId=${parsedTechId}`),
+        repairRequest,
       ]);
 
       const normalizedOrders: Order[] = pendingOrders.map((row: any) => ({
@@ -131,9 +136,11 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
         onAllCompleted();
       }
 
-      if (repairRes.ok) {
+      if (repairRes?.ok) {
         const repairData = await repairRes.json();
         setAllRepairs(Array.isArray(repairData.repairs) ? repairData.repairs : []);
+      } else if (parsedTechId === null) {
+        setAllRepairs([]);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);

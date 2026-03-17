@@ -1,7 +1,7 @@
 'use client';
 
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { ShippedDetailsPanel as LegacyShippedDetailsPanel } from '@/components/shipped/ShippedDetailsPanelLegacy';
+import { ShippedDetailsPanel } from '@/components/shipped/ShippedDetailsPanel';
 
 interface UnshippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -10,6 +10,6 @@ interface UnshippedDetailsPanelProps {
 }
 
 export function UnshippedDetailsPanel(props: UnshippedDetailsPanelProps) {
-  return <LegacyShippedDetailsPanel {...props} />;
+  return <ShippedDetailsPanel {...props} context="dashboard" />;
 }
 

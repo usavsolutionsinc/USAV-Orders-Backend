@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
     const packedOnly         = searchParams.get('packedOnly') === 'true';
     /** excludePacked=true → exclude orders that have a matching packer_logs row (pending view) */
     const excludePacked      = searchParams.get('excludePacked') === 'true';
+    /** awaitingOnly=true → only orders without shipment_id (Awaiting tab: no tracking yet) */
+    const awaitingOnly       = searchParams.get('awaitingOnly') === 'true';
 
     const cacheLookup = createCacheLookupKey({
       status:             status || '',
@@ -40,6 +42,7 @@ export async function GET(req: NextRequest) {
       shippedOnly,
       packedOnly,
       excludePacked,
+      awaitingOnly,
     });
 
     const CACHE_HEADERS = { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' };
@@ -227,6 +230,10 @@ export async function GET(req: NextRequest) {
         SELECT 1 FROM packer_logs pl
         WHERE pl.shipment_id IS NOT NULL AND pl.shipment_id = o.shipment_id
       )`;
+    }
+
+    if (awaitingOnly) {
+      sql += ` AND o.shipment_id IS NULL`;
     }
 
     if (status) {

@@ -31,9 +31,10 @@ export async function POST(req: NextRequest) {
     const limit = Math.max(1, Math.min(1000, Number(body.limit || 500)));
 
     // ── 1. Orders needing backfill ────────────────────────────────────────────
-    const { rows: candidates } = await pool.query<{
+    const { rows: rawCandidates } = await pool.query<{
       id: number;
       order_id: string;
+      shipment_id: number | null;
       account_source: string | null;
       sku: string | null;
       item_number: string | null;
@@ -42,32 +43,61 @@ export async function POST(req: NextRequest) {
       quantity: string | null;
       order_date: Date | null;
     }>(
-      `SELECT o.id, o.order_id, o.account_source, o.sku, o.item_number, o.product_title,
+      `SELECT o.id, o.order_id, o.shipment_id, o.account_source, o.sku, o.item_number, o.product_title,
               o.condition, o.quantity, o.order_date
        FROM orders o
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
        WHERE NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
                OR stn.is_out_for_delivery OR stn.is_delivered, false)
-         AND COALESCE(order_id, '') != ''
+         AND COALESCE(o.order_id, '') != ''
          AND (
-           COALESCE(sku, '')           = '' OR
-           COALESCE(item_number, '')   = '' OR
-           COALESCE(product_title, '') = '' OR
-           COALESCE(condition, '')     = '' OR
-           COALESCE(quantity, '')      = '' OR
-           order_date IS NULL             OR
-           COALESCE(account_source, '') = ''
+           COALESCE(o.sku, '')           = '' OR
+           COALESCE(o.item_number, '')   = '' OR
+           COALESCE(o.product_title, '') = '' OR
+           COALESCE(o.condition, '')     = '' OR
+           COALESCE(o.quantity, '')      = '' OR
+           o.order_date IS NULL             OR
+           COALESCE(o.account_source, '') = ''
          )
-       ORDER BY created_at DESC
+       ORDER BY o.created_at DESC
        LIMIT $1`,
       [limit]
     );
+
+    // ── 1b. Dedupe: multiple orders with same order_id + same tracking → keep one, delete rest
+    const byOrderId = new Map<string, typeof rawCandidates>();
+    for (const o of rawCandidates) {
+      const key = String(o.order_id || '').trim();
+      if (!key) continue;
+      const arr = byOrderId.get(key) ?? [];
+      arr.push(o);
+      byOrderId.set(key, arr);
+    }
+
+    const ordersToDelete: number[] = [];
+    const candidates: typeof rawCandidates = [];
+    for (const group of Array.from(byOrderId.values())) {
+      if (group.length > 1) {
+        const score = (ord: (typeof rawCandidates)[0]) =>
+          [ord.product_title, ord.condition, ord.item_number, ord.sku, ord.quantity]
+            .filter((v) => !isBlank(v)).length;
+        const sorted = [...group].sort((a, b) => score(b) - score(a));
+        candidates.push(sorted[0]);
+        sorted.slice(1).forEach((o) => ordersToDelete.push(o.id));
+      } else {
+        candidates.push(group[0]);
+      }
+    }
+
+    for (const id of ordersToDelete) {
+      await pool.query('DELETE FROM orders WHERE id = $1', [id]);
+    }
 
     if (candidates.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No unshipped orders with blank fields found.',
-        totals: { scanned: 0, updated: 0, unchanged: 0, notFound: 0, errors: 0 },
+        totals: { scanned: 0, updated: 0, unchanged: 0, notFound: 0, errors: 0, deletedDuplicates: ordersToDelete.length },
       });
     }
 
@@ -191,8 +221,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `eBay backfill complete: ${updated} updated, ${unchanged} already complete, ${notFound} not found on eBay, ${errors} errors.`,
-      totals: { scanned, updated, unchanged, notFound, errors },
+      message: `eBay backfill complete: ${updated} updated, ${unchanged} already complete, ${notFound} not found on eBay, ${errors} errors, ${ordersToDelete.length} duplicates removed.`,
+      totals: { scanned, updated, unchanged, notFound, errors, deletedDuplicates: ordersToDelete.length },
       errorMessages: errorMessages.slice(0, 20),
     });
   } catch (error: any) {

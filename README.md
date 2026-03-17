@@ -64,6 +64,22 @@ The app has many route handlers under `src/app/api`. Core groups include:
 - integrations: `ebay/*`, `ecwid-square/sync`, `google-sheets/*`, `manuals/resolve`, `orders-exceptions/*`
 - realtime/ai: `realtime/token`, `ai/chat`, `ai/search`, `ai/health`
 
+## Cron Jobs (Vercel)
+
+Configured in `vercel.json`. All schedules are UTC.
+
+| Path | Schedule (UTC) | Purpose |
+|------|----------------|---------|
+| `/api/shipping/track/sync-due` | Every 2 hours | Sync USPS/UPS/FedEx tracking for due shipments |
+| `/api/ebay/refresh-tokens` | Every hour | Refresh eBay tokens expiring within 30 minutes |
+| `/api/google-sheets/transfer-orders` | 16:30 daily | 8:30 AM PST – transfer orders from Google Sheet |
+| `/api/google-sheets/transfer-orders` | 18:00 Mon–Fri | 10 AM PST weekdays |
+| `/api/google-sheets/transfer-orders` | 00:00 Tue–Sat | 4 PM PST weekdays (Mon–Fri) |
+
+Set `CRON_SECRET` in Vercel env; Vercel sends `Authorization: Bearer <CRON_SECRET>` on cron invocations. The manual Transfer button in the dashboard continues to work via POST (no cron auth).
+
+*Note: Schedules use PST (UTC-8). During PDT (daylight saving), subtract 1 hour from Pacific times (e.g. 16:30 UTC = 9:30 AM PDT).*
+
 ## Database Model (Current Core Tables)
 
 Defined in `src/lib/drizzle/schema.ts`.
@@ -159,7 +175,7 @@ npm run dev
 - `FEDEX_CLIENT_ID`
 - `FEDEX_CLIENT_SECRET`
 - `FEDEX_ENV` (`production` or unset for sandbox)
-- `CRON_SECRET` for `/api/shipping/track/sync-due` if you run scheduled shipment refreshes
+- `CRON_SECRET` for cron endpoints: `/api/shipping/track/sync-due` (carrier sync) and `/api/ebay/refresh-tokens` (eBay token refresh)
 
 ### Realtime / Ably
 

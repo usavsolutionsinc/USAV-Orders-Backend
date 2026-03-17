@@ -4,7 +4,8 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
-import { Package, Plus, RotateCcw } from '@/components/Icons';
+import { Plus } from '@/components/Icons';
+import { AwaitingEbayPanel } from '@/components/unshipped/AwaitingEbayPanel';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
@@ -197,51 +198,12 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           />
         </motion.div>
 
-        <motion.section variants={itemVariants} className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-          <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center">
-              <Package className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-wider text-blue-900">
-                Mock ShipStation Import
-              </p>
-              <p className="text-[10px] font-bold text-blue-700 mt-1">
-                Import source: ShipStation staging feed
-              </p>
-              <p className="text-[10px] font-medium text-blue-800/90 mt-2 leading-relaxed">
-                Showing orders missing tracking numbers. Use this mock panel to validate unshipped flow and shipping readiness.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="mt-3 w-full h-9 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Run Mock Import
-          </button>
-        </motion.section>
-
-        <motion.section variants={itemVariants} className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-700">Shipping Mock Details</p>
-          <div className="flex items-center justify-between text-[10px] font-bold text-gray-600">
-            <span>Carrier Mix</span>
-            <span>USPS / UPS / FedEx</span>
-          </div>
-          <div className="flex items-center justify-between text-[10px] font-bold text-gray-600">
-            <span>Label Status</span>
-            <span>Awaiting Generation</span>
-          </div>
-          <div className="flex items-center justify-between text-[10px] font-bold text-gray-600">
-            <span>Cutoff Window</span>
-            <span>4:00 PM PST</span>
-          </div>
-          <div className="flex items-center justify-between text-[10px] font-bold text-gray-600">
-            <span>Batch Grouping</span>
-            <span>By Ship-By Date</span>
-          </div>
-        </motion.section>
+        <AwaitingEbayPanel
+          onRefresh={() => {
+            window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+          }}
+        />
       </motion.div>
     </>
   );

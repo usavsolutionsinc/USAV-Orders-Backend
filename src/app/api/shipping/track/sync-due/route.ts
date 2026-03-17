@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runDueShipments } from '@/lib/shipping/scheduler';
 
+export const dynamic = 'force-dynamic';
+
 // Protected by CRON_SECRET — safe for Vercel cron jobs and internal scheduler calls.
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;

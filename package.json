@@ -18,6 +18,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "realtime:relay": "node scripts/realtime-outbox-relay.js",
+    "debug:transfer-order": "node scripts/debug-transfer-order-match.js",
     "sync:packer-logs": "node sync-packer-sheets-to-logs.js",
     "sync:packer-logs:preview": "node sync-packer-sheets-to-logs-dry-run.js"
   },

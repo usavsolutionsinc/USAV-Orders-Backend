@@ -70,6 +70,9 @@ export async function fetchUnshippedOrdersData({
   if (searchQuery.trim()) params.set('q', searchQuery.trim());
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+  // Awaiting tab: only orders without tracking (shipment_id). When searching,
+  // omit so search can find any order; client still filters for display.
+  if (!searchQuery.trim()) params.set('awaitingOnly', 'true');
 
   const res = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
   if (!res.ok) {
@@ -78,9 +81,9 @@ export async function fetchUnshippedOrdersData({
 
   const data = await res.json();
   const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
-  // When searching, lift the shipment_id == null restriction so orders with a
-  // label can still be found from the unshipped tab's search bar.
-  return searchQuery.trim() ? records : records.filter((record) => record.shipment_id == null);
+  // When searching, show all matches (including those with tracking) so user can find any order.
+  // When not searching, API already filtered via awaitingOnly=true.
+  return records;
 }
 
 export async function fetchDashboardShippedData({

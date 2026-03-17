@@ -16,7 +16,8 @@ export async function GET() {
         last_sync_date, 
         is_active, 
         created_at,
-        marketplace_id
+        marketplace_id,
+        platform
       FROM ebay_accounts 
       ORDER BY account_name`
     );

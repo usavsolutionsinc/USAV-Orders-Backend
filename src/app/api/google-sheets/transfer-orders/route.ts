@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
+
+export const dynamic = 'force-dynamic';
+
+function isCronAuthorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true;
+  const authHeader = req.headers.get('authorization');
+  if (authHeader === `Bearer ${secret}`) return true;
+  if (req.headers.get('x-cron-secret') === secret) return true;
+  return false;
+}
 import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
 import pool from '@/lib/db';
@@ -9,6 +20,13 @@ import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { desc, eq, inArray } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
+
+function findHeaderIndex(headers: any[], candidates: string[]) {
+    return headers.findIndex((header) => {
+        const normalized = String(header || '').trim().toLowerCase();
+        return candidates.some((candidate) => normalized === candidate.trim().toLowerCase());
+    });
+}
 
 function normalizeTracking(str: any) {
     if (!str) return '';
@@ -141,15 +159,16 @@ async function runTransferOrders(manualSheetName?: string) {
 
         const headerRow = sourceRows[0];
         const colIndices = {
-            shipByDate: headerRow.indexOf('Ship by date'),
-            orderNumber: headerRow.indexOf('Order Number'),
-            itemNumber: headerRow.indexOf('Item Number'),
-            itemTitle: headerRow.indexOf('Item title'),
-            quantity: headerRow.indexOf('Quantity'),
-            usavSku: headerRow.indexOf('USAV SKU'),
-            condition: headerRow.indexOf('Condition'),
-            tracking: headerRow.indexOf('Tracking'),
-            note: headerRow.indexOf('Note'),
+            shipByDate: findHeaderIndex(headerRow, ['Ship by date']),
+            orderNumber: findHeaderIndex(headerRow, ['Order Number', 'Order - Number']),
+            itemNumber: findHeaderIndex(headerRow, ['Item Number']),
+            itemTitle: findHeaderIndex(headerRow, ['Item title', 'Item Title']),
+            quantity: findHeaderIndex(headerRow, ['Quantity']),
+            usavSku: findHeaderIndex(headerRow, ['USAV SKU']),
+            condition: findHeaderIndex(headerRow, ['Condition']),
+            tracking: findHeaderIndex(headerRow, ['Tracking', 'Shipment - Tracking Number']),
+            note: findHeaderIndex(headerRow, ['Note', 'Notes']),
+            platform: findHeaderIndex(headerRow, ['Platform', 'Account Source', 'Channel']),
         };
 
         // Validate required columns
@@ -164,11 +183,38 @@ async function runTransferOrders(manualSheetName?: string) {
             }, { status: 400 });
         }
 
+        // Rows with order_id + tracking: full processing (insert or backfill).
+        // Rows with order_id but no tracking: backfill-only (update existing orders by order_id).
+        const eligibleSourceRows = sourceRows.slice(1).filter((row) => {
+            const orderId = String(row[colIndices.orderNumber] || '').trim();
+            const tracking = normalizeTracking(row[colIndices.tracking]);
+            const platform = colIndices.platform >= 0
+                ? String(row[colIndices.platform] || '').trim()
+                : '';
+            if (!orderId) return false;
+            if (colIndices.platform >= 0 && !platform) return false;
+            return true;
+        });
+
+        if (eligibleSourceRows.length === 0) {
+            return NextResponse.json({
+                success: true,
+                rowCount: 0,
+                processedRows: 0,
+                insertedOrders: 0,
+                updatedOrdersTracking: 0,
+                updatedOrdersFields: 0,
+                matchedCustomers: 0,
+                unmatchedCustomers: 0,
+                tabName: targetTabName,
+                skippedRows: sourceRows.length - 1,
+            });
+        }
+
         // 4. Preload the latest existing orders and customers using order_id first, then tracking as a fallback.
         const sourceOrderIds = Array.from(
             new Set(
-                sourceRows
-                    .slice(1)
+                eligibleSourceRows
                     .map(row => String(row[colIndices.orderNumber] || '').trim())
                     .filter(Boolean)
             )
@@ -176,8 +222,7 @@ async function runTransferOrders(manualSheetName?: string) {
 
         const sourceTrackings = Array.from(
             new Set(
-                sourceRows
-                    .slice(1)
+                eligibleSourceRows
                     .map(row => normalizeTracking(row[colIndices.tracking]))
                     .filter(Boolean)
             )
@@ -209,13 +254,52 @@ async function runTransferOrders(manualSheetName?: string) {
             shipmentTrackingById.set(id, String(row.tracking_number_raw || '').trim());
         });
 
-        const sourceShipmentIds = Array.from(
+        const shipmentIdCache = new Map<string, number | null>();
+        shipmentByNormalized.forEach((shipment, normalized) => {
+            shipmentIdCache.set(normalized, shipment.id);
+        });
+
+        const ensureShipmentId = async (tracking: string) => {
+            const normalized = normalizeTrackingNumber(tracking);
+            if (!normalized) return null;
+            if (shipmentIdCache.has(normalized)) return shipmentIdCache.get(normalized) ?? null;
+            const resolved = await resolveShipmentId(tracking);
+            shipmentIdCache.set(normalized, resolved.shipmentId ?? null);
+            return resolved.shipmentId ?? null;
+        };
+
+        for (const tracking of sourceTrackings) {
+            await ensureShipmentId(tracking);
+        }
+
+        const resolvedShipmentIds = Array.from(
             new Set(
-                Array.from(shipmentByNormalized.values())
-                    .map((shipment) => shipment.id)
-                    .filter((id) => Number.isFinite(id))
+                Array.from(shipmentIdCache.values())
+                    .filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
             )
         );
+
+        const missingShipmentIds = resolvedShipmentIds.filter((id) => !shipmentTrackingById.has(id));
+        if (missingShipmentIds.length > 0) {
+            const resolvedShipmentsResult = await pool.query(
+                `SELECT id, tracking_number_raw, tracking_number_normalized
+                 FROM shipping_tracking_numbers
+                 WHERE id = ANY($1::bigint[])`,
+                [missingShipmentIds]
+            );
+            resolvedShipmentsResult.rows.forEach((row: any) => {
+                const normalized = String(row.tracking_number_normalized || '').trim();
+                const id = Number(row.id);
+                if (!normalized || Number.isNaN(id)) return;
+                shipmentByNormalized.set(normalized, {
+                    id,
+                    tracking: String(row.tracking_number_raw || '').trim(),
+                });
+                shipmentTrackingById.set(id, String(row.tracking_number_raw || '').trim());
+            });
+        }
+
+        const sourceShipmentIds = resolvedShipmentIds;
 
         const sourceOrdersByOrderId = sourceOrderIds.length > 0
             ? await db
@@ -318,6 +402,36 @@ async function runTransferOrders(manualSheetName?: string) {
             });
         });
 
+        const latestOrderByOrderId = new Map<string, {
+            id: number;
+            orderId: string | null;
+            itemNumber: string | null;
+            productTitle: string | null;
+            quantity: string | null;
+            sku: string | null;
+            condition: string | null;
+            notes: string | null;
+            customerId: number | null;
+            shipmentId: number | null;
+        }>();
+        sourceOrdersByOrderId.forEach(order => {
+            const key = String(order.orderId || '').trim();
+            const id = Number(order.id);
+            if (!key || Number.isNaN(id) || latestOrderByOrderId.has(key)) return;
+            latestOrderByOrderId.set(key, {
+                id,
+                orderId: order.orderId,
+                itemNumber: order.itemNumber,
+                productTitle: order.productTitle,
+                quantity: order.quantity,
+                sku: order.sku,
+                condition: order.condition,
+                notes: order.notes,
+                customerId: order.customerId,
+                shipmentId: order.shipmentId ?? null,
+            });
+        });
+
         const latestOrderByTracking = new Map<string, {
             id: number;
             tracking: string;
@@ -353,28 +467,37 @@ async function runTransferOrders(manualSheetName?: string) {
             });
         });
 
+        // All orders per order_id and per tracking — for backfilling every order that needs it
+        // (multiple orders can share the same order_id/tracking and have blank fields).
+        type OrderRecord = { id: number; orderId: string | null; itemNumber: string | null; productTitle: string | null; quantity: string | null; sku: string | null; condition: string | null; notes: string | null; customerId: number | null; shipmentId: number | null };
+        const allOrdersByOrderId = new Map<string, OrderRecord[]>();
+        sourceOrdersByOrderId.forEach((order) => {
+            const key = String(order.orderId || '').trim();
+            if (!key) return;
+            const rec: OrderRecord = { id: order.id, orderId: order.orderId, itemNumber: order.itemNumber, productTitle: order.productTitle, quantity: order.quantity, sku: order.sku, condition: order.condition, notes: order.notes, customerId: order.customerId, shipmentId: order.shipmentId ?? null };
+            const arr = allOrdersByOrderId.get(key) ?? [];
+            arr.push(rec);
+            allOrdersByOrderId.set(key, arr);
+        });
+        const allOrdersByTracking = new Map<string, OrderRecord[]>();
+        [...sourceOrdersByShipmentId, ...sourceLegacyOrdersByTracking].forEach((order) => {
+            const tracking = normalizeTracking(order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined);
+            const trackingKey = normalizeTrackingNumber(tracking) || tracking;
+            if (!trackingKey) return;
+            const rec: OrderRecord = { id: order.id, orderId: order.orderId, itemNumber: order.itemNumber, productTitle: order.productTitle, quantity: order.quantity, sku: order.sku, condition: order.condition, notes: order.notes, customerId: order.customerId, shipmentId: order.shipmentId ?? null };
+            const arr = allOrdersByTracking.get(trackingKey) ?? [];
+            arr.push(rec);
+            allOrdersByTracking.set(trackingKey, arr);
+        });
+
         const latestCustomerByOrderId = pickLatestByKey(sourceCustomers, (customer) =>
             String(customer.orderId || '').trim()
         );
 
-        const shipmentIdCache = new Map<string, number | null>();
-        shipmentByNormalized.forEach((shipment, normalized) => {
-            shipmentIdCache.set(normalized, shipment.id);
-        });
-
-        const ensureShipmentId = async (tracking: string) => {
-            const normalized = normalizeTrackingNumber(tracking);
-            if (!normalized) return null;
-            if (shipmentIdCache.has(normalized)) return shipmentIdCache.get(normalized) ?? null;
-            const resolved = await resolveShipmentId(tracking);
-            shipmentIdCache.set(normalized, resolved.shipmentId ?? null);
-            return resolved.shipmentId ?? null;
-        };
-
         // Keep one source row per tracking number. For rows without tracking, fall back to order_id
         // so re-running the transfer does not create duplicates for blank-tracking orders.
         const latestSourceRowByKey = new Map<string, any[]>();
-        sourceRows.slice(1).forEach(row => {
+        eligibleSourceRows.forEach(row => {
             const orderId = String(row[colIndices.orderNumber] || '').trim();
             const tracking = normalizeTracking(row[colIndices.tracking]);
             const normalizedTracking = normalizeTrackingNumber(tracking);
@@ -387,6 +510,7 @@ async function runTransferOrders(manualSheetName?: string) {
         // Store unshipped orders even when tracking is blank, and only fill fields when the DB value is empty.
         const ordersToInsert: Array<{ values: Record<string, unknown>; shipByDate: Date | null }> = [];
         const ordersToBackfill: Array<{ id: number; values: Record<string, unknown> }> = [];
+        const ordersToDelete: number[] = [];
         const orderDeadlinesToUpsert: Array<{ id: number; shipByDate: Date | null }> = [];
         let matchedCustomers = 0;
         let unmatchedCustomers = 0;
@@ -400,9 +524,11 @@ async function runTransferOrders(manualSheetName?: string) {
                     ?? shipmentByNormalized.get(normalizedSheetTracking)?.id
                     ?? null
                 : null;
-            const existingOrder = normalizedSheetTracking
-                ? latestOrderByTracking.get(normalizedSheetTracking)
-                : (orderId ? latestBlankTrackingOrderByOrderId.get(orderId) : undefined);
+            // Prefer tracking match when sheet has tracking — ensures correct order when multiple
+            // orders share the same order_id but have different tracking numbers.
+            const existingOrder = (normalizedSheetTracking ? latestOrderByTracking.get(normalizedSheetTracking) : undefined)
+                ?? (orderId ? latestOrderByOrderId.get(orderId) : undefined)
+                ?? (orderId ? latestBlankTrackingOrderByOrderId.get(orderId) : undefined);
             const rawShipByDate = row[colIndices.shipByDate] || '';
             const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
             const sheetShipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
@@ -425,25 +551,50 @@ async function runTransferOrders(manualSheetName?: string) {
 
             if (!orderId && !sheetTracking) return;
 
+            // Rows without tracking: backfill only — do not insert new orders.
+            if (!existingOrder && !sheetTracking) continue;
+
             if (existingOrder) {
+                // One tracking per order_id from sheet → dedupe: keep one order, delete duplicates.
+                const candidates = new Map<number, OrderRecord>();
+                const byTracking = normalizedSheetTracking ? allOrdersByTracking.get(normalizedSheetTracking) ?? [] : [];
+                const byOrderId = orderId ? allOrdersByOrderId.get(orderId) ?? [] : [];
+                [...byTracking, ...byOrderId].forEach((o) => candidates.set(o.id, o));
+
+                const candidateList = Array.from(candidates.values());
+                let orderToKeep: OrderRecord;
+
+                if (candidateList.length > 1 && orderId && normalizedSheetTracking) {
+                    // Multiple orders share same order_id + tracking → keep one, delete rest.
+                    const score = (o: OrderRecord) =>
+                        [o.productTitle, o.condition, o.itemNumber, o.sku, o.quantity, o.notes]
+                            .filter((v) => !isBlank(v)).length;
+                    const sorted = [...candidateList].sort((a, b) => score(b) - score(a));
+                    orderToKeep = sorted[0];
+                    sorted.slice(1).forEach((o) => ordersToDelete.push(o.id));
+                } else {
+                    orderToKeep = candidateList[0];
+                }
+
+                const order = orderToKeep;
                 const updateValues: Record<string, any> = {};
-                if (isBlank(existingOrder.orderId) && orderId) updateValues.orderId = orderId;
-                if (isBlank(existingOrder.itemNumber) && sheetItemNumber) updateValues.itemNumber = sheetItemNumber;
-                if (isBlank(existingOrder.productTitle) && sheetProductTitle) updateValues.productTitle = sheetProductTitle;
-                if (isBlank(existingOrder.quantity) && sheetQuantity) updateValues.quantity = sheetQuantity;
-                if (isBlank(existingOrder.sku) && sheetSku) updateValues.sku = sheetSku;
-                if (isBlank(existingOrder.condition) && sheetCondition) updateValues.condition = sheetCondition;
-                if (isBlank(existingOrder.notes) && sheetNotes) updateValues.notes = sheetNotes;
-                if (existingOrder.shipmentId == null && sheetTracking) {
+                if (isBlank(order.orderId) && orderId) updateValues.orderId = orderId;
+                if (isBlank(order.itemNumber) && sheetItemNumber) updateValues.itemNumber = sheetItemNumber;
+                if (isBlank(order.productTitle) && sheetProductTitle) updateValues.productTitle = sheetProductTitle;
+                if (isBlank(order.quantity) && sheetQuantity) updateValues.quantity = sheetQuantity;
+                if (isBlank(order.sku) && sheetSku) updateValues.sku = sheetSku;
+                if (isBlank(order.condition) && sheetCondition) updateValues.condition = sheetCondition;
+                if (isBlank(order.notes) && sheetNotes) updateValues.notes = sheetNotes;
+                if (order.shipmentId == null && sheetTracking) {
                     const shipmentId = existingShipmentId ?? await ensureShipmentId(sheetTracking);
                     if (shipmentId) updateValues.shipmentId = shipmentId;
                 }
-                if (existingOrder.customerId == null && customerId) updateValues.customerId = customerId;
+                if (order.customerId == null && customerId) updateValues.customerId = customerId;
                 const compactedUpdateValues = compactUpdateValues(updateValues);
                 if (Object.keys(compactedUpdateValues).length > 0) {
-                    ordersToBackfill.push({ id: existingOrder.id, values: compactedUpdateValues });
+                    ordersToBackfill.push({ id: order.id, values: compactedUpdateValues });
                 }
-                orderDeadlinesToUpsert.push({ id: existingOrder.id, shipByDate: effectiveShipByDate });
+                orderDeadlinesToUpsert.push({ id: order.id, shipByDate: effectiveShipByDate });
             } else {
                 const shipmentId = sheetTracking ? await ensureShipmentId(sheetTracking) : null;
                 ordersToInsert.push({
@@ -466,7 +617,13 @@ async function runTransferOrders(manualSheetName?: string) {
             }
         }
 
-        // Apply DB sync
+        // Apply DB sync — delete duplicates first, then backfill
+        if (ordersToDelete.length > 0) {
+            for (const id of ordersToDelete) {
+                await db.delete(ordersTable).where(eq(ordersTable.id, id));
+            }
+        }
+
         if (ordersToBackfill.length > 0) {
             for (const entry of ordersToBackfill) {
                 const compactedUpdateValues = compactUpdateValues(entry.values);
@@ -505,6 +662,7 @@ async function runTransferOrders(manualSheetName?: string) {
             insertedOrders: ordersToInsert.length,
             updatedOrdersTracking: 0,
             updatedOrdersFields: ordersToBackfill.length,
+            deletedDuplicateOrders: ordersToDelete.length,
             matchedCustomers,
             unmatchedCustomers,
             tabName: targetTabName 
@@ -523,4 +681,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const manualSheetName = body?.manualSheetName;
     return runTransferOrders(manualSheetName);
+}
+
+/** GET: Cron only. Requires CRON_SECRET. Auto-detects latest sheet tab. */
+export async function GET(req: NextRequest) {
+    if (!isCronAuthorized(req)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return runTransferOrders(undefined);
 }

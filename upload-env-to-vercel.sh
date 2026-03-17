@@ -1,13 +1,15 @@
 #!/bin/bash
 # ============================================================
 # upload-env-to-vercel.sh
-# Wipes ALL production env vars on Vercel and re-uploads from .env
+# Wipes ALL Vercel env vars for development/preview/production
+# and re-uploads every key from .env to each target.
 # Usage: bash upload-env-to-vercel.sh
 # ============================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
+TARGETS=(development preview production)
 
 # ── Pre-flight checks ─────────────────────────────────────────
 if [ ! -f "$ENV_FILE" ]; then
@@ -34,117 +36,94 @@ fi
 echo "Using Vercel CLI: $VERCEL_BIN"
 export VERCEL_BIN
 
-if ! command -v python3 &>/dev/null; then
-  echo "ERROR: python3 is required but not found."
+if ! command -v node &>/dev/null; then
+  echo "ERROR: node is required but not found."
   exit 1
 fi
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║        Vercel Production Env — Full Replace              ║"
+echo "║          Vercel Env — Full Replace All Targets           ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 
-# ── Step 1: Remove all existing production env vars ───────────
-echo "▶ Step 1/2 — Removing existing production env vars..."
+# ── Step 1: Remove all existing env vars for each target ───────
+echo "▶ Step 1/2 — Removing existing Vercel env vars..."
 echo ""
 
-EXISTING=$($VERCEL_BIN env ls production 2>&1 \
-  | awk '/^[[:space:]]+[A-Za-z_][A-Za-z0-9_]/ { gsub(/^[[:space:]]+/, ""); print $1 }' \
-  || true)
+for target in "${TARGETS[@]}"; do
+  echo "  Target: $target"
+  EXISTING=$($VERCEL_BIN env ls "$target" 2>&1 \
+    | awk '/^[[:space:]]+[A-Za-z_][A-Za-z0-9_]/ { gsub(/^[[:space:]]+/, ""); print $1 }' \
+    || true)
 
-if [ -z "$EXISTING" ]; then
-  echo "  (no existing production vars found)"
-else
+  if [ -z "$EXISTING" ]; then
+    echo "    (no vars found)"
+    continue
+  fi
+
   while IFS= read -r var; do
     [ -z "$var" ] && continue
-    echo "  Removing: $var"
-    $VERCEL_BIN env rm "$var" production --yes 2>/dev/null || echo "  (skip — $var not found)"
+    echo "    Removing: $var"
+    $VERCEL_BIN env rm "$var" "$target" --yes 2>/dev/null || echo "    (skip — $var not found)"
   done <<< "$EXISTING"
-fi
+done
 
 echo ""
-echo "▶ Step 2/2 — Uploading .env to production..."
+echo "▶ Step 2/2 — Uploading .env to Vercel..."
 echo ""
 
-# ── Step 2: Parse .env and upload each var via Python ─────────
+# ── Step 2: Parse .env and upload each var to every target ────
 export ENV_FILE
+export TARGETS_CSV="$(IFS=,; echo "${TARGETS[*]}")"
 
-python3 <<'PYEOF'
-import subprocess, os, sys
+node <<'JSEOF'
+const fs = require('fs');
+const { spawnSync } = require('child_process');
+const dotenv = require('dotenv');
 
-env_file = os.environ["ENV_FILE"]
-env_vars = {}
+const envFile = process.env.ENV_FILE;
+const vercelCmd = String(process.env.VERCEL_BIN || '').split(' ').filter(Boolean);
+const targets = String(process.env.TARGETS_CSV || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
 
-with open(env_file, "r") as f:
-    lines = f.readlines()
+const parsed = dotenv.parse(fs.readFileSync(envFile));
+const entries = Object.entries(parsed);
 
-i = 0
-while i < len(lines):
-    line = lines[i].rstrip("\n")
+if (entries.length === 0) {
+  console.error(`No environment variables found in ${envFile}`);
+  process.exit(1);
+}
 
-    # Skip blank lines and comments
-    stripped = line.strip()
-    if not stripped or stripped.startswith("#"):
-        i += 1
-        continue
+let success = 0;
+let failed = 0;
 
-    if "=" not in line:
-        i += 1
-        continue
+for (const target of targets) {
+  console.log(`  Target: ${target}`);
+  for (const [key, value] of entries) {
+    const result = spawnSync(vercelCmd[0], [...vercelCmd.slice(1), 'env', 'add', key, target], {
+      input: `${value}\n`,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
 
-    key, _, raw_value = line.partition("=")
-    key = key.strip()
+    if (result.status === 0) {
+      console.log(`    ✓ ${key}`);
+      success += 1;
+    } else {
+      const err = `${result.stderr || ''}${result.stdout || ''}`.trim();
+      console.log(`    ✗ ${key} → ${err}`);
+      failed += 1;
+    }
+  }
+}
 
-    # Skip commented-out or empty keys
-    if not key or key.startswith("#") or not key.replace("_", "").isalnum():
-        i += 1
-        continue
+console.log('');
+console.log('='.repeat(52));
+console.log(`Done — ${success} uploaded, ${failed} failed.`);
+console.log('='.repeat(52));
 
-    # Quoted value (possibly multi-line, e.g. GOOGLE_PRIVATE_KEY)
-    if raw_value.startswith('"'):
-        inner = raw_value[1:]
-        if inner.endswith('"'):
-            # Same-line closing quote
-            value = inner[:-1]
-        else:
-            # Multi-line: keep reading until a line ending with "
-            parts = [inner]
-            i += 1
-            while i < len(lines):
-                next_line = lines[i].rstrip("\n")
-                if next_line.endswith('"'):
-                    parts.append(next_line[:-1])
-                    break
-                parts.append(next_line)
-                i += 1
-            value = "\n".join(parts)
-    else:
-        value = raw_value.strip()
-
-    env_vars[key] = value
-    i += 1
-
-success, failed = 0, 0
-
-for key, value in env_vars.items():
-    vercel_cmd = os.environ["VERCEL_BIN"].split()
-    result = subprocess.run(
-        vercel_cmd + ["env", "add", key, "production"],
-        input=value,
-        text=True,
-        capture_output=True,
-    )
-    if result.returncode == 0:
-        print(f"  ✓  {key}")
-        success += 1
-    else:
-        err = result.stderr.strip() or result.stdout.strip()
-        print(f"  ✗  {key}  →  {err}")
-        failed += 1
-
-print("")
-print(f"{'═'*52}")
-print(f"  Done — {success} uploaded, {failed} failed.")
-print(f"{'═'*52}")
-PYEOF
+if (failed > 0) process.exit(1);
+JSEOF

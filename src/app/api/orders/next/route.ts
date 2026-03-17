@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
+import { parsePositiveInt } from '@/utils/number';
 
 /**
  * GET /api/orders/next - Get next order(s) for a tech.
@@ -32,8 +33,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'techId is required' }, { status: 400 });
     }
 
-    const techIdNum = parseInt(techId, 10);
-    if (!Number.isFinite(techIdNum)) {
+    const techIdNum = parsePositiveInt(techId);
+    if (techIdNum === null) {
       return NextResponse.json({ error: 'Invalid techId' }, { status: 400 });
     }
 
