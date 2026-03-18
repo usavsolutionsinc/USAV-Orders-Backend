@@ -12,7 +12,6 @@ import { DetailsStackDurationData } from './stacks/types';
 import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
 import { QtyBadge } from '@/components/ui/QtyBadge';
 import { useDeleteOrderRow } from '@/hooks';
-import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
 import { getStaffName } from '@/utils/staff';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
@@ -240,6 +239,13 @@ export function ShippedDetailsPanel({
     setTimeout(() => setCopiedAll(false), 2000);
   };
 
+  const stackActionBar = {
+    onClose,
+    onMoveUp: () => dispatchNavigateShippedDetails('up'),
+    onMoveDown: () => dispatchNavigateShippedDetails('down'),
+    rightActions: panelActions,
+  };
+
   const handleCopyOrderId = () => {
     const value = String(shipped.order_id || '').trim();
     if (!value) return;
@@ -323,13 +329,6 @@ export function ShippedDetailsPanel({
         </div>
       </div>
 
-      <PanelActionBar
-        onClose={onClose}
-        onMoveUp={() => dispatchNavigateShippedDetails('up')}
-        onMoveDown={() => dispatchNavigateShippedDetails('down')}
-        rightActions={panelActions}
-      />
-
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <div className="pb-8 pt-4 space-y-4">
           {context === 'dashboard' ? (
@@ -340,6 +339,7 @@ export function ShippedDetailsPanel({
               onCopyAll={handleCopyAll}
               onUpdate={_onUpdate}
               showShippingTimestamp={false}
+              actionBar={stackActionBar}
             />
           ) : context === 'station' ? (
             <TechDetailsStack
@@ -349,6 +349,7 @@ export function ShippedDetailsPanel({
               onCopyAll={handleCopyAll}
               onUpdate={_onUpdate}
               showShippingTimestamp={false}
+              actionBar={stackActionBar}
             />
           ) : context === 'packer' ? (
             <PackerDetailsStack
@@ -358,6 +359,7 @@ export function ShippedDetailsPanel({
               onCopyAll={handleCopyAll}
               onUpdate={_onUpdate}
               showShippingTimestamp={false}
+              actionBar={stackActionBar}
             />
           ) : (
             <ShippedDetailsPanelContent

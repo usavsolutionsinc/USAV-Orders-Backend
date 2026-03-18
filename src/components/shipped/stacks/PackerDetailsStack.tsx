@@ -8,6 +8,7 @@ import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from 
 import { formatDatePST, formatDateTimePST, toPSTDateKey } from '@/utils/date';
 import { getStaffName } from '@/utils/staff';
 import { getActiveStaff } from '@/lib/staffCache';
+import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 
 type PackerOption = { id: number; name: string };
 
@@ -25,7 +26,8 @@ export function PackerDetailsStack({
   durationData,
   copiedAll,
   onCopyAll,
-  onUpdate
+  onUpdate,
+  actionBar,
 }: DetailsStackProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
@@ -187,6 +189,8 @@ export function PackerDetailsStack({
 
   return (
     <div className="pb-8 pt-4 space-y-4">
+      {actionBar ? <PanelActionBar {...actionBar} /> : null}
+
       <section className="mx-8 space-y-2">
         <button
           type="button"

@@ -13,6 +13,7 @@ import { getActiveStaff } from '@/lib/staffCache';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
 import { DeleteOrderControl } from './DeleteOrderControl';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
+import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 
 export function DashboardDetailsStack({
   shipped,
@@ -21,6 +22,7 @@ export function DashboardDetailsStack({
   onCopyAll,
   onUpdate,
   mode = 'dashboard',
+  actionBar,
 }: DetailsStackProps) {
   const [staffOptions, setStaffOptions] = useState<Array<{ id: number; name: string; role: string }>>([]);
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
@@ -188,6 +190,8 @@ export function DashboardDetailsStack({
       variants={containerVariants}
       className="pb-8 pt-4 space-y-4"
     >
+      {actionBar ? <PanelActionBar {...actionBar} /> : null}
+
       <motion.section variants={itemVariants} className="mx-8 space-y-2">
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">

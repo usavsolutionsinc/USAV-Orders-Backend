@@ -17,6 +17,8 @@ interface PanelActionBarProps {
   }>;
 }
 
+export type PanelActionBarConfig = PanelActionBarProps;
+
 function ActionButton({
   onClick,
   label,

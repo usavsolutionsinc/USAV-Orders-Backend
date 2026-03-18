@@ -94,6 +94,13 @@ const HEAVY_JOB_SCHEDULES = [
     body: {},
     label: 'orders-exceptions-sync',
   },
+  {
+    scheduleId: 'replenishment-sync-every-30m',
+    cron: '*/30 * * * *',
+    path: '/api/qstash/replenishment/sync',
+    body: {},
+    label: 'replenishment-sync',
+  },
 ] as Array<{
   scheduleId: string;
   cron: string;

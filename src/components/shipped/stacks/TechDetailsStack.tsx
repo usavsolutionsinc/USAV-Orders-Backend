@@ -8,13 +8,15 @@ import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from 
 import { ContextualManualLinkRow } from '@/components/shipped/details-panel/blocks/ContextualManualLinkRow';
 import { toPSTDateKey } from '@/utils/date';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
+import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 
 export function TechDetailsStack({
   shipped,
   durationData,
   copiedAll,
   onCopyAll,
-  onUpdate
+  onUpdate,
+  actionBar,
 }: DetailsStackProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
@@ -151,6 +153,8 @@ export function TechDetailsStack({
 
   return (
     <div className="pb-8 pt-4 space-y-4">
+      {actionBar ? <PanelActionBar {...actionBar} /> : null}
+
       <ContextualManualLinkRow
         sku={shipped.sku}
         itemNumber={itemNumber}

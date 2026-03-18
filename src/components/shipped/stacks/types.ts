@@ -1,4 +1,5 @@
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { PanelActionBarConfig } from '@/components/shipped/details-panel/PanelActionBar';
 
 export interface DetailsStackDurationData {
   boxingDuration?: string;
@@ -14,4 +15,5 @@ export interface DetailsStackProps {
   showShippingTimestamp?: boolean;
   mode?: 'dashboard' | 'tech';
   showAssignmentButton?: boolean;
+  actionBar?: PanelActionBarConfig;
 }

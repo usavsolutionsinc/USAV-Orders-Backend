@@ -26,8 +26,6 @@ const STATUS_OPTIONS = [
 
 export function RepairDetailsPanel({ 
   repair, 
-  assignmentId: initialAssignmentId,
-  assignedTechId: initialAssignedTechId,
   onClose, 
   onUpdate 
 }: RepairDetailsPanelProps) {
@@ -38,8 +36,6 @@ export function RepairDetailsPanel({
   const [isEditingTicket, setIsEditingTicket] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const ticketInputRef = useRef<HTMLInputElement>(null);
-
-  const [assignedTechId, setAssignedTechId] = useState<number | null>(initialAssignedTechId ?? null);
 
   useEffect(() => {
     if (isEditingTicket && ticketInputRef.current) {
@@ -200,23 +196,6 @@ export function RepairDetailsPanel({
       
       {/* Content sections */}
       <div className="p-6 space-y-6">
-        <section>
-          <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-            Work Orders
-          </h3>
-          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-3">
-            <p className="text-[10px] font-semibold text-orange-700">
-              Technician: <span className="font-black text-orange-950">{assignedTechId ? `#${assignedTechId}` : 'Unassigned'}</span>
-            </p>
-            <a
-              href={`/work-orders?queue=repair_services&entityType=REPAIR&entityId=${repair.id}`}
-              className="mt-3 inline-flex h-9 items-center justify-center rounded-xl bg-orange-600 px-3 text-[9px] font-black uppercase tracking-[0.18em] text-white hover:bg-orange-700"
-            >
-              Open In Work Orders
-            </a>
-          </div>
-        </section>
-
         {/* Current Status */}
         <section>
           <h3 className="text-[10px] font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
