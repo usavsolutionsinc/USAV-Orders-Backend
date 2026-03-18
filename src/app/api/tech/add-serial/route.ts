@@ -125,11 +125,7 @@ export async function POST(req: NextRequest) {
         const staffName = staffResult.rows[0].name;
 
         const upperSerial = serial.toUpperCase();
-        const parseSerials = (value: string | null | undefined) =>
-            String(value || '')
-                .split(',')
-                .map((s) => s.trim().toUpperCase())
-                .filter(Boolean);
+
 
         const isFbaLikeTracking = /^(X0|B0|FBA)/i.test(scannedTracking);
         const normalizedFnsku = isFbaLikeTracking ? scannedTracking.toUpperCase() : null;
@@ -161,170 +157,69 @@ export async function POST(req: NextRequest) {
             unmatchedFnskuLog = unmatchedFnskuLogResult.rows[0] ?? null;
         }
 
-        // One-row-per-tracking model: append serial to existing row.
-        // Priority: shipment_id FK → exact fnsku match → scan_ref key match.
-        let existingRowResult: { rows: Array<{ id: number; serial_number: string }> } = { rows: [] };
+        // ── Fetch all serials already recorded for this tracking (duplicate check) ──
+        const allTsnResult = await pool.query(
+            `SELECT serial_number
+             FROM tech_serial_numbers
+             WHERE ($1::bigint IS NOT NULL AND shipment_id = $1)
+                OR ($2::int    IS NOT NULL AND shipment_id IS NULL AND orders_exception_id = $2)
+                OR (
+                    $1::bigint IS NULL AND $2::int IS NULL
+                    AND scan_ref IS NOT NULL
+                    AND RIGHT(regexp_replace(UPPER(scan_ref), '[^A-Z0-9]', '', 'g'), 18) = $3
+                )
+             ORDER BY id ASC`,
+            [resolvedScan.shipmentId ?? null, ordersExceptionId, key18]
+        );
 
-        if (resolvedScan.shipmentId) {
-            const byFK = await pool.query(
-                `SELECT id, serial_number
-                 FROM tech_serial_numbers
-                 WHERE shipment_id = $1
-                 ORDER BY id ASC
-                 LIMIT 1`,
-                [resolvedScan.shipmentId]
-            );
-            if (byFK.rows.length > 0) existingRowResult = byFK;
-        }
-
-        if (existingRowResult.rows.length === 0 && ordersExceptionId) {
-            const byOrdersException = await pool.query(
-                `SELECT id, serial_number
-                 FROM tech_serial_numbers
-                 WHERE orders_exception_id = $1
-                 ORDER BY id ASC
-                 LIMIT 1`,
-                [ordersExceptionId]
-            );
-            if (byOrdersException.rows.length > 0) existingRowResult = byOrdersException;
-        }
-
-        if (existingRowResult.rows.length === 0 && isFbaLikeTracking) {
-            const byFnsku = await pool.query(
-                `SELECT id, serial_number
-                 FROM tech_serial_numbers
-                 WHERE fnsku = $1
-                 ORDER BY id ASC
-                 LIMIT 1`,
-                [scannedTracking.toUpperCase()]
-            );
-            if (byFnsku.rows.length > 0) existingRowResult = byFnsku;
-        }
-
-        if (existingRowResult.rows.length === 0) {
-            const byScanRef = await pool.query(
-                `SELECT id, serial_number
-                 FROM tech_serial_numbers
-                 WHERE scan_ref IS NOT NULL AND scan_ref != ''
-                   AND RIGHT(regexp_replace(UPPER(scan_ref), '[^A-Z0-9]', '', 'g'), 18) = $1
-                 ORDER BY id ASC
-                 LIMIT 1`,
-                [key18]
-            );
-            if (byScanRef.rows.length > 0) existingRowResult = byScanRef;
-        }
-
-        // Legacy text-match fallback removed — all rows now use shipment_id / scan_ref after migration.
+        const allExistingSerials: string[] = allTsnResult.rows
+            .map((r: any) => String(r.serial_number || '').trim().toUpperCase())
+            .filter(Boolean);
 
         const shouldAllowDuplicateSerial =
             Boolean(allowFbaDuplicates) || isFbaLikeTracking || order?.account_source === 'fba';
 
-        let updatedSerialList: string[] = [];
-        let targetTechSerialId: number | null = null;
-        if (existingRowResult.rows.length > 0) {
-            const row = existingRowResult.rows[0];
-            targetTechSerialId = Number(row.id);
-            const existingSerials = parseSerials(row.serial_number);
-
-            if (existingSerials.includes(upperSerial) && !shouldAllowDuplicateSerial) {
-                return NextResponse.json({ 
-                    success: false,
-                    error: `Serial ${upperSerial} already scanned for this order`
-                });
-            }
-
-            updatedSerialList = [...existingSerials, upperSerial];
-            await pool.query(
-                `UPDATE tech_serial_numbers
-                 SET serial_number = $1,
-                     updated_at = date_trunc('second', NOW()),
-                     tested_by = $2,
-                     orders_exception_id = CASE
-                       WHEN $9::int IS NOT NULL THEN COALESCE(orders_exception_id, $9)
-                       ELSE orders_exception_id
-                     END,
-                     fnsku = CASE
-                       WHEN $4 THEN COALESCE(fnsku, $5)
-                       ELSE fnsku
-                     END,
-                     fnsku_log_id = CASE
-                       WHEN $4 AND fnsku_log_id IS NULL THEN COALESCE($6, fnsku_log_id)
-                       ELSE fnsku_log_id
-                     END,
-                     fba_shipment_id = CASE
-                       WHEN $4 AND fba_shipment_id IS NULL THEN COALESCE($7, fba_shipment_id)
-                       ELSE fba_shipment_id
-                     END,
-                     fba_shipment_item_id = CASE
-                       WHEN $4 AND fba_shipment_item_id IS NULL THEN COALESCE($8, fba_shipment_item_id)
-                       ELSE fba_shipment_item_id
-                     END
-                 WHERE id = $3`,
-                [
-                    updatedSerialList.join(', '),
-                    staffId,
-                    row.id,
-                    isFbaLikeTracking,
-                    normalizedFnsku,
-                    unmatchedFnskuLog?.id ?? null,
-                    unmatchedFnskuLog?.fba_shipment_id ?? null,
-                    unmatchedFnskuLog?.fba_shipment_item_id ?? null,
-                    ordersExceptionId,
-                ]
-            );
-        } else {
-            updatedSerialList = [upperSerial];
-            // Use shipment_id FK when available; fall back to scan_ref / legacy text column.
-            if (resolvedScan.shipmentId) {
-                await pool.query(
-                    `INSERT INTO tech_serial_numbers
-                     (shipment_id, orders_exception_id, scan_ref, serial_number, serial_type, tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-                    [
-                        resolvedScan.shipmentId,
-                        ordersExceptionId,
-                        resolvedScan.scanRef ?? null,
-                        updatedSerialList.join(', '),
-                        serialType,
-                        staffId,
-                        normalizedFnsku,
-                        unmatchedFnskuLog?.id ?? null,
-                        unmatchedFnskuLog?.fba_shipment_id ?? null,
-                        unmatchedFnskuLog?.fba_shipment_item_id ?? null,
-                    ]
-                );
-                const insertedRow = await pool.query(
-                    `SELECT id FROM tech_serial_numbers WHERE shipment_id = $1 ORDER BY id DESC LIMIT 1`,
-                    [resolvedScan.shipmentId]
-                );
-                targetTechSerialId = insertedRow.rows[0]?.id ? Number(insertedRow.rows[0].id) : null;
-            } else {
-                await pool.query(
-                    `INSERT INTO tech_serial_numbers
-                     (orders_exception_id, scan_ref, serial_number, serial_type, tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                    [
-                        ordersExceptionId,
-                        resolvedScan.scanRef ?? scannedTracking,
-                        updatedSerialList.join(', '),
-                        serialType,
-                        staffId,
-                        normalizedFnsku,
-                        unmatchedFnskuLog?.id ?? null,
-                        unmatchedFnskuLog?.fba_shipment_id ?? null,
-                        unmatchedFnskuLog?.fba_shipment_item_id ?? null,
-                    ]
-                );
-                const insertedRow = await pool.query(
-                    `SELECT id
-                     FROM tech_serial_numbers
-                     WHERE scan_ref = $1
-                     ORDER BY id DESC LIMIT 1`,
-                    [resolvedScan.scanRef ?? scannedTracking]
-                );
-                targetTechSerialId = insertedRow.rows[0]?.id ? Number(insertedRow.rows[0].id) : null;
-            }
+        if (allExistingSerials.includes(upperSerial) && !shouldAllowDuplicateSerial) {
+            return NextResponse.json({
+                success: false,
+                error: `Serial ${upperSerial} already scanned for this order`
+            });
         }
+
+        // ── Guard: need at least one valid FK ─────────────────────────────────
+        if (!resolvedScan.shipmentId && ordersExceptionId == null) {
+            return NextResponse.json({
+                success: false,
+                error: 'Tracking did not resolve to a shipment or open exception'
+            }, { status: 400 });
+        }
+
+        // ── Insert one new TSN row per serial scan (latest SAL linked via RETURNING id) ──
+        const insertResult = await pool.query(
+            `INSERT INTO tech_serial_numbers
+             (shipment_id, orders_exception_id, scan_ref, serial_number, serial_type,
+              tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             RETURNING id`,
+            [
+                resolvedScan.shipmentId ?? null,
+                ordersExceptionId,
+                resolvedScan.scanRef ?? (resolvedScan.shipmentId ? null : scannedTracking),
+                upperSerial,
+                serialType,
+                staffId,
+                normalizedFnsku,
+                unmatchedFnskuLog?.id ?? null,
+                unmatchedFnskuLog?.fba_shipment_id ?? null,
+                unmatchedFnskuLog?.fba_shipment_item_id ?? null,
+            ]
+        );
+
+        const targetTechSerialId: number | null = insertResult.rows[0]?.id
+            ? Number(insertResult.rows[0].id)
+            : null;
+
+        const updatedSerialList = [...allExistingSerials, upperSerial];
 
         await createStationActivityLog(pool, {
             station: 'TECH',

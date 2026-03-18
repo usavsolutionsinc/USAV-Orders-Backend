@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
       : 'NULL::text AS received_at';
     const dateColumnRef = `r.${dateColumn}`;
     const receivingDateSelect = `to_char(${dateColumnRef}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at`;
+    const limitParamRef = hasLineColumn('workflow_status') ? '$2' : '$1';
     const workflowFilterClause = hasLineColumn('workflow_status')
       ? `EXISTS (
              SELECT 1 FROM receiving_lines rl
@@ -168,8 +169,8 @@ export async function GET(request: NextRequest) {
            )
          )
        ORDER BY r.id DESC
-       LIMIT $2`,
-      [filterStatuses, limit]
+       LIMIT ${limitParamRef}`,
+      hasLineColumn('workflow_status') ? [filterStatuses, limit] : [limit]
     );
 
     if (receivingRows.rows.length === 0) {

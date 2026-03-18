@@ -44,12 +44,14 @@ async function runZohoPurchaseOrdersSync(body: Record<string, unknown> = {}) {
 
   return {
     success: true,
-    message: 'Zoho purchase orders sync completed.',
+    message: 'Zoho purchase orders sync completed against receiving_lines.',
     totals: {
       processed: summary.processed,
       created: summary.created,
       updated: summary.updated,
       failed: summary.failed,
+      linked: summary.linked,
+      line_items_synced: summary.line_items_synced,
     },
     errors: summary.errors.slice(0, 25),
   };

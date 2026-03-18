@@ -130,12 +130,6 @@ export function RepairTable({ filter }: RepairTableProps) {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 shadow-sm">
-              <span className="text-[9px] font-black uppercase tracking-[0.24em] text-gray-400">View</span>
-              <span className="ml-2 text-[10px] font-black uppercase tracking-[0.22em] text-orange-600">
-                {filter === 'incoming' ? 'Incoming' : filter === 'done' ? 'Done' : 'Active'}
-              </span>
-            </div>
             {search && (
               <div className="flex items-center gap-2 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
                 <Search className="w-3 h-3" />

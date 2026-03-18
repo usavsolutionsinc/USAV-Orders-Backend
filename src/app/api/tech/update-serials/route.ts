@@ -3,11 +3,20 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { createStationActivityLog } from '@/lib/station-activity';
+import { publishTechLogChanged } from '@/lib/realtime/publish';
 
 function normalizeSerialList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .map((entry) => String(entry || '').trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function splitCsvSerials(value: string | null | undefined): string[] {
+  return String(value || '')
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
     .filter(Boolean);
 }
 
@@ -21,11 +30,18 @@ function detectSerialType(
   return serials.some((serial) => /^X0|^B0/i.test(serial)) ? 'FNSKU' : 'SERIAL';
 }
 
+/**
+ * Full sync: the caller sends the desired final set of serials.
+ * - Serials that are new → INSERT a TSN row.
+ * - Serials that already exist → keep (no-op).
+ * - Serials that were removed → UPDATE the owning TSN row (drop that serial),
+ *   or DELETE the row entirely when it becomes empty.
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const tracking = String(body?.tracking || '').trim();
-    const serialNumbers = normalizeSerialList(body?.serialNumbers);
+    const desiredSerials = normalizeSerialList(body?.serialNumbers);
     const parsedTechId = Number.parseInt(String(body?.techId || ''), 10);
     const techId = Number.isFinite(parsedTechId) && parsedTechId > 0 ? parsedTechId : null;
 
@@ -40,13 +56,12 @@ export async function POST(req: NextRequest) {
 
     const { shipmentId: resolvedShipmentId, scanRef: resolvedScanRef } = await resolveShipmentId(tracking);
 
-    let existingRowResult = await pool.query(
-      `SELECT id, serial_type, tested_by
+    const existingRowResult = await pool.query(
+      `SELECT id, serial_number, serial_type, tested_by
        FROM tech_serial_numbers
        WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
           OR (shipment_id IS NULL AND scan_ref IS NOT NULL AND scan_ref = $2)
-       ORDER BY id ASC
-       LIMIT 1`,
+       ORDER BY id ASC`,
       [resolvedShipmentId, resolvedScanRef]
     );
 
@@ -59,73 +74,115 @@ export async function POST(req: NextRequest) {
        LIMIT 1`,
       [key18]
     );
-    const exceptionResult = await pool.query(
-      `SELECT id
-       FROM orders_exceptions
-       WHERE status = 'open'
-         AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-       ORDER BY id DESC
-       LIMIT 1`,
-      [key18]
+
+    const existingRows = existingRowResult.rows as Array<{
+      id: number;
+      serial_number: string | null;
+      serial_type: string | null;
+      tested_by: number | null;
+    }>;
+
+    const fallbackTestedBy =
+      techId
+      ?? existingRows.find((row) => Number.isFinite(Number(row.tested_by)))?.tested_by
+      ?? null;
+
+    const serialType = detectSerialType(
+      desiredSerials,
+      existingRows[0]?.serial_type,
+      orderResult.rows[0]?.account_source
     );
-    const ordersExceptionId = exceptionResult.rows[0]?.id ? Number(exceptionResult.rows[0].id) : null;
 
-    if (existingRowResult.rows.length === 0 && ordersExceptionId) {
-      existingRowResult = await pool.query(
-        `SELECT id, serial_type, tested_by
-         FROM tech_serial_numbers
-         WHERE orders_exception_id = $1
-         ORDER BY id ASC
-         LIMIT 1`,
-        [ordersExceptionId]
-      );
-    }
+    // Build flat set of all currently persisted serials.
+    const allPersistedSerials = existingRows.flatMap((row) => splitCsvSerials(row.serial_number));
+    const persistedSet = new Set(allPersistedSerials);
+    const desiredSet = new Set(desiredSerials);
 
-    const joinedSerials = serialNumbers.join(', ');
+    const serialsToInsert = desiredSerials.filter((s) => !persistedSet.has(s));
+    const serialsToRemove = new Set(allPersistedSerials.filter((s) => !desiredSet.has(s)));
 
-    if (existingRowResult.rows.length > 0) {
-      const row = existingRowResult.rows[0];
-      const nextTestedBy = techId ?? (row.tested_by ? Number(row.tested_by) : null);
-      await pool.query(
-        `UPDATE tech_serial_numbers
-         SET serial_number = $1,
-             serial_type = $2,
-             updated_at = date_trunc('second', NOW()),
-             tested_by = $3,
-             orders_exception_id = CASE
-               WHEN $5::int IS NOT NULL THEN COALESCE(orders_exception_id, $5)
-               ELSE orders_exception_id
-             END
-         WHERE id = $4`,
-        [
-          joinedSerials,
-          detectSerialType(serialNumbers, row.serial_type, orderResult.rows[0]?.account_source),
-          nextTestedBy,
-          row.id,
-          ordersExceptionId,
-        ]
-      );
-    } else if (serialNumbers.length > 0) {
-      await pool.query(
-        `INSERT INTO tech_serial_numbers
-         (shipment_id, orders_exception_id, scan_ref, serial_number, serial_type, tested_by)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          resolvedShipmentId,
-          ordersExceptionId,
-          resolvedScanRef,
-          joinedSerials,
-          detectSerialType(serialNumbers, null, orderResult.rows[0]?.account_source),
-          techId,
-        ]
-      );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // ── Removals: update or delete each affected TSN row ──────────────────
+      for (const row of existingRows) {
+        const rowSerials = splitCsvSerials(row.serial_number);
+        const hadRemoval = rowSerials.some((s) => serialsToRemove.has(s));
+        if (!hadRemoval) continue;
+
+        const remaining = rowSerials.filter((s) => !serialsToRemove.has(s));
+
+        if (remaining.length === 0) {
+          // Row is now empty — purge it and its activity log entries.
+          await client.query(
+            `DELETE FROM station_activity_logs
+             WHERE station = 'TECH'
+               AND activity_type = 'SERIAL_ADDED'
+               AND tech_serial_number_id = $1`,
+            [row.id]
+          );
+          await client.query(
+            `DELETE FROM tech_serial_numbers WHERE id = $1`,
+            [row.id]
+          );
+        } else {
+          // Trim the CSV to only the surviving serials.
+          await client.query(
+            `UPDATE tech_serial_numbers
+             SET serial_number = $1, updated_at = date_trunc('second', NOW())
+             WHERE id = $2`,
+            [remaining.join(', '), row.id]
+          );
+        }
+      }
+
+      // ── Insertions: one row per new serial ────────────────────────────────
+      for (const serial of serialsToInsert) {
+        const insertResult = await client.query(
+          `INSERT INTO tech_serial_numbers
+           (shipment_id, scan_ref, serial_number, serial_type, tested_by)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id`,
+          [resolvedShipmentId, resolvedScanRef, serial, serialType, fallbackTestedBy]
+        );
+
+        const techSerialId = insertResult.rows[0]?.id ? Number(insertResult.rows[0].id) : null;
+        if (techSerialId) {
+          await createStationActivityLog(client, {
+            station: 'TECH',
+            activityType: 'SERIAL_ADDED',
+            staffId: fallbackTestedBy,
+            shipmentId: resolvedShipmentId ?? null,
+            scanRef: resolvedScanRef ?? tracking,
+            techSerialNumberId: techSerialId,
+            notes: `Serial added from details: ${serial}`,
+            metadata: { serial, serial_type: serialType, source: 'tech.update-serials' },
+          });
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (txError) {
+      await client.query('ROLLBACK');
+      throw txError;
+    } finally {
+      client.release();
     }
 
     await invalidateCacheTags(['tech-logs', 'orders-next', 'shipped', 'orders']);
+    if (fallbackTestedBy) {
+      await publishTechLogChanged({
+        techId: fallbackTestedBy,
+        action: 'update',
+        source: 'tech.update-serials',
+      });
+    }
 
+    // Return the canonical final list (desired set, validated).
     return NextResponse.json({
       success: true,
-      serialNumbers,
+      serialNumbers: desiredSerials,
     });
   } catch (error: any) {
     console.error('Error updating serials:', error);

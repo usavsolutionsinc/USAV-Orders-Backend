@@ -9,6 +9,9 @@ const connectionString = process.env.DATABASE_URL || 'postgres://localhost:5432/
 export const client = postgres(connectionString, { 
     prepare: false,
     onnotice: () => {}, // Suppress notices
+    connect_timeout: 4,
+    idle_timeout: 10,
+    max_lifetime: 60 * 30,
 });
 
 export const db = drizzle(client, { schema });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { formatPSTTimestamp } from '@/utils/date';
 
 /**
  * POST /api/repair-service/repaired
@@ -66,9 +67,34 @@ export async function POST(req: NextRequest) {
     await client.query(
       `UPDATE repair_service
           SET status = 'Repaired, Contact Customer',
+              status_history = CASE
+                WHEN COALESCE(status, '') IS DISTINCT FROM 'Repaired, Contact Customer' THEN
+                  COALESCE(status_history, '[]'::jsonb) || jsonb_build_array(
+                    jsonb_strip_nulls(
+                      jsonb_build_object(
+                        'status', 'Repaired, Contact Customer',
+                        'timestamp', $2,
+                        'previous_status', NULLIF(status, ''),
+                        'source', 'repair-service.repaired',
+                        'user_id', $3,
+                        'metadata', jsonb_build_object(
+                          'assignment_id', $4,
+                          'repair_outcome', $5
+                        )
+                      )
+                    )
+                  )
+                ELSE COALESCE(status_history, '[]'::jsonb)
+              END,
               updated_at = NOW()
         WHERE id = $1`,
-      [repairId],
+      [
+        repairId,
+        formatPSTTimestamp(),
+        completedBy,
+        assignmentId ?? null,
+        repairOutcome,
+      ],
     );
 
     await client.query('COMMIT');

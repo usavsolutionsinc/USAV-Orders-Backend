@@ -12,6 +12,7 @@ import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmen
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { WorkOrderAssignmentCard } from './WorkOrderAssignmentCard';
 import { SkuStockAssignPanel } from './SkuStockAssignPanel';
+import { LocalPickupTable } from './LocalPickupTable';
 import {
   type WorkOrderRow,
   type QueueCounts,
@@ -310,12 +311,12 @@ export function WorkOrdersDashboard() {
           </div>
           {queue !== 'stock_replenish' && (
             <div className="flex shrink-0 items-center gap-4">
-              {unassignedRows.length > 0 && (
+              {queue !== 'local_pickups' && unassignedRows.length > 0 && (
                 <span className="text-[10px] font-black uppercase tracking-wider text-orange-500">
                   {unassignedRows.length} unassigned
                 </span>
               )}
-              {assignedRows.length > 0 && (
+              {queue !== 'local_pickups' && assignedRows.length > 0 && (
                 <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">
                   {assignedRows.length} assigned
                 </span>
@@ -328,6 +329,8 @@ export function WorkOrdersDashboard() {
       {/* Stock Replenish — search-then-assign panel (never loads all SKUs) */}
       {queue === 'stock_replenish' ? (
         <SkuStockAssignPanel technicianOptions={technicianOptions} packerOptions={packerOptions} />
+      ) : queue === 'local_pickups' ? (
+        <LocalPickupTable />
       ) : (
         /* Table body — all other queues */
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto no-scrollbar">

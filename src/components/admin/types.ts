@@ -20,6 +20,11 @@ export interface Order {
   tester_id: number | null;
   packer_id: number | null;
   out_of_stock: string | null;
+  replenishment_request_id?: string | null;
+  replenishment_status?: string | null;
+  replenishment_quantity_to_order?: string | null;
+  replenishment_po_number?: string | null;
+  replenishment_notes?: string | null;
   notes: string | null;
   /** Derived from shipping_tracking_numbers carrier status */
   is_shipped?: boolean;

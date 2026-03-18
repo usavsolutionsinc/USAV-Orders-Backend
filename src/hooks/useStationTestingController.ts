@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
+import { classifyInput, findSerialInCatalog } from '@/lib/scan-resolver';
 import { stationThemeColors } from '@/utils/staff-colors';
-
 export type StationThemeColor = 'green' | 'blue' | 'purple' | 'yellow';
 
 export interface ActiveStationOrder {
@@ -48,43 +49,47 @@ function parseRepairServiceId(value: string): number | null {
 const LAST_MANUAL_STORAGE_PREFIX = 'usav:last-manual:tech:';
 const COMPLETED_ORDER_AUTO_HIDE_MS = 2 * 60 * 1000;
 
-function detectType(val: string) {
+/**
+ * detectType
+ *
+ * Maps a raw scan to one of the controller action types:
+ *   TRACKING | SERIAL | FNSKU | SKU | REPAIR | COMMAND
+ *
+ * Special inputs (SKU, REPAIR, FNSKU, COMMAND) are checked first.
+ * Everything else falls through to classifyInput() from scan-resolver,
+ * which tests all carrier patterns (UPS, FedEx, USPS, DHL, Amazon, …).
+ * Both serial_full and serial_partial resolve to SERIAL so the controller
+ * routes them to add-serial; partial serials are catalog-matched there.
+ */
+function detectType(val: string): string {
   const input = val.trim();
   if (!input) return 'SERIAL';
 
-  // SKU scan (colon-separated, e.g. "SKU:ABC123")
+  // Colon-separated SKU
   if (input.includes(':')) return 'SKU';
 
+  // Repair service ID (RS-12345)
   if (/^RS-\d+$/i.test(input)) return 'REPAIR';
 
-  // FNSKU — Amazon FBA barcodes (X0… / B0… prefix)
-  if (/^(X0|B0)/i.test(input)) return 'FNSKU';
+  // Amazon FBA FNSKU (X0… / B0… prefix)
+  if (/^(X0|B0)/i.test(input.toUpperCase().replace(/[^A-Z0-9]/g, ''))) return 'FNSKU';
 
   // Operator commands
   if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input.toUpperCase())) return 'COMMAND';
 
-  // Carrier-detection: strip everything except A–Z 0–9 (mirrors normalizeTrackingCanonical)
-  const norm = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // Delegate to shared carrier-pattern classifier
+  const { type } = classifyInput(input);
+  if (type === 'tracking') return 'TRACKING';
 
-  // UPS — 1Z + 16 alphanumeric chars (18 total)
-  if (/^1Z[A-Z0-9]{16}$/.test(norm)) return 'TRACKING';
-
-  // USPS — starts with 9 + 15–21 more digits (covers 91, 92, 93, 94, 95, 96, 98, 99…)
-  if (/^9\d{15,21}$/.test(norm)) return 'TRACKING';
-
-  // USPS / DHL — legacy prefix patterns
-  if (/^(42|420|93|96|94|92|JJD|JD|JVGL)/i.test(norm)) return 'TRACKING';
-
-  // FedEx Ground / Express — exactly 12 or 15 digits
-  if (/^\d{12}$/.test(norm) || /^\d{15}$/.test(norm)) return 'TRACKING';
-
-  // FedEx / USPS 22-digit formats (FedEx SmartPost, USPS IMpb)
-  if (/^\d{20,22}$/.test(norm)) return 'TRACKING';
-
-  // Amazon Logistics — TBA + at least 9 digits
-  if (/^TBA\d{9,}$/.test(norm)) return 'TRACKING';
-
+  // serial_full, serial_partial, unknown → serial path
   return 'SERIAL';
+}
+
+function resolveScanType(
+  val: string,
+  _options?: { hasActiveOrderContext?: boolean; activeTracking?: string | null },
+) {
+  return detectType(val);
 }
 
 export function getOrderIdLast4(orderId: string) {
@@ -95,15 +100,18 @@ export function getOrderIdLast4(orderId: string) {
 
 export function useStationTestingController({
   userId,
+  userName,
   onComplete,
   themeColor,
   onTrackingScan,
 }: {
   userId: string;
+  userName: string;
   onComplete?: () => void;
   themeColor: StationThemeColor;
   onTrackingScan?: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -143,6 +151,7 @@ export function useStationTestingController({
     setActiveOrder(nextOrder);
 
     if (!nextOrder) {
+      lastScannedOrderRef.current = null;
       clearCompletedOrderHideTimer();
       setIsActiveOrderVisible(false);
       return;
@@ -392,6 +401,29 @@ export function useStationTestingController({
       }
 
       const repair = data?.repair ?? data;
+      try {
+        await fetch('/api/repair-service', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: Number(repair.id),
+            statusHistoryEntry: {
+              status: 'station_testing_scan',
+              source: 'station-testing.scan',
+              user_id: Number.isFinite(Number(userId)) ? Number(userId) : null,
+              user_name: userName || null,
+              metadata: {
+                scanned_input: repairScan.trim().toUpperCase(),
+                screen: 'StationTesting',
+                station: 'TECH',
+              },
+            },
+          }),
+        });
+      } catch (historyError) {
+        console.warn('Repair status history append failed:', historyError);
+      }
+
       window.dispatchEvent(new CustomEvent('open-repair-details', {
         detail: {
           repairId: Number(repair.id),
@@ -420,7 +452,11 @@ export function useStationTestingController({
     setSuccessMessage(null);
     setTrackingNotFoundAlert(null);
 
-    const type = detectType(input);
+    const contextOrder = getScanContextOrder();
+    const type = resolveScanType(input, {
+      hasActiveOrderContext: Boolean(contextOrder),
+      activeTracking: contextOrder?.tracking ?? null,
+    });
 
     if (type === 'REPAIR') {
       await handleRepairScan(input);
@@ -507,8 +543,38 @@ export function useStationTestingController({
               notes: data.order.notes ?? null,
               account_source: data.order.accountSource ?? null,
               quantity: String(data.order.quantity || '1'),
-              is_shipped: data.order.isShipped ?? false,  // derived from stn in API
+              is_shipped: data.order.isShipped ?? false,
               ship_by_date: data.order.shipByDate ?? null,
+              out_of_stock: null,
+            },
+          }));
+        } else if (data.techActivityId) {
+          // Exception scan (no order found): the SAL row id maps to the negative
+          // id format used by tracking_scan_rows in tech-logs SQL.
+          window.dispatchEvent(new CustomEvent('tech-log-added', {
+            detail: {
+              id: -1000000000 - data.techActivityId,
+              source_row_id: data.techActivityId,
+              source_kind: 'tech_scan',
+              tech_serial_id: null,
+              created_at: data.order.testDateTime ?? null,
+              shipping_tracking_number: data.order.tracking ?? '',
+              serial_number: '',
+              tested_by: data.order.testedBy ?? null,
+              shipment_id: null,
+              order_db_id: null,
+              order_id: null,
+              product_title: 'Unknown Product',
+              item_number: null,
+              sku: null,
+              condition: null,
+              status: null,
+              status_history: [],
+              notes: 'Tracking recorded in orders_exceptions',
+              account_source: null,
+              quantity: '1',
+              is_shipped: false,
+              ship_by_date: null,
               out_of_stock: null,
             },
           }));
@@ -585,7 +651,28 @@ export function useStationTestingController({
         inputRef.current?.focus();
         return;
       }
-      const finalSerial = input.toUpperCase();
+
+      // ── Partial serial resolution ──────────────────────────────────────────
+      // classifyInput returns serial_partial for ≤8-char inputs.  Try to
+      // expand the partial by suffix-matching it against already-scanned serials
+      // on this order.  If exactly one match is found we use the full canonical
+      // serial; if zero or multiple, store the raw partial as-is.
+      const { type: scanKind } = classifyInput(input);
+      let finalSerial = input.toUpperCase();
+      if (scanKind === 'serial_partial' && contextOrder.serialNumbers.length > 0) {
+        const { matchType, matches } = findSerialInCatalog(input, contextOrder.serialNumbers);
+        if (matchType !== 'none' && matches.length === 1) {
+          finalSerial = matches[0].toUpperCase();
+          setSuccessMessage(`Partial matched → ${finalSerial}`);
+        } else if (matches.length > 1) {
+          setErrorMessage(`Partial "${input}" is ambiguous — ${matches.length} serials match. Scan the full serial.`);
+          setInputValue('');
+          inputRef.current?.focus();
+          return;
+        }
+        // matchType === 'none' → fall through and store the raw partial
+      }
+
       const isFbaDuplicateAllowedTracking = /^(X0|B0|FBA)/i.test(String(contextOrder.tracking || '').trim());
 
       setIsLoading(true);
@@ -608,10 +695,18 @@ export function useStationTestingController({
           return;
         }
 
-        syncActiveOrderState({
+        const nextOrder = {
           ...contextOrder,
           serialNumbers: data.serialNumbers,
-        });
+        };
+        const completedExceptionOrder =
+          nextOrder.orderFound === false && isOrderComplete(nextOrder);
+
+        if (completedExceptionOrder) {
+          syncActiveOrderState(null);
+        } else {
+          syncActiveOrderState(nextOrder);
+        }
 
         setSuccessMessage(`Serial ${finalSerial} added ✓ (${data.serialNumbers.length} total)`);
 
@@ -619,6 +714,8 @@ export function useStationTestingController({
           confetti({ particleCount: 100, spread: 70 });
         }
 
+        // Refresh TechTable so the new serial row (SERIAL_ADDED SAL entry) appears immediately.
+        queryClient.invalidateQueries({ queryKey: ['tech-logs'] });
         triggerGlobalRefresh();
       } catch (e) {
         console.error('Add serial error:', e);

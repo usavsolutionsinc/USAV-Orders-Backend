@@ -38,14 +38,6 @@ export function TechDetailsStack({
     return !!toPSTDateKey(raw);
   };
 
-  const toMonthDayYearCurrent = (value: string | null | undefined) => {
-    if (!value) return '';
-    const pstDateKey = toPSTDateKey(value);
-    if (!pstDateKey) return '';
-    const [year, month, day] = pstDateKey.split('-').map(Number);
-    return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${String(year % 100).padStart(2, '0')}`;
-  };
-
   useEffect(() => {
     return () => {
       if (deleteArmTimeoutRef.current) {
@@ -53,6 +45,14 @@ export function TechDetailsStack({
       }
     };
   }, []);
+
+  const toMonthDayYearCurrent = (value: string | null | undefined) => {
+    if (!value) return '';
+    const pstDateKey = toPSTDateKey(value);
+    if (!pstDateKey) return '';
+    const [year, month, day] = pstDateKey.split('-').map(Number);
+    return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${String(year % 100).padStart(2, '0')}`;
+  };
 
   useEffect(() => {
     const preferredDate = isValidShipByDate(shipped.ship_by_date)
@@ -104,8 +104,15 @@ export function TechDetailsStack({
     setIsDeleting(true);
     try {
       const rowId = Number((shipped as any).tech_serial_id);
-      if (!Number.isFinite(rowId) || rowId <= 0) {
+      const sourceRowId = Number((shipped as any).source_row_id);
+      const sourceKind = String((shipped as any).source_kind || '');
+
+      if (sourceKind !== 'tech_scan' && (!Number.isFinite(rowId) || rowId <= 0)) {
         throw new Error('Missing tech row id for delete');
+      }
+
+      if (sourceKind === 'tech_scan' && (!Number.isFinite(sourceRowId) || sourceRowId <= 0)) {
+        throw new Error('Missing tracking scan activity id for delete');
       }
 
       const response = await fetch('/api/tech/delete-tracking', {
@@ -113,6 +120,8 @@ export function TechDetailsStack({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rowId,
+          sourceRowId,
+          sourceKind,
         }),
       });
 
@@ -121,6 +130,14 @@ export function TechDetailsStack({
         throw new Error(data?.error || 'Failed to delete tech records');
       }
 
+      window.dispatchEvent(new CustomEvent('tech-log-removed', {
+        detail: {
+          sourceKind,
+          sourceRowId,
+          techSerialId: rowId,
+          orderDbId: shipped.id,
+        },
+      }));
       onUpdate?.();
       dispatchDashboardAndStationRefresh();
       dispatchCloseShippedDetails();
@@ -136,7 +153,8 @@ export function TechDetailsStack({
     <div className="pb-8 pt-4 space-y-4">
       <ContextualManualLinkRow
         sku={shipped.sku}
-        itemNumber={shipped.item_number}
+        itemNumber={itemNumber}
+        allowEmbeddedItemNumberInput={false}
       />
 
       <ShippedDetailsPanelContent

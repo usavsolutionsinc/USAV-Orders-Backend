@@ -3,7 +3,8 @@ import { runDueShipments } from '@/lib/shipping/scheduler';
 
 export const dynamic = 'force-dynamic';
 
-// Protected by CRON_SECRET — safe for Vercel cron jobs and internal scheduler calls.
+// Protected by CRON_SECRET — intended for QStash worker wrappers and explicit
+// internal calls only. Scheduled execution should go through /api/qstash/*.
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return true; // no secret configured → open (dev only)
@@ -51,7 +52,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Also accept GET so Vercel cron can hit it directly
 export async function GET(req: NextRequest) {
-  return POST(req);
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return NextResponse.json(
+    { ok: false, error: 'Method not allowed. Use POST via the QStash worker route.' },
+    { status: 405 }
+  );
 }

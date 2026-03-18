@@ -1,7 +1,7 @@
 'use client';
 
-import { Check, Pencil } from '@/components/Icons';
-import { AlertLineRow } from '@/design-system/components';
+import { useEffect, useRef, useState } from 'react';
+import { Pencil, X } from '@/components/Icons';
 import { dmSans } from '@/lib/fonts';
 
 interface OutOfStockFieldProps {
@@ -23,61 +23,93 @@ export function OutOfStockField({
   onChange,
   onCancel,
   onSubmit,
-  isSaving = false,
   autoFocus = false,
   className = '',
   onEdit,
-  dividerClassName = 'border-b border-red-100',
+  dividerClassName,
 }: OutOfStockFieldProps) {
-  return (
-    <div className={className}>
-      {editable ? (
-        <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/40 p-3">
-          <textarea
-            value={value}
-            onChange={(e) => onChange?.(e.target.value)}
-            placeholder="What is out of stock?"
-            rows={2}
-            className={`w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-normal text-gray-900 leading-5 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-200 resize-none ${dmSans.className}`}
-            autoFocus={autoFocus}
-          />
-          <div className="grid grid-cols-2 gap-2">
+  const [showSaved, setShowSaved] = useState(false);
+  const onSubmitRef = useRef(onSubmit);
+  useEffect(() => { onSubmitRef.current = onSubmit; }, [onSubmit]);
+
+  useEffect(() => {
+    if (!editable || !value.trim()) return;
+    const t = setTimeout(() => {
+      onSubmitRef.current?.();
+      setShowSaved(true);
+    }, 700);
+    return () => clearTimeout(t);
+  }, [editable, value]);
+
+  useEffect(() => {
+    if (!showSaved) return;
+    const t = setTimeout(() => setShowSaved(false), 1600);
+    return () => clearTimeout(t);
+  }, [showSaved]);
+
+  if (editable) {
+    return (
+      <div className={`border-b border-red-100 pb-2 ${className}`}>
+        {/* Row 1 — label + saved feedback + X */}
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-black uppercase tracking-widest text-red-500 leading-none">
+            What needs to be ordered?
+          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-[9px] font-bold uppercase tracking-wide text-emerald-500 transition-opacity duration-300 ${
+                showSaved ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              Saved
+            </span>
             <button
               type="button"
               onClick={onCancel}
-              className="h-8 rounded-lg bg-white border border-red-200 text-red-700 text-[9px] font-black uppercase tracking-wider"
+              className="flex h-5 w-5 items-center justify-center text-red-400 hover:text-red-600 transition-colors"
+              aria-label="Cancel"
             >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={onSubmit}
-              disabled={isSaving}
-              className="h-8 inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[9px] font-black uppercase tracking-wider disabled:opacity-50"
-            >
-              <Check className="w-3 h-3" />
-              {isSaving ? 'Saving' : 'Submit'}
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
-      ) : (
-        <AlertLineRow
+
+        {/* Row 2 — input only */}
+        <input
+          type="text"
           value={value}
-          dividerClassName={dividerClassName}
-          valueClassName={dmSans.className}
-          actions={onEdit ? (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="text-gray-400 transition-colors hover:text-red-600"
-              aria-label="Edit out of stock note"
-              title="Edit out of stock note"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
+          onChange={(e) => onChange?.(e.target.value)}
+          placeholder="Describe missing parts…"
+          autoFocus={autoFocus}
+          className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-400 ${dmSans.className}`}
         />
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`border-b border-red-100 pb-2 ${className}`}>
+      {/* Row 1 — label + edit */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-red-500 leading-none">
+          What needs to be ordered?
+        </span>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex h-5 w-5 items-center justify-center text-gray-400 hover:text-red-600 transition-colors"
+            aria-label="Edit need-to-order note"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Row 2 — value */}
+      <p className={`text-sm font-medium text-gray-800 ${dmSans.className}`}>
+        {value || 'N/A'}
+      </p>
     </div>
   );
 }

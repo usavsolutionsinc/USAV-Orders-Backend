@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, RefreshCw, Search, X } from '@/components/Icons';
-import { QA_BADGE, DISP_BADGE, COND_LABEL } from './receiving-constants';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { Calendar, ChevronRight, Loader2, RefreshCw } from '@/components/Icons';
+import { SearchBar } from '@/components/ui/SearchBar';
+import { COND_LABEL } from './receiving-constants';
 
 export interface ReceivingLineRow {
   id: number;
@@ -21,9 +20,15 @@ export interface ReceivingLineRow {
   quantity_received: number;
   quantity_expected: number | null;
   qa_status: string;
+  workflow_status: string | null;
   disposition_code: string;
   condition_grade: string;
   disposition_audit: unknown[];
+  needs_test: boolean;
+  assigned_tech_id: number | null;
+  zoho_sync_source: string | null;
+  zoho_last_modified_time: string | null;
+  zoho_synced_at: string | null;
   notes: string | null;
   created_at: string | null;
 }
@@ -36,174 +41,280 @@ interface ApiResponse {
   offset: number;
 }
 
-// ─── Cross-component event helpers ────────────────────────────────────────────
-
 export function dispatchSelectLine(row: ReceivingLineRow | null) {
   window.dispatchEvent(new CustomEvent('receiving-select-line', { detail: row }));
 }
+
 export function dispatchLineUpdated(row: ReceivingLineRow) {
   window.dispatchEvent(new CustomEvent('receiving-line-updated', { detail: row }));
 }
 
-// ─── Palette helpers ──────────────────────────────────────────────────────────
-
-function qaBadge(status: string) {
-  return QA_BADGE[status] ?? 'bg-gray-100 text-gray-500';
+function formatCompactDate(value: string | null) {
+  if (!value) return 'No timestamp';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date).replace(',', '');
 }
-function dispBadge(code: string) {
-  return DISP_BADGE[code] ?? 'bg-gray-100 text-gray-500 border-gray-200';
+
+function formatExpandedDate(value: string | null) {
+  if (!value) return 'Not available';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
 }
 
-// ─── Row component ────────────────────────────────────────────────────────────
+function getStatusTone(status: string | null | undefined) {
+  const value = String(status || '').trim().toUpperCase();
+  if (value === 'EXPECTED') return 'bg-amber-50 text-amber-900 ring-amber-200';
+  if (value === 'MATCHED') return 'bg-blue-50 text-blue-900 ring-blue-200';
+  if (value === 'UNBOXED') return 'bg-indigo-50 text-indigo-900 ring-indigo-200';
+  if (value === 'PASSED') return 'bg-emerald-50 text-emerald-900 ring-emerald-200';
+  if (value.startsWith('FAILED') || value === 'SCRAP') return 'bg-rose-50 text-rose-900 ring-rose-200';
+  return 'bg-slate-100 text-slate-800 ring-slate-200';
+}
 
-function LineRow({
-  row,
-  isSelected,
-  onClick,
-}: {
-  row: ReceivingLineRow;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
-  const progressPct =
-    row.quantity_expected && row.quantity_expected > 0
-      ? Math.min(100, Math.round((row.quantity_received / row.quantity_expected) * 100))
-      : null;
-
-  const receivedDate = row.created_at
-    ? (() => {
-        const d = new Date(row.created_at);
-        return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      })()
-    : '—';
-
-  const carrierShort = row.carrier ? row.carrier.toUpperCase().slice(0, 5) : null;
-  const trackingShort = row.tracking_number ? `…${row.tracking_number.slice(-6)}` : null;
-
+function RowStatusPill({ status }: { status: string | null | undefined }) {
+  const label = String(status || 'Unknown').replace(/_/g, ' ');
   return (
-    <tr
-      onClick={onClick}
-      data-line-row-id={row.id}
-      className={`group cursor-pointer border-b border-gray-50 transition-colors ${
-        isSelected ? 'bg-indigo-50' : 'hover:bg-gray-50/60'
-      }`}
+    <span
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold ring-1 ring-inset ${getStatusTone(status)}`}
     >
-      {/* ID + date */}
-      <td className="px-3 py-2.5 whitespace-nowrap w-[80px]">
-        <p className={`text-[10px] font-black tabular-nums ${isSelected ? 'text-indigo-700' : 'text-gray-700'}`}>
-          #{row.id}
-        </p>
-        <p className="text-[8px] font-mono text-gray-400 mt-0.5">{receivedDate}</p>
-      </td>
-
-      {/* Item */}
-      <td className="px-3 py-2.5 min-w-[160px] max-w-[240px]">
-        <p className="text-[11px] font-bold text-gray-800 truncate leading-snug">
-          {row.item_name || row.zoho_item_id || '—'}
-        </p>
-        {row.sku && (
-          <p className="text-[8px] font-mono text-indigo-500 mt-0.5 truncate">{row.sku}</p>
-        )}
-        {row.zoho_purchaseorder_id && (
-          <p className="text-[8px] font-mono text-gray-400 mt-0.5 truncate">
-            PO {row.zoho_purchaseorder_id}
-          </p>
-        )}
-      </td>
-
-      {/* Package / tracking */}
-      <td className="px-3 py-2.5 whitespace-nowrap w-[100px]">
-        {row.receiving_id ? (
-          <div className="flex flex-col gap-0.5">
-            {carrierShort && (
-              <span className="text-[7px] font-black uppercase tracking-widest text-gray-400">
-                {carrierShort}
-              </span>
-            )}
-            <span className="text-[10px] font-black font-mono text-gray-600">
-              {trackingShort ?? `#${row.receiving_id}`}
-            </span>
-          </div>
-        ) : (
-          <span className="text-[9px] font-medium text-gray-300 italic">Unmatched</span>
-        )}
-      </td>
-
-      {/* Qty */}
-      <td className="px-3 py-2.5 w-[80px]">
-        <div className="flex flex-col items-start gap-1">
-          <span className="text-[12px] font-black tabular-nums text-gray-700 leading-none">
-            {row.quantity_received}
-            <span className="text-gray-300 mx-0.5 font-normal">/</span>
-            <span className="text-gray-400 text-[10px]">{row.quantity_expected ?? '?'}</span>
-          </span>
-          {progressPct !== null && (
-            <div className="h-1 w-12 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full ${progressPct === 100 ? 'bg-emerald-400' : 'bg-indigo-400'}`}
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-          )}
-        </div>
-      </td>
-
-      {/* QA status */}
-      <td className="px-3 py-2.5 w-[110px]">
-        <span className={`inline-block text-[8px] font-black uppercase tracking-wider rounded-lg px-2 py-1 ${qaBadge(row.qa_status)}`}>
-          {row.qa_status.replace(/_/g, ' ')}
-        </span>
-      </td>
-
-      {/* Disposition */}
-      <td className="px-3 py-2.5 w-[80px]">
-        <span className={`inline-block text-[8px] font-black uppercase tracking-wider rounded-lg px-2 py-1 border ${dispBadge(row.disposition_code)}`}>
-          {row.disposition_code}
-        </span>
-      </td>
-
-      {/* Condition */}
-      <td className="px-3 py-2.5 w-[60px]">
-        <span className="text-[9px] font-black text-gray-500 uppercase tracking-wide">
-          {COND_LABEL[row.condition_grade] ?? row.condition_grade}
-        </span>
-      </td>
-
-      {/* Notes */}
-      <td className="px-3 py-2.5 max-w-[120px]">
-        {row.notes ? (
-          <p className="text-[9px] font-medium text-gray-400 truncate italic">{row.notes}</p>
-        ) : (
-          <span className="text-[8px] text-gray-200">—</span>
-        )}
-      </td>
-    </tr>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {label}
+    </span>
   );
 }
 
-// ─── Main table component ─────────────────────────────────────────────────────
+function MetaChip({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className={`mt-1 truncate text-[13px] font-semibold text-slate-900 ${mono ? 'font-mono' : ''}`}>{value}</p>
+    </div>
+  );
+}
+
+function OrderRow({
+  row,
+  isExpanded,
+  onToggle,
+}: {
+  row: ReceivingLineRow;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const panelId = `receiving-line-panel-${row.id}`;
+  const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
+  const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
+
+  return (
+    <>
+      <tr
+        data-line-row-id={row.id}
+        className={`border-b border-slate-200 bg-white transition-colors ${
+          isExpanded ? 'bg-[color-mix(in_srgb,var(--color-brand-light)_38%,white)]' : 'hover:bg-slate-50'
+        }`}
+      >
+        <td className="w-14 px-3 py-4 align-top">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={isExpanded}
+            aria-controls={panelId}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          >
+            <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+          </button>
+        </td>
+
+        <td className="w-[11rem] px-2 py-4 align-top">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={isExpanded}
+            aria-controls={panelId}
+            className="w-full text-left"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Inbound</p>
+            <p className="mt-1 text-[16px] font-semibold leading-none text-slate-950">#{row.id}</p>
+            <p className="mt-2 inline-flex items-center gap-2 text-[12px] font-medium text-slate-600">
+              <Calendar className="h-3.5 w-3.5" />
+              {formatCompactDate(row.created_at)}
+            </p>
+          </button>
+        </td>
+
+        <td className="min-w-[18rem] px-3 py-4 align-top">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={isExpanded}
+            aria-controls={panelId}
+            className="w-full text-left"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <RowStatusPill status={row.workflow_status || 'EXPECTED'} />
+              {row.needs_test ? (
+                <span className="inline-flex rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-orange-800">
+                  Needs Test
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-3 text-[15px] font-semibold leading-6 text-slate-950 md:text-[16px]">
+              {productTitle}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-slate-600">
+              <span className="font-mono font-semibold text-blue-700">{row.sku || 'No SKU'}</span>
+              <span className="font-mono">{row.zoho_purchaseorder_id ? `PO ${row.zoho_purchaseorder_id}` : 'No PO'}</span>
+            </div>
+            <div className="mt-3 grid gap-2 text-[12px] text-slate-600 sm:hidden">
+              <div className="flex items-center justify-between">
+                <span className="uppercase tracking-[0.14em] text-slate-400">Qty</span>
+                <span className="font-mono font-semibold text-slate-900">{quantityText}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="uppercase tracking-[0.14em] text-slate-400">PO</span>
+                <span className="font-mono text-slate-900">{row.zoho_purchaseorder_id || '—'}</span>
+              </div>
+            </div>
+          </button>
+        </td>
+
+        <td className="hidden w-[9rem] px-3 py-4 align-top sm:table-cell">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Qty</p>
+          <p className="mt-1 text-[18px] font-semibold tabular-nums text-slate-950">{quantityText}</p>
+          <p className="mt-2 text-[12px] text-slate-500">
+            {row.quantity_expected && row.quantity_expected > 0
+              ? `${Math.round((row.quantity_received / row.quantity_expected) * 100)}% received`
+              : 'Expected qty pending'}
+          </p>
+        </td>
+
+        <td className="hidden w-[13rem] px-3 py-4 align-top lg:table-cell">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Purchase Order</p>
+          <p className="mt-1 font-mono text-[14px] font-semibold text-slate-950">{row.zoho_purchaseorder_id || '—'}</p>
+        </td>
+      </tr>
+
+      <tr aria-hidden={!isExpanded} className="border-b border-slate-200 bg-[color-mix(in_srgb,var(--color-brand-light)_20%,white)]">
+        <td colSpan={5} className="p-0">
+          <div
+            id={panelId}
+            className="grid transition-[grid-template-rows,opacity] duration-300 ease-out"
+            style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr', opacity: isExpanded ? 1 : 0 }}
+          >
+            <div className="overflow-hidden">
+              <div className="grid gap-5 px-5 pb-5 pt-1 md:grid-cols-3">
+                <MetaChip label="Product" value={productTitle} />
+                <MetaChip label="SKU" value={row.sku || 'Not provided'} mono />
+                <MetaChip label="Inbound ID" value={`#${row.id}`} mono />
+                <MetaChip label="Purchase Order" value={row.zoho_purchaseorder_id || 'Not linked'} mono />
+                <MetaChip label="Purchase Receive" value={row.zoho_purchase_receive_id || 'Not linked'} mono />
+                <MetaChip label="Condition" value={COND_LABEL[row.condition_grade] ?? row.condition_grade} />
+                <MetaChip label="QA Status" value={row.qa_status.replace(/_/g, ' ')} />
+                <MetaChip label="Disposition" value={row.disposition_code.replace(/_/g, ' ')} />
+                <MetaChip label="Created" value={formatExpandedDate(row.created_at)} />
+                <MetaChip label="Tracking" value={row.tracking_number || 'No package linked'} mono />
+                <MetaChip label="Carrier" value={row.carrier || 'Unmatched'} />
+                <MetaChip label="Testing" value={row.needs_test ? `Required${row.assigned_tech_id ? ` · Tech #${row.assigned_tech_id}` : ''}` : 'Tech cleared'} />
+              </div>
+
+              <div className="border-t border-slate-200 px-5 py-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Notes & Sync</p>
+                <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+                  <p className="min-h-[3rem] text-[13px] leading-6 text-slate-700">
+                    {row.notes || 'No operator notes yet.'}
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <MetaChip label="Sync Source" value={row.zoho_sync_source || 'Local only'} />
+                    <MetaChip label="Zoho Modified" value={row.zoho_last_modified_time || 'Not available'} mono />
+                    <MetaChip label="Synced At" value={formatExpandedDate(row.zoho_synced_at)} />
+                    <MetaChip label="Zoho Line" value={row.zoho_line_item_id || 'Not available'} mono />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </>
+  );
+}
+
+function OrdersTable({
+  rows,
+  expandedId,
+  onToggle,
+}: {
+  rows: ReceivingLineRow[];
+  expandedId: number | null;
+  onToggle: (row: ReceivingLineRow) => void;
+}) {
+  return (
+    <table className="w-full min-w-[760px] border-collapse text-left">
+      <thead className="sticky top-0 z-10 bg-white">
+        <tr className="border-b border-slate-200">
+          <th className="w-14 px-3 py-3" />
+          <th className="w-[11rem] px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Inbound</th>
+          <th className="px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Product</th>
+          <th className="hidden w-[9rem] px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:table-cell">Quantity</th>
+          <th className="hidden w-[13rem] px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 lg:table-cell">Purchase Order</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <OrderRow
+            key={row.id}
+            row={row}
+            isExpanded={expandedId === row.id}
+            onToggle={() => onToggle(row)}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 interface ReceivingLinesTableProps {
-  /** Pre-filter to a specific receiving package */
   receivingId?: number | null;
 }
 
 export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTableProps = {}) {
   const queryClient = useQueryClient();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const [qaFilter, setQaFilter] = useState('');
   const [dispFilter, setDispFilter] = useState('');
   const [offset, setOffset] = useState(0);
-  const [selectedLine, setSelectedLine] = useState<ReceivingLineRow | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const LIMIT = 100;
 
-  // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setOffset(0); }, 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setOffset(0);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    if (search.trim()) setSearchExpanded(true);
   }, [search]);
 
   const buildParams = useCallback(() => {
@@ -216,7 +327,6 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
   }, [receivingId, debouncedSearch, qaFilter, dispFilter, offset]);
 
   const queryKey = ['receiving-lines-table', receivingId, debouncedSearch, qaFilter, dispFilter, offset];
-
   const { data, isLoading, isFetching, refetch } = useQuery<ApiResponse>({
     queryKey,
     queryFn: async () => {
@@ -232,9 +342,10 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     if (data?.receiving_lines) setLocalRows(data.receiving_lines);
   }, [data]);
 
-  // Refresh when a scan event fires
   useEffect(() => {
-    const handler = () => { queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] }); };
+    const handler = () => {
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+    };
     window.addEventListener('receiving-entry-added', handler);
     window.addEventListener('usav-refresh-data', handler);
     return () => {
@@ -243,179 +354,166 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     };
   }, [queryClient]);
 
-  const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / LIMIT);
-  const currentPage = Math.floor(offset / LIMIT) + 1;
-
-  const handleRowClick = useCallback((row: ReceivingLineRow) => {
-    setSelectedLine((prev) => {
-      const next = prev?.id === row.id ? null : row;
-      dispatchSelectLine(next);
-      return next;
-    });
-  }, []);
-
-  // Keep local rows in sync when the sidebar saves a line
   useEffect(() => {
-    const handler = (e: Event) => {
-      const updated = (e as CustomEvent<ReceivingLineRow>).detail;
+    const handler = (event: Event) => {
+      const updated = (event as CustomEvent<ReceivingLineRow>).detail;
       if (!updated) return;
-      setLocalRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-      setSelectedLine((prev) => (prev?.id === updated.id ? updated : prev));
+      setLocalRows((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
     };
     window.addEventListener('receiving-line-updated', handler);
     return () => window.removeEventListener('receiving-line-updated', handler);
   }, []);
 
-  // Clear selection when sidebar dismisses the panel
   useEffect(() => {
-    const handler = () => {
-      setSelectedLine(null);
-    };
+    const handler = () => setExpandedId(null);
     window.addEventListener('receiving-clear-line', handler);
     return () => window.removeEventListener('receiving-clear-line', handler);
+  }, []);
+
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / LIMIT);
+  const currentPage = Math.floor(offset / LIMIT) + 1;
+
+  const handleToggleRow = useCallback((row: ReceivingLineRow) => {
+    setExpandedId((current) => {
+      const next = current === row.id ? null : row.id;
+      dispatchSelectLine(next ? row : null);
+      return next;
+    });
   }, []);
 
   const qaOptions = ['', 'PENDING', 'PASSED', 'FAILED_DAMAGED', 'FAILED_INCOMPLETE', 'HOLD'];
   const dispOptions = ['', 'ACCEPT', 'HOLD', 'RTV', 'SCRAP', 'REWORK'];
 
   return (
-    <div className="flex h-full min-w-0 bg-white overflow-hidden">
-      {/* ── Main table panel ── */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-
-        {/* Toolbar */}
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-white">
-          {/* Search */}
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search item, SKU, PO…"
-              className="w-full pl-8 pr-8 py-2 rounded-xl border border-gray-200 text-[11px] font-medium text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
-            />
-            {search && (
-              <button type="button" onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
-                <X className="w-3 h-3" />
+    <div className="flex h-full min-w-0 overflow-hidden bg-white">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {searchExpanded ? (
+              <SearchBar
+                inputRef={searchInputRef}
+                value={search}
+                onChange={setSearch}
+                onClear={() => {
+                  setSearch('');
+                  setSearchExpanded(false);
+                }}
+                placeholder="Search product, SKU, PO number..."
+                variant="blue"
+                size="compact"
+                className="max-w-[34rem] flex-1"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchExpanded(true);
+                  requestAnimationFrame(() => searchInputRef.current?.focus());
+                }}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                aria-label="Expand search"
+              >
+                <ChevronRight className="h-4 w-4 -rotate-45" />
               </button>
             )}
           </div>
 
-          {/* QA filter */}
-          <select
-            value={qaFilter}
-            onChange={(e) => { setQaFilter(e.target.value); setOffset(0); }}
-            className="text-[10px] font-black uppercase tracking-wider rounded-xl border border-gray-200 px-2 py-2 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer"
-          >
-            {qaOptions.map((o) => (
-              <option key={o} value={o}>{o || 'All QA'}</option>
-            ))}
-          </select>
-
-          {/* Disposition filter */}
-          <select
-            value={dispFilter}
-            onChange={(e) => { setDispFilter(e.target.value); setOffset(0); }}
-            className="text-[10px] font-black uppercase tracking-wider rounded-xl border border-gray-200 px-2 py-2 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-pointer"
-          >
-            {dispOptions.map((o) => (
-              <option key={o} value={o}>{o || 'All Disp.'}</option>
-            ))}
-          </select>
-
-          {/* Count + refresh */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <span className="text-[9px] font-black text-gray-400 tabular-nums">
-              {total.toLocaleString()} line{total !== 1 ? 's' : ''}
-            </span>
-            {isFetching && !isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-300" />}
-            <button
-              type="button"
-              onClick={() => refetch()}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-              title="Refresh"
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={qaFilter}
+              onChange={(e) => {
+                setQaFilter(e.target.value);
+                setOffset(0);
+              }}
+              className="border-b border-slate-200 bg-transparent px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 focus:outline-none"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-            </button>
+              {qaOptions.map((option) => (
+                <option key={option} value={option}>{option || 'All QA'}</option>
+              ))}
+            </select>
+
+            <select
+              value={dispFilter}
+              onChange={(e) => {
+                setDispFilter(e.target.value);
+                setOffset(0);
+              }}
+              className="border-b border-slate-200 bg-transparent px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 focus:outline-none"
+            >
+              {dispOptions.map((option) => (
+                <option key={option} value={option}>{option || 'All Disp.'}</option>
+              ))}
+            </select>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                {total.toLocaleString()} rows
+              </span>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
+                title="Refresh"
+              >
+                <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Table */}
-        <div ref={scrollRef} className="flex-1 overflow-auto" style={{ scrollbarWidth: 'thin' }}>
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
           {isLoading && localRows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 opacity-40">
-              <Loader2 className="w-8 h-8 animate-spin" />
-              <p className="text-[10px] font-black uppercase tracking-widest">Loading lines…</p>
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
             </div>
           ) : localRows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 opacity-20">
-              <p className="text-[10px] font-black uppercase tracking-widest">No line items found</p>
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="text-[14px] font-semibold text-slate-500">No inbound lines found.</p>
               {(search || qaFilter || dispFilter) && (
                 <button
                   type="button"
-                  onClick={() => { setSearch(''); setQaFilter(''); setDispFilter(''); }}
-                  className="text-[9px] font-bold text-indigo-400 hover:underline"
+                  onClick={() => {
+                    setSearch('');
+                    setQaFilter('');
+                    setDispFilter('');
+                    setSearchExpanded(false);
+                  }}
+                  className="border-b border-slate-900 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-900"
                 >
                   Clear filters
                 </button>
               )}
             </div>
           ) : (
-            <table className="w-full border-collapse text-left">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-white border-b-2 border-gray-100">
-                  <th className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-400 w-[80px]">ID / Date</th>
-                  <th className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-400">Item</th>
-                  <th className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-400 w-[100px]">Package</th>
-                  <th className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-400 w-[80px]">Qty</th>
-                  <th className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-400 w-[110px]">QA Status</th>
-                  <th className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-400 w-[80px]">Disp.</th>
-                  <th className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-400 w-[60px]">Cond.</th>
-                  <th className="px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-400">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {localRows.map((row) => (
-                  <LineRow
-                    key={row.id}
-                    row={row}
-                    isSelected={selectedLine?.id === row.id}
-                    onClick={() => handleRowClick(row)}
-                  />
-                ))}
-              </tbody>
-            </table>
+            <OrdersTable rows={localRows} expandedId={expandedId} onToggle={handleToggleRow} />
           )}
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-white">
+          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
             <button
               type="button"
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - LIMIT))}
-              className="text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              className="border-b border-transparent py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-900 hover:text-slate-950 disabled:opacity-30"
             >
-              ← Prev
+              Prev
             </button>
-            <span className="text-[9px] font-black text-gray-400 tabular-nums">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
               Page {currentPage} of {totalPages}
             </span>
             <button
               type="button"
               disabled={offset + LIMIT >= total}
               onClick={() => setOffset(offset + LIMIT)}
-              className="text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              className="border-b border-transparent py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-900 hover:text-slate-950 disabled:opacity-30"
             >
-              Next →
+              Next
             </button>
           </div>
         )}
       </div>
-
     </div>
   );
 }

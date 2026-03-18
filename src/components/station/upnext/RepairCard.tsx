@@ -328,7 +328,6 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
                   onChange={setOosText}
                   onCancel={() => { setShowOosInput(false); setOosText(''); }}
                   onSubmit={handleOosSubmit}
-                  isSaving={oosSaving}
                   autoFocus
                 />
               </motion.div>

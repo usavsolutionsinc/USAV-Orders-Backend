@@ -20,7 +20,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
 
   const zohoSyncMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/zoho/purchase-receives/sync', {
+      const res = await fetch('/api/zoho/purchase-orders/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ per_page: 200, max_pages: 5, max_items: 800, days_back: 30 }),
@@ -60,7 +60,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
       const data = await zohoSyncMutation.mutateAsync();
       setStatus({
         type: 'success',
-        message: `Zoho sync completed. Processed ${data?.totals?.processed || 0}, imported ${data?.totals?.imported || 0}, created ${data?.totals?.created || 0}, updated ${data?.totals?.updated || 0}, failed ${data?.totals?.failed || 0}.`,
+        message: `Zoho sync completed. Processed ${data?.totals?.processed || 0}, line items ${data?.totals?.line_items_synced || 0}, created ${data?.totals?.created || 0}, updated ${data?.totals?.updated || 0}, failed ${data?.totals?.failed || 0}.`,
       });
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error: any) {
@@ -91,7 +91,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
       <div className={`flex items-center justify-between gap-3 ${embedded ? 'border-b border-gray-200 pb-3' : ''}`}>
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Zoho Receiving Sync</h2>
-          <p className="text-[9px] font-bold text-gray-500 mt-1">Refresh Zoho token, then sync purchase receives into receiving + receiving_lines</p>
+          <p className="text-[9px] font-bold text-gray-500 mt-1">Refresh Zoho token, then sync expected PO lines into receiving_lines before physical scans link them</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -108,7 +108,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${zohoSyncMutation.isPending ? 'animate-spin' : ''}`} />
-            {zohoSyncMutation.isPending ? 'Syncing...' : 'Sync Last 30 Days'}
+            {zohoSyncMutation.isPending ? 'Syncing...' : 'Sync Expected POs'}
           </button>
         </div>
       </div>

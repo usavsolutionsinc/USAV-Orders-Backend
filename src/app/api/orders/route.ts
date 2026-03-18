@@ -3,6 +3,46 @@ import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
+let replenishmentSchemaCheck:
+  | { value: boolean; checkedAt: number }
+  | null = null;
+
+function isDatabaseUnavailable(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const causeMessage = typeof (error as { cause?: unknown }).cause === 'object'
+    ? String(((error as { cause?: { message?: string } }).cause?.message) || '')
+    : '';
+  const message = `${error.message} ${causeMessage}`;
+  return /ENOTFOUND|ECONNREFUSED|connect_timeout|connection terminated|timeout/i.test(message);
+}
+
+async function hasReplenishmentSchema(): Promise<boolean> {
+  if (replenishmentSchemaCheck && (Date.now() - replenishmentSchemaCheck.checkedAt) < 60_000) {
+    return replenishmentSchemaCheck.value;
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_name = 'replenishment_requests'
+       ) AS present`
+    );
+
+    const value = Boolean(result.rows[0]?.present);
+    replenishmentSchemaCheck = { value, checkedAt: Date.now() };
+    return value;
+  } catch (error) {
+    if (isDatabaseUnavailable(error)) {
+      replenishmentSchemaCheck = { value: false, checkedAt: Date.now() };
+      return false;
+    }
+    throw error;
+  }
+}
+
 /**
  * GET /api/orders - Fetch all pending orders with optional filters.
  * Assignment info (tester_id / packer_id) is sourced from work_assignments.
@@ -52,6 +92,36 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
     }
 
+    const hasReplenishment = await hasReplenishmentSchema();
+    const replenishmentSelect = hasReplenishment
+      ? `
+        rr.id AS replenishment_request_id,
+        rr.status AS replenishment_status,
+        rr.quantity_to_order AS replenishment_quantity_to_order,
+        rr.zoho_po_number AS replenishment_po_number,
+        rr.notes AS replenishment_notes,`
+      : `
+        NULL::uuid AS replenishment_request_id,
+        NULL::text AS replenishment_status,
+        NULL::numeric AS replenishment_quantity_to_order,
+        NULL::text AS replenishment_po_number,
+        NULL::text AS replenishment_notes,`;
+    const replenishmentJoin = hasReplenishment
+      ? `LEFT JOIN LATERAL (
+           SELECT
+             req.id,
+             req.status,
+             req.quantity_to_order,
+             req.zoho_po_number,
+             req.notes
+           FROM replenishment_order_lines rol
+           JOIN replenishment_requests req ON req.id = rol.replenishment_request_id
+           WHERE rol.order_id = o.id
+           ORDER BY rol.created_at DESC
+           LIMIT 1
+         ) rr ON TRUE`
+      : '';
+
     // Lateral subqueries pull the latest assignment IDs for each order from work_assignments.
     // The alias columns (tester_id / packer_id) preserve backward-compat with client consumers.
     let sql = `
@@ -70,6 +140,7 @@ export async function GET(req: NextRequest) {
         o.out_of_stock,
         o.status,
         o.notes,
+        ${replenishmentSelect}
         o.customer_id,
         COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
           OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
@@ -150,6 +221,7 @@ export async function GET(req: NextRequest) {
         LIMIT 1
       ) next_pack_activity ON true
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      ${replenishmentJoin}
       LEFT JOIN LATERAL (
         SELECT sal.created_at, sal.staff_id
         FROM station_activity_logs sal
@@ -350,6 +422,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(payload, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
   } catch (error: any) {
     console.error('Error in GET /api/orders:', error);
+    if (isDatabaseUnavailable(error)) {
+      return NextResponse.json(
+        { orders: [], count: 0, weekStart: null, weekEnd: null, dbUnavailable: true },
+        { headers: { 'x-db-fallback': 'unavailable' } }
+      );
+    }
     return NextResponse.json(
       { error: 'Failed to fetch orders', details: error.message },
       { status: 500 }

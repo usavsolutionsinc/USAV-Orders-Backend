@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from '@/components/Icons';
@@ -225,7 +226,7 @@ export function ConnectionsSidebarPanel() {
 
   const zohoSyncMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/zoho/purchase-receives/sync', {
+      const res = await fetch('/api/zoho/purchase-orders/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ per_page: 200, max_pages: 5, max_items: 800, days_back: 30 }),
@@ -234,7 +235,7 @@ export function ConnectionsSidebarPanel() {
       if (!res.ok || !data?.success) throw new Error(data?.error || data?.message || `Zoho sync failed (HTTP ${res.status})`);
       return data;
     },
-    onSuccess: (data) => logSuccess('Zoho', 'Zoho Sync', `Processed ${data?.totals?.processed || 0}, imported ${data?.totals?.imported || 0}.`),
+    onSuccess: (data) => logSuccess('Zoho', 'Zoho Sync', `Processed ${data?.totals?.processed || 0}, line items ${data?.totals?.line_items_synced || 0}, failures ${data?.totals?.failed || 0}.`),
     onError: (error: any) => logError('Zoho', 'Zoho Sync', error?.message || 'Zoho sync failed'),
   });
 
@@ -363,8 +364,16 @@ export function ConnectionsSidebarPanel() {
         </SidebarSection>
 
         <SidebarSection title="Zoho" expanded={showZoho} onToggle={() => setShowZoho((v) => !v)}>
+          <div className="border-b border-gray-200 bg-white px-4 py-3">
+            <Link
+              href="/admin?section=connections&page=zoho-management"
+              className="inline-flex border-b border-gray-900 py-1 text-[10px] font-black uppercase tracking-widest text-gray-900"
+            >
+              Open Zoho Management
+            </Link>
+          </div>
           <LineItem label="Refresh Token" detail="Refresh Zoho auth token" right={<ActionButton onClick={() => zohoRefreshMutation.mutate()} loading={zohoRefreshMutation.isPending} title="Refresh Zoho token" />} />
-          <LineItem label="Sync Last 30 Days" detail="Import purchase receives into receiving" right={<ActionButton onClick={() => zohoSyncMutation.mutate()} loading={zohoSyncMutation.isPending} title="Sync Zoho receives" tone="green" />} />
+          <LineItem label="Sync Expected POs" detail="Stage expected inbound lines before physical receiving" right={<ActionButton onClick={() => zohoSyncMutation.mutate()} loading={zohoSyncMutation.isPending} title="Sync Zoho purchase orders" tone="green" />} />
           <div className="border-b border-gray-200 bg-white px-4 py-3">
             <p className="text-[11px] font-black tracking-widest text-gray-900">Import One Receive</p>
             <div className="mt-2 flex items-stretch gap-0 border border-gray-200">

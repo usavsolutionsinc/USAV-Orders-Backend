@@ -91,6 +91,7 @@ export function ProductDetailsSection({
           label="SKU"
           value={shipped.sku || 'N/A'}
           variant="flat"
+          keepBottomDivider
         />
       </div>
     </section>

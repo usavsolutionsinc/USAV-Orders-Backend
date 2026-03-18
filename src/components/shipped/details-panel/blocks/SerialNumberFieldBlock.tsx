@@ -158,6 +158,9 @@ export function SerialNumberFieldBlock({
       setDisplaySerialNumber(savedSerialNumber);
       setSerialRows(savedSerials.length > 0 ? savedSerials : ['']);
       patchCaches(savedSerialNumber);
+      // tech-logs rows use SAL/TSN ids (not order id) so surgical patch by
+      // rowId won't hit them — invalidate to force a fresh fetch instead.
+      queryClient.invalidateQueries({ queryKey: ['tech-logs'] });
       onSerialNumberChange?.(savedSerialNumber);
       onUpdate?.();
     } catch (saveError) {

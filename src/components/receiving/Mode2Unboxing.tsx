@@ -206,7 +206,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
     const [conditionGrade, setConditionGrade] = useState('BRAND_NEW');
     const [qaStatus, setQaStatus] = useState('PASSED');
     const [dispositionCode, setDispositionCode] = useState('ACCEPT');
-    const [needsTest, setNeedsTest] = useState(false);
+    const [needsTest, setNeedsTest] = useState(true);
     const [assignedTechId, setAssignedTechId] = useState('');
     const [targetChannel, setTargetChannel] = useState('');
     const [zohoConfirm, setZohoConfirm] = useState(false);
@@ -223,7 +223,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
         setConditionGrade(entry.condition_grade || 'BRAND_NEW');
         setQaStatus('PASSED');
         setDispositionCode('ACCEPT');
-        setNeedsTest(entry.needs_test || false);
+        setNeedsTest(entry.needs_test !== false);
         setAssignedTechId(entry.assigned_tech_id ? String(entry.assigned_tech_id) : '');
         setTargetChannel(entry.target_channel || '');
         setZohoConfirm(false);

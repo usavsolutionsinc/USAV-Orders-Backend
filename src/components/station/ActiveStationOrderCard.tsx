@@ -3,10 +3,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShipByDate } from '../ui/ShipByDate';
-import { Check, ClipboardList } from '../Icons';
+import { Check, ClipboardList, ExternalLink } from '../Icons';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
-import ProductManualViewer from './ProductManualViewer';
 
 interface ActiveStationOrderCardProps {
   activeOrder: ActiveStationOrder;
@@ -14,7 +13,6 @@ interface ActiveStationOrderCardProps {
   resolvedManuals: ResolvedProductManual[];
   isManualLoading: boolean;
   onViewManual?: () => void;
-  onSaveManual: (params: { googleLinkOrFileId: string; type?: string | null }) => Promise<{ success: boolean; error?: string }>;
 }
 
 export default function ActiveStationOrderCard({
@@ -23,9 +21,7 @@ export default function ActiveStationOrderCard({
   resolvedManuals,
   isManualLoading,
   onViewManual,
-  onSaveManual,
 }: ActiveStationOrderCardProps) {
-  const [isSavingManual, setIsSavingManual] = React.useState(false);
   const [lastAddedSerial, setLastAddedSerial] = React.useState<string | null>(null);
   const prevTrackingRef = React.useRef(activeOrder.tracking);
   const prevSerialCountRef = React.useRef(activeOrder.serialNumbers.length);
@@ -52,22 +48,6 @@ export default function ActiveStationOrderCard({
   }, [activeOrder.serialNumbers, activeOrder.tracking]);
 
   const primaryManual = resolvedManuals[0] ?? null;
-
-  const handleAddOrChangeManual = async () => {
-    const linkOrId = window.prompt('Paste Google Drive view-only link (or file ID):');
-    if (!linkOrId) return;
-    const defaultType = primaryManual?.type || 'Product Manual';
-    const type = window.prompt('Type (e.g. Product Manual, Packing List, QR Code Manual):', defaultType);
-
-    setIsSavingManual(true);
-    const result = await onSaveManual({ googleLinkOrFileId: linkOrId, type: type || null });
-    setIsSavingManual(false);
-    if (!result.success) {
-      window.alert(result.error || 'Failed to save manual');
-      return;
-    }
-    window.alert('Manual saved.');
-  };
 
   return (
     <motion.div
@@ -128,50 +108,36 @@ export default function ActiveStationOrderCard({
         </div>
 
         {/* ── Manual section ── */}
-        {activeOrder.orderFound !== false && (
-          <div className="border-t border-blue-100 bg-blue-50/40">
-            {/* Manual header row */}
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <div>
+        {activeOrder.orderFound !== false && !isManualLoading && primaryManual && (
+          <div className="border-t border-blue-100 bg-blue-50/40 px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
                 <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">Product Manual</p>
-                {resolvedManuals.length > 0 ? (
-                  <p className="text-[10px] font-bold text-blue-900">
-                    {resolvedManuals.length} manual{resolvedManuals.length > 1 ? 's' : ''} linked •{' '}
-                    Matched by {primaryManual?.matchedBy === 'sku' ? 'SKU' : 'Item #'}
-                  </p>
-                ) : (
-                  <p className="text-[10px] font-bold text-gray-500">
-                    {isManualLoading ? 'Resolving manual...' : 'No manual linked for this product'}
-                  </p>
-                )}
+                <p className="text-[10px] font-bold text-blue-900 truncate">
+                  {resolvedManuals.length > 1
+                    ? `${resolvedManuals.length} manuals linked`
+                    : primaryManual.type || 'Manual linked'}
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleAddOrChangeManual}
-                  disabled={isSavingManual}
-                  className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-md border border-blue-200 bg-white hover:bg-blue-50 text-[10px] font-black uppercase tracking-wider text-blue-700 disabled:opacity-60"
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <a
+                  href={primaryManual.viewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-blue-200 bg-white hover:bg-blue-50 text-[10px] font-black uppercase tracking-wider text-blue-700 transition-colors"
                 >
-                  {isSavingManual ? 'Saving...' : resolvedManuals.length > 0 ? 'Add Type' : 'Add Manual'}
-                </button>
-              </div>
-            </div>
-
-            {/* View Panel button + inline preview */}
-            {resolvedManuals.length > 0 && (
-              <div className="px-4 pb-3 space-y-3">
+                  <ExternalLink className="w-3 h-3" />
+                  Open
+                </a>
                 <button
                   type="button"
                   onClick={onViewManual}
-                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-wider transition-colors"
                 >
-                  View Full Panel
+                  View Manual
                 </button>
-                <div className="h-64 rounded-xl overflow-hidden">
-                  <ProductManualViewer manuals={resolvedManuals} isLoading={isManualLoading} />
-                </div>
               </div>
-            )}
+            </div>
           </div>
         )}
 

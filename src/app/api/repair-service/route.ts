@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllRepairs, updateRepairStatus, updateRepairNotes, updateRepairField, searchRepairs, type RepairTab } from '@/lib/neon/repair-service-queries';
+import { appendRepairStatusHistory, getAllRepairs, updateRepairStatus, updateRepairNotes, updateRepairField, searchRepairs, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, status, notes, field, value } = body;
+    const { id, status, notes, field, value, statusHistoryEntry } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 });
@@ -66,6 +66,9 @@ export async function PATCH(req: NextRequest) {
     }
     if (field && value !== undefined) {
       await updateRepairField(id, field, value);
+    }
+    if (statusHistoryEntry) {
+      await appendRepairStatusHistory(id, statusHistoryEntry);
     }
 
     await invalidateCacheTags(REPAIR_TAGS);

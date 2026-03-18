@@ -1,5 +1,15 @@
 import pool from '../db';
-import { normalizePSTTimestamp } from '@/utils/date';
+import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
+
+export interface RepairStatusHistoryEntry {
+  status: string;
+  timestamp: string;
+  previous_status?: string | null;
+  source?: string | null;
+  user_id?: number | null;
+  user_name?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
 
 export interface RSRecord {
   id: number;
@@ -14,6 +24,7 @@ export interface RSRecord {
   serial_number: string;
   status: string;
   notes?: string | null;
+  status_history?: RepairStatusHistoryEntry[];
   source_system?: string | null;
   source_order_id?: string | null;
   source_tracking_number?: string | null;
@@ -43,6 +54,18 @@ export type RepairStatus = typeof REPAIR_STATUS_OPTIONS[number];
 export type RepairTab = 'incoming' | 'active' | 'done';
 
 function mapRepairRow(row: any): RSRecord {
+  const statusHistory = Array.isArray(row.status_history)
+    ? row.status_history
+    : (() => {
+        if (!row.status_history) return [];
+        try {
+          const parsed = JSON.parse(row.status_history);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })();
+
   return {
     id: Number(row.id),
     version: row.version == null ? undefined : Number(row.version),
@@ -56,6 +79,7 @@ function mapRepairRow(row: any): RSRecord {
     serial_number: row.serial_number || '',
     status: row.status || 'Pending Repair',
     notes: row.notes ?? null,
+    status_history: statusHistory,
     source_system: row.source_system ?? null,
     source_order_id: row.source_order_id ?? null,
     source_tracking_number: row.source_tracking_number ?? null,
@@ -115,6 +139,7 @@ export async function getAllRepairs(limit = 100, offset = 0, options?: { tab?: R
          serial_number,
          status,
          notes,
+         status_history,
          source_system,
          source_order_id,
          source_tracking_number,
@@ -154,6 +179,7 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
          serial_number,
          status,
          notes,
+         status_history,
          source_system,
          source_order_id,
          source_tracking_number,
@@ -179,9 +205,27 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
 
 export async function updateRepairStatus(id: number, newStatus: string): Promise<void> {
   try {
+    const timestamp = formatPSTTimestamp();
     const result = await pool.query(
-      'UPDATE repair_service SET status = $1, updated_at = NOW() WHERE id = $2',
-      [newStatus, id],
+      `UPDATE repair_service
+          SET status = $1,
+              status_history = CASE
+                WHEN COALESCE(status, '') IS DISTINCT FROM $1 THEN
+                  COALESCE(status_history, '[]'::jsonb) || jsonb_build_array(
+                    jsonb_strip_nulls(
+                      jsonb_build_object(
+                        'status', $1,
+                        'timestamp', $2::text,
+                        'previous_status', NULLIF(status, ''),
+                        'source', 'repair-service.update-status'
+                      )
+                    )
+                  )
+                ELSE COALESCE(status_history, '[]'::jsonb)
+              END,
+              updated_at = NOW()
+        WHERE id = $3`,
+      [newStatus, timestamp, id],
     );
     if ((result.rowCount ?? 0) === 0) throw new Error('Repair not found');
   } catch (error) {
@@ -199,6 +243,31 @@ export async function updateRepairNotes(id: number, notes: string): Promise<void
   } catch (error) {
     console.error('Error updating repair notes:', error);
     throw new Error('Failed to update repair notes');
+  }
+}
+
+export async function appendRepairStatusHistory(
+  id: number,
+  entry: Omit<RepairStatusHistoryEntry, 'timestamp'> & { timestamp?: string }
+): Promise<void> {
+  try {
+    const payload = {
+      ...entry,
+      timestamp: entry.timestamp ?? formatPSTTimestamp(),
+    };
+
+    const result = await pool.query(
+      `UPDATE repair_service
+          SET status_history = COALESCE(status_history, '[]'::jsonb) || $1::jsonb,
+              updated_at = NOW()
+        WHERE id = $2`,
+      [JSON.stringify([payload]), id],
+    );
+
+    if ((result.rowCount ?? 0) === 0) throw new Error('Repair not found');
+  } catch (error) {
+    console.error('Error appending repair status history:', error);
+    throw new Error('Failed to append repair status history');
   }
 }
 
@@ -331,6 +400,7 @@ export async function searchRepairs(query: string, options?: { tab?: RepairTab }
          serial_number,
          status,
          notes,
+         status_history,
          source_system,
          source_order_id,
          source_tracking_number,

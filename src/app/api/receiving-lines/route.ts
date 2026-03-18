@@ -5,6 +5,11 @@ const QA_STATUSES  = new Set(['PENDING', 'PASSED', 'FAILED_DAMAGED', 'FAILED_INC
 const DISPOSITIONS = new Set(['ACCEPT', 'HOLD', 'RTV', 'SCRAP', 'REWORK']);
 const CONDITIONS   = new Set(['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
 
+function parsePositiveTechId(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+}
+
 // ─── GET ──────────────────────────────────────────────────────────────────────
 // ?id=<n>              → single row
 // ?receiving_id=<n>    → all lines for a package
@@ -127,6 +132,10 @@ export async function POST(request: NextRequest) {
     const dispositionRaw = String(body?.disposition_code || 'HOLD').trim().toUpperCase();
     const conditionRaw   = String(body?.condition_grade || 'BRAND_NEW').trim().toUpperCase();
     const dispositionAudit = Array.isArray(body?.disposition_audit) ? body.disposition_audit : [];
+    const assignedTechId = parsePositiveTechId(body?.assigned_tech_id ?? body?.assignedTechId);
+    const needsTest = body?.needs_test === undefined && body?.needsTest === undefined
+      ? true
+      : !!(body?.needs_test ?? body?.needsTest);
 
     if (!zohoItemId) {
       return NextResponse.json({ success: false, error: 'zoho_item_id is required' }, { status: 400 });
@@ -149,15 +158,17 @@ export async function POST(request: NextRequest) {
         receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchase_receive_id,
         zoho_purchaseorder_id, item_name, sku,
         quantity_received, quantity_expected,
-        qa_status, disposition_code, condition_grade, disposition_audit, notes
+        qa_status, disposition_code, condition_grade, disposition_audit, notes,
+        needs_test, assigned_tech_id
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16)
       RETURNING *`,
       [
         receivingId, zohoItemId, zohoLineItemId, zohoPurchaseReceiveId,
         zohoPurchaseOrderId, itemName, sku,
         quantityReceived, quantityExpected,
         qaStatusRaw, dispositionRaw, conditionRaw, JSON.stringify(dispositionAudit), notes,
+        needsTest, assignedTechId,
       ],
     );
 
@@ -251,6 +262,35 @@ export async function PATCH(request: NextRequest) {
       values.push(JSON.stringify(Array.isArray(body.disposition_audit) ? body.disposition_audit : []));
     }
 
+    if (body?.assigned_tech_id !== undefined || body?.assignedTechId !== undefined) {
+      updates.push(`assigned_tech_id = $${idx++}`);
+      values.push(parsePositiveTechId(body?.assigned_tech_id ?? body?.assignedTechId));
+    }
+
+    if (body?.needs_test !== undefined || body?.needsTest !== undefined) {
+      const nextNeedsTest = !!(body?.needs_test ?? body?.needsTest);
+      if (!nextNeedsTest) {
+        const existing = await pool.query<{ assigned_tech_id: number | null }>(
+          `SELECT assigned_tech_id FROM receiving_lines WHERE id = $1`,
+          [id],
+        );
+        if (existing.rows.length === 0) {
+          return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
+        }
+        const effectiveTechId =
+          parsePositiveTechId(body?.assigned_tech_id ?? body?.assignedTechId) ??
+          parsePositiveTechId(existing.rows[0]?.assigned_tech_id);
+        if (!effectiveTechId) {
+          return NextResponse.json(
+            { success: false, error: 'needs_test can only be cleared after a technician is assigned' },
+            { status: 400 },
+          );
+        }
+      }
+      updates.push(`needs_test = $${idx++}`);
+      values.push(nextNeedsTest);
+    }
+
     if (updates.length === 0) {
       return NextResponse.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
     }
@@ -312,9 +352,15 @@ function normalizeRow(row: Record<string, unknown>) {
     quantity_received:        Number(row.quantity_received ?? 0),
     quantity_expected:        row.quantity_expected != null ? Number(row.quantity_expected) : null,
     qa_status:                (row.qa_status as string) ?? 'PENDING',
+    workflow_status:          (row.workflow_status as string | null) ?? null,
     disposition_code:         (row.disposition_code as string) ?? 'HOLD',
     condition_grade:          (row.condition_grade as string) ?? 'BRAND_NEW',
     disposition_audit:        (row.disposition_audit as unknown[]) ?? [],
+    needs_test:               !!row.needs_test,
+    assigned_tech_id:         row.assigned_tech_id != null ? Number(row.assigned_tech_id) : null,
+    zoho_sync_source:         (row.zoho_sync_source as string | null) ?? null,
+    zoho_last_modified_time:  (row.zoho_last_modified_time as string | null) ?? null,
+    zoho_synced_at:           (row.zoho_synced_at as string | null) ?? null,
     notes:                    (row.notes as string | null) ?? null,
     created_at:               (row.created_at as string | null) ?? null,
   };

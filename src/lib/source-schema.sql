@@ -158,7 +158,7 @@ CREATE TABLE IF NOT EXISTS repair_service (
     issue TEXT,
     serial_number TEXT,
     notes TEXT,
-    status_history JSON DEFAULT '[]',
+    status_history JSONB DEFAULT '[]',
     status TEXT,
     process JSON DEFAULT '[]',
     date_time JSON,

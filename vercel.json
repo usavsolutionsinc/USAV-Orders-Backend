@@ -2,12 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/shipping/track/sync-due",
-      "schedule": "0 */2 * * *"
-    },
-    {
-      "path": "/api/ebay/refresh-tokens",
-      "schedule": "0 * * * *"
+      "path": "/api/cron/replenishment-sync",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

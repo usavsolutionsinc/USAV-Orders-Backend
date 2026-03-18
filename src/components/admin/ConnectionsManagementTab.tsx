@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { ConnectionLogEntryInput } from '@/components/sidebar/ConnectionsSidebarPanel';
+import { ZohoManagementPage } from '@/components/admin/connections/ZohoManagementPage';
 
 interface ConnectionLogEntry extends ConnectionLogEntryInput {
   id: string;
@@ -9,7 +11,11 @@ interface ConnectionLogEntry extends ConnectionLogEntryInput {
 }
 
 export function ConnectionsManagementTab() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([]);
+  const page = String(searchParams.get('page') || '').trim().toLowerCase();
+  const isZohoManagement = page === 'zoho-management';
 
   useEffect(() => {
     const handleLog = (event: Event) => {
@@ -38,6 +44,17 @@ export function ConnectionsManagementTab() {
     return counts;
   }, [logs]);
 
+  const navigateTo = (nextPage: '' | 'zoho-management') => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextPage) params.set('page', nextPage);
+    else params.delete('page');
+    router.replace(`/admin?${params.toString()}`);
+  };
+
+  if (isZohoManagement) {
+    return <ZohoManagementPage />;
+  }
+
   return (
     <section className="flex h-full min-h-0 w-full flex-col border border-gray-200 bg-white">
         <div className="border-b border-gray-200 px-6 py-5">
@@ -50,6 +67,13 @@ export function ConnectionsManagementTab() {
               </p>
             </div>
             <div className="ml-auto flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-500">
+              <button
+                type="button"
+                onClick={() => navigateTo('zoho-management')}
+                className="border-b border-gray-900 py-1 text-[10px] font-black uppercase tracking-widest text-gray-900"
+              >
+                Zoho Management
+              </button>
               <span>Success {groupedSummary.success}</span>
               <span>Error {groupedSummary.error}</span>
               <span>Total {logs.length}</span>

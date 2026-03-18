@@ -61,16 +61,23 @@ export async function upsertQStashSchedule<TBody = unknown>(params: {
   retries?: number;
   timeout?: QStashDuration;
   label?: string;
+  /** Headers forwarded to destination (e.g. Authorization for CRON_SECRET) */
+  headers?: Record<string, string>;
 }) {
   const client = getQStashClient();
   const destination = `${getAppBaseUrl()}${params.path.startsWith('/') ? params.path : `/${params.path}`}`;
+
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    ...params.headers,
+  };
 
   return client.schedules.create({
     scheduleId: params.scheduleId,
     destination,
     cron: params.cron,
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: params.body === undefined ? undefined : JSON.stringify(params.body),
     retries: params.retries,
     timeout: params.timeout,

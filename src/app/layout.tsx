@@ -5,6 +5,7 @@ import "./globals.css";
 import Providers from "../components/Providers";
 import DashboardSidebar from "../components/DashboardSidebar";
 import { HeaderProvider } from "../contexts/HeaderContext";
+import { designTokenStyleText } from '@/styles/tokens';
 
 export default function RootLayout({
     children,
@@ -17,6 +18,8 @@ export default function RootLayout({
             <head>
                 <title>USAV Orders Backend</title>
                 <meta name="description" content="USAV Orders Management System" />
+                <link rel="icon" type="image/png" href="/favicon.png" />
+                <style id="app-design-tokens">{designTokenStyleText}</style>
             </head>
             <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100vh' }}>
                 <Providers>

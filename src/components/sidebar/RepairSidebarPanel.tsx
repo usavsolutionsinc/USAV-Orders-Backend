@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { Plus } from '@/components/Icons';
+import { Loader2, Plus } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { TabSwitch } from '@/components/ui/TabSwitch';
 import {
@@ -19,15 +19,28 @@ interface RepairSidebarPanelProps {
   hideSectionHeader?: boolean;
 }
 
-function buildDraftFromFavorite(favorite: FavoriteSkuRecord): Partial<RepairFormData> {
+interface EcwidSearchProduct {
+  id: string;
+  name: string;
+  sku: string;
+  price: number | null;
+}
+
+function buildDraftFromFavorite(
+  favorite: FavoriteSkuRecord,
+  ecwidProduct?: EcwidSearchProduct | null,
+): Partial<RepairFormData> {
   return {
     product: {
-      type: 'Other',
-      model: favorite.productTitle || favorite.label || favorite.sku,
+      type: 'Bose Repair Service',
+      model: ecwidProduct?.name || favorite.productTitle || favorite.label || favorite.sku,
     },
     repairReasons: [],
     repairNotes: favorite.issueTemplate || '',
-    price: favorite.defaultPrice || '130',
+    price:
+      ecwidProduct?.price != null
+        ? ecwidProduct.price.toFixed(2)
+        : favorite.defaultPrice || '130',
     notes: favorite.notes || '',
   };
 }
@@ -38,6 +51,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const searchParams = useSearchParams();
   const [showIntakeForm, setShowIntakeForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingFavorite, setIsFetchingFavorite] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
   const [intakeDraft, setIntakeDraft] = useState<Partial<RepairFormData> | undefined>(undefined);
@@ -113,8 +127,26 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
     }
   };
 
-  const handleUseFavorite = (favorite: FavoriteSkuRecord) => {
-    setIntakeDraft(buildDraftFromFavorite(favorite));
+  const handleUseFavorite = async (favorite: FavoriteSkuRecord) => {
+    setIsFetchingFavorite(true);
+    let ecwidProduct: EcwidSearchProduct | null = null;
+    try {
+      const res = await fetch(
+        `/api/ecwid/products/search?q=${encodeURIComponent(favorite.sku)}`,
+        { cache: 'no-store' },
+      );
+      const data = await res.json();
+      const products: EcwidSearchProduct[] = Array.isArray(data?.products) ? data.products : [];
+      ecwidProduct =
+        products.find((p) => p.sku.trim().toLowerCase() === favorite.sku.trim().toLowerCase()) ??
+        products[0] ??
+        null;
+    } catch {
+      // fall through — will use cached favorite data
+    } finally {
+      setIsFetchingFavorite(false);
+    }
+    setIntakeDraft(buildDraftFromFavorite(favorite, ecwidProduct));
     setShowIntakeForm(true);
   };
 
@@ -158,11 +190,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           }
         />
 
-        <div className="mt-4 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 via-amber-50 to-white p-2 shadow-[0_18px_40px_-28px_rgba(234,88,12,0.45)]">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <p className="text-[9px] font-black uppercase tracking-[0.28em] text-orange-600">Repair Flow</p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-gray-400">Incoming first</p>
-          </div>
+        <div className="mt-4">
           <TabSwitch
             tabs={[
               { id: 'incoming', label: 'Incoming', color: 'orange' },
@@ -177,24 +205,18 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
               })
             }
           />
-          <div className="mt-2 grid grid-cols-1 gap-2 px-1 sm:grid-cols-3">
-            <div className={`rounded-xl border px-2 py-2 transition-colors ${activeTab === 'incoming' ? 'border-orange-300 bg-white text-orange-700' : 'border-transparent bg-white/70 text-gray-500'}`}>
-              <p className="text-[8px] font-black uppercase tracking-[0.22em]">Incoming</p>
-              <p className="mt-1 text-[10px] font-bold leading-tight">Shipment arrivals and newly synced repair intake.</p>
-            </div>
-            <div className={`rounded-xl border px-2 py-2 transition-colors ${activeTab === 'active' ? 'border-orange-300 bg-white text-orange-700' : 'border-transparent bg-white/70 text-gray-500'}`}>
-              <p className="text-[8px] font-black uppercase tracking-[0.22em]">Active</p>
-              <p className="mt-1 text-[10px] font-bold leading-tight">Repairs currently moving through diagnosis and work.</p>
-            </div>
-            <div className={`rounded-xl border px-2 py-2 transition-colors ${activeTab === 'done' ? 'border-orange-300 bg-white text-orange-700' : 'border-transparent bg-white/70 text-gray-500'}`}>
-              <p className="text-[8px] font-black uppercase tracking-[0.22em]">Done</p>
-              <p className="mt-1 text-[10px] font-bold leading-tight">Completed, shipped, or customer pickup records.</p>
-            </div>
-          </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="relative flex-1 overflow-y-auto px-4 py-4">
+        {isFetchingFavorite && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
+            <div className="flex items-center gap-2 text-orange-500">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-[10px] font-black uppercase tracking-[0.18em]">Loading…</span>
+            </div>
+          </div>
+        )}
         <FavoritesWorkspaceSection
           workspaceKey="repair"
           accent="orange"

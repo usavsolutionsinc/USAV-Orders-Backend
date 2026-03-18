@@ -18,6 +18,7 @@ export function WorkOrdersSidebarPanel() {
   const queue = normalizeQueue(searchParams.get('queue'));
   const [localSearch, setLocalSearch] = useState(searchParams.get('q') || '');
   const [counts, setCounts] = useState<QueueCounts>(EMPTY_COUNTS);
+  const [pickupDates, setPickupDates] = useState<Array<{ pickup_date: string; item_count: number; total_value: string }>>([]);
 
   useEffect(() => {
     setLocalSearch(searchParams.get('q') || '');
@@ -32,12 +33,28 @@ export function WorkOrdersSidebarPanel() {
       .catch(() => {});
   }, [queue]);
 
+  const fetchPickupDates = useCallback(() => {
+    if (queue !== 'local_pickups') return;
+    fetch(`/api/local-pickups`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (Array.isArray(json?.dates)) setPickupDates(json.dates);
+      })
+      .catch(() => setPickupDates([]));
+  }, [queue]);
+
   useEffect(() => { fetchCounts(); }, [fetchCounts]);
+
+  useEffect(() => { fetchPickupDates(); }, [fetchPickupDates]);
 
   useEffect(() => {
     window.addEventListener('dashboard-refresh', fetchCounts);
-    return () => window.removeEventListener('dashboard-refresh', fetchCounts);
-  }, [fetchCounts]);
+    window.addEventListener('dashboard-refresh', fetchPickupDates);
+    return () => {
+      window.removeEventListener('dashboard-refresh', fetchCounts);
+      window.removeEventListener('dashboard-refresh', fetchPickupDates);
+    };
+  }, [fetchCounts, fetchPickupDates]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -54,8 +71,27 @@ export function WorkOrdersSidebarPanel() {
     params.set('queue', nextQueue);
     params.delete('entityType');
     params.delete('entityId');
+    if (nextQueue !== 'local_pickups') params.delete('pickupDate');
     router.replace(`/work-orders?${params.toString()}`);
   };
+
+  const updatePickupDate = (pickupDate: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('queue', 'local_pickups');
+    params.set('pickupDate', pickupDate);
+    params.delete('entityType');
+    params.delete('entityId');
+    router.replace(`/work-orders?${params.toString()}`);
+  };
+
+  useEffect(() => {
+    if (queue !== 'local_pickups') return;
+    if (searchParams.get('pickupDate')) return;
+    if (!pickupDates[0]?.pickup_date) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('pickupDate', pickupDates[0].pickup_date);
+    router.replace(`/work-orders?${params.toString()}`);
+  }, [pickupDates, queue, router, searchParams]);
 
   return (
     <div className="font-dm-sans flex h-full flex-col overflow-hidden bg-white">
@@ -70,6 +106,43 @@ export function WorkOrdersSidebarPanel() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+        {queue === 'local_pickups' && pickupDates.length > 0 && (
+          <div className="mb-3 border-b border-[var(--color-neutral-200)] pb-2">
+            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-700)]">
+              Pickup Dates
+            </p>
+            {pickupDates.map((item) => {
+              const active = searchParams.get('pickupDate') === item.pickup_date;
+              const date = new Date(`${item.pickup_date}T12:00:00`);
+              const label = Number.isNaN(date.getTime())
+                ? item.pickup_date
+                : new Intl.DateTimeFormat('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                  }).format(date);
+              return (
+                <button
+                  key={item.pickup_date}
+                  type="button"
+                  onClick={() => updatePickupDate(item.pickup_date)}
+                  className={`group relative flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors ${
+                    active ? 'text-slate-950' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-semibold tracking-tight">{label}</div>
+                    <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+                      {item.item_count} items · ${Number(item.total_value || 0).toFixed(2)}
+                    </div>
+                  </div>
+                  {active && <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-slate-950 rounded-full" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {QUEUE_ITEMS.map((item) => {
           const active = item.key === queue;
           const count = counts[item.key] ?? 0;

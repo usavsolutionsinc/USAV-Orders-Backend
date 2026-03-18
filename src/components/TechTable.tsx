@@ -41,6 +41,7 @@ export function TechTable({ testedBy }: TechTableProps) {
   const [currentCount, setCurrentCount] = useState<number>(0);
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
+  const [removedRowKeys, setRemovedRowKeys] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Compute week range before calling the hook so it can be used in the query key
@@ -99,7 +100,9 @@ export function TechTable({ testedBy }: TechTableProps) {
       quantity: record.quantity || '1',
       shipment_id: record.shipment_id ?? null,
       status: record.status ?? null,
-      tech_serial_id: record.source_kind === 'tech_serial' ? record.id : undefined,
+      tech_serial_id: record.tech_serial_id ?? (record.source_kind === 'tech_serial' ? record.id : undefined),
+      source_row_id: record.source_row_id ?? null,
+      source_kind: record.source_kind ?? null,
     };
   };
 
@@ -107,6 +110,9 @@ export function TechTable({ testedBy }: TechTableProps) {
     const detail = toDetailRecord(record);
     return Number(detail.id ?? detail.shipment_id ?? record.id);
   };
+
+  const getRowKey = (record: TechRecord) =>
+    `${record.source_kind || 'tech'}:${record.source_row_id ?? record.id}`;
 
   const openDetails = (record: TechRecord) => {
     const detail = toDetailRecord(record);
@@ -157,6 +163,8 @@ export function TechTable({ testedBy }: TechTableProps) {
     if (activeCount) setCurrentCount(activeCount);
   }, []);
 
+  const visibleRecords = records.filter((record) => !removedRowKeys.has(getRowKey(record)));
+
   useEffect(() => {
     const container = scrollRef.current;
     if (container) {
@@ -164,12 +172,12 @@ export function TechTable({ testedBy }: TechTableProps) {
       setTimeout(() => handleScroll(), 100);
     }
     return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, records]);
+  }, [handleScroll, visibleRecords]);
 
   // Group records by PST date (server pre-filters by week with ±1 day UTC buffer;
   // grouping + display filter below gives exact PST-week accuracy).
   const groupedRecords: { [key: string]: TechRecord[] } = {};
-  records.forEach(record => {
+  visibleRecords.forEach(record => {
     if (!record.created_at) return;
     let date = '';
     try {
@@ -216,6 +224,24 @@ export function TechTable({ testedBy }: TechTableProps) {
       window.removeEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
     };
   }, [orderedRecords, selectedDetailId]);
+
+  useEffect(() => {
+    const handleTechLogRemoved = (e: any) => {
+      const sourceKind = String(e?.detail?.sourceKind || '').trim();
+      const sourceRowId = Number(e?.detail?.sourceRowId);
+      if (!sourceKind || !Number.isFinite(sourceRowId) || sourceRowId <= 0) return;
+
+      setRemovedRowKeys((current) => {
+        const next = new Set(current);
+        next.add(`${sourceKind}:${sourceRowId}`);
+        return next;
+      });
+      setSelectedDetailId(null);
+    };
+
+    window.addEventListener('tech-log-removed', handleTechLogRemoved as any);
+    return () => window.removeEventListener('tech-log-removed', handleTechLogRemoved as any);
+  }, []);
 
   const getWeekCount = () =>
     Object.values(filteredGroupedRecords).reduce((sum, recs) => sum + recs.length, 0);
@@ -290,7 +316,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                           <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            key={`${record.source_kind || 'tech'}:${record.source_row_id ?? record.id}`}
+                            key={getRowKey(record)}
                             onClick={() => openDetails(record)}
                             className={`grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'

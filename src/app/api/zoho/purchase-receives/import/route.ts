@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     const receivedBy = Number.isFinite(receivedByRaw) && receivedByRaw > 0 ? receivedByRaw : null;
     const assignedTechIdRaw = Number(body?.assigned_tech_id);
     const assignedTechId = Number.isFinite(assignedTechIdRaw) && assignedTechIdRaw > 0 ? assignedTechIdRaw : null;
-    const needsTest = !!body?.needs_test;
+    const needsTest = body?.needs_test === undefined ? true : !!body.needs_test;
     const targetChannel = String(body?.target_channel || '').trim().toUpperCase();
 
     if (!purchaseReceiveId) {

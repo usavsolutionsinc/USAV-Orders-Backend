@@ -8,6 +8,7 @@ export interface TechRecord {
   id: number;
   source_row_id?: number;
   source_kind?: 'tech_serial' | 'fba_scan' | 'tech_scan';
+  tech_serial_id?: number | null;
   order_db_id?: number | null;
   shipment_id?: number | null;
   created_at: string;
@@ -84,15 +85,18 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
   });
 
   // ── Ably: live row-level updates from any session (mobile or web) ─────────
+  // INSERT  → prepend new row (new tracking scan from another tab/device).
+  // UPDATE  → invalidate so the table refetches (covers exception scans and
+  //           serial additions that arrive via Ably from a different session).
+  // DELETE  → intentionally ignored.
   useAblyChannel(
     STATION_CHANNEL,
     'tech-log.changed',
     (msg: any) => {
-      const { techId: changedId, action, row, rowId } = msg?.data ?? {};
+      const { techId: changedId, action, row } = msg?.data ?? {};
       if (Number(changedId) !== techId) return;
 
       if (action === 'insert' && row) {
-        // Surgical prepend into the current-week cache slice only.
         const currentWeek = computeCurrentPSTWeek();
         queryClient.setQueryData<TechRecord[]>(
           ['tech-logs', techId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
@@ -102,14 +106,16 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
             return [row as TechRecord, ...prev];
           },
         );
-      } else {
-        // update / delete: invalidate so the query re-fetches fresh data.
+      } else if (action === 'update') {
         queryClient.invalidateQueries({ queryKey: ['tech-logs', techId] });
       }
+      // delete: intentionally ignored.
     },
   );
 
-  // ── Local surgical insert (same-tab scans dispatched via CustomEvent) ─────
+  // ── Local surgical insert (same-tab tracking scans via CustomEvent) ────────
+  // Fired by scan-tracking handler in useStationTestingController only when a
+  // new tracking number creates a new row — serial additions do NOT fire this.
   useEffect(() => {
     const handleNewLog = (e: any) => {
       const record = e?.detail as TechRecord | null;
@@ -127,15 +133,6 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
     };
     window.addEventListener('tech-log-added', handleNewLog);
     return () => window.removeEventListener('tech-log-added', handleNewLog);
-  }, [queryClient, techId]);
-
-  // ── Full invalidation for manual refreshes ────────────────────────────────
-  useEffect(() => {
-    const handleRefresh = () => {
-      queryClient.invalidateQueries({ queryKey: ['tech-logs', techId] });
-    };
-    window.addEventListener('usav-refresh-data', handleRefresh);
-    return () => window.removeEventListener('usav-refresh-data', handleRefresh);
   }, [queryClient, techId]);
 
   return query;

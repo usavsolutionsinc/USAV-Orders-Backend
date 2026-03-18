@@ -18,23 +18,37 @@ function isAuthorized(req: NextRequest): boolean {
 
 const HEAVY_JOB_SCHEDULES = [
   {
+    scheduleId: 'shipping-sync-due-every-2h',
+    cron: '0 */2 * * *',
+    path: '/api/qstash/shipping/sync-due',
+    body: {},
+    label: 'shipping-sync-due',
+  },
+  {
+    scheduleId: 'ebay-refresh-tokens-hourly',
+    cron: '0 * * * *',
+    path: '/api/qstash/ebay/refresh-tokens',
+    body: {},
+    label: 'ebay-refresh-tokens',
+  },
+  {
     scheduleId: 'google-sheets-transfer-orders-0830-pacific',
     cron: '30 16 * * *',
-    path: '/api/google-sheets/transfer-orders',
+    path: '/api/qstash/google-sheets/transfer-orders',
     body: {},
     label: 'google-sheets-transfer-orders',
   },
   {
     scheduleId: 'google-sheets-transfer-orders-1000-weekdays-pacific',
     cron: '0 18 * * 1-5',
-    path: '/api/google-sheets/transfer-orders',
+    path: '/api/qstash/google-sheets/transfer-orders',
     body: {},
     label: 'google-sheets-transfer-orders',
   },
   {
     scheduleId: 'google-sheets-transfer-orders-1600-weekdays-pacific',
     cron: '0 0 * * 2-6',
-    path: '/api/google-sheets/transfer-orders',
+    path: '/api/qstash/google-sheets/transfer-orders',
     body: {},
     label: 'google-sheets-transfer-orders',
   },
@@ -44,6 +58,20 @@ const HEAVY_JOB_SCHEDULES = [
     path: '/api/qstash/ebay/sync',
     body: { reconcileExceptions: true },
     label: 'ebay-sync',
+  },
+  {
+    scheduleId: 'zoho-items-incremental-every-5m',
+    cron: '*/5 * * * *',
+    path: '/api/qstash/zoho/items/sync',
+    body: { type: 'incremental' },
+    label: 'zoho-items-sync',
+  },
+  {
+    scheduleId: 'zoho-items-full-nightly-pacific',
+    cron: '0 9 * * *',
+    path: '/api/qstash/zoho/items/sync',
+    body: { type: 'full' },
+    label: 'zoho-items-full-sync',
   },
   {
     scheduleId: 'zoho-purchase-orders-half-hour',
@@ -72,6 +100,7 @@ const HEAVY_JOB_SCHEDULES = [
   path: string;
   body: Record<string, unknown>;
   label: string;
+  headers?: Record<string, string>;
 }>;
 
 export async function POST(req: NextRequest) {
@@ -81,8 +110,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const results = await Promise.all(
-      HEAVY_JOB_SCHEDULES.map(async (schedule) => {
-        const result = await upsertQStashSchedule(schedule);
+      HEAVY_JOB_SCHEDULES.map(async ({ headers, ...schedule }) => {
+        const result = await upsertQStashSchedule({ ...schedule, headers });
         return { ...schedule, ...result };
       })
     );

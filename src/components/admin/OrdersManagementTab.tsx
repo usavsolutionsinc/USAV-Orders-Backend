@@ -17,7 +17,7 @@ import type { Order, Staff } from './types';
 
 export function OrdersManagementTab() {
   const queryClient = useQueryClient();
-  const [filterTab, setFilterTab] = useState<'all' | 'unassigned' | 'assigned' | 'out of stock'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'unassigned' | 'assigned' | 'need to order'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
   const [focusedOrderId, setFocusedOrderId] = useState<number | null>(null);
@@ -50,8 +50,12 @@ export function OrdersManagementTab() {
   const orders = allOrders.filter((order) => {
     if (order.is_shipped) return false;
     const normalizedSearchTerm = searchTerm.toLowerCase();
+    const hasNeedToOrder = Boolean(
+      String(order.out_of_stock || '').trim() ||
+      String(order.replenishment_request_id || '').trim()
+    );
     const matchesTab = (() => {
-      if (filterTab === 'out of stock') return order.out_of_stock && (order.is_shipped === false || !order.is_shipped);
+      if (filterTab === 'need to order') return hasNeedToOrder && (order.is_shipped === false || !order.is_shipped);
       if (filterTab === 'unassigned') return order.packer_id == null && order.tester_id == null;
       if (filterTab === 'assigned') return order.packer_id != null || order.tester_id != null;
       return true;
@@ -191,13 +195,13 @@ export function OrdersManagementTab() {
           />
 
           <div className="flex gap-2 p-1 bg-white rounded-2xl border border-gray-200 shadow-sm w-fit">
-            {(['all', 'unassigned', 'assigned', 'out of stock'] as const).map((tab) => (
+            {(['all', 'unassigned', 'assigned', 'need to order'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setFilterTab(tab)}
                 className={`px-4 py-1.5 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all ${
                   filterTab === tab
-                    ? tab === 'out of stock'
+                    ? tab === 'need to order'
                       ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
                       : tab === 'unassigned'
                         ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
@@ -372,7 +376,7 @@ export function OrdersManagementTab() {
                       </div>
                     </div>
 
-                    {order.out_of_stock && filterTab === 'out of stock' && (
+                    {(order.out_of_stock || order.replenishment_request_id) && filterTab === 'need to order' && (
                       <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm w-fit">
                         <AlertCircle className="w-3 h-3" />
                         <span className="text-[8px] font-black uppercase tracking-wider">Out of Stock</span>

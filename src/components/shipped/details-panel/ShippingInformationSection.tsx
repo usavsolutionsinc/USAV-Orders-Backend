@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Copy, ExternalLink, Pencil } from '@/components/Icons';
+import { Check, Copy, ExternalLink, Pencil, Plus, X } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
 import { formatDateTimePST, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { DetailsPanelRow } from '@/components/shipped/details-panel/blocks/DetailsPanelRow';
+import { InlineSaveIndicator } from '@/design-system/components';
 
 export interface EditableShippingFields {
   orderNumber: string;
@@ -181,36 +182,56 @@ function ShippingSerialNumberRow({
   onUpdate?: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [displaySerialNumber, setDisplaySerialNumber] = useState(serialNumber || '');
   const [serialRows, setSerialRows] = useState<string[]>(() => parseSerialRows(serialNumber));
   const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const saveTimerRef = useRef<number | null>(null);
+  const lastSavedSerialNumberRef = useRef(
+    parseSerialRows(serialNumber)
+      .map((row) => row.trim().toUpperCase())
+      .filter(Boolean)
+      .join(', ')
+  );
 
   useEffect(() => {
-    setDisplaySerialNumber(serialNumber || '');
     setSerialRows(parseSerialRows(serialNumber));
     setIsEditing(false);
     setError(null);
+    setSaveState('idle');
+    lastSavedSerialNumberRef.current = parseSerialRows(serialNumber)
+      .map((row) => row.trim().toUpperCase())
+      .filter(Boolean)
+      .join(', ');
   }, [rowId, serialNumber]);
 
-  const handleCancel = () => {
-    setSerialRows(parseSerialRows(displaySerialNumber));
-    setIsEditing(false);
-    setError(null);
-  };
+  useEffect(() => {
+    if (saveState === 'idle' || saveState === 'saving') return;
+    const timeout = window.setTimeout(() => setSaveState('idle'), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [saveState]);
 
-  const handleSave = async () => {
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const normalizedRows = serialRows
+    .map((row) => row.trim().toUpperCase())
+    .filter(Boolean);
+  const normalizedSerialNumber = normalizedRows.join(', ');
+
+  const saveSerialRows = async (rowsToSave: string[]) => {
     if (!trackingNumber) {
       setError('Tracking number is required to update serials.');
+      setSaveState('error');
       return;
     }
 
-    const normalizedRows = serialRows
-      .map((row) => row.trim().toUpperCase())
-      .filter(Boolean);
-    const nextSerialNumber = normalizedRows.join(', ');
-    const previousSerialNumber = displaySerialNumber;
+    const nextSerialNumber = rowsToSave.join(', ');
     const snapshots: Array<{ key: readonly unknown[]; data: any }> = [];
 
     [['orders'], ['shipped'], ['dashboard-table']].forEach((key) => {
@@ -221,11 +242,8 @@ function ShippingSerialNumberRow({
       });
     });
 
-    setDisplaySerialNumber(nextSerialNumber);
-    setSerialRows(normalizedRows.length > 0 ? normalizedRows : ['']);
-    setIsEditing(false);
-    setIsSaving(true);
     setError(null);
+    setSaveState('saving');
 
     try {
       const response = await fetch('/api/tech/update-serials', {
@@ -233,7 +251,7 @@ function ShippingSerialNumberRow({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tracking: trackingNumber,
-          serialNumbers: normalizedRows,
+          serialNumbers: rowsToSave,
           techId: techId ?? null,
         }),
       });
@@ -245,119 +263,161 @@ function ShippingSerialNumberRow({
 
       const savedSerials = Array.isArray(data.serialNumbers)
         ? data.serialNumbers.map((row: unknown) => String(row || '').trim().toUpperCase()).filter(Boolean)
-        : normalizedRows;
+        : rowsToSave;
       const savedSerialNumber = savedSerials.join(', ');
 
-      setDisplaySerialNumber(savedSerialNumber);
       setSerialRows(savedSerials.length > 0 ? savedSerials : ['']);
+      lastSavedSerialNumberRef.current = savedSerialNumber;
+      setSaveState('saved');
       [['orders'], ['shipped'], ['dashboard-table']].forEach((key) => {
         const matches = queryClient.getQueriesData({ queryKey: key });
         matches.forEach(([queryKey, data]) => {
           queryClient.setQueryData(queryKey, patchSerialNumberInData(data, rowId, savedSerialNumber));
         });
       });
+      // tech-logs rows use SAL/TSN ids (not order id) so surgical patch by
+      // rowId won't hit them — invalidate to force a fresh fetch instead.
+      queryClient.invalidateQueries({ queryKey: ['tech-logs'] });
       onUpdate?.();
     } catch (saveError) {
       snapshots.forEach((snapshot) => {
         queryClient.setQueryData(snapshot.key, snapshot.data);
       });
-      setDisplaySerialNumber(previousSerialNumber);
-      setSerialRows(parseSerialRows(previousSerialNumber));
-      setIsEditing(true);
+      setSaveState('error');
       setError(saveError instanceof Error ? saveError.message : 'Failed to update serials');
-    } finally {
-      setIsSaving(false);
     }
   };
 
+  useEffect(() => {
+    if (!isEditing) return;
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    if (normalizedSerialNumber === lastSavedSerialNumberRef.current) return;
+
+    saveTimerRef.current = window.setTimeout(() => {
+      void saveSerialRows(normalizedRows);
+    }, 700);
+
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [isEditing, normalizedRows, normalizedSerialNumber, trackingNumber]);
+
+  const copyAllSerials = () => {
+    if (!normalizedSerialNumber) return;
+    navigator.clipboard.writeText(normalizedSerialNumber);
+  };
+
   return (
-    <div className="space-y-0">
-      <CopyableValueFieldBlock
-        label="Serial Number"
-        value={displaySerialNumber || 'N/A'}
-        twoLineValue
-        variant="flat"
-        keepBottomDivider
-        trailingActions={
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (isEditing) {
-                handleCancel();
-              } else {
-                setSerialRows(parseSerialRows(displaySerialNumber));
+    <DetailsPanelRow
+      label="Serial Number"
+      actions={(
+        <div className="flex items-center gap-1.5 text-gray-400">
+          <InlineSaveIndicator state={saveState} />
+          {isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setSerialRows((current) => [...current, '']);
+                  setError(null);
+                }}
+                className="transition-all hover:text-blue-700"
+                aria-label="Add serial row"
+                title="Add serial row"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSerialRows(parseSerialRows(lastSavedSerialNumberRef.current));
+                  setIsEditing(false);
+                  setError(null);
+                  setSaveState('idle');
+                }}
+                className="transition-all hover:text-red-600"
+                aria-label="Close serial editing"
+                title="Close serial editing"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setSerialRows(parseSerialRows(lastSavedSerialNumberRef.current));
                 setIsEditing(true);
                 setError(null);
-              }
-            }}
-            className="transition-all text-gray-400 hover:text-gray-900"
-            title={isEditing ? 'Cancel serial edit' : 'Edit serial numbers'}
-            aria-label={isEditing ? 'Cancel serial edit' : 'Edit serial numbers'}
+              }}
+              className="transition-all hover:text-gray-900"
+              aria-label="Edit serial numbers"
+              title="Edit serial numbers"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={copyAllSerials}
+            disabled={!normalizedSerialNumber}
+            className="transition-all hover:text-gray-900 disabled:opacity-40"
+            aria-label="Copy all serial numbers"
+            title="Copy all serial numbers"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Copy className="w-3.5 h-3.5" />
           </button>
-        }
-      />
-
-      {isEditing ? (
-        <div className="space-y-2">
-          <div className="space-y-1.5">
-            {serialRows.map((serial, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={serial}
-                  onChange={(e) => {
-                    const nextValue = e.target.value.toUpperCase();
-                    setSerialRows((current) => current.map((row, rowIndex) => (rowIndex === index ? nextValue : row)));
-                  }}
-                  placeholder={`Serial ${index + 1}`}
-                  className="flex-1 border-0 border-b border-gray-200 bg-transparent px-0 py-2 text-sm font-mono font-bold text-gray-900 outline-none focus:border-gray-400 focus:ring-0"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSerialRows((current) => {
-                      if (current.length <= 1) return [''];
-                      return current.filter((_, rowIndex) => rowIndex !== index);
-                    });
-                  }}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600"
-                  aria-label={`Remove serial row ${index + 1}`}
-                >
-                  <span className="text-sm leading-none">x</span>
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setSerialRows((current) => [...current, ''])}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wider text-gray-700"
-            >
-              <span className="text-xs leading-none">+</span>
-              Add Row
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-[10px] font-black uppercase tracking-wider text-white disabled:opacity-50"
-            >
-              <Check className="w-3 h-3" />
-              {isSaving ? 'Saving' : 'Save Serials'}
-            </button>
-          </div>
-
-          {error ? (
-            <p className="text-[10px] font-bold text-red-600">{error}</p>
-          ) : null}
         </div>
+      )}
+      dividerClassName="border-b border-gray-100"
+      className="!border-b !border-gray-100"
+    >
+      {isEditing ? (
+        <div>
+          {serialRows.map((serial, index) => (
+            <div key={index} className="flex items-center gap-2 border-b border-gray-100 last:border-b-0">
+              <input
+                type="text"
+                value={serial}
+                onChange={(e) => {
+                  const nextValue = e.target.value.toUpperCase();
+                  setSerialRows((current) => current.map((row, rowIndex) => (rowIndex === index ? nextValue : row)));
+                  setError(null);
+                  setSaveState('idle');
+                }}
+                placeholder={`Serial ${index + 1}`}
+                className="flex-1 border-0 bg-transparent px-0 py-2 text-sm font-mono font-bold text-gray-900 outline-none focus:ring-0"
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setSerialRows(parseSerialRows(lastSavedSerialNumberRef.current));
+            setIsEditing(true);
+            setError(null);
+          }}
+          className="block w-full py-0 text-left"
+        >
+          <p className="truncate py-2 text-sm font-mono font-bold text-gray-900">
+            {normalizedSerialNumber || 'Serial 1'}
+          </p>
+        </button>
+      )}
+
+      {error ? (
+        <p className="pt-1 text-[10px] font-bold text-red-600">{error}</p>
       ) : null}
-    </div>
+    </DetailsPanelRow>
   );
 }
 

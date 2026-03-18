@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
+import { clearReplenishmentForOrder, ensureReplenishmentForOrder } from '@/lib/replenishment';
 
 /**
  * POST /api/orders/missing-parts - Move order to missing parts status
@@ -24,7 +25,21 @@ export async function POST(req: NextRequest) {
       [reason || null, orderId]
     );
 
-    await invalidateCacheTags(['orders', 'shipped']);
+    if (process.env.FEATURE_REPLENISHMENT === 'true') {
+      const trimmedReason = String(reason || '').trim();
+      if (trimmedReason) {
+        await ensureReplenishmentForOrder({
+          orderId: Number(orderId),
+          reason: trimmedReason,
+          changedBy: 'staff',
+          forceFullQuantity: true,
+        });
+      } else {
+        await clearReplenishmentForOrder(Number(orderId), 'staff');
+      }
+    }
+
+    await invalidateCacheTags(['orders', 'shipped', 'need-to-order']);
     await publishOrderChanged({ orderIds: [Number(orderId)], source: 'orders.missing-parts' });
     return NextResponse.json({ success: true });
   } catch (error: any) {

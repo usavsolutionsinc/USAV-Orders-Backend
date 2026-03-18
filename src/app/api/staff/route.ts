@@ -4,6 +4,15 @@ import { staff } from '@/lib/drizzle/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 
+function isDatabaseUnavailable(error: unknown) {
+    if (!(error instanceof Error)) return false;
+    const causeMessage = typeof (error as { cause?: unknown }).cause === 'object'
+        ? String(((error as { cause?: { message?: string } }).cause?.message) || '')
+        : '';
+    const message = `${error.message} ${causeMessage}`;
+    return /ENOTFOUND|ECONNREFUSED|connect_timeout|connection terminated|timeout/i.test(message);
+}
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
@@ -37,6 +46,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(results, { headers: { 'x-cache': 'MISS' } });
     } catch (error) {
         console.error('Error fetching staff:', error);
+        if (isDatabaseUnavailable(error)) {
+            return NextResponse.json([], { headers: { 'x-db-fallback': 'unavailable' } });
+        }
         return NextResponse.json({ 
             error: 'Failed to fetch staff',
             details: error instanceof Error ? error.message : 'Unknown error'

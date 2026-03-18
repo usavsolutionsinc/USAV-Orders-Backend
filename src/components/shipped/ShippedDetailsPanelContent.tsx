@@ -51,7 +51,7 @@ export function ShippedDetailsPanelContent({
   showShippingTimestamp = false,
   showSerialNumber = true,
   productDetailsFirst = false,
-  editableShippingFields
+  editableShippingFields,
 }: ShippedDetailsPanelContentProps) {
   const productDetailsSection = <ProductDetailsSection shipped={shipped} />;
   const packedById = shipped.packed_by ?? null;

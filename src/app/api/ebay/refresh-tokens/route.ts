@@ -4,8 +4,8 @@ import { refreshEbayAccessToken } from '@/lib/ebay/token-refresh';
 
 /**
  * POST /api/ebay/refresh-tokens
- * Cron endpoint: refreshes all eBay accounts whose token expires within 30 minutes.
- * Protected by CRON_SECRET (Vercel cron sends Authorization: Bearer <CRON_SECRET>).
+ * Worker endpoint: refreshes all eBay accounts whose token expires within 30 minutes.
+ * Protected by CRON_SECRET and intended to be invoked by the QStash wrapper.
  */
 export const dynamic = 'force-dynamic';
 
@@ -99,5 +99,11 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  return POST(req);
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return NextResponse.json(
+    { success: false, error: 'Method not allowed. Use POST via the QStash worker route.' },
+    { status: 405 }
+  );
 }

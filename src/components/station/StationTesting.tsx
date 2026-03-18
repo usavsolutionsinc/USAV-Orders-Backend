@@ -70,9 +70,9 @@ export default function StationTesting({
     triggerGlobalRefresh,
     activeColor,
     clearFeedback,
-    saveManual,
   } = useStationTestingController({
     userId,
+    userName,
     onComplete,
     themeColor,
     onTrackingScan,
@@ -288,24 +288,17 @@ export default function StationTesting({
           <AnimatePresence mode="wait">
             {activeOrder && isActiveOrderVisible ? (
               <ActiveStationOrderCard
+                key={activeOrder.tracking}
                 activeOrder={activeOrder}
                 activeColorTextClass={activeColor.text}
                 resolvedManuals={resolvedManuals}
                 isManualLoading={isManualLoading}
                 onViewManual={onViewManual}
-                onSaveManual={({ googleLinkOrFileId, type }) =>
-                  saveManual({
-                    sku: activeOrder.sku,
-                    itemNumber: activeOrder.itemNumber,
-                    googleLinkOrFileId,
-                    type: type || null,
-                  })
-                }
               />
             ) : null}
           </AnimatePresence>
 
-          <div className="space-y-2 mt-2">
+          <motion.div layout className="space-y-2 mt-2">
             <UpNextOrder
               techId={userId}
               onStart={(tracking) => {
@@ -319,7 +312,7 @@ export default function StationTesting({
                 triggerGlobalRefresh();
               }}
             />
-          </div>
+          </motion.div>
 
           <div className="mt-auto pt-6 border-t border-gray-50 text-center">
             <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV TECH v2.6</p>

@@ -43,6 +43,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
+const WORKFLOW_STATUS_PRIORITY = [
+  'DONE',
+  'SCRAP',
+  'RTV',
+  'FAILED',
+  'PASSED',
+  'IN_TEST',
+  'AWAITING_TEST',
+  'UNBOXED',
+  'MATCHED',
+  'ARRIVED',
+  'EXPECTED',
+] as const;
+
+function deriveWorkflowStatus(rows: Array<{ workflow_status?: string | null }>): string | null {
+  const statuses = rows
+    .map((row) => row.workflow_status)
+    .filter((status): status is string => Boolean(status));
+
+  for (const status of WORKFLOW_STATUS_PRIORITY) {
+    if (statuses.includes(status)) return status;
+  }
+
+  return statuses[0] ?? null;
+}
+
 export async function POST(request: NextRequest) {
   const client = await pool.connect();
   try {
@@ -258,16 +284,23 @@ export async function GET(request: NextRequest) {
       ),
       pool.query(
         `SELECT id, receiving_tracking_number, carrier, zoho_purchase_receive_id,
-                zoho_purchaseorder_id, qa_status, workflow_status
+                zoho_purchaseorder_id, qa_status
          FROM receiving
          WHERE id = $1`,
         [receivingId]
       ),
     ]);
 
+    const receiving = receivingRow.rows[0]
+      ? {
+          ...receivingRow.rows[0],
+          workflow_status: deriveWorkflowStatus(matchedRes.rows),
+        }
+      : null;
+
     return NextResponse.json({
       success: true,
-      receiving: receivingRow.rows[0] ?? null,
+      receiving,
       matched_lines: matchedRes.rows,
     });
   } catch (error: unknown) {

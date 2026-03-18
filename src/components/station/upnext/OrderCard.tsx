@@ -207,12 +207,11 @@ export function OrderCard({
   return (
     <>
       <motion.div
-        layout
         key={order.id}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
         onClick={onToggleExpand}
         className={`border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
           isStockTab
@@ -271,15 +270,11 @@ export function OrderCard({
         </div>
 
         {hasOutOfStock && (
-          <div className="mt-2 border-t border-red-100 px-3 pt-2">
-            <div onClick={(e) => e.stopPropagation()}>
-              <OutOfStockField
-                value={String(order.out_of_stock || '')}
-                onEdit={() => onMissingPartsToggle(order.id)}
-                className="-mt-1"
-                dividerClassName="border-0"
-              />
-            </div>
+          <div className="mt-2 border-t border-red-100 px-3 pt-2" onClick={(e) => e.stopPropagation()}>
+            <OutOfStockField
+              value={String(order.out_of_stock || '')}
+              onEdit={() => onMissingPartsToggle(order.id)}
+            />
           </div>
         )}
 
@@ -341,7 +336,11 @@ export function OrderCard({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              transition={{
+                height:  { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
+                opacity: { duration: 0.14, ease: 'easeOut' },
+              }}
+              style={{ willChange: 'height, opacity' }}
               className="overflow-hidden"
             >
               <div className="mt-3 border-t border-emerald-100 px-3 pt-3" onClick={(e) => e.stopPropagation()}>

@@ -274,11 +274,29 @@ export async function PATCH(request: NextRequest) {
             values.push(String(returnReasonRaw || '').trim() || null);
         }
         if (availableColumns.has('needs_test') && needsTestRaw !== undefined) {
-            updates.push(`needs_test = $${idx++}`);
-            values.push(!!needsTestRaw);
-            if (!needsTestRaw && availableColumns.has('assigned_tech_id')) {
-                updates.push(`assigned_tech_id = NULL`);
+            const nextNeedsTest = !!needsTestRaw;
+            if (!nextNeedsTest && availableColumns.has('assigned_tech_id')) {
+                const currentRow = await pool.query<{ assigned_tech_id: number | null }>(
+                    `SELECT assigned_tech_id FROM receiving WHERE id = $1`,
+                    [id]
+                );
+                if (currentRow.rows.length === 0) {
+                    return NextResponse.json({ error: 'Receiving log not found' }, { status: 404 });
+                }
+                const nextAssignedTechId = Number(assignedTechIdRaw);
+                const effectiveTechId =
+                    (Number.isFinite(nextAssignedTechId) && nextAssignedTechId > 0 ? nextAssignedTechId : null) ??
+                    currentRow.rows[0]?.assigned_tech_id ??
+                    null;
+                if (!effectiveTechId) {
+                    return NextResponse.json(
+                        { error: 'needs_test can only be cleared after a technician is assigned' },
+                        { status: 400 }
+                    );
+                }
             }
+            updates.push(`needs_test = $${idx++}`);
+            values.push(nextNeedsTest);
         }
         if (availableColumns.has('assigned_tech_id') && assignedTechIdRaw !== undefined) {
             const parsed = Number(assignedTechIdRaw);

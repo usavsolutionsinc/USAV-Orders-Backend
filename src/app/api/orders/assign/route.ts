@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
+import { clearReplenishmentForOrder, ensureReplenishmentForOrder } from '@/lib/replenishment';
 import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize';
 
 type QueryClient = {
@@ -236,6 +237,9 @@ export async function POST(req: NextRequest) {
     const idsToUpdate: number[] = (orderId ? [orderId] : orderIds).map(Number);
 
     const client = await pool.connect();
+    let outOfStockChanged = false;
+    let outOfStockValue: string | null = null;
+
     try {
       await client.query('BEGIN');
 
@@ -287,6 +291,8 @@ export async function POST(req: NextRequest) {
       }
 
       if (outOfStock !== undefined) {
+        outOfStockChanged = true;
+        outOfStockValue = outOfStock;
         updates.push(`out_of_stock = $${paramCount++}`);
         values.push(outOfStock);
       }
@@ -320,8 +326,24 @@ export async function POST(req: NextRequest) {
       client.release();
     }
 
+    if (process.env.FEATURE_REPLENISHMENT === 'true' && outOfStockChanged) {
+      const trimmedOutOfStock = String(outOfStockValue || '').trim();
+      for (const orderId of idsToUpdate) {
+        if (trimmedOutOfStock) {
+          await ensureReplenishmentForOrder({
+            orderId,
+            reason: trimmedOutOfStock,
+            changedBy: 'staff',
+            forceFullQuantity: true,
+          });
+        } else {
+          await clearReplenishmentForOrder(orderId, 'staff');
+        }
+      }
+    }
+
     try {
-      await invalidateCacheTags(['orders', 'shipped', 'orders-next', 'tech-logs', 'packerlogs', 'packing-logs']);
+      await invalidateCacheTags(['orders', 'shipped', 'orders-next', 'tech-logs', 'packerlogs', 'packing-logs', 'need-to-order']);
     } catch (cacheErr) {
       console.warn('[orders/assign] cache invalidation failed (non-critical):', cacheErr);
     }

@@ -221,7 +221,6 @@ export function DashboardDetailsStack({
                 setActiveInput('none');
               }}
               onSubmit={() => void fieldSave.saveOutOfStock(outOfStock)}
-              isSaving={fieldSave.isSavingOutOfStock}
               autoFocus
             />
           ) : (

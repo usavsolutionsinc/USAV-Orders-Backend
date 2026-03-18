@@ -5,7 +5,8 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
-import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking, getPurchaseOrderById } from '@/lib/zoho';
+import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from '@/lib/zoho';
+import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 
 /**
  * Compute Mon–Fri week range (PST date strings) for a given PST timestamp string
@@ -55,7 +56,9 @@ export async function POST(request: NextRequest) {
         const returnPlatform = isReturn && returnPlatformAllowed.has(rawReturnPlatform) ? rawReturnPlatform : null;
         const returnReason = isReturn ? (String(body?.returnReason || body?.return_reason || '').trim() || null) : null;
 
-        const needsTest = !!body?.needsTest || !!body?.needs_test;
+        const needsTest = body?.needsTest === undefined && body?.needs_test === undefined
+            ? true
+            : !!(body?.needsTest ?? body?.needs_test);
         const assignedTechIdRaw = Number(body?.assignedTechId ?? body?.assigned_tech_id);
         const assignedTechId = needsTest && Number.isFinite(assignedTechIdRaw) && assignedTechIdRaw > 0 ? assignedTechIdRaw : null;
 
@@ -233,48 +236,18 @@ export async function POST(request: NextRequest) {
                                 zohoMatchSummary = { strategy: 'local_po_lines', matched_lines: lineCount, zoho_po_ids: [poId] };
                             }
                         } else {
-                            // Fetch PO detail from Zoho and insert lines now
+                            // Sync PO lines into receiving_lines and link any unmatched rows now
                             try {
-                                const poDetail = await getPurchaseOrderById(poId);
-                                const po = (poDetail as any)?.purchaseorder;
-                                const lineItems = Array.isArray(po?.line_items) ? po.line_items : [];
-                                let insertedCount = 0;
-                                for (const line of lineItems) {
-                                    const zohoItemId = String(line?.item_id || '').trim();
-                                    const zohoLineItemId = String(line?.line_item_id || line?.id || '').trim();
-                                    const qtyExpected = Math.floor(Math.max(0, Number(line?.quantity ?? 0)));
-                                    if (!zohoItemId || qtyExpected <= 0) continue;
-
-                                    await pool.query(
-                                        `INSERT INTO receiving_lines (
-                                           receiving_id, zoho_item_id, zoho_line_item_id,
-                                           zoho_purchaseorder_id, item_name, sku,
-                                           quantity_received, quantity_expected,
-                                           qa_status, disposition_code, condition_grade,
-                                           disposition_audit, workflow_status
-                                         )
-                                         VALUES ($1,$2,$3,$4,$5,$6,0,$7,
-                                                 'PENDING','HOLD','BRAND_NEW','[]'::jsonb,
-                                                 'MATCHED'::inbound_workflow_status_enum)
-                                         ON CONFLICT DO NOTHING`,
-                                        [
-                                            newReceivingId,
-                                            zohoItemId,
-                                            zohoLineItemId || null,
-                                            poId,
-                                            String(line?.name || line?.item_name || '').trim() || null,
-                                            String(line?.sku || '').trim() || null,
-                                            qtyExpected,
-                                        ]
-                                    );
-                                    insertedCount++;
-                                }
-                                if (insertedCount > 0) {
+                                const syncResult = await importZohoPurchaseOrderToReceiving(poId, {
+                                    receivingId: newReceivingId,
+                                    workflowStatus: 'MATCHED',
+                                });
+                                if (syncResult.line_items_linked > 0) {
                                     if (zohoMatchSummary) {
-                                        zohoMatchSummary.matched_lines += insertedCount;
+                                        zohoMatchSummary.matched_lines += syncResult.line_items_linked;
                                         zohoMatchSummary.zoho_po_ids.push(poId);
                                     } else {
-                                        zohoMatchSummary = { strategy: 'zoho_purchase_receive', matched_lines: insertedCount, zoho_po_ids: [poId] };
+                                        zohoMatchSummary = { strategy: 'zoho_purchase_receive', matched_lines: syncResult.line_items_linked, zoho_po_ids: [poId] };
                                     }
                                 }
                             } catch {
@@ -292,51 +265,17 @@ export async function POST(request: NextRequest) {
                         if (!poId || matchedPoIds.includes(poId)) continue;
                         matchedPoIds.push(poId);
 
-                        // Try to fetch full PO detail (may already have line_items)
-                        const lineItems = Array.isArray(po.line_items) ? po.line_items : [];
-                        const fullLineItems = lineItems.length > 0
-                            ? lineItems
-                            : await getPurchaseOrderById(poId)
-                                .then((d) => (d as any)?.purchaseorder?.line_items ?? [])
-                                .catch(() => []);
+                        const syncResult = await importZohoPurchaseOrderToReceiving(poId, {
+                            receivingId: newReceivingId,
+                            workflowStatus: 'MATCHED',
+                        }).catch(() => null);
 
-                        let insertedCount = 0;
-                        for (const line of fullLineItems) {
-                            const zohoItemId = String(line?.item_id || '').trim();
-                            const zohoLineItemId = String(line?.line_item_id || line?.id || '').trim();
-                            const qtyExpected = Math.floor(Math.max(0, Number(line?.quantity ?? 0)));
-                            if (!zohoItemId || qtyExpected <= 0) continue;
-
-                            await pool.query(
-                                `INSERT INTO receiving_lines (
-                                   receiving_id, zoho_item_id, zoho_line_item_id,
-                                   zoho_purchaseorder_id, item_name, sku,
-                                   quantity_received, quantity_expected,
-                                   qa_status, disposition_code, condition_grade,
-                                   disposition_audit, workflow_status
-                                 )
-                                 VALUES ($1,$2,$3,$4,$5,$6,0,$7,
-                                         'PENDING','HOLD','BRAND_NEW','[]'::jsonb,
-                                         'MATCHED'::inbound_workflow_status_enum)
-                                 ON CONFLICT DO NOTHING`,
-                                [
-                                    newReceivingId,
-                                    zohoItemId,
-                                    zohoLineItemId || null,
-                                    poId,
-                                    String(line?.name || line?.item_name || '').trim() || null,
-                                    String(line?.sku || '').trim() || null,
-                                    qtyExpected,
-                                ]
-                            );
-                            insertedCount++;
-                        }
-                        if (insertedCount > 0) {
+                        if (syncResult && syncResult.line_items_linked > 0) {
                             if (zohoMatchSummary) {
-                                zohoMatchSummary.matched_lines += insertedCount;
+                                zohoMatchSummary.matched_lines += syncResult.line_items_linked;
                                 zohoMatchSummary.zoho_po_ids.push(poId);
                             } else {
-                                zohoMatchSummary = { strategy: 'zoho_po_search', matched_lines: insertedCount, zoho_po_ids: [poId] };
+                                zohoMatchSummary = { strategy: 'zoho_po_search', matched_lines: syncResult.line_items_linked, zoho_po_ids: [poId] };
                             }
                         }
                     }

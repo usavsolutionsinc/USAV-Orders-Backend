@@ -107,6 +107,22 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
             const data = await res.json();
             invalidateReceivingCache();
 
+            const receivingId = Number(data?.record?.id);
+            if (Number.isFinite(receivingId) && receivingId > 0) {
+                await fetch('/api/local-pickups', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        receivingId,
+                        productTitle: selectedItem.product_title,
+                        sku: selectedItem.sku,
+                        quantity,
+                        partsStatus: 'COMPLETE',
+                        receivingGrade: conditionGrade,
+                    }),
+                }).catch(() => null);
+            }
+
             if (data.record) {
                 window.dispatchEvent(new CustomEvent('receiving-entry-added', { detail: data.record }));
             }

@@ -1,19 +1,22 @@
 /**
- * Zoho → receiving_lines sync
+ * Canonical Zoho inbound sync service.
  *
  * Data model:
- *   receiving       — physical package arrivals (tracking scans at the dock, Mode1/Mode2).
- *                     Populated ONLY by warehouse scans, NOT by this module.
- *   receiving_lines — expected line items from Zoho Purchase Orders.
- *                     receiving_id is NULL until a physical scan is matched/unboxed.
+ *   receiving       — physical package arrivals scanned at the dock.
+ *   receiving_lines — authoritative inbound line items sourced from Zoho.
  *
- * This module only writes to receiving_lines.
+ * This module keeps expected inbound state in receiving_lines and only links a
+ * physical receiving row when the warehouse has actually scanned a package.
  */
 
 import pool from '@/lib/db';
-import { getPurchaseReceiveById, getPurchaseOrderById } from '@/lib/zoho';
+import { getPurchaseOrderById, getPurchaseReceiveById, listPurchaseOrders } from '@/lib/zoho';
+import { formatApiOffsetTimestamp, formatPSTTimestamp } from '@/utils/date';
+import type { PoolClient } from 'pg';
+import { getSyncCursor, updateSyncCursor } from '@/lib/sync-cursors';
 
 type AnyRow = Record<string, unknown>;
+type WorkflowStatus = 'EXPECTED' | 'MATCHED';
 
 function asObject(value: unknown): AnyRow | null {
   return value && typeof value === 'object' ? (value as AnyRow) : null;
@@ -21,7 +24,7 @@ function asObject(value: unknown): AnyRow | null {
 
 function asString(...values: unknown[]): string | null {
   for (const value of values) {
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       const trimmed = value.trim();
       if (trimmed) return trimmed;
     }
@@ -40,25 +43,42 @@ function asPositiveInt(...values: unknown[]): number {
   return 0;
 }
 
-// ─── Import by Purchase Order ─────────────────────────────────────────────────
+function getZohoLastModifiedTime(row: AnyRow): string | null {
+  return asString(
+    row.last_modified_time,
+    row.last_modified_at,
+    row.updated_time,
+    row.modified_time,
+    row.created_time
+  );
+}
 
-export type ImportPOResult = {
+async function getReceivingLineColumns(client: PoolClient) {
+  const lineColsRes = await client.query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns WHERE table_name = 'receiving_lines'`
+  );
+  return new Set(lineColsRes.rows.map((r) => r.column_name));
+}
+
+type SyncPOLinesOptions = {
+  receivingId?: number | null;
+  workflowStatus?: WorkflowStatus;
+};
+
+type SyncPOLinesResult = {
   purchaseorder_id: string;
   purchaseorder_number: string;
   line_items_synced: number;
   line_items_skipped: number;
+  line_items_linked: number;
   mode: 'inserted' | 'updated';
 };
 
-/**
- * Syncs all line items from a single Zoho Purchase Order into receiving_lines.
- * - receiving_id is left NULL (physical scans assign it later).
- * - Upserts by (zoho_purchaseorder_id, zoho_line_item_id) so it's idempotent.
- * - No rows are created in the receiving table.
- */
-export async function importZohoPurchaseOrderToReceiving(
-  purchaseOrderId: string
-): Promise<ImportPOResult> {
+async function syncPurchaseOrderLines(
+  client: PoolClient,
+  purchaseOrderId: string,
+  options: SyncPOLinesOptions = {}
+): Promise<SyncPOLinesResult> {
   const poId = asString(purchaseOrderId);
   if (!poId) throw new Error('purchaseorder_id is required');
 
@@ -68,108 +88,152 @@ export async function importZohoPurchaseOrderToReceiving(
 
   const normalizedPoId = asString(po.purchaseorder_id, poId) || poId;
   const poNumber = asString(po.purchaseorder_number) || normalizedPoId;
-
   const lineItems = Array.isArray(po.line_items) ? po.line_items : [];
+  const lineCols = await getReceivingLineColumns(client);
 
+  let synced = 0;
+  let skipped = 0;
+  let linked = 0;
+  let mode: 'inserted' | 'updated' = 'inserted';
+  const workflowStatus = options.receivingId ? (options.workflowStatus || 'MATCHED') : 'EXPECTED';
+  const syncedAt = formatPSTTimestamp();
+  const lastModifiedTime = getZohoLastModifiedTime(po);
+
+  for (const rawLine of lineItems) {
+    const line = asObject(rawLine);
+    if (!line) {
+      skipped++;
+      continue;
+    }
+
+    const zohoItemId = asString(line.item_id);
+    const zohoLineItemId = asString(line.line_item_id, line.id);
+    const quantityExpected = asPositiveInt(line.quantity);
+    if (!zohoItemId || quantityExpected <= 0) {
+      skipped++;
+      continue;
+    }
+
+    const existing = (lineCols.has('zoho_purchaseorder_id') && lineCols.has('zoho_line_item_id') && zohoLineItemId)
+      ? await client.query<{ id: number; receiving_id: number | null }>(
+          `SELECT id, receiving_id
+           FROM receiving_lines
+           WHERE zoho_purchaseorder_id = $1
+             AND zoho_line_item_id = $2
+           LIMIT 1`,
+          [normalizedPoId, zohoLineItemId]
+        )
+      : { rows: [] as Array<{ id: number; receiving_id: number | null }> };
+
+    const existingRow = existing.rows[0] ?? null;
+    const desiredReceivingId =
+      options.receivingId && (!existingRow?.receiving_id || existingRow.receiving_id === options.receivingId)
+        ? options.receivingId
+        : existingRow?.receiving_id ?? null;
+
+    const lineValues: Record<string, unknown> = {
+      zoho_item_id: zohoItemId,
+      zoho_line_item_id: zohoLineItemId,
+      zoho_purchaseorder_id: normalizedPoId,
+      item_name: asString(line.name, line.item_name),
+      sku: asString(line.sku),
+      quantity_received: 0,
+      quantity_expected: quantityExpected,
+      qa_status: 'PENDING',
+      disposition_code: 'HOLD',
+      condition_grade: 'BRAND_NEW',
+      disposition_audit: JSON.stringify([]),
+      notes: asString(line.description),
+      workflow_status: workflowStatus,
+      receiving_id: desiredReceivingId,
+      zoho_sync_source: 'purchase_order',
+      zoho_last_modified_time: lastModifiedTime,
+      zoho_synced_at: syncedAt,
+    };
+
+    if (existingRow) {
+      const updatable = [
+        'zoho_item_id',
+        'zoho_line_item_id',
+        'item_name',
+        'sku',
+        'quantity_expected',
+        'notes',
+        'zoho_sync_source',
+        'zoho_last_modified_time',
+        'zoho_synced_at',
+      ];
+      if (options.receivingId && !existingRow.receiving_id) {
+        updatable.push('receiving_id', 'workflow_status');
+      }
+
+      const sets: string[] = [];
+      const vals: unknown[] = [];
+      let i = 1;
+      for (const col of updatable) {
+        if (!lineCols.has(col)) continue;
+        sets.push(`${col} = $${i++}`);
+        vals.push(lineValues[col]);
+      }
+      if (sets.length > 0) {
+        vals.push(existingRow.id);
+        await client.query(`UPDATE receiving_lines SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+        mode = 'updated';
+      }
+      if (options.receivingId && !existingRow.receiving_id) linked++;
+    } else {
+      const cols: string[] = [];
+      const vals: unknown[] = [];
+      for (const [col, val] of Object.entries(lineValues)) {
+        if (!lineCols.has(col)) continue;
+        cols.push(col);
+        vals.push(col === 'disposition_audit' ? `${val}` : val);
+      }
+      if (cols.length === 0) {
+        skipped++;
+        continue;
+      }
+
+      const placeholders = cols.map((c, i) =>
+        c === 'disposition_audit' ? `$${i + 1}::jsonb` : `$${i + 1}`
+      );
+      await client.query(
+        `INSERT INTO receiving_lines (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`,
+        vals
+      );
+      if (options.receivingId) linked++;
+    }
+
+    synced++;
+  }
+
+  return {
+    purchaseorder_id: normalizedPoId,
+    purchaseorder_number: poNumber,
+    line_items_synced: synced,
+    line_items_skipped: skipped,
+    line_items_linked: linked,
+    mode,
+  };
+}
+
+export type ImportPOResult = SyncPOLinesResult;
+
+/**
+ * Sync all line items from a single Zoho Purchase Order into receiving_lines.
+ * When receivingId is provided, any still-unmatched lines are linked to that
+ * physical receiving row and moved to MATCHED.
+ */
+export async function importZohoPurchaseOrderToReceiving(
+  purchaseOrderId: string,
+  options: SyncPOLinesOptions = {}
+): Promise<ImportPOResult> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
-    // Introspect receiving_lines columns so we gracefully handle any schema drift
-    const lineColsRes = await client.query<{ column_name: string }>(
-      `SELECT column_name FROM information_schema.columns WHERE table_name = 'receiving_lines'`
-    );
-    const lineCols = new Set(lineColsRes.rows.map((r) => r.column_name));
-
-    let synced = 0;
-    let skipped = 0;
-    let mode: 'inserted' | 'updated' = 'inserted';
-
-    for (const rawLine of lineItems) {
-      const line = asObject(rawLine);
-      if (!line) { skipped++; continue; }
-
-      const zohoItemId = asString(line.item_id);
-      const zohoLineItemId = asString(line.line_item_id, line.id);
-      // Zoho PO: quantity = ordered qty; quantity_received = already received qty
-      const quantityExpected = asPositiveInt(line.quantity);
-
-      if (!zohoItemId || quantityExpected <= 0) { skipped++; continue; }
-
-      // Check for an existing row for this PO + line item
-      let existingId: number | null = null;
-      if (lineCols.has('zoho_purchaseorder_id') && lineCols.has('zoho_line_item_id') && zohoLineItemId) {
-        const existing = await client.query<{ id: number }>(
-          `SELECT id FROM receiving_lines
-           WHERE zoho_purchaseorder_id = $1 AND zoho_line_item_id = $2
-           LIMIT 1`,
-          [normalizedPoId, zohoLineItemId]
-        );
-        existingId = existing.rows[0]?.id ?? null;
-      }
-
-      const lineValues: Record<string, unknown> = {
-        // receiving_id intentionally omitted — stays NULL until physical scan
-        zoho_item_id: zohoItemId,
-        zoho_line_item_id: zohoLineItemId,
-        zoho_purchaseorder_id: normalizedPoId,
-        item_name: asString(line.name, line.item_name),
-        sku: asString(line.sku),
-        quantity_received: 0,
-        quantity_expected: quantityExpected,
-        qa_status: 'PENDING',
-        disposition_code: 'HOLD',
-        condition_grade: 'BRAND_NEW',
-        disposition_audit: JSON.stringify([]),
-        notes: asString(line.description),
-      };
-
-      if (existingId) {
-        // Update mutable fields only; don't touch receiving_id or qa_status if already worked
-        const updatable = ['zoho_item_id', 'item_name', 'sku', 'quantity_expected', 'notes', 'zoho_line_item_id'];
-        const sets: string[] = [];
-        const vals: unknown[] = [];
-        let i = 1;
-        for (const col of updatable) {
-          if (!lineCols.has(col)) continue;
-          sets.push(`${col} = $${i++}`);
-          vals.push(lineValues[col]);
-        }
-        if (sets.length > 0) {
-          vals.push(existingId);
-          await client.query(`UPDATE receiving_lines SET ${sets.join(', ')} WHERE id = $${i}`, vals);
-          mode = 'updated';
-        }
-      } else {
-        // Insert new row
-        const cols: string[] = [];
-        const vals: unknown[] = [];
-        for (const [col, val] of Object.entries(lineValues)) {
-          if (!lineCols.has(col)) continue;
-          cols.push(col);
-          vals.push(col === 'disposition_audit' ? `${val}` : val);
-        }
-        if (cols.length === 0) { skipped++; continue; }
-
-        const placeholders = cols.map((c, i) =>
-          c === 'disposition_audit' ? `$${i + 1}::jsonb` : `$${i + 1}`
-        );
-        await client.query(
-          `INSERT INTO receiving_lines (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`,
-          vals
-        );
-      }
-      synced++;
-    }
-
+    const result = await syncPurchaseOrderLines(client, purchaseOrderId, options);
     await client.query('COMMIT');
-    return {
-      purchaseorder_id: normalizedPoId,
-      purchaseorder_number: poNumber,
-      line_items_synced: synced,
-      line_items_skipped: skipped,
-      mode,
-    };
+    return result;
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
@@ -178,8 +242,106 @@ export async function importZohoPurchaseOrderToReceiving(
   }
 }
 
-// ─── Legacy: Import by Purchase Receive ──────────────────────────────────────
-// (kept for backward compat with /api/zoho/purchase-receives/import)
+export type BulkSyncOptions = {
+  status?: string;
+  vendor_id?: string;
+  last_modified_time?: string;
+  days_back?: number;
+  per_page?: number;
+  max_pages?: number;
+  max_items?: number;
+};
+
+export type BulkSyncSummary = {
+  processed: number;
+  created: number;
+  updated: number;
+  failed: number;
+  linked: number;
+  line_items_synced: number;
+  errors: Array<{ purchaseorder_id: string; error: string }>;
+};
+
+export async function syncZohoPurchaseOrdersToReceiving(
+  opts: BulkSyncOptions = {}
+): Promise<BulkSyncSummary> {
+  const perPage = Math.min(200, Math.max(1, Number(opts.per_page) || 200));
+  const maxPages = Math.min(100, Math.max(1, Number(opts.max_pages) || 50));
+  const maxItems = Math.min(10000, Math.max(1, Number(opts.max_items) || 5000));
+
+  let lastModifiedTime = String(opts.last_modified_time || '').trim() || undefined;
+  if (!lastModifiedTime && opts.days_back && Number(opts.days_back) > 0) {
+    const cutoff = new Date(Date.now() - Number(opts.days_back) * 24 * 60 * 60 * 1000);
+    lastModifiedTime = formatApiOffsetTimestamp(cutoff);
+  }
+  if (!lastModifiedTime && !opts.days_back) {
+    const cursor = await getSyncCursor('zoho_purchase_orders');
+    if (cursor) {
+      lastModifiedTime = formatApiOffsetTimestamp(cursor);
+    }
+  }
+
+  const summary: BulkSyncSummary = {
+    processed: 0,
+    created: 0,
+    updated: 0,
+    failed: 0,
+    linked: 0,
+    line_items_synced: 0,
+    errors: [],
+  };
+
+  for (let page = 1; page <= maxPages && summary.processed < maxItems; page++) {
+    const data = await listPurchaseOrders({
+      page,
+      per_page: perPage,
+      status: opts.status || undefined,
+      vendor_id: opts.vendor_id || undefined,
+      last_modified_time: lastModifiedTime,
+    });
+
+    const rows = (data as AnyRow).purchaseorders;
+    const pos = Array.isArray(rows) ? rows : [];
+    if (pos.length === 0) break;
+
+    for (const po of pos) {
+      if (summary.processed >= maxItems) break;
+      summary.processed++;
+
+      const poRow = po as AnyRow;
+      const zohoId =
+        asString(poRow.purchaseorder_id, poRow.purchase_order_id, poRow.id) ?? 'unknown';
+
+      try {
+        const result = await importZohoPurchaseOrderToReceiving(zohoId);
+        summary.line_items_synced += result.line_items_synced;
+        summary.linked += result.line_items_linked;
+        if (result.mode === 'inserted') summary.created++;
+        else summary.updated++;
+      } catch (err: unknown) {
+        summary.failed++;
+        if (summary.errors.length < 50) {
+          summary.errors.push({
+            purchaseorder_id: zohoId,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          });
+        }
+      }
+    }
+
+    const pageCtx = (data as AnyRow)?.page_context as AnyRow | undefined;
+    const hasMore = Boolean(pageCtx?.has_more_page);
+    if (!hasMore) break;
+  }
+
+  if (summary.failed === 0) {
+    await updateSyncCursor('zoho_purchase_orders', new Date()).catch(() => {});
+  }
+
+  return summary;
+}
+
+// Legacy: import by Purchase Receive for backward compatibility.
 
 export type ImportResult = {
   purchase_receive_id: string;
@@ -188,10 +350,6 @@ export type ImportResult = {
   mode: 'inserted' | 'updated';
 };
 
-/**
- * Syncs line items from a single Zoho Purchase Receive into receiving_lines.
- * receiving_id is left NULL — matched to a physical scan by Mode2 unboxing.
- */
 export async function importZohoPurchaseReceiveToReceiving(options: {
   purchaseReceiveId: string;
   receivedBy?: number | null;
@@ -216,39 +374,44 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
   try {
     await client.query('BEGIN');
 
-    const lineColsRes = await client.query<{ column_name: string }>(
-      `SELECT column_name FROM information_schema.columns WHERE table_name = 'receiving_lines'`
-    );
-    const lineCols = new Set(lineColsRes.rows.map((r) => r.column_name));
-
+    const lineCols = await getReceivingLineColumns(client);
     let synced = 0;
     let skipped = 0;
     let mode: 'inserted' | 'updated' = 'inserted';
+    const syncedAt = formatPSTTimestamp();
+    const lastModifiedTime = getZohoLastModifiedTime(receive);
 
     for (const rawLine of lineItems) {
       const line = asObject(rawLine);
-      if (!line) { skipped++; continue; }
+      if (!line) {
+        skipped++;
+        continue;
+      }
 
       const zohoItemId = asString(line.item_id);
       const zohoLineItemId = asString(line.line_item_id, line.id);
       const qty = asPositiveInt(line.quantity, line.accepted_quantity, line.quantity_received);
-      if (!zohoItemId || qty <= 0) { skipped++; continue; }
-
-      let existingId: number | null = null;
-      if (lineCols.has('zoho_purchase_receive_id') && lineCols.has('zoho_line_item_id') && zohoLineItemId) {
-        const existing = await client.query<{ id: number }>(
-          `SELECT id FROM receiving_lines
-           WHERE zoho_purchase_receive_id = $1 AND zoho_line_item_id = $2
-           LIMIT 1`,
-          [normalizedReceiveId, zohoLineItemId]
-        );
-        existingId = existing.rows[0]?.id ?? null;
+      if (!zohoItemId || qty <= 0) {
+        skipped++;
+        continue;
       }
 
+      const existing = (lineCols.has('zoho_purchase_receive_id') && lineCols.has('zoho_line_item_id') && zohoLineItemId)
+        ? await client.query<{ id: number }>(
+            `SELECT id FROM receiving_lines
+             WHERE zoho_purchase_receive_id = $1
+               AND zoho_line_item_id = $2
+             LIMIT 1`,
+            [normalizedReceiveId, zohoLineItemId]
+          )
+        : { rows: [] as Array<{ id: number }> };
+
+      const existingId = existing.rows[0]?.id ?? null;
       const lineValues: Record<string, unknown> = {
         zoho_item_id: zohoItemId,
         zoho_line_item_id: zohoLineItemId,
         zoho_purchase_receive_id: normalizedReceiveId,
+        zoho_purchaseorder_id: asString(receive.purchaseorder_id),
         item_name: asString(line.name, line.item_name),
         sku: asString(line.sku),
         quantity_received: qty,
@@ -258,10 +421,24 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
         condition_grade: 'BRAND_NEW',
         disposition_audit: JSON.stringify([]),
         notes: null,
+        zoho_sync_source: 'purchase_receive',
+        zoho_last_modified_time: lastModifiedTime,
+        zoho_synced_at: syncedAt,
       };
 
       if (existingId) {
-        const updatable = ['zoho_item_id', 'item_name', 'sku', 'quantity_received', 'quantity_expected', 'notes'];
+        const updatable = [
+          'zoho_item_id',
+          'zoho_purchaseorder_id',
+          'item_name',
+          'sku',
+          'quantity_received',
+          'quantity_expected',
+          'notes',
+          'zoho_sync_source',
+          'zoho_last_modified_time',
+          'zoho_synced_at',
+        ];
         const sets: string[] = [];
         const vals: unknown[] = [];
         let i = 1;
@@ -283,7 +460,10 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
           cols.push(col);
           vals.push(col === 'disposition_audit' ? `${val}` : val);
         }
-        if (cols.length === 0) { skipped++; continue; }
+        if (cols.length === 0) {
+          skipped++;
+          continue;
+        }
 
         const placeholders = cols.map((c, i) =>
           c === 'disposition_audit' ? `$${i + 1}::jsonb` : `$${i + 1}`

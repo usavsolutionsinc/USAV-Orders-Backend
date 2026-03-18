@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,14 +11,20 @@ function isBlank(value: unknown): boolean {
 /**
  * POST /api/orders/integrity-check
  *
- * Integrity check: deduplicate orders by unique (order_id, tracking).
+ * Integrity check: deduplicate orders only when the same order_id is linked
+ * to the same tracking number more than once.
  * Industry-standard pattern: report-first (dryRun) then fix.
  *
  * - dryRun: true = report only, no deletes
  * - dryRun: false or omit = deduplicate (keep most complete row per group, delete rest)
  *
- * Groups by (order_id, shipment_id). When multiple orders share the same pair,
- * keeps the one with the most filled fields (product_title, condition, sku, etc.).
+ * Only groups rows when BOTH are present:
+ * - order_id
+ * - tracking number (via shipment_id -> shipping_tracking_numbers)
+ *
+ * Rows are deleted only when multiple orders share the same order_id AND the
+ * same normalized tracking number. Different order_id values on the same
+ * tracking number are not touched. Blank/no-tracking rows are not touched.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -28,6 +35,8 @@ export async function POST(req: NextRequest) {
       id: number;
       order_id: string | null;
       shipment_id: number | null;
+      tracking_number_raw: string | null;
+      tracking_number_normalized: string | null;
       product_title: string | null;
       condition: string | null;
       item_number: string | null;
@@ -35,17 +44,35 @@ export async function POST(req: NextRequest) {
       quantity: string | null;
       notes: string | null;
     }>(
-      `SELECT id, order_id, shipment_id, product_title, condition, item_number, sku, quantity, notes
-       FROM orders
-       ORDER BY id ASC`
+      `SELECT
+         o.id,
+         o.order_id,
+         o.shipment_id,
+         stn.tracking_number_raw,
+         stn.tracking_number_normalized,
+         o.product_title,
+         o.condition,
+         o.item_number,
+         o.sku,
+         o.quantity,
+         o.notes
+       FROM orders o
+       LEFT JOIN shipping_tracking_numbers stn
+         ON stn.id = o.shipment_id
+       ORDER BY o.id ASC`
     );
 
-    // Group by (order_id, shipment_id)
+    // Group only by (order_id, tracking) when both values exist.
     const groups = new Map<string, typeof orders>();
     for (const o of orders) {
       const oid = String(o.order_id ?? '').trim();
-      const sid = o.shipment_id ?? 0;
-      const key = `${oid}::${sid}`;
+      const tracking =
+        String(o.tracking_number_normalized ?? '').trim() ||
+        normalizeTrackingNumber(String(o.tracking_number_raw ?? '').trim());
+
+      if (!oid || !tracking) continue;
+
+      const key = `${oid}::${tracking}`;
       const arr = groups.get(key) ?? [];
       arr.push(o);
       groups.set(key, arr);

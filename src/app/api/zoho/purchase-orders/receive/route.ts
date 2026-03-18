@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     const assignedTechIdRaw = Number(body?.assigned_tech_id);
     const assignedTechId =
       Number.isFinite(assignedTechIdRaw) && assignedTechIdRaw > 0 ? assignedTechIdRaw : null;
-    const needsTest = !!body?.needs_test;
+    const needsTest = body?.needs_test === undefined ? true : !!body.needs_test;
     const defaultCondition = VALID_CONDITIONS.has(String(body?.condition_grade || '').toUpperCase())
       ? String(body.condition_grade).toUpperCase()
       : 'BRAND_NEW';
@@ -161,21 +161,27 @@ export async function POST(request: NextRequest) {
     for (const line of lineItems) {
       await client.query(
         `INSERT INTO receiving_lines (
-          receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchase_receive_id,
+          receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchase_receive_id, zoho_purchaseorder_id,
           item_name, sku, quantity_received, quantity_expected,
-          qa_status, disposition_code, condition_grade, disposition_audit
+          qa_status, disposition_code, condition_grade, disposition_audit,
+          workflow_status, needs_test, assigned_tech_id, zoho_sync_source, zoho_synced_at
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'PENDING','HOLD',$9,'[]'::jsonb)`,
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'PENDING','HOLD',$10,'[]'::jsonb,
+                'MATCHED'::inbound_workflow_status_enum,$11,$12,'purchase_receive',$13)`,
         [
           receivingId,
           line.item_id,
           line.line_item_id,
           purchaseReceiveId || null,
+          purchaseOrderId,
           line.item_name || null,
           line.sku || null,
           line.quantity_received,
           line.quantity_expected ?? null,
           line.condition_grade,
+          needsTest,
+          assignedTechId,
+          formatPSTTimestamp(),
         ]
       );
       insertedLines++;

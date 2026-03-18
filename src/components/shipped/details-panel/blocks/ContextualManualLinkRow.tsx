@@ -20,6 +20,7 @@ interface ContextualManualLinkRowProps {
   sku?: string | null;
   itemNumber?: string | null;
   onSaved?: (fileId: string) => void;
+  allowEmbeddedItemNumberInput?: boolean;
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -28,6 +29,7 @@ export function ContextualManualLinkRow({
   sku,
   itemNumber,
   onSaved,
+  allowEmbeddedItemNumberInput = true,
 }: ContextualManualLinkRowProps) {
   const normalizedSku = String(sku || '').trim().toUpperCase();
   const normalizedItemNumber = String(itemNumber || '').trim().toUpperCase();
@@ -161,7 +163,7 @@ export function ContextualManualLinkRow({
         dividerClassName="border-b border-gray-100"
       >
         <div className="space-y-2">
-          {!normalizedItemNumber ? (
+          {allowEmbeddedItemNumberInput && !normalizedItemNumber ? (
             <input
               ref={itemInputRef}
               type="text"
@@ -183,7 +185,11 @@ export function ContextualManualLinkRow({
               setSaveState('idle');
             }}
             onBlur={() => { void saveManual(); }}
-            placeholder={effectiveItemNumber ? `Paste manual link or file ID for ${contextualKey}` : 'Enter item number first'}
+            placeholder={
+              effectiveItemNumber
+                ? `Paste manual link or file ID for ${contextualKey}`
+                : 'Enter item number'
+            }
             disabled={!effectiveItemNumber}
             className="h-8 w-full border-0 bg-transparent px-0 text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400 disabled:text-gray-400"
           />

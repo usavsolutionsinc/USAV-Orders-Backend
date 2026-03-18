@@ -1,7 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { Check } from '@/components/Icons';
+import { useEffect, useRef, useState } from 'react';
+import { X } from '@/components/Icons';
 import { dmSans } from '@/lib/fonts';
 
 interface OutOfStockEditorBlockProps {
@@ -19,52 +19,65 @@ export function OutOfStockEditorBlock({
   onChange,
   onCancel,
   onSubmit,
-  isSaving = false,
   autoFocus = false,
   className = '',
 }: OutOfStockEditorBlockProps) {
+  const [showSaved, setShowSaved] = useState(false);
+  const onSubmitRef = useRef(onSubmit);
+  useEffect(() => { onSubmitRef.current = onSubmit; }, [onSubmit]);
+
+  // Debounced auto-save on value change
+  useEffect(() => {
+    if (!value.trim()) return;
+    const t = setTimeout(() => {
+      onSubmitRef.current();
+      setShowSaved(true);
+    }, 700);
+    return () => clearTimeout(t);
+  }, [value]);
+
+  // Fade out "Saved" after 1.6s
+  useEffect(() => {
+    if (!showSaved) return;
+    const t = setTimeout(() => setShowSaved(false), 1600);
+    return () => clearTimeout(t);
+  }, [showSaved]);
+
   return (
-    <motion.div
-      initial={{ height: 0, opacity: 0, y: -4 }}
-      animate={{ height: 'auto', opacity: 1, y: 0 }}
-      exit={{ height: 0, opacity: 0, y: -4 }}
-      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-      className={`overflow-hidden ${className}`}
-    >
-      <div className="flex flex-col gap-2 rounded-xl border border-red-200 bg-red-50/40 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),inset_0_0_0_1px_rgba(239,68,68,0.06)]">
-        <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="What is out of stock?"
-          rows={2}
-          className={`w-full resize-none rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-normal leading-5 text-gray-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.06)] outline-none transition-[border-color,box-shadow] placeholder:text-gray-400 focus:border-red-400 focus:shadow-[inset_0_1px_2px_rgba(15,23,42,0.06),0_0_0_1px_rgba(239,68,68,0.18)] ${dmSans.className}`}
-          autoFocus={autoFocus}
-        />
-        <div className="grid grid-cols-2 gap-2">
-          <motion.button
+    <div className={`border-b border-red-100 pb-2 ${className}`}>
+      {/* Row 1 — label + saved feedback + X */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-red-500 leading-none">
+          What needs to be ordered?
+        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-[9px] font-bold uppercase tracking-wide text-emerald-500 transition-opacity duration-300 ${
+              showSaved ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            Saved
+          </span>
+          <button
             type="button"
             onClick={onCancel}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.96 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-            className="h-8 rounded-lg border border-red-200 bg-white text-[9px] font-black uppercase tracking-wider text-red-700"
+            className="flex h-5 w-5 items-center justify-center text-red-400 hover:text-red-600 transition-colors"
+            aria-label="Cancel"
           >
-            Cancel
-          </motion.button>
-          <motion.button
-            type="button"
-            onClick={onSubmit}
-            disabled={isSaving}
-            whileHover={isSaving ? undefined : { scale: 1.02 }}
-            whileTap={isSaving ? undefined : { scale: 0.96 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-red-600 text-[9px] font-black uppercase tracking-wider text-white disabled:opacity-50"
-          >
-            <Check className="w-3 h-3" />
-            {isSaving ? 'Saving' : 'Submit'}
-          </motion.button>
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
-    </motion.div>
+
+      {/* Row 2 — input only */}
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Describe missing parts…"
+        autoFocus={autoFocus}
+        className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-400 ${dmSans.className}`}
+      />
+    </div>
   );
 }
