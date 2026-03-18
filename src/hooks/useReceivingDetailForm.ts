@@ -103,7 +103,7 @@ export function useReceivingDetailForm({
   useEffect(() => {
     const loadTechs = async () => {
       try {
-        const res = await fetch('/api/staff?role=technician&active=true', { cache: 'no-store' });
+        const res = await fetch('/api/staff?role=technician&active=true');
         if (!res.ok) return;
         const rows = await res.json();
         if (!Array.isArray(rows)) return;

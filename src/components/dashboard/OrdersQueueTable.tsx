@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, Search } from '@/components/Icons';
-import { CopyableText } from '@/components/ui/CopyableText';
+import { OrderIdChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -168,10 +168,6 @@ export function OrdersQueueTable({
 
   const totalCount = Object.values(groupedRecords).reduce((sum, dayRecords) => sum + dayRecords.length, 0);
   const fallbackDate = formatDate(getCurrentPSTDateKey());
-  const getLast4 = (value: string | null | undefined) => {
-    const raw = String(value || '');
-    return raw.length > 4 ? raw.slice(-4) : raw || '---';
-  };
   const getDaysLateNumber = (deadlineAt: string | null | undefined): number | null => {
     const deadlineKey = toPSTDateKey(deadlineAt);
     if (!deadlineKey) return null;
@@ -297,7 +293,7 @@ export function OrdersQueueTable({
                             key={record.id}
                             onClick={() => handleRowClick(record)}
                             data-order-row-id={String(record.id)}
-                            className={`grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                               selectedRecord?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                             }`}
                           >
@@ -349,26 +345,15 @@ export function OrdersQueueTable({
                               </div>
                             </div>
 
-                            <div className="flex items-start justify-end gap-1.5">
-                              <div className="flex flex-col w-[60px]">
-                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
-                                <CopyableText
-                                  text={record.order_id || ''}
-                                  displayText={getLast4(record.order_id)}
-                                  className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
-                                  variant="order"
-                                />
-                              </div>
-
-                              <div className="flex flex-col w-[60px]">
-                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Track</span>
-                                <CopyableText
-                                  text={(record as any).tracking_number || record.shipping_tracking_number || ''}
-                                  displayText={getLast4((record as any).tracking_number || record.shipping_tracking_number)}
-                                  className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
-                                  variant="default"
-                                />
-                              </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <OrderIdChip
+                                value={record.order_id || ''}
+                                display={getLast4(record.order_id)}
+                              />
+                              <TrackingChip
+                                value={(record as any).tracking_number || record.shipping_tracking_number || ''}
+                                display={getLast4((record as any).tracking_number || record.shipping_tracking_number)}
+                              />
                             </div>
                           </motion.div>
                         );

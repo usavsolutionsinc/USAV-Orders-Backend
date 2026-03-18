@@ -43,7 +43,7 @@ interface FBAShipmentLegacyRow {
 type FBAShipmentRow = FBAShipmentLifecycleRow | FBAShipmentLegacyRow;
 
 async function fetchFbaShipments(): Promise<{ rows: FBAShipmentRow[]; source: string }> {
-  const res = await fetch('/api/dashboard/fba-shipments?limit=500', { cache: 'no-store' });
+  const res = await fetch('/api/dashboard/fba-shipments?limit=500');
   if (!res.ok) throw new Error('Failed to fetch FBA shipments');
   const data = await res.json();
   return { rows: Array.isArray(data?.rows) ? data.rows : [], source: data?.source || 'unknown' };

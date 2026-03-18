@@ -19,6 +19,7 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
     const searchParams = useSearchParams();
     const currentSearch = searchParams.get('search') || '';
     const [searchInput, setSearchInput] = useState(currentSearch);
+    const [activeFilledSku, setActiveFilledSku] = useState('');
     const view = (searchParams.get('view') === 'sku_history' ? 'sku_history' : 'sku_stock') as SkuView;
 
     useEffect(() => {
@@ -44,6 +45,16 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
 
         return () => window.clearTimeout(handle);
     }, [currentSearch, router, searchInput, searchParams]);
+
+    useEffect(() => {
+        const handleSkuFill = (event: Event) => {
+            const sku = String((event as CustomEvent<{ sku?: string }>).detail?.sku || '').trim().toLowerCase();
+            setActiveFilledSku(sku);
+        };
+
+        window.addEventListener('sku:fill', handleSkuFill);
+        return () => window.removeEventListener('sku:fill', handleSkuFill);
+    }, []);
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -73,6 +84,12 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
         nextParams.set('search', nextSearchValue);
         const nextSearch = nextParams.toString();
         router.replace(nextSearch ? `/sku-stock?${nextSearch}` : '/sku-stock');
+    };
+
+    const handleAddFavorite = (favorite: FavoriteSkuRecord) => {
+        const sku = String(favorite.sku || '').trim();
+        if (!sku) return;
+        window.dispatchEvent(new CustomEvent('sku:fill', { detail: { sku } }));
     };
 
     const content = (
@@ -129,7 +146,10 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
                     useLabel="Search SKU"
                     inlineRows
                     buttonAccent="blue"
+                    addButtonAccent="green"
                     onUseFavorite={handleUseFavorite}
+                    onAddFavorite={handleAddFavorite}
+                    isFavoriteAdded={(favorite) => String(favorite.sku || '').trim().toLowerCase() === activeFilledSku}
                 />
                 <MultiSkuSnBarcode />
             </motion.div>

@@ -330,7 +330,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
   const { data, isLoading, isFetching, refetch } = useQuery<ApiResponse>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/receiving-lines?${buildParams()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/receiving-lines?${buildParams()}`);
       if (!res.ok) throw new Error('fetch failed');
       return res.json();
     },

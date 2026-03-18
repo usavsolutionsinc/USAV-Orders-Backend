@@ -86,7 +86,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
 
     try {
       const query = parentId ? `?parentId=${encodeURIComponent(parentId)}` : '';
-      const response = await fetch(`/api/repair/ecwid-categories${query}`, { cache: 'no-store' });
+      const response = await fetch(`/api/repair/ecwid-categories${query}`);
       const payload = (await response.json()) as CategoriesResponse;
 
       if (!response.ok || !payload.success) {
@@ -114,7 +114,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
     try {
       const response = await fetch(
         `/api/repair/ecwid-products?categoryId=${encodeURIComponent(categoryId)}`,
-        { cache: 'no-store' }
+        
       );
       const payload = (await response.json()) as ProductsResponse;
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Failed to load products');

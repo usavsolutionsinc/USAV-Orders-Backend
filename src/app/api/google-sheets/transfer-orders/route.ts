@@ -212,7 +212,7 @@ async function runTransferOrders(manualSheetName?: string) {
             });
         }
 
-        // 4. Preload the latest existing orders and customers using order_id first, then tracking as a fallback.
+        // 4. Preload existing orders/customers for tracking-first dedupe and order_id backfill.
         const sourceOrderIds = Array.from(
             new Set(
                 eligibleSourceRows
@@ -525,11 +525,12 @@ async function runTransferOrders(manualSheetName?: string) {
                     ?? shipmentByNormalized.get(normalizedSheetTracking)?.id
                     ?? null
                 : null;
-            // Prefer tracking match when sheet has tracking — ensures correct order when multiple
-            // orders share the same order_id but have different tracking numbers.
-            const existingOrder = (normalizedSheetTracking ? latestOrderByTracking.get(normalizedSheetTracking) : undefined)
-                ?? (orderId ? latestOrderByOrderId.get(orderId) : undefined)
-                ?? (orderId ? latestBlankTrackingOrderByOrderId.get(orderId) : undefined);
+            // Tracking rows must dedupe by tracking only. Falling back to order_id here
+            // would incorrectly block inserts for split shipments that share order_id.
+            const existingOrder = normalizedSheetTracking
+                ? latestOrderByTracking.get(normalizedSheetTracking)
+                : (orderId ? latestOrderByOrderId.get(orderId) : undefined)
+                    ?? (orderId ? latestBlankTrackingOrderByOrderId.get(orderId) : undefined);
             const rawShipByDate = row[colIndices.shipByDate] || '';
             const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
             const sheetShipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
@@ -556,17 +557,33 @@ async function runTransferOrders(manualSheetName?: string) {
             if (!existingOrder && !sheetTracking) continue;
 
             if (existingOrder) {
-                // One tracking per order_id from sheet → dedupe: keep one order, delete duplicates.
+                // Dedupe scope:
+                // - tracking row: only orders for the same tracking number.
+                // - blank-tracking row: orders for the same order_id.
                 const candidates = new Map<number, OrderRecord>();
                 const byTracking = normalizedSheetTracking ? allOrdersByTracking.get(normalizedSheetTracking) ?? [] : [];
-                const byOrderId = orderId ? allOrdersByOrderId.get(orderId) ?? [] : [];
+                const byOrderId = !normalizedSheetTracking && orderId ? allOrdersByOrderId.get(orderId) ?? [] : [];
                 [...byTracking, ...byOrderId].forEach((o) => candidates.set(o.id, o));
 
                 const candidateList = Array.from(candidates.values());
+                if (candidateList.length === 0) {
+                    candidateList.push({
+                        id: existingOrder.id,
+                        orderId: existingOrder.orderId,
+                        itemNumber: existingOrder.itemNumber,
+                        productTitle: existingOrder.productTitle,
+                        quantity: existingOrder.quantity,
+                        sku: existingOrder.sku,
+                        condition: existingOrder.condition,
+                        notes: existingOrder.notes,
+                        customerId: existingOrder.customerId,
+                        shipmentId: existingOrder.shipmentId ?? null,
+                    });
+                }
                 let orderToKeep: OrderRecord;
 
-                if (candidateList.length > 1 && orderId && normalizedSheetTracking) {
-                    // Multiple orders share same order_id + tracking → keep one, delete rest.
+                if (candidateList.length > 1 && normalizedSheetTracking) {
+                    // Multiple orders share the same tracking number → keep one, delete rest.
                     const score = (o: OrderRecord) =>
                         [o.productTitle, o.condition, o.itemNumber, o.sku, o.quantity, o.notes]
                             .filter((v) => !isBlank(v)).length;

@@ -12,11 +12,25 @@ export interface PackerRecord {
   packed_by: number;
   tracking_type: string | null;
   order_id: string | null;
+  order_row_id?: number | null;
+  shipment_id?: number | null;
   account_source: string | null;
   product_title: string | null;
   quantity?: string | null;
+  item_number?: string | null;
   condition: string | null;
   sku: string | null;
+  notes?: string | null;
+  status_history?: any;
+  ship_by_date?: string | null;
+  deadline_at?: string | null;
+  serial_number?: string | null;
+  tester_id?: number | null;
+  tested_by?: number | null;
+  test_date_time?: string | null;
+  tested_by_name?: string | null;
+  tester_name?: string | null;
+  packed_by_name?: string | null;
   packer_photos_url: any[];
 }
 

@@ -20,7 +20,7 @@ export function ReceivingPhotosSection({ receivingId }: ReceivingPhotosSectionPr
   const { data: photos = [], isFetching } = useQuery<ReceivingPhoto[]>({
     queryKey: ['receiving-photos', receivingId],
     queryFn: async () => {
-      const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`, { cache: 'no-store' });
+      const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`);
       if (!res.ok) return [];
       const data = await res.json();
       return Array.isArray(data.photos) ? data.photos : [];

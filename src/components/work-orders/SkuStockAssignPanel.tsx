@@ -98,7 +98,7 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
       try {
         const res = await fetch(
           `/api/assignments/sku-search?q=${encodeURIComponent(trimmed)}&limit=60`,
-          { signal: controller.signal, cache: 'no-store' }
+          { signal: controller.signal }
         );
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || 'Search failed');

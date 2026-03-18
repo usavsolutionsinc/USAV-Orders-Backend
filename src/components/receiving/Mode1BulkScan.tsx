@@ -298,7 +298,7 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
 async function enrichWithZoho(tracking: string, receivingId: number) {
     try {
         const res = await fetch(`/api/zoho/purchase-receives?tracking=${encodeURIComponent(tracking)}`, {
-            cache: 'no-store',
+           
         });
         if (!res.ok) return;
         const data = await res.json();

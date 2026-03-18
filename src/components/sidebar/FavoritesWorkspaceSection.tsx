@@ -32,6 +32,9 @@ interface FavoritesWorkspaceSectionProps {
   hideHeading?: boolean;
   inlineRows?: boolean;
   buttonAccent?: 'orange' | 'blue';
+  addButtonAccent?: 'orange' | 'green';
+  onAddFavorite?: (favorite: FavoriteSkuRecord) => void;
+  isFavoriteAdded?: (favorite: FavoriteSkuRecord) => boolean;
 }
 
 const EMPTY_DRAFT: FavoriteDraft = {
@@ -66,6 +69,9 @@ export function FavoritesWorkspaceSection({
   hideHeading = false,
   inlineRows = false,
   buttonAccent,
+  addButtonAccent = 'orange',
+  onAddFavorite,
+  isFavoriteAdded,
 }: FavoritesWorkspaceSectionProps) {
   const [favorites, setFavorites] = useState<FavoriteSkuRecord[]>([]);
   const [draft, setDraft] = useState<FavoriteDraft>(EMPTY_DRAFT);
@@ -88,7 +94,7 @@ export function FavoritesWorkspaceSection({
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/favorites?workspace=${encodeURIComponent(workspaceKey)}`, { cache: 'no-store' });
+      const res = await fetch(`/api/favorites?workspace=${encodeURIComponent(workspaceKey)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.details || data?.error || 'Failed to load favorites');
       setFavorites(Array.isArray(data?.favorites) ? data.favorites : []);
@@ -153,7 +159,7 @@ export function FavoritesWorkspaceSection({
       setSearchingProducts(true);
       try {
         const res = await fetch(`/api/ecwid/products/search?q=${encodeURIComponent(trimmed)}`, {
-          cache: 'no-store',
+         
           signal: controller.signal,
         });
         const data = await res.json();
@@ -420,80 +426,86 @@ export function FavoritesWorkspaceSection({
         </div>
       ) : (
         <div className={inlineRows ? 'divide-y divide-gray-200 border-t border-gray-200' : 'space-y-2'}>
-          {favorites.map((favorite) => (
-            <div key={`${favorite.workspaceKey}-${favorite.id}`}>
-              {/* Favorite row */}
-              <div className={inlineRows ? 'py-3' : 'rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3'}>
-                {/* Row 1 — label, wraps freely */}
-                <p className="text-[12px] font-black leading-snug tracking-tight text-black">{favorite.label}</p>
+          {favorites.map((favorite) => {
+            const isAdded = isFavoriteAdded?.(favorite) ?? false;
+            const addButtonClassName = isAdded
+              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+              : addButtonAccent === 'green'
+                ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                : 'bg-orange-500 text-white hover:bg-orange-600';
 
-                {/* Rows 2 & 3 + action buttons */}
-                <div className="mt-1 flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
-                      {favorite.sku || 'No SKU'}
-                      {favorite.defaultPrice ? ` · $${favorite.defaultPrice}` : ''}
-                    </p>
-                    {favorite.issueTemplate ? (
-                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
-                        {favorite.issueTemplate}
+            return (
+              <div key={`${favorite.workspaceKey}-${favorite.id}`}>
+                <div className={inlineRows ? 'py-3' : 'rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3'}>
+                  <p className="text-[12px] font-black leading-snug tracking-tight text-black">{favorite.label}</p>
+
+                  <div className="mt-1 flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">
+                        {favorite.sku || 'No SKU'}
+                        {favorite.defaultPrice ? ` · $${favorite.defaultPrice}` : ''}
                       </p>
-                    ) : null}
-                    {!inlineRows && favorite.productTitle && (
-                      <p className="mt-1 text-[11px] font-semibold text-gray-500">{favorite.productTitle}</p>
+                      {favorite.issueTemplate ? (
+                        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+                          {favorite.issueTemplate}
+                        </p>
+                      ) : null}
+                      {!inlineRows && favorite.productTitle && (
+                        <p className="mt-1 text-[11px] font-semibold text-gray-500">{favorite.productTitle}</p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editingFavoriteId === favorite.id && showForm) {
+                          resetDraft();
+                        } else {
+                          openEditForm(favorite);
+                        }
+                      }}
+                      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-colors ${
+                        editingFavoriteId === favorite.id && showForm
+                          ? 'border-blue-200 bg-blue-50 text-blue-600'
+                          : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600'
+                      }`}
+                      aria-label={`Edit ${favorite.label}`}
+                      title="Edit favorite"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+
+                    {isManageMode ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(favorite.id)}
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-red-200 bg-red-50 text-red-500 transition-colors hover:bg-red-100 hover:text-red-700"
+                        aria-label={`Delete ${favorite.label}`}
+                        title="Delete favorite"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUseFavorite(favorite);
+                          onAddFavorite?.(favorite);
+                        }}
+                        className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition-colors ${addButtonClassName}`}
+                        aria-label={useLabel}
+                        title={useLabel}
+                      >
+                        {isAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                      </button>
                     )}
                   </div>
-
-                  {/* Row pencil — opens inline edit form below this row */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (editingFavoriteId === favorite.id && showForm) {
-                        resetDraft();
-                      } else {
-                        openEditForm(favorite);
-                      }
-                    }}
-                    className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-colors ${
-                      editingFavoriteId === favorite.id && showForm
-                        ? 'border-blue-200 bg-blue-50 text-blue-600'
-                        : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600'
-                    }`}
-                    aria-label={`Edit ${favorite.label}`}
-                    title="Edit favorite"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-
-                  {/* Orange plus (use) ↔ Red trash (delete in manage mode) */}
-                  {isManageMode ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(favorite.id)}
-                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-red-200 bg-red-50 text-red-500 transition-colors hover:bg-red-100 hover:text-red-700"
-                      aria-label={`Delete ${favorite.label}`}
-                      title="Delete favorite"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onUseFavorite(favorite)}
-                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-white transition-colors hover:bg-orange-600"
-                      aria-label={useLabel}
-                      title={useLabel}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
-              </div>
 
-              {/* Inline edit form — edge to edge below this row */}
-              {showForm && editingFavoriteId === favorite.id && renderForm()}
-            </div>
-          ))}
+                {showForm && editingFavoriteId === favorite.id && renderForm()}
+              </div>
+            );
+          })}
         </div>
       )}
     </section>

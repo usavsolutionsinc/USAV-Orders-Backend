@@ -9,10 +9,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(() => new QueryClient({
         defaultOptions: {
             queries: {
-                staleTime: 5 * 60 * 1000, // 5 minutes — safe since server-side tag invalidation fires on mutations
-                gcTime: 10 * 60 * 1000,   // keep unused cache for 10 minutes
-                retry: 2,
+                staleTime: 5 * 60 * 1000,  // 5 min — safe; server-side tag invalidation fires on mutations
+                gcTime: 30 * 60 * 1000,    // keep unused cache in memory for 30 min (was 10)
+                retry: 1,                  // one retry is enough; 2 doubles perceived lag on errors
                 refetchOnWindowFocus: false,
+                refetchOnReconnect: false,  // don't blast the API on every network blip
             },
         },
     }));

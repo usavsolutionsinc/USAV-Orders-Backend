@@ -10,12 +10,13 @@ import { createStationActivityLog } from '@/lib/station-activity';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
-    const packerId = searchParams.get('packerId');
+    const packerId = searchParams.get('packerId') || searchParams.get('packedBy');
+    const testedBy = searchParams.get('testedBy');
     const limit = parseInt(searchParams.get('limit') || '5000');
     const offset = parseInt(searchParams.get('offset') || '0');
     const weekStart = searchParams.get('weekStart') || '';
     const weekEnd = searchParams.get('weekEnd') || '';
-    const cacheLookup = createCacheLookupKey({ packerId: packerId || '', limit, offset, weekStart, weekEnd });
+    const cacheLookup = createCacheLookupKey({ packerId: packerId || '', testedBy: testedBy || '', limit, offset, weekStart, weekEnd });
 
     const today = getCurrentPSTDateKey();
     const cacheTTL = weekEnd && weekEnd < today ? 86400 : 120;
@@ -35,6 +36,15 @@ export async function GET(req: NextRequest) {
             if (!isNaN(packerIdNum)) {
                 params.push(packerIdNum);
                 conditions.push(`sal.staff_id = $${params.length}`);
+            }
+        }
+
+        if (testedBy) {
+            const testedByNum = parseInt(testedBy);
+            if (!isNaN(testedByNum)) {
+                params.push(testedByNum);
+                const testedByIdx = params.length;
+                conditions.push(`(test_data.tested_by = $${testedByIdx} OR wa_t.assigned_tech_id = $${testedByIdx})`);
             }
         }
 
@@ -58,6 +68,7 @@ export async function GET(req: NextRequest) {
                 sal.scan_ref,
                 COALESCE(stn.tracking_number_raw, sal.scan_ref, sal.fnsku) AS shipping_tracking_number,
                 sal.staff_id AS packed_by,
+                packed_staff.name AS packed_by_name,
                 COALESCE(pl.tracking_type,
                          CASE sal.activity_type
                            WHEN 'FBA_READY' THEN 'FNSKU'
@@ -70,6 +81,8 @@ export async function GET(req: NextRequest) {
                      WHERE p.entity_type = 'PACKER_LOG' AND p.entity_id = sal.packer_log_id),
                     '[]'::json
                 ) AS packer_photos_url,
+                o.id AS order_row_id,
+                o.shipment_id,
                 o.order_id,
                 COALESCE(o.account_source, CASE WHEN sal.fnsku IS NOT NULL THEN 'fba' ELSE null END) AS account_source,
                 COALESCE(
@@ -84,13 +97,25 @@ export async function GET(req: NextRequest) {
                     ff.product_title,
                     o.product_title
                 ) AS product_title,
+                to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
+                to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS deadline_at,
+                o.item_number,
                 COALESCE(o.condition, CASE WHEN sal.fnsku IS NOT NULL THEN 'FBA Scan' ELSE null END) AS condition,
                 COALESCE(o.quantity, sal.metadata->>'quantity') AS quantity,
-                COALESCE(o.sku, ff.sku, sal.metadata->>'sku') AS sku
+                COALESCE(o.sku, ff.sku, sal.metadata->>'sku') AS sku,
+                COALESCE(o.notes, '') AS notes,
+                COALESCE(o.status_history, '[]'::jsonb) AS status_history,
+                COALESCE(test_data.serial_number, '') AS serial_number,
+                wa_t.assigned_tech_id AS tester_id,
+                test_data.tested_by,
+                test_data.test_date_time,
+                tested_staff.name AS tested_by_name,
+                tester_staff.name AS tester_name
             FROM station_activity_logs sal
             LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
             LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
+            LEFT JOIN staff packed_staff ON packed_staff.id = sal.staff_id
             LEFT JOIN LATERAL (
                 SELECT ord.id
                 FROM orders ord
@@ -112,6 +137,45 @@ export async function GET(req: NextRequest) {
                 LIMIT 1
             ) order_match ON TRUE
             LEFT JOIN orders o ON o.id = order_match.id
+            LEFT JOIN LATERAL (
+                SELECT wa.deadline_at
+                FROM work_assignments wa
+                WHERE wa.entity_type = 'ORDER'
+                  AND wa.entity_id = o.id
+                  AND wa.work_type = 'TEST'
+                ORDER BY
+                  CASE wa.status
+                    WHEN 'IN_PROGRESS' THEN 1
+                    WHEN 'ASSIGNED' THEN 2
+                    WHEN 'OPEN' THEN 3
+                    WHEN 'DONE' THEN 4
+                    ELSE 5
+                  END,
+                  wa.updated_at DESC,
+                  wa.id DESC
+                LIMIT 1
+            ) wa_deadline ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT assigned_tech_id
+                FROM work_assignments
+                WHERE entity_type = 'ORDER'
+                  AND entity_id = o.id
+                  AND work_type = 'TEST'
+                  AND status IN ('ASSIGNED', 'IN_PROGRESS')
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            ) wa_t ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT
+                    COALESCE(STRING_AGG(tsn.serial_number, ',' ORDER BY tsn.created_at), '') AS serial_number,
+                    MIN(tsn.tested_by)::int AS tested_by,
+                    MIN(tsn.created_at)::text AS test_date_time
+                FROM tech_serial_numbers tsn
+                WHERE o.shipment_id IS NOT NULL
+                  AND tsn.shipment_id = o.shipment_id
+            ) test_data ON TRUE
+            LEFT JOIN staff tested_staff ON tested_staff.id = test_data.tested_by
+            LEFT JOIN staff tester_staff ON tester_staff.id = wa_t.assigned_tech_id
             ${whereClause}
             ORDER BY sal.created_at DESC NULLS LAST
             LIMIT $${limitIdx} OFFSET $${offsetIdx}

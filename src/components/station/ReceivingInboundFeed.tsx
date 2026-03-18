@@ -101,7 +101,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
   const { data: allLogs = [], isFetching, isLoading } = useQuery<FeedLog[]>({
     queryKey: ['receiving-inbound-feed'],
     queryFn: async () => {
-      const res = await fetch('/api/receiving-logs?limit=100', { cache: 'no-store' });
+      const res = await fetch('/api/receiving-logs?limit=100');
       if (!res.ok) return [];
       const data = await res.json();
       return Array.isArray(data) ? data : [];

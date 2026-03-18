@@ -89,7 +89,7 @@ export function LocalPickupTable() {
       const params = new URLSearchParams();
       if (pickupDate) params.set('pickupDate', pickupDate);
       if (search.trim()) params.set('q', search.trim());
-      const res = await fetch(`/api/local-pickups?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/local-pickups?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch local pickups');
       return res.json();
     },

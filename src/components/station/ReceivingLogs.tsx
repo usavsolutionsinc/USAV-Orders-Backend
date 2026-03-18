@@ -2,7 +2,8 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Package, Loader2, Copy, Check } from '../Icons';
+import { Package, Loader2, Search } from '../Icons';
+import { CopyChip, getLast4 } from '@/components/ui/CopyChip';
 import { motion } from 'framer-motion';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
@@ -70,43 +71,10 @@ function computeWeekRange(weekOffset: number) {
     return { startStr: fmt(monday), endStr: fmt(friday), start: monday, end: friday };
 }
 
-const CopyableText = ({ text, className, disabled = false }: { text: string; className?: string; disabled?: boolean }) => {
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!text || disabled || text === '---') return;
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    const displayText = text.length > 4 ? text.slice(-4) : text;
-    const isEmpty = !text || text === '---' || disabled;
-
-    if (isEmpty) {
-        return (
-            <div className={`${className} flex items-center justify-center w-[60px] opacity-40`}>
-                <span className="text-left w-full">---</span>
-            </div>
-        );
-    }
-
-    return (
-        <button
-            onClick={handleCopy}
-            className={`${className} group relative flex items-center justify-between gap-1 hover:brightness-95 active:scale-95 transition-all w-[60px]`}
-            title={`Click to copy: ${text}`}
-        >
-            <span className="truncate flex-1 text-left">{displayText}</span>
-            {copied ? <Check className="w-2 h-2" /> : <Copy className="w-2 h-2 opacity-0 group-hover:opacity-40 transition-opacity" />}
-        </button>
-    );
-};
-
 export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingLogsProps) {
     const queryClient = useQueryClient();
     const [weekOffset, setWeekOffset] = useState(0);
+    const [searchQuery, setSearchQuery] = useState('');
     const [stickyDate, setStickyDate] = useState('');
     const [currentCount, setCurrentCount] = useState(0);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -124,7 +92,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
             });
             // Bypass browser HTTP cache so invalidateQueries always gets fresh data
             // from the server (server-side Upstash Redis handles the DB caching).
-            const res = await fetch(`/api/receiving-logs?${params}`, { cache: 'no-store' });
+            const res = await fetch(`/api/receiving-logs?${params}`);
             if (!res.ok) throw new Error('Failed to fetch receiving logs');
             const json = await res.json();
             return Array.isArray(json) ? json : [];
@@ -194,9 +162,25 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
 
     const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const filteredData = normalizedQuery
+        ? data.filter((log) => {
+            const haystack = [
+                log.tracking,
+                log.status,
+                log.return_platform,
+                log.return_reason,
+                log.target_channel,
+            ]
+                .map((value) => String(value || '').toLowerCase())
+                .join(' ');
+            return haystack.includes(normalizedQuery);
+        })
+        : data;
+
     // Group by PST date and apply precise week filter (server has ±1 day UTC buffer).
     const grouped: { [key: string]: ReceivingLog[] } = {};
-    data.forEach(log => {
+    filteredData.forEach(log => {
         if (!log.timestamp) return;
         let date = '';
         try { date = toPSTDateKey(log.timestamp) || 'Unknown'; } catch { date = 'Unknown'; }
@@ -242,7 +226,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
             setTimeout(() => handleScroll(), 100);
         }
         return () => container?.removeEventListener('scroll', handleScroll);
-    }, [handleScroll, data]);
+    }, [handleScroll, filteredData]);
 
     return (
         <div className="flex flex-col h-full w-full bg-white relative overflow-hidden">
@@ -262,6 +246,19 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                     ) : null
                 }
             />
+
+            <div className="border-b border-gray-100 px-2 py-1.5 bg-white">
+                <div className="relative">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search tracking or carrier..."
+                        className="w-full rounded-xl border border-gray-100 bg-gray-50 py-2 pl-9 pr-3 text-[10px] font-bold text-gray-700 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+                    />
+                </div>
+            </div>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar w-full">
                 {isLoading && data.length === 0 ? (
@@ -293,9 +290,13 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                             {formatDbTime(log.timestamp)}
                                         </div>
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <CopyableText
-                                                text={log.tracking || ''}
-                                                className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 w-[60px]"
+                                            <CopyChip
+                                                value={log.tracking || ''}
+                                                display={getLast4(log.tracking)}
+                                                icon={null}
+                                                iconClass=""
+                                                underlineClass="border-blue-500"
+                                                width="w-[30px]"
                                             />
                                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60 truncate">
                                                 {log.status || 'Unknown'}
@@ -303,11 +304,6 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                             {log.is_return ? (
                                                 <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-amber-700">
                                                     Return
-                                                </span>
-                                            ) : null}
-                                            {log.needs_test ? (
-                                                <span className="rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-slate-600">
-                                                    Test
                                                 </span>
                                             ) : null}
                                             {String(log.target_channel || '').toUpperCase() === 'FBA' ? (

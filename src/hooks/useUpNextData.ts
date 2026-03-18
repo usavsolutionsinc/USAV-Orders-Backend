@@ -100,7 +100,7 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
       const ordersRequest =
         parsedTechId === null
           ? Promise.resolve(null)
-          : fetch(`/api/orders/next?techId=${parsedTechId}&all=true&outOfStock=false`, { cache: 'no-store' });
+          : fetch(`/api/orders/next?techId=${parsedTechId}&all=true&outOfStock=false`);
 
       const [ordersRes, repairRes] = await Promise.all([
         ordersRequest,

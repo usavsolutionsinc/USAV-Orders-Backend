@@ -11,7 +11,7 @@ interface SearchBarProps {
     placeholder?: string;
     isSearching?: boolean;
     className?: string;
-    variant?: 'blue' | 'orange' | 'emerald' | 'purple' | 'red';
+    variant?: 'blue' | 'orange' | 'emerald' | 'purple' | 'red' | 'gray';
     size?: 'default' | 'compact';
     rightElement?: React.ReactNode;
 }
@@ -35,6 +35,7 @@ export function SearchBar({
         emerald: 'focus:ring-emerald-500/10 focus:border-emerald-500',
         purple: 'focus:ring-purple-500/10 focus:border-purple-500',
         red: 'focus:ring-red-500/10 focus:border-red-500',
+        gray: 'focus:ring-gray-900/10 focus:border-gray-900',
     }[variant];
 
     const iconColor = {
@@ -43,6 +44,7 @@ export function SearchBar({
         emerald: 'group-focus-within:text-emerald-600',
         purple: 'group-focus-within:text-purple-600',
         red: 'group-focus-within:text-red-600',
+        gray: 'group-focus-within:text-gray-900',
     }[variant];
 
     const loaderColor = {
@@ -51,6 +53,7 @@ export function SearchBar({
         emerald: 'text-emerald-600',
         purple: 'text-purple-600',
         red: 'text-red-600',
+        gray: 'text-gray-900',
     }[variant];
 
     const sizeClasses = size === 'compact'

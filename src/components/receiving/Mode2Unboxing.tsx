@@ -83,7 +83,7 @@ function usePendingEntries() {
     return useQuery<ReceivingLog[]>({
         queryKey: ['receiving-logs', 'pending-unboxing'],
         queryFn: async () => {
-            const res = await fetch('/api/receiving-logs?limit=200&offset=0', { cache: 'no-store' });
+            const res = await fetch('/api/receiving-logs?limit=200&offset=0');
             if (!res.ok) throw new Error('Failed to fetch logs');
             const data: ReceivingLog[] = await res.json();
             return data.filter((l) => !l.qa_status || l.qa_status === 'PENDING');
@@ -98,7 +98,7 @@ function usePhotos(receivingId: string | null, enabled: boolean) {
         queryKey: ['receiving-photos', receivingId],
         queryFn: async () => {
             if (!receivingId) return [];
-            const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`, { cache: 'no-store' });
+            const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`);
             if (!res.ok) return [];
             const data = await res.json();
             return Array.isArray(data.photos) ? data.photos : [];
@@ -111,7 +111,7 @@ function usePhotos(receivingId: string | null, enabled: boolean) {
 function useStaff() {
     const [staff, setStaff] = useState<StaffOption[]>([]);
     useEffect(() => {
-        fetch('/api/staff?active=true', { cache: 'no-store' })
+        fetch('/api/staff?active=true')
             .then((r) => r.json())
             .then((data) => {
                 if (Array.isArray(data)) {

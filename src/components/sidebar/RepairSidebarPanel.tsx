@@ -133,7 +133,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
     try {
       const res = await fetch(
         `/api/ecwid/products/search?q=${encodeURIComponent(favorite.sku)}`,
-        { cache: 'no-store' },
       );
       const data = await res.json();
       const products: EcwidSearchProduct[] = Array.isArray(data?.products) ? data.products : [];

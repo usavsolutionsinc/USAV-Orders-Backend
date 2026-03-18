@@ -80,14 +80,14 @@ export function FbaSidebarPanel() {
           onChange={setLocalSearch}
           onClear={() => setLocalSearch('')}
           placeholder="Search FNSKU, product, ASIN, SKU..."
-          variant="purple"
+          variant="gray"
           rightElement={
             <button
               type="button"
               onClick={() => setShowCreateForm((current) => !current)}
-              className="rounded-xl bg-purple-600 p-2.5 text-white transition-all active:scale-95 hover:bg-purple-700 shadow-lg shadow-purple-600/20"
-              title="New Shipment"
-              aria-label="Open new shipment form"
+              className="rounded-full bg-[#7c3aed] p-2.5 text-white transition active:scale-95 hover:bg-[#6d28d9]"
+              title="Add FBA items"
+              aria-label="Open add FBA items form"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -98,8 +98,8 @@ export function FbaSidebarPanel() {
       <div className={`${sidebarHeaderBandClass} px-4 py-3`}>
         <TabSwitch
           tabs={[
-            { id: 'summary', label: 'Summary', color: 'purple' },
-            { id: 'labels', label: 'Label Queue', color: 'purple' },
+            { id: 'summary', label: 'Summary', color: 'gray' },
+            { id: 'labels', label: 'Label Queue', color: 'gray' },
           ]}
           activeTab={activeTab}
           onTabChange={(tab) => updateFbaParams({ tab: tab as FbaTab })}

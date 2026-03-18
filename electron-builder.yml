@@ -1,0 +1,82 @@
+appId: com.usav.orders.desktop
+productName: USAV Orders
+
+asar: true
+
+directories:
+  output: desktop-dist
+
+# Files to include in the packaged app.
+# The Next.js build output is NOT included here — in production the app
+# loads from the Vercel URL.  Only the Electron shell, local sidecar server,
+# and node_modules needed at runtime are bundled.
+files:
+  - electron/**/*
+  - server/**/*
+  - node_modules/**/*
+  - package.json
+
+# Exclude heavy dev-only modules to keep the bundle lean
+# (electron-builder, next, typescript, etc. are not needed at runtime)
+# These are pruned automatically via asar but listing here adds clarity.
+asarUnpack:
+  - "node_modules/multer/**/*"
+  - "node_modules/express/**/*"
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+mac:
+  category: public.app-category.business
+  icon: public/icon.icns
+  # Build universal binary — works on both Intel and Apple Silicon
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+dmg:
+  title: USAV Orders ${version}
+  contents:
+    - x: 410
+      y: 150
+      type: link
+      path: /Applications
+    - x: 130
+      y: 150
+      type: file
+
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+win:
+  icon: public/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: public/icon.ico
+  uninstallerIcon: public/icon.ico
+
+# ---------------------------------------------------------------------------
+# Linux (optional)
+# ---------------------------------------------------------------------------
+linux:
+  icon: public/icon.png
+  target:
+    - AppImage
+
+# ---------------------------------------------------------------------------
+# Auto-update via GitHub Releases
+# Fill in your GitHub repo details below to enable silent auto-updates.
+# ---------------------------------------------------------------------------
+publish:
+  provider: github
+  owner: your-github-username   # ← replace with your GitHub username
+  repo: usav-orders             # ← replace with your repo name
+  releaseType: release          # only pull from published (non-draft) releases

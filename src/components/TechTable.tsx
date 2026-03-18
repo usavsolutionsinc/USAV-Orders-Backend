@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from './Icons';
-import { CopyableText } from './ui/CopyableText';
+import { OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from './ui/CopyChip';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -34,6 +34,13 @@ function computeWeekRange(weekOffset: number) {
     startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
     endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
   };
+}
+
+function normalizeTrackingKey(value: string | null | undefined): string {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
 }
 
 export function TechTable({ testedBy }: TechTableProps) {
@@ -128,20 +135,6 @@ export function TechTable({ testedBy }: TechTableProps) {
     setSelectedDetailId(detailId);
   };
 
-  const getLast4 = (value: string | null | undefined) => {
-    const raw = String(value || '');
-    return raw.length > 4 ? raw.slice(-4) : raw || '---';
-  };
-
-  // serial_number may be a CSV string aggregated via STRING_AGG (e.g. "SN1, SN2").
-  // Parse it, take the last individual serial, then show its last 4 chars.
-  const getLast4Serial = (value: string | null | undefined) => {
-    const raw = String(value || '').trim();
-    const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
-    const last = parts.length > 0 ? parts[parts.length - 1] : '';
-    return last.length > 4 ? last.slice(-4) : last || '---';
-  };
-
   const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
 
   const handleScroll = useCallback(() => {
@@ -163,7 +156,28 @@ export function TechTable({ testedBy }: TechTableProps) {
     if (activeCount) setCurrentCount(activeCount);
   }, []);
 
-  const visibleRecords = records.filter((record) => !removedRowKeys.has(getRowKey(record)));
+  const visibleRecords = useMemo(() => {
+    const base = records.filter((record) => !removedRowKeys.has(getRowKey(record)));
+    const sorted = [...base].sort((a, b) => {
+      const timeA = new Date(a.created_at || 0).getTime();
+      const timeB = new Date(b.created_at || 0).getTime();
+      return timeB - timeA;
+    });
+
+    const seenTrackings = new Set<string>();
+    const unique: TechRecord[] = [];
+    for (const record of sorted) {
+      const trackingKey = normalizeTrackingKey(record.shipping_tracking_number);
+      if (!trackingKey) {
+        unique.push(record);
+        continue;
+      }
+      if (seenTrackings.has(trackingKey)) continue;
+      seenTrackings.add(trackingKey);
+      unique.push(record);
+    }
+    return unique;
+  }, [records, removedRowKeys]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -318,59 +332,44 @@ export function TechTable({ testedBy }: TechTableProps) {
                             animate={{ opacity: 1 }}
                             key={getRowKey(record)}
                             onClick={() => openDetails(record)}
-                            className={`grid grid-cols-[1fr_auto_70px] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                             }`}
                           >
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span
-                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
+                                  className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
                                   title={SOURCE_DOT_LABEL[dotType]}
                                 />
                                 <div className="text-[11px] font-bold text-gray-900 truncate">
                                   {record.product_title || 'Unknown Product'}
                                 </div>
                               </div>
-                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
+                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5 pl-4">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                   {parseInt(String(record.quantity || '1'), 10) || 1}
                                 </span> • {displayValues.condition || 'No Condition'} • {displayValues.sku || 'No SKU'}
                               </div>
                             </div>
-                            <div className="flex items-start justify-end gap-1.5">
-                              <div className="flex flex-col w-[60px]">
-                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
-                                <CopyableText
-                                  text={record.order_id || 'N/A'}
-                                  displayText={getLast4(record.order_id)}
-                                  className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
-                                  variant="order"
-                                />
-                              </div>
-                              <div className="flex flex-col w-[60px]">
-                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Track</span>
-                                <CopyableText
-                                  text={record.shipping_tracking_number || ''}
-                                  displayText={getLast4(record.shipping_tracking_number)}
-                                  className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
-                                  variant="tracking"
-                                />
-                              </div>
-                            </div>
-                            <div className="flex flex-col w-[70px]">
-                              <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter mb-0.5">Serial</span>
-                              <CopyableText
-                                text={record.serial_number || ''}
-                                displayText={
+                            <div className="flex items-center gap-3 shrink-0">
+                              <OrderIdChip
+                                value={record.order_id || ''}
+                                display={getLast4(record.order_id)}
+                              />
+                              <TrackingChip
+                                value={record.shipping_tracking_number || ''}
+                                display={getLast4(record.shipping_tracking_number)}
+                              />
+                              <SerialChip
+                                value={record.serial_number || ''}
+                                display={
                                   record.serial_number
-                                    ? getLast4Serial(record.serial_number)
+                                    ? getLast6Serial(record.serial_number)
                                     : record.source_kind === 'fba_scan' || record.source_kind === 'tech_scan'
                                       ? 'SCAN'
                                       : '---'
                                 }
-                                className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"
-                                variant="serial"
                               />
                             </div>
                           </motion.div>

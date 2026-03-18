@@ -188,7 +188,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
         try {
             const runSearch = async (value: string) => {
                 const params = new URLSearchParams({ q: value });
-                const res = await fetch(`/api/shipped?${params.toString()}`, { cache: 'no-store' });
+                const res = await fetch(`/api/shipped?${params.toString()}`);
                 const data = await res.json();
                 const orders = Array.isArray(data?.results)
                     ? data.results

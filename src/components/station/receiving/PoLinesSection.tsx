@@ -45,7 +45,7 @@ export function PoLinesSection({ receivingId, trackingNumber }: PoLinesSectionPr
   const { data, isFetching, refetch } = useQuery<{ lines: ReceivingLine[]; matched: boolean }>({
     queryKey: ['receiving-match', receivingId],
     queryFn: async () => {
-      const res = await fetch(`/api/receiving/match?receiving_id=${receivingId}`, { cache: 'no-store' });
+      const res = await fetch(`/api/receiving/match?receiving_id=${receivingId}`);
       if (!res.ok) return { lines: [], matched: false };
       const json = await res.json();
       const lines: ReceivingLine[] = Array.isArray(json?.matched_lines) ? json.matched_lines : [];

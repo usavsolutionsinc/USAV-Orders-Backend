@@ -36,7 +36,7 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
     const [successEntry, setSuccessEntry] = useState<string | null>(null);
 
     useEffect(() => {
-        fetch('/api/staff?active=true', { cache: 'no-store' })
+        fetch('/api/staff?active=true')
             .then((r) => r.json())
             .then((data) => {
                 if (Array.isArray(data)) {
@@ -59,7 +59,7 @@ export default function Mode3LocalPickup({ staffId }: Mode3LocalPickupProps) {
         }
         setIsSearching(true);
         try {
-            const res = await fetch(`/api/sku-stock?q=${encodeURIComponent(value.trim())}`, { cache: 'no-store' });
+            const res = await fetch(`/api/sku-stock?q=${encodeURIComponent(value.trim())}`);
             if (!res.ok) throw new Error('Search failed');
             const data = await res.json();
             const items = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);

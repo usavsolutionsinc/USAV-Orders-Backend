@@ -15,7 +15,7 @@ export function useActiveStaffDirectory(): StaffMember[] {
     let isMounted = true;
     const fetchStaff = async () => {
       try {
-        const res = await fetch('/api/staff?active=true', { cache: 'no-store' });
+        const res = await fetch('/api/staff?active=true');
         if (!res.ok) return;
         const data = await res.json();
         if (!isMounted || !Array.isArray(data)) return;

@@ -58,7 +58,7 @@ async function fetchShippedData(options: UseShippedTableDataOptions): Promise<Sh
     url = `/api/orders?${params.toString()}`;
   }
 
-  const res = await fetch(url, { cache: 'no-store' }); // bypass browser HTTP cache; Upstash Redis handles server-side caching
+  const res = await fetch(url); // bypass browser HTTP cache; Upstash Redis handles server-side caching
   if (!res.ok) throw new Error('Failed to fetch shipped data');
   const data = await res.json();
 

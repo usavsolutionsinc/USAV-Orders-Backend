@@ -29,7 +29,7 @@ export default function ZohoPOManager() {
       const params = new URLSearchParams({ per_page: '100' });
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (debouncedSearch) params.set('search_text', debouncedSearch);
-      const res = await fetch(`/api/zoho/purchase-orders?${params}`, { cache: 'no-store' });
+      const res = await fetch(`/api/zoho/purchase-orders?${params}`);
       if (!res.ok) throw new Error('Failed to fetch purchase orders');
       const json = await res.json();
       return Array.isArray(json.purchaseorders) ? json.purchaseorders : [];
@@ -45,7 +45,7 @@ export default function ZohoPOManager() {
     try {
       const res = await fetch(
         `/api/zoho/purchase-orders?purchaseorder_id=${encodeURIComponent(po.purchaseorder_id)}`,
-        { cache: 'no-store' }
+        
       );
       const json = await res.json();
       if (json.purchaseorder) setSelectedPO(json.purchaseorder as ZohoPO);

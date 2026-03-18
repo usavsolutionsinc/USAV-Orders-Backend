@@ -25,7 +25,7 @@ function FbaPageContent() {
   const activeTab: Tab = searchParams.get('tab') === 'labels' ? 'labels' : 'summary';
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col bg-gray-50">
+    <div className="flex h-full w-full min-w-0 flex-col bg-white">
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'summary' ? (
           <FbaShipmentBoard
@@ -45,8 +45,8 @@ export default function FbaPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full w-full items-center justify-center bg-gray-50">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        <div className="flex h-full w-full items-center justify-center bg-white">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-900" />
         </div>
       }
     >

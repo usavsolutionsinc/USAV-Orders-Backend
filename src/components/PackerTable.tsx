@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Loader2, Search, X } from './Icons';
-import { CopyableText } from './ui/CopyableText';
+import { OrderIdChip, TrackingChip, getLast4 } from './ui/CopyChip';
 import { SearchBar } from './ui/SearchBar';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -127,11 +127,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
 
     window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
     setSelectedDetailId(detailId);
-  };
-
-  const getLast4 = (value: string | null | undefined) => {
-    const raw = String(value || '');
-    return raw.length > 4 ? raw.slice(-4) : raw || '---';
   };
 
   const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
@@ -369,45 +364,35 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                             animate={{ opacity: 1 }}
                             key={record.id}
                             onClick={() => openDetails(record)}
-                            className={`grid grid-cols-[1fr_auto] items-center gap-2 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                             }`}
                           >
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span
-                                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
+                                  className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_DOT_BG[dotType]}`}
                                   title={SOURCE_DOT_LABEL[dotType]}
                                 />
                                 <div className="text-[11px] font-bold text-gray-900 truncate">
                                   {record.product_title || 'Unknown Product'}
                                 </div>
                               </div>
-                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5">
+                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5 pl-4">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                   {parseInt(String(record.quantity || '1'), 10) || 1}
                                 </span> • {displayValues.condition || 'No Condition'} • {displayValues.sku || 'No SKU'}
                               </div>
                             </div>
-                            <div className="flex items-start justify-end gap-1.5">
-                              <div className="flex flex-col w-[60px]">
-                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Order ID</span>
-                                <CopyableText
-                                  text={record.order_id || 'N/A'}
-                                  displayText={getLast4(record.order_id)}
-                                  className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
-                                  variant="order"
-                                />
-                              </div>
-                              <div className="flex flex-col w-[60px]">
-                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-tighter mb-0.5">Tracking</span>
-                                <CopyableText
-                                  text={record.shipping_tracking_number || ''}
-                                  displayText={getLast4(record.shipping_tracking_number)}
-                                  className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"
-                                  variant="tracking"
-                                />
-                              </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <OrderIdChip
+                                value={record.order_id || ''}
+                                display={getLast4(record.order_id)}
+                              />
+                              <TrackingChip
+                                value={record.shipping_tracking_number || ''}
+                                display={getLast4(record.shipping_tracking_number)}
+                              />
                             </div>
                           </motion.div>
                         );

@@ -49,11 +49,11 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'tech', label: 'Technicians', href: '/tech?staffId=1', icon: Wrench, kind: 'station' },
   { id: 'packer', label: 'Packers', href: '/packer?staffId=4', icon: User, kind: 'station' },
   { id: 'sku-stock', label: 'Sku Stock', href: '/sku-stock', icon: Box, kind: 'station' },
+  { id: 'ai', label: 'AI Chat', href: '/ai', icon: Zap, kind: 'bottom' },
   { id: 'manuals', label: 'Manuals', href: '/manuals', icon: FileText, kind: 'bottom' },
   { id: 'support', label: 'Support', href: '/support', icon: AlertCircle, kind: 'bottom' },
   { id: 'previous-quarters', label: 'Quarters', href: '/previous-quarters', icon: Calendar, kind: 'bottom' },
   { id: 'admin', label: 'Admin', href: '/admin', icon: ShieldCheck, kind: 'bottom' },
-  { id: 'ai', label: 'AI Chat', href: '/ai', icon: Zap, kind: 'bottom' },
 ];
 
 export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {

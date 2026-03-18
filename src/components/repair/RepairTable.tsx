@@ -114,6 +114,23 @@ export function RepairTable({ filter }: RepairTableProps) {
     return groupedRepairs[today]?.length || 0;
   };
 
+  // Flat sorted list matching the render order (oldest date first, same order as groups)
+  const flatRepairs = Object.entries(groupedRepairs)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .flatMap(([, records]) => records);
+
+  const selectedIndex = selectedRepair
+    ? flatRepairs.findIndex((r) => r.id === selectedRepair.id)
+    : -1;
+
+  const handleMoveUp = () => {
+    if (selectedIndex > 0) setSelectedRepair(flatRepairs[selectedIndex - 1]);
+  };
+
+  const handleMoveDown = () => {
+    if (selectedIndex < flatRepairs.length - 1) setSelectedRepair(flatRepairs[selectedIndex + 1]);
+  };
+
   return (
     <div className="flex h-full w-full bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -274,6 +291,10 @@ export function RepairTable({ filter }: RepairTableProps) {
             repair={selectedRepair}
             onClose={handleCloseDetails}
             onUpdate={handleCloseDetails}
+            onMoveUp={handleMoveUp}
+            onMoveDown={handleMoveDown}
+            disableMoveUp={selectedIndex <= 0}
+            disableMoveDown={selectedIndex >= flatRepairs.length - 1}
           />
         )}
       </AnimatePresence>

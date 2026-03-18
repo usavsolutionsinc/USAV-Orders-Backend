@@ -25,7 +25,7 @@ export function WorkOrdersSidebarPanel() {
   }, [searchParams]);
 
   const fetchCounts = useCallback(() => {
-    fetch(`/api/work-orders?queue=${queue}`, { cache: 'no-store' })
+    fetch(`/api/work-orders?queue=${queue}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         if (json?.counts) setCounts({ ...EMPTY_COUNTS, ...json.counts });
@@ -35,7 +35,7 @@ export function WorkOrdersSidebarPanel() {
 
   const fetchPickupDates = useCallback(() => {
     if (queue !== 'local_pickups') return;
-    fetch(`/api/local-pickups`, { cache: 'no-store' })
+    fetch(`/api/local-pickups`)
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         if (Array.isArray(json?.dates)) setPickupDates(json.dates);

@@ -72,7 +72,7 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
         params.set('weekStart', weekRange.startStr);
         params.set('weekEnd', weekRange.endStr);
       }
-      const res = await fetch(`/api/tech-logs?${params}`, { cache: 'no-store' });
+      const res = await fetch(`/api/tech-logs?${params}`);
       if (!res.ok) throw new Error('Failed to fetch tech logs');
       const data = await res.json();
       return Array.isArray(data) ? data : [];

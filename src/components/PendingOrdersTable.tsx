@@ -120,7 +120,7 @@ export default function PendingOrdersTable({
       shippedRedirectAttemptRef.current = searchQuery;
       try {
         const params = new URLSearchParams({ q: searchQuery });
-        const response = await fetch(`/api/shipped?${params.toString()}`, { cache: 'no-store' });
+        const response = await fetch(`/api/shipped?${params.toString()}`);
         if (!response.ok || cancelled) return;
         const json = await response.json();
         const records = Array.isArray(json?.results)

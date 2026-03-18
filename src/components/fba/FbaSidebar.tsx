@@ -1,19 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Check, Loader2, X, Package, Barcode } from '@/components/Icons';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  Calendar,
+  Loader2,
+  Package,
+  Plus,
+  Trash2,
+  User,
+  X,
+} from '@/components/Icons';
+import type { FbaSummaryRow } from '@/components/fba/types';
 
 interface StaffMember {
   id: number;
   name: string;
   role: string;
-}
-
-interface FbaSidebarProps {
-  onShipmentCreated: () => void;
-  showCreateForm: boolean;
-  onCreateFormChange: (nextValue: boolean) => void;
 }
 
 interface CreateShipmentForm {
@@ -26,6 +29,12 @@ interface CreateShipmentForm {
   items: Array<{ fnsku: string; expected_qty: string }>;
 }
 
+interface LegacySidebarProps {
+  onShipmentCreated: () => void;
+  showCreateForm: boolean;
+  onCreateFormChange: (nextValue: boolean) => void;
+}
+
 const EMPTY_FORM: CreateShipmentForm = {
   shipment_ref: '',
   destination_fc: '',
@@ -36,30 +45,63 @@ const EMPTY_FORM: CreateShipmentForm = {
   items: [{ fnsku: '', expected_qty: '' }],
 };
 
-export function FbaSidebar({ onShipmentCreated, showCreateForm, onCreateFormChange }: FbaSidebarProps) {
+function getAttentionQty(row: FbaSummaryRow) {
+  const baseline = Math.max(row.expected_qty ?? 0, row.actual_qty ?? 0, row.tech_scanned_qty ?? 0);
+  return Math.max(baseline - row.pack_ready_qty, 0);
+}
+
+function SidebarIconButton({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-gray-600 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-950 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {icon}
+    </button>
+  );
+}
+
+function FbaControlSidebar({ onShipmentCreated, showCreateForm, onCreateFormChange }: LegacySidebarProps) {
   const [form, setForm] = useState<CreateShipmentForm>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [stats, setStats] = useState({ planned: 0, ready: 0, labeled: 0, shipped: 0 });
+  const [stats, setStats] = useState({ items: 0, ready: 0, attention: 0, shipped: 0 });
 
   useEffect(() => {
-    fetch('/api/staff?active=true', { cache: 'no-store' })
+    fetch('/api/staff?active=true')
       .then((r) => r.json())
-      .then((d) => Array.isArray(d) && setStaff(d.map((m: any) => ({ id: Number(m.id), name: String(m.name || ''), role: String(m.role || '') }))))
+      .then((d) =>
+        Array.isArray(d) &&
+        setStaff(d.map((m: any) => ({ id: Number(m.id), name: String(m.name || ''), role: String(m.role || '') })))
+      )
       .catch(() => {});
 
-    fetch('/api/fba/shipments?limit=200')
+    fetch('/api/fba/logs/summary?limit=500')
       .then((r) => r.json())
       .then((d) => {
-        if (!Array.isArray(d?.shipments)) return;
-        const s = d.shipments;
+        if (!Array.isArray(d?.rows)) return;
+        const rows = d.rows as FbaSummaryRow[];
         setStats({
-          planned:  s.filter((x: any) => x.status === 'PLANNED').length,
-          ready:    s.filter((x: any) => x.status === 'READY_TO_GO').length,
-          labeled:  s.filter((x: any) => x.status === 'LABEL_ASSIGNED').length,
-          shipped:  s.filter((x: any) => x.status === 'SHIPPED').length,
+          items: rows.length,
+          ready: rows.reduce((sum, row) => sum + row.pack_ready_qty, 0),
+          attention: rows.reduce((sum, row) => sum + getAttentionQty(row), 0),
+          shipped: rows.reduce((sum, row) => sum + row.shipped_qty, 0),
         });
       })
       .catch(() => {});
@@ -68,13 +110,19 @@ export function FbaSidebar({ onShipmentCreated, showCreateForm, onCreateFormChan
   const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { fnsku: '', expected_qty: '' }] }));
   const removeItem = (i: number) => setForm((f) => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
   const updateItem = (i: number, field: 'fnsku' | 'expected_qty', val: string) =>
-    setForm((f) => ({ ...f, items: f.items.map((item, idx) => idx === i ? { ...item, [field]: val } : item) }));
+    setForm((f) => ({ ...f, items: f.items.map((item, idx) => (idx === i ? { ...item, [field]: val } : item)) }));
 
   const handleCreate = async () => {
-    if (!form.shipment_ref.trim()) { setSubmitError('Shipment reference is required'); return; }
+    if (!form.shipment_ref.trim()) {
+      setSubmitError('Shipment reference is required');
+      return;
+    }
 
     const techIdNum = Number(form.assigned_tech_id) || null;
-    if (!techIdNum) { setSubmitError('Created-by staff is required'); return; }
+    if (!techIdNum) {
+      setSubmitError('Created-by staff is required');
+      return;
+    }
 
     setSubmitting(true);
     setSubmitError(null);
@@ -99,12 +147,15 @@ export function FbaSidebar({ onShipmentCreated, showCreateForm, onCreateFormChan
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setSubmitError(data?.error || 'Failed to create shipment'); return; }
+      if (!res.ok) {
+        setSubmitError(data?.error || 'Failed to create shipment');
+        return;
+      }
       setSubmitSuccess(true);
       setForm(EMPTY_FORM);
       onCreateFormChange(false);
       onShipmentCreated();
-      setTimeout(() => setSubmitSuccess(false), 3000);
+      window.setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (err: any) {
       setSubmitError(err?.message || 'Failed to create shipment');
     } finally {
@@ -112,195 +163,229 @@ export function FbaSidebar({ onShipmentCreated, showCreateForm, onCreateFormChan
     }
   };
 
-  return (
-    <div className="flex flex-col">
-      {/* Stats chips */}
-      <div className="px-4 pt-4 pb-3 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-purple-600" />
-            <h3 className="text-[12px] font-black uppercase tracking-widest text-gray-900">FBA</h3>
-          </div>
-          <AnimatePresence>
-            {submitSuccess && (
-              <motion.span
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-1 text-[9px] font-black text-emerald-600"
-              >
-                <Check className="w-3 h-3" /> Created
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
+  const statCards = useMemo(
+    () => [
+      { label: 'Items', value: stats.items },
+      { label: 'Ready', value: stats.ready },
+      { label: 'Attention', value: stats.attention },
+      { label: 'Shipped', value: stats.shipped },
+    ],
+    [stats]
+  );
 
-        <div className="grid grid-cols-2 gap-1.5">
-          {[
-            { label: 'Planned',  val: stats.planned,  color: 'bg-gray-100 text-gray-600' },
-            { label: 'Ready',    val: stats.ready,    color: 'bg-emerald-100 text-emerald-700' },
-            { label: 'Labeled',  val: stats.labeled,  color: 'bg-blue-100 text-blue-700' },
-            { label: 'Shipped',  val: stats.shipped,  color: 'bg-purple-100 text-purple-700' },
-          ].map(({ label, val, color }) => (
-            <div key={label} className={`rounded-xl px-3 py-2 ${color}`}>
-              <p className="text-[9px] font-black uppercase tracking-widest">{label}</p>
-              <p className="text-lg font-black tabular-nums">{val}</p>
+  return (
+    <div className="flex h-full flex-col bg-white">
+      <AnimatePresence initial={false}>
+        {submitSuccess ? (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="border-b border-gray-200 px-4 py-3 text-right text-[11px] font-medium text-gray-500"
+          >
+            Shipment created
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <div className="border-b border-gray-200 px-4 py-4">
+        <div className="grid grid-cols-2 gap-px border border-gray-200 bg-gray-200">
+          {statCards.map((card) => (
+            <div key={card.label} className="bg-white px-3 py-3">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-400">{card.label}</p>
+              <p className="mt-2 text-xl font-semibold tabular-nums text-gray-950">{card.value}</p>
             </div>
           ))}
         </div>
       </div>
-      {/* Create form */}
-      <AnimatePresence>
-        {showCreateForm && (
+
+      <AnimatePresence initial={false}>
+        {showCreateForm ? (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="border-b border-gray-200"
           >
-            <div className="px-4 py-3 space-y-3 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <p className="text-[9px] font-black uppercase tracking-widest text-purple-600">New Shipment</p>
-                <button type="button" onClick={() => onCreateFormChange(false)} className="text-gray-400 hover:text-gray-600">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Shipment Ref *</label>
-                <input
-                  type="text"
-                  value={form.shipment_ref}
-                  onChange={(e) => setForm((f) => ({ ...f, shipment_ref: e.target.value }))}
-                  placeholder="FBA15XXXXX"
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
+            <div className="px-4 py-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <label className="block text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">FC Code</label>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-[#7c3aed]">Add FBA items</p>
+                  <p className="mt-1 text-sm text-gray-500">Create a shipment and seed its first FNSKUs.</p>
+                </div>
+                <SidebarIconButton icon={<X className="h-4 w-4" />} label="Close shipment form" onClick={() => onCreateFormChange(false)} />
+              </div>
+
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Shipment reference</span>
                   <input
                     type="text"
-                    value={form.destination_fc}
-                    onChange={(e) => setForm((f) => ({ ...f, destination_fc: e.target.value }))}
-                    placeholder="PHX7"
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10"
+                    value={form.shipment_ref}
+                    onChange={(e) => setForm((f) => ({ ...f, shipment_ref: e.target.value }))}
+                    placeholder="FBA15XXXXX"
+                    className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
                   />
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">FC code</span>
+                    <input
+                      type="text"
+                      value={form.destination_fc}
+                      onChange={(e) => setForm((f) => ({ ...f, destination_fc: e.target.value }))}
+                      placeholder="PHX7"
+                      className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Due date</span>
+                    <input
+                      type="date"
+                      value={form.due_date}
+                      onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
+                      className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
+                    />
+                  </label>
                 </div>
-                <div>
-                  <label className="block text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Due Date</label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Tech</span>
+                    <select
+                      value={form.assigned_tech_id}
+                      onChange={(e) => setForm((f) => ({ ...f, assigned_tech_id: e.target.value }))}
+                      className="mt-1.5 w-full border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
+                    >
+                      <option value="">Select</option>
+                      {staff.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Packer</span>
+                    <select
+                      value={form.assigned_packer_id}
+                      onChange={(e) => setForm((f) => ({ ...f, assigned_packer_id: e.target.value }))}
+                      className="mt-1.5 w-full border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
+                    >
+                      <option value="">Select</option>
+                      {staff.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Notes</span>
                   <input
-                    type="date"
-                    value={form.due_date}
-                    onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10"
+                    type="text"
+                    value={form.notes}
+                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                    placeholder="Optional notes"
+                    className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
                   />
-                </div>
-              </div>
+                </label>
 
-              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Tech *</label>
-                  <select
-                    value={form.assigned_tech_id}
-                    onChange={(e) => setForm((f) => ({ ...f, assigned_tech_id: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10"
-                  >
-                    <option value="">Select</option>
-                    {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Packer</label>
-                  <select
-                    value={form.assigned_packer_id}
-                    onChange={(e) => setForm((f) => ({ ...f, assigned_packer_id: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10"
-                  >
-                    <option value="">Select</option>
-                    {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-              </div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">FBA items</span>
+                    <button
+                      type="button"
+                      onClick={addItem}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-[#7c3aed]"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add FBA items
+                    </button>
+                  </div>
 
-              <div>
-                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Notes</label>
-                <input
-                  type="text"
-                  value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                  placeholder="Optional notes..."
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">FNSKUs</label>
-                  <button
-                    type="button"
-                    onClick={addItem}
-                    className="flex items-center gap-1 text-[9px] font-black text-purple-600 hover:text-purple-700"
-                  >
-                    <Plus className="w-3 h-3" /> Add
-                  </button>
-                </div>
-                <div className="space-y-1.5">
-                  {form.items.map((item, i) => (
-                    <div key={i} className="flex gap-1.5 items-center">
-                      <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 flex-shrink-0">
-                        <Barcode className="w-3 h-3 text-gray-400" />
+                  <div className="space-y-px border border-gray-200 bg-gray-200">
+                    {form.items.map((item, i) => (
+                      <div key={i} className="grid grid-cols-[minmax(0,1fr)_7rem_auto] gap-px bg-gray-200">
+                        <input
+                          type="text"
+                          value={item.fnsku}
+                          onChange={(e) => updateItem(i, 'fnsku', e.target.value)}
+                          placeholder="FNSKU"
+                          className="bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:bg-gray-50"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.expected_qty}
+                          onChange={(e) => updateItem(i, 'expected_qty', e.target.value)}
+                          placeholder="Qty"
+                          className="bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:bg-gray-50"
+                        />
+                        {form.items.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(i)}
+                            className="flex items-center justify-center bg-white px-3 text-gray-400 transition hover:text-gray-900"
+                            title="Remove item"
+                            aria-label="Remove item"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <div className="bg-white" />
+                        )}
                       </div>
-                      <input
-                        type="text"
-                        value={item.fnsku}
-                        onChange={(e) => updateItem(i, 'fnsku', e.target.value)}
-                        placeholder="FNSKU"
-                        className="flex-1 min-w-0 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold focus:outline-none focus:border-purple-500"
-                      />
-                      <input
-                        type="number"
-                        value={item.expected_qty}
-                        onChange={(e) => updateItem(i, 'expected_qty', e.target.value)}
-                        placeholder="Qty"
-                        min={1}
-                        className="w-14 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold text-center focus:outline-none focus:border-purple-500"
-                      />
-                      {form.items.length > 1 && (
-                        <button type="button" onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-500 flex-shrink-0">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
+
+                {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
+
+                <button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={submitting}
+                  className="inline-flex w-full items-center justify-center gap-2 bg-gray-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-60"
+                >
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+                  Create shipment
+                </button>
               </div>
-
-              {submitError && (
-                <p className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{submitError}</p>
-              )}
-
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={submitting}
-                className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-              >
-                {submitting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...
-                  </span>
-                ) : 'Create Shipment'}
-              </button>
             </div>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
-      <div className="px-4 pb-4 pt-3 text-center">
-        <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">FBA LIFECYCLE v1.0</p>
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="space-y-4 border border-gray-200 px-4 py-4">
+          <div className="flex items-start gap-3">
+            <Calendar className="mt-0.5 h-4 w-4 text-gray-400" />
+            <div>
+              <p className="text-sm font-medium text-gray-900">Keep action density out of the board</p>
+              <p className="mt-1 text-sm leading-6 text-gray-500">
+                Use the main table for scanning state quickly. Use this rail for creation, search refinement, and filters.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <User className="mt-0.5 h-4 w-4 text-gray-400" />
+            <div>
+              <p className="text-sm font-medium text-gray-900">Add FBA items is the only accent color</p>
+              <p className="mt-1 text-sm leading-6 text-gray-500">
+                Everything else stays neutral so inventory state, not decoration, carries the hierarchy.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+export function FbaSidebar(props: LegacySidebarProps) {
+  return <FbaControlSidebar {...props} />;
 }

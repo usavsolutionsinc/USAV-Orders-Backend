@@ -1,11 +1,73 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, session, dialog } = require('electron');
+const path = require('path');
 
 const DEFAULT_URL = 'https://usav-orders-backend.vercel.app';
 const DEV_URL = 'http://127.0.0.1:3000';
+const SIDECAR_PORT = 3001;
 
+const isDev = process.env.NODE_ENV === 'development' || !!process.env.ELECTRON_START_URL;
+
+// ---------------------------------------------------------------------------
+// Performance: GPU + renderer flags — must be set before app is ready
+// ---------------------------------------------------------------------------
+// Keep hardware acceleration on (it's the default, but be explicit)
+app.disableHardwareAcceleration === undefined; // no-op guard
+// Smooth scrolling and GPU compositing
+app.commandLine.appendSwitch('enable-smooth-scrolling');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+// Use a persistent disk cache so Vercel assets (JS chunks, CSS, fonts) are
+// cached between launches — dramatically speeds up every load after the first.
+app.commandLine.appendSwitch('disk-cache-size', String(256 * 1024 * 1024)); // 256 MB
+
+let mainWindow;
+let sidecarStarted = false;
+
+// ---------------------------------------------------------------------------
+// Sidecar server — local Express API for .docx upload / storage / print
+// ---------------------------------------------------------------------------
+async function startSidecar() {
+  if (sidecarStarted) return;
+  try {
+    const { startServer } = require('../server/index');
+    await startServer(SIDECAR_PORT);
+    sidecarStarted = true;
+  } catch (err) {
+    console.error('[sidecar] Failed to start:', err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// IPC handlers
+// ---------------------------------------------------------------------------
+function registerIpcHandlers() {
+  const { printFile } = require('./printer');
+
+  ipcMain.handle('print-file', async (_event, filePath) => {
+    try {
+      await printFile(filePath);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('open-file', async (_event, filePath) => {
+    try {
+      await shell.openPath(filePath);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// URL helpers
+// ---------------------------------------------------------------------------
 function getStartUrl() {
-  const configuredUrl = process.env.ELECTRON_START_URL || process.env.NEXT_PUBLIC_APP_URL || DEFAULT_URL;
-  return configuredUrl.replace(/\/+$/, '');
+  const configured = process.env.ELECTRON_START_URL || process.env.NEXT_PUBLIC_APP_URL || DEFAULT_URL;
+  return configured.replace(/\/+$/, '');
 }
 
 function getAllowedOrigins(startUrl) {
@@ -13,10 +75,15 @@ function getAllowedOrigins(startUrl) {
     new URL(startUrl).origin,
     new URL(DEFAULT_URL).origin,
     new URL(DEV_URL).origin,
+    `http://localhost:${SIDECAR_PORT}`,
+    `http://127.0.0.1:${SIDECAR_PORT}`,
   ]);
 }
 
-function createMenu(mainWindow) {
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+function createMenu(win) {
   const template = [
     {
       label: 'View',
@@ -24,14 +91,21 @@ function createMenu(mainWindow) {
         {
           label: 'Reload',
           accelerator: 'CmdOrCtrl+R',
-          click: () => mainWindow.webContents.reload(),
+          click: () => win.webContents.reload(),
         },
         {
           label: 'Open In Browser',
-          click: async () => {
-            await shell.openExternal(mainWindow.webContents.getURL());
-          },
+          click: async () => shell.openExternal(win.webContents.getURL()),
         },
+        ...(isDev
+          ? [
+              {
+                label: 'Toggle DevTools',
+                accelerator: 'CmdOrCtrl+Shift+I',
+                click: () => win.webContents.toggleDevTools(),
+              },
+            ]
+          : []),
         { role: 'togglefullscreen' },
       ],
     },
@@ -44,45 +118,54 @@ function createMenu(mainWindow) {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// ---------------------------------------------------------------------------
+// Main window
+// ---------------------------------------------------------------------------
 function createWindow() {
   const startUrl = getStartUrl();
   const allowedOrigins = getAllowedOrigins(startUrl);
 
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1440,
     height: 960,
     minWidth: 1200,
     minHeight: 760,
     show: false,
     autoHideMenuBar: false,
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     title: 'USAV Orders',
     webPreferences: {
-      preload: require.resolve('./preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,               // must be false to use contextBridge with ipcRenderer
+      webviewTag: true,             // enables <webview> in the renderer (embedded browser panels)
       devTools: true,
+      backgroundThrottling: false,  // don't throttle timers/rendering when window loses focus
     },
   });
 
   createMenu(mainWindow);
 
+  // Allow same-origin popup windows; send everything else to the OS browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    const targetUrl = new URL(url);
-    if (allowedOrigins.has(targetUrl.origin)) {
-      return { action: 'allow' };
+    try {
+      const origin = new URL(url).origin;
+      if (allowedOrigins.has(origin)) return { action: 'allow' };
+    } catch (_) {
+      // ignore invalid URLs
     }
-
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const targetUrl = new URL(url);
-    if (allowedOrigins.has(targetUrl.origin)) {
-      return;
+    try {
+      const origin = new URL(url).origin;
+      if (allowedOrigins.has(origin)) return;
+    } catch (_) {
+      // ignore
     }
-
     event.preventDefault();
     shell.openExternal(url);
   });
@@ -110,25 +193,66 @@ function createWindow() {
     );
   });
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
-
+  mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.loadURL(startUrl);
 }
 
-app.whenReady().then(() => {
+// ---------------------------------------------------------------------------
+// App lifecycle
+// ---------------------------------------------------------------------------
+app.whenReady().then(async () => {
+  // Point the default session's cache at a persistent location under userData
+  // so static assets survive between app launches.
+  const cachePath = path.join(app.getPath('userData'), 'http-cache');
+  await session.defaultSession.clearCache().catch(() => {});
+  session.defaultSession.setSpellCheckerDictionaryDownloadURL(''); // silence unrelated warning
+
+  await startSidecar();
+  registerIpcHandlers();
   createWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
+
+// ---------------------------------------------------------------------------
+// Auto-updater — checks GitHub Releases silently on launch.
+// Only runs in a packaged build (not dev mode) to avoid noisy errors.
+// ---------------------------------------------------------------------------
+if (!isDev) {
+  try {
+    const { autoUpdater } = require('electron-updater');
+
+    autoUpdater.autoDownload = true;       // download in background automatically
+    autoUpdater.autoInstallOnAppQuit = true; // install when the user next quits
+
+    autoUpdater.on('update-downloaded', (info) => {
+      // Prompt the user to restart and apply the update now, or wait
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update ready',
+        message: `USAV Orders ${info.version} has been downloaded.`,
+        detail: 'Restart now to apply the update, or it will install automatically next time you quit.',
+        buttons: ['Restart Now', 'Later'],
+        defaultId: 0,
+      }).then(({ response }) => {
+        if (response === 0) autoUpdater.quitAndInstall();
+      });
+    });
+
+    autoUpdater.on('error', (err) => {
+      // Log silently — don't interrupt the user for update errors
+      console.error('[updater] Error:', err.message);
+    });
+
+    // Check 3 seconds after launch so startup isn't delayed
+    setTimeout(() => autoUpdater.checkForUpdates(), 3000);
+  } catch (_) {
+    // electron-updater not installed yet — skip silently
+  }
+}

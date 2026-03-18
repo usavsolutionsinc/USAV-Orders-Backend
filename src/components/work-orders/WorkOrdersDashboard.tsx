@@ -55,7 +55,7 @@ export function WorkOrdersDashboard() {
     const controller = new AbortController();
     setLoading(true);
     fetch(`/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`, {
-      cache: 'no-store',
+     
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
@@ -142,7 +142,7 @@ export function WorkOrdersDashboard() {
   const refreshRows = useCallback(async () => {
     const res = await fetch(
       `/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`,
-      { cache: 'no-store' }
+      
     );
     const json = await res.json();
     setRows(Array.isArray(json?.rows) ? json.rows : []);

@@ -169,7 +169,7 @@ function LineItemsPanel({
   const { data, isLoading } = useQuery<{ success: boolean; receiving_lines: ReceivingLine[] }>({
     queryKey: ['receiving-lines', receivingId],
     queryFn: async () => {
-      const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}`, { cache: 'no-store' });
+      const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}`);
       if (!res.ok) throw new Error('fetch failed');
       return res.json();
     },
@@ -318,7 +318,6 @@ export default function PendingUnboxingQueue({ onSelectReceivingId }: PendingUnb
     queryFn: async () => {
       const res = await fetch(
         `/api/receiving/pending-unboxing?limit=100&status=${statusParam}`,
-        { cache: 'no-store' },
       );
       if (!res.ok) throw new Error('Failed to fetch pending unboxing');
       return res.json();

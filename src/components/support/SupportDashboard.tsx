@@ -86,7 +86,7 @@ export function SupportDashboard() {
   const query = useQuery<SupportOverviewResponse>({
     queryKey: ['support-overview'],
     queryFn: async () => {
-      const response = await fetch('/api/support/overview', { cache: 'no-store' });
+      const response = await fetch('/api/support/overview');
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok || !data?.success) {

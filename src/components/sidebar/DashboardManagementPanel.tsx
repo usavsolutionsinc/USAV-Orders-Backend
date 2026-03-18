@@ -69,7 +69,7 @@ export function DashboardManagementPanel({
     setStatus(null);
     try {
       const [workRes, staffMembers] = await Promise.all([
-        fetch('/api/work-orders?queue=all_unassigned', { cache: 'no-store' }),
+        fetch('/api/work-orders?queue=all_unassigned'),
         getActiveStaff(),
       ]);
       const workJson = workRes.ok ? await workRes.json() : {};

@@ -1,0 +1,126 @@
+name: Desktop Build
+
+# Trigger on pushes to main and on published releases.
+# You can also trigger manually via Actions → Run workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'electron/**'
+      - 'server/**'
+      - 'package.json'
+      - 'electron-builder.yml'
+      - '.github/workflows/desktop-build.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # macOS — produces a universal .dmg (Intel + Apple Silicon)
+  # ---------------------------------------------------------------------------
+  build-mac:
+    name: Build macOS (.dmg)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Code signing — only runs when the secrets are present.
+      # Add these in GitHub → Settings → Secrets and variables → Actions:
+      #   CSC_LINK            — base64-encoded .p12 certificate
+      #   CSC_KEY_PASSWORD    — certificate password
+      #   APPLE_ID            — your Apple ID email
+      #   APPLE_ID_PASS       — app-specific password from appleid.apple.com
+      #   APPLE_TEAM_ID       — Team ID from developer.apple.com
+      - name: Build and package (macOS)
+        run: npm run electron:build:mac
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: usav-orders-mac
+          path: desktop-dist/*.dmg
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Windows — produces an NSIS installer .exe
+  # ---------------------------------------------------------------------------
+  build-win:
+    name: Build Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Code signing — add these secrets to enable Authenticode signing:
+      #   CSC_LINK          — base64-encoded .p12 certificate
+      #   CSC_KEY_PASSWORD  — certificate password
+      - name: Build and package (Windows)
+        run: npm run electron:build:win
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK_WIN }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD_WIN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: usav-orders-win
+          path: desktop-dist/*.exe
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # On a published GitHub Release, attach the built installers automatically
+  # ---------------------------------------------------------------------------
+  attach-to-release:
+    name: Attach installers to GitHub Release
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: usav-orders-mac
+          path: artifacts/mac
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: usav-orders-win
+          path: artifacts/win
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/mac/*.dmg
+            artifacts/win/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

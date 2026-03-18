@@ -47,13 +47,13 @@ interface ShipmentWithItems extends Shipment {
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     PLANNED: 'bg-gray-100 text-gray-600',
-    READY_TO_GO: 'bg-green-100 text-green-700',
-    LABEL_ASSIGNED: 'bg-blue-100 text-blue-700',
-    SHIPPED: 'bg-purple-100 text-purple-700',
+    READY_TO_GO: 'bg-gray-900 text-white',
+    LABEL_ASSIGNED: 'bg-gray-200 text-gray-700',
+    SHIPPED: 'bg-gray-100 text-gray-500',
   };
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${map[status] ?? 'bg-gray-100 text-gray-500'}`}
+      className={`inline-flex items-center px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${map[status] ?? 'bg-gray-100 text-gray-500'}`}
     >
       {status.replace(/_/g, ' ')}
     </span>
@@ -136,26 +136,25 @@ function ShipmentLabelCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
-      className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+      className="overflow-hidden border border-gray-200 bg-white"
     >
-      {/* Card header */}
-      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-gray-100 bg-gray-50">
+      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1.5 bg-blue-100 rounded-xl flex-shrink-0">
-            <Package className="w-4 h-4 text-blue-600" />
+          <div className="flex h-9 w-9 items-center justify-center border border-gray-200 flex-shrink-0">
+            <Package className="w-4 h-4 text-gray-900" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-black text-gray-900 truncate">{shipment.shipment_ref}</p>
             <div className="flex items-center gap-2 flex-wrap">
               {shipment.destination_fc && (
-                <span className="text-[10px] text-gray-500 font-bold">FC: {shipment.destination_fc}</span>
+                <span className="text-[10px] text-gray-500 font-bold">FC {shipment.destination_fc}</span>
               )}
               {shipment.due_date && (
                 <span className="text-[10px] text-gray-400">
                   Due: {new Date(shipment.due_date).toLocaleDateString()}
                 </span>
               )}
-              <span className="text-[10px] font-black text-green-600">
+              <span className="text-[10px] font-black text-gray-900">
                 {visibleItems.length} ready to print
               </span>
             </div>
@@ -164,7 +163,7 @@ function ShipmentLabelCard({
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-700 text-white rounded-xl text-[10px] font-black transition-all active:scale-95"
+            className="flex items-center gap-1.5 border border-gray-900 px-3 py-2 text-[10px] font-black text-gray-900 transition-all active:scale-95 hover:bg-gray-900 hover:text-white"
           >
             <Printer className="w-3 h-3" />
             Print
@@ -172,7 +171,7 @@ function ShipmentLabelCard({
           <button
             onClick={handleMarkPrinted}
             disabled={marking || visibleItems.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-[10px] font-black transition-all active:scale-95"
+            className="flex items-center gap-1.5 bg-gray-900 px-3 py-2 text-[10px] font-black text-white transition-all active:scale-95 disabled:opacity-50 hover:bg-gray-800"
           >
             {marking ? (
               <Loader2 className="w-3 h-3 animate-spin" />
@@ -185,7 +184,7 @@ function ShipmentLabelCard({
       </div>
 
       {/* Printable table area */}
-      <div ref={printRef}>
+      <div ref={printRef} className="px-4 py-4">
         <h2>{shipment.shipment_ref}</h2>
         <p className="meta">
           {shipment.destination_fc ? `FC: ${shipment.destination_fc} · ` : ''}
@@ -217,7 +216,7 @@ function ShipmentLabelCard({
       </div>
 
       {/* On-screen item rows */}
-      <div className="divide-y divide-gray-50">
+      <div className="divide-y divide-gray-200">
         <AnimatePresence>
           {visibleItems.map((item) => (
             <motion.div
@@ -225,13 +224,13 @@ function ShipmentLabelCard({
               initial={{ opacity: 1 }}
               exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
               transition={{ duration: 0.2 }}
-              className="flex items-center gap-3 px-4 py-2.5"
+              className="flex items-center gap-3 px-4 py-3"
             >
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-gray-900 truncate">
                   {item.product_title || item.fnsku}
                 </p>
-                <div className="flex items-center gap-3 flex-wrap mt-0.5">
+                <div className="mt-0.5 flex items-center gap-3 flex-wrap">
                   <span className="font-mono text-[10px] text-gray-500">{item.fnsku}</span>
                   {item.sku && (
                     <span className="text-[10px] text-gray-400">SKU: {item.sku}</span>
@@ -257,7 +256,7 @@ function ShipmentLabelCard({
         </AnimatePresence>
 
         {visibleItems.length === 0 && readyItems.length > 0 && (
-          <div className="flex items-center gap-2 px-4 py-3 text-green-700">
+          <div className="flex items-center gap-2 px-4 py-3 text-gray-700">
             <PackageCheck className="w-4 h-4" />
             <p className="text-xs font-bold">All items marked as label assigned</p>
           </div>
@@ -340,20 +339,20 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+      <div className="flex h-full items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-900" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center gap-3 p-4 bg-red-50 rounded-2xl border border-red-200 mx-4 my-4">
+      <div className="mx-4 my-4 flex items-center gap-3 border border-red-200 bg-red-50 p-4">
         <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
         <p className="text-sm font-bold text-red-700">{error}</p>
         <button
           onClick={() => setRefreshCount((c) => c + 1)}
-          className="ml-auto px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-black"
+          className="ml-auto bg-red-600 px-3 py-1.5 text-xs font-black text-white"
         >
           Retry
         </button>
@@ -362,28 +361,26 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
+    <div className="flex h-full flex-col bg-white">
+      <div className="sticky top-0 z-10 flex items-end justify-between border-b border-gray-200 bg-white px-4 py-4">
         <div className="flex items-center gap-2">
           <Printer className="w-4 h-4 text-gray-500" />
           <span className="text-sm font-black text-gray-900">Label Queue</span>
           {shipments.length > 0 && (
-            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-black">
+            <span className="border border-gray-200 px-2 py-0.5 text-[10px] font-black text-gray-700">
               {shipments.reduce((acc, s) => acc + s.items.filter(i => i.status === 'READY_TO_GO').length, 0)} items
             </span>
           )}
         </div>
         <button
           onClick={() => setRefreshCount((c) => c + 1)}
-          className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+          className="border border-gray-200 p-2 transition-colors hover:bg-gray-50"
           title="Refresh"
         >
           <RefreshCw className="w-4 h-4 text-gray-500" />
         </button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         <AnimatePresence>
           {shipments.length === 0 ? (
@@ -392,7 +389,7 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
               animate={{ opacity: 1 }}
               className="flex flex-col items-center justify-center py-16 text-center"
             >
-              <div className="p-4 bg-gray-100 rounded-2xl mb-4">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center border border-gray-200">
                 <PackageCheck className="w-8 h-8 text-gray-400" />
               </div>
               <p className="text-sm font-black text-gray-500">No items ready to label</p>

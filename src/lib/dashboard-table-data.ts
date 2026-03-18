@@ -1,6 +1,7 @@
 'use client';
 
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { isFbaOrder } from '@/utils/order-platform';
 
 function toOrderRecord(order: any): ShippedOrder {
@@ -124,4 +125,30 @@ export async function fetchDashboardShippedData({
         ? data.results
         : [];
   return ((shipped || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+}
+
+export async function fetchDashboardPackedRecords({
+  packedBy,
+  testedBy,
+  weekStart,
+  weekEnd,
+}: {
+  packedBy?: number;
+  testedBy?: number;
+  weekStart?: string;
+  weekEnd?: string;
+}) {
+  const params = new URLSearchParams({ limit: '1000' });
+  if (weekStart) params.set('weekStart', weekStart);
+  if (weekEnd) params.set('weekEnd', weekEnd);
+  if (packedBy !== undefined) params.set('packedBy', String(packedBy));
+  if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+
+  const res = await fetch(`/api/packerlogs?${params.toString()}`, { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error('Failed to fetch packed records');
+  }
+
+  const data = await res.json();
+  return (Array.isArray(data) ? data : []) as PackerRecord[];
 }

@@ -38,7 +38,7 @@ export function ZohoInboundStatusBanner() {
   const { data, isLoading } = useQuery<ZohoHealthResponse>({
     queryKey: ['zoho-health'],
     queryFn: async () => {
-      const res = await fetch('/api/zoho/health', { cache: 'no-store' });
+      const res = await fetch('/api/zoho/health');
       return res.json();
     },
     staleTime: 15_000,
