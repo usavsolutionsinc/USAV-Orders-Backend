@@ -24,6 +24,7 @@
     "realtime:relay": "node scripts/realtime-outbox-relay.js",
     "debug:transfer-order": "node scripts/debug-transfer-order-match.js",
     "check:mobile-endpoints": "node scripts/check-mobile-endpoint-integrity.js",
+    "sync:repair-incoming-ecwid": "node scripts/sync-ecwid-incoming-repairs.js",
     "sync:packer-logs": "node sync-packer-sheets-to-logs.js",
     "sync:packer-logs:preview": "node sync-packer-sheets-to-logs-dry-run.js"
   },

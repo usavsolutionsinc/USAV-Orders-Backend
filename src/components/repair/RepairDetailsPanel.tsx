@@ -14,8 +14,8 @@ interface RepairDetailsPanelProps {
   assignedTechId?: number | null;
   onClose: () => void;
   onUpdate: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   disableMoveUp?: boolean;
   disableMoveDown?: boolean;
 }
@@ -33,8 +33,8 @@ export function RepairDetailsPanel({
   repair, 
   onClose, 
   onUpdate,
-  onMoveUp,
-  onMoveDown,
+  onMoveUp = () => {},
+  onMoveDown = () => {},
   disableMoveUp = false,
   disableMoveDown = false,
 }: RepairDetailsPanelProps) {
@@ -45,6 +45,13 @@ export function RepairDetailsPanel({
   const [isEditingTicket, setIsEditingTicket] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const ticketInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setNotes(repair.notes || '');
+    setTicketNumber(repair.ticket_number || '');
+    setIsEditingTicket(false);
+    setIsSavingTicket(false);
+  }, [repair.id, repair.notes, repair.ticket_number]);
 
   useEffect(() => {
     if (isEditingTicket && ticketInputRef.current) {

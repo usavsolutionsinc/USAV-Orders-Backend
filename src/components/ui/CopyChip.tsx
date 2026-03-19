@@ -1,7 +1,7 @@
 'use client';
 
 import React, { MouseEvent, useState } from 'react';
-import { Check, Copy, MapPin, Barcode } from '../Icons';
+import { Check, Copy, MapPin, Barcode, Settings } from '../Icons';
 
 // --- Helpers ---
 
@@ -49,15 +49,17 @@ export interface CopyChipProps {
   underlineClass: string;
   iconClass?: string;
   width: string;
+  disableCopy?: boolean;
 }
 
-export function CopyChip({ value, display, icon, underlineClass, iconClass, width }: CopyChipProps) {
+export function CopyChip({ value, display, icon, underlineClass, iconClass, width, disableCopy = false }: CopyChipProps) {
   const [copied, setCopied] = useState(false);
-  const isEmpty = !value || value === '---';
+  const canCopy = !disableCopy && !!value && value !== '---';
+  const isDisabled = !canCopy && !disableCopy;
 
   const handleCopy = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    if (isEmpty) return;
+    if (!canCopy) return;
     navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -68,15 +70,15 @@ export function CopyChip({ value, display, icon, underlineClass, iconClass, widt
       <button
         type="button"
         onClick={handleCopy}
-        disabled={isEmpty}
+        disabled={isDisabled}
         className="w-full flex items-center gap-0.5 py-0 bg-white text-black transition-all active:scale-95 disabled:opacity-30"
       >
         <span className={`shrink-0 ${iconClass}`}>{icon}</span>
         <span className={`font-mono text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 flex-1 ${underlineClass}`}>
-          {isEmpty ? '---' : display}
+          {display || '---'}
         </span>
       </button>
-      {!isEmpty && (
+      {canCopy && (
         <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-150">
           <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-[10px] font-bold text-black whitespace-nowrap shadow-sm">
             {copied ? 'Copied!' : 'Copy'}
@@ -120,5 +122,38 @@ export const SerialChip = ({ value, display }: { value: string; display: string 
     underlineClass="border-emerald-500"
     iconClass="text-emerald-500"
     width="w-[64px]"
+  />
+);
+
+export const TicketChip = ({ value, display }: { value: string; display: string }) => (
+  <CopyChip
+    value={value}
+    display={display}
+    icon={<Settings className="w-4 h-4 shrink-0" />}
+    underlineClass="border-orange-500"
+    iconClass="text-orange-500"
+    width="w-[52px]"
+  />
+);
+
+export const SourceOrderChip = ({
+  value,
+  display,
+  width = 'w-[92px]',
+  disableCopy = false,
+}: {
+  value: string;
+  display: string;
+  width?: string;
+  disableCopy?: boolean;
+}) => (
+  <CopyChip
+    value={value}
+    display={display}
+    icon={<HashIcon />}
+    underlineClass="border-gray-400"
+    iconClass="text-gray-400"
+    width={width}
+    disableCopy={disableCopy}
   />
 );

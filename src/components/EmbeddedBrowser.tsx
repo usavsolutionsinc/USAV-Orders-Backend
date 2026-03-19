@@ -2,6 +2,13 @@
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 
+type WebviewElement = HTMLElement & {
+  src: string;
+  goBack: () => void;
+  goForward: () => void;
+  reload: () => void;
+};
+
 interface EmbeddedBrowserProps {
   /** Initial URL to load */
   url: string;
@@ -20,7 +27,7 @@ interface EmbeddedBrowserProps {
  * browser context it shows a fallback message instead.
  */
 export default function EmbeddedBrowser({ url, onNavigate, className = '' }: EmbeddedBrowserProps) {
-  const webviewRef = useRef<Electron.WebviewTag | null>(null);
+  const webviewRef = useRef<WebviewElement | null>(null);
   const [currentUrl, setCurrentUrl] = useState(url);
   const [loading, setLoading] = useState(false);
   const [isElectronEnv, setIsElectronEnv] = useState(false);
@@ -39,21 +46,23 @@ export default function EmbeddedBrowser({ url, onNavigate, className = '' }: Emb
 
     const onStartLoading = () => setLoading(true);
     const onStopLoading = () => setLoading(false);
-    const onDidNavigate = (e: { url: string }) => {
-      setCurrentUrl(e.url);
-      onNavigate?.(e.url);
+    const onDidNavigate = (event: Event) => {
+      const nextUrl = String((event as Event & { url?: string }).url || '').trim();
+      if (!nextUrl) return;
+      setCurrentUrl(nextUrl);
+      onNavigate?.(nextUrl);
     };
 
     wv.addEventListener('did-start-loading', onStartLoading);
     wv.addEventListener('did-stop-loading', onStopLoading);
-    wv.addEventListener('did-navigate', onDidNavigate as EventListener);
-    wv.addEventListener('did-navigate-in-page', onDidNavigate as EventListener);
+    wv.addEventListener('did-navigate', onDidNavigate);
+    wv.addEventListener('did-navigate-in-page', onDidNavigate);
 
     return () => {
       wv.removeEventListener('did-start-loading', onStartLoading);
       wv.removeEventListener('did-stop-loading', onStopLoading);
-      wv.removeEventListener('did-navigate', onDidNavigate as EventListener);
-      wv.removeEventListener('did-navigate-in-page', onDidNavigate as EventListener);
+      wv.removeEventListener('did-navigate', onDidNavigate);
+      wv.removeEventListener('did-navigate-in-page', onDidNavigate);
     };
   }, [onNavigate]);
 
@@ -126,12 +135,11 @@ export default function EmbeddedBrowser({ url, onNavigate, className = '' }: Emb
       </div>
 
       {/* Webview — bypasses X-Frame-Options */}
-      {/* @ts-expect-error webview is an Electron-only custom element */}
       <webview
         ref={webviewRef}
         src={url}
         style={{ flex: 1, width: '100%' }}
-        allowpopups="true"
+        allowpopups
       />
     </div>
   );

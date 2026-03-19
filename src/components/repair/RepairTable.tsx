@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Search, X, Printer, AlertTriangle } from '../Icons';
-import { CopyableText } from '../ui/CopyableText';
+import { Search, X, Printer } from '../Icons';
+import { SourceOrderChip, TicketChip } from '../ui/CopyChip';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
@@ -215,7 +215,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                         animate={{ opacity: 1 }}
                         key={repair.id}
                         onClick={() => handleRowClick(repair)}
-                        className={`grid grid-cols-[1fr_180px] items-center gap-1 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                        className={`grid grid-cols-[1fr_220px] items-center gap-1 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                           selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                         }`}
                       >
@@ -253,19 +253,19 @@ export function RepairTable({ filter }: RepairTableProps) {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                          {repair.intake_channel && (
-                            <span className="rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-orange-700">
-                              {repair.intake_channel}
-                            </span>
-                          )}
-                          <div className="flex flex-col">
-                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter mb-0.5">Ticket #</span>
-                            <CopyableText
-                              text={repair.ticket_number || ''}
-                              displayText={getLast4(repair.ticket_number)}
-                              className="text-[10px] font-mono font-bold text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100"
-                              variant="default"
+                        <div className="flex items-center justify-start gap-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-col items-start">
+                            <SourceOrderChip
+                              value={String(repair.source_order_id || '').trim() || 'WALK-IN'}
+                              display={String(repair.source_order_id || '').trim() || 'WALK-IN'}
+                              width="w-[72px]"
+                              disableCopy={!String(repair.source_order_id || '').trim()}
+                            />
+                          </div>
+                          <div className="flex flex-col items-start">
+                            <TicketChip
+                              value={repair.ticket_number || ''}
+                              display={getLast4(repair.ticket_number)}
                             />
                           </div>
                           <button

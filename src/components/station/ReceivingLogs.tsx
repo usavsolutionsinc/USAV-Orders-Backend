@@ -2,12 +2,13 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Package, Loader2, Search } from '../Icons';
+import { Package, Loader2, Search, X } from '../Icons';
 import { CopyChip, getLast4 } from '@/components/ui/CopyChip';
 import { motion } from 'framer-motion';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
+import { SearchBar } from '@/components/ui/SearchBar';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 const STATION_CHANNEL =
@@ -75,9 +76,11 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
     const queryClient = useQueryClient();
     const [weekOffset, setWeekOffset] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
+    const [searchOpen, setSearchOpen] = useState(false);
     const [stickyDate, setStickyDate] = useState('');
     const [currentCount, setCurrentCount] = useState(0);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
 
     const weekRange = computeWeekRange(weekOffset);
     const queryKey = ['receiving-logs', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr }] as const;
@@ -163,6 +166,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
     const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
     const normalizedQuery = searchQuery.trim().toLowerCase();
+    const showSearch = searchOpen || Boolean(normalizedQuery);
     const filteredData = normalizedQuery
         ? data.filter((log) => {
             const haystack = [
@@ -177,6 +181,20 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
             return haystack.includes(normalizedQuery);
         })
         : data;
+
+    useEffect(() => {
+        if (!showSearch) return;
+        const timeoutId = window.setTimeout(() => {
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select();
+        }, 40);
+        return () => window.clearTimeout(timeoutId);
+    }, [showSearch]);
+
+    const closeSearch = () => {
+        setSearchQuery('');
+        setSearchOpen(false);
+    };
 
     // Group by PST date and apply precise week filter (server has ±1 day UTC buffer).
     const grouped: { [key: string]: ReceivingLog[] } = {};
@@ -247,19 +265,6 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                 }
             />
 
-            <div className="border-b border-gray-100 px-2 py-1.5 bg-white">
-                <div className="relative">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search tracking or carrier..."
-                        className="w-full rounded-xl border border-gray-100 bg-gray-50 py-2 pl-9 pr-3 text-[10px] font-bold text-gray-700 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
-                    />
-                </div>
-            </div>
-
             <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar w-full">
                 {isLoading && data.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-400">
@@ -319,6 +324,40 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                     </div>
                 )}
             </div>
+
+            {showSearch ? (
+                <div className="absolute bottom-3 left-3 z-30 w-[320px]">
+                    <SearchBar
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        inputRef={searchInputRef}
+                        placeholder="Search tracking or carrier..."
+                        variant="blue"
+                        size="compact"
+                        className="w-full"
+                        onClear={closeSearch}
+                        rightElement={
+                            <button
+                                type="button"
+                                onClick={closeSearch}
+                                className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+                                aria-label="Close search"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        }
+                    />
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => setSearchOpen(true)}
+                    className="absolute bottom-3 left-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 transition hover:bg-blue-500"
+                    aria-label="Open receiving logs search"
+                >
+                    <Search className="h-4 w-4" />
+                </button>
+            )}
         </div>
     );
 }

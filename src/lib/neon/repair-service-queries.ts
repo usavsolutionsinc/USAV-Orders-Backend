@@ -459,7 +459,14 @@ export async function upsertEcwidIncomingRepair(params: {
        FROM repair_service
        WHERE source_system = 'ecwid'
          AND (
-           (source_order_id IS NOT NULL AND source_order_id = $1)
+           (
+             source_order_id IS NOT NULL
+             AND source_order_id = $1
+             AND (
+               COALESCE(NULLIF($3, ''), '') = ''
+               OR COALESCE(source_sku, '') = COALESCE($3, '')
+             )
+           )
            OR (
              source_tracking_number IS NOT NULL
              AND source_tracking_number = $2
