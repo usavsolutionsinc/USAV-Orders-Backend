@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
+import StockZohoOrdersTable from '@/components/dashboard/StockZohoOrdersTable';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
@@ -12,6 +13,8 @@ export interface PendingOrdersTableProps {
   packedBy?: number;
   testedBy?: number;
 }
+
+type PendingStockFilter = 'all' | 'pending' | 'stock';
 
 function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
   const patched = { ...row };
@@ -55,6 +58,13 @@ export default function PendingOrdersTable({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
+  const pendingFilterParam = searchParams.get('pendingFilter');
+  const pendingFilter: PendingStockFilter =
+    pendingFilterParam === 'stock'
+      ? 'stock'
+      : pendingFilterParam === 'pending'
+        ? 'pending'
+        : 'all';
   const shippedRedirectAttemptRef = useRef<string>('');
   const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy }] as const;
 
@@ -105,6 +115,7 @@ export default function PendingOrdersTable({
   );
 
   useEffect(() => {
+    if (pendingFilter === 'stock') return;
     if ((pathname || '/dashboard') !== '/dashboard') return;
     if (!searchQuery) {
       shippedRedirectAttemptRef.current = '';
@@ -150,7 +161,7 @@ export default function PendingOrdersTable({
     return () => {
       cancelled = true;
     };
-  }, [pathname, query.data, query.isFetching, query.isLoading, router, searchParams, searchQuery]);
+  }, [pathname, pendingFilter, query.data, query.isFetching, query.isLoading, router, searchParams, searchQuery]);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -209,14 +220,28 @@ export default function PendingOrdersTable({
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
   };
 
+  const allPendingRecords = query.data || [];
+  const pendingUntestedRecords = allPendingRecords.filter(
+    (record) => !Boolean((record as any).has_tech_scan)
+  );
+
+  if (pendingFilter === 'stock') {
+    return (
+      <StockZohoOrdersTable
+        searchValue={searchQuery}
+        onClearSearch={clearSearch}
+      />
+    );
+  }
+
   return (
     <OrdersQueueTable
-      records={query.data || []}
+      records={pendingFilter === 'all' ? allPendingRecords : pendingUntestedRecords}
       loading={query.isLoading}
       isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}
       onClearSearch={clearSearch}
-      emptyMessage="No pending order records found"
+      emptyMessage={pendingFilter === 'all' ? 'No pending orders found' : 'No pending untested orders found'}
       useWaForDisplay
       onOpenRecord={(record) => {
         window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: record }));

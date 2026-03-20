@@ -16,4 +16,5 @@ export interface DetailsStackProps {
   mode?: 'dashboard' | 'tech';
   showAssignmentButton?: boolean;
   actionBar?: PanelActionBarConfig;
+  showReturnInformation?: boolean;
 }

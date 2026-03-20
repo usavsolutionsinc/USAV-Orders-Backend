@@ -10,6 +10,7 @@ import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { DetailsPanelRow } from '@/components/shipped/details-panel/blocks/DetailsPanelRow';
 import { InlineSaveIndicator } from '@/design-system/components';
+import { getStaffName } from '@/utils/staff';
 
 export interface EditableShippingFields {
   orderNumber: string;
@@ -427,6 +428,7 @@ interface ShippingInformationSectionProps {
   onCopyAll: () => void;
   onUpdate?: () => void;
   showSerialNumber?: boolean;
+  showReturnInformation?: boolean;
   showShippingTimestamp?: boolean;
   editableShippingFields?: EditableShippingFields;
   metaFields?: ShippingMetaFields;
@@ -438,6 +440,7 @@ export function ShippingInformationSection({
   onCopyAll,
   onUpdate,
   showSerialNumber = true,
+  showReturnInformation = true,
   showShippingTimestamp = false,
   editableShippingFields,
   metaFields,
@@ -451,149 +454,189 @@ export function ShippingInformationSection({
       : daysLate === 1
         ? 'text-[10px] font-black uppercase tracking-wide text-yellow-600'
         : 'text-[10px] font-black uppercase tracking-wide text-gray-500';
+  const shippedAtDisplay =
+    shipped.packed_at && shipped.packed_at !== '1'
+      ? formatDateTimePST(shipped.packed_at)
+      : 'N/A';
+  const packerNameDisplay = String(
+    (shipped as any).packed_by_name
+    || (shipped as any).packer_name
+    || getStaffName((shipped as any).packed_by ?? (shipped as any).packer_id ?? null)
+  ).trim() || 'Not specified';
+  const techNameDisplay = String(
+    (shipped as any).tester_name
+    || (shipped as any).tested_by_name
+    || getStaffName((shipped as any).tested_by ?? (shipped as any).tester_id ?? null)
+  ).trim() || 'Not specified';
+  const serialNumbersDisplay = parseSerialRows(shipped.serial_number)
+    .map((row) => row.trim())
+    .filter(Boolean)
+    .join(', ') || 'N/A';
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Shipping Information</h3>
-        <button
-          onClick={onCopyAll}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-white transition-all hover:bg-blue-700 hover:shadow-md active:scale-95"
-          aria-label="Copy all shipping information"
-        >
-          {copiedAll ? (
+    <section className="space-y-6">
+      {showReturnInformation ? (
+        <div className="space-y-3">
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Return Information</h3>
+          <div className="space-y-0">
+            <DetailsPanelRow label="Shipment / Packer">
+              <div className="flex items-center justify-between gap-3">
+                <p className="truncate text-sm font-bold text-gray-900">{shippedAtDisplay}</p>
+                <p className="shrink-0 text-sm font-bold text-gray-900">{packerNameDisplay}</p>
+              </div>
+            </DetailsPanelRow>
+            <DetailsPanelRow label="Serial Numbers">
+              <p className="break-all py-0.5 text-sm font-mono font-bold text-gray-900">{serialNumbersDisplay}</p>
+            </DetailsPanelRow>
+            <DetailsPanelRow label="Tech Name" className="last:border-b-0">
+              <p className="text-sm font-bold text-gray-900">{techNameDisplay}</p>
+            </DetailsPanelRow>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Shipping Information</h3>
+          <button
+            onClick={onCopyAll}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-white transition-all hover:bg-blue-700 hover:shadow-md active:scale-95"
+            aria-label="Copy all shipping information"
+          >
+            {copiedAll ? (
+              <>
+                <Check className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-wider">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-wider">Copy</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="space-y-0">
+          {showShippingTimestamp && (
+            <DetailsPanelRow label="Shipped">
+              <p className="text-sm font-bold text-gray-900">
+                {shipped.packed_at && shipped.packed_at !== '1'
+                  ? formatDateTimePST(shipped.packed_at)
+                  : 'N/A'}
+              </p>
+            </DetailsPanelRow>
+          )}
+
+          {editableShippingFields ? (
             <>
-              <Check className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-black uppercase tracking-wider">Copied!</span>
+              <ShippingEditableRow
+                label="Ship By Date"
+                headerAccessory={String(daysLate)}
+                headerAccessoryClassName={daysLateClassName}
+                value={editableShippingFields.shipByDate}
+                placeholder="MM-DD-YY"
+                onChange={editableShippingFields.onShipByDateChange}
+                onBlur={editableShippingFields.onShipByDateBlur}
+              />
+              <ShippingEditableRow
+                label="Tracking Number"
+                value={editableShippingFields.trackingNumber}
+                placeholder="Enter tracking number"
+                onChange={editableShippingFields.onTrackingNumberChange}
+                onBlur={editableShippingFields.onBlur}
+                externalUrl={getTrackingUrl(editableShippingFields.trackingNumber)}
+              />
+              <ShippingEditableRow
+                label="Order ID"
+                value={editableShippingFields.orderNumber}
+                placeholder="Enter order ID"
+                onChange={editableShippingFields.onOrderNumberChange}
+                onBlur={editableShippingFields.onBlur}
+                externalUrl={getOrderIdUrl(editableShippingFields.orderNumber)}
+                headerAccessory={accountSourceLabel || undefined}
+                headerAccessoryClassName="text-[10px] font-black tracking-wide text-blue-600"
+              />
+              <ShippingEditableRow
+                label="Item Number"
+                value={editableShippingFields.itemNumber}
+                placeholder="Enter item number"
+                onChange={editableShippingFields.onItemNumberChange}
+                onBlur={editableShippingFields.onBlur}
+                externalUrl={getExternalUrlByItemNumber(editableShippingFields.itemNumber)}
+              />
             </>
           ) : (
             <>
-              <Copy className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-black uppercase tracking-wider">Copy</span>
+              <CopyableValueFieldBlock
+                label="Ship By Date"
+                value={String(shipped.ship_by_date || '').trim() || 'N/A'}
+                headerAccessory={<span className={daysLateClassName}>{daysLate}</span>}
+                variant="flat"
+              />
+              <CopyableValueFieldBlock
+                label="Tracking Number"
+                value={shipped.shipping_tracking_number || 'Not available'}
+                externalUrl={getTrackingUrl(shipped.shipping_tracking_number || '')}
+                externalLabel="Open shipment tracking in new tab"
+                variant="flat"
+              />
+              <CopyableValueFieldBlock
+                label="Order ID"
+                value={shipped.order_id || 'Not available'}
+                externalUrl={getOrderIdUrl(shipped.order_id)}
+                externalLabel={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? 'Open Amazon order in Seller Central in new tab' : 'Open Ecwid order in new tab'}
+                headerAccessory={accountSourceLabel ? <span className="text-[10px] font-black tracking-wide text-blue-600">{accountSourceLabel}</span> : null}
+                variant="flat"
+              />
+              <CopyableValueFieldBlock
+                label="Item Number"
+                value={shipped.item_number || 'N/A'}
+                externalUrl={getExternalUrlByItemNumber(shipped.item_number)}
+                externalLabel="Open product page in new tab"
+                variant="flat"
+              />
             </>
           )}
-        </button>
-      </div>
 
-      <div className="space-y-0">
-        {showShippingTimestamp && (
-          <DetailsPanelRow label="Shipped">
-            <p className="text-sm font-bold text-gray-900">
-              {shipped.packed_at && shipped.packed_at !== '1'
-                ? formatDateTimePST(shipped.packed_at)
-                : 'N/A'}
-            </p>
-          </DetailsPanelRow>
-        )}
+          {showSerialNumber ? (
+            <ShippingSerialNumberRow
+              rowId={shipped.id}
+              trackingNumber={shipped.shipping_tracking_number}
+              serialNumber={shipped.serial_number}
+              techId={shipped.tested_by ?? shipped.tester_id ?? null}
+              onUpdate={onUpdate}
+            />
+          ) : null}
 
-        {editableShippingFields ? (
-          <>
-            <ShippingEditableRow
-              label="Ship By Date"
-              headerAccessory={String(daysLate)}
-              headerAccessoryClassName={daysLateClassName}
-              value={editableShippingFields.shipByDate}
-              placeholder="MM-DD-YY"
-              onChange={editableShippingFields.onShipByDateChange}
-              onBlur={editableShippingFields.onShipByDateBlur}
-            />
-            <ShippingEditableRow
-              label="Tracking Number"
-              value={editableShippingFields.trackingNumber}
-              placeholder="Enter tracking number"
-              onChange={editableShippingFields.onTrackingNumberChange}
-              onBlur={editableShippingFields.onBlur}
-              externalUrl={getTrackingUrl(editableShippingFields.trackingNumber)}
-            />
-            <ShippingEditableRow
-              label="Order ID"
-              value={editableShippingFields.orderNumber}
-              placeholder="Enter order ID"
-              onChange={editableShippingFields.onOrderNumberChange}
-              onBlur={editableShippingFields.onBlur}
-              externalUrl={getOrderIdUrl(editableShippingFields.orderNumber)}
-              headerAccessory={accountSourceLabel || undefined}
-              headerAccessoryClassName="text-[10px] font-black tracking-wide text-blue-600"
-            />
-            <ShippingEditableRow
-              label="Item Number"
-              value={editableShippingFields.itemNumber}
-              placeholder="Enter item number"
-              onChange={editableShippingFields.onItemNumberChange}
-              onBlur={editableShippingFields.onBlur}
-              externalUrl={getExternalUrlByItemNumber(editableShippingFields.itemNumber)}
-            />
-          </>
-        ) : (
-          <>
-            <CopyableValueFieldBlock
-              label="Ship By Date"
-              value={String(shipped.ship_by_date || '').trim() || 'N/A'}
-              headerAccessory={<span className={daysLateClassName}>{daysLate}</span>}
-              variant="flat"
-            />
-            <CopyableValueFieldBlock
-              label="Tracking Number"
-              value={shipped.shipping_tracking_number || 'Not available'}
-              externalUrl={getTrackingUrl(shipped.shipping_tracking_number || '')}
-              externalLabel="Open shipment tracking in new tab"
-              variant="flat"
-            />
-            <CopyableValueFieldBlock
-              label="Order ID"
-              value={shipped.order_id || 'Not available'}
-              externalUrl={getOrderIdUrl(shipped.order_id)}
-              externalLabel={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? 'Open Amazon order in Seller Central in new tab' : 'Open Ecwid order in new tab'}
-              headerAccessory={accountSourceLabel ? <span className="text-[10px] font-black tracking-wide text-blue-600">{accountSourceLabel}</span> : null}
-              variant="flat"
-            />
-            <CopyableValueFieldBlock
-              label="Item Number"
-              value={shipped.item_number || 'N/A'}
-              externalUrl={getExternalUrlByItemNumber(shipped.item_number)}
-              externalLabel="Open product page in new tab"
-              variant="flat"
-            />
-          </>
-        )}
+          {metaFields ? (
+            <>
+              {metaFields.packedByName ? (
+                <DetailsPanelRow label="Packed By">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
+                    <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.packingDuration}</p>
+                  </div>
+                </DetailsPanelRow>
+              ) : null}
+              {metaFields.testedByName ? (
+                <DetailsPanelRow label="Tested By">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
+                    <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.testingDuration}</p>
+                  </div>
+                </DetailsPanelRow>
+              ) : null}
+            </>
+          ) : null}
 
-        {showSerialNumber ? (
-          <ShippingSerialNumberRow
-            rowId={shipped.id}
-            trackingNumber={shipped.shipping_tracking_number}
-            serialNumber={shipped.serial_number}
-            techId={shipped.tested_by ?? shipped.tester_id ?? null}
-            onUpdate={onUpdate}
-          />
-        ) : null}
-
-        {metaFields ? (
-          <>
-            {metaFields.packedByName ? (
-              <DetailsPanelRow label="Packed By">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
-                  <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.packingDuration}</p>
-                </div>
-              </DetailsPanelRow>
-            ) : null}
-            {metaFields.testedByName ? (
-              <DetailsPanelRow label="Tested By">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
-                  <p className="shrink-0 font-mono text-sm font-bold text-gray-900">{metaFields.testingDuration}</p>
-                </div>
-              </DetailsPanelRow>
-            ) : null}
-          </>
-        ) : null}
-
-        {editableShippingFields?.isSaving ? (
-          <p className="pt-2 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving shipping updates...</p>
-        ) : null}
-        {editableShippingFields?.isSavingShipByDate ? (
-          <p className="pt-1 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving ship by date...</p>
-        ) : null}
+          {editableShippingFields?.isSaving ? (
+            <p className="pt-2 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving shipping updates...</p>
+          ) : null}
+          {editableShippingFields?.isSavingShipByDate ? (
+            <p className="pt-1 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving ship by date...</p>
+          ) : null}
+        </div>
       </div>
     </section>
   );

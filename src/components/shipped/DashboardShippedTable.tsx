@@ -16,6 +16,8 @@ import { DateGroupHeader } from './DateGroupHeader';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { isFbaOrder } from '@/utils/order-platform';
+import { getStaffName } from '@/utils/staff';
 
 export interface DashboardShippedTableProps {
   packedBy?: number;
@@ -144,9 +146,10 @@ export function DashboardShippedTable({
     seenTracking.set(key, record);
   });
   const dedupedRecords = Array.from(seenTracking.values());
+  const nonFbaRecords = dedupedRecords.filter((record) => !isFbaOrder(record.order_id, record.account_source));
   const normalizedSearch = search.trim().toLowerCase();
   const records = normalizedSearch
-    ? dedupedRecords.filter((record) => {
+    ? nonFbaRecords.filter((record) => {
         const haystack = [
           record.product_title,
           record.order_id,
@@ -160,7 +163,7 @@ export function DashboardShippedTable({
           .join(' ');
         return haystack.includes(normalizedSearch);
       })
-    : dedupedRecords;
+    : nonFbaRecords;
 
   useEffect(() => {
     if (!Number.isFinite(openOrderId)) return;
@@ -270,22 +273,15 @@ export function DashboardShippedTable({
 
   const totalCount = Object.values(groupedRecords).reduce((sum, dayRecords) => sum + dayRecords.length, 0);
   const fallbackDate = formatDate(getCurrentPSTDateKey());
-  const getDaysLateNumber = (deadlineAt: string | null | undefined): number | null => {
-    const deadlineKey = toPSTDateKey(deadlineAt);
-    if (!deadlineKey) return null;
-    const todayKey = getCurrentPSTDateKey();
-    if (!todayKey) return null;
-    const [dy, dm, dd] = deadlineKey.split('-').map(Number);
-    const [ty, tm, td] = todayKey.split('-').map(Number);
-    const deadlineIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
-    const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
-    return Math.max(0, todayIndex - deadlineIndex);
-  };
-  const getDaysLateTone = (daysLate: number | null) => {
-    if (daysLate === null) return 'text-gray-300';
-    if (daysLate > 1) return 'text-red-600';
-    if (daysLate === 1) return 'text-yellow-600';
-    return 'text-emerald-600';
+  const normalizePersonName = (value: unknown): string => {
+    const text = String(value ?? '')
+      .replace(/^tech:\s*/i, '')
+      .replace(/^packer:\s*/i, '')
+      .trim();
+    if (!text) return '---';
+    if (/^(not specified|n\/a|null|undefined)$/i.test(text)) return '---';
+    if (/^staff\s*#\d+$/i.test(text)) return '---';
+    return text;
   };
 
   if (query.isLoading) {
@@ -369,7 +365,18 @@ export function DashboardShippedTable({
                             trackingType: record.tracking_type,
                             scanRef: record.scan_ref,
                           });
-                          const defaultDaysLate = getDaysLateNumber(record.deadline_at);
+                          const techName = String(
+                            (record as any).tested_by_name
+                            || (record as any).tester_name
+                            || getStaffName((record as any).tested_by ?? (record as any).tester_id ?? null)
+                          ).trim();
+                          const packerName = String(
+                            (record as any).packed_by_name
+                            || (record as any).packer_name
+                            || getStaffName((record as any).packed_by ?? (record as any).packer_id ?? null)
+                          ).trim();
+                          const techDisplay = normalizePersonName(techName);
+                          const packerDisplay = normalizePersonName(packerName);
 
                           return (
                             <motion.div
@@ -401,12 +408,10 @@ export function DashboardShippedTable({
                                     {displayValues.condition || 'No Condition'}
                                     {' • '}
                                     {displayValues.sku || 'No SKU'}
-                                    {defaultDaysLate !== null ? (
-                                      <>
-                                        {' • '}
-                                        <span className={getDaysLateTone(defaultDaysLate)}>{defaultDaysLate}</span>
-                                      </>
-                                    ) : null}
+                                    {' • '}
+                                    {techDisplay}
+                                    {' • '}
+                                    {packerDisplay}
                                   </div>
                                 </div>
                               </div>

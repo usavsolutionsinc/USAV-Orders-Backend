@@ -1,12 +1,20 @@
 'use client';
 
-import React, { MouseEvent, useState } from 'react';
-import { Check, Copy, MapPin, Barcode, Settings } from '../Icons';
+import React, { MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Check, Copy, MapPin, Barcode, Settings, Package } from '../Icons';
 
 // --- Helpers ---
 
+function normalizeCopyText(value: string | null | undefined): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(not specified|n\/a|null|undefined|none)$/i.test(raw)) return '';
+  return raw;
+}
+
 export function getLast4(value: string | null | undefined): string {
-  const raw = String(value || '');
+  const raw = normalizeCopyText(value);
   return raw.length > 4 ? raw.slice(-4) : raw || '---';
 }
 
@@ -15,7 +23,7 @@ export function getLast4(value: string | null | undefined): string {
  * Parses it, takes the last individual serial, then returns its last 6 chars.
  */
 export function getLast6Serial(value: string | null | undefined): string {
-  const raw = String(value || '').trim();
+  const raw = normalizeCopyText(value);
   const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
   const last = parts.length > 0 ? parts[parts.length - 1] : '';
   return last.length > 6 ? last.slice(-6) : last || '---';
@@ -54,38 +62,105 @@ export interface CopyChipProps {
 
 export function CopyChip({ value, display, icon, underlineClass, iconClass, width, disableCopy = false }: CopyChipProps) {
   const [copied, setCopied] = useState(false);
-  const canCopy = !disableCopy && !!value && value !== '---';
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
+  const chipRef = useRef<HTMLDivElement | null>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const normalizedValue = normalizeCopyText(value);
+  const normalizedDisplay = normalizeCopyText(display);
+  const canCopy = !disableCopy && !!normalizedValue && normalizedValue !== '---';
   const isDisabled = !canCopy && !disableCopy;
+
+  const updateTooltipPosition = useCallback(() => {
+    if (!chipRef.current || !tooltipRef.current) return;
+
+    const chipRect = chipRef.current.getBoundingClientRect();
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+    const margin = 8;
+
+    const centeredLeft = chipRect.left + chipRect.width / 2 - tooltipRect.width / 2;
+    const minLeft = margin;
+    const maxLeft = Math.max(minLeft, window.innerWidth - tooltipRect.width - margin);
+    const left = Math.min(Math.max(centeredLeft, minLeft), maxLeft);
+
+    const spaceAbove = chipRect.top - margin;
+    const spaceBelow = window.innerHeight - chipRect.bottom - margin;
+    const preferAbove = spaceAbove >= tooltipRect.height || spaceAbove > spaceBelow;
+    const rawTop = preferAbove ? chipRect.top - tooltipRect.height - margin : chipRect.bottom + margin;
+    const minTop = margin;
+    const maxTop = Math.max(minTop, window.innerHeight - tooltipRect.height - margin);
+    const top = Math.min(Math.max(rawTop, minTop), maxTop);
+
+    setTooltipPosition({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!tooltipOpen) return;
+    const rafId = window.requestAnimationFrame(updateTooltipPosition);
+    const handleReposition = () => updateTooltipPosition();
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
+    };
+  }, [tooltipOpen, updateTooltipPosition]);
+
+  useEffect(() => {
+    if (!canCopy) setTooltipOpen(false);
+  }, [canCopy]);
+
+  const openTooltip = () => {
+    if (!canCopy) return;
+    setTooltipOpen(true);
+  };
+
+  const closeTooltip = () => {
+    setTooltipOpen(false);
+  };
 
   const handleCopy = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!canCopy) return;
-    navigator.clipboard.writeText(value);
+    navigator.clipboard.writeText(normalizedValue);
+    setTooltipOpen(true);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
   return (
-    <div className={`relative group ${width}`}>
+    <div ref={chipRef} className={`relative ${width}`}>
       <button
         type="button"
         onClick={handleCopy}
+        onMouseEnter={openTooltip}
+        onMouseLeave={closeTooltip}
+        onFocus={openTooltip}
+        onBlur={closeTooltip}
         disabled={isDisabled}
-        className="w-full flex items-center gap-0.5 py-0 bg-white text-black transition-all active:scale-95 disabled:opacity-30"
+        className="w-full flex items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95 disabled:opacity-30"
       >
         <span className={`shrink-0 ${iconClass}`}>{icon}</span>
-        <span className={`font-mono text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 flex-1 ${underlineClass}`}>
-          {display || '---'}
+        <span className={`font-mono text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 flex-1 text-left ${underlineClass}`}>
+          {normalizedDisplay || '---'}
         </span>
       </button>
-      {canCopy && (
-        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-150">
-          <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 border border-gray-300 rounded text-[10px] font-bold text-black whitespace-nowrap shadow-sm">
-            {copied ? 'Copied!' : 'Copy'}
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-          </div>
-        </div>
-      )}
+      {canCopy && tooltipOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={tooltipRef}
+              style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
+              className="pointer-events-none fixed z-[2147483647]"
+            >
+              <div className="flex max-w-[min(90vw,24rem)] items-start gap-2 rounded border border-gray-300 bg-gray-100 px-2 py-1 text-[10px] font-bold text-black shadow-sm">
+                <span className="font-mono break-all leading-tight">{normalizedValue}</span>
+                {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0" />}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
@@ -133,6 +208,17 @@ export const TicketChip = ({ value, display }: { value: string; display: string 
     underlineClass="border-orange-500"
     iconClass="text-orange-500"
     width="w-[52px]"
+  />
+);
+
+export const FnskuChip = ({ value, width = 'w-[50px]' }: { value: string; width?: string }) => (
+  <CopyChip
+    value={value}
+    display={getLast4(value)}
+    icon={<Package className="w-4 h-4 shrink-0" />}
+    underlineClass="border-purple-500"
+    iconClass="text-purple-500"
+    width={width}
   />
 );
 

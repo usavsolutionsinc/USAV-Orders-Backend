@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { parsePositiveInt } from '@/utils/number';
+import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 
 const ENTITY_TYPES = new Set(['ORDER', 'REPAIR', 'FBA_SHIPMENT', 'RECEIVING', 'SKU_STOCK']);
 const WORK_TYPES = new Set(['TEST', 'PACK', 'REPAIR', 'QA', 'RECEIVE', 'STOCK_REPLENISH']);
@@ -73,9 +74,19 @@ export async function GET(request: NextRequest) {
       LIMIT $${params.length}
     `;
 
-    const result = await pool.query(query, params);
+    const result = await queryWithRetry(
+      () => pool.query(query, params),
+      { retries: 3, delayMs: 1000 },
+    );
     return NextResponse.json({ success: true, assignments: result.rows });
   } catch (error: any) {
+    if (isTransientDbError(error)) {
+      console.warn('Assignments DB unavailable (GET):', error?.message || error);
+      return NextResponse.json(
+        { success: true, assignments: [], fallback: 'db_unavailable' },
+        { headers: { 'x-db-fallback': 'unavailable' } }
+      );
+    }
     console.error('Failed to fetch assignments:', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to fetch assignments' },

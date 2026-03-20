@@ -20,7 +20,7 @@ export function AlertLineRow({
   actions,
   headerAccessory,
   className = '',
-  dividerClassName = 'border-b border-red-100',
+  dividerClassName = 'border-b border-red-400/25',
   valueClassName = '',
 }: AlertLineRowProps) {
   return (
@@ -31,9 +31,11 @@ export function AlertLineRow({
       className={className}
       dividerClassName={dividerClassName}
     >
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-        <p className={`whitespace-pre-wrap break-words text-sm font-medium leading-5 text-gray-800 ${valueClassName}`.trim()}>
+      <div className="flex items-start gap-1.5">
+        <AlertTriangle className="mt-[2px] h-[14px] w-[14px] shrink-0 text-red-500" />
+        <p
+          className={`whitespace-pre-wrap break-words border-b-2 border-red-500/70 pb-0.5 text-[13px] font-bold leading-[1.35] text-slate-900 ${valueClassName}`.trim()}
+        >
           {value || 'N/A'}
         </p>
       </div>

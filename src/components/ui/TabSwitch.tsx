@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { motion } from 'framer-motion';
 
 interface Tab {
@@ -15,7 +15,10 @@ interface TabSwitchProps {
   activeTab: string;
   onTabChange: (tabId: string) => void;
   className?: string;
+  /** Overrides the default rail container (background, radius, padding). */
+  railClassName?: string;
   scrollable?: boolean;
+  layoutId?: string;
 }
 
 const colorTextMap: Record<string, { active: string; shadow: string }> = {
@@ -30,9 +33,19 @@ const colorTextMap: Record<string, { active: string; shadow: string }> = {
   teal:    { active: 'text-teal-600',    shadow: '0 1px 4px 0 rgb(20 184 166 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
 };
 
-export function TabSwitch({ tabs, activeTab, onTabChange, className = '', scrollable = false }: TabSwitchProps) {
+export function TabSwitch({
+  tabs,
+  activeTab,
+  onTabChange,
+  className = '',
+  railClassName = 'bg-gray-100 rounded-xl p-1',
+  scrollable = false,
+  layoutId,
+}: TabSwitchProps) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const generatedLayoutId = useId();
+  const activePillLayoutId = layoutId || `tab-switch-active-pill-${generatedLayoutId}`;
 
   useEffect(() => {
     if (!scrollable) return;
@@ -52,7 +65,7 @@ export function TabSwitch({ tabs, activeTab, onTabChange, className = '', scroll
   return (
     <div
       ref={railRef}
-      className={`bg-gray-100 rounded-xl p-1 ${scrollable ? 'overflow-x-auto scrollbar-hide' : ''} ${className}`}
+      className={`${railClassName} ${scrollable ? 'overflow-x-auto scrollbar-hide' : ''} ${className}`}
     >
       {/* flex-1 on each button + min-w-[3rem] = always fills width equally;
           when many tabs overflow min-w the container scrolls instead of squishing */}
@@ -73,7 +86,7 @@ export function TabSwitch({ tabs, activeTab, onTabChange, className = '', scroll
             >
               {isActive && (
                 <motion.span
-                  layoutId="tab-switch-active-pill"
+                  layoutId={activePillLayoutId}
                   className="absolute inset-0 rounded-lg bg-white"
                   style={{ boxShadow: activeShadow }}
                   transition={{

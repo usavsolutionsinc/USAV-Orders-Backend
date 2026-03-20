@@ -39,6 +39,9 @@ export interface ResolvedProductManual {
   downloadUrl: string;
 }
 
+export type StationScanType = 'TRACKING' | 'SERIAL' | 'FNSKU' | 'SKU' | 'REPAIR' | 'COMMAND';
+export type StationInputMode = 'tracking' | 'fba' | 'repair' | 'serial';
+
 function parseRepairServiceId(value: string): number | null {
   const match = value.trim().toUpperCase().match(/^RS-(\d+)$/);
   if (!match) return null;
@@ -61,7 +64,7 @@ const COMPLETED_ORDER_AUTO_HIDE_MS = 2 * 60 * 1000;
  * Both serial_full and serial_partial resolve to SERIAL so the controller
  * routes them to add-serial; partial serials are catalog-matched there.
  */
-function detectType(val: string): string {
+function detectType(val: string): StationScanType {
   const input = val.trim();
   if (!input) return 'SERIAL';
 
@@ -85,10 +88,24 @@ function detectType(val: string): string {
   return 'SERIAL';
 }
 
+export function getStationInputMode(val: string): StationInputMode {
+  const input = String(val || '').trim();
+  // Display-level repair cue: any RS- prefix should show Repair mode.
+  if (/^RS-/i.test(input)) return 'repair';
+
+  const type = detectType(input);
+  if (type === 'FNSKU') return 'fba';
+  if (type === 'REPAIR') return 'repair';
+  if (type === 'TRACKING' || type === 'COMMAND') {
+    return 'tracking';
+  }
+  return 'serial';
+}
+
 function resolveScanType(
   val: string,
   _options?: { hasActiveOrderContext?: boolean; activeTracking?: string | null },
-) {
+): StationScanType {
   return detectType(val);
 }
 
@@ -176,6 +193,10 @@ export function useStationTestingController({
     if (!contextOrder) return null;
     syncActiveOrderState(contextOrder);
     return contextOrder;
+  };
+
+  const reopenLastActiveOrderCard = () => {
+    return Boolean(reopenScanContextOrder());
   };
 
   const publishLastManual = (manuals: ResolvedProductManual[]) => {
@@ -443,7 +464,11 @@ export function useStationTestingController({
     }
   };
 
-  const handleSubmit = async (e?: React.FormEvent, manualValue?: string) => {
+  const handleSubmit = async (
+    e?: React.FormEvent,
+    manualValue?: string,
+    options?: { forcedType?: 'TRACKING' | 'SERIAL' | null },
+  ) => {
     if (e) e.preventDefault();
     const input = (manualValue || inputValue).trim();
     if (!input) return;
@@ -453,10 +478,14 @@ export function useStationTestingController({
     setTrackingNotFoundAlert(null);
 
     const contextOrder = getScanContextOrder();
-    const type = resolveScanType(input, {
-      hasActiveOrderContext: Boolean(contextOrder),
-      activeTracking: contextOrder?.tracking ?? null,
-    });
+    const forcedType = options?.forcedType;
+    const type: StationScanType =
+      forcedType === 'TRACKING' || forcedType === 'SERIAL'
+        ? forcedType
+        : resolveScanType(input, {
+            hasActiveOrderContext: Boolean(contextOrder),
+            activeTracking: contextOrder?.tracking ?? null,
+          });
 
     if (type === 'REPAIR') {
       await handleRepairScan(input);
@@ -590,10 +619,9 @@ export function useStationTestingController({
       }
     } else if (type === 'FNSKU') {
       await handleFnskuScan(input);
-    } else if (type === 'SKU' && getScanContextOrder()) {
+    } else if (type === 'SKU') {
       const contextOrder = reopenScanContextOrder();
       if (!contextOrder) {
-        setErrorMessage('Please scan a tracking number first');
         setInputValue('');
         inputRef.current?.focus();
         return;
@@ -641,12 +669,9 @@ export function useStationTestingController({
         setInputValue('');
         inputRef.current?.focus();
       }
-    } else if (type === 'SKU' && !activeOrder) {
-      setErrorMessage('Please scan a tracking number first');
-    } else if (type === 'SERIAL' && getScanContextOrder()) {
+    } else if (type === 'SERIAL') {
       const contextOrder = reopenScanContextOrder();
       if (!contextOrder) {
-        setErrorMessage('Please scan a tracking number first');
         setInputValue('');
         inputRef.current?.focus();
         return;
@@ -725,8 +750,6 @@ export function useStationTestingController({
         setInputValue('');
         inputRef.current?.focus();
       }
-    } else if (type === 'SERIAL' && !activeOrder) {
-      setErrorMessage('Please scan a tracking number first');
     } else if (type === 'COMMAND') {
       const command = input.toUpperCase();
       if (command === 'TEST') {
@@ -830,5 +853,6 @@ export function useStationTestingController({
     clearFeedback,
     resolveManual,
     saveManual,
+    reopenLastActiveOrderCard,
   };
 }

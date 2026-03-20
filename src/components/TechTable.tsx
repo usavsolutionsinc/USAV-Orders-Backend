@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from './Icons';
-import { OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from './ui/CopyChip';
+import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from './ui/CopyChip';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { isFbaOrder } from '@/utils/order-platform';
 import { useTechLogs, TechRecord } from '@/hooks/useTechLogs';
 
 interface TechTableProps {
@@ -41,6 +42,15 @@ function normalizeTrackingKey(value: string | null | undefined): string {
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeProductTitle(value: string | null | undefined): string {
+  return String(value || '').trim();
+}
+
+function hasUsableProductTitle(value: string | null | undefined): boolean {
+  const normalized = normalizeProductTitle(value);
+  return Boolean(normalized) && !/^unknown product$/i.test(normalized);
 }
 
 export function TechTable({ testedBy }: TechTableProps) {
@@ -85,7 +95,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       id: record.order_db_id ?? record.id,
       ship_by_date: shipByDate,
       order_id: record.order_id || '',
-      product_title: record.product_title || '',
+      product_title: hasUsableProductTitle(record.product_title) ? normalizeProductTitle(record.product_title) : '',
       item_number: record.item_number || null,
       condition: record.condition || '',
       shipping_tracking_number: record.shipping_tracking_number || '',
@@ -164,7 +174,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       return timeB - timeA;
     });
 
-    const seenTrackings = new Set<string>();
+    const trackingIndexByKey = new Map<string, number>();
     const unique: TechRecord[] = [];
     for (const record of sorted) {
       const trackingKey = normalizeTrackingKey(record.shipping_tracking_number);
@@ -172,9 +182,23 @@ export function TechTable({ testedBy }: TechTableProps) {
         unique.push(record);
         continue;
       }
-      if (seenTrackings.has(trackingKey)) continue;
-      seenTrackings.add(trackingKey);
-      unique.push(record);
+
+      const existingIndex = trackingIndexByKey.get(trackingKey);
+      if (existingIndex === undefined) {
+        trackingIndexByKey.set(trackingKey, unique.length);
+        unique.push(record);
+        continue;
+      }
+
+      const existing = unique[existingIndex];
+      if (!existing) continue;
+
+      if (!hasUsableProductTitle(existing.product_title) && hasUsableProductTitle(record.product_title)) {
+        unique[existingIndex] = {
+          ...existing,
+          product_title: normalizeProductTitle(record.product_title),
+        };
+      }
     }
     return unique;
   }, [records, removedRowKeys]);
@@ -322,6 +346,8 @@ export function TechTable({ testedBy }: TechTableProps) {
                           condition: record.condition,
                           trackingNumber: record.shipping_tracking_number,
                         });
+                        const rowIsFba = isFbaOrder(record.order_id, record.account_source);
+                        const fnskuValue = String(record.shipping_tracking_number || record.order_id || '').trim();
                         const dotType = getSourceDotType({
                           orderId: record.order_id,
                           accountSource: record.account_source,
@@ -343,7 +369,9 @@ export function TechTable({ testedBy }: TechTableProps) {
                                   title={SOURCE_DOT_LABEL[dotType]}
                                 />
                                 <div className="text-[11px] font-bold text-gray-900 truncate">
-                                  {record.product_title || 'Unknown Product'}
+                                  {hasUsableProductTitle(record.product_title)
+                                    ? normalizeProductTitle(record.product_title)
+                                    : 'Unknown Product'}
                                 </div>
                               </div>
                               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5 pl-4">
@@ -353,10 +381,14 @@ export function TechTable({ testedBy }: TechTableProps) {
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              <OrderIdChip
-                                value={record.order_id || ''}
-                                display={getLast4(record.order_id)}
-                              />
+                              {rowIsFba ? (
+                                <FnskuChip value={fnskuValue} />
+                              ) : (
+                                <OrderIdChip
+                                  value={record.order_id || ''}
+                                  display={getLast4(record.order_id)}
+                                />
+                              )}
                               <TrackingChip
                                 value={record.shipping_tracking_number || ''}
                                 display={getLast4(record.shipping_tracking_number)}
@@ -367,7 +399,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                                   record.serial_number
                                     ? getLast6Serial(record.serial_number)
                                     : record.source_kind === 'fba_scan' || record.source_kind === 'tech_scan'
-                                      ? 'SCAN'
+                                      ? 'SERIAL'
                                       : '---'
                                 }
                               />

@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Loader2, Search, X } from './Icons';
-import { OrderIdChip, TrackingChip, getLast4 } from './ui/CopyChip';
-import { SearchBar } from './ui/SearchBar';
+import { Loader2, Search } from './Icons';
+import { FnskuChip, OrderIdChip, TrackingChip, getLast4 } from './ui/CopyChip';
+import { OverlaySearchBar } from './ui/OverlaySearchBar';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -13,6 +13,7 @@ import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getPackerThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { isFbaOrder } from '@/utils/order-platform';
 import { usePackerLogs, PackerRecord } from '@/hooks/usePackerLogs';
 
 interface PackerTableProps {
@@ -352,6 +353,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                           condition: record.condition,
                           trackingNumber: record.shipping_tracking_number,
                         });
+                        const rowIsFba = isFbaOrder(record.order_id, record.account_source);
+                        const fnskuValue = String(record.scan_ref || record.shipping_tracking_number || record.order_id || '').trim();
                         const dotType = getSourceDotType({
                           orderId: record.order_id,
                           accountSource: record.account_source,
@@ -385,14 +388,20 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              <OrderIdChip
-                                value={record.order_id || ''}
-                                display={getLast4(record.order_id)}
-                              />
-                              <TrackingChip
-                                value={record.shipping_tracking_number || ''}
-                                display={getLast4(record.shipping_tracking_number)}
-                              />
+                              {rowIsFba ? (
+                                <FnskuChip value={fnskuValue} />
+                              ) : (
+                                <>
+                                  <OrderIdChip
+                                    value={record.order_id || ''}
+                                    display={getLast4(record.order_id)}
+                                  />
+                                  <TrackingChip
+                                    value={record.shipping_tracking_number || ''}
+                                    display={getLast4(record.shipping_tracking_number)}
+                                  />
+                                </>
+                              )}
                             </div>
                           </motion.div>
                         );
@@ -406,50 +415,25 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       </div>
       <AnimatePresence initial={false} mode="wait">
         {showSearch ? (
-          <motion.div
-            key="packer-search-bar"
-            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scaleX: 0.2, y: 6 }}
-            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scaleX: 1, y: 0 }}
-            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scaleX: 0.88, y: 4 }}
-            transition={searchOverlayTransition}
-            style={{ transformOrigin: 'left center' }}
-            className="absolute bottom-3 left-3 z-30 w-[320px] will-change-transform"
-          >
-            <motion.div
-              initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0.84 }}
-              animate={{ opacity: 1 }}
-              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0.78 }}
-              transition={searchOverlayTransition}
-            >
-              <SearchBar
-                value={searchInput}
-                onChange={setSearchInput}
-                inputRef={searchInputRef}
-                placeholder="Search packed orders"
-                variant="blue"
-                size="compact"
-                className="w-full"
-                onClear={clearSearch}
-                rightElement={
-                  <button
-                    type="button"
-                    onClick={clearSearch}
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
-                    aria-label="Close packer search"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                }
-              />
-            </motion.div>
-          </motion.div>
+          <div key="packer-search-bar" className="absolute bottom-3 left-3 z-30 w-[320px]">
+            <OverlaySearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              inputRef={searchInputRef}
+              placeholder="Search packed orders"
+              variant="blue"
+              className="w-full"
+              onClear={clearSearch}
+              onClose={clearSearch}
+            />
+          </div>
         ) : (
           <motion.button
             key="packer-search-trigger"
             type="button"
-            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.9, y: 6 }}
-            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
-            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: 4 }}
+            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: -8 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -8 }}
             whileHover={prefersReducedMotion ? undefined : { scale: 1.04 }}
             whileTap={prefersReducedMotion ? undefined : { scale: 0.96 }}
             transition={searchOverlayTransition}

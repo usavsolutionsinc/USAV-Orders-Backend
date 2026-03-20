@@ -32,6 +32,7 @@ import { dispatchCloseShippedDetails } from '@/utils/events';
 import { resolveOrderSearchView } from '@/lib/order-search-resolver';
 
 type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
+type PendingStockFilter = 'all' | 'pending' | 'stock';
 
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
@@ -273,6 +274,13 @@ function SidebarContextPanel() {
   if (routeKey === 'dashboard') {
     const orderView = getOrderViewFromSearch(searchParams);
     const dashboardSearch = searchParams.get('search') || '';
+    const pendingFilterParam = searchParams.get('pendingFilter');
+    const pendingFilter: PendingStockFilter =
+      pendingFilterParam === 'stock'
+        ? 'stock'
+        : pendingFilterParam === 'pending'
+          ? 'pending'
+          : 'all';
     const activeTabId: string = orderView;
     const filterControl = (
       <div className="border-b border-gray-100 px-4 py-3">
@@ -326,6 +334,13 @@ function SidebarContextPanel() {
         showNextUnassignedButton={orderView === 'pending'}
         searchValue={dashboardSearch}
         onSearchChange={handleDashboardOrderSearch}
+        showPendingFilterControl={orderView === 'pending'}
+        pendingFilterValue={pendingFilter}
+        onPendingFilterChange={(value) =>
+          updateSearch((params) => {
+            params.set('pendingFilter', value);
+          }, '/dashboard')
+        }
       />
     );
   }
@@ -545,7 +560,7 @@ export default function DashboardSidebar() {
         variants={itemVariants}
         type="button"
         onClick={() => setShowHomeNavigation(true)}
-        className="w-full flex items-center gap-2 pl-1.5 pr-3 pt-1 pb-1 border-b border-gray-100 text-left hover:bg-gray-50 transition-colors"
+        className="w-full flex min-h-[44px] items-center gap-2 border-b border-gray-100 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
         aria-label="Back to navigation"
       >
         <div className="h-9 w-7 flex items-center justify-start text-gray-500">

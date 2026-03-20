@@ -7,16 +7,13 @@ export const maxDuration = 120;
 
 async function handleSyncDue(request: NextRequest) {
   const baseUrl = getAppBaseUrl();
-  const cronSecret = process.env.CRON_SECRET;
   const url = `${baseUrl}/api/shipping/track/sync-due`;
+  const payload = await request.json().catch(() => ({}));
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(cronSecret && { Authorization: `Bearer ${cronSecret}` }),
-    },
-    body: JSON.stringify({}),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json().catch(() => ({}));

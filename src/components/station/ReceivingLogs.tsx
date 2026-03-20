@@ -2,13 +2,13 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Package, Loader2, Search, X } from '../Icons';
+import { Package, Loader2, Search } from '../Icons';
 import { CopyChip, getLast4 } from '@/components/ui/CopyChip';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
-import { SearchBar } from '@/components/ui/SearchBar';
+import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 const STATION_CHANNEL =
@@ -325,39 +325,38 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                 )}
             </div>
 
-            {showSearch ? (
-                <div className="absolute bottom-3 left-3 z-30 w-[320px]">
-                    <SearchBar
-                        value={searchQuery}
-                        onChange={setSearchQuery}
-                        inputRef={searchInputRef}
-                        placeholder="Search tracking or carrier..."
-                        variant="blue"
-                        size="compact"
-                        className="w-full"
-                        onClear={closeSearch}
-                        rightElement={
-                            <button
-                                type="button"
-                                onClick={closeSearch}
-                                className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
-                                aria-label="Close search"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        }
-                    />
-                </div>
-            ) : (
-                <button
-                    type="button"
-                    onClick={() => setSearchOpen(true)}
-                    className="absolute bottom-3 left-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 transition hover:bg-blue-500"
-                    aria-label="Open receiving logs search"
-                >
-                    <Search className="h-4 w-4" />
-                </button>
-            )}
+            <AnimatePresence initial={false} mode="wait">
+                {showSearch ? (
+                    <div key="receiving-logs-search-bar" className="absolute bottom-3 left-3 z-30 w-[320px]">
+                        <OverlaySearchBar
+                            value={searchQuery}
+                            onChange={setSearchQuery}
+                            inputRef={searchInputRef}
+                            placeholder="Search tracking or carrier..."
+                            variant="blue"
+                            className="w-full"
+                            onClear={closeSearch}
+                            onClose={closeSearch}
+                        />
+                    </div>
+                ) : (
+                    <motion.button
+                        key="receiving-logs-search-trigger"
+                        type="button"
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -8 }}
+                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => setSearchOpen(true)}
+                        className="absolute bottom-3 left-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 will-change-transform transition hover:bg-blue-500"
+                        aria-label="Open receiving logs search"
+                    >
+                        <Search className="h-4 w-4" />
+                    </motion.button>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

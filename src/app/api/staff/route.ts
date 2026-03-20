@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import pool from '@/lib/db';
 import { db } from '@/lib/drizzle/db';
 import { staff } from '@/lib/drizzle/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 
 function isDatabaseUnavailable(error: unknown) {
-    if (!(error instanceof Error)) return false;
-    const causeMessage = typeof (error as { cause?: unknown }).cause === 'object'
-        ? String(((error as { cause?: { message?: string } }).cause?.message) || '')
-        : '';
-    const message = `${error.message} ${causeMessage}`;
-    return /ENOTFOUND|ECONNREFUSED|connect_timeout|connection terminated|timeout/i.test(message);
+    return isTransientDbError(error);
 }
 
 export async function GET(request: NextRequest) {
@@ -28,27 +25,38 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
         }
 
-        const conditions = [];
+        const conditions: string[] = [];
+        const params: any[] = [];
         if (role) {
-            conditions.push(eq(staff.role, role));
+            params.push(role);
+            conditions.push(`role = $${params.length}`);
         }
         if (activeOnly) {
-            conditions.push(eq(staff.active, true));
+            params.push(true);
+            conditions.push(`active = $${params.length}`);
         }
 
-        const results = await db
-            .select()
-            .from(staff)
-            .where(conditions.length > 0 ? and(...conditions) : undefined)
-            .orderBy(asc(staff.role), asc(staff.name));
+        const sql = `
+          SELECT id, name, role, employee_id, active, created_at
+          FROM staff
+          ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+          ORDER BY role ASC, name ASC
+        `;
+
+        const result = await queryWithRetry(
+            () => pool.query(sql, params),
+            { retries: 3, delayMs: 1000 }
+        );
+        const results = result.rows;
 
         await setCachedJson('api:staff', cacheLookup, results, 60, ['staff']);
         return NextResponse.json(results, { headers: { 'x-cache': 'MISS' } });
     } catch (error) {
-        console.error('Error fetching staff:', error);
         if (isDatabaseUnavailable(error)) {
+            console.warn('Staff DB unavailable (GET):', error instanceof Error ? error.message : String(error));
             return NextResponse.json([], { headers: { 'x-db-fallback': 'unavailable' } });
         }
+        console.error('Error fetching staff:', error);
         return NextResponse.json({ 
             error: 'Failed to fetch staff',
             details: error instanceof Error ? error.message : 'Unknown error'

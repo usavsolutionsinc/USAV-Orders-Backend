@@ -75,6 +75,7 @@ function normalizeUPSByText(description: string): NormalizedShipmentStatus {
 const USPS_CATEGORY_MAP: Record<string, NormalizedShipmentStatus> = {
   DELIVERED: 'DELIVERED',
   IN_TRANSIT: 'IN_TRANSIT',
+  MOVING_THROUGH_NETWORK: 'IN_TRANSIT',
   ACCEPTANCE: 'ACCEPTED',
   ACCEPTED: 'ACCEPTED',
   PICKED_UP: 'ACCEPTED',
@@ -122,6 +123,7 @@ function normalizeUSPSByText(event: string): NormalizedShipmentStatus {
     return 'EXCEPTION';
   if (
     e.includes('IN TRANSIT') ||
+    e.includes('MOVING THROUGH NETWORK') ||
     e.includes('DEPARTED') ||
     e.includes('ARRIVED') ||
     e.includes('PROCESSED') ||

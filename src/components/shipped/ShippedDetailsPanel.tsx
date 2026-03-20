@@ -24,7 +24,7 @@ interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
   onClose: () => void;
   onUpdate: () => void;
-  context?: 'dashboard' | 'shipped' | 'station' | 'packer';
+  context?: 'dashboard' | 'queue' | 'shipped' | 'station' | 'packer';
 }
 
 function buildAssignmentRow(shipped: ShippedOrder): WorkOrderRow {
@@ -331,7 +331,7 @@ export function ShippedDetailsPanel({
 
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <div className="pb-8 pt-4 space-y-4">
-          {context === 'dashboard' ? (
+          {context === 'dashboard' || context === 'queue' ? (
             <DashboardDetailsStack
               shipped={shipped}
               durationData={durationData}
@@ -339,6 +339,7 @@ export function ShippedDetailsPanel({
               onCopyAll={handleCopyAll}
               onUpdate={_onUpdate}
               showShippingTimestamp={false}
+              showReturnInformation={context !== 'queue'}
               actionBar={stackActionBar}
             />
           ) : context === 'station' ? (
@@ -387,7 +388,7 @@ export function ShippedDetailsPanel({
                 onBlur: () => { void saveInlineFields(); },
                 onShipByDateBlur: () => { void saveShipByDate(shipByDate); },
               }}
-              showShippingTimestamp={context === 'shipped'}
+              showShippingTimestamp={false}
             />
           )}
 

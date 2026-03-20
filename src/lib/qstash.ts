@@ -61,7 +61,7 @@ export async function upsertQStashSchedule<TBody = unknown>(params: {
   retries?: number;
   timeout?: QStashDuration;
   label?: string;
-  /** Headers forwarded to destination (e.g. Authorization for CRON_SECRET) */
+  /** Headers forwarded to destination when the destination requires custom headers. */
   headers?: Record<string, string>;
 }) {
   const client = getQStashClient();

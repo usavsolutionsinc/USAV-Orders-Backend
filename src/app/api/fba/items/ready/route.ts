@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { createStationActivityLog } from '@/lib/station-activity';
 
 // ── POST /api/fba/items/ready ─────────────────────────────────────────────────
 // Tech marks an FNSKU item as READY_TO_GO after testing/validation.
 // Increments actual_qty and transitions status PLANNED → READY_TO_GO.
-// Writes to fba_scan_events in the same transaction.
+// Writes to fba_fnsku_logs in the same transaction.
 //
 // Body: { shipment_id, fnsku, staff_id, station? }
 export async function POST(request: NextRequest) {
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    const normalizedFnsku = String(fnsku).trim().toUpperCase();
 
     await client.query('BEGIN');
 
@@ -58,31 +60,70 @@ export async function POST(request: NextRequest) {
              ready_at           = COALESCE(fba_shipment_items.ready_at, NOW()),
              updated_at         = NOW()
        RETURNING *`,
-      [shipment_id, fnsku.trim(), staff_id]
+      [shipment_id, normalizedFnsku, staff_id]
     );
 
     const item = itemRes.rows[0];
 
-    // Write immutable audit event
-    const eventRes = await client.query(
-      `INSERT INTO fba_scan_events
-         (shipment_id, item_id, scanned_by_staff_id, scan_mode, event_type, fnsku, station)
-       VALUES ($1, $2, $3, 'TECH_PREP', 'READY_MARKED', $4, $5)
+    const logRes = await client.query(
+      `INSERT INTO fba_fnsku_logs
+         (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
+       VALUES ($1, 'PACK', 'READY', $2, $3, $4, 1, $5, $6, $7::jsonb)
        RETURNING id, created_at`,
-      [shipment_id, item.id, staff_id, fnsku.trim(), station || null]
+      [
+        normalizedFnsku,
+        staff_id,
+        shipment_id,
+        item.id,
+        station || 'TECH_READY',
+        'Ready marked via /api/fba/items/ready',
+        JSON.stringify({
+          trigger: 'fba.items.ready',
+          previous_status: item.status,
+        }),
+      ]
     );
 
-    // Roll up shipment status: if all items are READY_TO_GO (or beyond), advance shipment
+    await createStationActivityLog(client, {
+      station: 'PACK',
+      activityType: 'FBA_READY',
+      staffId: Number(staff_id),
+      scanRef: normalizedFnsku,
+      fnsku: normalizedFnsku,
+      fbaShipmentId: Number(shipment_id),
+      fbaShipmentItemId: Number(item.id),
+      notes: 'Ready marked via API',
+      metadata: {
+        fnsku_log_id: Number(logRes.rows[0].id),
+        quantity: 1,
+      },
+    });
+
+    // Roll up shipment counters and advance status when nothing remains planned.
     await client.query(
       `UPDATE fba_shipments
-       SET status     = 'READY_TO_GO',
-           updated_at = NOW()
+       SET ready_item_count   = counts.ready_item_count,
+           packed_item_count  = counts.packed_item_count,
+           shipped_item_count = counts.shipped_item_count,
+           status             = CASE
+                                  WHEN fba_shipments.status = 'PLANNED' AND counts.planned_item_count = 0
+                                    THEN 'READY_TO_GO'::fba_shipment_status_enum
+                                  ELSE fba_shipments.status
+                                END,
+           updated_at         = NOW()
+       FROM (
+         SELECT
+           shipment_id,
+           COUNT(*) FILTER (WHERE status IN ('READY_TO_GO', 'LABEL_ASSIGNED', 'SHIPPED'))::int AS ready_item_count,
+           COUNT(*) FILTER (WHERE status IN ('LABEL_ASSIGNED', 'SHIPPED'))::int AS packed_item_count,
+           COUNT(*) FILTER (WHERE status = 'SHIPPED')::int AS shipped_item_count,
+           COUNT(*) FILTER (WHERE status = 'PLANNED')::int AS planned_item_count
+         FROM fba_shipment_items
+         WHERE shipment_id = $1
+         GROUP BY shipment_id
+       ) counts
        WHERE id = $1
-         AND status = 'PLANNED'
-         AND NOT EXISTS (
-           SELECT 1 FROM fba_shipment_items
-           WHERE shipment_id = $1 AND status = 'PLANNED'
-         )`,
+         AND fba_shipments.id = counts.shipment_id`,
       [shipment_id]
     );
 
@@ -91,7 +132,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       item,
-      event: eventRes.rows[0],
+      event: {
+        id: Number(logRes.rows[0].id),
+        created_at: logRes.rows[0].created_at,
+        type: 'FBA_LOG',
+      },
       staff_name: staffCheck.rows[0].name,
     });
   } catch (error: any) {

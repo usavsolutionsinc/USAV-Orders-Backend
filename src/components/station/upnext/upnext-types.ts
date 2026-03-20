@@ -28,6 +28,7 @@ export interface FBAQueueItem {
   status: 'PLANNED' | 'READY_TO_GO' | 'LABEL_ASSIGNED' | 'SHIPPED';
   assigned_tech_name: string | null;
   due_date: string | null;
+  deadline_at?: string | null;
 }
 
 export interface Order {

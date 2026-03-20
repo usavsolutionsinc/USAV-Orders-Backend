@@ -5,7 +5,7 @@ import pool from '@/lib/db';
 // Packer confirms a READY_TO_GO item is physically present (PACKER_VERIFIED).
 // Records verified_by_staff_id + verified_at without changing the status enum
 // (status transitions to LABEL_ASSIGNED only when a label is bound).
-// Writes to fba_scan_events in the same transaction.
+// Writes to fba_fnsku_logs in the same transaction.
 //
 // Body: { shipment_id, fnsku, staff_id, station? }
 export async function POST(request: NextRequest) {
@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    const normalizedFnsku = String(fnsku).trim().toUpperCase();
 
     await client.query('BEGIN');
 
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     const itemRes = await client.query(
       `SELECT * FROM fba_shipment_items
        WHERE shipment_id = $1 AND fnsku = $2`,
-      [shipment_id, fnsku.trim()]
+      [shipment_id, normalizedFnsku]
     );
 
     if (!itemRes.rows[0]) {
@@ -69,13 +70,23 @@ export async function POST(request: NextRequest) {
       [staff_id, item.id]
     );
 
-    // Write audit event
-    const eventRes = await client.query(
-      `INSERT INTO fba_scan_events
-         (shipment_id, item_id, scanned_by_staff_id, scan_mode, event_type, fnsku, station)
-       VALUES ($1, $2, $3, 'PACKER_VERIFY', 'PACK_VERIFIED', $4, $5)
+    const logRes = await client.query(
+      `INSERT INTO fba_fnsku_logs
+         (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
+       VALUES ($1, 'PACK', 'VERIFIED', $2, $3, $4, 0, $5, $6, $7::jsonb)
        RETURNING id, created_at`,
-      [shipment_id, item.id, staff_id, fnsku.trim(), station || null]
+      [
+        normalizedFnsku,
+        staff_id,
+        shipment_id,
+        item.id,
+        station || 'PACK_VERIFY',
+        'Packer verification',
+        JSON.stringify({
+          trigger: 'fba.items.verify',
+          item_status: item.status,
+        }),
+      ]
     );
 
     await client.query('COMMIT');
@@ -83,7 +94,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       item: updatedRes.rows[0],
-      event: eventRes.rows[0],
+      event: {
+        id: Number(logRes.rows[0].id),
+        created_at: logRes.rows[0].created_at,
+        type: 'FBA_LOG',
+      },
       staff_name: staffCheck.rows[0].name,
     });
   } catch (error: any) {

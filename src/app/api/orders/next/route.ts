@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { parsePositiveInt } from '@/utils/number';
+import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 
 /**
  * GET /api/orders/next - Get next order(s) for a tech.
@@ -48,9 +49,9 @@ export async function GET(req: NextRequest) {
     const employeeId = techEmployeeIds[techId];
     let resolvedStaffId: number | null = null;
     if (employeeId) {
-      const staffResult = await pool.query(
-        'SELECT id FROM staff WHERE employee_id = $1 LIMIT 1',
-        [employeeId]
+      const staffResult = await queryWithRetry(
+        () => pool.query('SELECT id FROM staff WHERE employee_id = $1 LIMIT 1', [employeeId]),
+        { retries: 3, delayMs: 1000 },
       );
       if (staffResult.rows.length > 0) {
         resolvedStaffId = Number(staffResult.rows[0].id);
@@ -125,12 +126,15 @@ export async function GET(req: NextRequest) {
 
     const queryParams = outOfStock === 'false' ? [techIdScope] : [];
 
-    const totalPendingResult = await pool.query(
-      `SELECT COUNT(DISTINCT o.id) AS count
-       FROM orders o
-       ${sharedJoins}
-       WHERE ${countConditions.join(' AND ')}`,
-      queryParams,
+    const totalPendingResult = await queryWithRetry(
+      () => pool.query(
+        `SELECT COUNT(DISTINCT o.id) AS count
+         FROM orders o
+         ${sharedJoins}
+         WHERE ${countConditions.join(' AND ')}`,
+        queryParams,
+      ),
+      { retries: 3, delayMs: 1000 },
     );
     const totalPending = parseInt(totalPendingResult.rows[0].count);
 
@@ -168,7 +172,10 @@ export async function GET(req: NextRequest) {
       ${!getAll ? 'LIMIT 1' : ''}
     `;
 
-    const result = await pool.query(mainQuery, queryParams);
+    const result = await queryWithRetry(
+      () => pool.query(mainQuery, queryParams),
+      { retries: 3, delayMs: 1000 },
+    );
 
     if (result.rows.length === 0) {
       const payload = { order: null, orders: [], all_completed: totalPending === 0 };
@@ -186,6 +193,13 @@ export async function GET(req: NextRequest) {
     await setCachedJson('api:orders-next', cacheLookup, payload, 120, ['orders', 'orders-next']);
     return NextResponse.json(payload, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
+    if (isTransientDbError(error)) {
+      const getAll = req.nextUrl.searchParams.get('all') === 'true';
+      const payload = getAll
+        ? { orders: [], all_completed: false, fallback: 'db_unavailable' }
+        : { order: null, all_completed: false, fallback: 'db_unavailable' };
+      return NextResponse.json(payload, { headers: { 'x-db-fallback': 'unavailable' } });
+    }
     console.error('Error fetching next order:', error);
     return NextResponse.json(
       { error: 'Failed to fetch next order', details: error.message },

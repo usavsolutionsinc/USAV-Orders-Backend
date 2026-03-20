@@ -1,6 +1,7 @@
 import pool from '../db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { queryWithRetry } from '@/lib/db-retry';
 
 // Order record with shipping information
 export interface ShippedOrder {
@@ -38,6 +39,10 @@ export interface ShippedOrder {
   /** Derived from shipping_tracking_numbers carrier status — not stored on orders */
   is_shipped?: boolean;
   shipment_status?: string | null;
+  latest_status_code?: string | null;
+  latest_status_label?: string | null;
+  latest_status_description?: string | null;
+  latest_status_category?: string | null;
   is_delivered?: boolean;
   carrier?: string | null;
   created_at: string | null;
@@ -231,10 +236,59 @@ const ORDER_SERIALS_CTE = `
 /**
  * Get all shipped orders with optional limit and offset
  */
-export async function getAllShippedOrders(limit = 100, offset = 0): Promise<ShippedOrder[]> {
+export interface GetAllShippedOrdersOptions {
+  limit?: number;
+  offset?: number;
+  weekStart?: string;
+  weekEnd?: string;
+  packedBy?: number | null;
+  testedBy?: number | null;
+  missingTrackingOnly?: boolean;
+}
+
+export async function getAllShippedOrders(limit: number, offset?: number): Promise<ShippedOrder[]>;
+export async function getAllShippedOrders(options: GetAllShippedOrdersOptions): Promise<ShippedOrder[]>;
+export async function getAllShippedOrders(
+  limitOrOptions: number | GetAllShippedOrdersOptions = 100,
+  offsetArg = 0,
+): Promise<ShippedOrder[]> {
   try {
-    const result = await pool.query(
-      `WITH ${ORDER_SERIALS_CTE}
+    const options: GetAllShippedOrdersOptions =
+      typeof limitOrOptions === 'number'
+        ? { limit: limitOrOptions, offset: offsetArg }
+        : limitOrOptions;
+    const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 100;
+    const offset = Number.isFinite(Number(options.offset)) ? Number(options.offset) : 0;
+
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    if (options.weekStart) {
+      params.push(options.weekStart);
+      conditions.push(`COALESCE(os.packed_at, os.created_at)::date >= $${params.length}::date`);
+    }
+    if (options.weekEnd) {
+      params.push(options.weekEnd);
+      conditions.push(`COALESCE(os.packed_at, os.created_at)::date <= $${params.length}::date`);
+    }
+    if (options.packedBy != null && Number.isFinite(Number(options.packedBy))) {
+      params.push(Number(options.packedBy));
+      conditions.push(`os.packed_by = $${params.length}`);
+    }
+    if (options.testedBy != null && Number.isFinite(Number(options.testedBy))) {
+      params.push(Number(options.testedBy));
+      conditions.push(`os.tested_by = $${params.length}`);
+    }
+    if (options.missingTrackingOnly) {
+      conditions.push(`COALESCE(BTRIM(os.tracking_number), '') = ''`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    params.push(Math.max(1, limit), Math.max(0, offset));
+    const limitIdx = params.length - 1;
+    const offsetIdx = params.length;
+
+    const sql = `WITH ${ORDER_SERIALS_CTE}
        SELECT
          os.*,
          s1.name AS tested_by_name,
@@ -244,9 +298,13 @@ export async function getAllShippedOrders(limit = 100, offset = 0): Promise<Ship
        LEFT JOIN staff s1 ON os.tested_by = s1.id
        LEFT JOIN staff s2 ON os.packed_by = s2.id
        LEFT JOIN staff s3 ON os.tester_id = s3.id
+       ${whereClause}
        ORDER BY COALESCE(os.packed_at, os.created_at)::timestamp DESC NULLS LAST, os.id DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset],
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
+
+    const result = await queryWithRetry(
+      () => pool.query(sql, params),
+      { retries: 3, delayMs: 1000 },
     );
     return result.rows;
   } catch (error: any) {

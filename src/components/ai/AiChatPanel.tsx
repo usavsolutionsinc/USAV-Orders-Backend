@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Send, Zap } from '@/components/Icons';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -197,7 +198,8 @@ export default function AiChatPanel() {
     <div className="flex flex-col h-full bg-white min-w-0 overflow-hidden">
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 flex-shrink-0">
+      <div className={`${mainStickyHeaderClass} flex-shrink-0`}>
+        <div className={`${mainStickyHeaderRowClass} px-6`}>
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600">
             <BotIcon className="w-4 h-4 text-white" />
@@ -243,6 +245,7 @@ export default function AiChatPanel() {
             <RefreshIcon className="w-3 h-3" />
             New Chat
           </button>
+        </div>
         </div>
       </div>
 

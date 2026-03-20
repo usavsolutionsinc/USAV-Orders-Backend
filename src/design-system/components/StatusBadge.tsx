@@ -28,6 +28,11 @@ const STATUS_MAP: Record<string, { label: string; colorVar: string }> = {
   purchase_order: { label: 'PO Sync', colorVar: '--color-status-confirmed' },
   purchase_receive: { label: 'Receive Sync', colorVar: '--color-status-invoiced' },
   sync_delayed: { label: 'Sync Delayed', colorVar: '--color-warning' },
+  support_ticket: { label: 'Support Ticket', colorVar: '--color-warning' },
+  inventory_alert: { label: 'Inventory Alert', colorVar: '--color-error' },
+  logistics: { label: 'Logistics', colorVar: '--color-info' },
+  fulfillment: { label: 'Fulfillment', colorVar: '--color-status-shipped' },
+  queued: { label: 'Queued', colorVar: '--color-warning' },
 };
 
 function formatStatusLabel(status: string) {
@@ -53,10 +58,10 @@ export function StatusBadge({
 
   return (
     <span
-      className={`inline-flex items-center py-0.5 text-[10px] font-semibold tracking-[0.02em] ${className}`.trim()}
+      className={`inline-flex items-center border-b-2 border-current pb-0.5 text-[9px] font-black uppercase tracking-[0.08em] leading-none ${className}`.trim()}
       style={{
         color: `var(${config.colorVar})`,
-        boxShadow: `inset 0 -1px 0 color-mix(in srgb, var(${config.colorVar}) 25%, transparent)`,
+        borderBottomColor: `color-mix(in srgb, var(${config.colorVar}) 82%, transparent)`,
       }}
     >
       {label || config.label}

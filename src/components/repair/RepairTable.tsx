@@ -254,15 +254,15 @@ export function RepairTable({ filter }: RepairTableProps) {
                           </div>
                         </div>
                         <div className="flex items-center justify-start gap-3" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex flex-col items-start">
+                          <div className="flex flex-col items-start flex-1 min-w-[50px]">
                             <SourceOrderChip
                               value={String(repair.source_order_id || '').trim() || 'WALK-IN'}
                               display={String(repair.source_order_id || '').trim() || 'WALK-IN'}
-                              width="w-[72px]"
+                              width="w-full min-w-[50px]"
                               disableCopy={!String(repair.source_order_id || '').trim()}
                             />
                           </div>
-                          <div className="flex flex-col items-start">
+                          <div className="flex flex-col items-start shrink-0">
                             <TicketChip
                               value={repair.ticket_number || ''}
                               display={getLast4(repair.ticket_number)}

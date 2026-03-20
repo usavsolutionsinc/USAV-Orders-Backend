@@ -5,15 +5,7 @@ import { upsertQStashSchedule } from '@/lib/qstash';
 export const dynamic = 'force-dynamic';
 
 function isAuthorized(req: NextRequest): boolean {
-  if (isAllowedAdminOrigin(req)) return true;
-
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-
-  const authHeader = req.headers.get('authorization');
-  if (authHeader === `Bearer ${secret}`) return true;
-
-  return req.headers.get('x-cron-secret') === secret;
+  return isAllowedAdminOrigin(req);
 }
 
 const HEAVY_JOB_SCHEDULES = [
@@ -40,14 +32,14 @@ const HEAVY_JOB_SCHEDULES = [
   },
   {
     scheduleId: 'google-sheets-transfer-orders-1000-weekdays-pacific',
-    cron: '0 18 * * 1-5',
+    cron: '0 18 * * *',
     path: '/api/qstash/google-sheets/transfer-orders',
     body: {},
     label: 'google-sheets-transfer-orders',
   },
   {
     scheduleId: 'google-sheets-transfer-orders-1600-weekdays-pacific',
-    cron: '0 0 * * 2-6',
+    cron: '0 22 * * *',
     path: '/api/qstash/google-sheets/transfer-orders',
     body: {},
     label: 'google-sheets-transfer-orders',

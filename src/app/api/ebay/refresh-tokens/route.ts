@@ -5,30 +5,13 @@ import { refreshEbayAccessToken } from '@/lib/ebay/token-refresh';
 /**
  * POST /api/ebay/refresh-tokens
  * Worker endpoint: refreshes all eBay accounts whose token expires within 30 minutes.
- * Protected by CRON_SECRET and intended to be invoked by the QStash wrapper.
+ * Intended for internal calls and QStash wrappers.
  */
 export const dynamic = 'force-dynamic';
-
-function isAuthorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-
-  const authHeader = req.headers.get('authorization');
-  if (authHeader === `Bearer ${secret}`) return true;
-
-  const bodySecret = req.headers.get('x-cron-secret');
-  if (bodySecret === secret) return true;
-
-  return false;
-}
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const { rows: accounts } = await pool.query<{ account_name: string; refresh_token: string }>(
       `SELECT account_name, refresh_token
@@ -98,10 +81,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET() {
   return NextResponse.json(
     { success: false, error: 'Method not allowed. Use POST via the QStash worker route.' },
     { status: 405 }

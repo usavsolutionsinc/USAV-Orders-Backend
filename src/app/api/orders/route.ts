@@ -67,6 +67,19 @@ export async function GET(req: NextRequest) {
     const excludePacked      = searchParams.get('excludePacked') === 'true';
     /** awaitingOnly=true → only orders without shipment_id (Awaiting tab: no tracking yet) */
     const awaitingOnly       = searchParams.get('awaitingOnly') === 'true';
+    const shippedByCarrierOrLatestStatusSql = `COALESCE(
+      stn.is_carrier_accepted
+      OR stn.is_in_transit
+      OR stn.is_out_for_delivery
+      OR stn.is_delivered
+      OR (
+        COALESCE(BTRIM(stn.latest_status_category), '') <> ''
+        AND UPPER(BTRIM(stn.latest_status_category)) NOT IN ('LABEL_CREATED', 'UNKNOWN')
+      )
+      OR UPPER(COALESCE(stn.latest_status_label, '')) LIKE '%MOVING THROUGH NETWORK%'
+      OR UPPER(COALESCE(stn.latest_status_description, '')) LIKE '%MOVING THROUGH NETWORK%',
+      false
+    )`;
 
     const cacheLookup = createCacheLookupKey({
       status:             status || '',
@@ -83,6 +96,7 @@ export async function GET(req: NextRequest) {
       packedOnly,
       excludePacked,
       awaitingOnly,
+      shipmentStatusRuleVersion: 'latest_status_relaxed_v2',
     });
 
     const CACHE_HEADERS = { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' };
@@ -330,8 +344,11 @@ export async function GET(req: NextRequest) {
         o.notes,
         ${replenishmentSelect}
         o.customer_id,
-        COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
-          OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
+        stn.latest_status_code,
+        stn.latest_status_label,
+        stn.latest_status_description,
+        stn.latest_status_category,
+        ${shippedByCarrierOrLatestStatusSql} AS is_shipped,
         o.created_at,
         wa_t.assigned_tech_id   AS tester_id,
         wa_p.assigned_packer_id AS packer_id,
@@ -373,11 +390,11 @@ export async function GET(req: NextRequest) {
     let paramCount = 1;
 
     if (shippedOnly) {
-      sql += ` AND COALESCE(stn.is_carrier_accepted OR stn.is_in_transit OR stn.is_out_for_delivery OR stn.is_delivered, false)`;
+      sql += ` AND ${shippedByCarrierOrLatestStatusSql}`;
     } else if (!includeShipped && !packedOnly) {
       // Pending/unshipped dashboards should stay limited to orders that have not
       // entered a carrier-shipped state, even when excludePacked is also active.
-      sql += ` AND NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit OR stn.is_out_for_delivery OR stn.is_delivered, false)`;
+      sql += ` AND NOT ${shippedByCarrierOrLatestStatusSql}`;
     }
 
     if (packedOnly) {

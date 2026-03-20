@@ -58,12 +58,29 @@ export function OrdersQueueTable({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
+  const isShippedByLatestStatus = (record: ShippedOrder): boolean => {
+    const category = String(record.latest_status_category ?? '').trim().toUpperCase();
+    const label = String(record.latest_status_label ?? '').toUpperCase();
+    const description = String(record.latest_status_description ?? '').toUpperCase();
+    if (!category) {
+      return label.includes('MOVING THROUGH NETWORK') || description.includes('MOVING THROUGH NETWORK');
+    }
+    return category !== 'LABEL_CREATED' && category !== 'UNKNOWN';
+  };
+  const visibleRecords = records.filter((record) => !isShippedByLatestStatus(record));
 
   useEffect(() => {
     if (!selectedRecord) return;
-    const nextSelected = records.find((record) => Number(record.id) === Number(selectedRecord.id));
-    if (nextSelected && nextSelected !== selectedRecord) setSelectedRecord(nextSelected);
-  }, [records, selectedRecord]);
+    const nextSelected = visibleRecords.find((record) => Number(record.id) === Number(selectedRecord.id));
+    if (nextSelected && nextSelected !== selectedRecord) {
+      setSelectedRecord(nextSelected);
+      return;
+    }
+    if (!nextSelected) {
+      onCloseRecord?.(selectedRecord);
+      setSelectedRecord(null);
+    }
+  }, [onCloseRecord, selectedRecord, visibleRecords]);
 
   const handleRowClick = useCallback((record: ShippedOrder) => {
     if (selectedRecord && Number(selectedRecord.id) === Number(record.id)) {
@@ -89,7 +106,7 @@ export function OrdersQueueTable({
   }, []);
 
   const groupedRecords: Record<string, ShippedOrder[]> = {};
-  records.forEach((record) => {
+  visibleRecords.forEach((record) => {
     const dateSource = record.deadline_at || record.created_at;
     if (!dateSource || dateSource === '1') return;
 
@@ -164,7 +181,7 @@ export function OrdersQueueTable({
       window.setTimeout(() => handleScroll(), 100);
     }
     return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, records]);
+  }, [handleScroll, visibleRecords]);
 
   const totalCount = Object.values(groupedRecords).reduce((sum, dayRecords) => sum + dayRecords.length, 0);
   const fallbackDate = formatDate(getCurrentPSTDateKey());
@@ -184,6 +201,16 @@ export function OrdersQueueTable({
     if (daysLate > 1) return 'text-red-600';
     if (daysLate === 1) return 'text-yellow-600';
     return 'text-emerald-600';
+  };
+  const normalizePersonName = (value: unknown): string => {
+    const text = String(value ?? '')
+      .replace(/^tech:\s*/i, '')
+      .replace(/^packer:\s*/i, '')
+      .trim();
+    if (!text) return '---';
+    if (/^(not specified|n\/a|null|undefined)$/i.test(text)) return '---';
+    if (/^staff\s*#\d+$/i.test(text)) return '---';
+    return text;
   };
 
   if (loading) {
@@ -280,6 +307,8 @@ export function OrdersQueueTable({
                             (record as any).packer_name ||
                             getStaffName((record as any).packed_by) ||
                             getStaffName((record as any).packer_id);
+                        const testerDisplay = normalizePersonName(testerName);
+                        const packerDisplay = normalizePersonName(packerName);
                         const outOfStockValue = String((record as any).out_of_stock || '').trim();
                         const hasOutOfStock = outOfStockValue !== '';
                         // Match UpNextOrder: only an actual tech scan marks the row as tested.
@@ -326,9 +355,9 @@ export function OrdersQueueTable({
                                     {record.condition || 'No Condition'}
                                   </span>
                                   {' • '}
-                                  {testerName}
+                                  {testerDisplay}
                                   {' • '}
-                                  {packerName}
+                                  {packerDisplay}
                                   {defaultDaysLate !== null ? (
                                     <>
                                       {' • '}

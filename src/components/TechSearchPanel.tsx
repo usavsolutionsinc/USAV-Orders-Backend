@@ -72,15 +72,17 @@ export default function TechSearchPanel() {
                         variant="blue"
                         rightElement={
                             <button
+                                type="button"
                                 onClick={handleSearch}
                                 disabled={isSearching || !searchQuery.trim()}
-                                className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white disabled:text-gray-400 rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-600/10 disabled:cursor-not-allowed"
+                                className="rounded-xl bg-blue-600 p-2.5 text-white transition-colors hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-400 disabled:cursor-not-allowed"
                                 title="Search Neon DB"
+                                aria-label="Search Neon DB"
                             >
                                 {isSearching ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <Loader2 className="h-5 w-5 animate-spin" />
                                 ) : (
-                                    <Search className="w-4 h-4" />
+                                    <Search className="h-5 w-5" />
                                 )}
                             </button>
                         }

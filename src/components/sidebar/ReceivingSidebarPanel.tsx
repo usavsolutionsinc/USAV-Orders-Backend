@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { sidebarHeaderBandClass, sidebarHeaderControlClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { Barcode } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
@@ -163,6 +164,8 @@ export function ReceivingSidebarPanel() {
           variant="blue"
           size="compact"
           isSearching={bulkSubmitting}
+          leadingIcon={<Barcode className="w-[14px] h-[14px]" />}
+          className="w-full"
         />
       </div>
 

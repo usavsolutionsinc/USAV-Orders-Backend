@@ -3,9 +3,8 @@ import pool from '@/lib/db';
 
 // ── POST /api/fba/labels/bind ─────────────────────────────────────────────────
 // Packer scans a shipping label barcode, then binds one or more FNSKUs to it.
-// Creates or reuses a fba_label_batches row, creates fba_label_batch_items rows,
-// and transitions bound items from READY_TO_GO → LABEL_ASSIGNED.
-// All operations run in a single transaction.
+// Transitions bound items from READY_TO_GO → LABEL_ASSIGNED and records
+// immutable events in fba_fnsku_logs. All operations run in one transaction.
 //
 // Body: { shipment_id, label_barcode, fnskus: string[], staff_id, station? }
 export async function POST(request: NextRequest) {
@@ -22,6 +21,16 @@ export async function POST(request: NextRequest) {
     }
     if (!Array.isArray(fnskus) || fnskus.length === 0) {
       return NextResponse.json({ success: false, error: 'At least one fnsku is required' }, { status: 400 });
+    }
+    const normalizedFnskus = Array.from(
+      new Set(
+        fnskus
+          .map((value: unknown) => String(value || '').trim().toUpperCase())
+          .filter(Boolean)
+      )
+    );
+    if (normalizedFnskus.length === 0) {
+      return NextResponse.json({ success: false, error: 'At least one valid fnsku is required' }, { status: 400 });
     }
 
     await client.query('BEGIN');
@@ -47,24 +56,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Shipment is already closed' }, { status: 409 });
     }
 
-    // Upsert label batch
-    const batchRes = await client.query(
-      `INSERT INTO fba_label_batches (shipment_id, label_barcode, labeled_by_staff_id)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (shipment_id, label_barcode) DO UPDATE
-         SET updated_at = NOW()
-       RETURNING *`,
-      [shipment_id, label_barcode.trim(), staff_id]
-    );
-    const batch = batchRes.rows[0];
-
-    const boundItems: unknown[] = [];
+    const boundItems: Array<Record<string, unknown>> = [];
     const errors: string[] = [];
 
-    for (const rawFnsku of fnskus) {
-      const fnsku = String(rawFnsku || '').trim();
-      if (!fnsku) continue;
-
+    for (const fnsku of normalizedFnskus) {
       // Find the item — must exist and be READY_TO_GO (or already LABEL_ASSIGNED for re-bind)
       const itemRes = await client.query(
         `SELECT * FROM fba_shipment_items WHERE shipment_id = $1 AND fnsku = $2`,
@@ -86,48 +81,73 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Bind to batch (idempotent)
-      await client.query(
-        `INSERT INTO fba_label_batch_items (batch_id, item_id, qty)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (batch_id, item_id) DO UPDATE SET qty = EXCLUDED.qty`,
-        [batch.id, item.id, item.actual_qty > 0 ? item.actual_qty : 1]
-      );
-
       // Advance status to LABEL_ASSIGNED
       const updatedRes = await client.query(
         `UPDATE fba_shipment_items
          SET status            = 'LABEL_ASSIGNED',
-             labeled_by_staff_id = $1,
-             labeled_at        = NOW(),
+             labeled_by_staff_id = COALESCE(labeled_by_staff_id, $1),
+             labeled_at        = COALESCE(labeled_at, NOW()),
              updated_at        = NOW()
          WHERE id = $2
          RETURNING *`,
         [staff_id, item.id]
       );
 
-      // Audit event
-      await client.query(
-        `INSERT INTO fba_scan_events
-           (shipment_id, item_id, batch_id, scanned_by_staff_id, scan_mode, event_type, fnsku, station)
-         VALUES ($1, $2, $3, $4, 'LABEL_BIND', 'LABEL_BOUND', $5, $6)`,
-        [shipment_id, item.id, batch.id, staff_id, fnsku, station || null]
+      const logRes = await client.query(
+        `INSERT INTO fba_fnsku_logs
+           (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
+         VALUES ($1, 'PACK', 'ASSIGNED', $2, $3, $4, $5, $6, $7, $8::jsonb)
+         RETURNING id, created_at`,
+        [
+          fnsku,
+          staff_id,
+          shipment_id,
+          item.id,
+          Math.max(1, Number(item.actual_qty) || 0),
+          station || 'LABEL_BIND',
+          'Label barcode bound to shipment item',
+          JSON.stringify({
+            label_barcode: String(label_barcode).trim(),
+            trigger: 'fba.labels.bind',
+            previous_status: item.status,
+          }),
+        ]
       );
 
-      boundItems.push(updatedRes.rows[0]);
+      boundItems.push({
+        ...updatedRes.rows[0],
+        log_id: Number(logRes.rows[0].id),
+      });
     }
 
-    // Roll up shipment status: advance to LABEL_ASSIGNED if no items remain READY_TO_GO or PLANNED
+    // Roll up shipment counters and status.
     await client.query(
       `UPDATE fba_shipments
-       SET status     = 'LABEL_ASSIGNED',
-           updated_at = NOW()
-       WHERE id = $1
-         AND status IN ('PLANNED','READY_TO_GO')
-         AND NOT EXISTS (
-           SELECT 1 FROM fba_shipment_items
-           WHERE shipment_id = $1 AND status IN ('PLANNED','READY_TO_GO')
-         )`,
+       SET ready_item_count   = counts.ready_item_count,
+           packed_item_count  = counts.packed_item_count,
+           shipped_item_count = counts.shipped_item_count,
+           status             = CASE
+                                  WHEN counts.planned_item_count = 0
+                                    AND counts.ready_to_go_item_count = 0
+                                    THEN 'LABEL_ASSIGNED'::fba_shipment_status_enum
+                                  WHEN counts.planned_item_count = 0
+                                    THEN 'READY_TO_GO'::fba_shipment_status_enum
+                                  ELSE fba_shipments.status
+                                END,
+           updated_at         = NOW()
+       FROM (
+         SELECT
+           shipment_id,
+           COUNT(*) FILTER (WHERE status IN ('READY_TO_GO', 'LABEL_ASSIGNED', 'SHIPPED'))::int AS ready_item_count,
+           COUNT(*) FILTER (WHERE status IN ('LABEL_ASSIGNED', 'SHIPPED'))::int AS packed_item_count,
+           COUNT(*) FILTER (WHERE status = 'SHIPPED')::int AS shipped_item_count,
+           COUNT(*) FILTER (WHERE status = 'PLANNED')::int AS planned_item_count,
+           COUNT(*) FILTER (WHERE status = 'READY_TO_GO')::int AS ready_to_go_item_count
+         FROM fba_shipment_items
+         WHERE shipment_id = $1
+         GROUP BY shipment_id
+       ) counts
+       WHERE fba_shipments.id = counts.shipment_id`,
       [shipment_id]
     );
 
@@ -135,8 +155,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      batch,
+      label_barcode: String(label_barcode).trim(),
+      shipment_id: Number(shipment_id),
       bound_items: boundItems,
+      bound_count: boundItems.length,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error: any) {

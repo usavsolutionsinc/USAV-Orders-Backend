@@ -28,7 +28,6 @@ export default function SkuBrowser() {
   const searchParams = useSearchParams();
   const view = (searchParams.get('view') === 'sku_history' ? 'sku_history' : 'sku_stock') as SkuView;
   const searchQuery = String(searchParams.get('search') || '').trim();
-  const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [skuStockRows, setSkuStockRows] = useState<SkuStockRow[]>([]);
@@ -40,7 +39,6 @@ export default function SkuBrowser() {
 
     async function load() {
       setError('');
-      setIsSearching(true);
       if ((view === 'sku_stock' ? skuStockRows.length : skuHistoryRows.length) === 0) {
         setLoading(true);
       }
@@ -77,7 +75,6 @@ export default function SkuBrowser() {
       } finally {
         if (!cancelled) {
           setLoading(false);
-          setIsSearching(false);
         }
       }
     }
@@ -112,18 +109,6 @@ export default function SkuBrowser() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-white">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex-shrink-0 border-b border-gray-200 bg-white px-2 py-1">
-          <div className="flex items-center justify-between">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
-              {view === 'sku_stock' ? 'SKU Stock' : 'SKU Database'}
-            </p>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">{activeCount}</span>
-              {isSearching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
-            </div>
-          </div>
-        </div>
-
         <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {loading ? (
             <div className="flex h-full items-center justify-center bg-gray-50">
@@ -154,7 +139,7 @@ export default function SkuBrowser() {
                 <>
                   <div className="grid grid-cols-[64px_140px_minmax(220px,1fr)] items-center gap-1 border-b border-gray-200 bg-gray-50 px-2 py-1">
                     <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Stock</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">SKU</div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Stock SKU</div>
                     <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Product Title</div>
                   </div>
                   {skuStockRows.map((row, index) => (

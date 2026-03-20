@@ -7,6 +7,7 @@ import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -16,7 +17,14 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const weekStart = searchParams.get('weekStart') || '';
     const weekEnd = searchParams.get('weekEnd') || '';
-    const cacheLookup = createCacheLookupKey({ packerId: packerId || '', testedBy: testedBy || '', limit, offset, weekStart, weekEnd });
+    const cacheLookup = createCacheLookupKey({
+        packerId: packerId || '',
+        testedBy: testedBy || '',
+        limit,
+        offset,
+        weekStart,
+        weekEnd,
+    });
 
     const today = getCurrentPSTDateKey();
     const cacheTTL = weekEnd && weekEnd < today ? 86400 : 120;
@@ -100,7 +108,7 @@ export async function GET(req: NextRequest) {
                 to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
                 to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS deadline_at,
                 o.item_number,
-                COALESCE(o.condition, CASE WHEN sal.fnsku IS NOT NULL THEN 'FBA Scan' ELSE null END) AS condition,
+                NULLIF(TRIM(COALESCE(o.condition, '')), '') AS condition,
                 COALESCE(o.quantity, sal.metadata->>'quantity') AS quantity,
                 COALESCE(o.sku, ff.sku, sal.metadata->>'sku') AS sku,
                 COALESCE(o.notes, '') AS notes,
@@ -181,7 +189,10 @@ export async function GET(req: NextRequest) {
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
         `;
 
-        const result = await pool.query(query, params);
+        const result = await queryWithRetry(
+            () => pool.query(query, params),
+            { retries: 3, delayMs: 1000 }
+        );
 
         await setCachedJson('api:packerlogs', cacheLookup, result.rows, cacheTTL, ['packerlogs']);
         return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });

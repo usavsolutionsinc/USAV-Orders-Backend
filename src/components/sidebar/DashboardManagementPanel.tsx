@@ -13,10 +13,19 @@ import {
 } from '@/components/Icons';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { TabSwitch } from '@/components/ui/TabSwitch';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { getActiveStaff } from '@/lib/staffCache';
+
+type PendingStockFilter = 'all' | 'pending' | 'stock';
+
+const PENDING_STOCK_FILTER_TABS = [
+  { id: 'all', label: 'All', color: 'blue' as const },
+  { id: 'pending', label: 'Pick/Test', color: 'yellow' as const },
+  { id: 'stock', label: 'Stock', color: 'red' as const },
+];
 
 interface DashboardManagementPanelProps {
   showIntakeForm?: boolean;
@@ -26,6 +35,9 @@ interface DashboardManagementPanelProps {
   showNextUnassignedButton?: boolean;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  showPendingFilterControl?: boolean;
+  pendingFilterValue?: PendingStockFilter;
+  onPendingFilterChange?: (value: PendingStockFilter) => void;
 }
 
 interface SearchHistory {
@@ -42,6 +54,9 @@ export function DashboardManagementPanel({
   showNextUnassignedButton = false,
   searchValue = '',
   onSearchChange,
+  showPendingFilterControl = false,
+  pendingFilterValue = 'all',
+  onPendingFilterChange,
 }: DashboardManagementPanelProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -294,15 +309,24 @@ export function DashboardManagementPanel({
                   <button
                     type="button"
                     onClick={handleOpenIntakeForm}
-                    className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                    className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
                     title="New Order Entry"
                     aria-label="Open new order entry form"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="h-5 w-5" />
                   </button>
                 }
               />
             </motion.div>
+            {showPendingFilterControl ? (
+              <motion.div variants={itemVariants} className="-mt-2">
+                <TabSwitch
+                  tabs={PENDING_STOCK_FILTER_TABS}
+                  activeTab={pendingFilterValue}
+                  onTabChange={(tab) => onPendingFilterChange?.(tab === 'stock' ? 'stock' : tab === 'pending' ? 'pending' : 'all')}
+                />
+              </motion.div>
+            ) : null}
             <motion.div variants={itemVariants} className="-mt-1">
               <RecentSearchesList
                 items={visibleSearchHistory}

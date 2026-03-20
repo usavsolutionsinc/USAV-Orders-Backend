@@ -5,7 +5,7 @@ import pool from '@/lib/db';
 // Ship Close: transitions all LABEL_ASSIGNED items (and any remaining
 // READY_TO_GO items) to SHIPPED and marks the shipment as SHIPPED.
 // Requires all items to be at least READY_TO_GO (admin can force-close).
-// Writes a SHIPMENT_CLOSED audit event for each item.
+// Writes a SHIP/SHIPPED event to fba_fnsku_logs for each shipped item.
 //
 // Body: { shipment_id, staff_id, force?: boolean, station? }
 export async function POST(request: NextRequest) {
@@ -75,29 +75,53 @@ export async function POST(request: NextRequest) {
       [staff_id, shipment_id]
     );
 
-    // Write one audit event per shipped item
+    // Write one immutable SHIPPED event per item.
     for (const item of itemsRes.rows) {
       await client.query(
-        `INSERT INTO fba_scan_events
-           (shipment_id, item_id, scanned_by_staff_id, scan_mode, event_type, fnsku, station)
-         VALUES ($1, $2, $3, 'SHIP_CLOSE', 'SHIPMENT_CLOSED', $4, $5)`,
-        [shipment_id, item.id, staff_id, item.fnsku, station || null]
+        `INSERT INTO fba_fnsku_logs
+           (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
+         VALUES ($1, 'SHIP', 'SHIPPED', $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+        [
+          item.fnsku,
+          staff_id,
+          shipment_id,
+          item.id,
+          Math.max(1, Number(item.actual_qty) || 0),
+          station || 'SHIP_CLOSE',
+          `Shipment closed (${force ? 'force' : 'standard'})`,
+          JSON.stringify({
+            trigger: 'fba.shipments.close',
+            shipment_ref: shipmentCheck.rows[0].shipment_ref || null,
+          }),
+        ]
       );
     }
 
-    // Mark the label batches as SHIPPED
-    await client.query(
-      `UPDATE fba_label_batches SET status = 'SHIPPED', updated_at = NOW() WHERE shipment_id = $1`,
-      [shipment_id]
-    );
-
-    // Close the shipment
+    // Close shipment and refresh counters.
     const closedShipmentRes = await client.query(
-      `UPDATE fba_shipments
+      `UPDATE fba_shipments fs
        SET status     = 'SHIPPED',
            shipped_at = NOW(),
+           ready_item_count = (
+             SELECT COUNT(*)::int
+             FROM fba_shipment_items i
+             WHERE i.shipment_id = fs.id
+               AND i.status IN ('READY_TO_GO', 'LABEL_ASSIGNED', 'SHIPPED')
+           ),
+           packed_item_count = (
+             SELECT COUNT(*)::int
+             FROM fba_shipment_items i
+             WHERE i.shipment_id = fs.id
+               AND i.status IN ('LABEL_ASSIGNED', 'SHIPPED')
+           ),
+           shipped_item_count = (
+             SELECT COUNT(*)::int
+             FROM fba_shipment_items i
+             WHERE i.shipment_id = fs.id
+               AND i.status = 'SHIPPED'
+           ),
            updated_at = NOW()
-       WHERE id = $1
+       WHERE fs.id = $1
        RETURNING *`,
       [shipment_id]
     );

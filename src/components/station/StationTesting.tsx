@@ -3,10 +3,11 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
-import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
+import { Barcode, AlertCircle, Loader2, Package, MapPin, Settings } from '../Icons';
 import ActiveStationOrderCard from './ActiveStationOrderCard';
 import StationGoalBar from './StationGoalBar';
-import { useStationTestingController } from '@/hooks/useStationTestingController';
+import { StationScanBar } from './StationScanBar';
+import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 
 // FNSKUs start with X0, B0, or are exactly 10 alphanumeric chars — Amazon barcode pattern
 function looksLikeFnsku(value: string): boolean {
@@ -53,6 +54,7 @@ export default function StationTesting({
   const [fbaFeedback, setFbaFeedback] = useState<FbaFeedback | null>(null);
   const [fbaError, setFbaError] = useState<string | null>(null);
   const [isFbaLoading, setIsFbaLoading] = useState(false);
+  const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
 
   const {
     inputValue,
@@ -70,6 +72,7 @@ export default function StationTesting({
     triggerGlobalRefresh,
     activeColor,
     clearFeedback,
+    reopenLastActiveOrderCard,
   } = useStationTestingController({
     userId,
     userName,
@@ -135,16 +138,92 @@ export default function StationTesting({
   const handleFormSubmit = useCallback(
     (e?: React.FormEvent, overrideTracking?: string) => {
       const value = overrideTracking ?? inputValue;
-      if (looksLikeFnsku(value)) {
+
+      if ((manualMode === 'fba' || manualMode === 'repair') && value.trim()) {
+        const detectedMode = getStationInputMode(value);
+        if (detectedMode !== manualMode) {
+          setManualMode(detectedMode);
+        }
+      }
+
+      const forcedType =
+        typeof overrideTracking === 'string'
+          ? 'TRACKING'
+          : manualMode === 'tracking'
+            ? 'TRACKING'
+            : manualMode === 'serial'
+              ? 'SERIAL'
+              : undefined;
+
+      if (!forcedType && looksLikeFnsku(value)) {
         e?.preventDefault();
         setInputValue('');
         handleFnskuScan(value);
         return;
       }
-      handleSubmit(e, overrideTracking);
+      handleSubmit(e, overrideTracking, forcedType ? { forcedType } : undefined);
     },
-    [inputValue, handleFnskuScan, handleSubmit, setInputValue]
+    [inputValue, manualMode, handleFnskuScan, handleSubmit, setInputValue]
   );
+
+  const detectedMode = inputValue.trim() ? getStationInputMode(inputValue) : null;
+  const autoMode: StationInputMode = detectedMode ?? (activeOrder ? 'serial' : 'tracking');
+  const effectiveMode: StationInputMode =
+    manualMode === 'tracking' || manualMode === 'serial'
+      ? manualMode
+      : manualMode === 'fba'
+        ? (detectedMode && detectedMode !== 'fba' ? detectedMode : 'fba')
+        : manualMode === 'repair'
+          ? (detectedMode && detectedMode !== 'repair' ? detectedMode : 'repair')
+        : autoMode;
+  const isTrackingMode = effectiveMode === 'tracking';
+  const isFbaMode = effectiveMode === 'fba';
+  const isRepairMode = effectiveMode === 'repair';
+  const isSerialMode = effectiveMode === 'serial';
+
+  const modeBadge = (() => {
+    switch (effectiveMode) {
+      case 'tracking':
+        return {
+          label: 'Tracking',
+          Icon: MapPin,
+          leftDisplayClassName: 'text-blue-600 group-hover:text-blue-700',
+        };
+      case 'fba':
+        return {
+          label: 'FBA',
+          Icon: Package,
+          leftDisplayClassName: 'text-violet-600 group-hover:text-violet-700',
+        };
+      case 'repair':
+        return {
+          label: 'Repair',
+          Icon: Settings,
+          leftDisplayClassName: 'text-amber-600 group-hover:text-amber-700',
+        };
+      case 'serial':
+      default:
+        return {
+          label: 'Serial',
+          Icon: Barcode,
+          leftDisplayClassName: 'text-emerald-600 group-hover:text-emerald-700',
+        };
+    }
+  })();
+  const ActiveModeIcon = modeBadge.Icon;
+  const modeButtonBaseClass =
+    'h-6 w-6 rounded-md flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60';
+  const inactiveModeButtonClass = 'text-gray-500 hover:bg-gray-100 hover:text-gray-800';
+
+  const toggleMode = useCallback((nextMode: StationInputMode) => {
+    const nextManualMode = manualMode === nextMode ? null : nextMode;
+    setManualMode(nextManualMode);
+
+    // Serial mode always targets the last scanned order context and re-opens the card.
+    if (nextManualMode === 'serial') {
+      reopenLastActiveOrderCard();
+    }
+  }, [manualMode, reopenLastActiveOrderCard]);
 
   return (
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
@@ -169,29 +248,75 @@ export default function StationTesting({
             animate={{ opacity: 1, y: 0 }}
             className="space-y-2"
           >
-            <form onSubmit={handleFormSubmit} className="relative group">
-              <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${activeColor.text}`}>
-                <Barcode className="w-4 h-4" />
-              </div>
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Scan Tracking, RS ID, SKU, SN, or FNSKU..."
-                className={`w-full pl-11 pr-14 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 outline-none transition-all shadow-inner`}
-                autoFocus
-              />
-              <div className="absolute right-3 bottom-2">
-                {isLoading || isFbaLoading ? (
-                  <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
-                ) : (
-                  <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
-                    <span className="text-[8px] font-black text-gray-400">ENTER</span>
+            <StationScanBar
+              value={inputValue}
+              onChange={setInputValue}
+              onSubmit={handleFormSubmit}
+              inputRef={inputRef}
+              placeholder="ORDERS, FNSKU, RS, SN"
+              autoFocus
+              icon={(
+                <span
+                  className="-ml-1 flex items-center justify-center"
+                  role="status"
+                  aria-label={`Current input mode: ${modeBadge.label}`}
+                  title={`Current mode: ${modeBadge.label}`}
+                >
+                  <ActiveModeIcon className={`h-[17px] w-[17px] transition-colors ${modeBadge.leftDisplayClassName}`} />
+                </span>
+              )}
+              inputClassName={`pl-[2.2rem] focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 pr-32`}
+              rightContentClassName="right-1.5 gap-0.5"
+              rightContent={(
+                <>
+                  {(isLoading || isFbaLoading) && (
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-700" />
+                  )}
+                  <div className="flex items-center gap-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleMode('tracking')}
+                      aria-pressed={isTrackingMode}
+                      aria-label={manualMode === 'tracking' ? 'Tracking mode manual override enabled. Click to return to auto mode.' : 'Switch to tracking mode override.'}
+                      title={manualMode === 'tracking' ? 'Tracking mode (manual override). Click again for auto mode.' : 'Tracking mode'}
+                      className={`${modeButtonBaseClass} ${isTrackingMode ? 'text-blue-700 bg-blue-50' : inactiveModeButtonClass}`}
+                    >
+                      <MapPin className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleMode('fba')}
+                      aria-pressed={isFbaMode}
+                      aria-label={manualMode === 'fba' ? 'FBA mode feedback selected. Regex can still switch modes.' : 'Show FBA mode feedback.'}
+                      title={manualMode === 'fba' ? 'FBA feedback mode selected (regex still takes priority)' : 'FBA mode'}
+                      className={`${modeButtonBaseClass} ${isFbaMode ? 'text-violet-700 bg-violet-50' : inactiveModeButtonClass}`}
+                    >
+                      <Package className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleMode('repair')}
+                      aria-pressed={isRepairMode}
+                      aria-label={manualMode === 'repair' ? 'Repair mode feedback selected. RS- prefix detection can still switch modes.' : 'Show repair service mode feedback.'}
+                      title={manualMode === 'repair' ? 'Repair feedback mode selected (regex still takes priority)' : 'Repair mode'}
+                      className={`${modeButtonBaseClass} ${isRepairMode ? 'text-amber-700 bg-amber-50' : inactiveModeButtonClass}`}
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleMode('serial')}
+                      aria-pressed={isSerialMode}
+                      aria-label={manualMode === 'serial' ? 'Serial mode manual override enabled. Click to return to auto mode.' : 'Switch to serial mode override.'}
+                      title={manualMode === 'serial' ? 'Serial mode (manual override). Click again for auto mode.' : 'Serial mode'}
+                      className={`${modeButtonBaseClass} ${isSerialMode ? 'text-emerald-700 bg-emerald-50' : inactiveModeButtonClass}`}
+                    >
+                      <Barcode className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                )}
-              </div>
-            </form>
+                </>
+              )}
+            />
 
             <AnimatePresence>
               {trackingNotFoundAlert && (

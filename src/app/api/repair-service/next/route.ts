@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizePSTTimestamp } from '@/utils/date';
 import { parsePositiveInt } from '@/utils/number';
+import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 
 export interface RepairQueueItem {
   kind: 'REPAIR';
@@ -24,26 +25,8 @@ export interface RepairQueueItem {
 }
 
 const CLOSED_STATUSES = ['Done', 'Shipped', 'Picked Up'];
-
-async function getRepairWorkAssignmentSelects() {
-  const columns = await pool.query<{ column_name: string }>(
-    `SELECT column_name
-     FROM information_schema.columns
-     WHERE table_name = 'work_assignments'
-       AND column_name IN ('out_of_stock', 'repair_outcome')`
-  );
-
-  const present = new Set(columns.rows.map((row) => row.column_name));
-
-  return {
-    outOfStockSelect: present.has('out_of_stock')
-      ? `wa.out_of_stock     AS "outOfStock"`
-      : `NULL::text          AS "outOfStock"`,
-    repairOutcomeSelect: present.has('repair_outcome')
-      ? `wa.repair_outcome   AS "repairOutcome"`
-      : `NULL::text          AS "repairOutcome"`,
-  };
-}
+const OUT_OF_STOCK_SELECT = `wa.out_of_stock   AS "outOfStock"`;
+const REPAIR_OUTCOME_SELECT = `wa.repair_outcome AS "repairOutcome"`;
 
 /**
  * GET /api/repair-service/next?techId=<id>
@@ -57,7 +40,6 @@ export async function GET(req: NextRequest) {
   try {
     const techIdParam = req.nextUrl.searchParams.get('techId');
     const techId = techIdParam ? parsePositiveInt(techIdParam) : null;
-    const { outOfStockSelect, repairOutcomeSelect } = await getRepairWorkAssignmentSelects();
 
     if (techIdParam && techId === null) {
       return NextResponse.json({ error: 'techId must be a positive integer' }, { status: 400 });
@@ -85,8 +67,8 @@ export async function GET(req: NextRequest) {
           rs.price,
           wa.assigned_tech_id AS "assignedTechId",
           s.name              AS "techName",
-          ${outOfStockSelect},
-          ${repairOutcomeSelect}
+          ${OUT_OF_STOCK_SELECT},
+          ${REPAIR_OUTCOME_SELECT}
         FROM repair_service rs
         LEFT JOIN LATERAL (
           SELECT *
@@ -138,8 +120,8 @@ export async function GET(req: NextRequest) {
           rs.price,
           wa.assigned_tech_id AS "assignedTechId",
           s.name              AS "techName",
-          ${outOfStockSelect},
-          ${repairOutcomeSelect}
+          ${OUT_OF_STOCK_SELECT},
+          ${REPAIR_OUTCOME_SELECT}
         FROM repair_service rs
         LEFT JOIN LATERAL (
           SELECT *
@@ -170,7 +152,10 @@ export async function GET(req: NextRequest) {
       params = [...CLOSED_STATUSES];
     }
 
-    const result = await pool.query(query, params);
+    const result = await queryWithRetry(
+      () => pool.query(query, params),
+      { retries: 3, delayMs: 1000 },
+    );
 
     const repairs: RepairQueueItem[] = result.rows.map((row) => ({
       kind:             'REPAIR' as const,
@@ -194,6 +179,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ repairs, count: repairs.length });
   } catch (error: unknown) {
+    if (isTransientDbError(error)) {
+      return NextResponse.json(
+        { repairs: [], count: 0, fallback: 'db_unavailable' },
+        { headers: { 'x-db-fallback': 'unavailable' } }
+      );
+    }
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('GET /api/repair-service/next error:', error);
     return NextResponse.json({ error: message }, { status: 500 });

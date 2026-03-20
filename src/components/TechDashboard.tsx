@@ -13,8 +13,8 @@ import ProductManualViewer from './station/ProductManualViewer';
 import { ReceivingInboundFeed } from './station/ReceivingInboundFeed';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
 import { RepairDetailsPanel } from './repair/RepairDetailsPanel';
-import { SearchBar } from '@/components/ui/SearchBar';
-import { Search, X } from '@/components/Icons';
+import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
+import { Search } from '@/components/Icons';
 import { resolveOrderSearchView } from '@/lib/order-search-resolver';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import type { ResolvedProductManual } from '@/hooks/useStationTestingController';
@@ -237,43 +237,18 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
 
                 <AnimatePresence initial={false} mode="wait">
                     {showPendingSearch && (
-                        <motion.div
-                            key="pending-search-bar"
-                            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scaleX: 0.2, y: 6 }}
-                            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scaleX: 1, y: 0 }}
-                            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scaleX: 0.88, y: 4 }}
-                            transition={searchOverlayTransition}
-                            style={{ transformOrigin: 'left center' }}
-                            className="absolute bottom-3 left-3 z-30 w-[320px] will-change-transform"
-                        >
-                            <motion.div
-                                initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0.84 }}
-                                animate={{ opacity: 1 }}
-                                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0.78 }}
-                                transition={searchOverlayTransition}
-                            >
-                                <SearchBar
-                                    value={searchInput}
-                                    onChange={setSearchInput}
-                                    inputRef={searchInputRef}
-                                    placeholder="Search pending orders"
-                                    variant="blue"
-                                    size="compact"
-                                    className="w-full"
-                                    onClear={clearPendingSearch}
-                                    rightElement={
-                                        <button
-                                            type="button"
-                                            onClick={clearPendingSearch}
-                                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
-                                            aria-label="Close pending order search"
-                                        >
-                                            <X className="h-4 w-4" />
-                                        </button>
-                                    }
-                                />
-                            </motion.div>
-                        </motion.div>
+                        <div key="pending-search-bar" className="absolute bottom-3 left-3 z-30 w-[320px]">
+                            <OverlaySearchBar
+                                value={searchInput}
+                                onChange={setSearchInput}
+                                inputRef={searchInputRef}
+                                placeholder="Search pending orders"
+                                variant="blue"
+                                className="w-full"
+                                onClear={clearPendingSearch}
+                                onClose={clearPendingSearch}
+                            />
+                        </div>
                     )}
                 </AnimatePresence>
 
@@ -282,9 +257,9 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                         <motion.button
                             key="pending-search-trigger"
                             type="button"
-                            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.9, y: 6 }}
-                            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
-                            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: 4 }}
+                            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: -8 }}
+                            animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
+                            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -8 }}
                             whileHover={prefersReducedMotion ? undefined : { scale: 1.04 }}
                             whileTap={prefersReducedMotion ? undefined : { scale: 0.96 }}
                             transition={searchOverlayTransition}

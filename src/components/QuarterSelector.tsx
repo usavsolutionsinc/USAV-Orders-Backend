@@ -2,7 +2,8 @@
 
 import { motion } from 'framer-motion';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ChevronRight } from './Icons';
+import { ChevronRight, ExternalLink } from './Icons';
+import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 
 export const QUARTER_OPTIONS = [
   { key: 'q4-25', label: "Q4 25'", sheetId: '1xzGV0cm7WEwX_vx8N-icA8SZQllNq9APhhILzCahww0' },
@@ -97,10 +98,31 @@ export function QuarterSidebar({ hideSectionHeader = false }: { hideSectionHeade
 export default function QuarterSelector() {
   const { selectedQuarter } = useSelectedQuarter();
   const iframeUrl = `https://docs.google.com/spreadsheets/d/${selectedQuarter.sheetId}/edit?rm=minimal&single=true&widget=false`;
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${selectedQuarter.sheetId}/edit`;
 
   return (
-    <div className="flex h-full w-full bg-white overflow-hidden">
-      <div className="flex-1 overflow-hidden w-full h-full relative">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-white">
+      <div className={mainStickyHeaderClass}>
+        <div className={`${mainStickyHeaderShellRowClass} px-6`}>
+          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Previous Quarters</p>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-[10px] font-black uppercase tracking-[0.18em] text-gray-500 sm:block">
+              {selectedQuarter.label}
+            </span>
+            <a
+              href={sheetUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
+            >
+              Open
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative h-full w-full flex-1 overflow-hidden">
         <iframe
           key={selectedQuarter.sheetId}
           src={iframeUrl}

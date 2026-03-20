@@ -72,12 +72,12 @@ All recurring jobs run via **Upstash QStash** (no Vercel cron; Hobby plan compat
 |-------------|----------------|---------|
 | `/api/qstash/shipping/sync-due` | `0 */2 * * *` | Sync USPS/UPS/FedEx tracking every 2 hours |
 | `/api/qstash/ebay/refresh-tokens` | `0 * * * *` | Refresh eBay tokens every hour |
-| `/api/qstash/google-sheets/transfer-orders` | 16:30 daily, 18:00 Mon–Fri, 00:00 Tue–Sat | Transfer Google Sheet orders (8:30 AM, 10 AM, 4 PM PST) |
+| `/api/qstash/google-sheets/transfer-orders` | 16:30 daily, 18:00 daily, 22:00 daily | Transfer Google Sheet orders (8:30 AM, 10 AM, 2 PM PST) |
 | `/api/qstash/ebay/sync` | `10,25,40,55 * * * *` | Exceptions-first eBay sync |
 | `/api/zoho/purchase-orders/sync` | `20,50 * * * *` | Bulk Zoho purchase order sync |
 | `/api/zoho/purchase-receives/sync` | `25,55 * * * *` | Zoho purchase receive line sync |
 
-**Bootstrap:** Run `POST /api/qstash/schedules/bootstrap` (allowed admin origin or `Authorization: Bearer <CRON_SECRET>`) after deploy to register schedules in QStash.
+**Bootstrap:** Run `POST /api/qstash/schedules/bootstrap` after deploy to register schedules in QStash.
 
 *Schedules use PST (UTC-8). During PDT, subtract 1 hour from Pacific times.*
 
@@ -176,7 +176,6 @@ npm run dev
 - `FEDEX_CLIENT_ID`
 - `FEDEX_CLIENT_SECRET`
 - `FEDEX_ENV` (`production` or unset for sandbox)
-- `CRON_SECRET` for protected worker endpoints invoked by QStash: `/api/shipping/track/sync-due` (carrier sync) and `/api/ebay/refresh-tokens` (eBay token refresh)
 
 ### QStash
 

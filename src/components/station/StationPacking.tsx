@@ -6,6 +6,7 @@ import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import { getPackerInputTheme } from '@/utils/staff-colors';
 import { formatPSTTimestamp } from '@/utils/date';
 import StationGoalBar from './StationGoalBar';
+import { StationScanBar } from './StationScanBar';
 
 interface ActivePackingOrder {
   orderId: string;
@@ -171,29 +172,28 @@ export default function StationPacking({
             colorClass={activeColor.text}
           />
 
-          <form onSubmit={handleSubmit} className="relative group">
-            <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${activeColor.text}`}>
-              <Barcode className="w-4 h-4" />
-            </div>
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Scan Tracking, FNSKU, FBA, or SKU:..."
-              className={`w-full pl-11 pr-14 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold ${activeColor.ring} ${activeColor.border} outline-none transition-all shadow-inner`}
-              autoFocus
-            />
-            <div className="absolute right-3 bottom-2">
-              {isLoading ? (
-                <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
-              ) : (
-                <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
-                  <span className="text-[8px] font-black text-gray-400">ENTER</span>
-                </div>
-              )}
-            </div>
-          </form>
+          <StationScanBar
+            value={inputValue}
+            onChange={setInputValue}
+            onSubmit={handleSubmit}
+            inputRef={inputRef}
+            placeholder="Scan Tracking, FNSKU, FBA, or SKU..."
+            icon={<Barcode className="w-4 h-4" />}
+            iconClassName={activeColor.text}
+            inputClassName={`${activeColor.ring} ${activeColor.border}`}
+            autoFocus
+            rightContent={(
+              <>
+                {isLoading ? (
+                  <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
+                ) : (
+                  <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
+                    <span className="text-[8px] font-black text-gray-400">ENTER</span>
+                  </div>
+                )}
+              </>
+            )}
+          />
 
           <p className="text-[10px] font-bold text-gray-400 px-1">
             Supports tracking, FNSKU (X0.../B0...), FBA, and <code className="font-mono">SKU:VALUE</code> scans.

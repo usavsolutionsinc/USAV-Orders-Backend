@@ -6,12 +6,14 @@ interface InlineSaveIndicatorProps {
   state: SaveState;
   errorLabel?: string;
   idleLabel?: string | null;
+  className?: string;
 }
 
 export function InlineSaveIndicator({
   state,
   errorLabel = 'Save failed',
   idleLabel = null,
+  className = '',
 }: InlineSaveIndicatorProps) {
   if (state === 'idle' && !idleLabel) return null;
 
@@ -32,7 +34,7 @@ export function InlineSaveIndicator({
         : 'text-gray-400';
 
   return (
-    <span className={`shrink-0 text-[10px] font-black uppercase tracking-wide ${toneClassName}`}>
+    <span className={`shrink-0 text-[9px] font-black uppercase tracking-[0.10rem] leading-none ${toneClassName} ${className}`.trim()}>
       {label}
     </span>
   );

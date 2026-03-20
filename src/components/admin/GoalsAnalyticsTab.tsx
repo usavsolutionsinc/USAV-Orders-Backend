@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { invalidateStaffGoalsCache, getAllStaffGoals, type GoalRow } from '@/lib/staffGoalsCache';
+import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 
 type GoalViewMode = 'all' | 'behind' | 'on-track' | 'exceeded';
 
@@ -146,17 +147,22 @@ export function GoalsAnalyticsTab() {
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]">
-      <div className="border-b border-gray-200 bg-white/90 px-6 py-5 backdrop-blur">
-        <div className="flex flex-wrap items-end justify-between gap-5">
-          <div className="max-w-2xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Goals Control Room</p>
-            <h2 className="mt-2 text-lg font-black uppercase tracking-[0.18em] text-slate-900">Daily Goal Analytics</h2>
-            <p className="mt-2 text-[12px] font-bold leading-relaxed text-slate-500">
-              The sidebar drives search, performance slices, and refresh actions. This board stays focused on staff output, goal pacing, and quick target edits.
-            </p>
+      <div className={mainStickyHeaderClass}>
+        <div className={`${mainStickyHeaderShellRowClass} px-6`}>
+          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-slate-900">Daily Goal Analytics</p>
+          <div className="hidden items-center gap-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 sm:flex">
+            <span>Visible {summary.total}</span>
+            <span className="text-slate-300">/</span>
+            <span>Today {summary.today}</span>
+            <span className="text-slate-300">/</span>
+            <span>Week {summary.week}</span>
           </div>
+        </div>
+      </div>
 
-          <div className="grid min-w-[280px] flex-1 gap-3 sm:grid-cols-4">
+      <div className="min-h-0 flex-1 overflow-hidden px-6 py-6">
+        <div className="flex h-full min-h-0 flex-col gap-4">
+          <div className="grid gap-3 sm:grid-cols-4">
             <div className="border border-slate-200 bg-slate-50 px-4 py-3">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Visible Staff</p>
               <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{summary.total}</p>
@@ -178,91 +184,89 @@ export function GoalsAnalyticsTab() {
               </p>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden px-6 py-6">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden border border-slate-200 bg-white">
-          <div className="grid grid-cols-[minmax(180px,1.4fr)_110px_90px_90px_90px_minmax(220px,1fr)] border-b border-slate-200 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
-            <p>Staff</p>
-            <p>Daily Goal</p>
-            <p>Today</p>
-            <p>Week</p>
-            <p>7D Avg</p>
-            <p>Performance</p>
-          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-slate-200 bg-white">
+            <div className="grid grid-cols-[minmax(180px,1.4fr)_110px_90px_90px_90px_minmax(220px,1fr)] border-b border-slate-200 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+              <p>Staff</p>
+              <p>Daily Goal</p>
+              <p>Today</p>
+              <p>Week</p>
+              <p>7D Avg</p>
+              <p>Performance</p>
+            </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="flex h-full items-center justify-center px-6 text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
-                Loading goals...
-              </div>
-            ) : filteredRows.length === 0 ? (
-              <div className="flex h-full items-center justify-center px-6 text-center">
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">No Staff Matched</p>
-                  <p className="mt-2 text-[12px] font-bold text-slate-500">
-                    Adjust the goals sidebar filters or refresh the analytics feed.
-                  </p>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex h-full items-center justify-center px-6 text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
+                  Loading goals...
                 </div>
-              </div>
-            ) : (
-              filteredRows.map((row) => {
-                const { goal, percent, progress } = getProgress(row, goalInputs[row.staff_id]);
-                const tone = getPerformanceTone(progress);
-
-                return (
-                  <div
-                    key={row.staff_id}
-                    className="grid grid-cols-[minmax(180px,1.4fr)_110px_90px_90px_90px_minmax(220px,1fr)] items-center border-b border-slate-200 px-4 py-3 last:border-b-0"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px] font-black uppercase tracking-[0.08em] text-slate-900">{row.name}</p>
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{row.role}</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        value={goalInputs[row.staff_id] ?? String(row.daily_goal)}
-                        onChange={(e) => setGoalInputs((current) => ({ ...current, [row.staff_id]: e.target.value }))}
-                        className="w-16 border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] font-black text-slate-900 outline-none focus:border-blue-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => saveGoal(row.staff_id)}
-                        disabled={savingId === row.staff_id}
-                        className="border border-blue-200 bg-blue-50 px-2 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-blue-700 disabled:opacity-50"
-                      >
-                        {savingId === row.staff_id ? 'Wait' : 'Save'}
-                      </button>
-                    </div>
-
-                    <p className="text-[12px] font-black text-slate-900">{row.today_count}</p>
-                    <p className="text-[12px] font-black text-slate-900">{row.week_count}</p>
-                    <p className="text-[12px] font-black text-slate-900">{row.avg_daily_last_7d}</p>
-
-                    <div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-[0.22em] ${tone.chipClass}`}>
-                          {tone.label}
-                        </span>
-                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
-                          {row.today_count}/{goal}
-                        </span>
-                      </div>
-                      <div className={`mt-2 h-2 overflow-hidden ${tone.railClass}`}>
-                        <div className={`h-full ${tone.barClass}`} style={{ width: `${percent}%` }} />
-                      </div>
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                        {Math.round(percent)}% complete today
-                      </p>
-                    </div>
+              ) : filteredRows.length === 0 ? (
+                <div className="flex h-full items-center justify-center px-6 text-center">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">No Staff Matched</p>
+                    <p className="mt-2 text-[12px] font-bold text-slate-500">
+                      Adjust the goals sidebar filters or refresh the analytics feed.
+                    </p>
                   </div>
-                );
-              })
-            )}
+                </div>
+              ) : (
+                filteredRows.map((row) => {
+                  const { goal, percent, progress } = getProgress(row, goalInputs[row.staff_id]);
+                  const tone = getPerformanceTone(progress);
+
+                  return (
+                    <div
+                      key={row.staff_id}
+                      className="grid grid-cols-[minmax(180px,1.4fr)_110px_90px_90px_90px_minmax(220px,1fr)] items-center border-b border-slate-200 px-4 py-3 last:border-b-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] font-black uppercase tracking-[0.08em] text-slate-900">{row.name}</p>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{row.role}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          value={goalInputs[row.staff_id] ?? String(row.daily_goal)}
+                          onChange={(e) => setGoalInputs((current) => ({ ...current, [row.staff_id]: e.target.value }))}
+                          className="w-16 border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] font-black text-slate-900 outline-none focus:border-blue-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => saveGoal(row.staff_id)}
+                          disabled={savingId === row.staff_id}
+                          className="border border-blue-200 bg-blue-50 px-2 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-blue-700 disabled:opacity-50"
+                        >
+                          {savingId === row.staff_id ? 'Wait' : 'Save'}
+                        </button>
+                      </div>
+
+                      <p className="text-[12px] font-black text-slate-900">{row.today_count}</p>
+                      <p className="text-[12px] font-black text-slate-900">{row.week_count}</p>
+                      <p className="text-[12px] font-black text-slate-900">{row.avg_daily_last_7d}</p>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-[0.22em] ${tone.chipClass}`}>
+                            {tone.label}
+                          </span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                            {row.today_count}/{goal}
+                          </span>
+                        </div>
+                        <div className={`mt-2 h-2 overflow-hidden ${tone.railClass}`}>
+                          <div className={`h-full ${tone.barClass}`} style={{ width: `${percent}%` }} />
+                        </div>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                          {Math.round(percent)}% complete today
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>

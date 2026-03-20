@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { enqueueQStashJson, getQStashResultIdentifier } from '@/lib/qstash';
-
-export const dynamic = 'force-dynamic';
-
-function isCronAuthorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true;
-  const authHeader = req.headers.get('authorization');
-  if (authHeader === `Bearer ${secret}`) return true;
-  if (req.headers.get('x-cron-secret') === secret) return true;
-  return false;
-}
+import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { db } from '@/lib/drizzle/db';
 import pool from '@/lib/db';
@@ -19,6 +9,8 @@ import { customers as customersTable, orders as ordersTable } from '@/lib/drizzl
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { desc, eq, inArray } from 'drizzle-orm';
+
+export const dynamic = 'force-dynamic';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
 
@@ -715,10 +707,9 @@ export async function POST(req: NextRequest) {
     return runTransferOrders(manualSheetName);
 }
 
-/** GET: Cron only. Requires CRON_SECRET. Auto-detects latest sheet tab. */
 export async function GET(req: NextRequest) {
-    if (!isCronAuthorized(req)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!isAllowedAdminOrigin(req)) {
+        return NextResponse.json({ success: false, error: 'Origin not allowed' }, { status: 403 });
     }
     const result = await enqueueQStashJson({
         path: '/api/google-sheets/transfer-orders',

@@ -102,6 +102,7 @@ export function WorkOrdersSidebarPanel() {
           onClear={() => setLocalSearch('')}
           placeholder="Search queue, tracking, SKU…"
           variant="emerald"
+          className="w-full"
         />
       </div>
 

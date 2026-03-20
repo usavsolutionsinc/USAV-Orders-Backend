@@ -11,8 +11,9 @@ interface FbaItemCardProps {
 
 export function FbaItemCard({ item }: FbaItemCardProps) {
   const badgeCls = FBA_ITEM_STATUS_BADGE[item.status] || FBA_ITEM_STATUS_BADGE['PLANNED'];
-  const dueDateStr = item.due_date
-    ? new Date(item.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const planDateSource = item.deadline_at || item.due_date;
+  const dueDateStr = planDateSource
+    ? new Date(planDateSource).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : null;
   const qtyReady    = Number(item.actual_qty) || 0;
   const qtyExpected = Number(item.expected_qty) || 0;

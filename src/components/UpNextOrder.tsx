@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { Check, Package } from './Icons';
+import { Package } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
 import { useUpNextData } from '@/hooks/useUpNextData';
 import { OrderCard } from './station/upnext/OrderCard';
@@ -124,6 +124,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     }),
   };
   const shouldShowStockSection = stockOrders.length > 0 && effectiveTab !== 'stock';
+  const showNoCurrentOrdersBanner = allCompletedToday && filteredOrders.length === 0 && filteredStockOrders.length === 0;
 
   useEffect(() => {
     if (!activeTabVisible && effectiveTab !== activeTab) setActiveTab(effectiveTab);
@@ -150,13 +151,14 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   }, [effectiveTab, activeTab, tabCounts.orders, tabCounts.repair, tabCounts.fba, tabCounts.stock, tabCounts.receiving]);
 
   useEffect(() => {
-    if (effectiveTab === 'orders' && allCompletedToday && filteredStockOrders.length === 0 && !hasCelebratedRef.current) {
+    const isCompletionView = (effectiveTab === 'orders' || effectiveTab === 'all') && showNoCurrentOrdersBanner;
+    if (isCompletionView && !hasCelebratedRef.current) {
       confetti({ particleCount: 180, spread: 80, origin: { y: 0.7 } });
       hasCelebratedRef.current = true;
       return;
     }
-    if (!allCompletedToday || filteredStockOrders.length > 0) hasCelebratedRef.current = false;
-  }, [allCompletedToday, effectiveTab, filteredStockOrders.length]);
+    if (!isCompletionView) hasCelebratedRef.current = false;
+  }, [effectiveTab, showNoCurrentOrdersBanner]);
 
   const handleStart = async (order: { id: number; shipping_tracking_number: string; order_id: string }) => {
     try {
@@ -356,12 +358,21 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
             ) : effectiveTab === 'all' ? (
               allSections.length === 0 ? (
-                <EmptySlate label="No current work" color="green" />
+                showNoCurrentOrdersBanner ? (
+                  <EmptySlate label="No current orders" color="green" />
+                ) : (
+                  <EmptySlate label="No current work" color="green" />
+                )
               ) : (
                 <div className="flex flex-col">
+                  {showNoCurrentOrdersBanner && (
+                    <div className="mb-3">
+                      <EmptySlate label="No current orders" color="green" />
+                    </div>
+                  )}
                   {allSections.map((section, index) => (
                     <div key={section.id} className={index === 0 ? '' : 'mt-3'}>
-                      {index > 0 && (
+                      {(index > 0 || showNoCurrentOrdersBanner) && (
                         <SectionHeader label={section.label} />
                       )}
                       <div className="flex flex-col">
@@ -371,39 +382,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                   ))}
                 </div>
               )
-
-            ) : allCompletedToday && effectiveTab === 'orders' && filteredStockOrders.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.94 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="bg-emerald-50 rounded-2xl p-5 border-2 border-emerald-200 text-center space-y-3"
-              >
-                <motion.div
-                  initial={{ scale: 0.6, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.12, type: 'spring', stiffness: 340, damping: 22 }}
-                  className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2"
-                >
-                  <Check className="w-8 h-8 text-emerald-600" />
-                </motion.div>
-                <motion.h3
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                  className="text-sm font-black text-emerald-900 uppercase tracking-widest leading-tight"
-                >
-                  All orders have been completed today!
-                </motion.h3>
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.32, duration: 0.25 }}
-                  className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest"
-                >
-                  Great job!
-                </motion.p>
-              </motion.div>
 
             ) : effectiveTab === 'repair' ? (
               filteredRepairs.length === 0 ? (
@@ -460,7 +438,27 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               )
 
             ) : orders.length === 0 ? (
-              <EmptySlate label="No current orders" color="green" />
+              <div className="flex flex-col">
+                <EmptySlate label="No current orders" color="green" />
+                {filteredRepairs.length > 0 && (
+                  <div className="mt-3">
+                    <SectionHeader label="Repair Service" />
+                    <div className="flex flex-col">
+                      <AnimatePresence mode="popLayout">
+                        {filteredRepairs.map((repair) => (
+                          <RepairCard
+                            key={`orders-repair-${repair.repairId}`}
+                            repair={repair}
+                            techId={techId}
+                            isExpanded={expandedItemKey === `repair-${repair.repairId}`}
+                            onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                )}
+              </div>
 
             ) : (
               <div className="flex flex-col">

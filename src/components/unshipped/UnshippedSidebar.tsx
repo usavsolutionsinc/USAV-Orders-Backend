@@ -177,11 +177,11 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
               <button
                 type="button"
                 onClick={handleOpenIntakeForm}
-                className="p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+                className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
                 title="New Order Entry"
                 aria-label="Open new order entry form"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="h-5 w-5" />
               </button>
             }
           />

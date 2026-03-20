@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 
 function emitOpenAddFba() {
   window.dispatchEvent(new CustomEvent('admin-fba-open-add'));
@@ -36,13 +37,14 @@ export function AdminFbaSidebarPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className="border-b border-gray-200 px-3 py-3">
+      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
         <SearchBar
           value={searchValue}
           onChange={updateSearch}
           onClear={() => updateSearch('')}
           placeholder="Search ASIN, SKU, FNSKU..."
           variant="blue"
+          className="w-full"
         />
       </div>
 

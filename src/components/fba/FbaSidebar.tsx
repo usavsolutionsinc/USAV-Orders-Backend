@@ -1,17 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Calendar,
   Loader2,
   Package,
   Plus,
   Trash2,
-  User,
   X,
 } from '@/components/Icons';
 import type { FbaSummaryRow } from '@/components/fba/types';
+import { deriveFbaWorkflowMode, getFbaCurrentlyPackingQty, getFbaReadyToPrintQty } from '@/components/fba/types';
+import { DetailsPanelRow, PanelSection } from '@/design-system/components';
 
 interface StaffMember {
   id: number;
@@ -33,6 +33,8 @@ interface LegacySidebarProps {
   onShipmentCreated: () => void;
   showCreateForm: boolean;
   onCreateFormChange: (nextValue: boolean) => void;
+  activeMode?: 'ALL' | 'PACKING' | 'STOCK';
+  refreshToken?: number;
 }
 
 const EMPTY_FORM: CreateShipmentForm = {
@@ -45,10 +47,20 @@ const EMPTY_FORM: CreateShipmentForm = {
   items: [{ fnsku: '', expected_qty: '' }],
 };
 
-function getAttentionQty(row: FbaSummaryRow) {
-  const baseline = Math.max(row.expected_qty ?? 0, row.actual_qty ?? 0, row.tech_scanned_qty ?? 0);
-  return Math.max(baseline - row.pack_ready_qty, 0);
-}
+const MODE_META = {
+  PLAN: {
+    label: 'Plan',
+    badge: 'bg-violet-100 text-violet-700 border-violet-200',
+  },
+  PACKING: {
+    label: 'Packing',
+    badge: 'bg-amber-100 text-amber-700 border-amber-200',
+  },
+  READY_TO_GO: {
+    label: 'Ready to Go',
+    badge: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  },
+} as const;
 
 function SidebarIconButton({
   icon,
@@ -75,13 +87,69 @@ function SidebarIconButton({
   );
 }
 
-function FbaControlSidebar({ onShipmentCreated, showCreateForm, onCreateFormChange }: LegacySidebarProps) {
+function FbaControlSidebar({
+  onShipmentCreated,
+  showCreateForm,
+  onCreateFormChange,
+  activeMode = 'ALL',
+  refreshToken = 0,
+}: LegacySidebarProps) {
   const [form, setForm] = useState<CreateShipmentForm>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [stats, setStats] = useState({ items: 0, ready: 0, attention: 0, shipped: 0 });
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [stats, setStats] = useState({
+    planned_units: 0,
+    packing_units: 0,
+    ready_units: 0,
+    shipped_units: 0,
+    plan_fnskus: 0,
+    packing_fnskus: 0,
+    ready_to_go_fnskus: 0,
+  });
+  const [flowRows, setFlowRows] = useState<FbaSummaryRow[]>([]);
+
+  const loadSummary = useCallback(async () => {
+    setIsSummaryLoading(true);
+    try {
+      const summaryRes = await fetch('/api/fba/logs/summary?limit=500', { cache: 'no-store' });
+      const summaryData = await summaryRes.json();
+      const rows = Array.isArray(summaryData?.rows) ? (summaryData.rows as FbaSummaryRow[]) : [];
+
+      let planFnskus = 0;
+      let packingFnskus = 0;
+      let readyToGoFnskus = 0;
+      for (const row of rows) {
+        const mode = deriveFbaWorkflowMode(row);
+        if (mode === 'PLAN') planFnskus += 1;
+        if (mode === 'PACKING') packingFnskus += 1;
+        if (mode === 'READY_TO_GO') readyToGoFnskus += 1;
+      }
+
+      setStats({
+        planned_units: rows.reduce((sum, row) => sum + Number(row.tech_scanned_qty || 0), 0),
+        packing_units: rows.reduce((sum, row) => sum + getFbaCurrentlyPackingQty(row), 0),
+        ready_units: rows.reduce((sum, row) => sum + getFbaReadyToPrintQty(row), 0),
+        shipped_units: rows.reduce((sum, row) => sum + Number(row.shipped_qty || 0), 0),
+        plan_fnskus: planFnskus,
+        packing_fnskus: packingFnskus,
+        ready_to_go_fnskus: readyToGoFnskus,
+      });
+
+      const sorted = [...rows].sort((a, b) => {
+        const timeA = new Date(a.last_event_at || 0).getTime();
+        const timeB = new Date(b.last_event_at || 0).getTime();
+        return timeB - timeA;
+      });
+      setFlowRows(sorted.filter((row) => deriveFbaWorkflowMode(row) !== 'NONE').slice(0, 24));
+    } catch {
+      // no-op
+    } finally {
+      setIsSummaryLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetch('/api/staff?active=true')
@@ -91,21 +159,23 @@ function FbaControlSidebar({ onShipmentCreated, showCreateForm, onCreateFormChan
         setStaff(d.map((m: any) => ({ id: Number(m.id), name: String(m.name || ''), role: String(m.role || '') })))
       )
       .catch(() => {});
+  }, []);
 
-    fetch('/api/fba/logs/summary?limit=500')
-      .then((r) => r.json())
-      .then((d) => {
-        if (!Array.isArray(d?.rows)) return;
-        const rows = d.rows as FbaSummaryRow[];
-        setStats({
-          items: rows.length,
-          ready: rows.reduce((sum, row) => sum + row.pack_ready_qty, 0),
-          attention: rows.reduce((sum, row) => sum + getAttentionQty(row), 0),
-          shipped: rows.reduce((sum, row) => sum + row.shipped_qty, 0),
-        });
-      })
-      .catch(() => {});
-  }, [submitSuccess]);
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary, refreshToken, submitSuccess]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      loadSummary();
+    };
+    window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
+    window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
+    return () => {
+      window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
+      window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
+    };
+  }, [loadSummary]);
 
   const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { fnsku: '', expected_qty: '' }] }));
   const removeItem = (i: number) => setForm((f) => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
@@ -163,14 +233,17 @@ function FbaControlSidebar({ onShipmentCreated, showCreateForm, onCreateFormChan
     }
   };
 
-  const statCards = useMemo(
-    () => [
-      { label: 'Items', value: stats.items },
-      { label: 'Ready', value: stats.ready },
-      { label: 'Attention', value: stats.attention },
-      { label: 'Shipped', value: stats.shipped },
-    ],
-    [stats]
+  const visibleFlowRows = useMemo(
+    () =>
+      flowRows
+        .filter((row) => {
+          const mode = deriveFbaWorkflowMode(row);
+          if (activeMode === 'ALL') return mode === 'PLAN' || mode === 'PACKING';
+          if (activeMode === 'PACKING') return mode === 'PACKING';
+          return mode === 'PLAN';
+        })
+        .slice(0, 8),
+    [activeMode, flowRows]
   );
 
   return (
@@ -181,22 +254,78 @@ function FbaControlSidebar({ onShipmentCreated, showCreateForm, onCreateFormChan
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            className="border-b border-gray-200 px-4 py-3 text-right text-[11px] font-medium text-gray-500"
+            className="border-b border-gray-200 px-3 py-2 text-right text-[10px] font-black uppercase tracking-widest text-gray-500"
           >
             Shipment created
           </motion.div>
         ) : null}
       </AnimatePresence>
 
-      <div className="border-b border-gray-200 px-4 py-4">
-        <div className="grid grid-cols-2 gap-px border border-gray-200 bg-gray-200">
-          {statCards.map((card) => (
-            <div key={card.label} className="bg-white px-3 py-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-400">{card.label}</p>
-              <p className="mt-2 text-xl font-semibold tabular-nums text-gray-950">{card.value}</p>
-            </div>
-          ))}
-        </div>
+      <div className="border-b border-gray-200 px-3 pb-2">
+        <PanelSection title="Pipeline" className="pt-3">
+          <DetailsPanelRow label="Plan" dividerClassName="border-b border-gray-100">
+            <p className="text-sm font-black tabular-nums text-violet-700">{stats.planned_units}</p>
+          </DetailsPanelRow>
+          <DetailsPanelRow label="Currently packing" dividerClassName="border-b border-gray-100">
+            <p className="text-sm font-black tabular-nums text-amber-700">{stats.packing_units}</p>
+          </DetailsPanelRow>
+          <DetailsPanelRow label="Ready to go" dividerClassName="border-b border-gray-100" className="last:border-b-0">
+            <p className="text-sm font-black tabular-nums text-emerald-700">{stats.ready_units}</p>
+          </DetailsPanelRow>
+        </PanelSection>
+
+        <PanelSection title="FNSKU counts" className="pt-4">
+          <DetailsPanelRow label="Plan SKUs" dividerClassName="border-b border-gray-100">
+            <p className="text-sm font-black tabular-nums text-violet-700">{stats.plan_fnskus}</p>
+          </DetailsPanelRow>
+          <DetailsPanelRow label="Packing" dividerClassName="border-b border-gray-100">
+            <p className="text-sm font-black tabular-nums text-amber-700">{stats.packing_fnskus}</p>
+          </DetailsPanelRow>
+          <DetailsPanelRow label="Ready to go" dividerClassName="border-b border-gray-100" className="last:border-b-0">
+            <p className="text-sm font-black tabular-nums text-emerald-700">{stats.ready_to_go_fnskus}</p>
+          </DetailsPanelRow>
+        </PanelSection>
+      </div>
+
+      <div className="border-b border-gray-200 px-3 py-2.5">
+        <PanelSection
+          title="Flow"
+          headerRight={isSummaryLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-500" /> : null}
+        >
+          {visibleFlowRows.length === 0 ? (
+            <p className="py-2 text-[10px] font-bold text-gray-400">No FNSKUs in this mode.</p>
+          ) : (
+            visibleFlowRows
+              .filter((row) => deriveFbaWorkflowMode(row) !== 'NONE')
+              .map((row, idx, arr) => {
+                const mode = deriveFbaWorkflowMode(row);
+                if (mode === 'NONE') return null;
+                const meta = MODE_META[mode];
+                const isLast = idx === arr.length - 1;
+                return (
+                  <DetailsPanelRow
+                    key={row.fnsku}
+                    label="FNSKU"
+                    dividerClassName="border-b border-gray-100"
+                    className={isLast ? '!border-b-0' : ''}
+                    actions={
+                      <span
+                        className={`inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider ${meta.badge}`}
+                      >
+                        {meta.label}
+                      </span>
+                    }
+                  >
+                    <p className="truncate font-mono text-xs font-bold text-gray-900">{row.fnsku}</p>
+                    <p className="mt-1 text-[9px] font-bold text-gray-500">
+                      Plan:{row.tech_scanned_qty} • Packing:{getFbaCurrentlyPackingQty(row)} • Ready:
+                      {getFbaReadyToPrintQty(row)}
+                    </p>
+                  </DetailsPanelRow>
+                );
+              })
+          )}
+        </PanelSection>
       </div>
 
       <AnimatePresence initial={false}>
@@ -207,149 +336,142 @@ function FbaControlSidebar({ onShipmentCreated, showCreateForm, onCreateFormChan
             exit={{ opacity: 0, y: -6 }}
             className="border-b border-gray-200"
           >
-            <div className="px-4 py-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="px-3 py-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.2em] text-[#7c3aed]">Add FBA items</p>
-                  <p className="mt-1 text-sm text-gray-500">Create a shipment and seed its first FNSKUs.</p>
+                  <p className="mt-1 text-[11px] text-gray-500">Create shipment + seed first FNSKUs.</p>
                 </div>
                 <SidebarIconButton icon={<X className="h-4 w-4" />} label="Close shipment form" onClick={() => onCreateFormChange(false)} />
               </div>
 
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Shipment reference</span>
+              <div className="space-y-0">
+                <DetailsPanelRow label="Shipment reference" dividerClassName="border-b border-gray-100">
                   <input
                     type="text"
                     value={form.shipment_ref}
                     onChange={(e) => setForm((f) => ({ ...f, shipment_ref: e.target.value }))}
                     placeholder="FBA15XXXXX"
-                    className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
+                    className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0 placeholder:font-medium placeholder:text-gray-400"
                   />
-                </label>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">FC code</span>
-                    <input
-                      type="text"
-                      value={form.destination_fc}
-                      onChange={(e) => setForm((f) => ({ ...f, destination_fc: e.target.value }))}
-                      placeholder="PHX7"
-                      className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Due date</span>
-                    <input
-                      type="date"
-                      value={form.due_date}
-                      onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
-                      className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
-                    />
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Tech</span>
-                    <select
-                      value={form.assigned_tech_id}
-                      onChange={(e) => setForm((f) => ({ ...f, assigned_tech_id: e.target.value }))}
-                      className="mt-1.5 w-full border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
-                    >
-                      <option value="">Select</option>
-                      {staff.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Packer</span>
-                    <select
-                      value={form.assigned_packer_id}
-                      onChange={(e) => setForm((f) => ({ ...f, assigned_packer_id: e.target.value }))}
-                      className="mt-1.5 w-full border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
-                    >
-                      <option value="">Select</option>
-                      {staff.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <label className="block">
-                  <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">Notes</span>
+                </DetailsPanelRow>
+                <DetailsPanelRow label="FC code" dividerClassName="border-b border-gray-100">
+                  <input
+                    type="text"
+                    value={form.destination_fc}
+                    onChange={(e) => setForm((f) => ({ ...f, destination_fc: e.target.value }))}
+                    placeholder="PHX7"
+                    className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0 placeholder:font-medium placeholder:text-gray-400"
+                  />
+                </DetailsPanelRow>
+                <DetailsPanelRow label="Due date" dividerClassName="border-b border-gray-100">
+                  <input
+                    type="date"
+                    value={form.due_date}
+                    onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
+                    className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0"
+                  />
+                </DetailsPanelRow>
+                <DetailsPanelRow label="Tech" dividerClassName="border-b border-gray-100">
+                  <select
+                    value={form.assigned_tech_id}
+                    onChange={(e) => setForm((f) => ({ ...f, assigned_tech_id: e.target.value }))}
+                    className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0"
+                  >
+                    <option value="">Select</option>
+                    {staff.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </DetailsPanelRow>
+                <DetailsPanelRow label="Packer" dividerClassName="border-b border-gray-100">
+                  <select
+                    value={form.assigned_packer_id}
+                    onChange={(e) => setForm((f) => ({ ...f, assigned_packer_id: e.target.value }))}
+                    className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0"
+                  >
+                    <option value="">Select</option>
+                    {staff.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </DetailsPanelRow>
+                <DetailsPanelRow label="Notes" dividerClassName="border-b border-gray-100">
                   <input
                     type="text"
                     value={form.notes}
                     onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                     placeholder="Optional notes"
-                    className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-900"
+                    className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0 placeholder:font-medium placeholder:text-gray-400"
                   />
-                </label>
+                </DetailsPanelRow>
 
-                <div>
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <span className="text-[10px] uppercase tracking-[0.18em] text-gray-400">FBA items</span>
+                <div className="border-b border-gray-100 py-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-[0.10rem] text-gray-500">FBA items</span>
                     <button
                       type="button"
                       onClick={addItem}
-                      className="inline-flex items-center gap-1 text-sm font-medium text-[#7c3aed]"
+                      className="inline-flex items-center gap-1 rounded-lg border border-violet-200 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#7c3aed] transition hover:bg-violet-50"
                     >
                       <Plus className="h-4 w-4" />
-                      Add FBA items
+                      Add line
                     </button>
                   </div>
-
-                  <div className="space-y-px border border-gray-200 bg-gray-200">
+                  <div className="space-y-0">
                     {form.items.map((item, i) => (
-                      <div key={i} className="grid grid-cols-[minmax(0,1fr)_7rem_auto] gap-px bg-gray-200">
-                        <input
-                          type="text"
-                          value={item.fnsku}
-                          onChange={(e) => updateItem(i, 'fnsku', e.target.value)}
-                          placeholder="FNSKU"
-                          className="bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:bg-gray-50"
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.expected_qty}
-                          onChange={(e) => updateItem(i, 'expected_qty', e.target.value)}
-                          placeholder="Qty"
-                          className="bg-white px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:bg-gray-50"
-                        />
-                        {form.items.length > 1 ? (
-                          <button
-                            type="button"
-                            onClick={() => removeItem(i)}
-                            className="flex items-center justify-center bg-white px-3 text-gray-400 transition hover:text-gray-900"
-                            title="Remove item"
-                            aria-label="Remove item"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        ) : (
-                          <div className="bg-white" />
-                        )}
-                      </div>
+                      <DetailsPanelRow
+                        key={i}
+                        label={`Line ${i + 1}`}
+                        dividerClassName="border-b border-gray-100"
+                        className={i === form.items.length - 1 ? '!border-b-0' : ''}
+                        actions={
+                          form.items.length > 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => removeItem(i)}
+                              className="text-gray-400 transition hover:text-gray-900"
+                              title="Remove item"
+                              aria-label="Remove item"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          ) : null
+                        }
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <input
+                            type="text"
+                            value={item.fnsku}
+                            onChange={(e) => updateItem(i, 'fnsku', e.target.value)}
+                            placeholder="FNSKU"
+                            className="min-w-0 flex-1 border-0 bg-transparent px-0 py-1 font-mono text-sm font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.expected_qty}
+                            onChange={(e) => updateItem(i, 'expected_qty', e.target.value)}
+                            placeholder="Qty"
+                            className="w-full border-0 bg-transparent px-0 py-1 text-sm font-bold text-gray-900 outline-none sm:w-24"
+                          />
+                        </div>
+                      </DetailsPanelRow>
                     ))}
                   </div>
                 </div>
 
-                {submitError ? <p className="text-sm text-red-600">{submitError}</p> : null}
+                {submitError ? <p className="py-2 text-sm text-red-600">{submitError}</p> : null}
 
                 <button
                   type="button"
                   onClick={handleCreate}
                   disabled={submitting}
-                  className="inline-flex w-full items-center justify-center gap-2 bg-gray-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-60"
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-60"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
                   Create shipment
@@ -360,28 +482,6 @@ function FbaControlSidebar({ onShipmentCreated, showCreateForm, onCreateFormChan
         ) : null}
       </AnimatePresence>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="space-y-4 border border-gray-200 px-4 py-4">
-          <div className="flex items-start gap-3">
-            <Calendar className="mt-0.5 h-4 w-4 text-gray-400" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">Keep action density out of the board</p>
-              <p className="mt-1 text-sm leading-6 text-gray-500">
-                Use the main table for scanning state quickly. Use this rail for creation, search refinement, and filters.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <User className="mt-0.5 h-4 w-4 text-gray-400" />
-            <div>
-              <p className="text-sm font-medium text-gray-900">Add FBA items is the only accent color</p>
-              <p className="mt-1 text-sm leading-6 text-gray-500">
-                Everything else stays neutral so inventory state, not decoration, carries the hierarchy.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

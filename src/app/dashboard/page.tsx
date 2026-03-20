@@ -185,7 +185,7 @@ function DashboardPageContent() {
                     ) : (
                         <ShippedDetailsPanel
                             shipped={selectedShipped}
-                            context={orderView === 'shipped' ? 'shipped' : 'dashboard'}
+                            context={orderView === 'shipped' ? 'shipped' : 'queue'}
                             onClose={() => {
                                 window.dispatchEvent(new CustomEvent('close-shipped-details'));
                                 setSelectedShipped(null);

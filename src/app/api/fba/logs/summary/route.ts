@@ -5,28 +5,38 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const q = String(searchParams.get('q') || '').trim();
+    const modeParam = String(searchParams.get('mode') || 'ALL').trim().toUpperCase();
+    let mode = 'ALL';
+    if (modeParam === 'PLAN' || modeParam === 'PACKING' || modeParam === 'READY_TO_GO') mode = modeParam;
+    if (modeParam === 'TESTED') mode = 'PLAN';
+    if (modeParam === 'READY_TO_PRINT') mode = 'READY_TO_GO';
     const limitRaw = Number(searchParams.get('limit') || 200);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 500) : 200;
 
     const params: unknown[] = [];
     let idx = 1;
-    let whereSql = '';
+    const whereClauses: string[] = [];
 
     if (q) {
-      whereSql = `
-        WHERE (
-          ff.fnsku ILIKE $${idx}
-          OR COALESCE(ff.product_title, '') ILIKE $${idx}
-          OR COALESCE(ff.asin, '') ILIKE $${idx}
-          OR COALESCE(ff.sku, '') ILIKE $${idx}
-          OR COALESCE(oi.shipment_ref, '') ILIKE $${idx}
-        )
-      `;
+      whereClauses.push(
+        `(sr.fnsku ILIKE $${idx}
+          OR COALESCE(sr.product_title, '') ILIKE $${idx}
+          OR COALESCE(sr.asin, '') ILIKE $${idx}
+          OR COALESCE(sr.sku, '') ILIKE $${idx}
+          OR COALESCE(sr.shipment_ref, '') ILIKE $${idx})`
+      );
       params.push(`%${q}%`);
-      idx++;
+      idx += 1;
     }
+    if (mode !== 'ALL') {
+      whereClauses.push(`sr.workflow_mode = $${idx}`);
+      params.push(mode);
+      idx += 1;
+    }
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     params.push(limit);
+    const limitIdx = idx;
 
     const result = await pool.query(
       `
@@ -40,6 +50,15 @@ export async function GET(request: NextRequest) {
           FROM fba_fnsku_logs l
           WHERE l.event_type != 'VOID'
           GROUP BY l.fnsku
+        ),
+        latest_serial AS (
+          SELECT DISTINCT ON (tsn.fnsku)
+            tsn.fnsku,
+            tsn.serial_number
+          FROM tech_serial_numbers tsn
+          WHERE tsn.fnsku IS NOT NULL
+            AND COALESCE(BTRIM(tsn.serial_number), '') <> ''
+          ORDER BY tsn.fnsku, tsn.created_at DESC NULLS LAST, tsn.id DESC
         ),
         open_items AS (
           SELECT DISTINCT ON (fsi.fnsku)
@@ -64,30 +83,64 @@ export async function GET(request: NextRequest) {
             END,
             fs.created_at ASC,
             fsi.id ASC
+        ),
+        summary_rows AS (
+          SELECT
+            ff.fnsku,
+            ff.product_title,
+            ff.asin,
+            ff.sku,
+            ls.serial_number AS latest_serial_number,
+            ff.is_active,
+            lt.tech_scanned_qty,
+            lt.pack_ready_qty,
+            lt.shipped_qty,
+            GREATEST(lt.tech_scanned_qty - lt.pack_ready_qty, 0)::int AS currently_packing_qty,
+            GREATEST(LEAST(lt.tech_scanned_qty, lt.pack_ready_qty) - lt.shipped_qty, 0)::int AS ready_to_print_qty,
+            GREATEST(LEAST(lt.tech_scanned_qty, lt.pack_ready_qty) - lt.shipped_qty, 0)::int AS available_to_ship,
+            CASE
+              WHEN GREATEST(LEAST(lt.tech_scanned_qty, lt.pack_ready_qty) - lt.shipped_qty, 0) > 0 THEN 'READY_TO_GO'
+              WHEN GREATEST(lt.tech_scanned_qty - lt.pack_ready_qty, 0) > 0 THEN 'PACKING'
+              WHEN lt.tech_scanned_qty > 0 THEN 'PLAN'
+              ELSE 'NONE'
+            END AS workflow_mode,
+            lt.last_event_at,
+            oi.shipment_id,
+            oi.shipment_ref,
+            oi.shipment_item_id,
+            oi.status AS shipment_item_status,
+            oi.expected_qty,
+            oi.actual_qty
+          FROM log_totals lt
+          JOIN fba_fnskus ff ON ff.fnsku = lt.fnsku
+          LEFT JOIN latest_serial ls ON ls.fnsku = lt.fnsku
+          LEFT JOIN open_items oi ON oi.fnsku = lt.fnsku
         )
         SELECT
-          ff.fnsku,
-          ff.product_title,
-          ff.asin,
-          ff.sku,
-          ff.is_active,
-          lt.tech_scanned_qty,
-          lt.pack_ready_qty,
-          lt.shipped_qty,
-          GREATEST(LEAST(lt.tech_scanned_qty, lt.pack_ready_qty) - lt.shipped_qty, 0)::int AS available_to_ship,
-          lt.last_event_at,
-          oi.shipment_id,
-          oi.shipment_ref,
-          oi.shipment_item_id,
-          oi.status AS shipment_item_status,
-          oi.expected_qty,
-          oi.actual_qty
-        FROM log_totals lt
-        JOIN fba_fnskus ff ON ff.fnsku = lt.fnsku
-        LEFT JOIN open_items oi ON oi.fnsku = lt.fnsku
+          sr.fnsku,
+          sr.product_title,
+          sr.asin,
+          sr.sku,
+          sr.latest_serial_number,
+          sr.is_active,
+          sr.tech_scanned_qty,
+          sr.pack_ready_qty,
+          sr.shipped_qty,
+          sr.currently_packing_qty,
+          sr.ready_to_print_qty,
+          sr.available_to_ship,
+          sr.workflow_mode,
+          sr.last_event_at,
+          sr.shipment_id,
+          sr.shipment_ref,
+          sr.shipment_item_id,
+          sr.shipment_item_status,
+          sr.expected_qty,
+          sr.actual_qty
+        FROM summary_rows sr
         ${whereSql}
-        ORDER BY available_to_ship DESC, lt.last_event_at DESC NULLS LAST, ff.fnsku ASC
-        LIMIT $${idx}
+        ORDER BY sr.ready_to_print_qty DESC, sr.currently_packing_qty DESC, sr.last_event_at DESC NULLS LAST, sr.fnsku ASC
+        LIMIT $${limitIdx}
       `,
       params
     );

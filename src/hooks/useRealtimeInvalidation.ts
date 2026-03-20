@@ -26,7 +26,9 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
     },
     dashboard,
   );

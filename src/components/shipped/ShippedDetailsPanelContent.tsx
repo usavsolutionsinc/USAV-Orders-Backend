@@ -37,6 +37,7 @@ interface ShippedDetailsPanelContentProps {
   showSerialNumber?: boolean;
   productDetailsFirst?: boolean;
   editableShippingFields?: EditableShippingFields;
+  showReturnInformation?: boolean;
 }
 
 export function ShippedDetailsPanelContent({
@@ -52,6 +53,7 @@ export function ShippedDetailsPanelContent({
   showSerialNumber = true,
   productDetailsFirst = false,
   editableShippingFields,
+  showReturnInformation = true,
 }: ShippedDetailsPanelContentProps) {
   const productDetailsSection = <ProductDetailsSection shipped={shipped} />;
   const packedById = shipped.packed_by ?? null;
@@ -103,6 +105,7 @@ export function ShippedDetailsPanelContent({
         onUpdate={onUpdate}
         showShippingTimestamp={showShippingTimestamp}
         showSerialNumber={showSerialNumber}
+        showReturnInformation={showReturnInformation}
         editableShippingFields={editableShippingFields}
         metaFields={
           packedByName || testedByName

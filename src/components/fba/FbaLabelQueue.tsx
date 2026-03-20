@@ -11,6 +11,9 @@ import {
   RefreshCw,
   AlertCircle,
 } from '@/components/Icons';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
+import type { FbaSummaryRow } from '@/components/fba/types';
+import { getFbaReadyToPrintQty } from '@/components/fba/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +43,14 @@ interface Shipment {
 
 interface ShipmentWithItems extends Shipment {
   items: ShipmentItem[];
+}
+
+interface FallbackReadyRow extends FbaSummaryRow {
+  ready_to_print_qty?: number;
+}
+
+function getUnitCount(items: ShipmentItem[]): number {
+  return items.reduce((sum, item) => sum + Math.max(Number(item.actual_qty || 0), 0), 0);
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -128,6 +139,9 @@ function ShipmentLabelCard({
   };
 
   const visibleItems = readyItems.filter((i) => !markedIds.has(i.id));
+  const combineBoxCount = visibleItems.length;
+  const combineUnitCount = getUnitCount(visibleItems);
+  const combineLabelBatches = combineBoxCount > 0 ? 1 : 0;
 
   if (readyItems.length === 0) return null;
 
@@ -136,7 +150,7 @@ function ShipmentLabelCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
-      className="overflow-hidden border border-gray-200 bg-white"
+      className="overflow-hidden border-b border-gray-200 bg-white"
     >
       <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4">
         <div className="flex items-center gap-2 min-w-0">
@@ -155,7 +169,7 @@ function ShipmentLabelCard({
                 </span>
               )}
               <span className="text-[10px] font-black text-gray-900">
-                {visibleItems.length} ready to print
+                {combineBoxCount} boxes • {combineUnitCount} units • {combineLabelBatches} label batch
               </span>
             </div>
           </div>
@@ -178,7 +192,7 @@ function ShipmentLabelCard({
             ) : (
               <Check className="w-3 h-3" />
             )}
-            Mark Printed
+            Mark Combined
           </button>
         </div>
       </div>
@@ -189,7 +203,7 @@ function ShipmentLabelCard({
         <p className="meta">
           {shipment.destination_fc ? `FC: ${shipment.destination_fc} · ` : ''}
           {shipment.due_date ? `Due: ${new Date(shipment.due_date).toLocaleDateString()} · ` : ''}
-          {visibleItems.length} item(s) ready to label
+          Combine {combineBoxCount} boxes ({combineUnitCount} units) into {combineLabelBatches} label batch
         </p>
         <table className="w-full text-xs hidden print:table">
           <thead>
@@ -274,6 +288,7 @@ export interface FbaLabelQueueProps {
 
 export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
   const [shipments, setShipments] = useState<ShipmentWithItems[]>([]);
+  const [fallbackRows, setFallbackRows] = useState<FallbackReadyRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
@@ -309,7 +324,23 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
       );
 
       // Only show shipments that actually have READY_TO_GO items
-      setShipments(withItems.filter((s) => s.items.length > 0));
+      const visibleShipments = withItems.filter((s) => s.items.length > 0);
+      setShipments(visibleShipments);
+
+      // Fallback mode: surface event-ledger rows that are ready to print but
+      // not linked to an open shipment record yet.
+      if (visibleShipments.length === 0) {
+        const summaryRes = await fetch('/api/fba/logs/summary?mode=READY_TO_GO&limit=300', { cache: 'no-store' });
+        if (summaryRes.ok) {
+          const summaryData = await summaryRes.json();
+          const rows = Array.isArray(summaryData?.rows) ? (summaryData.rows as FallbackReadyRow[]) : [];
+          setFallbackRows(rows.filter((row) => getFbaReadyToPrintQty(row) > 0));
+        } else {
+          setFallbackRows([]);
+        }
+      } else {
+        setFallbackRows([]);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load label queue');
     } finally {
@@ -362,15 +393,11 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="sticky top-0 z-10 flex items-end justify-between border-b border-gray-200 bg-white px-4 py-4">
-        <div className="flex items-center gap-2">
+      <div className={mainStickyHeaderClass}>
+        <div className={mainStickyHeaderRowClass}>
+        <div className="flex items-center gap-2 min-w-0">
           <Printer className="w-4 h-4 text-gray-500" />
-          <span className="text-sm font-black text-gray-900">Label Queue</span>
-          {shipments.length > 0 && (
-            <span className="border border-gray-200 px-2 py-0.5 text-[10px] font-black text-gray-700">
-              {shipments.reduce((acc, s) => acc + s.items.filter(i => i.status === 'READY_TO_GO').length, 0)} items
-            </span>
-          )}
+          <span className="text-sm font-black text-gray-900">Print Queue</span>
         </div>
         <button
           onClick={() => setRefreshCount((c) => c + 1)}
@@ -379,9 +406,10 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
         >
           <RefreshCw className="w-4 h-4 text-gray-500" />
         </button>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto">
         <AnimatePresence>
           {shipments.length === 0 ? (
             <motion.div
@@ -389,13 +417,43 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
               animate={{ opacity: 1 }}
               className="flex flex-col items-center justify-center py-16 text-center"
             >
-              <div className="mb-4 flex h-16 w-16 items-center justify-center border border-gray-200">
-                <PackageCheck className="w-8 h-8 text-gray-400" />
-              </div>
-              <p className="text-sm font-black text-gray-500">No items ready to label</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Items will appear here once they reach READY_TO_GO status
-              </p>
+              {fallbackRows.length > 0 ? (
+                <div className="w-full max-w-5xl px-4 text-left">
+                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">Event-Ledger Fallback</p>
+                    <p className="text-[11px] font-semibold text-amber-800">
+                      Ready-to-print FNSKUs exist, but they are not linked to active `fba_shipments` records yet.
+                    </p>
+                  </div>
+                  <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                    <div className="grid grid-cols-[minmax(0,1fr)_120px_120px] gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2">
+                      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">FNSKU / Product</p>
+                      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">Ready Units</p>
+                      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-gray-500">Shipment Ref</p>
+                    </div>
+                    {fallbackRows.map((row) => (
+                      <div key={row.fnsku} className="grid grid-cols-[minmax(0,1fr)_120px_120px] gap-2 border-b border-gray-100 px-3 py-2 last:border-b-0">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-black text-gray-900">{row.product_title || row.fnsku}</p>
+                          <p className="truncate font-mono text-[10px] text-gray-500">{row.fnsku}{row.sku ? ` • ${row.sku}` : ''}</p>
+                        </div>
+                        <p className="text-xs font-black tabular-nums text-violet-700">{getFbaReadyToPrintQty(row)}</p>
+                        <p className="text-[10px] font-bold text-gray-500">{row.shipment_ref || 'Unlinked'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center border border-gray-200">
+                    <PackageCheck className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="text-sm font-black text-gray-500">No box groups ready to combine</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Items appear here after packing scans move them to READY_TO_GO
+                  </p>
+                </>
+              )}
             </motion.div>
           ) : (
             shipments.map((s) => (

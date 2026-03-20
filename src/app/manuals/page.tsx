@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FileText, ExternalLink } from '@/components/Icons';
-import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
+import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 
 interface ProductManual {
   id: number;
@@ -37,39 +37,39 @@ function ManualDetailPanel({ manual }: { manual: ProductManual }) {
   return (
     <div className="h-full flex flex-col bg-white">
       <div className={mainStickyHeaderClass}>
-        <div className={`${mainStickyHeaderRowClass} items-start px-6`}>
-        <div className="min-w-0">
-          <p className="text-[9px] font-black uppercase tracking-[0.3em] text-blue-600 mb-1">Product Manual</p>
-          <h2 className="text-lg font-black tracking-tight text-gray-900 leading-tight">{title}</h2>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            {manual.sku && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gray-100 text-[9px] font-black uppercase tracking-wider text-gray-600">
-                SKU: {manual.sku}
-              </span>
-            )}
-            {manual.item_number && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gray-100 text-[9px] font-black uppercase tracking-wider text-gray-600">
-                Item: {manual.item_number}
-              </span>
-            )}
-            {manual.type && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 text-[9px] font-black uppercase tracking-wider text-blue-600">
-                {manual.type}
-              </span>
-            )}
-          </div>
+        <div className={`${mainStickyHeaderShellRowClass} px-4`}>
+          <p className="truncate text-[11px] font-black uppercase tracking-[0.18em] text-gray-900">{title}</p>
+          {manual.google_file_id && (
+            <a
+              href={`https://docs.google.com/document/d/${manual.google_file_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open
+            </a>
+          )}
         </div>
-        {manual.google_file_id && (
-          <a
-            href={`https://docs.google.com/document/d/${manual.google_file_id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-wider hover:bg-black transition-colors"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Open
-          </a>
-        )}
+      </div>
+
+      <div className="border-b border-gray-100 px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {manual.sku && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gray-100 text-[9px] font-black uppercase tracking-wider text-gray-600">
+              SKU: {manual.sku}
+            </span>
+          )}
+          {manual.item_number && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gray-100 text-[9px] font-black uppercase tracking-wider text-gray-600">
+              Item: {manual.item_number}
+            </span>
+          )}
+          {manual.type && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 text-[9px] font-black uppercase tracking-wider text-blue-600">
+              {manual.type}
+            </span>
+          )}
         </div>
       </div>
 
@@ -232,19 +232,14 @@ function ManualsPageContent() {
     <div className="flex h-full w-full overflow-hidden bg-gray-50">
       <div className={`flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${selectedManual ? 'flex-1' : 'w-full'}`}>
         {/* Page header */}
-        <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-[0.3em] text-gray-400 mb-0.5">Library</p>
-              <h1 className="text-xl font-black tracking-tight text-gray-900">Product Manuals</h1>
-            </div>
-            <div className="text-right">
-              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">
-                {isLoading ? 'Loading…' : `${manuals.length} result${manuals.length !== 1 ? 's' : ''}`}
-              </p>
-              {query && (
-                <p className="text-[10px] font-bold text-blue-600 mt-0.5">for "{query}"</p>
-              )}
+        <div className={mainStickyHeaderClass}>
+          <div className={`${mainStickyHeaderShellRowClass} px-6`}>
+            <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Product Manuals</p>
+            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+              <span>{isLoading ? 'Loading…' : `${manuals.length} result${manuals.length !== 1 ? 's' : ''}`}</span>
+              {query ? (
+                <span className="max-w-[180px] truncate text-blue-600">&ldquo;{query}&rdquo;</span>
+              ) : null}
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ExternalLink, RefreshCw } from '@/components/Icons';
+import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 
 interface QueueItem {
   [key: string]: any;
@@ -109,17 +110,22 @@ export function SupportDashboard() {
     };
   }, [query]);
 
+  const generatedLabel = query.data?.generatedAt
+    ? `Updated ${formatDateTime(query.data.generatedAt)}`
+    : query.isLoading
+      ? 'Loading support data'
+      : 'Awaiting support data';
+
+  let content;
   if (query.isLoading) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-50">
+    content = (
+      <div className="flex h-full w-full items-center justify-center">
         <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
-  }
-
-  if (query.isError || !query.data) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-50 p-6">
+  } else if (query.isError || !query.data) {
+    content = (
+      <div className="flex h-full w-full items-center justify-center p-6">
         <div className="max-w-md rounded-3xl border border-rose-200 bg-white p-6 text-center shadow-sm">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
             <AlertCircle className="h-6 w-6" />
@@ -137,39 +143,10 @@ export function SupportDashboard() {
         </div>
       </div>
     );
-  }
-
-  const { totals, ebayAccounts, zendesk, generatedAt } = query.data;
-
-  return (
-    <div className="min-h-full bg-gray-50 p-4">
+  } else {
+    const { totals, ebayAccounts, zendesk } = query.data;
+    content = (
       <div className="space-y-4">
-        <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-rose-600">Customer Support</p>
-              <h1 className="mt-2 text-2xl font-black tracking-tight text-gray-900">Unified support queue</h1>
-              <p className="mt-2 text-sm text-gray-600">
-                One view for eBay unread messages, active eBay returns, and Zendesk open tickets.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
-                Updated {formatDateTime(generatedAt)}
-              </div>
-              <button
-                type="button"
-                onClick={() => void query.refetch()}
-                disabled={query.isFetching}
-                className="inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${query.isFetching ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-          </div>
-        </div>
-
         <div className="grid gap-4 md:grid-cols-4">
           <SummaryCard label="Unread Messages" value={totals.unreadMessages} tone="blue" />
           <SummaryCard label="Return Requests" value={totals.returnRequests} tone="amber" />
@@ -317,6 +294,34 @@ export function SupportDashboard() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col bg-gray-50">
+      <div className={mainStickyHeaderClass}>
+        <div className={`${mainStickyHeaderShellRowClass} px-6`}>
+          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Unified Support Queue</p>
+          <div className="flex items-center gap-3">
+            <div className="hidden rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500 md:block">
+              {generatedLabel}
+            </div>
+            <button
+              type="button"
+              onClick={() => void query.refetch()}
+              disabled={query.isFetching}
+              className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${query.isFetching ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        {content}
       </div>
     </div>
   );

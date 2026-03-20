@@ -70,11 +70,13 @@ function getAblyRestClient() {
 async function publishEvent(channel: string, name: string, data: Record<string, unknown>) {
   const client = getAblyRestClient();
   if (!client) return;
+  const normalizedChannel = String(channel || '').trim().replace(/[\u0000-\u001F\u007F]/g, '');
+  if (!normalizedChannel) return;
 
   try {
-    await client.channels.get(channel).publish(name, data);
+    await client.channels.get(normalizedChannel).publish(name, data);
   } catch (error) {
-    console.error(`[realtime] Failed to publish "${name}" on "${channel}":`, error);
+    console.error(`[realtime] Failed to publish "${name}" on "${normalizedChannel}":`, error);
   }
 }
 

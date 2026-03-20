@@ -23,6 +23,7 @@ export function DashboardDetailsStack({
   onUpdate,
   mode = 'dashboard',
   actionBar,
+  showReturnInformation = true,
 }: DetailsStackProps) {
   const [staffOptions, setStaffOptions] = useState<Array<{ id: number; name: string; role: string }>>([]);
   const [outOfStock, setOutOfStock] = useState((shipped as any).out_of_stock || '');
@@ -295,6 +296,7 @@ export function DashboardDetailsStack({
           showPackingInformation={false}
           showTestingInformation={false}
           showSerialNumber
+          showReturnInformation={showReturnInformation}
         />
       </motion.div>
 

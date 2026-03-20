@@ -8,4 +8,5 @@ export { StatusBadge, getCarrierVariant } from './StatusBadge';
 export { EmptyState } from './EmptyState';
 export { LoadingSpinner } from './LoadingSpinner';
 export { SearchBar } from './SearchBar';
+export { OverlaySearchBar } from './OverlaySearchBar';
 export { ShipByDate } from './ShipByDate';
