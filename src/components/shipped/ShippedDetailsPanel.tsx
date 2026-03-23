@@ -16,8 +16,8 @@ import { dispatchNavigateShippedDetails } from '@/utils/events';
 import { getStaffName } from '@/utils/staff';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { toPSTDateKey } from '@/utils/date';
-import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
+import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 
 interface ShippedDetailsPanelProps {
@@ -151,7 +151,7 @@ export function ShippedDetailsPanel({
 
   const openAssignmentCard = useCallback(async () => {
     try {
-      const members = await getActiveStaff();
+      const members = await getPresentStaffForToday();
       setStaff(members);
       setShowAssignmentCard(true);
     } catch {

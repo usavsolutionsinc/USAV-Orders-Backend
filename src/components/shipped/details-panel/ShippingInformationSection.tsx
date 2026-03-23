@@ -188,6 +188,8 @@ function ShippingSerialNumberRow({
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveTimerRef = useRef<number | null>(null);
+  const skuColonLookupTimerRef = useRef<number | null>(null);
+  const skuColonLookupSeqRef = useRef(0);
   const lastSavedSerialNumberRef = useRef(
     parseSerialRows(serialNumber)
       .map((row) => row.trim().toUpperCase())
@@ -217,8 +219,63 @@ function ShippingSerialNumberRow({
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current);
       }
+      if (skuColonLookupTimerRef.current) {
+        window.clearTimeout(skuColonLookupTimerRef.current);
+      }
     };
   }, []);
+
+  const scheduleSkuColonExpand = (rowIndex: number, rawValue: string) => {
+    const trimmed = rawValue.trim().toUpperCase();
+    if (!trimmed.includes(':')) return;
+    const left = trimmed.split(':')[0]?.trim() ?? '';
+    if (!left) return;
+
+    if (skuColonLookupTimerRef.current) {
+      window.clearTimeout(skuColonLookupTimerRef.current);
+      skuColonLookupTimerRef.current = null;
+    }
+
+    const seq = ++skuColonLookupSeqRef.current;
+    skuColonLookupTimerRef.current = window.setTimeout(async () => {
+      skuColonLookupTimerRef.current = null;
+      if (seq !== skuColonLookupSeqRef.current) return;
+
+      try {
+        const res = await fetch(`/api/sku/serials-from-code?code=${encodeURIComponent(trimmed)}`);
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success) {
+          setError(String(data?.error || 'SKU lookup failed'));
+          setSaveState('error');
+          return;
+        }
+        const serials = Array.isArray(data.serials)
+          ? data.serials.map((s: unknown) => String(s || '').trim().toUpperCase()).filter(Boolean)
+          : [];
+        if (serials.length === 0) {
+          setError('No serials on file for this SKU.');
+          setSaveState('error');
+          return;
+        }
+        if (seq !== skuColonLookupSeqRef.current) return;
+
+        if (data.notes) {
+          window.alert(`Notes for SKU:\n\n${data.notes}`);
+        }
+
+        setSerialRows((current) => {
+          const next = [...current];
+          next.splice(rowIndex, 1, ...serials);
+          return next.length > 0 ? next : [''];
+        });
+        setError(null);
+        setSaveState('idle');
+      } catch {
+        setError('Network error loading SKU serials');
+        setSaveState('error');
+      }
+    }, 400);
+  };
 
   const normalizedRows = serialRows
     .map((row) => row.trim().toUpperCase())
@@ -392,8 +449,9 @@ function ShippingSerialNumberRow({
                   setSerialRows((current) => current.map((row, rowIndex) => (rowIndex === index ? nextValue : row)));
                   setError(null);
                   setSaveState('idle');
+                  scheduleSkuColonExpand(index, nextValue);
                 }}
-                placeholder={`Serial ${index + 1}`}
+                placeholder={`Serial ${index + 1} · or SKU:tag`}
                 className="flex-1 border-0 bg-transparent px-0 py-2 text-sm font-mono font-bold text-gray-900 outline-none focus:ring-0"
               />
             </div>

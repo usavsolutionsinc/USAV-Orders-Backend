@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { LayoutGroup, motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
 import { Barcode, AlertCircle, Loader2, Package, MapPin, Settings } from '../Icons';
 import ActiveStationOrderCard from './ActiveStationOrderCard';
@@ -11,9 +11,14 @@ import { getStationInputMode, type StationInputMode, useStationTestingController
 
 // FNSKUs start with X0, B0, or are exactly 10 alphanumeric chars — Amazon barcode pattern
 function looksLikeFnsku(value: string): boolean {
-  const v = value.trim().toUpperCase();
+  const v = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   return /^X0[A-Z0-9]{8,10}$/.test(v) || /^B0[A-Z0-9]{8,}$/.test(v);
 }
+
+const STATION_EASE_OUT = [0.22, 1, 0.36, 1] as const;
+const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
+const stationTween = { duration: 0.26, ease: STATION_EASE_OUT };
+const stationLayoutTween = { layout: { duration: 0.32, ease: STATION_EASE_HEIGHT } };
 
 interface FbaFeedback {
   fnsku: string;
@@ -79,11 +84,17 @@ export default function StationTesting({
     onComplete,
     themeColor,
     onTrackingScan,
+    onTrackingOrderLoaded: useCallback(() => {
+      setManualMode((m) => (m === 'tracking' ? null : m));
+    }, []),
+    onActiveOrderCardAutoHidden: useCallback(() => {
+      setManualMode('tracking');
+    }, []),
   });
 
   const handleFnskuScan = useCallback(
     async (raw: string) => {
-      const fnsku = raw.trim().toUpperCase();
+      const fnsku = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       setIsFbaLoading(true);
       setFbaFeedback(null);
       setFbaError(null);
@@ -125,6 +136,9 @@ export default function StationTesting({
           available_to_ship: Number(data.summary?.available_to_ship ?? 0),
           shipment_ref: data.shipment?.shipment_ref ?? null,
         });
+        // After an FNSKU context is loaded, default the empty-input feedback
+        // to serial mode so the next expected action is clear.
+        setManualMode('serial');
         triggerGlobalRefresh();
       } catch {
         setFbaError('Network error — FNSKU scan could not be saved');
@@ -138,6 +152,11 @@ export default function StationTesting({
   const handleFormSubmit = useCallback(
     (e?: React.FormEvent, overrideTracking?: string) => {
       const value = overrideTracking ?? inputValue;
+      const trimmedValue = value.trim();
+      const detectedInputMode = trimmedValue ? getStationInputMode(value) : null;
+      const isFnskuInput =
+        Boolean(trimmedValue) && (detectedInputMode === 'fba' || looksLikeFnsku(value));
+      const isSkuInput = trimmedValue.includes(':');
 
       if ((manualMode === 'fba' || manualMode === 'repair') && value.trim()) {
         const detectedMode = getStationInputMode(value);
@@ -146,36 +165,48 @@ export default function StationTesting({
         }
       }
 
-      const forcedType =
-        typeof overrideTracking === 'string'
-          ? 'TRACKING'
-          : manualMode === 'tracking'
-            ? 'TRACKING'
-            : manualMode === 'serial'
-              ? 'SERIAL'
-              : undefined;
-
-      if (!forcedType && looksLikeFnsku(value)) {
+      // FNSKU scans should always hit the dedicated FBA route even when manual
+      // tracking/serial override is active, otherwise logs are misclassified.
+      if (isFnskuInput && typeof overrideTracking !== 'string') {
         e?.preventDefault();
         setInputValue('');
         handleFnskuScan(value);
         return;
       }
+
+      const forcedType =
+        typeof overrideTracking === 'string'
+          ? 'TRACKING'
+          : isSkuInput
+            ? undefined
+          : manualMode === 'tracking'
+            ? 'TRACKING'
+            : manualMode === 'serial'
+              ? 'SERIAL'
+              : undefined;
       handleSubmit(e, overrideTracking, forcedType ? { forcedType } : undefined);
     },
     [inputValue, manualMode, handleFnskuScan, handleSubmit, setInputValue]
   );
 
-  const detectedMode = inputValue.trim() ? getStationInputMode(inputValue) : null;
+  const trimmedInput = inputValue.trim();
+  const detectedMode = trimmedInput ? getStationInputMode(inputValue) : null;
   const autoMode: StationInputMode = detectedMode ?? (activeOrder ? 'serial' : 'tracking');
+  // Non-empty field: classifier / tracking regex drives the icon; manual tracking|serial is only for empty-field feedback.
   const effectiveMode: StationInputMode =
-    manualMode === 'tracking' || manualMode === 'serial'
-      ? manualMode
-      : manualMode === 'fba'
-        ? (detectedMode && detectedMode !== 'fba' ? detectedMode : 'fba')
-        : manualMode === 'repair'
-          ? (detectedMode && detectedMode !== 'repair' ? detectedMode : 'repair')
-        : autoMode;
+    manualMode === 'fba'
+      ? detectedMode && detectedMode !== 'fba'
+        ? detectedMode
+        : 'fba'
+      : manualMode === 'repair'
+        ? detectedMode && detectedMode !== 'repair'
+          ? detectedMode
+          : 'repair'
+        : trimmedInput && detectedMode
+          ? detectedMode
+          : manualMode === 'tracking' || manualMode === 'serial'
+            ? manualMode
+            : autoMode;
   const isTrackingMode = effectiveMode === 'tracking';
   const isFbaMode = effectiveMode === 'fba';
   const isRepairMode = effectiveMode === 'repair';
@@ -246,6 +277,7 @@ export default function StationTesting({
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={stationTween}
             className="space-y-2"
           >
             <StationScanBar
@@ -323,7 +355,8 @@ export default function StationTesting({
                 <motion.div
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={stationTween}
                   role="status"
                   aria-live="polite"
                   className="mt-2 p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-2"
@@ -342,7 +375,8 @@ export default function StationTesting({
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={stationTween}
                 className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-200 flex items-center gap-3"
               >
                 <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -358,7 +392,8 @@ export default function StationTesting({
                 key="fba-error"
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={stationTween}
                 className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2"
               >
                 <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
@@ -368,9 +403,10 @@ export default function StationTesting({
             {fbaFeedback && !fbaError && (
               <motion.div
                 key={`fba-${fbaFeedback.log_id}`}
-                initial={{ opacity: 0, y: -8 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={stationTween}
                 className="rounded-2xl border border-orange-200 bg-orange-50 p-3 space-y-2"
               >
                 <div className="flex items-start gap-2">
@@ -410,34 +446,37 @@ export default function StationTesting({
             )}
           </AnimatePresence>
 
-          <AnimatePresence mode="wait">
-            {activeOrder && isActiveOrderVisible ? (
-              <ActiveStationOrderCard
-                key={activeOrder.tracking}
-                activeOrder={activeOrder}
-                activeColorTextClass={activeColor.text}
-                resolvedManuals={resolvedManuals}
-                isManualLoading={isManualLoading}
-                onViewManual={onViewManual}
-              />
-            ) : null}
-          </AnimatePresence>
+          <LayoutGroup id="station-active-upnext">
+            {/* popLayout: exiting card leaves document flow so Up Next reflows up instead of a dead gap */}
+            <AnimatePresence mode="popLayout" initial={false}>
+              {activeOrder && isActiveOrderVisible ? (
+                <ActiveStationOrderCard
+                  key={activeOrder.tracking}
+                  activeOrder={activeOrder}
+                  activeColorTextClass={activeColor.text}
+                  resolvedManuals={resolvedManuals}
+                  isManualLoading={isManualLoading}
+                  onViewManual={onViewManual}
+                />
+              ) : null}
+            </AnimatePresence>
 
-          <motion.div layout className="space-y-2 mt-2">
-            <UpNextOrder
-              techId={userId}
-              onStart={(tracking) => {
-                setActiveOrder(null);
-                clearFeedback();
-                setFbaFeedback(null);
-                setFbaError(null);
-                setTimeout(() => handleFormSubmit(undefined, tracking), 50);
-              }}
-              onMissingParts={() => {
-                triggerGlobalRefresh();
-              }}
-            />
-          </motion.div>
+            <motion.div layout transition={stationLayoutTween} className="space-y-2 mt-2">
+              <UpNextOrder
+                techId={userId}
+                onStart={(tracking) => {
+                  setActiveOrder(null);
+                  clearFeedback();
+                  setFbaFeedback(null);
+                  setFbaError(null);
+                  setTimeout(() => handleFormSubmit(undefined, tracking), 50);
+                }}
+                onMissingParts={() => {
+                  triggerGlobalRefresh();
+                }}
+              />
+            </motion.div>
+          </LayoutGroup>
 
           <div className="mt-auto pt-6 border-t border-gray-50 text-center">
             <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV TECH v2.6</p>

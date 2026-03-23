@@ -321,6 +321,16 @@ export function OrdersQueueTable({
                             animate={{ opacity: 1 }}
                             key={record.id}
                             onClick={() => handleRowClick(record)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                handleRowClick(record);
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={selectedRecord?.id === record.id}
+                            aria-label={`Open order ${record.order_id || record.id}`}
                             data-order-row-id={String(record.id)}
                             className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                               selectedRecord?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'

@@ -52,7 +52,8 @@ export function useStationHistory({
                 // Normalize data structure
                 const normalizedData = data.map((log: any) => ({
                     ...log,
-                    timestamp: log.packedAt || log.timestamp,
+                    // packing-logs: packedAt; tech-logs: created_at (never updated_at)
+                    timestamp: log.packedAt || log.created_at || log.timestamp,
                     title: log.product || log.title,
                     tracking: log.trackingNumber || log.tracking,
                     status: log.carrier || log.status,

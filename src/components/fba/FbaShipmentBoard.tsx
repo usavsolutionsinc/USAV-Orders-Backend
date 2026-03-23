@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle,
-  AlertTriangle,
-  Check,
+  Box,
+  ClipboardList,
   Copy,
-  ExternalLink,
   Loader2,
+  Package,
+  PackageCheck,
+  Printer,
   RefreshCw,
   Search,
 } from '@/components/Icons';
@@ -17,45 +19,62 @@ import { FnskuChip, SerialChip, getLast6Serial } from '@/components/ui/CopyChip'
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import type { FbaSummaryRow } from '@/components/fba/types';
-import { deriveFbaWorkflowMode, getFbaCurrentlyPackingQty, getFbaReadyToPrintQty } from '@/components/fba/types';
+import type { FbaSummaryRow, FbaWorkflowMode } from '@/components/fba/types';
+import { deriveFbaWorkflowMode } from '@/components/fba/types';
+
+export type FbaPlanSummaryMode = 'ALL' | 'PLAN' | 'PACKING' | 'PRINT_READY';
 
 interface FbaShipmentBoardProps {
-  summaryMode: 'ALL' | 'PACKING' | 'STOCK';
+  summaryMode: FbaPlanSummaryMode;
   refreshTrigger: number;
   searchQuery: string;
 }
 
-const MODE_BADGE_CLASS = {
-  PLAN: 'bg-violet-50 text-violet-700 border-violet-200',
-  PACKING: 'bg-amber-50 text-amber-700 border-amber-200',
-  READY_TO_GO: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  NONE: 'bg-gray-50 text-gray-500 border-gray-200',
-} as const;
-
 const MODE_LABEL = {
   PLAN: 'Plan',
   PACKING: 'Packing',
-  READY_TO_GO: 'Ready to Go',
-  NONE: 'None',
+  PRINT_READY: 'Print ready',
+  NONE: '—',
 } as const;
 
-function getFnskuDisplay(value: string | null | undefined): string {
-  const raw = String(value || '').trim().toUpperCase();
-  if (!raw) return '---';
-  if (raw.length <= 10) return raw;
-  return `${raw.slice(0, 3)}…${raw.slice(-4)}`;
+const STATUS_ICON_CLASS = 'h-3.5 w-3.5 shrink-0 text-gray-500';
+
+function WorkflowStatusIcon({ mode }: { mode: FbaWorkflowMode }) {
+  const label = MODE_LABEL[mode];
+  const icon =
+    mode === 'PLAN' ? (
+      <ClipboardList className={STATUS_ICON_CLASS} />
+    ) : mode === 'PACKING' ? (
+      <Package className={STATUS_ICON_CLASS} />
+    ) : mode === 'PRINT_READY' ? (
+      <PackageCheck className={STATUS_ICON_CLASS} />
+    ) : (
+      <Box className={`${STATUS_ICON_CLASS} text-gray-400`} />
+    );
+  return (
+    <span className="inline-flex shrink-0" title={label} aria-label={label}>
+      {icon}
+    </span>
+  );
 }
 
 function matchesMode(row: FbaSummaryRow, summaryMode: FbaShipmentBoardProps['summaryMode']): boolean {
   const mode = deriveFbaWorkflowMode(row);
-  if (summaryMode === 'ALL') return mode === 'PLAN' || mode === 'PACKING';
+  if (summaryMode === 'ALL') return mode === 'PLAN' || mode === 'PACKING' || mode === 'PRINT_READY';
   if (summaryMode === 'PACKING') return mode === 'PACKING';
+  if (summaryMode === 'PRINT_READY') return mode === 'PRINT_READY';
   return mode === 'PLAN';
 }
 
 function EmptyState({ searchQuery, summaryMode }: { searchQuery: string; summaryMode: FbaShipmentBoardProps['summaryMode'] }) {
-  const modeLabel = summaryMode === 'ALL' ? 'plan rows' : summaryMode === 'PACKING' ? 'packing rows' : 'stock rows';
+  const modeLabel =
+    summaryMode === 'ALL'
+      ? 'workflow rows'
+      : summaryMode === 'PACKING'
+        ? 'packing rows'
+        : summaryMode === 'PRINT_READY'
+          ? 'print-ready rows'
+          : 'plan rows';
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-gray-200 bg-gray-50">
@@ -105,9 +124,6 @@ function InlineRowDetails({
   onOpenLabels: () => void;
 }) {
   const mode = deriveFbaWorkflowMode(row);
-  const readyToPrintQty = getFbaReadyToPrintQty(row);
-  const currentlyPackingQty = getFbaCurrentlyPackingQty(row);
-  const planQty = Number(row.tech_scanned_qty || 0);
 
   const copyFnsku = async () => {
     try {
@@ -122,37 +138,21 @@ function InlineRowDetails({
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
-      className="border-b border-blue-100 bg-blue-50/50 px-3 py-3"
+      className="border-b border-gray-100 bg-gray-50/80 px-3 py-3"
     >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="grid gap-2 sm:grid-cols-3">
-          <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-gray-400">Plan / Testing / Picking</p>
-            <p className="mt-1 text-sm font-black tabular-nums text-violet-700">{planQty}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-gray-400">Currently Packing</p>
-            <p className="mt-1 text-sm font-black tabular-nums text-amber-700">{currentlyPackingQty}</p>
-          </div>
-          <div className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-gray-400">Ready to Go</p>
-            <p className="mt-1 text-sm font-black tabular-nums text-emerald-700">{readyToPrintQty}</p>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2" title={MODE_LABEL[mode]}>
+          <WorkflowStatusIcon mode={mode} />
         </div>
-
-        <div className="flex items-start gap-1.5">
+        <div className="flex items-center gap-1.5">
           <InlineActionButton label="Copy FNSKU" onClick={copyFnsku} icon={<Copy className="h-3.5 w-3.5" />} />
-          <InlineActionButton label="Open label queue" onClick={onOpenLabels} icon={<ExternalLink className="h-3.5 w-3.5" />} />
+          <InlineActionButton label="Open print queue" onClick={onOpenLabels} icon={<Printer className="h-3.5 w-3.5" />} />
           <InlineActionButton label="Refresh row" onClick={onRefresh} icon={<RefreshCw className="h-3.5 w-3.5" />} />
         </div>
       </div>
 
-      <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-gray-500">
-        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${MODE_BADGE_CLASS[mode]}`}>
-          {MODE_LABEL[mode]}
-        </span>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-gray-500">
         <span>Shipment: {row.shipment_ref || '---'}</span>
-        <span>FNSKU: {row.fnsku || '---'}</span>
         <span>Serial: {getLast6Serial(row.latest_serial_number || '')}</span>
         <span>ASIN: {row.asin || '---'}</span>
       </div>
@@ -184,7 +184,8 @@ export function FbaShipmentBoard({ summaryMode, refreshTrigger, searchQuery }: F
       params.set('limit', '500');
       if (searchQuery.trim()) params.set('q', searchQuery.trim());
       if (summaryMode === 'PACKING') params.set('mode', 'PACKING');
-      if (summaryMode === 'STOCK') params.set('mode', 'PLAN');
+      if (summaryMode === 'PLAN') params.set('mode', 'PLAN');
+      if (summaryMode === 'PRINT_READY') params.set('mode', 'PRINT_READY');
 
       const res = await fetch(`/api/fba/logs/summary?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch FBA summary');
@@ -221,6 +222,19 @@ export function FbaShipmentBoard({ summaryMode, refreshTrigger, searchQuery }: F
     params.set('tab', 'labels');
     router.replace(`/fba?${params.toString()}`);
   }, [router, searchParams]);
+
+  const openPrintForRow = useCallback(
+    (e: React.MouseEvent, row: FbaSummaryRow) => {
+      e.stopPropagation();
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', 'labels');
+      const ref = String(row.shipment_ref || '').trim();
+      if (ref) params.set('q', ref);
+      else if (row.fnsku) params.set('q', row.fnsku);
+      router.replace(`/fba?${params.toString()}`);
+    },
+    [router, searchParams]
+  );
 
   const groupedRows: Record<string, FbaSummaryRow[]> = {};
   visibleRows.forEach((row) => {
@@ -305,7 +319,7 @@ export function FbaShipmentBoard({ summaryMode, refreshTrigger, searchQuery }: F
           stickyDate={stickyDate}
           fallbackDate={fallbackDate}
           count={currentCount || totalCount}
-          countClassName="text-emerald-600"
+          countClassName="text-gray-600"
           formatDate={formatDate}
           showWeekControls={false}
           rightSlot={(
@@ -338,57 +352,50 @@ export function FbaShipmentBoard({ summaryMode, refreshTrigger, searchQuery }: F
                   <div key={date} className="flex flex-col">
                     <DateGroupHeader date={date} total={dayRows.length} formatDate={formatDate} />
                     {sortedRows.map((row, index) => {
-                      const mode = deriveFbaWorkflowMode(row);
-                      const planQty = Number(row.tech_scanned_qty || 0);
-                      const currentlyPackingQty = getFbaCurrentlyPackingQty(row);
-                      const readyToGoQty = getFbaReadyToPrintQty(row);
                       const isSelected = selectedFnsku === row.fnsku;
 
                       return (
                         <div key={row.fnsku} className="flex flex-col">
-                          <motion.button
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            type="button"
-                            onClick={() => setSelectedFnsku((current) => (current === row.fnsku ? null : row.fnsku))}
-                            className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 border-b border-gray-50 text-left transition-all hover:bg-blue-50/50 ${
-                              isSelected ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
-                            }`}
-                            aria-pressed={isSelected}
+                          <div
+                            className={`flex w-full items-center gap-2 border-b border-gray-50 px-3 py-2 transition-colors ${
+                              isSelected ? 'bg-gray-100' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
+                            } hover:bg-gray-50`}
                           >
-                            <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-2 h-2 rounded-full shrink-0 bg-violet-500" title="FBA" />
-                                <div className="text-[12px] font-bold text-gray-900 truncate">
-                                  {row.product_title || 'Unknown Product'}
-                                </div>
+                            <motion.button
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              type="button"
+                              onClick={() => setSelectedFnsku((current) => (current === row.fnsku ? null : row.fnsku))}
+                              className="min-w-0 flex-1 text-left"
+                              aria-pressed={isSelected}
+                            >
+                              <div className="whitespace-normal break-words text-[15px] font-bold leading-snug tracking-tight text-gray-900">
+                                {row.product_title || 'Unknown Product'}
                               </div>
-                              <div className="mt-0.5 flex items-center gap-2">
-                                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-                                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest truncate">
-                                    {row.shipment_ref || '---'} • {row.fnsku || '---'}
-                                  </span>
-                                  <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-violet-700">
-                                    Plan {planQty}
-                                  </span>
-                                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-amber-700">
-                                    Packing {currentlyPackingQty}
-                                  </span>
-                                  <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-emerald-700">
-                                    Ready {readyToGoQty}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
+                            </motion.button>
 
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${MODE_BADGE_CLASS[mode]}`}>
-                                {MODE_LABEL[mode]}
-                              </span>
+                            <div
+                              className="flex shrink-0 items-center gap-1.5"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                              role="presentation"
+                            >
                               <FnskuChip value={row.fnsku} />
-                              <SerialChip value={row.latest_serial_number || ''} display={getLast6Serial(row.latest_serial_number || '')} />
+                              <SerialChip
+                                value={row.latest_serial_number || ''}
+                                display={getLast6Serial(row.latest_serial_number || '')}
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => openPrintForRow(e, row)}
+                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+                                title="Open print queue"
+                                aria-label="Open print queue"
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                              </button>
                             </div>
-                          </motion.button>
+                          </div>
 
                           <AnimatePresence initial={false}>
                             {isSelected ? <InlineRowDetails row={row} onRefresh={load} onOpenLabels={openLabels} /> : null}

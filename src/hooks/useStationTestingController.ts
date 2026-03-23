@@ -121,14 +121,24 @@ export function useStationTestingController({
   onComplete,
   themeColor,
   onTrackingScan,
+  onTrackingOrderLoaded,
+  onActiveOrderCardAutoHidden,
 }: {
   userId: string;
   userName: string;
   onComplete?: () => void;
   themeColor: StationThemeColor;
   onTrackingScan?: () => void;
+  /** Fired after a tracking scan successfully loads order context (input cleared). UI can drop tracking-only display override so SN mode shows. */
+  onTrackingOrderLoaded?: () => void;
+  /** Fired when the active order card auto-hides after qty-complete timeout (UI can switch back to tracking mode). */
+  onActiveOrderCardAutoHidden?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const onAutoHiddenRef = useRef(onActiveOrderCardAutoHidden);
+  useEffect(() => {
+    onAutoHiddenRef.current = onActiveOrderCardAutoHidden;
+  }, [onActiveOrderCardAutoHidden]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -182,6 +192,7 @@ export function useStationTestingController({
     if (isOrderComplete(nextOrder) && shouldShow) {
       completedOrderHideTimerRef.current = setTimeout(() => {
         setIsActiveOrderVisible(false);
+        onAutoHiddenRef.current?.();
       }, COMPLETED_ORDER_AUTO_HIDE_MS);
     }
   };
@@ -347,7 +358,7 @@ export function useStationTestingController({
   const handleFnskuScan = async (fnskuInput: string) => {
     setIsLoading(true);
     try {
-      const fnsku = fnskuInput.toUpperCase();
+      const fnsku = fnskuInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       const res = await fetch(`/api/tech/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&techId=${userId}`);
       const data = await res.json();
 
@@ -550,6 +561,8 @@ export function useStationTestingController({
           void resolveManual(data.order.sku, data.order.itemNumber ?? null);
         }
 
+        onTrackingOrderLoaded?.();
+
         // Surgical cache insert: fire a targeted event so TechTable can prepend
         // the new row via setQueryData without invalidating the whole cache.
         if (data.techSerialId) {
@@ -651,15 +664,23 @@ export function useStationTestingController({
           alert(`Notes for SKU:\n\n${data.notes}`);
         }
 
+        const nextSerials = Array.isArray(data.updatedSerials)
+          ? data.updatedSerials
+          : contextOrder.serialNumbers;
+
         syncActiveOrderState({
           ...contextOrder,
-          serialNumbers: data.updatedSerials,
+          serialNumbers: nextSerials,
         });
 
+        const addedCount = Array.isArray(data.serialNumbers) ? data.serialNumbers.length : 0;
         setSuccessMessage(
-          `SKU matched! Added ${data.serialNumbers.length} serial(s) from SKU lookup (Stock: -${data.quantityDecremented})`
+          addedCount > 0
+            ? `SKU matched! Added ${addedCount} serial(s) from SKU lookup (Stock: -${data.quantityDecremented})`
+            : `SKU matched — stock −${data.quantityDecremented}${data.productTitle ? ` · ${data.productTitle}` : ''}`,
         );
 
+        queryClient.invalidateQueries({ queryKey: ['tech-logs'] });
         triggerGlobalRefresh();
       } catch (e) {
         console.error('SKU scan error:', e);

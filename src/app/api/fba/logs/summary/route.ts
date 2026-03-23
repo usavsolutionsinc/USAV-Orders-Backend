@@ -7,9 +7,11 @@ export async function GET(request: NextRequest) {
     const q = String(searchParams.get('q') || '').trim();
     const modeParam = String(searchParams.get('mode') || 'ALL').trim().toUpperCase();
     let mode = 'ALL';
-    if (modeParam === 'PLAN' || modeParam === 'PACKING' || modeParam === 'READY_TO_GO') mode = modeParam;
-    if (modeParam === 'TESTED') mode = 'PLAN';
-    if (modeParam === 'READY_TO_PRINT') mode = 'READY_TO_GO';
+    // Canonical modes
+    if (modeParam === 'PLAN' || modeParam === 'PACKING' || modeParam === 'PRINT_READY') mode = modeParam;
+    // Backward-compatible aliases
+    if (modeParam === 'STOCK' || modeParam === 'TESTED') mode = 'PLAN';
+    if (modeParam === 'READY_TO_GO' || modeParam === 'READY_TO_PRINT') mode = 'PRINT_READY';
     const limitRaw = Number(searchParams.get('limit') || 200);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 500) : 200;
 
@@ -99,7 +101,7 @@ export async function GET(request: NextRequest) {
             GREATEST(LEAST(lt.tech_scanned_qty, lt.pack_ready_qty) - lt.shipped_qty, 0)::int AS ready_to_print_qty,
             GREATEST(LEAST(lt.tech_scanned_qty, lt.pack_ready_qty) - lt.shipped_qty, 0)::int AS available_to_ship,
             CASE
-              WHEN GREATEST(LEAST(lt.tech_scanned_qty, lt.pack_ready_qty) - lt.shipped_qty, 0) > 0 THEN 'READY_TO_GO'
+              WHEN GREATEST(LEAST(lt.tech_scanned_qty, lt.pack_ready_qty) - lt.shipped_qty, 0) > 0 THEN 'PRINT_READY'
               WHEN GREATEST(lt.tech_scanned_qty - lt.pack_ready_qty, 0) > 0 THEN 'PACKING'
               WHEN lt.tech_scanned_qty > 0 THEN 'PLAN'
               ELSE 'NONE'

@@ -1,141 +1,129 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { AnimatePresence } from 'framer-motion';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from '@/components/Icons';
-import { FbaShipmentBoard } from '@/components/fba/FbaShipmentBoard';
-import { FbaLabelQueue } from '@/components/fba/FbaLabelQueue';
-import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
-import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
-import { ShippedDetailsPanel } from '@/components/shipped';
-import type { ShippedOrder } from '@/lib/neon/orders-queries';
+import { type FbaPlanSummaryMode } from '@/components/fba/FbaShipmentBoard';
+import { FbaPrintReadyTable } from '@/components/fba/FbaPrintReadyTable';
+import { FbaShippedHistory } from '@/components/fba/FbaShippedHistory';
+import { FbaFnskuChecklist } from '@/components/fba/FbaFnskuChecklist';
 
-type Tab = 'summary' | 'labels' | 'shipped';
-type SummaryMode = 'ALL' | 'PACKING' | 'STOCK';
+type Tab = 'summary' | 'shipped';
 
-function resolveSummaryMode(rawMode: string | null, rawStatus: string | null): SummaryMode {
+function resolveSummaryMode(rawMode: string | null, rawStatus: string | null): FbaPlanSummaryMode | null {
   const mode = String(rawMode || '').toUpperCase();
-  if (mode === 'ALL' || mode === 'PACKING' || mode === 'STOCK') return mode as SummaryMode;
-  if (mode === 'PLAN' || mode === 'TESTED') return 'STOCK';
-  if (mode === 'READY_TO_GO' || mode === 'READY_TO_PRINT') return 'ALL';
-
+  if (mode === 'PLAN' || mode === 'PACKING' || mode === 'OUT_OF_STOCK' || mode === 'STOCK') return 'PLAN';
+  if (mode === 'PRINT_READY') return 'PRINT_READY';
+  if (mode === 'READY_TO_GO' || mode === 'READY_TO_PRINT') return 'PRINT_READY';
+  if (mode === 'ALL') return 'PLAN';
   const legacyStatus = String(rawStatus || '').toUpperCase();
-  if (legacyStatus === 'PLANNED') return 'STOCK';
-  if (legacyStatus === 'READY_TO_GO' || legacyStatus === 'LABEL_ASSIGNED' || legacyStatus === 'SHIPPED') return 'ALL';
-  return 'ALL';
+  if (legacyStatus === 'PLANNED') return 'PLAN';
+  if (legacyStatus === 'READY_TO_GO' || legacyStatus === 'READY_TO_PRINT') return 'PRINT_READY';
+  return null;
 }
 
 function resolveActiveTab(rawTab: string | null): Tab {
-  if (rawTab === 'labels') return 'labels';
   if (rawTab === 'shipped') return 'shipped';
   return 'summary';
 }
 
+function buildFbaHref(params: URLSearchParams) {
+  const query = params.toString();
+  return query ? `/fba?${query}` : '/fba';
+}
+
 function FbaPageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const summaryMode = resolveSummaryMode(searchParams.get('mode'), searchParams.get('status'));
   const refreshTrigger = Number(searchParams.get('r') || 0);
   const searchQuery = searchParams.get('q') || '';
   const activeTab = resolveActiveTab(searchParams.get('tab'));
-  const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
+  const legacyLabelsTab = searchParams.get('tab') === 'labels';
 
+  // Draft FNSKUs from sidebar input
+  const draftParam = searchParams.get('draft') || '';
+  const draftFnskus = draftParam ? draftParam.split(',').filter(Boolean) : [];
+  const hasDraft = draftFnskus.length > 0;
+
+  // Existing plan selected from sidebar
+  const planParam = searchParams.get('plan');
+  const planId = planParam ? Number(planParam) : null;
+  const hasPlan = Boolean(planId && Number.isFinite(planId) && planId > 0);
+
+  // Status filter from sidebar third slider
+  const statusFilter = searchParams.get('filter') || 'ALL';
+
+  const clearDraftOrPlan = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('draft');
+    params.delete('plan');
+    router.replace(buildFbaHref(params));
+  };
+
+  const handleCreated = (_id: number, _ref: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('draft');
+    params.set('r', String(Date.now()));
+    params.set('mode', 'PLAN');
+    router.replace(buildFbaHref(params));
+  };
+
+  // Refresh trigger for print table (listen for fba-print-shipped event)
+  const [printRefresh, setPrintRefresh] = useState(0);
+
+  // Listen to fba-print-shipped to refresh the table
   useEffect(() => {
-    const handleOpen = (event: CustomEvent<ShippedOrder>) => {
-      if (event.detail) setSelectedShipped(event.detail);
-    };
-    const handleClose = () => setSelectedShipped(null);
-
-    window.addEventListener('open-shipped-details' as any, handleOpen as any);
-    window.addEventListener('close-shipped-details' as any, handleClose as any);
-    return () => {
-      window.removeEventListener('open-shipped-details' as any, handleOpen as any);
-      window.removeEventListener('close-shipped-details' as any, handleClose as any);
-    };
+    const handler = () => setPrintRefresh((n) => n + 1);
+    window.addEventListener('fba-print-shipped', handler);
+    return () => window.removeEventListener('fba-print-shipped', handler);
   }, []);
 
+  // Legacy URLs: mode=out_of_stock → plan view + filter
   useEffect(() => {
-    if (activeTab !== 'shipped' && selectedShipped) {
-      window.dispatchEvent(new CustomEvent('close-shipped-details'));
-      setSelectedShipped(null);
-    }
-  }, [activeTab, selectedShipped]);
-
-  useEffect(() => {
-    const handleAssignmentUpdate = (event: any) => {
-      const detail = event?.detail || {};
-      const ids = new Set<number>((detail.orderIds || []).map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id)));
-      if (ids.size === 0) return;
-
-      setSelectedShipped((current) => {
-        if (!current || !ids.has(Number(current.id))) return current;
-
-        const next: any = { ...current };
-        if (detail.testerId !== undefined) next.tester_id = detail.testerId;
-        if (detail.packerId !== undefined) next.packer_id = detail.packerId;
-        if (detail.shipByDate !== undefined) next.ship_by_date = detail.shipByDate;
-        if (detail.outOfStock !== undefined) next.out_of_stock = detail.outOfStock;
-        if (detail.notes !== undefined) next.notes = detail.notes;
-        if (detail.shippingTrackingNumber !== undefined) next.shipping_tracking_number = detail.shippingTrackingNumber;
-        if (detail.itemNumber !== undefined) next.item_number = detail.itemNumber;
-        if (detail.condition !== undefined) next.condition = detail.condition;
-        return next;
-      });
-    };
-
-    window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdate as any);
-    return () => window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdate as any);
-  }, []);
+    const mode = String(searchParams.get('mode') || '').toUpperCase();
+    if (mode !== 'OUT_OF_STOCK' && mode !== 'STOCK') return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('mode', 'PLAN');
+    params.set('filter', 'OUT_OF_STOCK');
+    router.replace(buildFbaHref(params));
+  }, [searchParams, router]);
 
   return (
     <div className="flex h-full w-full">
       <div className="flex-1 min-w-0 h-full overflow-hidden">
         <div className="flex h-full min-w-0 flex-1 bg-white relative">
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className={mainStickyHeaderClass}>
-              <div className={mainStickyHeaderRowClass}>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">FBA</p>
-                {searchQuery.trim() ? (
-                  <p className="min-w-0 max-w-[min(100%,20rem)] truncate text-right text-[10px] font-bold text-gray-500">
-                    Filter: {searchQuery.trim()}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
             <div className="min-h-0 flex-1 overflow-hidden">
-              {activeTab === 'summary' ? (
-                <FbaShipmentBoard
-                  summaryMode={summaryMode}
-                  refreshTrigger={refreshTrigger}
-                  searchQuery={searchQuery}
-                />
-              ) : activeTab === 'labels' ? (
-                <FbaLabelQueue refreshTrigger={refreshTrigger} />
+
+              {/* Specific plan selected from sidebar */}
+              {hasPlan ? (
+                <FbaFnskuChecklist planId={planId!} statusFilter={statusFilter} onClear={clearDraftOrPlan} />
+
+              /* Draft FNSKUs pasted — review before adding to today's plan */
+              ) : hasDraft ? (
+                <FbaFnskuChecklist fnskus={draftFnskus} onClear={clearDraftOrPlan} onCreated={handleCreated} />
+
+              ) : activeTab === 'shipped' ? (
+                <FbaShippedHistory refreshTrigger={refreshTrigger} />
+
+              ) : legacyLabelsTab || summaryMode === 'PRINT_READY' ? (
+                <div className="h-full overflow-y-auto p-5">
+                  <div className="mb-4">
+                    <h2 className="text-sm font-black text-zinc-800 tracking-tight">Print Queue</h2>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">Items ready to ship — select rows, then enter tracking in the sidebar</p>
+                  </div>
+                  <FbaPrintReadyTable refreshTrigger={printRefresh} />
+                </div>
+
               ) : (
-                <FbaShippedTable refreshTrigger={refreshTrigger} />
+                <FbaFnskuChecklist key={refreshTrigger} statusFilter={statusFilter} />
               )}
+
             </div>
           </div>
         </div>
       </div>
-
-      <AnimatePresence>
-        {activeTab === 'shipped' && selectedShipped ? (
-          <ShippedDetailsPanel
-            shipped={selectedShipped}
-            context="dashboard"
-            onClose={() => {
-              window.dispatchEvent(new CustomEvent('close-shipped-details'));
-              setSelectedShipped(null);
-            }}
-            onUpdate={() => {
-              window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-              window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-            }}
-          />
-        ) : null}
-      </AnimatePresence>
     </div>
   );
 }

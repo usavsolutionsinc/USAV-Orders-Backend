@@ -242,7 +242,12 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       render: () => (
         <AnimatePresence mode="popLayout">
           {filteredFbaItems.map((item) => (
-            <FbaItemCard key={item.item_id} item={item} />
+            <FbaItemCard
+              key={item.item_id}
+              item={item}
+              isExpanded={expandedItemKey === `fba-${item.item_id}`}
+              onToggleExpand={() => toggleExpandedItem(`fba-${item.item_id}`)}
+            />
           ))}
         </AnimatePresence>
       ),
@@ -418,7 +423,12 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                 <div className="flex flex-col">
                   <AnimatePresence mode="popLayout">
                     {filteredFbaItems.map((item) => (
-                      <FbaItemCard key={item.item_id} item={item} />
+                      <FbaItemCard
+                        key={item.item_id}
+                        item={item}
+                        isExpanded={expandedItemKey === `fba-${item.item_id}`}
+                        onToggleExpand={() => toggleExpandedItem(`fba-${item.item_id}`)}
+                      />
                     ))}
                   </AnimatePresence>
                 </div>

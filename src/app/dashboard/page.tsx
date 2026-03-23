@@ -35,6 +35,7 @@ function DashboardPageContent() {
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
     const orderView = getOrderViewFromSearch(searchParams.toString());
+    const detailsEnabled = orderView !== 'fba';
     useRealtimeInvalidation({ dashboard: true });
 
     useEffect(() => {
@@ -151,6 +152,12 @@ function DashboardPageContent() {
         };
     }, []);
 
+    useEffect(() => {
+        if (!detailsEnabled) {
+            setSelectedShipped(null);
+        }
+    }, [detailsEnabled]);
+
     return (
         <div className="flex h-full w-full">
             <Suspense fallback={
@@ -170,7 +177,7 @@ function DashboardPageContent() {
             </Suspense>
 
             <AnimatePresence>
-                {selectedShipped && (
+                {detailsEnabled && selectedShipped && (
                     orderView === 'unshipped' ? (
                         <UnshippedDetailsPanel
                             shipped={selectedShipped}

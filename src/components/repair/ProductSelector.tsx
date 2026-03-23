@@ -3,9 +3,15 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from '../Icons';
 
+interface ProductSelection {
+  type: string;
+  model: string;
+  sourceSku?: string | null;
+}
+
 interface ProductSelectorProps {
-  onSelect: (product: { type: string; model: string }) => void;
-  selectedProduct: { type: string; model: string } | null;
+  onSelect: (product: ProductSelection) => void;
+  selectedProduct: ProductSelection | null;
   onPriceChange?: (price: string) => void;
 }
 
@@ -65,14 +71,12 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
   const [otherModelText, setOtherModelText] = useState('');
   const [showOther, setShowOther] = useState(false);
 
-  const totalPrice = selectedItems.reduce((sum, item) => sum + (item.price ?? 0), 0);
+  const deriveSourceSku = (items: SelectedItem[]): string | null => {
+    const candidate = items
+      .map((item) => String(item.sku || '').trim())
+      .find(Boolean);
 
-  const pushSelection = (items: SelectedItem[]) => {
-    setSelectedItems(items);
-    const model = items.map((i) => i.name).join(', ');
-    const type = items.length > 0 ? rootName : '';
-    onSelect({ type, model });
-    onPriceChange?.(items.length > 0 ? totalPriceOf(items).toFixed(2) : '');
+    return candidate || null;
   };
 
   const totalPriceOf = (items: SelectedItem[]) =>
@@ -154,7 +158,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
         ? prev.filter((i) => i.id !== product.id)
         : [...prev, { id: product.id, name: product.name, price: product.price, sku: product.sku }];
       const model = next.map((i) => i.name).join(', ');
-      onSelect({ type: next.length > 0 ? rootName : '', model });
+      onSelect({ type: next.length > 0 ? rootName : '', model, sourceSku: deriveSourceSku(next) });
       onPriceChange?.(totalPriceOf(next).toFixed(2));
       return next;
     });
@@ -164,7 +168,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
     setSelectedItems((prev) => {
       const next = prev.filter((i) => i.id !== id);
       const model = next.map((i) => i.name).join(', ');
-      onSelect({ type: next.length > 0 ? rootName : '', model });
+      onSelect({ type: next.length > 0 ? rootName : '', model, sourceSku: deriveSourceSku(next) });
       onPriceChange?.(totalPriceOf(next).toFixed(2));
       return next;
     });
@@ -174,7 +178,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
     const value = otherModelText.trim();
     if (!value) return;
     setSelectedItems([]);
-    onSelect({ type: 'Other', model: value });
+    onSelect({ type: 'Other', model: value, sourceSku: null });
     setOtherModelText('');
     setShowOther(false);
   };

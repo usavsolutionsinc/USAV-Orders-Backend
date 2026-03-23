@@ -1,4 +1,10 @@
-export type FbaWorkflowMode = 'PLAN' | 'PACKING' | 'READY_TO_GO' | 'NONE';
+/**
+ * Canonical workflow modes derived from fba_fnsku_logs quantity rules.
+ * PRINT_READY replaces the legacy READY_TO_GO alias used in older API responses.
+ * Note: READY_TO_GO is still the DB enum for fba_shipment_items.status — this
+ * type is only for the derived planning workflow state.
+ */
+export type FbaWorkflowMode = 'PLAN' | 'PACKING' | 'PRINT_READY' | 'NONE';
 
 export interface FbaSummaryRow {
   fnsku: string;
@@ -37,21 +43,18 @@ export function getFbaReadyToPrintQty(row: FbaSummaryRow): number {
 
 export function deriveFbaWorkflowMode(row: FbaSummaryRow): FbaWorkflowMode {
   const fromApi = String(row.workflow_mode || '').toUpperCase();
-  if (fromApi === 'PLAN' || fromApi === 'PACKING' || fromApi === 'READY_TO_GO' || fromApi === 'NONE') {
+  if (fromApi === 'PLAN' || fromApi === 'PACKING' || fromApi === 'PRINT_READY' || fromApi === 'NONE') {
     return fromApi as FbaWorkflowMode;
   }
 
   // Backward-compatible aliases from legacy API responses.
-  if (fromApi === 'TESTED') return 'PLAN';
-  if (fromApi === 'READY_TO_PRINT') return 'READY_TO_GO';
-  if (fromApi === 'READY_TO_GO') return 'READY_TO_GO';
-  if (fromApi === 'PLANNED') return 'PLAN';
-  if (fromApi === 'LABEL_ASSIGNED' || fromApi === 'SHIPPED') {
-    return 'READY_TO_GO';
-  }
+  if (fromApi === 'TESTED' || fromApi === 'PLANNED') return 'PLAN';
+  if (fromApi === 'READY_TO_GO' || fromApi === 'READY_TO_PRINT') return 'PRINT_READY';
+  if (fromApi === 'LABEL_ASSIGNED' || fromApi === 'SHIPPED') return 'PRINT_READY';
 
+  // Fallback: derive from quantity fields when workflow_mode is absent.
   const readyToPrintQty = getFbaReadyToPrintQty(row);
-  if (readyToPrintQty > 0) return 'READY_TO_GO';
+  if (readyToPrintQty > 0) return 'PRINT_READY';
   if (getFbaCurrentlyPackingQty(row) > 0) return 'PACKING';
   if (Number(row.tech_scanned_qty || 0) > 0) return 'PLAN';
   return 'NONE';

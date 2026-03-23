@@ -2,16 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Loader2,
-  Package,
-  Printer,
-  PackageCheck,
-  Check,
-  RefreshCw,
-  AlertCircle,
-} from '@/components/Icons';
-import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
+import { Check, Loader2, Package, PackageCheck, Printer, RefreshCw, AlertCircle } from '@/components/Icons';
+import WeekHeader from '@/components/ui/WeekHeader';
+import { formatDateWithOrdinal, getCurrentPSTDateKey } from '@/utils/date';
 import type { FbaSummaryRow } from '@/components/fba/types';
 import { getFbaReadyToPrintQty } from '@/components/fba/types';
 
@@ -293,6 +286,9 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
   const [error, setError] = useState<string | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
 
+  const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
+  const fallbackDate = formatDate(getCurrentPSTDateKey());
+
   const loadQueue = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -391,25 +387,36 @@ export function FbaLabelQueue({ refreshTrigger = 0 }: FbaLabelQueueProps) {
     );
   }
 
-  return (
-    <div className="flex h-full flex-col bg-white">
-      <div className={mainStickyHeaderClass}>
-        <div className={mainStickyHeaderRowClass}>
-        <div className="flex items-center gap-2 min-w-0">
-          <Printer className="w-4 h-4 text-gray-500" />
-          <span className="text-sm font-black text-gray-900">Print Queue</span>
-        </div>
-        <button
-          onClick={() => setRefreshCount((c) => c + 1)}
-          className="border border-gray-200 p-2 transition-colors hover:bg-gray-50"
-          title="Refresh"
-        >
-          <RefreshCw className="w-4 h-4 text-gray-500" />
-        </button>
-        </div>
-      </div>
+  const headerCount =
+    shipments.length > 0
+      ? shipments.length
+      : fallbackRows.length > 0
+        ? fallbackRows.length
+        : 0;
 
-      <div className="flex-1 overflow-y-auto">
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <WeekHeader
+        stickyDate=""
+        fallbackDate={fallbackDate}
+        count={headerCount}
+        countClassName="text-gray-600"
+        formatDate={formatDate}
+        showWeekControls={false}
+        rightSlot={(
+          <button
+            type="button"
+            onClick={() => setRefreshCount((c) => c + 1)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-gray-300 text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
+            title="Refresh print queue"
+            aria-label="Refresh print queue"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        )}
+      />
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <AnimatePresence>
           {shipments.length === 0 ? (
             <motion.div

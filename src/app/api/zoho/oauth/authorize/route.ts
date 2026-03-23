@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { normalizeEnvValue } from '@/lib/env-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,9 +13,9 @@ export const dynamic = 'force-dynamic';
  * Optional: ZOHO_DOMAIN (defaults to accounts.zoho.com)
  */
 export async function GET(request: NextRequest) {
-  const clientId = process.env.ZOHO_CLIENT_ID;
-  const domain = process.env.ZOHO_DOMAIN || 'accounts.zoho.com';
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+  const clientId = normalizeEnvValue(process.env.ZOHO_CLIENT_ID);
+  const domain = normalizeEnvValue(process.env.ZOHO_DOMAIN) || 'accounts.zoho.com';
+  const appUrl = normalizeEnvValue(process.env.NEXT_PUBLIC_APP_URL).replace(/\/$/, '');
 
   if (!clientId) {
     return NextResponse.json(

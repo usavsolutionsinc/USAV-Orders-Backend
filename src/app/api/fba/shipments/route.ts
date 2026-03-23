@@ -56,17 +56,38 @@ export async function GET(request: NextRequest) {
         fs.assigned_tech_id,
         fs.assigned_packer_id,
         -- Item aggregates
-        COUNT(fsi.id)                                              AS total_items,
-        COUNT(fsi.id) FILTER (WHERE fsi.status = 'READY_TO_GO')   AS ready_items,
-        COUNT(fsi.id) FILTER (WHERE fsi.status = 'LABEL_ASSIGNED') AS labeled_items,
-        COUNT(fsi.id) FILTER (WHERE fsi.status = 'SHIPPED')        AS shipped_items,
-        COALESCE(SUM(fsi.expected_qty), 0)                         AS total_expected_qty,
-        COALESCE(SUM(fsi.actual_qty), 0)                           AS total_actual_qty
+        COUNT(DISTINCT fsi.id)                                                   AS total_items,
+        COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'READY_TO_GO')        AS ready_items,
+        COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'LABEL_ASSIGNED')     AS labeled_items,
+        COUNT(DISTINCT fsi.id) FILTER (WHERE fsi.status = 'SHIPPED')            AS shipped_items,
+        COALESCE(SUM(DISTINCT fsi.expected_qty), 0)                              AS total_expected_qty,
+        COALESCE(SUM(DISTINCT fsi.actual_qty), 0)                               AS total_actual_qty,
+        -- Tracking numbers joined via junction table
+        COALESCE(
+          jsonb_agg(
+            DISTINCT jsonb_build_object(
+              'link_id',              fst.id,
+              'tracking_id',          stn.id,
+              'tracking_number',      stn.tracking_number_raw,
+              'carrier',              stn.carrier,
+              'status_category',      stn.latest_status_category,
+              'status_description',   stn.latest_status_description,
+              'is_delivered',         stn.is_delivered,
+              'is_in_transit',        stn.is_in_transit,
+              'has_exception',        stn.has_exception,
+              'latest_event_at',      stn.latest_event_at,
+              'label',                fst.label
+            )
+          ) FILTER (WHERE stn.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS tracking_numbers
       FROM fba_shipments fs
       LEFT JOIN staff creator ON creator.id = fs.created_by_staff_id
       LEFT JOIN staff tech    ON tech.id    = fs.assigned_tech_id
       LEFT JOIN staff packer  ON packer.id  = fs.assigned_packer_id
       LEFT JOIN fba_shipment_items fsi ON fsi.shipment_id = fs.id
+      LEFT JOIN fba_shipment_tracking fst ON fst.shipment_id = fs.id
+      LEFT JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
       ${whereClause}
       GROUP BY fs.id, creator.name, tech.name, packer.name
       ORDER BY fs.created_at DESC

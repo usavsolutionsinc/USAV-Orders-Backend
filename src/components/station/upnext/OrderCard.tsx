@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { framerPresence, framerTransition } from '@/design-system';
 import { Check, ChevronDown, Copy, ExternalLink, Play, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
@@ -11,9 +12,8 @@ import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { getTrackingUrl } from '@/utils/order-links';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { getActiveStaff } from '@/lib/staffCache';
-import { WorkOrderAssignmentCard } from '@/components/work-orders/WorkOrderAssignmentCard';
-import type { AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
+import { getPresentStaffForToday } from '@/lib/staffCache';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { Order } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';
@@ -159,7 +159,7 @@ export function OrderCard({
   const openAssignment = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const members = await getActiveStaff();
+      const members = await getPresentStaffForToday();
       setTechnicianOptions(
         members
           .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
@@ -208,10 +208,10 @@ export function OrderCard({
     <>
       <motion.div
         key={order.id}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        initial={framerPresence.upNextRow.initial}
+        animate={framerPresence.upNextRow.animate}
+        exit={framerPresence.upNextRow.exit}
+        transition={framerTransition.upNextRowMount}
         onClick={onToggleExpand}
         className={`border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
           isStockTab
@@ -244,7 +244,7 @@ export function OrderCard({
             />
             <motion.span
               animate={{ rotate: isExpanded ? 180 : 0 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              transition={framerTransition.upNextChevron}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500"
             >
               <ChevronDown className="w-4 h-4" />
@@ -333,13 +333,10 @@ export function OrderCard({
           {isExpanded && (
             <motion.div
               key="expanded-order"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{
-                height:  { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
-                opacity: { duration: 0.14, ease: 'easeOut' },
-              }}
+              initial={framerPresence.collapseHeight.initial}
+              animate={framerPresence.collapseHeight.animate}
+              exit={framerPresence.collapseHeight.exit}
+              transition={framerTransition.upNextCollapse}
               style={{ willChange: 'height, opacity' }}
               className="overflow-hidden"
             >

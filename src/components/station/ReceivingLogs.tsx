@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Package, Loader2, Search } from '../Icons';
 import { CopyChip, getLast4 } from '@/components/ui/CopyChip';
@@ -9,6 +9,7 @@ import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/uti
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 const STATION_CHANNEL =
@@ -41,6 +42,8 @@ interface ReceivingLogsProps {
     onSelectLog?: (log: ReceivingLog) => void;
     selectedLogId?: string | null;
 }
+
+type ReceivingLogFilter = 'all' | 'fba' | 'returns';
 
 function formatDbTime(value: string | null | undefined): string {
     if (!value) return '--:--';
@@ -77,6 +80,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
     const [weekOffset, setWeekOffset] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
+    const [logChannelFilter, setLogChannelFilter] = useState<ReceivingLogFilter>('all');
     const [stickyDate, setStickyDate] = useState('');
     const [currentCount, setCurrentCount] = useState(0);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -167,8 +171,33 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
 
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const showSearch = searchOpen || Boolean(normalizedQuery);
+
+    const channelFiltered = useMemo(() => {
+        if (logChannelFilter === 'fba') {
+            return data.filter((log) => String(log.target_channel || '').toUpperCase() === 'FBA');
+        }
+        if (logChannelFilter === 'returns') {
+            return data.filter((log) => log.is_return);
+        }
+        return data;
+    }, [data, logChannelFilter]);
+
+    const logFilterSliderItems = useMemo(
+        () => [
+            { id: 'all', label: 'All', tone: 'zinc' as const, count: data.length },
+            {
+                id: 'fba',
+                label: 'FBA',
+                tone: 'blue' as const,
+                count: data.filter((log) => String(log.target_channel || '').toUpperCase() === 'FBA').length,
+            },
+            { id: 'returns', label: 'Returns', tone: 'yellow' as const, count: data.filter((log) => log.is_return).length },
+        ],
+        [data]
+    );
+
     const filteredData = normalizedQuery
-        ? data.filter((log) => {
+        ? channelFiltered.filter((log) => {
             const haystack = [
                 log.tracking,
                 log.status,
@@ -180,7 +209,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                 .join(' ');
             return haystack.includes(normalizedQuery);
         })
-        : data;
+        : channelFiltered;
 
     useEffect(() => {
         if (!showSearch) return;
@@ -233,17 +262,21 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                 activeCount = parseInt(header.getAttribute('data-count') || '0');
             } else break;
         }
-        if (activeDate) setStickyDate(formatDate(activeDate));
-        if (activeCount) setCurrentCount(activeCount);
+        setStickyDate(activeDate ? formatDate(activeDate) : '');
+        setCurrentCount(activeCount);
     }, []);
 
     useEffect(() => {
         const container = scrollRef.current;
+        let timeoutId: number | null = null;
         if (container) {
             container.addEventListener('scroll', handleScroll);
-            setTimeout(() => handleScroll(), 100);
+            timeoutId = window.setTimeout(() => handleScroll(), 100);
         }
-        return () => container?.removeEventListener('scroll', handleScroll);
+        return () => {
+            container?.removeEventListener('scroll', handleScroll);
+            if (timeoutId !== null) window.clearTimeout(timeoutId);
+        };
     }, [handleScroll, filteredData]);
 
     return (
@@ -287,6 +320,17 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                         animate={{ opacity: 1 }}
                                         key={log.id}
                                         onClick={() => onSelectLog?.(log)}
+                                        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                                            if (event.target !== event.currentTarget) return;
+                                            if (event.key === 'Enter' || event.key === ' ') {
+                                                event.preventDefault();
+                                                onSelectLog?.(log);
+                                            }
+                                        }}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-pressed={selectedLogId === log.id}
+                                        aria-label={`Open receiving log ${log.tracking || `#${log.id}`}`}
                                         className={`grid grid-cols-[45px_1fr] items-center gap-2 px-2 py-1 transition-colors border-b border-gray-50/50 cursor-pointer hover:bg-blue-50/40 ${
                                             selectedLogId === log.id ? 'bg-blue-50/60' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
                                         }`}
@@ -301,7 +345,8 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                                 icon={null}
                                                 iconClass=""
                                                 underlineClass="border-blue-500"
-                                                width="w-[30px]"
+                                                width="w-[40px]"
+                                                truncateDisplay={false}
                                             />
                                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60 truncate">
                                                 {log.status || 'Unknown'}
@@ -325,38 +370,59 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                 )}
             </div>
 
-            <AnimatePresence initial={false} mode="wait">
-                {showSearch ? (
-                    <div key="receiving-logs-search-bar" className="absolute bottom-3 left-3 z-30 w-[320px]">
-                        <OverlaySearchBar
-                            value={searchQuery}
-                            onChange={setSearchQuery}
-                            inputRef={searchInputRef}
-                            placeholder="Search tracking or carrier..."
-                            variant="blue"
-                            className="w-full"
-                            onClear={closeSearch}
-                            onClose={closeSearch}
-                        />
-                    </div>
-                ) : (
+            <div className="absolute bottom-3 left-3 z-30 flex w-[320px] flex-col gap-2">
+                <AnimatePresence initial={false} mode="wait">
+                    {showSearch ? (
+                        <motion.div
+                            key="receiving-logs-search-bar"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 6 }}
+                            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                            <OverlaySearchBar
+                                value={searchQuery}
+                                onChange={setSearchQuery}
+                                inputRef={searchInputRef}
+                                placeholder="Search tracking or carrier..."
+                                variant="blue"
+                                className="w-full"
+                                onClear={closeSearch}
+                                onClose={closeSearch}
+                            />
+                        </motion.div>
+                    ) : null}
+                </AnimatePresence>
+
+                <div className="rounded-2xl border border-zinc-200/90 bg-white/95 p-2 shadow-md shadow-zinc-900/5 backdrop-blur-sm">
+                    <HorizontalButtonSlider
+                        variant="fba"
+                        size="lg"
+                        legend="View"
+                        items={logFilterSliderItems}
+                        value={logChannelFilter}
+                        onChange={(id) => setLogChannelFilter(id as ReceivingLogFilter)}
+                        aria-label="Receiving log filter"
+                    />
+                </div>
+
+                {!showSearch ? (
                     <motion.button
                         key="receiving-logs-search-trigger"
                         type="button"
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -8 }}
                         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                         whileHover={{ scale: 1.04 }}
                         whileTap={{ scale: 0.96 }}
                         onClick={() => setSearchOpen(true)}
-                        className="absolute bottom-3 left-3 z-30 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 will-change-transform transition hover:bg-blue-500"
+                        className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 will-change-transform transition hover:bg-blue-500"
                         aria-label="Open receiving logs search"
                     >
                         <Search className="h-4 w-4" />
                     </motion.button>
-                )}
-            </AnimatePresence>
+                ) : null}
+            </div>
         </div>
     );
 }

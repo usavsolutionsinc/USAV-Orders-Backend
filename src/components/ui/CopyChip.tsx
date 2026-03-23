@@ -58,9 +58,19 @@ export interface CopyChipProps {
   iconClass?: string;
   width: string;
   disableCopy?: boolean;
+  truncateDisplay?: boolean;
 }
 
-export function CopyChip({ value, display, icon, underlineClass, iconClass, width, disableCopy = false }: CopyChipProps) {
+export function CopyChip({
+  value,
+  display,
+  icon,
+  underlineClass,
+  iconClass,
+  width,
+  disableCopy = false,
+  truncateDisplay = true,
+}: CopyChipProps) {
   const [copied, setCopied] = useState(false);
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
@@ -68,6 +78,7 @@ export function CopyChip({ value, display, icon, underlineClass, iconClass, widt
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const normalizedValue = normalizeCopyText(value);
   const normalizedDisplay = normalizeCopyText(display);
+  const displayOverflowClass = truncateDisplay ? 'truncate' : 'whitespace-nowrap';
   const canCopy = !disableCopy && !!normalizedValue && normalizedValue !== '---';
   const isDisabled = !canCopy && !disableCopy;
 
@@ -142,7 +153,7 @@ export function CopyChip({ value, display, icon, underlineClass, iconClass, widt
         className="w-full flex items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95 disabled:opacity-30"
       >
         <span className={`shrink-0 ${iconClass}`}>{icon}</span>
-        <span className={`font-mono text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 flex-1 text-left ${underlineClass}`}>
+        <span className={`font-mono text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 flex-1 min-w-0 text-left ${displayOverflowClass} ${underlineClass}`}>
           {normalizedDisplay || '---'}
         </span>
       </button>
@@ -225,7 +236,7 @@ export const FnskuChip = ({ value, width = 'w-[50px]' }: { value: string; width?
 export const SourceOrderChip = ({
   value,
   display,
-  width = 'w-[92px]',
+  width = 'w-[50px]',
   disableCopy = false,
 }: {
   value: string;

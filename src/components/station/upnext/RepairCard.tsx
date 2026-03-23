@@ -6,10 +6,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronDown, Settings } from '@/components/Icons';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { ShipByDate } from '@/components/ui/ShipByDate';
-import { getActiveStaff } from '@/lib/staffCache';
+import { getPresentStaffForToday } from '@/lib/staffCache';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { WorkOrderAssignmentCard } from '@/components/work-orders/WorkOrderAssignmentCard';
-import type { AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { RepairQueueItem } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';
@@ -101,7 +100,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
   const openAssignment = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const members = await getActiveStaff();
+      const members = await getPresentStaffForToday();
       setTechnicianOptions(
         members
           .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))

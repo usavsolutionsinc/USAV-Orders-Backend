@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const storeId = requiredEnvAny('ECWID_STORE_ID', ['ECWID_STOREID', 'ECWID_STORE', 'NEXT_PUBLIC_ECWID_STORE_ID']);
     const token = requiredEnvAny('ECWID_API_TOKEN', ['ECWID_TOKEN', 'ECWID_ACCESS_TOKEN', 'NEXT_PUBLIC_ECWID_API_TOKEN']);
     const query = String(req.nextUrl.searchParams.get('q') || '').trim();
-    const limit = Math.min(Math.max(Number(req.nextUrl.searchParams.get('limit') || 12), 1), 50);
+    const limit = Math.min(Math.max(Number(req.nextUrl.searchParams.get('limit') || 12), 1), 100);
 
     if (!query) {
       return NextResponse.json({ success: true, products: [], count: 0, query });

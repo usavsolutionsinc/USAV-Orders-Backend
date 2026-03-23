@@ -24,6 +24,12 @@ export default function ReceivingDashboard() {
         return () => window.removeEventListener('receiving-select-log', handleSelectLog);
     }, []);
 
+    useEffect(() => {
+        if (isUnboxingMode && selectedLog) {
+            setSelectedLog(null);
+        }
+    }, [isUnboxingMode, selectedLog]);
+
     return (
         <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f8fbfb_0%,#ffffff_16%)]">
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">

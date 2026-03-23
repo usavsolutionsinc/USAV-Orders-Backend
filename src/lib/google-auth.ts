@@ -1,14 +1,16 @@
 import { google } from 'googleapis';
+import { normalizeEnvValue, normalizeMultilineEnvValue } from '@/lib/env-utils';
 
 export function getGoogleAuth() {
-    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-    const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+    const rawClientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+    const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
 
-    if (!clientEmail || !privateKey) {
+    if (!rawClientEmail || !rawPrivateKey) {
         throw new Error('Missing GOOGLE_CLIENT_EMAIL or GOOGLE_PRIVATE_KEY');
     }
 
-    const normalizedPrivateKey = privateKey.replace(/\\n/g, '\n');
+    const clientEmail = normalizeEnvValue(rawClientEmail);
+    const normalizedPrivateKey = normalizeMultilineEnvValue(rawPrivateKey);
 
     return new google.auth.JWT({
         email: clientEmail,
@@ -19,4 +21,3 @@ export function getGoogleAuth() {
         ],
     });
 }
-

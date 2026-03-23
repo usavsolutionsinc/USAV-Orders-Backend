@@ -24,13 +24,17 @@ export async function GET(request: NextRequest) {
            fsi.id           AS item_id,
            fsi.shipment_id,
            fs.shipment_ref,
+           fs.assigned_tech_id,
+           fs.assigned_packer_id,
            fs.destination_fc,
            fs.due_date,
            fs.due_date      AS deadline_at,
+           COALESCE(NULLIF(fs.notes, ''), fs.shipment_ref) AS plan_title,
            fsi.fnsku,
            fsi.product_title,
            fsi.asin,
            fsi.sku,
+           NULLIF(COALESCE(to_jsonb(ff)->>'condition', to_jsonb(ff)->>'condition_grade'), '') AS condition,
            fsi.expected_qty,
            fsi.actual_qty,
            fsi.status,
@@ -38,6 +42,7 @@ export async function GET(request: NextRequest) {
            tech.name        AS assigned_tech_name
          FROM fba_shipment_items fsi
          JOIN fba_shipments fs ON fs.id = fsi.shipment_id
+         LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
          LEFT JOIN staff tech ON tech.id = fs.assigned_tech_id
          WHERE fsi.status = ANY($1::fba_shipment_status_enum[])
            AND fs.status != 'SHIPPED'

@@ -19,13 +19,17 @@ export interface FBAQueueItem {
   item_id: number;
   shipment_id: number;
   shipment_ref: string;
+  plan_title?: string | null;
   fnsku: string;
   product_title: string | null;
   asin: string | null;
   sku: string | null;
+  condition?: string | null;
   expected_qty: number;
   actual_qty: number;
   status: 'PLANNED' | 'READY_TO_GO' | 'LABEL_ASSIGNED' | 'SHIPPED';
+  assigned_tech_id?: number | null;
+  assigned_packer_id?: number | null;
   assigned_tech_name: string | null;
   due_date: string | null;
   deadline_at?: string | null;

@@ -26,6 +26,16 @@ export const staff = pgTable('staff', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+export const staffWeeklySchedule = pgTable('staff_weekly_schedule', {
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  dayOfWeek: integer('day_of_week').notNull(),
+  isScheduled: boolean('is_scheduled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.staffId, table.dayOfWeek] }),
+}));
+
 export const favoriteSkus = pgTable('favorite_skus', {
   id: serial('id').primaryKey(),
   ecwidProductId: varchar('ecwid_product_id', { length: 64 }),

@@ -51,10 +51,17 @@ export async function GET(req: NextRequest) {
     const params: any[] = [staffId];
     let idx = 2;
     let weekClause = '';
+    /** Same bounds as weekClause but uses first tracking + serial time so re-scans / late serials stay grouped by first scan. */
+    let weekClauseSerial = '';
     if (weekStart && weekEnd) {
       weekClause = `
         AND sal.created_at >= ($${idx}::date - interval '1 day')
         AND sal.created_at <  ($${idx + 1}::date + interval '2 days')`;
+      weekClauseSerial = `
+        AND LEAST(sal.created_at, COALESCE(tr_first.first_tracking_at, sal.created_at))
+            >= ($${idx}::date - interval '1 day')
+        AND LEAST(sal.created_at, COALESCE(tr_first.first_tracking_at, sal.created_at))
+            < ($${idx + 1}::date + interval '2 days')`;
       params.push(weekStart, weekEnd);
       idx += 2;
     }
@@ -147,7 +154,10 @@ export async function GET(req: NextRequest) {
           sal.id AS source_row_id,
           'tech_serial'::text AS source_kind,
           tsn.id AS tech_serial_id,
-          sal.created_at,
+          LEAST(
+            sal.created_at,
+            COALESCE(tr_first.first_tracking_at, sal.created_at)
+          ) AS created_at,
           COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
           tsn.serial_number,
           sal.staff_id AS tested_by,
@@ -179,6 +189,23 @@ export async function GET(req: NextRequest) {
         FROM station_activity_logs sal
         JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
         LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+        LEFT JOIN LATERAL (
+          SELECT MIN(ts.created_at) AS first_tracking_at
+          FROM station_activity_logs ts
+          LEFT JOIN shipping_tracking_numbers stn_ts ON stn_ts.id = ts.shipment_id
+          WHERE ts.station = 'TECH'
+            AND ts.activity_type = 'TRACKING_SCANNED'
+            AND ts.staff_id = sal.staff_id
+            AND (
+              (tsn.shipment_id IS NOT NULL AND ts.shipment_id = tsn.shipment_id)
+              OR (
+                COALESCE(tsn.scan_ref, stn.tracking_number_raw, '') <> ''
+                AND COALESCE(ts.scan_ref, stn_ts.tracking_number_raw, '') <> ''
+                AND RIGHT(regexp_replace(UPPER(COALESCE(ts.scan_ref, stn_ts.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18) =
+                    RIGHT(regexp_replace(UPPER(COALESCE(tsn.scan_ref, stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
+              )
+            )
+        ) tr_first ON TRUE
         LEFT JOIN LATERAL (
           SELECT o_match.id, o_match.shipment_id
           FROM orders o_match
@@ -217,7 +244,7 @@ export async function GET(req: NextRequest) {
         WHERE sal.station = 'TECH'
           AND sal.activity_type = 'SERIAL_ADDED'
           AND sal.staff_id = $1
-          ${weekClause}
+          ${weekClauseSerial || weekClause}
       ),
       fnsku_scan_rows AS (
         SELECT

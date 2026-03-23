@@ -18,12 +18,14 @@ export async function GET(
       `SELECT
          fsi.id,
          fsi.fnsku,
+         COALESCE(fsi.product_title, ff.product_title, fsi.fnsku) AS display_title,
          fsi.product_title,
          fsi.asin,
          fsi.sku,
          fsi.expected_qty,
          fsi.actual_qty,
          fsi.status,
+         fsi.notes,
          fsi.ready_by_staff_id,
          fsi.verified_by_staff_id,
          fsi.labeled_by_staff_id,
@@ -37,6 +39,7 @@ export async function GET(
          l.name  AS labeled_by_name,
          sh.name AS shipped_by_name
        FROM fba_shipment_items fsi
+       LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
        LEFT JOIN staff r  ON r.id  = fsi.ready_by_staff_id
        LEFT JOIN staff v  ON v.id  = fsi.verified_by_staff_id
        LEFT JOIN staff l  ON l.id  = fsi.labeled_by_staff_id

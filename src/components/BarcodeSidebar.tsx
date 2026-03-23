@@ -136,21 +136,23 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
                     variant="blue"
                 />
             </motion.div>
-            <motion.div variants={itemVariants} className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4 space-y-4">
-                <FavoritesWorkspaceSection
-                    workspaceKey="sku-stock"
-                    accent="blue"
-                    title="Favorites"
-                    description=""
-                    emptyLabel="No SKU stock favorites yet"
-                    useLabel="Search SKU"
-                    inlineRows
-                    buttonAccent="blue"
-                    addButtonAccent="green"
-                    onUseFavorite={handleUseFavorite}
-                    onAddFavorite={handleAddFavorite}
-                    isFavoriteAdded={(favorite) => String(favorite.sku || '').trim().toLowerCase() === activeFilledSku}
-                />
+            <motion.div variants={itemVariants} className="flex-1 overflow-y-auto scrollbar-hide">
+                <div className="p-4">
+                    <FavoritesWorkspaceSection
+                        workspaceKey="sku-stock"
+                        accent="blue"
+                        title="Favorites"
+                        description=""
+                        emptyLabel="No SKU stock favorites yet"
+                        useLabel="Search SKU"
+                        inlineRows
+                        buttonAccent="blue"
+                        addButtonAccent="green"
+                        onUseFavorite={handleUseFavorite}
+                        onAddFavorite={handleAddFavorite}
+                        isFavoriteAdded={(favorite) => String(favorite.sku || '').trim().toLowerCase() === activeFilledSku}
+                    />
+                </div>
                 <MultiSkuSnBarcode />
             </motion.div>
             <motion.footer variants={itemVariants} className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">

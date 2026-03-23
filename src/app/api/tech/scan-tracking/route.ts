@@ -8,6 +8,7 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
@@ -92,12 +93,6 @@ export async function POST(req: NextRequest) {
         if (!techIdNum) {
             return NextResponse.json({ success: false, found: false, error: 'Invalid Tech ID' }, { status: 400 });
         }
-
-        const parseSerials = (value: string | null | undefined) =>
-            String(value || '')
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean);
 
         const client = await pool.connect();
         try {
@@ -217,9 +212,16 @@ export async function POST(req: NextRequest) {
                     tsn.scan_ref IS NOT NULL
                     AND tsn.scan_ref != ''
                     AND RIGHT(regexp_replace(UPPER(tsn.scan_ref), '[^A-Z0-9]', '', 'g'), 18) = $2
+                 ) OR (
+                    tsn.orders_exception_id IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1 FROM orders_exceptions oe
+                        WHERE oe.id = tsn.orders_exception_id
+                          AND oe.status = 'open'
+                          AND RIGHT(regexp_replace(UPPER(COALESCE(oe.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $2
+                    )
                  )
-                 ORDER BY tsn.id DESC
-                 LIMIT 1`,
+                 ORDER BY tsn.id ASC`,
                 [resolvedScan.shipmentId, key18]
             );
 
@@ -398,7 +400,10 @@ export async function POST(req: NextRequest) {
                 techActivityId = updateResult.rows[0]?.id ?? existingScanLog.rows[0].id ?? null;
                 techTestDateTime = updateResult.rows[0]?.created_at ?? null;
             }
-            const serialNumbers = parseSerials(existingTracking.rows[0]?.serial_number);
+            const serialNumbers = mergeSerialsFromTsnRows(existingTracking.rows);
+            const techSerialRowIds = existingTracking.rows.map((r: { id: number }) => Number(r.id)).filter(Boolean);
+            const techSerialIdForPayload =
+                techSerialRowIds.length > 0 ? Math.max(...techSerialRowIds) : null;
 
             await client.query('COMMIT');
 
@@ -423,7 +428,7 @@ export async function POST(req: NextRequest) {
                 success: true,
                 found: true,
                 orderFound: true,
-                techSerialId: existingTracking.rows[0]?.id ?? null,
+                techSerialId: techSerialIdForPayload,
                 techActivityId,
                 order: {
                     id: row.id,

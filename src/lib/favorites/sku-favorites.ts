@@ -1,6 +1,6 @@
 import pool from '@/lib/db';
 
-export const FAVORITE_WORKSPACE_KEYS = ['repair', 'sku-stock'] as const;
+export const FAVORITE_WORKSPACE_KEYS = ['repair', 'sku-stock', 'fba'] as const;
 
 export type FavoriteWorkspaceKey = typeof FAVORITE_WORKSPACE_KEYS[number];
 

@@ -2,6 +2,7 @@
  * Direct eBay OAuth2 Token Refresh
  * Converts the Python script to TypeScript for reliable token refreshing
  */
+import { normalizeEnvValue } from '@/lib/env-utils';
 
 interface TokenResponse {
   access_token: string;
@@ -18,11 +19,18 @@ export async function refreshEbayAccessToken(
   clientSecret: string,
   refreshToken: string
 ): Promise<{ accessToken: string; expiresIn: number }> {
+  const normalizedClientId = normalizeEnvValue(clientId);
+  const normalizedClientSecret = normalizeEnvValue(clientSecret);
+  const normalizedRefreshToken = normalizeEnvValue(refreshToken);
+  if (!normalizedClientId || !normalizedClientSecret || !normalizedRefreshToken) {
+    throw new Error('Missing eBay OAuth credentials (client_id/client_secret/refresh_token)');
+  }
+
   // 1. eBay OAuth2 token endpoint
   const url = 'https://api.ebay.com/identity/v1/oauth2/token';
 
   // 2. Create Base64 encoded credentials: <client_id>:<client_secret>
-  const authString = `${clientId}:${clientSecret}`;
+  const authString = `${normalizedClientId}:${normalizedClientSecret}`;
   const base64Auth = Buffer.from(authString).toString('base64');
 
   // 3. Configure headers
@@ -37,7 +45,7 @@ export async function refreshEbayAccessToken(
 
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
-    refresh_token: refreshToken,
+    refresh_token: normalizedRefreshToken,
     scope: scopes,
   });
 
@@ -75,9 +83,9 @@ export async function refreshEbayAccessToken(
 if (require.main === module) {
   require('dotenv').config();
   
-  const CLIENT_ID = process.env.EBAY_APP_ID;
-  const CLIENT_SECRET = process.env.EBAY_CERT_ID;
-  const REFRESH_TOKEN = process.env.EBAY_REFRESH_TOKEN_USAV;
+  const CLIENT_ID = normalizeEnvValue(process.env.EBAY_APP_ID);
+  const CLIENT_SECRET = normalizeEnvValue(process.env.EBAY_CERT_ID);
+  const REFRESH_TOKEN = normalizeEnvValue(process.env.EBAY_REFRESH_TOKEN_USAV);
 
   if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
     console.error('❌ Missing required environment variables:');

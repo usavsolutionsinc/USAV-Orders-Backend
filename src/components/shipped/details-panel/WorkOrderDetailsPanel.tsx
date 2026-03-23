@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -16,6 +16,7 @@ import {
 } from '@/components/Icons';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
 import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { ShippingInformationSection } from '@/components/shipped/details-panel/ShippingInformationSection';
 import { ProductDetailsSection } from '@/components/shipped/details-panel/ProductDetailsSection';
@@ -118,7 +119,6 @@ export function WorkOrderDetailsPanel({
   const [notes, setNotes] = useState(row.notes || '');
   const [isMarkAsShippedOpen, setIsMarkAsShippedOpen] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
-  const workflowScrollerRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState({
     assignedTechId: row.techId ? String(row.techId) : '',
     assignedPackerId: row.packerId ? String(row.packerId) : '',
@@ -270,13 +270,10 @@ export function WorkOrderDetailsPanel({
     },
   ];
 
-  const handleWorkflowWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    const container = workflowScrollerRef.current;
-    if (!container) return;
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-    container.scrollLeft += event.deltaY;
-    event.preventDefault();
-  };
+  const statusSliderItems = useMemo(
+    () => STATUS_OPTIONS.map((status) => ({ id: status, label: status.replace('_', ' ') })),
+    []
+  );
 
   return (
     <motion.div
@@ -428,31 +425,14 @@ export function WorkOrderDetailsPanel({
             <div className="space-y-4">
               <div>
                 <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</p>
-                <div
-                  ref={workflowScrollerRef}
-                  onWheel={handleWorkflowWheel}
-                  className="-mx-1 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-                >
-                  <div className="flex min-w-max snap-x snap-mandatory gap-1.5 px-1">
-                    {STATUS_OPTIONS.map((status) => {
-                      const isActive = form.status === status;
-                      return (
-                        <button
-                          key={status}
-                          type="button"
-                          onClick={() => setForm((prev) => ({ ...prev, status }))}
-                          className={`h-8 snap-start whitespace-nowrap rounded-full border px-3 text-[9px] font-black uppercase tracking-wide transition-all ${
-                            isActive
-                              ? 'border-slate-900 bg-slate-900 text-white'
-                              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          {status.replace('_', ' ')}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <HorizontalButtonSlider
+                  variant="slate"
+                  size="md"
+                  items={statusSliderItems}
+                  value={form.status}
+                  onChange={(id) => setForm((prev) => ({ ...prev, status: id as WorkStatus }))}
+                  aria-label="Work order status"
+                />
               </div>
 
             </div>

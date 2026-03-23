@@ -1,120 +1,152 @@
-# FBA Workflow UX + Backend Plan
+# FBA Workflow UX + Backend Plan (Plan/Print/Shipped Realignment)
 
-## Goal
-Build a consistent FBA flow across Tech -> Packing -> Label Queue -> Shipped that is easy to scan, compact, and operationally safe.
+## Objective
+Move the current `src/components/fba/FbaShippedTable.tsx` behavior out of the **Shipped** tab and into the **Plan** flow as a **Print-ready FNSKU** view, because those rows are pack-scanned and ready for label/print work, not yet shipped.
 
-## Canonical Workflow States
-Use these as the single workflow source-of-truth for UI filters and server logic:
+## Current Problem (As-Is)
+1. `FbaShippedTable` is rendered when `tab=shipped` (`src/app/fba/page.tsx`).
+2. `FbaShippedTable` data source is `/api/packerlogs` via `fetchDashboardPackedRecords`.
+3. `/api/packerlogs` represents PACK station activity, including `FBA_READY`, not shipment close.
+4. Result: FNSKU rows can look "shipped" too early, even though they are only ready to print.
 
-1. `TESTED`
-- Meaning: FNSKU has at least one tech scan.
-- Rule: `tech_scanned_qty > 0`.
+## Target Flow (To-Be)
+Use strict lifecycle ownership per tab:
+
+1. **Plan tab**
+- Source of truth: `fba_fnsku_logs` summary and FNSKU workflow state.
+- Show FNSKU rows in these modes: `PLAN`, `PACKING`, `PRINT_READY` (`READY_TO_GO` alias).
+- This is where the moved table lives.
+
+2. **Print tab**
+- Source of truth: shipment/item queue for label operations.
+- Shows shipment groups and item rows that are ready for label assignment / printing.
+
+3. **Shipped tab**
+- Source of truth: shipment close (`SHIP/SHIPPED`) outcomes only.
+- No PACK scan ledger data here.
+
+## Canonical Server State Contract
+Continue server-side derivation from `fba_fnsku_logs`:
+
+1. `PLAN`
+- Rule: `tech_scanned_qty > 0` and `currently_packing_qty = 0` and `ready_to_print_qty = 0`.
 
 2. `PACKING`
-- Meaning: Tech has scanned units that have not been pack-scanned yet.
 - Rule: `tech_scanned_qty - pack_ready_qty > 0`.
 
-3. `READY_TO_PRINT`
-- Meaning: Units are pack-verified and available for carton/label grouping.
+3. `PRINT_READY` (API alias accepted: `READY_TO_GO`, `READY_TO_PRINT`)
 - Rule: `min(tech_scanned_qty, pack_ready_qty) - shipped_qty > 0`.
 
 4. `LABEL_ASSIGNED`
-- Meaning: Units are grouped to a printed label and waiting pickup/manifest.
 - Rule: shipment item status is `LABEL_ASSIGNED`.
 
 5. `SHIPPED`
-- Meaning: Units confirmed outbound.
-- Rule: outbound shipment/ship event exists for units.
+- Rule: shipment/item status `SHIPPED` and/or `SHIP/SHIPPED` event exists.
 
-## Event Transitions
-1. Tech station FNSKU scan (`/api/tech/scan-fnsku`)
-- Append immutable `TECH/SCANNED` log event.
-- Transition impact: may move row to `PACKING` or increase `TESTED` units.
+## Frontend Ownership Changes
 
-2. Packing station FNSKU scan (`/api/fba/items/scan`)
-- Append immutable `PACK/READY` log event.
-- Increment shipment item `actual_qty`.
-- If item is `PLANNED`, move to `READY_TO_GO`.
-- Transition impact: `PACKING` -> `READY_TO_PRINT` as unit counts balance.
+### 1) Move FbaShippedTable behavior to Plan flow
+1. Keep the row UX pattern from `FbaShippedTable` (date groups, chips, quick scanning readability).
+2. Rebind its data source from `/api/packerlogs` to FBA workflow API (`/api/fba/logs/summary` filtered to print-ready + optional plan/packing modes).
+3. Place this table in `tab=summary` (Plan tab), under a mode toggle that can explicitly show print-ready rows.
 
-3. Label queue mark printed
-- Move shipment items `READY_TO_GO` -> `LABEL_ASSIGNED`.
+Suggested naming cleanup:
+- `FbaShippedTable` -> `FbaPrintReadyTable` (or `FbaWorkflowTable`) to match behavior.
 
-4. Shipping confirm
-- Append immutable `SHIP/SHIPPED` log event.
-- Move shipment/item status to `SHIPPED`.
+### 2) Keep Print tab for label operations
+1. `FbaLabelQueue` remains the print-action surface.
+2. It should consume shipment/item states (`READY_TO_GO`, `LABEL_ASSIGNED`) and not depend on packer-log fallback as primary path.
 
-## UX Ownership by Surface
+### 3) Restrict Shipped tab to shipped history only
+1. Replace current FBA shipped-tab data with shipment-close history.
+2. Use `fba_shipments.status = 'SHIPPED'` (+ item details) as list/detail source.
+3. Remove dependence on `/api/packerlogs` for this tab.
 
-### Sidebar (`src/components/sidebar/FbaSidebarPanel.tsx`, `src/components/fba/FbaSidebar.tsx`)
-What belongs here:
-1. Workflow slider only: `Packing`, `Ready Print`, `Tested`.
-2. Compact pipeline metrics (tested, packed, ready, shipped).
-3. Quick search + quick create controls.
-4. Top 5-8 "active flow" FNSKUs for selected mode.
+## API Plan
 
-What should not live here:
-1. Dense per-item metadata grids.
-2. Long editable forms beyond quick create.
-3. Shipment-level reconciliation details.
+### A) Extend `GET /api/fba/logs/summary`
+Add explicit mode contract for UI filters:
+1. Accept: `ALL`, `PLAN`, `PACKING`, `PRINT_READY`, `READY_TO_GO`, `READY_TO_PRINT`, `LABEL_ASSIGNED`, `SHIPPED`.
+2. Normalize aliases server-side (`READY_TO_GO`/`READY_TO_PRINT` => `PRINT_READY`).
+3. Return canonical `workflow_mode` values used by UI (`PLAN`, `PACKING`, `PRINT_READY`, `LABEL_ASSIGNED`, `SHIPPED`, `NONE`).
 
-### Summary Table (`src/components/fba/FbaShipmentBoard.tsx`)
-What belongs here:
-1. Date-grouped canonical queue.
-2. Dense row summary: product, shipment ref, SKU, T/P/R counters.
-3. Mode badge + FNSKU chip.
-4. One-row expand for quick actions only.
+Response fields to guarantee:
+1. `fnsku`, `product_title`, `asin`, `sku`.
+2. `tech_scanned_qty`, `pack_ready_qty`, `shipped_qty`, `ready_to_print_qty`.
+3. `workflow_mode`, `last_event_at`.
+4. `shipment_id`, `shipment_ref`, `shipment_item_status`, `expected_qty`, `actual_qty`.
 
-What should not live here:
-1. Multi-step reconciliation workflows.
-2. Full shipment edit forms.
+### B) Add dedicated print-ready list endpoint (recommended)
+`GET /api/fba/items/print-ready`
 
-### Details Panel (future dedicated FBA details panel)
-What belongs here:
-1. Shipment item history timeline.
-2. Exception resolution (qty mismatch, relink, void).
-3. Audit metadata (who/when/station).
-4. Final irreversible actions with confirmations.
+Query params:
+1. `q` (search fnsku/title/asin/sku/shipment_ref)
+2. `weekStart`, `weekEnd`
+3. `limit`, `offset`
 
-### Inline Row Expanded View
-What belongs here:
-1. Fast counters (Tested/Packed/Ready/In Packing).
-2. Copy/open queue/refresh actions.
-3. Minimal identifiers (FNSKU, SKU, ASIN, shipment ref).
+Purpose:
+1. Provide row-level list directly for moved table in Plan tab.
+2. Avoid overloading `/api/packerlogs` and avoid mixing non-FBA pack logs.
 
-What should not live here:
-1. Any action requiring >1 confirmation step.
-2. Full-page context switching controls.
+### C) Shipped history endpoint contract
+Use existing shipment APIs with shipped filter:
+1. `GET /api/fba/shipments?status=SHIPPED&limit=...&q=...`
+2. `GET /api/fba/shipments/[id]/items`
 
-## Backend Logic Gaps to Close
-1. Scan idempotency guard
-- Reject or collapse duplicate scans for same `(fnsku, station, staff)` within a short window (for scanner bounce).
+Optional later optimization:
+- Add `GET /api/fba/shipments/shipped-history` if we need flattened row paging.
 
-2. Over-pack protection
-- Prevent `pack_ready_qty` from exceeding expected constraints unless manual override is provided.
+## Transition Rules by Event
 
-3. Exception channel
-- Add `FBA_EXCEPTION` events for mismatch/unknown FNSKU/manual fixes instead of silent failures.
+1. Tech scan (`/api/tech/scan-fnsku`)
+- Append `TECH/SCANNED`.
+- Affects Plan/Packing counts.
 
-4. Explicit reconciliation queue
-- Add endpoint returning rows where `abs(tech_scanned_qty - pack_ready_qty)` or `expected_qty vs actual_qty` diverges materially.
+2. Pack scan (`/api/fba/items/scan`)
+- Append `PACK/READY`.
+- Promotes to print-ready when counts allow.
+- Must not appear in shipped history.
 
-5. Strong status derivation contract
-- Keep `workflow_mode` server-derived and returned with every summary row to avoid UI drift.
+3. Label bind (`/api/fba/labels/bind`)
+- Move item to `LABEL_ASSIGNED`.
 
-## UI/UX Size + Simplicity Constraints
-1. Keep sidebar controls at 44px min height for touch consistency.
-2. Keep row secondary metadata at 9-10px uppercase microcopy only.
-3. Keep one visual accent per row (dot + badge), avoid multiple competing highlights.
-4. Keep expanded inline actions icon-only and max 3 actions.
+4. Ship close (`/api/fba/shipments/close`)
+- Append `SHIP/SHIPPED`.
+- Now eligible for Shipped tab.
 
-## Standards Sources Used
-- Amazon Sell blog: FBA shipment event definitions and status semantics.
-  - https://sell.amazon.com/es/blog/fba-shipment-tracking
-- Amazon FBA Setup Guide PDF: box content, label placement, and shipment packaging checklist.
-  - https://m.media-amazon.com/images/G/02/Sell/Guides/FBA_SEtupGuide_SU_EN_AS-XwEFVMTZuA.pdf
-- Amazon Seller University (official): inventory requirements overview.
-  - https://www.youtube.com/watch?v=3eCYQQLVqpQ
+## Rollout Phases
 
-## Notes
-Seller Central help reference pages are authoritative but require account sign-in from this environment, so direct crawled excerpts were unavailable.
+### Phase 1: API hardening
+1. Update `summary` mode aliases + canonical `workflow_mode` output.
+2. Add `/api/fba/items/print-ready`.
+3. Add tests for mode filters and state derivation.
+
+### Phase 2: UI reassignment
+1. Move/rename `FbaShippedTable` into Plan tab as print-ready list.
+2. Repoint table fetch logic to new FBA endpoint.
+3. Add Plan sub-modes: `PLAN`, `PACKING`, `PRINT_READY`.
+
+### Phase 3: Shipped tab correction
+1. Replace shipped-tab content with shipped-only data source.
+2. Remove `/api/packerlogs` dependency from FBA page.
+
+### Phase 4: Cleanup
+1. Remove legacy query keys (`shipped-fba`, `shipped-table-fba`) if unused.
+2. Remove FBA-specific assumptions from generic shipped table handlers.
+
+## Acceptance Criteria
+1. Pack-scanned FNSKU appears in Plan/Print-ready view, not in Shipped tab.
+2. Shipped tab shows only rows with confirmed ship close.
+3. Same FNSKU does not appear as shipped before `SHIP/SHIPPED` event.
+4. API contracts are explicit and mode aliases are backward-compatible.
+5. Sidebar counts and table rows stay consistent for all mode filters.
+
+## Key Files Affected (Implementation)
+1. `src/app/fba/page.tsx`
+2. `src/components/fba/FbaShippedTable.tsx` (rename/rebind)
+3. `src/components/fba/FbaShipmentBoard.tsx`
+4. `src/components/sidebar/FbaSidebarPanel.tsx`
+5. `src/components/fba/types.ts`
+6. `src/app/api/fba/logs/summary/route.ts`
+7. `src/app/api/fba/items/print-ready/route.ts` (new)
+8. `src/app/api/fba/shipments/route.ts` (shipped filter usage/fields as needed)

@@ -4,11 +4,13 @@ import {
   getZohoRefreshTokenFromKv,
   setZohoTokens,
 } from '@/lib/zoho-kv';
+import { normalizeEnvValue } from '@/lib/env-utils';
 
-const ZOHO_ORG_ID = process.env.ZOHO_ORG_ID || process.env.ZOHO_ORGANIZATION_ID;
-const ZOHO_DOMAIN = process.env.ZOHO_DOMAIN || 'accounts.zoho.com';
-const ZOHO_CLIENT_ID = process.env.ZOHO_CLIENT_ID;
-const ZOHO_CLIENT_SECRET = process.env.ZOHO_CLIENT_SECRET;
+const ZOHO_ORG_ID =
+  normalizeEnvValue(process.env.ZOHO_ORG_ID) || normalizeEnvValue(process.env.ZOHO_ORGANIZATION_ID);
+const ZOHO_DOMAIN = normalizeEnvValue(process.env.ZOHO_DOMAIN) || 'accounts.zoho.com';
+const ZOHO_CLIENT_ID = normalizeEnvValue(process.env.ZOHO_CLIENT_ID);
+const ZOHO_CLIENT_SECRET = normalizeEnvValue(process.env.ZOHO_CLIENT_SECRET);
 
 export function requireOrgId(): string {
   if (!ZOHO_ORG_ID) throw new Error('ZOHO_ORG_ID or ZOHO_ORGANIZATION_ID missing');
@@ -54,7 +56,8 @@ export async function getAccessToken(): Promise<string> {
   }
 
   const refreshToken =
-    process.env.ZOHO_REFRESH_TOKEN || (await getZohoRefreshTokenFromKv());
+    normalizeEnvValue(process.env.ZOHO_REFRESH_TOKEN) ||
+    normalizeEnvValue(await getZohoRefreshTokenFromKv());
 
   if (!refreshToken) {
     throw new Error(

@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
         const normalizedSerialNumber = String(serialNumber || '').trim();
         const normalizedPrice = String(price || '').trim();
         const normalizedNotes = String(notes || '').trim();
+        const normalizedSourceSku = String(product?.sourceSku || '').trim();
         const techId = assignedTechId ? Number(assignedTechId) : null;
 
         // Validate required fields (email is optional)
@@ -68,6 +69,8 @@ export async function POST(req: NextRequest) {
             issue: issueString,
             serialNumber: normalizedSerialNumber,
             notes: normalizedNotes || null,
+            sourceSystem: normalizedSourceSku ? 'ecwid' : null,
+            sourceSku: normalizedSourceSku || null,
         });
 
         const dbId = repairRecord.id;

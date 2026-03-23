@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useSearchParams } from 'next/navigation';
-import { Search, X, Printer } from '../Icons';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Search, X, Printer, DollarSign } from '../Icons';
 import { SourceOrderChip, TicketChip } from '../ui/CopyChip';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
@@ -26,11 +26,14 @@ interface RepairTableProps {
 }
 
 export function RepairTable({ filter }: RepairTableProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams.get('search');
   const [selectedRepair, setSelectedRepair] = useState<RSRecord | null>(null);
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
+  const [payingRepairId, setPayingRepairId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: repairs = [], isLoading: loading } = useRepairs(search, filter);
@@ -81,19 +84,90 @@ export function RepairTable({ filter }: RepairTableProps) {
 
   useEffect(() => {
     const container = scrollRef.current;
+    let timeoutId: number | null = null;
     if (container) {
       container.addEventListener('scroll', handleScroll);
-      setTimeout(() => handleScroll(), 100);
+      timeoutId = window.setTimeout(() => handleScroll(), 100);
     }
-    return () => container?.removeEventListener('scroll', handleScroll);
+    return () => {
+      container?.removeEventListener('scroll', handleScroll);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
   }, [handleScroll, repairs]);
 
   const handleRowClick = (repair: RSRecord) => setSelectedRepair(repair);
   const handleCloseDetails = () => setSelectedRepair(null);
 
+  const clearSearch = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('search');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  };
+
   const getLast4 = (value: string | null | undefined) => {
     const raw = String(value || '');
     return raw.length > 4 ? raw.slice(-4) : raw || '---';
+  };
+
+  const parsePriceToMinorUnits = (value: string | null | undefined): number | null => {
+    const cleaned = String(value || '').replace(/[^0-9.-]/g, '');
+    const parsed = Number(cleaned);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    const amount = Math.round(parsed * 100);
+    return amount > 0 ? amount : null;
+  };
+
+  const getRepairSourceSku = (repair: RSRecord): string =>
+    String(repair.source_sku || '').trim();
+
+  const canCreateSquarePayment = (repair: RSRecord): boolean =>
+    Boolean(getRepairSourceSku(repair)) || parsePriceToMinorUnits(repair.price) !== null;
+
+  const openSquarePayment = async (repair: RSRecord) => {
+    if (payingRepairId === repair.id) return;
+    const sourceSku = getRepairSourceSku(repair);
+    const amount = parsePriceToMinorUnits(repair.price);
+    if (!sourceSku && amount === null) {
+      window.alert('Add a source SKU or set a valid repair price before creating a Square payment link.');
+      return;
+    }
+
+    const pendingWindow = window.open('', '_blank');
+    setPayingRepairId(repair.id);
+
+    try {
+      const response = await fetch('/api/repair/square-payment-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repairId: repair.id,
+          sourceSku: sourceSku || null,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        paymentUrl?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success || !payload.paymentUrl) {
+        throw new Error(payload.error || 'Failed to create Square payment link');
+      }
+
+      if (pendingWindow) {
+        pendingWindow.location.href = payload.paymentUrl;
+      } else {
+        window.open(payload.paymentUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      if (pendingWindow && !pendingWindow.closed) pendingWindow.close();
+      const message = error instanceof Error ? error.message : 'Failed to open Square checkout';
+      window.alert(message);
+    } finally {
+      setPayingRepairId((current) => (current === repair.id ? null : current));
+    }
   };
 
   const filteredRepairs = repairs;
@@ -152,8 +226,9 @@ export function RepairTable({ filter }: RepairTableProps) {
                 <Search className="w-3 h-3" />
                 <span className="text-[9px] font-black uppercase tracking-widest">{search}</span>
                 <button
-                  onClick={() => window.history.pushState({}, '', '/repair')}
+                  onClick={clearSearch}
                   className="hover:text-orange-900 transition-colors"
+                  aria-label="Clear search filter"
                 >
                   <X className="w-2.5 h-2.5" />
                 </button>
@@ -215,7 +290,18 @@ export function RepairTable({ filter }: RepairTableProps) {
                         animate={{ opacity: 1 }}
                         key={repair.id}
                         onClick={() => handleRowClick(repair)}
-                        className={`grid grid-cols-[1fr_220px] items-center gap-1 px-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handleRowClick(repair);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={selectedRepair?.id === repair.id}
+                        aria-label={`Open repair details for ${repair.product_title || `record ${repair.id}`}`}
+                        className={`grid grid-cols-[1fr_220px] items-center gap-1 pl-4 pr-4 py-3 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                           selectedRepair?.id === repair.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                         }`}
                       >
@@ -253,12 +339,12 @@ export function RepairTable({ filter }: RepairTableProps) {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-start gap-3" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex flex-col items-start flex-1 min-w-[50px]">
+                        <div className="flex w-full items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-col items-start shrink-0">
                             <SourceOrderChip
                               value={String(repair.source_order_id || '').trim() || 'WALK-IN'}
-                              display={String(repair.source_order_id || '').trim() || 'WALK-IN'}
-                              width="w-full min-w-[50px]"
+                              display={String(repair.source_order_id || '').trim() ? getLast4(repair.source_order_id) : 'WALK-IN'}
+                              width={String(repair.source_order_id || '').trim() ? 'w-[50px]' : 'w-[76px]'}
                               disableCopy={!String(repair.source_order_id || '').trim()}
                             />
                           </div>
@@ -269,11 +355,25 @@ export function RepairTable({ filter }: RepairTableProps) {
                             />
                           </div>
                           <button
-                            onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank')}
+                            onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank', 'noopener,noreferrer')}
                             className="p-1.5 bg-gray-50 hover:bg-orange-50 text-gray-400 hover:text-orange-600 rounded-lg transition-all"
                             title="Print Repair Form"
                           >
                             <Printer className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => void openSquarePayment(repair)}
+                            disabled={!canCreateSquarePayment(repair) || payingRepairId === repair.id}
+                            className="p-1.5 bg-gray-50 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={
+                              !canCreateSquarePayment(repair)
+                                ? 'Set source SKU or valid price to enable Square payment'
+                                : getRepairSourceSku(repair)
+                                  ? 'Create Square payment link from matching catalog SKU'
+                                  : 'Create Square payment link (price fallback)'
+                            }
+                          >
+                            <DollarSign className={`w-3.5 h-3.5 ${payingRepairId === repair.id ? 'animate-pulse' : ''}`} />
                           </button>
                         </div>
                       </motion.div>

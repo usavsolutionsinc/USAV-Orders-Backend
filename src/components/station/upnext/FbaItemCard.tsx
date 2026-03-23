@@ -1,16 +1,77 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { Calendar, ExternalLink } from '@/components/Icons';
-import { type FBAQueueItem, FBA_ITEM_STATUS_BADGE } from './upnext-types';
-import { UpNextActionButton } from './UpNextActionButton';
+import { createPortal } from 'react-dom';
+import { useEffect, useState, type MouseEvent } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Calendar, Check, ChevronDown, Copy, ExternalLink, Settings } from '@/components/Icons';
+import { getPresentStaffForToday } from '@/lib/staffCache';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
+import type { WorkOrderRow } from '@/components/work-orders/types';
+import { type FBAQueueItem } from './upnext-types';
+
+const TECH_IDS = [1, 2, 3, 6];
+
+interface StaffOption {
+  id: number;
+  name: string;
+}
 
 interface FbaItemCardProps {
   item: FBAQueueItem;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }
 
-export function FbaItemCard({ item }: FbaItemCardProps) {
-  const badgeCls = FBA_ITEM_STATUS_BADGE[item.status] || FBA_ITEM_STATUS_BADGE['PLANNED'];
+function getLast4(value: string | null | undefined) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'Not available';
+  return raw.slice(-4);
+}
+
+function getAsinUrl(value: string | null | undefined) {
+  const asin = String(value || '').trim();
+  if (!asin) return null;
+  return `https://www.amazon.com/dp/${encodeURIComponent(asin)}`;
+}
+
+function getConditionLabel(value: string | null | undefined) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'No Condition';
+  return raw.replaceAll('_', ' ');
+}
+
+function buildWorkOrderRow(item: FBAQueueItem): WorkOrderRow {
+  return {
+    id: `fba-shipment-${item.shipment_id}`,
+    entityType: 'FBA_SHIPMENT',
+    entityId: item.shipment_id,
+    queueKey: 'fba_shipments',
+    queueLabel: 'FBA Shipments',
+    title: String(item.plan_title || item.shipment_ref || `FBA #${item.shipment_id}`),
+    subtitle: [item.fnsku, item.asin, item.sku].filter(Boolean).join(' • '),
+    recordLabel: String(item.shipment_ref || `FBA #${item.shipment_id}`),
+    sourcePath: '/fba',
+    techId: item.assigned_tech_id ?? null,
+    techName: item.assigned_tech_name ?? null,
+    packerId: item.assigned_packer_id ?? null,
+    packerName: null,
+    status: item.assigned_tech_id ? 'ASSIGNED' : 'OPEN',
+    priority: 100,
+    deadlineAt: String(item.deadline_at || item.due_date || '').trim() || null,
+    notes: null,
+    assignedAt: null,
+    updatedAt: null,
+  };
+}
+
+export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardProps) {
+  const [copiedAsin, setCopiedAsin] = useState(false);
+  const [showAssignment, setShowAssignment] = useState(false);
+  const [technicianOptions, setTechnicianOptions] = useState<StaffOption[]>([]);
+  const [packerOptions, setPackerOptions] = useState<StaffOption[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
   const planDateSource = item.deadline_at || item.due_date;
   const dueDateStr = planDateSource
     ? new Date(planDateSource).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -18,77 +79,230 @@ export function FbaItemCard({ item }: FbaItemCardProps) {
   const qtyReady    = Number(item.actual_qty) || 0;
   const qtyExpected = Number(item.expected_qty) || 0;
   const qtyLabel = qtyExpected > 0 ? qtyExpected : qtyReady || 1;
+  const fnsku = String(item.fnsku || '').trim();
+  const asin = String(item.asin || '').trim();
+  const asinUrl = getAsinUrl(asin);
+  const conditionLabel = getConditionLabel(item.condition);
+  const planTitle = String(item.plan_title || item.shipment_ref || '').trim();
+
+  const handleCopyAsin = async (e: MouseEvent) => {
+    e.stopPropagation();
+    if (!asin) return;
+    try {
+      await navigator.clipboard.writeText(asin);
+      setCopiedAsin(true);
+      window.setTimeout(() => setCopiedAsin(false), 1500);
+    } catch {
+      // noop
+    }
+  };
+
+  const openAssignment = async (e: MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const members = await getPresentStaffForToday();
+      setTechnicianOptions(
+        members
+          .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
+          .map((m) => ({ id: Number(m.id), name: m.name }))
+          .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id)),
+      );
+      setPackerOptions(
+        members
+          .filter((m) => m.role === 'packer')
+          .map((m) => ({ id: Number(m.id), name: m.name })),
+      );
+    } catch {
+      // proceed with empty options
+    }
+    setShowAssignment(true);
+  };
+
+  const handleAssignConfirm = async (row: WorkOrderRow, payload: AssignmentConfirmPayload) => {
+    const newStatus =
+      payload.status ??
+      (payload.techId && row.status === 'OPEN' ? 'ASSIGNED' : row.status);
+
+    try {
+      const res = await fetch('/api/work-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entityType: row.entityType,
+          entityId: row.entityId,
+          assignedTechId: payload.techId,
+          assignedPackerId: payload.packerId,
+          status: newStatus,
+          priority: row.priority,
+          deadlineAt: payload.deadline,
+          notes: row.notes,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.details || data?.error || 'Failed to save');
+      }
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (err: any) {
+      window.alert(err?.message || 'Failed to save assignment');
+    }
+  };
 
   return (
-    <motion.div
-      key={`fba-item-${item.item_id}`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="border-b-2 px-0 py-3 transition-colors relative bg-white border-purple-300 hover:border-purple-500 cursor-default"
-    >
-      <div className="flex items-center justify-between mb-4 px-3">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-[14px] font-black text-gray-900">
-            <Calendar className="w-4 h-4 text-purple-600" />
-            <span>{dueDateStr || 'No Due Date'}</span>
+    <>
+      <motion.div
+        key={`fba-item-${item.item_id}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onToggleExpand}
+        className={`border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
+          isExpanded
+            ? 'bg-white border-purple-500'
+            : 'bg-white border-purple-300 hover:border-purple-500'
+        }`}
+      >
+        <div className="flex items-center justify-between mb-4 px-3">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-[14px] font-black text-gray-900">
+              <Calendar className="w-4 h-4 text-purple-600" />
+              <span>{dueDateStr || 'No Due Date'}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (asinUrl) window.open(asinUrl, '_blank', 'noopener,noreferrer');
+              }}
+              disabled={!asinUrl}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Open ASIN in external tab"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </button>
+            <motion.span
+              animate={{ rotate: isExpanded ? 180 : 0 }}
+              transition={{ duration: 0.18 }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </motion.span>
           </div>
         </div>
-        <span className="inline-flex items-center rounded-lg border border-purple-200 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-900">
-          FBA
-        </span>
-      </div>
 
-      <div className="mb-4 px-3">
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[13px] font-black text-gray-900">{qtyLabel}</span>
-            <span className="text-[13px] font-black uppercase tracking-wider text-gray-500">-</span>
-            <span className="text-[13px] font-black uppercase truncate text-gray-900">
-              {item.status.replaceAll('_', ' ')}
+        <div className="px-3">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[13px] font-black text-gray-900">{qtyLabel}</span>
+              <span className="text-[13px] font-black uppercase tracking-wider text-gray-500">-</span>
+              <span className="text-[13px] font-black uppercase truncate text-gray-900">
+                {conditionLabel}
+              </span>
+            </div>
+            <span className="text-[13px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
+              #{getLast4(fnsku)}
             </span>
           </div>
-          <span className="text-[13px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
-            #{item.shipment_ref}
-          </span>
+          <h4 className="text-base font-black text-gray-900 leading-tight">{item.product_title || `FNSKU • ${getLast4(fnsku)}`}</h4>
         </div>
-        <h4 className="text-base font-black text-gray-900 leading-tight">{item.product_title || item.fnsku}</h4>
-      </div>
 
-      {(item.asin || item.fnsku || item.sku) && (
-        <div className="mb-4 mx-3 rounded-xl border border-purple-200 px-3 py-2">
-          <div className="text-[10px] font-black uppercase tracking-widest text-purple-700 mb-1">
-            FBA Details
-          </div>
-          <p className="text-sm text-gray-900 break-words whitespace-pre-wrap">
-            {[
-              item.asin ? `ASIN: ${item.asin}` : null,
-              item.fnsku ? `FNSKU: ${item.fnsku}` : null,
-              item.sku ? `SKU: ${item.sku}` : null,
-            ].filter(Boolean).join(' • ')}
-          </p>
-        </div>
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div
+              key="expanded-fba-item"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 border-t border-purple-100 px-3 pt-3" onClick={(e) => e.stopPropagation()}>
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">Source</div>
+                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                      {planTitle ? `FBA ${planTitle}` : 'FBA'}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">FNSKU</div>
+                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                      {fnsku || 'Not available'}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">Tech</div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] text-gray-900 normal-case tracking-normal">
+                        {item.assigned_tech_name || 'Unassigned'}
+                      </span>
+                      <button
+                        onClick={openAssignment}
+                        className="flex-shrink-0 text-gray-400 hover:text-purple-600 transition-colors"
+                        aria-label="Edit assignment"
+                      >
+                        <Settings className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">ASIN</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                        {asin || 'Not available'}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={handleCopyAsin}
+                          disabled={!asin}
+                          className="flex-shrink-0 text-gray-400 hover:text-purple-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={copiedAsin ? 'ASIN copied' : 'Copy ASIN'}
+                        >
+                          {copiedAsin ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (asinUrl) window.open(asinUrl, '_blank', 'noopener,noreferrer');
+                          }}
+                          disabled={!asinUrl}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label="Open ASIN in external tab"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {mounted && createPortal(
+        <AnimatePresence>
+          {showAssignment && (
+            <WorkOrderAssignmentCard
+              rows={[buildWorkOrderRow(item)]}
+              startIndex={0}
+              technicianOptions={technicianOptions}
+              packerOptions={packerOptions}
+              onConfirm={handleAssignConfirm}
+              onClose={() => setShowAssignment(false)}
+            />
+          )}
+        </AnimatePresence>,
+        document.body,
       )}
-
-      <div className="flex items-center gap-2 px-3 pt-2 border-t border-purple-200">
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-black text-gray-900 truncate">
-            {item.assigned_tech_name || 'FBA Queue'}
-          </div>
-          <div className="text-[10px] text-gray-500 truncate">
-            Ready {qtyReady} / {qtyExpected > 0 ? qtyExpected : '?'}
-          </div>
-        </div>
-        <span className={`text-[9px] font-black uppercase tracking-widest border rounded-lg px-2 py-0.5 ${badgeCls}`}>
-          {item.status.replace('_', ' ')}
-        </span>
-        <UpNextActionButton
-          onClick={(e) => e.stopPropagation()}
-          label="Open"
-          icon={<ExternalLink className="w-3 h-3" />}
-          tone="purple"
-        />
-      </div>
-    </motion.div>
+    </>
   );
 }

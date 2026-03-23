@@ -1,50 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { normalizeSku } from '@/utils/sku';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishTechLogChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { parseSerialCsvField } from '@/lib/tech/serialFields';
+import { insertTechSerialForTracking } from '@/lib/tech/insertTechSerialForTracking';
 
 export async function POST(req: NextRequest) {
+  const client = await pool.connect();
   try {
     const { skuCode, tracking, techId } = await req.json();
-    
+
     if (!skuCode || !tracking || !techId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'skuCode, tracking, and techId are required' 
-      }, { status: 400 });
-    }
-    
-    // Parse SKU code: "12345:ABC" or "12345x3:ABC"
-    const parts = skuCode.split(':');
-    if (parts.length !== 2) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Invalid SKU format. Use SKU:identifier or SKUxN:identifier' 
+      return NextResponse.json({
+        success: false,
+        error: 'skuCode, tracking, and techId are required',
       });
     }
-    
+
+    const parts = String(skuCode).split(':');
+    if (parts.length !== 2) {
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid SKU format. Use SKU:identifier or SKUxN:identifier',
+      });
+    }
+
     let skuToMatch = parts[0].trim();
     let qtyToDecrement = 1;
-    
-    // Check for xN notation (e.g., "12345x3")
+
     const xMatch = skuToMatch.match(/^(.+?)x(\d+)$/i);
     if (xMatch) {
       skuToMatch = xMatch[1];
       qtyToDecrement = parseInt(xMatch[2], 10) || 1;
     }
     const normalizedSkuToMatch = normalizeSku(skuToMatch);
-    
-    // Resolve staff primarily by numeric staff.id (current flow), with legacy employee_id fallback.
+
     const techIdNum = parseInt(String(techId), 10);
     let staffResult = { rows: [] as Array<{ id: number }> };
     if (!Number.isNaN(techIdNum) && techIdNum > 0) {
-      const byId = await pool.query(
-        'SELECT id FROM staff WHERE id = $1 LIMIT 1',
-        [techIdNum]
-      );
+      const byId = await client.query('SELECT id FROM staff WHERE id = $1 LIMIT 1', [techIdNum]);
       if (byId.rows.length > 0) {
         staffResult = byId;
       }
@@ -55,173 +51,142 @@ export async function POST(req: NextRequest) {
         '1': 'TECH001',
         '2': 'TECH002',
         '3': 'TECH003',
-        '4': 'TECH004'
+        '4': 'TECH004',
       };
       const employeeId = techEmployeeIds[String(techId)] || String(techId);
-      const byEmployeeId = await pool.query(
-        'SELECT id FROM staff WHERE employee_id = $1 LIMIT 1',
-        [employeeId]
-      );
+      const byEmployeeId = await client.query('SELECT id FROM staff WHERE employee_id = $1 LIMIT 1', [
+        employeeId,
+      ]);
       staffResult = byEmployeeId;
     }
-    
+
     if (staffResult.rows.length === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Staff not found' 
-      }, { status: 404 });
-    }
-    
-    const staffId = staffResult.rows[0].id;
-    
-    // Look up SKU in sku table
-    const skuResult = await pool.query(
-      `SELECT id, serial_number, notes
-       FROM sku 
-       WHERE BTRIM(static_sku) = BTRIM($1)
-       LIMIT 1`,
-      [skuCode]
-    );
-    
-    if (skuResult.rows.length === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: `SKU ${skuCode} not found in sku table` 
-      });
-    }
-    
-    const skuRecord = skuResult.rows[0];
-    const serialNumbers = skuRecord.serial_number 
-      ? skuRecord.serial_number.split(',').map((s: string) => s.trim()).filter(Boolean)
-      : [];
-    
-    // Get order by tracking key-18
-    const key18 = normalizeTrackingKey18(String(tracking || ''));
-    if (!key18 || key18.length < 8) {
       return NextResponse.json({
         success: false,
-        error: 'Invalid tracking number'
-      }, { status: 400 });
+        error: 'Staff not found',
+      }, { status: 404 });
     }
-    const orderResult = await pool.query(
-      `SELECT o.id, stn.tracking_number_raw AS shipping_tracking_number
-       FROM orders o
-       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-       WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1`,
-      [key18]
+
+    const staffId = staffResult.rows[0].id;
+
+    const exactSku = await client.query(
+      `SELECT id, serial_number, notes, static_sku
+       FROM sku
+       WHERE BTRIM(static_sku) = BTRIM($1)
+       LIMIT 1`,
+      [skuToMatch],
     );
-    
-    if (orderResult.rows.length === 0) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Order not found' 
+
+    let skuRecord: { id: number; serial_number: string | null; notes: string | null; static_sku: string | null } | null =
+      exactSku.rows[0] ?? null;
+
+    if (!skuRecord) {
+      const fuzzy = await client.query(
+        `SELECT id, serial_number, notes, static_sku
+         FROM sku
+         WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
+      );
+      skuRecord =
+        fuzzy.rows.find((r: any) => normalizeSku(String(r.static_sku || '')) === normalizedSkuToMatch) ?? null;
+    }
+
+    if (!skuRecord) {
+      return NextResponse.json({
+        success: false,
+        error: `SKU ${skuToMatch} not found in sku table`,
       });
     }
-    
-    const order = orderResult.rows[0];
-    const parseSerials = (value: string | null | undefined) =>
-      String(value || '')
-        .split(',')
-        .map((s) => s.trim().toUpperCase())
-        .filter(Boolean);
+
+    const serialsFromSku = parseSerialCsvField(skuRecord.serial_number);
+    const normalizedTracking = String(tracking || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const isFnskuTracking = /^(X00|X0|B0)/i.test(normalizedTracking);
+    const pairingTracking = isFnskuTracking ? normalizedTracking : String(tracking || '').trim();
+    const resolvedOnce = await resolveShipmentId(pairingTracking);
+
+    let fnskuContextExists = false;
+    if (isFnskuTracking) {
+      const fnskuLookup = await client.query(
+        `SELECT 1
+         FROM fba_fnskus
+         WHERE fnsku = $1
+         LIMIT 1`,
+        [normalizedTracking],
+      );
+      fnskuContextExists = fnskuLookup.rows.length > 0;
+    }
+
+    if (!resolvedOnce.shipmentId && !fnskuContextExists) {
+      return NextResponse.json({
+        success: false,
+        error: 'Tracking/FNSKU context not found',
+      }, { status: 404 });
+    }
 
     const insertedSerials: string[] = [];
-    let updatedSerials: string[] = [];
+    let canonicalSerialList: string[] = [];
+    let productTitle = '';
 
-    if (serialNumbers.length > 0) {
-      // Resolve shipment_id / scan_ref for this tracking number
-      const { shipmentId: resolvedShipmentId, scanRef: resolvedScanRef } =
-        await resolveShipmentId(order.shipping_tracking_number || tracking);
+    await client.query('BEGIN');
 
-      // One-row-per-tracking model: fetch (or create) a single tech_serial_numbers row.
-      const rowResult = await pool.query(
-        `SELECT id, serial_number
-         FROM tech_serial_numbers
-         WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
-            OR (shipment_id IS NULL AND scan_ref IS NOT NULL AND scan_ref = $2)
-         ORDER BY id ASC
-         LIMIT 1`,
-        [resolvedShipmentId, resolvedScanRef]
-      );
-      const existingRow = rowResult.rows[0] || null;
-      const serialList = parseSerials(existingRow?.serial_number);
-      const serialSet = new Set(serialList);
-
-      // Append each serial from the exact SKU row into the tech serial column.
-      for (const serial of serialNumbers) {
-        const upperSerial = serial.toUpperCase();
-        if (!serialSet.has(upperSerial)) {
-          serialSet.add(upperSerial);
-          serialList.push(upperSerial);
-          insertedSerials.push(upperSerial);
+    try {
+      if (serialsFromSku.length > 0) {
+        for (const rawSerial of serialsFromSku) {
+          const ins = await insertTechSerialForTracking(
+            client,
+            { tracking: pairingTracking, serial: rawSerial, techId, resolvedScan: resolvedOnce },
+            { skipInvalidateAndPublish: true },
+          );
+          if (!ins.ok) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ success: false, error: ins.error }, { status: ins.status });
+          }
+          insertedSerials.push(rawSerial.toUpperCase());
+          canonicalSerialList = ins.serialNumbers;
         }
       }
 
-      if (existingRow) {
-        await pool.query(
-          `UPDATE tech_serial_numbers
-           SET serial_number = $1,
-               serial_type = 'SKU_STATIC',
-               updated_at = date_trunc('second', NOW()),
-               tested_by = $2
-           WHERE id = $3`,
-          [serialList.join(', '), staffId, existingRow.id]
-        );
-      } else {
-        await pool.query(
-          `INSERT INTO tech_serial_numbers
-           (shipment_id, scan_ref, serial_number, serial_type, tested_by)
-           VALUES ($1, $2, $3, 'SKU_STATIC', $4)`,
-          [resolvedShipmentId, resolvedScanRef, serialList.join(', '), staffId]
-        );
+      const stockRows = await client.query(`SELECT id, stock, sku, product_title FROM sku_stock`);
+      const stockTarget = stockRows.rows.find(
+        (r: any) => normalizeSku(String(r.sku || '')) === normalizedSkuToMatch,
+      );
+      productTitle = String(stockTarget?.product_title || '').trim();
+      if (stockTarget) {
+        const currentQty = parseInt(String(stockTarget.stock || '0'), 10) || 0;
+        const nextQty = Math.max(0, currentQty - qtyToDecrement);
+        await client.query(`UPDATE sku_stock SET stock = $1 WHERE id = $2`, [String(nextQty), stockTarget.id]);
       }
 
-      updatedSerials = serialList;
+      await client.query(`UPDATE sku SET shipping_tracking_number = $1 WHERE id = $2`, [pairingTracking, skuRecord.id]);
+
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
     }
-    
-    // Decrease stock in sku_stock table using normalized SKU comparison.
-    const stockRows = await pool.query(`SELECT id, stock, sku, product_title FROM sku_stock`);
-    const stockTarget = stockRows.rows.find((r: any) => normalizeSku(String(r.sku || '')) === normalizedSkuToMatch);
-    const productTitle = String(stockTarget?.product_title || '').trim();
-    if (stockTarget) {
-      const currentQty = parseInt(String(stockTarget.stock || '0'), 10) || 0;
-      const nextQty = Math.max(0, currentQty - qtyToDecrement);
-      await pool.query(
-        `UPDATE sku_stock 
-         SET stock = $1
-         WHERE id = $2`,
-        [String(nextQty), stockTarget.id]
-      );
-    }
-    
-    // Update sku table with tracking number
-    await pool.query(
-      `UPDATE sku 
-       SET shipping_tracking_number = $1 
-       WHERE id = $2`,
-      [tracking, skuRecord.id]
-    );
-    
+
     await invalidateCacheTags(['tech-logs', 'orders-next']);
     await publishTechLogChanged({
       techId: staffId,
       action: 'update',
       source: 'tech.scan-sku',
     });
+
     return NextResponse.json({
       success: true,
       serialNumbers: insertedSerials,
       productTitle,
       notes: skuRecord.notes,
       quantityDecremented: qtyToDecrement,
-      updatedSerials
+      ...(serialsFromSku.length > 0 ? { updatedSerials: canonicalSerialList } : {}),
     });
   } catch (error: any) {
     console.error('SKU scan error:', error);
-    return NextResponse.json({ 
-      success: false, 
+    return NextResponse.json({
+      success: false,
       error: 'Failed to process SKU scan',
-      details: error.message 
+      details: error.message,
     }, { status: 500 });
+  } finally {
+    client.release();
   }
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { Loader2, Plus } from '@/components/Icons';
+import { Barcode, Check, Loader2, Plus } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { TabSwitch } from '@/components/ui/TabSwitch';
 import {
@@ -34,6 +34,7 @@ function buildDraftFromFavorite(
     product: {
       type: 'Bose Repair Service',
       model: ecwidProduct?.name || favorite.productTitle || favorite.label || favorite.sku,
+      sourceSku: ecwidProduct?.sku || favorite.sku,
     },
     repairReasons: [],
     repairNotes: favorite.issueTemplate || '',
@@ -52,6 +53,9 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const [showIntakeForm, setShowIntakeForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingFavorite, setIsFetchingFavorite] = useState(false);
+  const [pickupScanValue, setPickupScanValue] = useState('');
+  const [pickupScanSubmitting, setPickupScanSubmitting] = useState(false);
+  const [pickupScanFeedback, setPickupScanFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
   const [intakeDraft, setIntakeDraft] = useState<Partial<RepairFormData> | undefined>(undefined);
@@ -149,6 +153,50 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
     setShowIntakeForm(true);
   };
 
+  const handlePickupScanSubmit = async () => {
+    const scan = pickupScanValue.trim();
+    if (!scan || pickupScanSubmitting) return;
+
+    setPickupScanSubmitting(true);
+    setPickupScanFeedback(null);
+
+    try {
+      const response = await fetch('/api/repair-service/pickup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scan }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.details || result?.error || 'Failed to mark repair as picked up');
+      }
+
+      const fallbackId = Number.isFinite(Number(result?.repairId))
+        ? `RS-${Number(result.repairId)}`
+        : scan.toUpperCase();
+      const displayId = String(result?.ticketNumber || '').trim() || fallbackId;
+
+      setPickupScanValue('');
+      setPickupScanFeedback({
+        tone: 'success',
+        message: result?.alreadyDone
+          ? `${displayId} was already done.`
+          : `${displayId} marked as picked up.`,
+      });
+
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    } catch (error: any) {
+      setPickupScanFeedback({
+        tone: 'error',
+        message: error?.message || 'Pickup scan failed.',
+      });
+    } finally {
+      setPickupScanSubmitting(false);
+    }
+  };
+
   const content = (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <div className="border-b border-gray-100 px-4 py-4">
@@ -158,6 +206,23 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             <h2 className="mt-1 text-xl font-black tracking-tight text-gray-900">Repairs</h2>
           </div>
         ) : null}
+
+        <div className="mb-3">
+          <TabSwitch
+            tabs={[
+              { id: 'incoming', label: 'Incoming', color: 'orange' },
+              { id: 'active', label: 'Active', color: 'orange' },
+              { id: 'done', label: 'Done', color: 'orange' },
+            ]}
+            activeTab={activeTab}
+            onTabChange={(tab) =>
+              updateParams((params) => {
+                if (tab === 'active') params.delete('tab');
+                else params.set('tab', tab);
+              })
+            }
+          />
+        </div>
 
         <SearchBar
           value={searchValue}
@@ -188,23 +253,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             </button>
           }
         />
-
-        <div className="mt-4">
-          <TabSwitch
-            tabs={[
-              { id: 'incoming', label: 'Incoming', color: 'orange' },
-              { id: 'active', label: 'Active', color: 'orange' },
-              { id: 'done', label: 'Done', color: 'orange' },
-            ]}
-            activeTab={activeTab}
-            onTabChange={(tab) =>
-              updateParams((params) => {
-                if (tab === 'active') params.delete('tab');
-                else params.set('tab', tab);
-              })
-            }
-          />
-        </div>
       </div>
 
       <div className="relative flex-1 overflow-y-auto px-4 py-4">
@@ -216,6 +264,62 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             </div>
           </div>
         )}
+
+        <div className="mb-4 border-b border-emerald-100 pb-2">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handlePickupScanSubmit();
+            }}
+          >
+            <div className="mb-1.5 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Barcode className="h-3.5 w-3.5 text-emerald-500" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 leading-none">
+                  Scan RS-ID Pickup
+                </span>
+              </div>
+              <button
+                type="submit"
+                disabled={pickupScanSubmitting || !pickupScanValue.trim()}
+                className="flex h-5 w-5 items-center justify-center text-emerald-500 transition-colors hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-gray-300"
+                aria-label="Mark repair picked up"
+                title="Mark repair picked up"
+              >
+                {pickupScanSubmitting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Check className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
+
+            <input
+              type="text"
+              value={pickupScanValue}
+              onChange={(event) => {
+                setPickupScanValue(event.target.value);
+                if (pickupScanFeedback) setPickupScanFeedback(null);
+              }}
+              placeholder="Scan RS-ID…"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={pickupScanSubmitting}
+              className="w-full bg-transparent text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400 disabled:cursor-not-allowed disabled:opacity-70"
+            />
+          </form>
+
+          {pickupScanFeedback && (
+            <p
+              className={`mt-1.5 text-[9px] font-bold uppercase tracking-wide ${
+                pickupScanFeedback.tone === 'success' ? 'text-emerald-600' : 'text-red-500'
+              }`}
+            >
+              {pickupScanFeedback.message}
+            </p>
+          )}
+        </div>
+
         <FavoritesWorkspaceSection
           workspaceKey="repair"
           accent="orange"
@@ -227,6 +331,9 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           inlineRows
           buttonAccent="blue"
           onUseFavorite={handleUseFavorite}
+          searchSkuSuffixFilter="-RS"
+          fuzzyTitleSearch
+          searchResultsMaxHeightClass="max-h-72"
         />
       </div>
     </div>

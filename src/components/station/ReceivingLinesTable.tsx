@@ -343,6 +343,14 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
   }, [data]);
 
   useEffect(() => {
+    if (!expandedId) return;
+    if (!localRows.some((row) => row.id === expandedId)) {
+      setExpandedId(null);
+      dispatchSelectLine(null);
+    }
+  }, [expandedId, localRows]);
+
+  useEffect(() => {
     const handler = () => {
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
     };
@@ -398,6 +406,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                 onClear={() => {
                   setSearch('');
                   setSearchExpanded(false);
+                  setOffset(0);
                 }}
                 placeholder="Search product, SKU, PO number..."
                 variant="blue"
@@ -478,6 +487,9 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                     setQaFilter('');
                     setDispFilter('');
                     setSearchExpanded(false);
+                    setOffset(0);
+                    setExpandedId(null);
+                    dispatchSelectLine(null);
                   }}
                   className="border-b border-slate-900 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-900"
                 >
@@ -495,7 +507,11 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
             <button
               type="button"
               disabled={offset === 0}
-              onClick={() => setOffset(Math.max(0, offset - LIMIT))}
+              onClick={() => {
+                setExpandedId(null);
+                dispatchSelectLine(null);
+                setOffset(Math.max(0, offset - LIMIT));
+              }}
               className="border-b border-transparent py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-900 hover:text-slate-950 disabled:opacity-30"
             >
               Prev
@@ -506,7 +522,11 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
             <button
               type="button"
               disabled={offset + LIMIT >= total}
-              onClick={() => setOffset(offset + LIMIT)}
+              onClick={() => {
+                setExpandedId(null);
+                dispatchSelectLine(null);
+                setOffset(offset + LIMIT);
+              }}
               className="border-b border-transparent py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-900 hover:text-slate-950 disabled:opacity-30"
             >
               Next

@@ -11,6 +11,11 @@ interface ConnectionLogEntry extends ConnectionLogEntryInput {
   createdAt: string;
 }
 
+function buildAdminHref(params: URLSearchParams) {
+  const query = params.toString();
+  return query ? `/admin?${query}` : '/admin';
+}
+
 export function ConnectionsManagementTab() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -49,7 +54,7 @@ export function ConnectionsManagementTab() {
     const params = new URLSearchParams(searchParams.toString());
     if (nextPage) params.set('page', nextPage);
     else params.delete('page');
-    router.replace(`/admin?${params.toString()}`);
+    router.replace(buildAdminHref(params));
   };
 
   if (isZohoManagement) {

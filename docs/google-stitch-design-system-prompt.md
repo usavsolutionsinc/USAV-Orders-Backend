@@ -7,7 +7,7 @@ Use this file as the source prompt for Google Stitch to generate a clean, lightw
 - `src/components/ui/CopyChip.tsx`
 - `src/components/station/upnext/OrderCard.tsx`
 - `src/components/shipped/details-panel/ShippingInformationSection.tsx`
-- `src/components/ui/OutOfStockField.tsx`
+- `src/design-system/components/OutOfStockField.tsx` (re-export: `src/components/ui/OutOfStockField.tsx`)
 - `src/components/ui/SearchBar.tsx`
 - `src/components/work-orders/WorkOrderAssignmentCard.tsx`
 - Supporting line-row primitives already in use:

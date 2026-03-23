@@ -15,9 +15,10 @@ import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { TabSwitch } from '@/components/ui/TabSwitch';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
 import type { WorkOrderRow } from '@/components/work-orders/types';
-import { getActiveStaff } from '@/lib/staffCache';
+import { getPresentStaffForToday } from '@/lib/staffCache';
+import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimaryButtons';
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
 
@@ -85,7 +86,7 @@ export function DashboardManagementPanel({
     try {
       const [workRes, staffMembers] = await Promise.all([
         fetch('/api/work-orders?queue=all_unassigned'),
-        getActiveStaff(),
+        getPresentStaffForToday(),
       ]);
       const workJson = workRes.ok ? await workRes.json() : {};
       const rows: WorkOrderRow[] = Array.isArray(workJson?.rows)
@@ -387,7 +388,7 @@ export function DashboardManagementPanel({
                     type="button"
                     onClick={handleOpenNextUnassigned}
                     disabled={isLoadingAssignment}
-                    className="w-full py-3 bg-gray-900 hover:bg-black disabled:bg-gray-400 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className={SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS}
                   >
                     {isLoadingAssignment && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     Next Unassigned Order

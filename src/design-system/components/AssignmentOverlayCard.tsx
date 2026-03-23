@@ -14,6 +14,7 @@ interface AssignmentOverlayCardProps {
   bodyClassName?: string;
   widthClassName?: string;
   showHeaderGradient?: boolean;
+  showCloseButton?: boolean;
 }
 
 export function AssignmentOverlayCard({
@@ -27,6 +28,7 @@ export function AssignmentOverlayCard({
   bodyClassName = '',
   widthClassName = 'w-[94vw] max-w-[480px]',
   showHeaderGradient = true,
+  showCloseButton = true,
 }: AssignmentOverlayCardProps) {
   return (
     <>
@@ -34,12 +36,12 @@ export function AssignmentOverlayCard({
         type="button"
         aria-label="Close overlay"
         onClick={onClose}
-        className="fixed inset-0 z-[400] bg-slate-950/35 backdrop-blur-[12px]"
+        className="fixed inset-0 z-[1200] bg-slate-950/55 backdrop-blur-[4px]"
       />
       <section
         role="dialog"
         aria-modal="true"
-        className={`fixed left-1/2 top-1/2 z-[401] -translate-x-1/2 -translate-y-1/2 border border-slate-400/20 bg-white/85 shadow-[0_16px_44px_rgba(15,23,42,0.04)] backdrop-blur-[12px] ${widthClassName} ${className}`.trim()}
+        className={`fixed left-1/2 top-1/2 z-[1201] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-slate-300/70 bg-white shadow-[0_28px_72px_rgba(15,23,42,0.22)] ${widthClassName} ${className}`.trim()}
       >
         <header className={`border-b border-slate-400/20 px-4 py-3 ${showHeaderGradient ? 'bg-[linear-gradient(180deg,#2563EB,#3B82F6)] text-white' : ''}`.trim()}>
           <div className="mb-2 flex items-start justify-between gap-3">
@@ -56,15 +58,17 @@ export function AssignmentOverlayCard({
                 </p>
               ) : null}
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className={`mt-0.5 transition-colors duration-100 ease-out hover:opacity-100 active:scale-95 ${showHeaderGradient ? 'text-white/80 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`.trim()}
-              aria-label="Close"
-              title="Close"
-            >
-              <X className="h-[14px] w-[14px]" />
-            </button>
+            {showCloseButton ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className={`mt-0.5 transition-colors duration-100 ease-out hover:opacity-100 active:scale-95 ${showHeaderGradient ? 'text-white/80 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`.trim()}
+                aria-label="Close"
+                title="Close"
+              >
+                <X className="h-[14px] w-[14px]" />
+              </button>
+            ) : null}
           </div>
           {meta ? (
             <div className={`text-[9px] font-black uppercase tracking-[0.08em] ${showHeaderGradient ? 'text-blue-100' : 'text-slate-500'}`.trim()}>

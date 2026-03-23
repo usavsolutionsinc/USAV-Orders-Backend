@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ExternalLink, RefreshCw } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
@@ -84,7 +84,7 @@ function SummaryCard({
 }
 
 export function SupportDashboard() {
-  const query = useQuery<SupportOverviewResponse>({
+  const { data, isLoading, isError, error, isFetching, refetch } = useQuery<SupportOverviewResponse>({
     queryKey: ['support-overview'],
     queryFn: async () => {
       const response = await fetch('/api/support/overview');
@@ -99,31 +99,31 @@ export function SupportDashboard() {
     refetchInterval: 60000,
   });
 
-  useEffect(() => {
-    const handleRefresh = () => {
-      void query.refetch();
-    };
+  const handleRefresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
+  useEffect(() => {
     window.addEventListener('support-refresh', handleRefresh as EventListener);
     return () => {
       window.removeEventListener('support-refresh', handleRefresh as EventListener);
     };
-  }, [query]);
+  }, [handleRefresh]);
 
-  const generatedLabel = query.data?.generatedAt
-    ? `Updated ${formatDateTime(query.data.generatedAt)}`
-    : query.isLoading
+  const generatedLabel = data?.generatedAt
+    ? `${isFetching ? 'Refreshing' : 'Updated'} ${formatDateTime(data.generatedAt)}`
+    : isLoading
       ? 'Loading support data'
       : 'Awaiting support data';
 
   let content;
-  if (query.isLoading) {
+  if (isLoading) {
     content = (
       <div className="flex h-full w-full items-center justify-center">
         <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
-  } else if (query.isError || !query.data) {
+  } else if (isError || !data) {
     content = (
       <div className="flex h-full w-full items-center justify-center p-6">
         <div className="max-w-md rounded-3xl border border-rose-200 bg-white p-6 text-center shadow-sm">
@@ -131,10 +131,10 @@ export function SupportDashboard() {
             <AlertCircle className="h-6 w-6" />
           </div>
           <p className="mt-4 text-sm font-black uppercase tracking-[0.2em] text-gray-900">Support data unavailable</p>
-          <p className="mt-2 text-sm text-gray-600">{query.error instanceof Error ? query.error.message : 'Unknown error'}</p>
+          <p className="mt-2 text-sm text-gray-600">{error instanceof Error ? error.message : 'Unknown error'}</p>
           <button
             type="button"
-            onClick={() => void query.refetch()}
+            onClick={handleRefresh}
             className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -144,7 +144,7 @@ export function SupportDashboard() {
       </div>
     );
   } else {
-    const { totals, ebayAccounts, zendesk } = query.data;
+    const { totals, ebayAccounts, zendesk } = data;
     content = (
       <div className="space-y-4">
         <div className="grid gap-4 md:grid-cols-4">
@@ -156,78 +156,85 @@ export function SupportDashboard() {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           <div className="space-y-4">
-            {ebayAccounts.map((account) => (
-              <div key={account.accountName} className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">eBay account</p>
-                    <h2 className="text-lg font-black tracking-tight text-gray-900">{account.accountName}</h2>
-                  </div>
-                  <div className="flex gap-2 text-[9px] font-black uppercase tracking-[0.18em]">
-                    <span className="rounded-xl bg-blue-50 px-3 py-2 text-blue-700">{account.unreadMessages.count} unread</span>
-                    <span className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">{account.returnRequests.count} returns</span>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-700">Unread messages</p>
-                    {account.unreadMessages.error ? (
-                      <p className="mt-3 text-sm text-rose-600">{account.unreadMessages.error}</p>
-                    ) : account.unreadMessages.items.length === 0 ? (
-                      <p className="mt-3 text-sm text-gray-500">No unread buyer conversations.</p>
-                    ) : (
-                      <div className="mt-3 space-y-3">
-                        {account.unreadMessages.items.map((item) => (
-                          <div key={item.conversationId || item.subject} className="rounded-2xl border border-white bg-white p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-bold text-gray-900">{item.subject}</p>
-                                <p className="mt-1 text-[11px] font-medium text-gray-500">
-                                  {item.otherPartyUsername} • {item.referenceType || 'MESSAGE'} {item.referenceId || ''}
-                                </p>
-                              </div>
-                              <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-blue-700">
-                                {item.unreadCount} unread
-                              </span>
-                            </div>
-                            <p className="mt-2 text-[11px] font-medium text-gray-500">{formatDateTime(item.createdDate)}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">Return requests</p>
-                    {account.returnRequests.error ? (
-                      <p className="mt-3 text-sm text-rose-600">{account.returnRequests.error}</p>
-                    ) : account.returnRequests.items.length === 0 ? (
-                      <p className="mt-3 text-sm text-gray-500">No active return requests.</p>
-                    ) : (
-                      <div className="mt-3 space-y-3">
-                        {account.returnRequests.items.map((item) => (
-                          <div key={item.returnId || item.orderId} className="rounded-2xl border border-white bg-white p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-gray-900">Return #{item.returnId || 'Pending'}</p>
-                                <p className="mt-1 text-[11px] font-medium text-gray-500">
-                                  Order {item.orderId || 'N/A'} • Item {item.itemId || 'N/A'}
-                                </p>
-                              </div>
-                              <span className="rounded-lg bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-amber-700">
-                                {item.state}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-[11px] font-medium text-gray-500">{formatDateTime(item.lastModifiedDate || item.creationDate)}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+            {ebayAccounts.length === 0 ? (
+              <div className="rounded-[28px] border border-dashed border-gray-200 bg-white p-6 text-center">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">No eBay accounts connected</p>
+                <p className="mt-2 text-sm text-gray-500">Connect an account to surface unread messages and return requests here.</p>
               </div>
-            ))}
+            ) : (
+              ebayAccounts.map((account) => (
+                <div key={account.accountName} className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">eBay account</p>
+                      <h2 className="text-lg font-black tracking-tight text-gray-900">{account.accountName}</h2>
+                    </div>
+                    <div className="flex gap-2 text-[9px] font-black uppercase tracking-[0.18em]">
+                      <span className="rounded-xl bg-blue-50 px-3 py-2 text-blue-700">{account.unreadMessages.count} unread</span>
+                      <span className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">{account.returnRequests.count} returns</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-700">Unread messages</p>
+                      {account.unreadMessages.error ? (
+                        <p className="mt-3 text-sm text-rose-600">{account.unreadMessages.error}</p>
+                      ) : account.unreadMessages.items.length === 0 ? (
+                        <p className="mt-3 text-sm text-gray-500">No unread buyer conversations.</p>
+                      ) : (
+                        <div className="mt-3 space-y-3">
+                          {account.unreadMessages.items.map((item, index) => (
+                            <div key={`${item.conversationId || item.referenceId || item.subject || 'message'}-${index}`} className="rounded-2xl border border-white bg-white p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-bold text-gray-900">{item.subject}</p>
+                                  <p className="mt-1 text-[11px] font-medium text-gray-500">
+                                    {item.otherPartyUsername} • {item.referenceType || 'MESSAGE'} {item.referenceId || ''}
+                                  </p>
+                                </div>
+                                <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-blue-700">
+                                  {item.unreadCount} unread
+                                </span>
+                              </div>
+                              <p className="mt-2 text-[11px] font-medium text-gray-500">{formatDateTime(item.createdDate)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
+                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">Return requests</p>
+                      {account.returnRequests.error ? (
+                        <p className="mt-3 text-sm text-rose-600">{account.returnRequests.error}</p>
+                      ) : account.returnRequests.items.length === 0 ? (
+                        <p className="mt-3 text-sm text-gray-500">No active return requests.</p>
+                      ) : (
+                        <div className="mt-3 space-y-3">
+                          {account.returnRequests.items.map((item, index) => (
+                            <div key={`${item.returnId || item.orderId || item.itemId || 'return'}-${index}`} className="rounded-2xl border border-white bg-white p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-gray-900">Return #{item.returnId || 'Pending'}</p>
+                                  <p className="mt-1 text-[11px] font-medium text-gray-500">
+                                    Order {item.orderId || 'N/A'} • Item {item.itemId || 'N/A'}
+                                  </p>
+                                </div>
+                                <span className="rounded-lg bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-amber-700">
+                                  {item.state}
+                                </span>
+                              </div>
+                              <p className="mt-2 text-[11px] font-medium text-gray-500">{formatDateTime(item.lastModifiedDate || item.creationDate)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           <div className="space-y-4">
@@ -309,11 +316,11 @@ export function SupportDashboard() {
             </div>
             <button
               type="button"
-              onClick={() => void query.refetch()}
-              disabled={query.isFetching}
+              onClick={handleRefresh}
+              disabled={isFetching}
               className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:opacity-50"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${query.isFetching ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
               Refresh
             </button>
           </div>

@@ -1,0 +1,23 @@
+# Build and dependency artifacts
+.next
+node_modules
+desktop-dist
+build
+out
+coverage
+
+# Local/runtime metadata
+.git
+.vercel
+.DS_Store
+*.log
+*.tsbuildinfo
+
+# Env and local-only files
+.env
+.env.local
+.env.*.local
+
+# Electron/desktop extras not needed for web deploy
+electron
+server/storage

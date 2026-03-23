@@ -1,7 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { Loader2 } from '@/components/Icons';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, Minus } from '@/components/Icons';
 import { formatDateTimePST } from '@/utils/date';
 
 // Lifecycle row shape (post-migration)
@@ -76,6 +77,65 @@ function ReadinessBar({ ready, total }: { ready: number; total: number }) {
         />
       </div>
       <span className="text-[10px] font-bold text-gray-500 tabular-nums">{ready}/{total}</span>
+    </div>
+  );
+}
+
+function QtyCellWithRemove({ row }: { row: FBAShipmentLifecycleRow }) {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const totalItems = Number(row.total_items) || 0;
+  const readyItems =
+    Number(row.ready_items) + Number(row.labeled_items) + Number(row.shipped_items);
+  const canRemove = row.status === 'PLANNED' && totalItems === 1 && readyItems === 0;
+
+  const removeSinglePlannedItem = async () => {
+    if (!canRemove || busy) return;
+    setBusy(true);
+    try {
+      const itemsRes = await fetch(`/api/fba/shipments/${row.id}/items`, { cache: 'no-store' });
+      const data = await itemsRes.json();
+      const items = Array.isArray(data?.items) ? data.items : [];
+      if (items.length !== 1 || String(items[0].status) !== 'PLANNED') return;
+      const del = await fetch(`/api/fba/shipments/${row.id}/items/${items[0].id}`, {
+        method: 'DELETE',
+      });
+      if (del.ok) {
+        await queryClient.invalidateQueries({ queryKey: ['dashboard-fba-shipments'] });
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-mono">
+        <span
+          className={
+            Number(row.total_actual_qty) < Number(row.total_expected_qty)
+              ? 'text-amber-600'
+              : 'text-emerald-600'
+          }
+        >
+          {row.total_actual_qty}
+        </span>
+        <span className="text-gray-400">/{row.total_expected_qty}</span>
+      </span>
+      {canRemove ? (
+        <button
+          type="button"
+          onClick={() => void removeSinglePlannedItem()}
+          disabled={busy}
+          title="Remove the only line from this plan"
+          aria-label="Remove item from plan"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 disabled:opacity-40"
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Minus className="h-3 w-3" />}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -201,11 +261,8 @@ export default function FBAShipmentsTable() {
                     <td className="px-3 py-2">
                       <ReadinessBar ready={readyItems} total={totalItems} />
                     </td>
-                    <td className="px-3 py-2 font-mono">
-                      <span className={Number(row.total_actual_qty) < Number(row.total_expected_qty) ? 'text-amber-600' : 'text-emerald-600'}>
-                        {row.total_actual_qty}
-                      </span>
-                      <span className="text-gray-400">/{row.total_expected_qty}</span>
+                    <td className="px-3 py-2">
+                      <QtyCellWithRemove row={row} />
                     </td>
                     <td className="px-3 py-2 font-mono text-gray-500">{row.destination_fc || '-'}</td>
                     <td className="px-3 py-2">{row.due_date ? new Date(row.due_date).toLocaleDateString() : '-'}</td>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setZohoTokens, clearZohoTokens, getZohoRefreshTokenFromKv } from '@/lib/zoho-kv';
+import { normalizeEnvValue } from '@/lib/env-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   // Zoho may return an accounts-server that differs from the default domain
   const accountsServer =
     searchParams.get('accounts-server') ||
-    `https://${process.env.ZOHO_DOMAIN || 'accounts.zoho.com'}`;
+    `https://${normalizeEnvValue(process.env.ZOHO_DOMAIN) || 'accounts.zoho.com'}`;
 
   if (oauthError) {
     return NextResponse.json(
@@ -45,9 +46,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const clientId = process.env.ZOHO_CLIENT_ID;
-  const clientSecret = process.env.ZOHO_CLIENT_SECRET;
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+  const clientId = normalizeEnvValue(process.env.ZOHO_CLIENT_ID);
+  const clientSecret = normalizeEnvValue(process.env.ZOHO_CLIENT_SECRET);
+  const appUrl = normalizeEnvValue(process.env.NEXT_PUBLIC_APP_URL).replace(/\/$/, '');
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(
@@ -107,8 +108,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const accessToken = String(tokenData.access_token ?? '');
-  const refreshToken = String(tokenData.refresh_token ?? '');
+  const accessToken = normalizeEnvValue(String(tokenData.access_token ?? ''));
+  const refreshToken = normalizeEnvValue(String(tokenData.refresh_token ?? ''));
   const expiresIn = Number(tokenData.expires_in_sec ?? tokenData.expires_in ?? 3600);
 
   if (!accessToken) {

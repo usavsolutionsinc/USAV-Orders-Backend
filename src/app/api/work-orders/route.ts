@@ -54,6 +54,22 @@ interface WorkOrderRow {
   stockLevel?: number | null;
 }
 
+// Keep shipped detection in sync with /api/orders so work-orders excludes
+// anything already moving through carrier/shipped states.
+const shippedByCarrierOrLatestStatusSql = `COALESCE(
+  stn.is_carrier_accepted
+  OR stn.is_in_transit
+  OR stn.is_out_for_delivery
+  OR stn.is_delivered
+  OR (
+    COALESCE(BTRIM(stn.latest_status_category), '') <> ''
+    AND UPPER(BTRIM(stn.latest_status_category)) NOT IN ('LABEL_CREATED', 'UNKNOWN')
+  )
+  OR UPPER(COALESCE(stn.latest_status_label, '')) LIKE '%MOVING THROUGH NETWORK%'
+  OR UPPER(COALESCE(stn.latest_status_description, '')) LIKE '%MOVING THROUGH NETWORK%',
+  false
+)`;
+
 function normalizeQueue(raw: string | null): QueueKey {
   const value = String(raw || '').trim().toLowerCase();
   const allowed: QueueKey[] = [
@@ -82,6 +98,10 @@ function isAssignedRow(row: WorkOrderRow): boolean {
   return row.techId != null || row.packerId != null;
 }
 
+function isActionableRow(row: WorkOrderRow): boolean {
+  return row.status !== 'DONE' && row.status !== 'CANCELED';
+}
+
 function matchesSearch(row: WorkOrderRow, query: string): boolean {
   if (!query.trim()) return true;
   const needle = query.trim().toLowerCase();
@@ -102,8 +122,8 @@ function matchesSearch(row: WorkOrderRow, query: string): boolean {
 function matchesQueue(row: WorkOrderRow, queue: QueueKey): boolean {
   if (queue === 'all') return true;
   if (queue === 'done') return row.status === 'DONE';
-  if (queue === 'all_unassigned') return !isAssignedRow(row);
-  if (queue === 'all_assigned') return isAssignedRow(row);
+  if (queue === 'all_unassigned') return isActionableRow(row) && !isAssignedRow(row);
+  if (queue === 'all_assigned') return isActionableRow(row) && isAssignedRow(row);
   return row.queueKey === queue;
 }
 
@@ -193,10 +213,14 @@ async function getOrders(): Promise<WorkOrderRow[]> {
      LEFT JOIN staff st ON st.id = test_wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = pack_wa.assigned_packer_id
      LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-     WHERE NOT COALESCE(
-             stn.is_carrier_accepted OR stn.is_in_transit
-             OR stn.is_out_for_delivery OR stn.is_delivered, false
-           )
+     WHERE NOT ${shippedByCarrierOrLatestStatusSql}
+       AND NOT EXISTS (
+         SELECT 1
+         FROM packer_logs pl
+         WHERE pl.shipment_id IS NOT NULL
+           AND pl.shipment_id = o.shipment_id
+       )
+       AND UPPER(COALESCE(o.status, '')) <> 'SHIPPED'
        AND o.shipment_id IS NOT NULL
      ORDER BY COALESCE(test_wa.deadline_at, o.created_at) ASC, o.id ASC
      LIMIT 500`
@@ -370,15 +394,20 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
   );
 
   return result.rows.map((row) => {
+    const ticketLabel = String(row.ticket_number || `Repair #${row.id}`);
+    const issueText = row.issue ? String(row.issue) : '';
+    const titleText = String(row.product_title || issueText || ticketLabel);
+    const subtitleText = [issueText || null, ticketLabel].filter(Boolean).join(' • ') || 'Repair work order';
+
     return {
       id: `REPAIR:${row.id}`,
       entityType: 'REPAIR' as const,
       entityId: Number(row.id),
       queueKey: 'repair_services' as const,
       queueLabel: 'Repair Services',
-      title: String(row.product_title || 'Repair service'),
-      subtitle: String(row.issue || 'Repair work order'),
-      recordLabel: String(row.ticket_number || `Repair #${row.id}`),
+      title: titleText,
+      subtitle: subtitleText,
+      recordLabel: ticketLabel,
       sourcePath: '/repair',
       techId: row.assigned_tech_id == null ? null : Number(row.assigned_tech_id),
       techName: row.tech_name ? String(row.tech_name) : null,

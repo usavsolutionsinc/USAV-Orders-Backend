@@ -6,9 +6,11 @@ type Params = Promise<{ id: string; itemId: string }>;
 
 const STATUS_ORDER: Record<string, number> = {
   PLANNED: 0,
-  READY_TO_GO: 1,
-  LABEL_ASSIGNED: 2,
-  SHIPPED: 3,
+  PACKING: 1,
+  OUT_OF_STOCK: 1, // same level as PACKING — sideways transition
+  READY_TO_GO: 2,
+  LABEL_ASSIGNED: 3,
+  SHIPPED: 4,
 };
 
 // ── GET /api/fba/shipments/[id]/items/[itemId] ────────────────────────────────
@@ -114,15 +116,19 @@ export async function PATCH(
 
     const currentStatus = existing.rows[0].status as string;
     if (body.status) {
+      // Block only SHIPPED→anything (irreversible) or LABEL_ASSIGNED→PLANNED
       const currentRank = STATUS_ORDER[currentStatus] ?? 0;
-      const newRank = STATUS_ORDER[body.status] ?? 0;
-      if (newRank < currentRank) {
+      if (currentStatus === 'SHIPPED') {
         await client.query('ROLLBACK');
         return NextResponse.json(
-          {
-            success: false,
-            error: `Cannot move status backward from '${currentStatus}' to '${body.status}'`,
-          },
+          { success: false, error: 'Cannot change status of a shipped item' },
+          { status: 409 }
+        );
+      }
+      if (currentStatus === 'LABEL_ASSIGNED' && STATUS_ORDER[body.status] < currentRank) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, error: `Cannot move status backward from '${currentStatus}' to '${body.status}'` },
           { status: 409 }
         );
       }
@@ -141,14 +147,20 @@ export async function PATCH(
     if ('product_title' in body) setField('product_title', body.product_title || null);
     if ('asin' in body) setField('asin', body.asin || null);
     if ('sku' in body) setField('sku', body.sku || null);
+    if ('notes' in body) setField('notes', body.notes != null ? String(body.notes).trim() || null : null);
+
+    // staff_id can be set independently (bulk-assign)
+    if ('staff_id' in body && !body.status) setField('ready_by_staff_id', body.staff_id || null);
 
     if (body.status) {
       setField('status', body.status);
-      // Stamp the corresponding lifecycle timestamp + staff if provided
       const staffId = body.staff_id || null;
-      if (body.status === 'READY_TO_GO') {
+      if (body.status === 'PACKING') {
         setField('ready_by_staff_id', staffId);
         setField('ready_at', formatPSTTimestamp());
+      } else if (body.status === 'READY_TO_GO') {
+        setField('verified_by_staff_id', staffId);
+        setField('verified_at', formatPSTTimestamp());
       } else if (body.status === 'LABEL_ASSIGNED') {
         setField('labeled_by_staff_id', staffId);
         setField('labeled_at', formatPSTTimestamp());

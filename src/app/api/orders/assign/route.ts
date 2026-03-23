@@ -135,10 +135,11 @@ async function upsertOrderTracking(
     throw new Error('Tracking number is invalid');
   }
 
-  const carrier = detectCarrier(normalizedTracking);
-  if (!carrier) {
-    throw new Error(`Cannot detect carrier for tracking number: ${rawTracking}`);
-  }
+  const detectedCarrier = detectCarrier(normalizedTracking);
+  const carrierForStorage = detectedCarrier ?? 'UNKNOWN';
+  const isUnknownCarrier = !detectedCarrier;
+  const unknownCarrierMessage =
+    'Carrier detection unavailable for this tracking format; manual tracking only.';
 
   const existingOrders = await client.query(
     `SELECT id, shipment_id
@@ -177,21 +178,97 @@ async function upsertOrderTracking(
        SET tracking_number_raw = $1,
            tracking_number_normalized = $2,
            carrier = $3,
+           latest_status_category = CASE
+             WHEN $4::boolean THEN 'UNKNOWN'
+             WHEN carrier = 'UNKNOWN' THEN NULL
+             ELSE latest_status_category
+           END,
+           is_terminal = CASE
+             WHEN $4::boolean THEN true
+             WHEN carrier = 'UNKNOWN' THEN false
+             ELSE is_terminal
+           END,
+           next_check_at = CASE
+             WHEN $4::boolean THEN NULL
+             WHEN carrier = 'UNKNOWN' THEN NOW()
+             ELSE next_check_at
+           END,
+           last_error_code = CASE
+             WHEN $4::boolean THEN 'UNKNOWN_CARRIER'
+             WHEN carrier = 'UNKNOWN' THEN NULL
+             ELSE last_error_code
+           END,
+           last_error_message = CASE
+             WHEN $4::boolean THEN $5
+             WHEN carrier = 'UNKNOWN' THEN NULL
+             ELSE last_error_message
+           END,
            updated_at = NOW()
-       WHERE id = $4`,
-      [rawTracking, normalizedTracking, carrier, shipmentId]
+       WHERE id = $6`,
+      [
+        rawTracking,
+        normalizedTracking,
+        carrierForStorage,
+        isUnknownCarrier,
+        unknownCarrierMessage,
+        shipmentId,
+      ]
     );
   } else {
     const insertedShipment = await client.query(
       `INSERT INTO shipping_tracking_numbers
-         (tracking_number_raw, tracking_number_normalized, carrier, source_system, next_check_at)
-       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', NOW())
+         (
+           tracking_number_raw,
+           tracking_number_normalized,
+           carrier,
+           source_system,
+           next_check_at,
+           latest_status_category,
+           is_terminal,
+           last_error_code,
+           last_error_message
+         )
+       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', $4, $5, $6, $7, $8)
        ON CONFLICT (tracking_number_normalized) DO UPDATE
          SET tracking_number_raw = EXCLUDED.tracking_number_raw,
              carrier = EXCLUDED.carrier,
+             next_check_at = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN NULL
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NOW()
+               ELSE shipping_tracking_numbers.next_check_at
+             END,
+             latest_status_category = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN 'UNKNOWN'
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.latest_status_category
+             END,
+             is_terminal = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN true
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN false
+               ELSE shipping_tracking_numbers.is_terminal
+             END,
+             last_error_code = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN 'UNKNOWN_CARRIER'
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.last_error_code
+             END,
+             last_error_message = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN EXCLUDED.last_error_message
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.last_error_message
+             END,
              updated_at = NOW()
        RETURNING id`,
-      [rawTracking, normalizedTracking, carrier]
+      [
+        rawTracking,
+        normalizedTracking,
+        carrierForStorage,
+        isUnknownCarrier ? null : new Date(),
+        isUnknownCarrier ? 'UNKNOWN' : null,
+        isUnknownCarrier,
+        isUnknownCarrier ? 'UNKNOWN_CARRIER' : null,
+        isUnknownCarrier ? unknownCarrierMessage : null,
+      ]
     );
     const insertedShipmentId = Number((insertedShipment.rows[0] as { id?: unknown } | undefined)?.id ?? 0);
     shipmentId = insertedShipmentId > 0 ? insertedShipmentId : null;

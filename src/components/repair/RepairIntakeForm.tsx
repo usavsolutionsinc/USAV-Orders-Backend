@@ -16,6 +16,7 @@ export interface RepairFormData {
     product: {
         type: string;
         model: string;
+        sourceSku?: string | null;
     };
     repairReasons: string[];
     repairNotes: string;
@@ -43,6 +44,7 @@ function buildInitialFormData(initialData?: Partial<RepairFormData>): RepairForm
         product: {
             type: initialData?.product?.type || '',
             model: initialData?.product?.model || '',
+            sourceSku: initialData?.product?.sourceSku ?? null,
         },
         repairReasons: Array.isArray(initialData?.repairReasons) ? initialData!.repairReasons : [],
         repairNotes: initialData?.repairNotes || '',

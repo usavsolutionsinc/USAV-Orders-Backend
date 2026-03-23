@@ -21,10 +21,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const activeTab = ADMIN_SECTION_OPTIONS.some((item) => item.value === requestedSection)
     ? requestedSection
     : 'goals';
-  const sidebarSearch = params.search || '';
-  const manualMode = (params.manualMode as 'category' | 'orders') || 'category';
-  const categoryId = params.categoryId || '';
-  const orderId = params.orderId || '';
+  const sidebarSearch = (params.search || '').trim();
+  const manualMode = params.manualMode === 'orders' ? 'orders' : 'category';
+  const categoryId = (params.categoryId || '').trim();
+  const orderId = (params.orderId || '').trim();
 
   const isManuals = activeTab === 'manuals';
 

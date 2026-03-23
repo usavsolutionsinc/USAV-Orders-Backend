@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from './WorkOrderAssignmentCard';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
 import type { WorkOrderRow } from './types';
 
 interface StaffOption {
@@ -17,7 +17,7 @@ interface SkuSearchResult {
   product_title: string;
   stock: string | null;
   wa_id: number | null;
-  wa_status: 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | null;
+  wa_status: 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'DONE' | null;
   assigned_tech_id: number | null;
   assigned_packer_id: number | null;
   assigned_tech_name: string | null;
@@ -32,11 +32,16 @@ interface Props {
   packerOptions: StaffOption[];
 }
 
+type StockViewFilter = 'needs_assign' | 'assigned' | 'done' | 'all';
+
 const STATUS_BADGE: Record<string, string> = {
   ASSIGNED:    'bg-blue-50 text-blue-700',
   IN_PROGRESS: 'bg-amber-50 text-amber-700',
   OPEN:        'bg-slate-100 text-slate-500',
+  DONE:        'bg-emerald-50 text-emerald-700',
 };
+
+const SELECTED_STOCK_STORAGE_KEY = 'stock-replenish:selected-sku-stock-id';
 
 /** Convert a search result into the WorkOrderRow shape the assignment card expects */
 function toWorkOrderRow(r: SkuSearchResult): WorkOrderRow {
@@ -70,6 +75,8 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
   const [results, setResults]       = useState<SkuSearchResult[]>([]);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
+  const [viewFilter, setViewFilter] = useState<StockViewFilter>('needs_assign');
+  const [selectedSkuId, setSelectedSkuId] = useState<number | null>(null);
   const [assigningRow, setAssigningRow] = useState<WorkOrderRow | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -175,6 +182,54 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
   const isFullyAssigned = (r: SkuSearchResult) =>
     r.assigned_tech_id != null && r.assigned_packer_id != null;
 
+  const isDone = (r: SkuSearchResult) => r.wa_status === 'DONE';
+  const needsAssignment = (r: SkuSearchResult) => !isDone(r) && !isFullyAssigned(r);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(SELECTED_STOCK_STORAGE_KEY);
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setSelectedSkuId(parsed);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || selectedSkuId == null) return;
+    window.localStorage.setItem(SELECTED_STOCK_STORAGE_KEY, String(selectedSkuId));
+  }, [selectedSkuId]);
+
+  useEffect(() => {
+    if (!results.length) return;
+    if (selectedSkuId != null && results.some((r) => r.sku_stock_id === selectedSkuId)) return;
+    setSelectedSkuId(results[0].sku_stock_id);
+  }, [results, selectedSkuId]);
+
+  const counts = useMemo(() => ({
+    all: results.length,
+    needs_assign: results.filter(needsAssignment).length,
+    assigned: results.filter((r) => !isDone(r) && isFullyAssigned(r)).length,
+    done: results.filter(isDone).length,
+  }), [results]);
+
+  const filteredResults = useMemo(() => {
+    if (viewFilter === 'all') return results;
+    if (viewFilter === 'done') return results.filter(isDone);
+    if (viewFilter === 'assigned') return results.filter((r) => !isDone(r) && isFullyAssigned(r));
+    return results.filter(needsAssignment);
+  }, [results, viewFilter]);
+
+  const selectedRecord = useMemo(() => {
+    if (selectedSkuId == null) return null;
+    return results.find((r) => r.sku_stock_id === selectedSkuId) ?? null;
+  }, [results, selectedSkuId]);
+
+  const selectedStockCount = useMemo(() => {
+    if (selectedRecord?.stock == null) return null;
+    const parsed = Number.parseInt(String(selectedRecord.stock).replace(/[^0-9-]+/g, ''), 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [selectedRecord]);
+
   return (
     <>
       <div className="flex flex-col h-full min-h-0">
@@ -211,6 +266,81 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
           </div>
         </div>
 
+        {/* View filters */}
+        <div className="border-b border-gray-100 px-4 py-2">
+          <div className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1">
+            {([
+              { key: 'needs_assign', label: 'Needs Assign' },
+              { key: 'assigned', label: 'Assigned' },
+              { key: 'done', label: 'Done' },
+              { key: 'all', label: 'All' },
+            ] as Array<{ key: StockViewFilter; label: string }>).map((item) => {
+              const active = viewFilter === item.key;
+              const count = counts[item.key];
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setViewFilter(item.key)}
+                  className={`rounded-lg px-2 py-1.5 text-[9px] font-black uppercase tracking-[0.14em] transition-colors ${
+                    active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  <span className={`ml-1 ${active ? 'text-slate-900' : 'text-slate-400'}`}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Selected stock summary */}
+        <div className="border-b border-gray-100 px-4 py-3">
+          {selectedRecord ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">Currently Selected Stock</p>
+                <span className={`text-[8px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-sm ${STATUS_BADGE[selectedRecord.wa_status || 'OPEN'] ?? 'bg-slate-100 text-slate-500'}`}>
+                  {(selectedRecord.wa_status || 'OPEN').replace('_', ' ')}
+                </span>
+              </div>
+              <p className="truncate text-[12px] font-black text-slate-900">{selectedRecord.product_title || selectedRecord.sku}</p>
+              <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                {selectedRecord.sku}
+                {selectedStockCount != null && (
+                  <span className={`ml-1 ${selectedStockCount <= 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                    · Stock {selectedStockCount}
+                  </span>
+                )}
+              </p>
+              <p className="mt-1 text-[10px] font-semibold">
+                <span className={selectedRecord.assigned_tech_id ? 'text-blue-600' : 'text-orange-500'}>
+                  {selectedRecord.assigned_tech_name || 'Tech unassigned'}
+                </span>
+                <span className="text-slate-300"> · </span>
+                <span className={selectedRecord.assigned_packer_id ? 'text-emerald-600' : 'text-orange-500'}>
+                  {selectedRecord.assigned_packer_name || 'Packer unassigned'}
+                </span>
+              </p>
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setAssigningRow(toWorkOrderRow(selectedRecord))}
+                  className={`h-8 rounded-lg px-3 text-[9px] font-black uppercase tracking-[0.16em] transition-colors ${
+                    needsAssignment(selectedRecord)
+                      ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {needsAssignment(selectedRecord) ? 'Assign Selected' : 'Edit Selected'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px] font-medium text-slate-400">No stock item selected</p>
+          )}
+        </div>
+
         {/* Results list */}
         <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
           {loading ? (
@@ -232,18 +362,25 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
                 Type a SKU or product name, then assign a tech and packer
               </p>
             </div>
-          ) : results.length === 0 ? (
+          ) : filteredResults.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-1.5 px-8 py-12 text-center">
-              <p className="text-[12px] font-semibold text-slate-500">No results for &ldquo;{query}&rdquo;</p>
-              <p className="text-[11px] text-slate-400">Try a different SKU or product name</p>
+              <p className="text-[12px] font-semibold text-slate-500">
+                No {viewFilter === 'needs_assign' ? 'assignable' : viewFilter} results for &ldquo;{query}&rdquo;
+              </p>
+              <p className="text-[11px] text-slate-400">Try another filter or search term</p>
             </div>
           ) : (
             <ul className="divide-y divide-gray-50">
-              {results.map((r) => {
+              {filteredResults.map((r) => {
                 const fullyAssigned = isFullyAssigned(r);
+                const selected = selectedSkuId === r.sku_stock_id;
 
                 return (
-                  <li key={r.sku_stock_id} className="px-4 py-3">
+                  <li
+                    key={r.sku_stock_id}
+                    className={`px-4 py-3 cursor-pointer transition-colors ${selected ? 'bg-blue-50/50' : 'hover:bg-slate-50'}`}
+                    onClick={() => setSelectedSkuId(r.sku_stock_id)}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       {/* Left: product info */}
                       <div className="min-w-0 flex-1">
@@ -293,9 +430,13 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
                       <div className="shrink-0 pt-0.5">
                         <button
                           type="button"
-                          onClick={() => setAssigningRow(toWorkOrderRow(r))}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSkuId(r.sku_stock_id);
+                            setAssigningRow(toWorkOrderRow(r));
+                          }}
                           className={[
-                            'h-6 px-2 rounded-md text-[8px] font-black uppercase tracking-wider border transition-all',
+                            'h-8 px-3 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all',
                             fullyAssigned
                               ? 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
                               : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100',
@@ -313,12 +454,15 @@ export function SkuStockAssignPanel({ technicianOptions, packerOptions }: Props)
         </div>
 
         {/* Footer: result count */}
-        {results.length > 0 && (
+        {filteredResults.length > 0 && (
           <div className="border-t border-gray-100 px-4 py-2 text-right">
             <span className="text-[10px] font-medium text-slate-400">
-              {results.length} result{results.length !== 1 ? 's' : ''}
-              {results.filter(isFullyAssigned).length > 0 && (
-                <> · <span className="text-blue-500">{results.filter(isFullyAssigned).length} fully assigned</span></>
+              {filteredResults.length} shown
+              {results.length !== filteredResults.length && (
+                <> · {results.length} total</>
+              )}
+              {counts.assigned > 0 && (
+                <> · <span className="text-blue-500">{counts.assigned} assigned</span></>
               )}
             </span>
           </div>

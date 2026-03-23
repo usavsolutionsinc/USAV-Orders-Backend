@@ -26,7 +26,12 @@ This design system implements the "Kinetic Ledger" direction for dense operation
   - `tokens/radii.ts` (zero-radius policy)
   - `tokens/shadows.ts` (surface-dim/low-opacity only)
 - Motion:
-  - `foundations/motion.ts` (`micro=100ms`, `fast=150ms`)
+  - `foundations/motion.ts` — CSS-oriented durations / cubic-bezier strings (`micro=100ms`, `fast=150ms`)
+  - `foundations/motion-framer.ts` — Framer Motion presets used on station surfaces:
+    - `motionBezier.easeOut` / `motionBezier.layout` — cubic tuples aligned with **ActiveStationOrderCard** / **Up Next OrderCard**
+    - `framerDuration` — second-scale timings
+    - `framerTransition` — named transitions (`stationCardMount`, `upNextRowMount`, `stationCollapse`, `upNextCollapse`, chevrons, serial rows, badges)
+    - `framerPresence` — `initial` / `animate` / `exit` objects; `framerVariants` for the variants API
 - CSS variable generation:
   - `tokens/css-variables.ts`
 
@@ -51,11 +56,16 @@ This design system implements the "Kinetic Ledger" direction for dense operation
 - New precision primitives:
   - `components/UnderlineValue.tsx`
   - `components/InlineEditableValue.tsx`
+- **Reference example (inline inventory note):** `components/OutOfStockField.tsx` — micro-label + underline row, read/edit modes, debounced save with ephemeral “Saved” feedback; use as a template for similar operational fields (see file-level comment).
   - `components/CopyActionIcon.tsx`
   - `components/ExternalLinkActionIcon.tsx`
   - `components/StatusMicroLabel.tsx`
   - `components/CompactSearchInput.tsx`
   - `components/AssignmentOverlayCard.tsx`
+  - `components/sidebar-intake/` — sidebar “intake” chrome shared by **ShippedIntakeForm** and **FbaCreateShipmentForm**:
+    - `intakeFormClasses.ts` — label / input / select / submit button class strings
+    - `SidebarIntakeFormShell.tsx` — header + optional band + scroll body + footer
+    - `SidebarIntakeFormField.tsx` — stacked label + control + optional hints
 
 ## Functional Color Mapping
 
@@ -83,8 +93,7 @@ Adopt the new exported primitives in:
 - `src/components/ui/CopyChip.tsx`
 - `src/components/station/upnext/OrderCard.tsx`
 - `src/components/shipped/details-panel/ShippingInformationSection.tsx` (optional: wrap blocks with `PanelSection`; `DetailsPanelRow` re-exports from design-system)
-- `src/components/ui/OutOfStockField.tsx`
+- `src/design-system/components/OutOfStockField.tsx` (also re-exported from `src/components/ui/OutOfStockField.tsx`)
 - `src/components/ui/SearchBar.tsx`
-- `src/components/work-orders/WorkOrderAssignmentCard.tsx`
 
 This keeps implementation aligned with the Kinetic Ledger contract while avoiding one-off styling drift.

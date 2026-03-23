@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { db } from '@/lib/drizzle/db';
-import { staff } from '@/lib/drizzle/schema';
+import { staff, staffWeeklySchedule } from '@/lib/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
+import { getCurrentStaffDayOfWeek } from '@/lib/staff-schedule';
 
 function isDatabaseUnavailable(error: unknown) {
     return isTransientDbError(error);
@@ -15,9 +16,13 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const role = searchParams.get('role');
         const activeOnly = searchParams.get('active') !== 'false';
+        const presentToday = searchParams.get('presentToday') === 'true';
+        const todayDayOfWeek = presentToday ? getCurrentStaffDayOfWeek() : null;
         const cacheLookup = createCacheLookupKey({
             role: role || '',
             activeOnly,
+            presentToday,
+            todayDayOfWeek: todayDayOfWeek != null ? String(todayDayOfWeek) : '',
         });
 
         const cached = await getCachedJson<any[]>('api:staff', cacheLookup);
@@ -27,26 +32,81 @@ export async function GET(request: NextRequest) {
 
         const conditions: string[] = [];
         const params: any[] = [];
+        let scheduleJoin = '';
+        let scheduledTodaySelect = '';
+
+        if (presentToday) {
+            params.push(todayDayOfWeek);
+            scheduleJoin = `
+              LEFT JOIN staff_weekly_schedule sws
+                ON sws.staff_id = s.id
+               AND sws.day_of_week = $${params.length}
+            `;
+            scheduledTodaySelect = `,
+              COALESCE(sws.is_scheduled, true) AS is_scheduled_today
+            `;
+            conditions.push('COALESCE(sws.is_scheduled, true) = true');
+        }
+
         if (role) {
             params.push(role);
-            conditions.push(`role = $${params.length}`);
+            conditions.push(`s.role = $${params.length}`);
         }
         if (activeOnly) {
             params.push(true);
-            conditions.push(`active = $${params.length}`);
+            conditions.push(`s.active = $${params.length}`);
         }
 
         const sql = `
-          SELECT id, name, role, employee_id, active, created_at
-          FROM staff
+          SELECT s.id, s.name, s.role, s.employee_id, s.active, s.created_at
+          ${scheduledTodaySelect}
+          FROM staff s
+          ${scheduleJoin}
           ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
-          ORDER BY role ASC, name ASC
+          ORDER BY s.role ASC, s.name ASC
         `;
 
-        const result = await queryWithRetry(
-            () => pool.query(sql, params),
-            { retries: 3, delayMs: 1000 }
-        );
+        let result;
+        try {
+            result = await queryWithRetry(
+                () => pool.query(sql, params),
+                { retries: 3, delayMs: 1000 }
+            );
+        } catch (queryError: any) {
+            // If the schedule table is not yet migrated, treat everyone as present.
+            const missingScheduleTable =
+                presentToday &&
+                queryError?.code === '42P01' &&
+                String(queryError?.message || '').includes('staff_weekly_schedule');
+
+            if (!missingScheduleTable) {
+                throw queryError;
+            }
+
+            const fallbackConditions: string[] = [];
+            const fallbackParams: any[] = [];
+            if (role) {
+                fallbackParams.push(role);
+                fallbackConditions.push(`s.role = $${fallbackParams.length}`);
+            }
+            if (activeOnly) {
+                fallbackParams.push(true);
+                fallbackConditions.push(`s.active = $${fallbackParams.length}`);
+            }
+
+            const fallbackSql = `
+              SELECT s.id, s.name, s.role, s.employee_id, s.active, s.created_at
+              FROM staff s
+              ${fallbackConditions.length > 0 ? `WHERE ${fallbackConditions.join(' AND ')}` : ''}
+              ORDER BY s.role ASC, s.name ASC
+            `;
+
+            result = await queryWithRetry(
+                () => pool.query(fallbackSql, fallbackParams),
+                { retries: 1, delayMs: 250 }
+            );
+        }
+
         const results = result.rows;
 
         await setCachedJson('api:staff', cacheLookup, results, 60, ['staff']);
@@ -83,6 +143,17 @@ export async function POST(request: NextRequest) {
             employeeId: employee_id || null,
             active: typeof active === 'boolean' ? active : true,
         }).returning();
+
+        await db
+            .insert(staffWeeklySchedule)
+            .values(
+                Array.from({ length: 7 }, (_, day) => ({
+                    staffId: result.id,
+                    dayOfWeek: day,
+                    isScheduled: true,
+                }))
+            )
+            .onConflictDoNothing();
 
         await invalidateCacheTags(['staff']);
         return NextResponse.json(result, { status: 201 });

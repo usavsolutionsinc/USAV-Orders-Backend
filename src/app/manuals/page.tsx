@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState, type KeyboardEvent } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FileText, ExternalLink } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 
@@ -28,7 +28,12 @@ function formatDate(raw: string | null): string {
   }
 }
 
-function ManualDetailPanel({ manual }: { manual: ProductManual }) {
+function buildManualsHref(pathname: string, params: URLSearchParams) {
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
+function ManualDetailPanel({ manual, onClose }: { manual: ProductManual; onClose: () => void }) {
   const title = manual.product_title || manual.sku || manual.item_number || `Manual #${manual.id}`;
   const docUrl = manual.google_file_id
     ? `https://docs.google.com/document/d/${manual.google_file_id}/preview`
@@ -39,17 +44,26 @@ function ManualDetailPanel({ manual }: { manual: ProductManual }) {
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} px-4`}>
           <p className="truncate text-[11px] font-black uppercase tracking-[0.18em] text-gray-900">{title}</p>
-          {manual.google_file_id && (
-            <a
-              href={`https://docs.google.com/document/d/${manual.google_file_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
+          <div className="inline-flex items-center gap-1.5">
+            {manual.google_file_id && (
+              <a
+                href={`https://docs.google.com/document/d/${manual.google_file_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center border border-gray-300 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-100"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Open
-            </a>
-          )}
+              Close
+            </button>
+          </div>
         </div>
       </div>
 
@@ -131,9 +145,19 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
               <tr
                 key={manual.id}
                 onClick={() => onSelect(manual)}
+                onKeyDown={(event: KeyboardEvent<HTMLTableRowElement>) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelect(manual);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                aria-label={`Open manual ${manual.product_title || manual.sku || manual.item_number || `#${manual.id}`}`}
                 className={`border-b border-gray-50 cursor-pointer transition-colors group ${
                   isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
+                } focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300`}
               >
                 <td className="px-4 py-3">
                   <span className={`text-[11px] font-black tracking-tight ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
@@ -188,44 +212,85 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
 }
 
 function ManualsPageContent() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const query = searchParams.get('q') || '';
-  const selectedId = searchParams.get('id') ? Number(searchParams.get('id')) : null;
+  const selectedParam = searchParams.get('id');
+  const selectedId = selectedParam && Number.isFinite(Number(selectedParam)) ? Number(selectedParam) : null;
 
   const [manuals, setManuals] = useState<ProductManual[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [selectedManual, setSelectedManual] = useState<ProductManual | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setIsLoading(true);
+      setLoadError(null);
       try {
         const params = new URLSearchParams();
         if (query.trim()) params.set('q', query.trim());
         params.set('limit', '200');
         const res = await fetch(`/api/product-manuals/search?${params.toString()}`);
-        if (!res.ok || cancelled) return;
+        if (!res.ok) throw new Error('Failed to load manuals');
+        if (cancelled) return;
         const data = await res.json();
         if (data.success && Array.isArray(data.manuals) && !cancelled) {
           setManuals(data.manuals);
-          if (selectedId) {
-            const found = data.manuals.find((m: ProductManual) => m.id === selectedId);
-            if (found) setSelectedManual(found);
-          }
+          return;
         }
+        throw new Error('Failed to load manuals');
       } catch (_error) {
-        // no-op
+        if (cancelled) return;
+        setManuals([]);
+        setLoadError('Failed to load manuals.');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [query, selectedId]);
+  }, [query, reloadKey]);
+
+  useEffect(() => {
+    if (selectedId === null) {
+      setSelectedManual(null);
+      return;
+    }
+
+    const found = manuals.find((manual) => manual.id === selectedId) || null;
+    setSelectedManual(found);
+
+    if (!isLoading && !found) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (params.has('id')) {
+        params.delete('id');
+        router.replace(buildManualsHref(pathname, params));
+      }
+    }
+  }, [isLoading, manuals, pathname, router, searchParams, selectedId]);
 
   const handleSelect = (manual: ProductManual) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (selectedManual?.id === manual.id) {
+      setSelectedManual(null);
+      params.delete('id');
+      router.replace(buildManualsHref(pathname, params));
+      return;
+    }
     setSelectedManual(manual);
+    params.set('id', String(manual.id));
+    router.replace(buildManualsHref(pathname, params));
+  };
+
+  const handleCloseDetails = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('id');
+    setSelectedManual(null);
+    router.replace(buildManualsHref(pathname, params));
   };
 
   return (
@@ -253,6 +318,19 @@ function ManualsPageContent() {
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading manuals…</p>
               </div>
             </div>
+          ) : loadError ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center space-y-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{loadError}</p>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((current) => current + 1)}
+                  className="inline-flex items-center border border-red-300 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-red-700 transition-colors hover:bg-red-50"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
           ) : (
             <ManualsTable
               manuals={manuals}
@@ -266,7 +344,7 @@ function ManualsPageContent() {
       {/* Detail panel */}
       {selectedManual && (
         <div className="w-[520px] flex-shrink-0 border-l border-gray-200 overflow-hidden">
-          <ManualDetailPanel manual={selectedManual} />
+          <ManualDetailPanel manual={selectedManual} onClose={handleCloseDetails} />
         </div>
       )}
     </div>
