@@ -258,24 +258,31 @@ export async function POST(req: NextRequest) {
                 }
 
                 const existingScanLog = await client.query(
-                    `SELECT id, created_at::text AS created_at
+                    `SELECT id, staff_id, created_at::text AS created_at
                      FROM station_activity_logs
                      WHERE station = 'TECH'
                        AND activity_type = 'TRACKING_SCANNED'
-                       AND staff_id = $3
                        AND (
                          ($1::bigint IS NOT NULL AND shipment_id = $1)
                          OR RIGHT(regexp_replace(UPPER(COALESCE(scan_ref, metadata->>'tracking', '')), '[^A-Z0-9]', '', 'g'), 18) = $2
                        )
-                     ORDER BY id ASC
+                     ORDER BY id DESC
                      LIMIT 1`,
-                    [resolvedScan.shipmentId, key18, testedBy]
+                    [resolvedScan.shipmentId, key18]
                 );
 
                 let techActivityId: number | null = null;
                 let techTestDateTime: string | null = null;
+                const existingScanStaffId = existingScanLog.rows[0]?.staff_id != null
+                    ? Number(existingScanLog.rows[0].staff_id)
+                    : null;
+                const shouldReplaceExistingScan =
+                    existingScanLog.rows.length > 0 && existingScanStaffId !== testedBy;
 
-                if (existingScanLog.rows.length === 0) {
+                if (existingScanLog.rows.length === 0 || shouldReplaceExistingScan) {
+                    if (shouldReplaceExistingScan) {
+                        await client.query(`DELETE FROM station_activity_logs WHERE id = $1`, [existingScanLog.rows[0].id]);
+                    }
                     techTestDateTime = formatPSTTimestamp();
                     techActivityId = await createStationActivityLog(client, {
                         station: 'TECH',
@@ -358,21 +365,28 @@ export async function POST(req: NextRequest) {
             let techTestDateTime: string | null = null;
 
             const existingScanLog = await client.query(
-                `SELECT id, created_at::text AS created_at
+                `SELECT id, staff_id, created_at::text AS created_at
                  FROM station_activity_logs
                  WHERE station = 'TECH'
                    AND activity_type = 'TRACKING_SCANNED'
-                   AND staff_id = $3
                    AND (
                      ($1::bigint IS NOT NULL AND shipment_id = $1)
                      OR RIGHT(regexp_replace(UPPER(COALESCE(scan_ref, metadata->>'tracking', '')), '[^A-Z0-9]', '', 'g'), 18) = $2
                    )
-                 ORDER BY id ASC
+                 ORDER BY id DESC
                  LIMIT 1`,
-                [matchedShipmentId, key18, testedBy]
+                [matchedShipmentId, key18]
             );
+            const existingScanStaffId = existingScanLog.rows[0]?.staff_id != null
+                ? Number(existingScanLog.rows[0].staff_id)
+                : null;
+            const shouldReplaceExistingScan =
+                existingScanLog.rows.length > 0 && existingScanStaffId !== testedBy;
 
-            if (existingScanLog.rows.length === 0) {
+            if (existingScanLog.rows.length === 0 || shouldReplaceExistingScan) {
+                if (shouldReplaceExistingScan) {
+                    await client.query(`DELETE FROM station_activity_logs WHERE id = $1`, [existingScanLog.rows[0].id]);
+                }
                 techTestDateTime = formatPSTTimestamp();
                 techActivityId = await createStationActivityLog(client, {
                     station: 'TECH',

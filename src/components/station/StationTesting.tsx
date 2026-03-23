@@ -149,6 +149,14 @@ export default function StationTesting({
     [userId]
   );
 
+  const forcedTypeForManualMode = useCallback((mode: StationInputMode | null) => {
+    if (mode === 'tracking') return 'TRACKING' as const;
+    if (mode === 'serial') return 'SERIAL' as const;
+    if (mode === 'fba') return 'FNSKU' as const;
+    if (mode === 'repair') return 'REPAIR' as const;
+    return undefined;
+  }, []);
+
   const handleFormSubmit = useCallback(
     (e?: React.FormEvent, overrideTracking?: string) => {
       const value = overrideTracking ?? inputValue;
@@ -156,57 +164,41 @@ export default function StationTesting({
       const detectedInputMode = trimmedValue ? getStationInputMode(value) : null;
       const isFnskuInput =
         Boolean(trimmedValue) && (detectedInputMode === 'fba' || looksLikeFnsku(value));
-      const isSkuInput = trimmedValue.includes(':');
+      const manualForcedType =
+        typeof overrideTracking === 'string'
+          ? 'TRACKING'
+          : forcedTypeForManualMode(manualMode);
 
-      if ((manualMode === 'fba' || manualMode === 'repair') && value.trim()) {
-        const detectedMode = getStationInputMode(value);
-        if (detectedMode !== manualMode) {
-          setManualMode(detectedMode);
-        }
-      }
-
-      // FNSKU scans should always hit the dedicated FBA route even when manual
-      // tracking/serial override is active, otherwise logs are misclassified.
-      if (isFnskuInput && typeof overrideTracking !== 'string') {
+      // In auto mode, FNSKU-looking input routes to the dedicated FBA endpoint.
+      // Manual mode now fully overrides auto classification.
+      if (isFnskuInput && typeof overrideTracking !== 'string' && !manualForcedType) {
         e?.preventDefault();
         setInputValue('');
         handleFnskuScan(value);
         return;
       }
 
-      const forcedType =
-        typeof overrideTracking === 'string'
-          ? 'TRACKING'
-          : isSkuInput
-            ? undefined
-          : manualMode === 'tracking'
-            ? 'TRACKING'
-            : manualMode === 'serial'
-              ? 'SERIAL'
-              : undefined;
-      handleSubmit(e, overrideTracking, forcedType ? { forcedType } : undefined);
+      if (manualForcedType === 'FNSKU') {
+        e?.preventDefault();
+        setInputValue('');
+        handleFnskuScan(value);
+        return;
+      }
+
+      handleSubmit(e, overrideTracking, manualForcedType ? { forcedType: manualForcedType } : undefined);
     },
-    [inputValue, manualMode, handleFnskuScan, handleSubmit, setInputValue]
+    [inputValue, manualMode, forcedTypeForManualMode, handleFnskuScan, handleSubmit, setInputValue]
   );
 
   const trimmedInput = inputValue.trim();
   const detectedMode = trimmedInput ? getStationInputMode(inputValue) : null;
   const autoMode: StationInputMode = detectedMode ?? (activeOrder ? 'serial' : 'tracking');
-  // Non-empty field: classifier / tracking regex drives the icon; manual tracking|serial is only for empty-field feedback.
+  // Manual mode is a hard override for display and submit routing.
   const effectiveMode: StationInputMode =
-    manualMode === 'fba'
-      ? detectedMode && detectedMode !== 'fba'
-        ? detectedMode
-        : 'fba'
-      : manualMode === 'repair'
-        ? detectedMode && detectedMode !== 'repair'
-          ? detectedMode
-          : 'repair'
-        : trimmedInput && detectedMode
-          ? detectedMode
-          : manualMode === 'tracking' || manualMode === 'serial'
-            ? manualMode
-            : autoMode;
+    manualMode ??
+    (trimmedInput && detectedMode
+      ? detectedMode
+      : autoMode);
   const isTrackingMode = effectiveMode === 'tracking';
   const isFbaMode = effectiveMode === 'fba';
   const isRepairMode = effectiveMode === 'repair';
@@ -254,7 +246,23 @@ export default function StationTesting({
     if (nextManualMode === 'serial') {
       reopenLastActiveOrderCard();
     }
-  }, [manualMode, reopenLastActiveOrderCard]);
+
+    // If there's already input in the field, selecting a manual mode should
+    // immediately force-post using that mode.
+    const pendingInput = inputValue.trim();
+    if (!nextManualMode || !pendingInput) return;
+
+    const forcedType = forcedTypeForManualMode(nextManualMode);
+    if (!forcedType) return;
+
+    if (forcedType === 'FNSKU') {
+      setInputValue('');
+      handleFnskuScan(inputValue);
+      return;
+    }
+
+    handleSubmit(undefined, inputValue, { forcedType });
+  }, [manualMode, inputValue, forcedTypeForManualMode, handleFnskuScan, handleSubmit, reopenLastActiveOrderCard, setInputValue]);
 
   return (
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
@@ -319,8 +327,8 @@ export default function StationTesting({
                       type="button"
                       onClick={() => toggleMode('fba')}
                       aria-pressed={isFbaMode}
-                      aria-label={manualMode === 'fba' ? 'FBA mode feedback selected. Regex can still switch modes.' : 'Show FBA mode feedback.'}
-                      title={manualMode === 'fba' ? 'FBA feedback mode selected (regex still takes priority)' : 'FBA mode'}
+                      aria-label={manualMode === 'fba' ? 'FBA mode manual override enabled. Click to return to auto mode.' : 'Switch to FBA mode override.'}
+                      title={manualMode === 'fba' ? 'FBA mode (manual override). Click again for auto mode.' : 'FBA mode'}
                       className={`${modeButtonBaseClass} ${isFbaMode ? 'text-violet-700 bg-violet-50' : inactiveModeButtonClass}`}
                     >
                       <Package className="h-3.5 w-3.5" />
@@ -329,8 +337,8 @@ export default function StationTesting({
                       type="button"
                       onClick={() => toggleMode('repair')}
                       aria-pressed={isRepairMode}
-                      aria-label={manualMode === 'repair' ? 'Repair mode feedback selected. RS- prefix detection can still switch modes.' : 'Show repair service mode feedback.'}
-                      title={manualMode === 'repair' ? 'Repair feedback mode selected (regex still takes priority)' : 'Repair mode'}
+                      aria-label={manualMode === 'repair' ? 'Repair mode manual override enabled. Click to return to auto mode.' : 'Switch to repair mode override.'}
+                      title={manualMode === 'repair' ? 'Repair mode (manual override). Click again for auto mode.' : 'Repair mode'}
                       className={`${modeButtonBaseClass} ${isRepairMode ? 'text-amber-700 bg-amber-50' : inactiveModeButtonClass}`}
                     >
                       <Settings className="h-3.5 w-3.5" />

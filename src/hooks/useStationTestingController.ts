@@ -41,6 +41,7 @@ export interface ResolvedProductManual {
 
 export type StationScanType = 'TRACKING' | 'SERIAL' | 'FNSKU' | 'SKU' | 'REPAIR' | 'COMMAND';
 export type StationInputMode = 'tracking' | 'fba' | 'repair' | 'serial';
+type ForcedStationScanType = 'TRACKING' | 'SERIAL' | 'FNSKU' | 'REPAIR';
 
 function parseRepairServiceId(value: string): number | null {
   const match = value.trim().toUpperCase().match(/^RS-(\d+)$/);
@@ -478,7 +479,7 @@ export function useStationTestingController({
   const handleSubmit = async (
     e?: React.FormEvent,
     manualValue?: string,
-    options?: { forcedType?: 'TRACKING' | 'SERIAL' | null },
+    options?: { forcedType?: ForcedStationScanType | null },
   ) => {
     if (e) e.preventDefault();
     const input = (manualValue || inputValue).trim();
@@ -491,7 +492,10 @@ export function useStationTestingController({
     const contextOrder = getScanContextOrder();
     const forcedType = options?.forcedType;
     const type: StationScanType =
-      forcedType === 'TRACKING' || forcedType === 'SERIAL'
+      forcedType === 'TRACKING' ||
+      forcedType === 'SERIAL' ||
+      forcedType === 'FNSKU' ||
+      forcedType === 'REPAIR'
         ? forcedType
         : resolveScanType(input, {
             hasActiveOrderContext: Boolean(contextOrder),

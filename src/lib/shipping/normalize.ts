@@ -191,6 +191,7 @@ export function detectCarrier(normalized: string): CarrierCode | null {
   if (/^\d{12}$/.test(normalized)) return 'FEDEX';
   if (/^\d{15}$/.test(normalized)) return 'FEDEX';
   if (/^\d{20}$/.test(normalized)) return 'FEDEX';
+  if (/^9621\d{29}$/.test(normalized)) return 'FEDEX';
   // USPS: 20-22 digits, or starts with 9
   if (/^9\d{15,21}$/.test(normalized)) return 'USPS';
   if (/^\d{20,22}$/.test(normalized)) return 'USPS';
