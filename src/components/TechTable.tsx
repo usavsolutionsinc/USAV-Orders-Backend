@@ -53,6 +53,28 @@ function hasUsableProductTitle(value: string | null | undefined): boolean {
   return Boolean(normalized) && !/^unknown product$/i.test(normalized);
 }
 
+function hasSerialValue(value: string | null | undefined): boolean {
+  return Boolean(String(value || '').trim());
+}
+
+/** Returns the first value that is non-empty and not a placeholder like "N/A". */
+function pickBestValue(primary: string | null | undefined, fallback: string | null | undefined): string | null {
+  const a = String(primary || '').trim();
+  const b = String(fallback || '').trim();
+  if (a && !/^n\/a$/i.test(a)) return a;
+  if (b && !/^n\/a$/i.test(b)) return b;
+  return a || b || null;
+}
+
+/** Merges two serial_number strings (comma-separated) into one deduplicated value. */
+function mergeSerialNumbers(a: string | null | undefined, b: string | null | undefined): string {
+  const combined = [
+    ...String(a || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
+    ...String(b || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
+  ];
+  return [...new Set(combined)].join(', ');
+}
+
 export function TechTable({ testedBy }: TechTableProps) {
   const [stickyDate, setStickyDate] = useState<string>('');
   const [currentCount, setCurrentCount] = useState<number>(0);
@@ -192,11 +214,59 @@ export function TechTable({ testedBy }: TechTableProps) {
 
       const existing = unique[existingIndex];
       if (!existing) continue;
+      const existingHasSerial = hasSerialValue(existing.serial_number);
+      const candidateHasSerial = hasSerialValue(record.serial_number);
+      const shouldPreferCandidate =
+        (candidateHasSerial && !existingHasSerial)
+        || (
+          candidateHasSerial
+          && existingHasSerial
+          && existing.source_kind !== 'tech_serial'
+          && record.source_kind === 'tech_serial'
+        );
 
-      if (!hasUsableProductTitle(existing.product_title) && hasUsableProductTitle(record.product_title)) {
+      const mergedProductTitle = hasUsableProductTitle(record.product_title)
+        ? normalizeProductTitle(record.product_title)
+        : hasUsableProductTitle(existing.product_title)
+          ? normalizeProductTitle(existing.product_title)
+          : record.product_title;
+
+      // Always pick the best condition + SKU from either row so a re-scan of the
+      // same tracking (which may produce a tech_scan row with null fields) never
+      // overwrites the values already established by the tech_serial row.
+      const mergedCondition = shouldPreferCandidate
+        ? pickBestValue(record.condition, existing.condition)
+        : pickBestValue(existing.condition, record.condition);
+      const mergedSku = shouldPreferCandidate
+        ? pickBestValue(record.sku, existing.sku)
+        : pickBestValue(existing.sku, record.sku);
+      // Always union all serial numbers from both rows so that multiple TSN
+      // records for the same tracking all appear together in the details panel.
+      const mergedSerial = mergeSerialNumbers(existing.serial_number, record.serial_number);
+
+      if (shouldPreferCandidate) {
+        unique[existingIndex] = {
+          ...record,
+          product_title: mergedProductTitle,
+          condition: mergedCondition,
+          sku: mergedSku,
+          serial_number: mergedSerial,
+        };
+        continue;
+      }
+
+      // Always patch the winner if any field improved — not just when product_title changed.
+      const titleImproved = !hasUsableProductTitle(existing.product_title) && hasUsableProductTitle(record.product_title);
+      const conditionImproved = mergedCondition !== existing.condition;
+      const skuImproved = mergedSku !== existing.sku;
+      const serialImproved = mergedSerial !== (existing.serial_number || '');
+      if (titleImproved || conditionImproved || skuImproved || serialImproved) {
         unique[existingIndex] = {
           ...existing,
-          product_title: normalizeProductTitle(record.product_title),
+          product_title: mergedProductTitle,
+          condition: mergedCondition,
+          sku: mergedSku,
+          serial_number: mergedSerial,
         };
       }
     }

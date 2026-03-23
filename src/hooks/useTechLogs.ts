@@ -85,10 +85,11 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
   });
 
   // ── Ably: live row-level updates from any session (mobile or web) ─────────
-  // INSERT  → prepend new row (new tracking scan from another tab/device).
-  // UPDATE  → invalidate so the table refetches (covers exception scans and
-  //           serial additions that arrive via Ably from a different session).
-  // DELETE  → intentionally ignored.
+  // INSERT with row  → surgical prepend (avoids a full round-trip).
+  // INSERT without row → invalidate so the table refetches.
+  // UPDATE            → invalidate (covers re-scans, condition/SKU patches).
+  // DELETE            → invalidate (TSN id ≠ SAL row id so we can't remove
+  //                     surgically; a fresh fetch is the safest approach).
   useAblyChannel(
     STATION_CHANNEL,
     'tech-log.changed',
@@ -97,6 +98,7 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
       if (Number(changedId) !== techId) return;
 
       if (action === 'insert' && row) {
+        // Surgical prepend — no refetch needed for a known new row.
         const currentWeek = computeCurrentPSTWeek();
         queryClient.setQueryData<TechRecord[]>(
           ['tech-logs', techId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
@@ -106,10 +108,11 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
             return [row as TechRecord, ...prev];
           },
         );
-      } else if (action === 'update') {
+      } else if (action === 'insert' || action === 'update' || action === 'delete') {
+        // Covers: insert without full row data, updates to existing rows,
+        // and deletions (e.g. undo-last) from any client or device.
         queryClient.invalidateQueries({ queryKey: ['tech-logs', techId] });
       }
-      // delete: intentionally ignored.
     },
   );
 

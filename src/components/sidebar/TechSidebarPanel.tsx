@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { sidebarHeaderBandClass, sidebarHeaderControlClass } from '@/components/layout/header-shell';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
@@ -9,7 +10,44 @@ import StationTesting from '@/components/station/StationTesting';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getTechThemeById } from '@/utils/staff-colors';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
+import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
 import { useActiveStaffDirectory } from './hooks';
+
+function computeCurrentWeekRange() {
+  const todayPst = getCurrentPSTDateKey();
+  const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
+  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
+  const currentDay = now.getDay();
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  return {
+    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
+    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
+  };
+}
+
+function deduplicateByTracking(records: TechRecord[]): TechRecord[] {
+  const sorted = [...records].sort(
+    (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+  );
+  const trackingIndex = new Map<string, number>();
+  const unique: TechRecord[] = [];
+  for (const record of sorted) {
+    const key = String(record.shipping_tracking_number || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '');
+    if (!key) { unique.push(record); continue; }
+    if (!trackingIndex.has(key)) {
+      trackingIndex.set(key, unique.length);
+      unique.push(record);
+    }
+  }
+  return unique;
+}
 
 const TECH_VIEW_OPTIONS = [
   { value: 'history', label: 'Tech History' },
@@ -24,7 +62,7 @@ type TechViewMode = 'history' | 'shipped' | 'pending' | 'manual' | 'update-manua
 export function TechSidebarPanel({ techId }: { techId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [history, setHistory] = useState<any[]>([]);
+  const queryClient = useQueryClient();
   const [dailyGoal, setDailyGoal] = useState(50);
   const staffDirectory = useActiveStaffDirectory();
 
@@ -43,29 +81,22 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
             ? 'update-manuals'
             : 'history';
 
+  // Fetch goal on mount / when techId changes
   useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const res = await fetch(`/api/tech-logs?techId=${techId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (Array.isArray(data)) setHistory(data);
-      } catch {
-        // no-op
-      }
-    };
-
     getStaffGoalById(techId).then(setDailyGoal).catch(() => {});
-    fetchHistory();
   }, [techId]);
 
+  // Use the same hook + week range as TechTable so counts always match
+  const weekRange = useMemo(() => computeCurrentWeekRange(), []);
+  const { data: records = [] } = useTechLogs(parseInt(techId, 10), { weekOffset: 0, weekRange });
+
   const todayCount = useMemo(() => {
-    if (history.length === 0) return 0;
     const todayDate = getCurrentPSTDateKey();
-    return history.filter(
-      (item) => toPSTDateKey(item.created_at || item.test_date_time || item.timestamp || '') === todayDate,
-    ).length;
-  }, [history]);
+    const todayRecords = records.filter(
+      (r) => toPSTDateKey(r.created_at || '') === todayDate,
+    );
+    return deduplicateByTracking(todayRecords).length;
+  }, [records]);
 
   const updateViewMode = (nextView: TechViewMode) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -83,16 +114,9 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
     router.replace(nextSearch ? `/tech?${nextSearch}` : '/tech');
   };
 
-  const refreshHistory = async () => {
-    try {
-      const res = await fetch(`/api/tech-logs?techId=${techId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data)) setHistory(data);
-    } catch {
-      // no-op
-    }
-  };
+  const refreshHistory = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['tech-logs', parseInt(techId, 10)] });
+  }, [queryClient, techId]);
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden">

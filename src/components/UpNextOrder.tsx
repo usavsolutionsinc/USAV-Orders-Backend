@@ -228,6 +228,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     {
       id: 'orders',
       label: 'Orders',
+      headerColor: 'orange' as const,
       count: filteredOrders.length,
       render: () => (
         <AnimatePresence mode="popLayout">
@@ -237,7 +238,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     },
     {
       id: 'fba',
-      label: 'FBA',
+      label: 'FBA Planned Items',
+      headerColor: 'purple' as const,
       count: filteredFbaItems.length,
       render: () => (
         <AnimatePresence mode="popLayout">
@@ -255,6 +257,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     {
       id: 'repair',
       label: 'Repair Service',
+      headerColor: 'orange' as const,
       count: filteredRepairs.length,
       render: () => (
         <AnimatePresence mode="popLayout">
@@ -273,6 +276,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     {
       id: 'receiving',
       label: 'Receiving',
+      headerColor: 'orange' as const,
       count: filteredReceivingItems.length,
       render: () => (
         <AnimatePresence mode="popLayout">
@@ -378,7 +382,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                   {allSections.map((section, index) => (
                     <div key={section.id} className={index === 0 ? '' : 'mt-3'}>
                       {(index > 0 || showNoCurrentOrdersBanner) && (
-                        <SectionHeader label={section.label} />
+                        <SectionHeader label={section.label} color={section.headerColor} />
                       )}
                       <div className="flex flex-col">
                         {section.render()}
@@ -525,14 +529,16 @@ function EmptySlate({ label, color = 'gray' }: { label: string; color?: 'gray' |
   );
 }
 
-function SectionHeader({ label }: { label: string }) {
+function SectionHeader({ label, color = 'orange' }: { label: string; color?: 'orange' | 'purple' }) {
+  const lineClass = color === 'purple' ? 'bg-purple-200' : 'bg-orange-200';
+  const textClass = color === 'purple' ? 'text-purple-600' : 'text-orange-600';
   return (
     <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
-      <div className="h-px flex-1 bg-orange-200" />
-      <span className="text-[9px] font-black uppercase tracking-widest text-orange-600">
+      <div className={`h-px flex-1 ${lineClass}`} />
+      <span className={`text-[9px] font-black uppercase tracking-widest ${textClass}`}>
         {label}
       </span>
-      <div className="h-px flex-1 bg-orange-200" />
+      <div className={`h-px flex-1 ${lineClass}`} />
     </div>
   );
 }

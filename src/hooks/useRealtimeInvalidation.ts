@@ -33,6 +33,20 @@ export function useRealtimeInvalidation({
     dashboard,
   );
 
+  // Serial added from the tech station publishes order.tested (not order.changed).
+  // Invalidate shipped views so the serial list in the details panel stays current.
+  useAblyChannel(
+    ORDERS_CHANNEL,
+    'order.tested',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
+    },
+    dashboard,
+  );
+
   useAblyChannel(
     REPAIRS_CHANNEL,
     'repair.changed',

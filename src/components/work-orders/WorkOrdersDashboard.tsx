@@ -655,13 +655,11 @@ function WorkOrderTableRow({
             {row.title}
           </p>
 
-          {/* Reference chips below title */}
-          <div className="mt-0.5 flex items-center gap-2">
-            {renderReferenceChip()}
-            {row.priority < 100 && (
+          {row.priority < 100 && (
+            <div className="mt-0.5 flex items-center gap-2">
               <span className="text-[8px] font-black text-red-500">P{row.priority}</span>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Subtitle — tech · packer names from work_assignments + deadline */}
           <p className="text-[10px] font-bold uppercase tracking-widest truncate text-gray-400">
@@ -678,8 +676,9 @@ function WorkOrderTableRow({
           </p>
         </div>
 
-        {/* Right: assign button */}
-        <div className="flex items-center shrink-0 pt-0.5">
+        {/* Right: reference chip + assign button */}
+        <div className="flex items-center gap-2 shrink-0 pt-0.5">
+          {renderReferenceChip()}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenAssign(); }}

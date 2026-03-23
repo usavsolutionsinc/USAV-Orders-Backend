@@ -119,6 +119,13 @@ export function useShippedTableData(options: UseShippedTableDataOptions = {}) {
     queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
   });
 
+  // A serial was added from the tech station (insertTechSerialForTracking publishes
+  // order.tested, not order.changed). Without this listener the shipped table cache
+  // stays stale and the details panel shows an incomplete serial list.
+  useAblyChannel(ORDERS_CHANNEL, 'order.tested', () => {
+    queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+  });
+
   // A packer log was inserted → order transitioned to shipped
   useAblyChannel(STATION_CHANNEL, 'packer-log.changed', () => {
     queryClient.invalidateQueries({ queryKey: ['shipped-table'] });

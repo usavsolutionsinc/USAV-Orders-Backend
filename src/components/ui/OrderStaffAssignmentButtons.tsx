@@ -43,9 +43,9 @@ export function OrderStaffAssignmentButtons({
   layout = 'columns',
 }: OrderStaffAssignmentButtonsProps) {
   const techRow = (
-    <div className="flex items-center gap-2 min-w-0">
-      <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400 w-7">Tech</span>
-      <div className="flex flex-wrap gap-1">
+    <div className="flex items-start gap-2 min-w-0">
+      <span className="shrink-0 pt-2 text-[9px] font-black uppercase tracking-widest text-slate-400 w-9">Tech</span>
+      <div className="flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {testerOptions.map((member) => {
           const isActive = testerId === member.id;
           const theme = resolveTechTheme(member.id);
@@ -62,7 +62,7 @@ export function OrderStaffAssignmentButtons({
                 if (!disabled && !testerDisabled && !isActive) void onAssignTester(member.id);
               }}
               className={[
-                'h-7 px-2.5 rounded-md text-[9px] font-black uppercase tracking-wide border transition-all disabled:opacity-50',
+                'touch-manipulation h-14 min-w-[112px] px-3.5 rounded-xl text-[11px] font-black uppercase tracking-[0.08em] border transition-all disabled:opacity-50',
                 isActive ? themeClass.active : themeClass.inactive,
                 isPurple3Fallback
                   ? '!text-purple-700 !border-purple-200 !bg-white hover:!bg-purple-50'
@@ -80,9 +80,9 @@ export function OrderStaffAssignmentButtons({
   );
 
   const packRow = (
-    <div className="flex items-center gap-2 min-w-0">
-      <span className="shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400 w-7">Pack</span>
-      <div className="flex flex-wrap gap-1">
+    <div className="flex items-start gap-2 min-w-0">
+      <span className="shrink-0 pt-2 text-[9px] font-black uppercase tracking-widest text-slate-400 w-9">Pack</span>
+      <div className="flex min-w-0 flex-nowrap gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {packerOptions.map((member) => {
           const isActive = packerId === member.id;
           const theme = getStaffThemeById(member.id, 'packer');
@@ -105,7 +105,7 @@ export function OrderStaffAssignmentButtons({
                 e.stopPropagation();
                 if (!disabled && !packerDisabled && !isActive) void onAssignPacker(member.id);
               }}
-              className={`h-7 px-2.5 rounded-md text-[9px] font-black uppercase tracking-wide border transition-all disabled:opacity-50 ${packerClass}`}
+              className={`touch-manipulation h-14 min-w-[112px] px-3.5 rounded-xl text-[11px] font-black uppercase tracking-[0.08em] border transition-all disabled:opacity-50 ${packerClass}`}
             >
               {member.name}
             </button>

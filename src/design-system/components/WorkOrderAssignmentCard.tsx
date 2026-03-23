@@ -400,7 +400,10 @@ export function WorkOrderAssignmentCard({
               <div>
                 <p className="mb-2.5 text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Technician</p>
                 {technicianOptions.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div
+                    className="grid w-full gap-2"
+                    style={{ gridTemplateColumns: `repeat(${Math.max(1, technicianOptions.length)}, minmax(0, 1fr))` }}
+                  >
                     {technicianOptions.map((m) => {
                       const active = techId === m.id;
                       const cls = stationThemeClasses[resolveTechTheme(m.id)];
@@ -411,11 +414,11 @@ export function WorkOrderAssignmentCard({
                           whileTap={framerGesture.tapPress}
                           onClick={() => handleTech(m.id)}
                           className={[
-                            'touch-manipulation flex h-[112px] w-full min-w-0 flex-col items-center justify-center rounded-2xl border-2 px-5 transition-all active:scale-[0.98]',
+                            'touch-manipulation flex h-[84px] w-full min-w-0 flex-col items-center justify-center rounded-xl border-2 px-4 transition-all active:scale-[0.98]',
                             active ? `${cls.active} border-transparent shadow-lg` : cls.inactive,
                           ].join(' ')}
                         >
-                          <span className="w-full text-center text-[13px] font-black uppercase leading-tight tracking-[0.04em]">
+                          <span className="w-full text-center text-[12px] font-black uppercase leading-tight tracking-[0.04em]">
                             {m.name}
                           </span>
                         </motion.button>
@@ -443,11 +446,11 @@ export function WorkOrderAssignmentCard({
                           whileTap={framerGesture.tapPress}
                           onClick={() => handlePacker(m.id)}
                           className={[
-                            'touch-manipulation flex h-[112px] w-full min-w-0 flex-col items-center justify-center rounded-2xl border-2 px-5 transition-all active:scale-[0.98]',
+                            'touch-manipulation flex h-[84px] w-full min-w-0 flex-col items-center justify-center rounded-xl border-2 px-4 transition-all active:scale-[0.98]',
                             active ? `${cls.active} border-transparent shadow-lg` : cls.inactive,
                           ].join(' ')}
                         >
-                          <span className="w-full text-center text-[13px] font-black uppercase leading-tight tracking-[0.04em]">
+                          <span className="w-full text-center text-[12px] font-black uppercase leading-tight tracking-[0.04em]">
                             {m.name}
                           </span>
                         </motion.button>

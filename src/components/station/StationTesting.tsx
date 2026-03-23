@@ -190,6 +190,39 @@ export default function StationTesting({
     [inputValue, manualMode, forcedTypeForManualMode, handleFnskuScan, handleSubmit, setInputValue]
   );
 
+  const handleRemoveSerial = useCallback(
+    async (_serial: string, serialIndex: number) => {
+      if (!activeOrder) return;
+      const nextSerials = activeOrder.serialNumbers.filter((_, idx) => idx !== serialIndex);
+
+      const response = await fetch('/api/tech/update-serials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tracking: activeOrder.tracking,
+          serialNumbers: nextSerials,
+          techId: userId,
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.details || data?.error || 'Failed to remove serial');
+      }
+
+      const savedSerials = Array.isArray(data.serialNumbers)
+        ? data.serialNumbers.map((row: unknown) => String(row || '').trim().toUpperCase()).filter(Boolean)
+        : nextSerials;
+
+      setActiveOrder({
+        ...activeOrder,
+        serialNumbers: savedSerials,
+      });
+      triggerGlobalRefresh();
+    },
+    [activeOrder, setActiveOrder, triggerGlobalRefresh, userId]
+  );
+
   const trimmedInput = inputValue.trim();
   const detectedMode = trimmedInput ? getStationInputMode(inputValue) : null;
   const autoMode: StationInputMode = detectedMode ?? (activeOrder ? 'serial' : 'tracking');
@@ -465,6 +498,7 @@ export default function StationTesting({
                   resolvedManuals={resolvedManuals}
                   isManualLoading={isManualLoading}
                   onViewManual={onViewManual}
+                  onRemoveSerial={handleRemoveSerial}
                 />
               ) : null}
             </AnimatePresence>

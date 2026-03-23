@@ -51,17 +51,17 @@ export async function GET(req: NextRequest) {
     const params: any[] = [staffId];
     let idx = 2;
     let weekClause = '';
-    /** Same bounds as weekClause but uses first tracking + serial time so re-scans / late serials stay grouped by first scan. */
+    // For serial_rows the position is anchored to the TRACKING_SCANNED SAL
+    // created_at (via the tracking_sal lateral join), so week-filtering must
+    // also reference that timestamp instead of the SERIAL_ADDED SAL timestamp.
     let weekClauseSerial = '';
     if (weekStart && weekEnd) {
       weekClause = `
         AND sal.created_at >= ($${idx}::date - interval '1 day')
         AND sal.created_at <  ($${idx + 1}::date + interval '2 days')`;
       weekClauseSerial = `
-        AND LEAST(sal.created_at, COALESCE(tr_first.first_tracking_at, sal.created_at))
-            >= ($${idx}::date - interval '1 day')
-        AND LEAST(sal.created_at, COALESCE(tr_first.first_tracking_at, sal.created_at))
-            < ($${idx + 1}::date + interval '2 days')`;
+        AND COALESCE(tracking_sal.created_at, sal.created_at) >= ($${idx}::date - interval '1 day')
+        AND COALESCE(tracking_sal.created_at, sal.created_at) <  ($${idx + 1}::date + interval '2 days')`;
       params.push(weekStart, weekEnd);
       idx += 2;
     }
@@ -149,17 +149,31 @@ export async function GET(req: NextRequest) {
           )
       ),
       serial_rows AS (
-        SELECT
+        -- DISTINCT ON produces one row per tracking (shipment_id or scan_ref),
+        -- picking the latest SERIAL_ADDED SAL entry for metadata.  The scalar
+        -- subquery aggregates ALL TSN serial numbers for that tracking so that
+        -- multiple scans appear as one combined row rather than split rows.
+        SELECT DISTINCT ON (COALESCE(tsn.shipment_id::text, COALESCE(tsn.scan_ref, '')))
           sal.id,
           sal.id AS source_row_id,
           'tech_serial'::text AS source_kind,
           tsn.id AS tech_serial_id,
-          LEAST(
-            sal.created_at,
-            COALESCE(tr_first.first_tracking_at, sal.created_at)
-          ) AS created_at,
+          -- Always use the original TRACKING_SCANNED SAL created_at so that
+          -- adding or replacing a serial never changes the row's position.
+          -- Falls back to the SERIAL_ADDED SAL created_at when no tracking
+          -- scan exists (e.g. serial added without prior tracking scan).
+          COALESCE(tracking_sal.created_at, sal.created_at) AS created_at,
           COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
-          tsn.serial_number,
+          -- Aggregate every serial number linked to this shipment/scan_ref so
+          -- that all serials scanned for the same tracking appear together.
+          (SELECT STRING_AGG(t.serial_number, ',' ORDER BY t.created_at)
+           FROM tech_serial_numbers t
+           WHERE (tsn.shipment_id IS NOT NULL AND t.shipment_id = tsn.shipment_id)
+              OR (tsn.shipment_id IS NULL
+                  AND t.shipment_id IS NULL
+                  AND tsn.scan_ref IS NOT NULL
+                  AND COALESCE(t.scan_ref, '') = tsn.scan_ref)
+          ) AS serial_number,
           sal.staff_id AS tested_by,
           order_match.shipment_id,
           o.id AS order_db_id,
@@ -189,23 +203,25 @@ export async function GET(req: NextRequest) {
         FROM station_activity_logs sal
         JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
         LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+        -- Resolve the original TRACKING_SCANNED SAL row for this staff + tracking
+        -- so we can anchor created_at to when the item was first scanned.
         LEFT JOIN LATERAL (
-          SELECT MIN(ts.created_at) AS first_tracking_at
+          SELECT ts.created_at
           FROM station_activity_logs ts
-          LEFT JOIN shipping_tracking_numbers stn_ts ON stn_ts.id = ts.shipment_id
           WHERE ts.station = 'TECH'
             AND ts.activity_type = 'TRACKING_SCANNED'
-            AND ts.staff_id = sal.staff_id
+            AND ts.staff_id = $1
             AND (
               (tsn.shipment_id IS NOT NULL AND ts.shipment_id = tsn.shipment_id)
               OR (
                 COALESCE(tsn.scan_ref, stn.tracking_number_raw, '') <> ''
-                AND COALESCE(ts.scan_ref, stn_ts.tracking_number_raw, '') <> ''
-                AND RIGHT(regexp_replace(UPPER(COALESCE(ts.scan_ref, stn_ts.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18) =
+                AND RIGHT(regexp_replace(UPPER(COALESCE(ts.scan_ref, ts.metadata->>'tracking', '')), '[^A-Z0-9]', '', 'g'), 18) =
                     RIGHT(regexp_replace(UPPER(COALESCE(tsn.scan_ref, stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
               )
             )
-        ) tr_first ON TRUE
+          ORDER BY ts.created_at ASC
+          LIMIT 1
+        ) tracking_sal ON TRUE
         LEFT JOIN LATERAL (
           SELECT o_match.id, o_match.shipment_id
           FROM orders o_match
@@ -244,7 +260,10 @@ export async function GET(req: NextRequest) {
         WHERE sal.station = 'TECH'
           AND sal.activity_type = 'SERIAL_ADDED'
           AND sal.staff_id = $1
-          ${weekClauseSerial || weekClause}
+          ${weekClauseSerial}
+        -- DISTINCT ON requires: same leading expression, then sal.id DESC to pick
+        -- the latest SERIAL_ADDED SAL row as the representative for each tracking.
+        ORDER BY COALESCE(tsn.shipment_id::text, COALESCE(tsn.scan_ref, '')), sal.id DESC
       ),
       fnsku_scan_rows AS (
         SELECT

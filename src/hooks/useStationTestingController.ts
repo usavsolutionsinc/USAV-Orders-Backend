@@ -697,8 +697,56 @@ export function useStationTestingController({
     } else if (type === 'SERIAL') {
       const contextOrder = reopenScanContextOrder();
       if (!contextOrder) {
-        setInputValue('');
-        inputRef.current?.focus();
+        // No active order — add the serial to the last scanned tracking in TSN.
+        // The endpoint resolves the most recent TRACKING_SCANNED SAL for this tech,
+        // inserts (or creates) the TSN row, then returns the order info so the
+        // active order card can be restored.
+        setIsLoading(true);
+        try {
+          const res = await fetch('/api/tech/add-serial-to-last', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ serial: input.toUpperCase(), techId: userId }),
+          });
+          const data = await res.json();
+
+          if (!data.success) {
+            setErrorMessage(data.error || 'Failed to add serial');
+            return;
+          }
+
+          syncActiveOrderState({
+            id: data.order.id ?? null,
+            orderId: data.order.orderId,
+            productTitle: data.order.productTitle,
+            itemNumber: data.order.itemNumber ?? null,
+            sku: data.order.sku,
+            condition: data.order.condition,
+            notes: data.order.notes,
+            tracking: data.order.tracking,
+            serialNumbers: data.serialNumbers,
+            testDateTime: null,
+            testedBy: null,
+            quantity: data.order.quantity || 1,
+            shipByDate: data.order.shipByDate ?? null,
+            createdAt: data.order.createdAt ?? null,
+            orderFound: data.order.orderFound !== false,
+          });
+
+          setSuccessMessage(`Serial ${input.toUpperCase()} added ✓ (${data.serialNumbers.length} total)`);
+          if (data.isComplete) {
+            confetti({ particleCount: 100, spread: 70 });
+          }
+          queryClient.invalidateQueries({ queryKey: ['tech-logs'] });
+          triggerGlobalRefresh();
+        } catch (err) {
+          console.error('Add serial to last error:', err);
+          setErrorMessage('Network error occurred');
+        } finally {
+          setIsLoading(false);
+          setInputValue('');
+          inputRef.current?.focus();
+        }
         return;
       }
 

@@ -1,5 +1,5 @@
 import pool from '@/lib/db';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-format';
 
 export type ExceptionSourceStation = 'tech' | 'packer' | 'verify' | 'mobile';
 
@@ -31,6 +31,8 @@ export async function findOrderByTrackingKey(
 
   const rawTracking = String(shippingTrackingNumber || '').trim();
   const trackingKey18 = normalizeTrackingKey18(rawTracking);
+  const trackingLast8 = normalizeTrackingLast8(rawTracking);
+  const normalizedLast8 = /^\d{8}$/.test(trackingLast8) ? trackingLast8 : null;
   if (!trackingKey18) return null;
 
   const result = await dbClient.query(
@@ -45,17 +47,27 @@ export async function findOrderByTrackingKey(
          SELECT s.tracking_number_raw, s.id
          FROM shipping_tracking_numbers s
          WHERE RIGHT(regexp_replace(UPPER(s.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+            OR (
+              $2::text IS NOT NULL
+              AND RIGHT(regexp_replace(COALESCE(s.tracking_number_normalized, ''), '[^0-9]', '', 'g'), 8) = $2
+            )
          ORDER BY s.id DESC LIMIT 1
      ) s2 ON TRUE
      WHERE (
          stn.id IS NOT NULL
-         AND RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+         AND (
+           RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+           OR (
+             $2::text IS NOT NULL
+             AND RIGHT(regexp_replace(COALESCE(stn.tracking_number_normalized, ''), '[^0-9]', '', 'g'), 8) = $2
+           )
+         )
      ) OR (
          s2.id IS NOT NULL AND o.shipment_id = s2.id
      )
      ORDER BY o.id DESC
      LIMIT 1`,
-    [trackingKey18]
+    [trackingKey18, normalizedLast8]
   );
 
   return result.rows[0] || null;
@@ -76,6 +88,8 @@ export async function upsertOpenOrderException(params: {
     return { exception: null, matchedOrderId: null };
   }
   const trackingKey18 = normalizeTrackingKey18(tracking);
+  const trackingLast8 = normalizeTrackingLast8(tracking);
+  const normalizedLast8 = /^\d{8}$/.test(trackingLast8) ? trackingLast8 : null;
   if (!tracking || !trackingKey18) {
     return { exception: null, matchedOrderId: null };
   }
@@ -90,10 +104,16 @@ export async function upsertOpenOrderException(params: {
      FROM orders_exceptions
      WHERE status = 'open'
        AND source_station = $2
-       AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+       AND (
+         RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+         OR (
+           $3::text IS NOT NULL
+           AND RIGHT(regexp_replace(COALESCE(shipping_tracking_number, ''), '[^0-9]', '', 'g'), 8) = $3
+         )
+       )
      ORDER BY id DESC
      LIMIT 1`,
-    [trackingKey18, params.sourceStation]
+    [trackingKey18, params.sourceStation, normalizedLast8]
   );
 
   if (existing.rows.length > 0) {

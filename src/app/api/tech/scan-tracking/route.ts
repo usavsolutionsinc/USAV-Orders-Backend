@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -88,6 +88,8 @@ export async function POST(req: NextRequest) {
         if (!key18) {
             return NextResponse.json({ success: false, found: false, error: 'Invalid tracking number' }, { status: 400 });
         }
+        const trackingLast8 = normalizeTrackingLast8(scannedTracking);
+        const normalizedLast8 = /^\d{8}$/.test(trackingLast8) ? trackingLast8 : null;
         const resolvedScan = await resolveShipmentId(scannedTracking);
         const techIdNum = parseInt(techId, 10);
         if (!techIdNum) {
@@ -147,6 +149,10 @@ export async function POST(req: NextRequest) {
                            s.is_out_for_delivery, s.is_delivered
                     FROM shipping_tracking_numbers s
                     WHERE RIGHT(regexp_replace(UPPER(s.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $2
+                       OR (
+                         $3::text IS NOT NULL
+                         AND RIGHT(regexp_replace(COALESCE(s.tracking_number_normalized, ''), '[^0-9]', '', 'g'), 8) = $3
+                       )
                     ORDER BY s.id DESC
                     LIMIT 1
                 ) stn_any ON TRUE
@@ -183,7 +189,13 @@ export async function POST(req: NextRequest) {
                 ) OR (
                     -- Order's linked stn row matches key18
                     stn.id IS NOT NULL
-                    AND RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $2
+                    AND (
+                      RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $2
+                      OR (
+                        $3::text IS NOT NULL
+                        AND RIGHT(regexp_replace(COALESCE(stn.tracking_number_normalized, ''), '[^0-9]', '', 'g'), 8) = $3
+                      )
+                    )
                 ) OR (
                     -- Independent stn lookup matched and this order's shipment_id points to it
                     stn_any.id IS NOT NULL
@@ -195,7 +207,7 @@ export async function POST(req: NextRequest) {
                          ELSE 2 END,
                     o.id DESC
                 LIMIT 1
-            `, [resolvedScan.shipmentId, key18]);
+            `, [resolvedScan.shipmentId, key18, normalizedLast8]);
 
             // Check tech_serial_numbers for existing tracking entry
             const existingTracking = await client.query(
@@ -211,18 +223,30 @@ export async function POST(req: NextRequest) {
                  ) OR (
                     tsn.scan_ref IS NOT NULL
                     AND tsn.scan_ref != ''
-                    AND RIGHT(regexp_replace(UPPER(tsn.scan_ref), '[^A-Z0-9]', '', 'g'), 18) = $2
+                    AND (
+                      RIGHT(regexp_replace(UPPER(tsn.scan_ref), '[^A-Z0-9]', '', 'g'), 18) = $2
+                      OR (
+                        $3::text IS NOT NULL
+                        AND RIGHT(regexp_replace(COALESCE(tsn.scan_ref, ''), '[^0-9]', '', 'g'), 8) = $3
+                      )
+                    )
                  ) OR (
                     tsn.orders_exception_id IS NOT NULL
                     AND EXISTS (
                         SELECT 1 FROM orders_exceptions oe
                         WHERE oe.id = tsn.orders_exception_id
                           AND oe.status = 'open'
-                          AND RIGHT(regexp_replace(UPPER(COALESCE(oe.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $2
+                          AND (
+                            RIGHT(regexp_replace(UPPER(COALESCE(oe.shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $2
+                            OR (
+                              $3::text IS NOT NULL
+                              AND RIGHT(regexp_replace(COALESCE(oe.shipping_tracking_number, ''), '[^0-9]', '', 'g'), 8) = $3
+                            )
+                          )
                     )
                  )
                  ORDER BY tsn.id ASC`,
-                [resolvedScan.shipmentId, key18]
+                [resolvedScan.shipmentId, key18, normalizedLast8]
             );
 
             const row = result.rows[0] || null;
@@ -265,14 +289,19 @@ export async function POST(req: NextRequest) {
                        AND (
                          ($1::bigint IS NOT NULL AND shipment_id = $1)
                          OR RIGHT(regexp_replace(UPPER(COALESCE(scan_ref, metadata->>'tracking', '')), '[^A-Z0-9]', '', 'g'), 18) = $2
+                         OR (
+                           $3::text IS NOT NULL
+                           AND RIGHT(regexp_replace(COALESCE(scan_ref, metadata->>'tracking', ''), '[^0-9]', '', 'g'), 8) = $3
+                         )
                        )
                      ORDER BY id DESC
                      LIMIT 1`,
-                    [resolvedScan.shipmentId, key18]
+                    [resolvedScan.shipmentId, key18, normalizedLast8]
                 );
 
                 let techActivityId: number | null = null;
                 let techTestDateTime: string | null = null;
+                let isNewSalRow = false;
                 const existingScanStaffId = existingScanLog.rows[0]?.staff_id != null
                     ? Number(existingScanLog.rows[0].staff_id)
                     : null;
@@ -283,6 +312,7 @@ export async function POST(req: NextRequest) {
                     if (shouldReplaceExistingScan) {
                         await client.query(`DELETE FROM station_activity_logs WHERE id = $1`, [existingScanLog.rows[0].id]);
                     }
+                    isNewSalRow = true;
                     techTestDateTime = formatPSTTimestamp();
                     techActivityId = await createStationActivityLog(client, {
                         station: 'TECH',
@@ -319,7 +349,7 @@ export async function POST(req: NextRequest) {
                 if (techActivityId) {
                     await publishTechLogChanged({
                         techId: testedBy,
-                        action: 'update',
+                        action: isNewSalRow ? 'insert' : 'update',
                         rowId: techActivityId,
                         source: 'tech.scan-tracking',
                     });
@@ -363,6 +393,7 @@ export async function POST(req: NextRequest) {
 
             let techActivityId: number | null = null;
             let techTestDateTime: string | null = null;
+            let isNewSalRow = false;
 
             const existingScanLog = await client.query(
                 `SELECT id, staff_id, created_at::text AS created_at
@@ -372,10 +403,14 @@ export async function POST(req: NextRequest) {
                    AND (
                      ($1::bigint IS NOT NULL AND shipment_id = $1)
                      OR RIGHT(regexp_replace(UPPER(COALESCE(scan_ref, metadata->>'tracking', '')), '[^A-Z0-9]', '', 'g'), 18) = $2
+                     OR (
+                       $3::text IS NOT NULL
+                       AND RIGHT(regexp_replace(COALESCE(scan_ref, metadata->>'tracking', ''), '[^0-9]', '', 'g'), 8) = $3
+                     )
                    )
                  ORDER BY id DESC
                  LIMIT 1`,
-                [matchedShipmentId, key18]
+                [matchedShipmentId, key18, normalizedLast8]
             );
             const existingScanStaffId = existingScanLog.rows[0]?.staff_id != null
                 ? Number(existingScanLog.rows[0].staff_id)
@@ -387,6 +422,7 @@ export async function POST(req: NextRequest) {
                 if (shouldReplaceExistingScan) {
                     await client.query(`DELETE FROM station_activity_logs WHERE id = $1`, [existingScanLog.rows[0].id]);
                 }
+                isNewSalRow = true;
                 techTestDateTime = formatPSTTimestamp();
                 techActivityId = await createStationActivityLog(client, {
                     station: 'TECH',
@@ -426,7 +462,7 @@ export async function POST(req: NextRequest) {
             if (techActivityId) {
                 await publishTechLogChanged({
                     techId: testedBy,
-                    action: 'update',
+                    action: isNewSalRow ? 'insert' : 'update',
                     rowId: techActivityId,
                     source: 'tech.scan-tracking',
                 });

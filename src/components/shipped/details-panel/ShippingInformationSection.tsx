@@ -184,7 +184,11 @@ function ShippingSerialNumberRow({
 }) {
   const queryClient = useQueryClient();
   const [serialRows, setSerialRows] = useState<string[]>(() => parseSerialRows(serialNumber));
+  const serialRowsRef = useRef<string[]>(parseSerialRows(serialNumber));
   const [isEditing, setIsEditing] = useState(false);
+  // Mirror isEditing into a ref so effects that must not re-run on every edit
+  // can still read the current value without adding isEditing to their deps.
+  const isEditingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveTimerRef = useRef<number | null>(null);
@@ -197,15 +201,29 @@ function ShippingSerialNumberRow({
       .join(', ')
   );
 
+  // Keep the ref in sync with state so other effects can read it.
+  useEffect(() => { isEditingRef.current = isEditing; }, [isEditing]);
+
   useEffect(() => {
-    setSerialRows(parseSerialRows(serialNumber));
-    setIsEditing(false);
-    setError(null);
-    setSaveState('idle');
-    lastSavedSerialNumberRef.current = parseSerialRows(serialNumber)
+    const incoming = parseSerialRows(serialNumber)
       .map((row) => row.trim().toUpperCase())
       .filter(Boolean)
       .join(', ');
+
+    // If the user is actively editing, don't blow away their unsaved changes.
+    // Just update the "last saved" baseline so the comparison stays accurate.
+    if (isEditingRef.current) {
+      lastSavedSerialNumberRef.current = incoming;
+      return;
+    }
+
+    const parsedRows = parseSerialRows(serialNumber);
+    setSerialRows(parsedRows);
+    serialRowsRef.current = parsedRows;
+    setIsEditing(false);
+    setError(null);
+    setSaveState('idle');
+    lastSavedSerialNumberRef.current = incoming;
   }, [rowId, serialNumber]);
 
   useEffect(() => {
@@ -263,11 +281,12 @@ function ShippingSerialNumberRow({
           window.alert(`Notes for SKU:\n\n${data.notes}`);
         }
 
-        setSerialRows((current) => {
-          const next = [...current];
-          next.splice(rowIndex, 1, ...serials);
-          return next.length > 0 ? next : [''];
-        });
+      setSerialRows((current) => {
+        const next = [...current];
+        next.splice(rowIndex, 1, ...serials);
+        serialRowsRef.current = next.length > 0 ? next : [''];
+        return next.length > 0 ? next : [''];
+      });
         setError(null);
         setSaveState('idle');
       } catch {
@@ -282,11 +301,11 @@ function ShippingSerialNumberRow({
     .filter(Boolean);
   const normalizedSerialNumber = normalizedRows.join(', ');
 
-  const saveSerialRows = async (rowsToSave: string[]) => {
+  const saveSerialRows = async (rowsToSave: string[]): Promise<boolean> => {
     if (!trackingNumber) {
       setError('Tracking number is required to update serials.');
       setSaveState('error');
-      return;
+      return false;
     }
 
     const nextSerialNumber = rowsToSave.join(', ');
@@ -316,7 +335,7 @@ function ShippingSerialNumberRow({
 
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.success) {
-        throw new Error(data?.error || 'Failed to update serials');
+        throw new Error(data?.details || data?.error || 'Failed to update serials');
       }
 
       const savedSerials = Array.isArray(data.serialNumbers)
@@ -325,6 +344,7 @@ function ShippingSerialNumberRow({
       const savedSerialNumber = savedSerials.join(', ');
 
       setSerialRows(savedSerials.length > 0 ? savedSerials : ['']);
+      serialRowsRef.current = savedSerials.length > 0 ? savedSerials : [''];
       lastSavedSerialNumberRef.current = savedSerialNumber;
       setSaveState('saved');
       [['orders'], ['shipped'], ['dashboard-table']].forEach((key) => {
@@ -337,12 +357,14 @@ function ShippingSerialNumberRow({
       // rowId won't hit them — invalidate to force a fresh fetch instead.
       queryClient.invalidateQueries({ queryKey: ['tech-logs'] });
       onUpdate?.();
+      return true;
     } catch (saveError) {
       snapshots.forEach((snapshot) => {
         queryClient.setQueryData(snapshot.key, snapshot.data);
       });
       setSaveState('error');
       setError(saveError instanceof Error ? saveError.message : 'Failed to update serials');
+      return false;
     }
   };
 
@@ -355,8 +377,13 @@ function ShippingSerialNumberRow({
 
     if (normalizedSerialNumber === lastSavedSerialNumberRef.current) return;
 
+    // Read from the ref inside the callback so we always save the latest value
+    // even if more renders happen before the 700 ms window closes.
     saveTimerRef.current = window.setTimeout(() => {
-      void saveSerialRows(normalizedRows);
+      const latestRows = serialRowsRef.current
+        .map((row) => row.trim().toUpperCase())
+        .filter(Boolean);
+      void saveSerialRows(latestRows);
     }, 700);
 
     return () => {
@@ -365,7 +392,11 @@ function ShippingSerialNumberRow({
         saveTimerRef.current = null;
       }
     };
-  }, [isEditing, normalizedRows, normalizedSerialNumber, trackingNumber]);
+    // normalizedRows intentionally omitted: it's a new array reference every render
+    // and would continuously reset the timer. normalizedSerialNumber (string) is
+    // the stable signal; serialRowsRef.current is read inside the callback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, normalizedSerialNumber, trackingNumber]);
 
   const copyAllSerials = () => {
     if (!normalizedSerialNumber) return;
@@ -384,6 +415,7 @@ function ShippingSerialNumberRow({
                 type="button"
                 onClick={() => {
                   setSerialRows((current) => [...current, '']);
+                  serialRowsRef.current = [...serialRowsRef.current, ''];
                   setError(null);
                 }}
                 className="transition-all hover:text-blue-700"
@@ -394,11 +426,24 @@ function ShippingSerialNumberRow({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setSerialRows(parseSerialRows(lastSavedSerialNumberRef.current));
+                onClick={async () => {
+                  if (saveTimerRef.current) {
+                    window.clearTimeout(saveTimerRef.current);
+                    saveTimerRef.current = null;
+                  }
+
+                  const latestRows = serialRowsRef.current
+                    .map((row) => row.trim().toUpperCase())
+                    .filter(Boolean);
+                  const latestSerialNumber = latestRows.join(', ');
+
+                  if (latestSerialNumber !== lastSavedSerialNumberRef.current) {
+                    const ok = await saveSerialRows(latestRows);
+                    if (!ok) return;
+                  }
+
                   setIsEditing(false);
                   setError(null);
-                  setSaveState('idle');
                 }}
                 className="transition-all hover:text-red-600"
                 aria-label="Close serial editing"
@@ -446,7 +491,11 @@ function ShippingSerialNumberRow({
                 value={serial}
                 onChange={(e) => {
                   const nextValue = e.target.value.toUpperCase();
-                  setSerialRows((current) => current.map((row, rowIndex) => (rowIndex === index ? nextValue : row)));
+                  setSerialRows((current) => {
+                    const next = current.map((row, rowIndex) => (rowIndex === index ? nextValue : row));
+                    serialRowsRef.current = next;
+                    return next;
+                  });
                   setError(null);
                   setSaveState('idle');
                   scheduleSkuColonExpand(index, nextValue);
@@ -462,19 +511,28 @@ function ShippingSerialNumberRow({
           type="button"
           onClick={() => {
             setSerialRows(parseSerialRows(lastSavedSerialNumberRef.current));
+            serialRowsRef.current = parseSerialRows(lastSavedSerialNumberRef.current);
             setIsEditing(true);
             setError(null);
           }}
-          className="block w-full py-0 text-left"
+          className="block w-full text-left"
         >
-          <p className="truncate py-2 text-sm font-mono font-bold text-gray-900">
-            {normalizedSerialNumber || 'Serial 1'}
-          </p>
+          {normalizedRows.length > 0 ? (
+            <div className="divide-y divide-gray-100">
+              {normalizedRows.map((serial, idx) => (
+                <p key={idx} className="truncate py-1.5 last:pb-0 font-mono text-sm font-bold text-gray-900">{serial}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="py-2 text-sm font-mono text-gray-400">No serials — click to add</p>
+          )}
         </button>
       )}
 
       {error ? (
         <p className="pt-1 text-[10px] font-bold text-red-600">{error}</p>
+      ) : saveState === 'saved' ? (
+        <p className="pt-1 text-[10px] font-bold text-emerald-600">Serial numbers saved.</p>
       ) : null}
     </DetailsPanelRow>
   );
@@ -526,10 +584,9 @@ export function ShippingInformationSection({
     || (shipped as any).tested_by_name
     || getStaffName((shipped as any).tested_by ?? (shipped as any).tester_id ?? null)
   ).trim() || 'Not specified';
-  const serialNumbersDisplay = parseSerialRows(shipped.serial_number)
+  const serialNumberRows = parseSerialRows(shipped.serial_number)
     .map((row) => row.trim())
-    .filter(Boolean)
-    .join(', ') || 'N/A';
+    .filter(Boolean);
 
   return (
     <section className="space-y-6">
@@ -544,7 +601,15 @@ export function ShippingInformationSection({
               </div>
             </DetailsPanelRow>
             <DetailsPanelRow label="Serial Numbers">
-              <p className="break-all py-0.5 text-sm font-mono font-bold text-gray-900">{serialNumbersDisplay}</p>
+              {serialNumberRows.length > 0 ? (
+                <div className="divide-y divide-gray-100">
+                  {serialNumberRows.map((serial, idx) => (
+                    <p key={idx} className="break-all py-1 last:pb-0 font-mono text-sm font-bold text-gray-900">{serial}</p>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-0.5 text-sm font-bold text-gray-400">N/A</p>
+              )}
             </DetailsPanelRow>
             <DetailsPanelRow label="Tech Name" className="last:border-b-0">
               <p className="text-sm font-bold text-gray-900">{techNameDisplay}</p>

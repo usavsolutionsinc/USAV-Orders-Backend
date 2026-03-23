@@ -53,14 +53,16 @@ const TRACKING_PATTERNS: ReadonlyArray<{ carrier: ScanCarrier; regex: RegExp }> 
   // UPS — 1Z + 16 alphanumeric chars (18 total)
   { carrier: 'UPS',           regex: /^1Z[A-Z0-9]{16}$/ },
 
-  // Extended FedEx long labels seen in station scans (33 digits, 9621…)
-  { carrier: 'FEDEX',         regex: /^9621\d{29}$/ },
+  // Extended FedEx long labels seen in station scans (33–34 digits, 9621…)
+  { carrier: 'FEDEX',         regex: /^9621\d{29,30}$/ },
 
   // Explicit 12-digit short tracking example used at station (399…)
   { carrier: 'FEDEX',         regex: /^399\d{9}$/ },
 
-  // FedEx — 12 / 15 / 20 / 22 pure digit OR 96XXXXXXXXXX (22) OR 1[456789]XXXXXXXXXXXXXX (16)
-  { carrier: 'FEDEX',         regex: /^(96\d{20}|1[456789]\d{14}|\d{22}|\d{20}|\d{15}|\d{12})$/ },
+  // FedEx — 12 / 15 / 20 pure digits OR 96XXXXXXXXXX (22) OR 1[456789]XXXXXXXXXXXXXX (16)
+  // Note: generic 22-digit matching was removed to avoid swallowing USPS IMpb
+  // labels such as 9300... which should classify as USPS.
+  { carrier: 'FEDEX',         regex: /^(96\d{20}|1[456789]\d{14}|\d{20}|\d{15}|\d{12})$/ },
 
   // USPS — IMpb starts 9XXXX (various lengths 16-22) or pure-digit 20-22
   { carrier: 'USPS',          regex: /^(9[2345][0-9]{18,20}|9[0-9]{15,21}|[0-9]{20,22})$/ },
@@ -117,6 +119,19 @@ export function classifyInput(raw: string): ClassifyResult {
     if (regex.test(norm)) {
       return { type: 'tracking', carrier, normalized: norm };
     }
+  }
+
+  // Anything ≥ 20 chars is definitively too long to be a serial number
+  // (serial_full max is 19 chars). Treat as an unrecognised-carrier tracking number.
+  if (norm.length >= 20) {
+    return { type: 'tracking', carrier: null, normalized: norm };
+  }
+
+  // A scan that ends in a digit (no trailing letter suffix) and is ≥ 10 chars
+  // is characteristic of a carrier tracking barcode, not a product serial.
+  // Serial numbers in this system end with 0–2 uppercase letters.
+  if (norm.length >= 10 && /\d$/.test(norm)) {
+    return { type: 'tracking', carrier: null, normalized: norm };
   }
 
   // Full serial (15-19 chars with optional 2-letter suffix)

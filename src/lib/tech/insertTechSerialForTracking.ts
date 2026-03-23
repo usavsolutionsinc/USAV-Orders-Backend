@@ -298,7 +298,8 @@ export async function insertTechSerialForTracking(
     await invalidateCacheTags(['tech-logs', 'orders-next']);
     await publishTechLogChanged({
       techId: staffId,
-      action: 'update',
+      // This function always creates a new TSN row + SERIAL_ADDED SAL row.
+      action: 'insert',
       source: 'tech.add-serial',
     });
     if (order?.id) {

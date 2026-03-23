@@ -7,7 +7,7 @@ import {
   framerTransition,
 } from '@/design-system';
 import { ShipByDate } from '../ui/ShipByDate';
-import { Check, ClipboardList, Copy, ExternalLink, ChevronDown } from '@/components/Icons';
+import { Check, ClipboardList, Copy, ExternalLink, ChevronDown, Loader2, X } from '@/components/Icons';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
 import { getTrackingUrl } from '@/utils/order-links';
@@ -50,6 +50,7 @@ interface ActiveStationOrderCardProps {
   resolvedManuals: ResolvedProductManual[];
   isManualLoading: boolean;
   onViewManual?: () => void;
+  onRemoveSerial?: (serial: string, index: number) => Promise<void> | void;
 }
 
 export default function ActiveStationOrderCard({
@@ -58,10 +59,13 @@ export default function ActiveStationOrderCard({
   resolvedManuals,
   isManualLoading,
   onViewManual,
+  onRemoveSerial,
 }: ActiveStationOrderCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastAddedSerial, setLastAddedSerial] = useState<string | null>(null);
   const [copiedTracking, setCopiedTracking] = useState(false);
+  const [removingSerialKey, setRemovingSerialKey] = useState<string | null>(null);
+  const [serialRemoveError, setSerialRemoveError] = useState<string | null>(null);
   const prevTrackingRef = React.useRef(activeOrder.tracking);
   const prevSerialCountRef = React.useRef(activeOrder.serialNumbers.length);
 
@@ -100,6 +104,21 @@ export default function ActiveStationOrderCard({
       window.setTimeout(() => setCopiedTracking(false), 1500);
     } catch {
       /* noop */
+    }
+  };
+
+  const handleRemoveSerial = async (e: React.MouseEvent, serial: string, index: number) => {
+    e.stopPropagation();
+    if (!onRemoveSerial || removingSerialKey) return;
+    setSerialRemoveError(null);
+    const rowKey = `${serial}-${index}`;
+    setRemovingSerialKey(rowKey);
+    try {
+      await onRemoveSerial(serial, index);
+    } catch (error) {
+      setSerialRemoveError(error instanceof Error ? error.message : 'Failed to remove serial');
+    } finally {
+      setRemovingSerialKey(null);
     }
   };
 
@@ -304,11 +323,12 @@ export default function ActiveStationOrderCard({
               </p>
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 <AnimatePresence initial={false}>
-                  {activeOrder.serialNumbers.map((sn) => {
+                  {activeOrder.serialNumbers.map((sn, index) => {
                     const isNew = sn === lastAddedSerial;
+                    const isRemoving = removingSerialKey === `${sn}-${index}`;
                     return (
                       <motion.div
-                        key={sn}
+                        key={`${sn}-${index}`}
                         initial={framerPresence.stationSerialRow.initial}
                         animate={framerPresence.stationSerialRow.animate}
                         exit={framerPresence.stationSerialRow.exit}
@@ -321,24 +341,41 @@ export default function ActiveStationOrderCard({
                       >
                         <Check className="w-3 h-3 text-emerald-600 flex-shrink-0" />
                         <span className="text-xs font-mono font-bold text-emerald-700 flex-1">{sn}</span>
-                        <AnimatePresence>
-                          {isNew && (
-                            <motion.span
-                              initial={framerPresence.stationAddedBadge.initial}
-                              animate={framerPresence.stationAddedBadge.animate}
-                              exit={framerPresence.stationAddedBadge.exit}
-                              transition={framerTransition.stationAddedBadge}
-                              className="text-[9px] font-black text-emerald-600 uppercase tracking-wider"
+                        <div className="flex items-center gap-1 shrink-0">
+                          <AnimatePresence>
+                            {isNew && (
+                              <motion.span
+                                initial={framerPresence.stationAddedBadge.initial}
+                                animate={framerPresence.stationAddedBadge.animate}
+                                exit={framerPresence.stationAddedBadge.exit}
+                                transition={framerTransition.stationAddedBadge}
+                                className="text-[9px] font-black text-emerald-600 uppercase tracking-wider"
+                              >
+                                ✓ Added
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
+                          {onRemoveSerial && (
+                            <button
+                              type="button"
+                              onClick={(e) => void handleRemoveSerial(e, sn, index)}
+                              disabled={Boolean(removingSerialKey)}
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-emerald-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              aria-label={`Remove serial ${sn}`}
+                              title={`Remove serial ${sn}`}
                             >
-                              ✓ Added
-                            </motion.span>
+                              {isRemoving ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                            </button>
                           )}
-                        </AnimatePresence>
+                        </div>
                       </motion.div>
                     );
                   })}
                 </AnimatePresence>
               </div>
+              {serialRemoveError && (
+                <p className="text-[10px] font-bold text-red-600">{serialRemoveError}</p>
+              )}
             </div>
           </motion.div>
         )}
