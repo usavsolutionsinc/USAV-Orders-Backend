@@ -90,6 +90,7 @@ export async function GET(req: NextRequest) {
           o.quantity,
           o.condition,
           o.sku,
+          NULL::text AS fnsku,
           o.status::text AS status,
           o.status_history,
           o.account_source,
@@ -191,8 +192,9 @@ export async function GET(req: NextRequest) {
             o.product_title
           ) AS product_title,
           o.quantity,
-          o.condition,
+          COALESCE(fba.condition, o.condition) AS condition,
           COALESCE(fba.sku, o.sku) AS sku,
+          tsn.fnsku AS fnsku,
           o.status::text AS status,
           o.status_history,
           COALESCE(o.account_source, CASE WHEN tsn.fnsku IS NOT NULL THEN 'fba' ELSE NULL END) AS account_source,
@@ -252,7 +254,7 @@ export async function GET(req: NextRequest) {
                    wa.updated_at DESC, wa.id DESC LIMIT 1
         ) wa_deadline ON o.id IS NOT NULL
         LEFT JOIN LATERAL (
-          SELECT product_title, sku
+          SELECT product_title, sku, condition
           FROM fba_fnskus
           WHERE fnsku = COALESCE(tsn.fnsku, tsn.scan_ref)
           LIMIT 1
@@ -282,8 +284,9 @@ export async function GET(req: NextRequest) {
           NULL::text AS item_number,
           COALESCE(ff.product_title, sal.metadata->>'product_title') AS product_title,
           COALESCE(sal.metadata->>'quantity', '1') AS quantity,
-          'FBA Scan'::text AS condition,
+          COALESCE(ff.condition, sal.metadata->>'condition', 'FBA Scan') AS condition,
           COALESCE(ff.sku, sal.metadata->>'sku') AS sku,
+          sal.fnsku AS fnsku,
           COALESCE(fsi.status::text, fs.status::text, 'READY_TO_GO') AS status,
           '[]'::jsonb AS status_history,
           'fba'::text AS account_source,
@@ -325,6 +328,7 @@ export async function GET(req: NextRequest) {
         rows.quantity,
         rows.condition,
         rows.sku,
+        rows.fnsku,
         rows.status,
         rows.status_history,
         rows.account_source,

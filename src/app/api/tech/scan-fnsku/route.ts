@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
        WHERE fnsku = $1
          AND serial_number IS NOT NULL
          AND BTRIM(serial_number) <> ''
-       ORDER BY test_date_time ASC, id ASC`,
+       ORDER BY created_at ASC NULLS LAST, id ASC`,
       [fnsku]
     );
 

@@ -33,7 +33,7 @@ export default function RootLayout({
                             {/* Main Content Area */}
                             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
                                 {/* Optional Header overlay or replacement if needed for panelContent */}
-                                <main className="flex-1 overflow-hidden flex min-w-0">
+                                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                                     {children}
                                 </main>
                             </div>

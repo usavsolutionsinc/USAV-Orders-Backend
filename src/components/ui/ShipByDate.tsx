@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { Calendar } from '../Icons';
-import { formatDatePST, formatShortDate } from '@/utils/date';
+import { formatDatePST, formatMonthDay, formatShortDate } from '@/utils/date';
 
 interface ShipByDateProps {
   date: string | null | undefined;
@@ -25,7 +25,7 @@ export function ShipByDate({
 
   const formattedDate = showYear
     ? formatShortDate(date)
-    : formatDatePST(date, { withLeadingZeros: true }).replace(/\/\d{4}$/, '');
+    : formatMonthDay(date) ?? formatDatePST(date, { withLeadingZeros: true }).replace(/\/\d{4}$/, '');
   
   return (
     <div className={`flex items-center gap-1.5 ${className}`}>

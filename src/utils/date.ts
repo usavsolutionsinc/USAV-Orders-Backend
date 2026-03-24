@@ -336,3 +336,18 @@ export function formatShortDate(dateString: string | null | undefined): string {
     return 'Invalid Date';
   }
 }
+
+export function formatMonthDay(dateString: string | null | undefined): string | null {
+  if (!dateString) return null;
+  const dateKey = toPSTDateKey(dateString);
+  if (dateKey) {
+    const [, month, day] = dateKey.split('-').map(Number);
+    if (!month || !day) return null;
+    return `${month}/${day}`;
+  }
+  const parsed = new Date(dateString);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const month = parsed.getMonth() + 1;
+  const day = parsed.getDate();
+  return `${month}/${day}`;
+}

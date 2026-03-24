@@ -237,17 +237,27 @@ export async function DELETE(
     }
 
     const check = await pool.query(
-      `SELECT id, status FROM fba_shipment_items WHERE id = $1 AND shipment_id = $2`,
+      `SELECT id, status, expected_qty, actual_qty FROM fba_shipment_items WHERE id = $1 AND shipment_id = $2`,
       [itemIdNum, shipmentId]
     );
     if (!check.rows[0]) {
       return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 });
     }
-    if (check.rows[0].status !== 'PLANNED') {
+    const row = check.rows[0] as {
+      status: string;
+      expected_qty: number;
+      actual_qty: number;
+    };
+    const canDeletePlanned = row.status === 'PLANNED';
+    const canDeleteSingleReady =
+      row.status === 'READY_TO_GO' &&
+      Number(row.expected_qty) === 1 &&
+      Number(row.actual_qty) === 0;
+    if (!canDeletePlanned && !canDeleteSingleReady) {
       return NextResponse.json(
         {
           success: false,
-          error: `Cannot delete an item with status '${check.rows[0].status}'. Only PLANNED items can be deleted.`,
+          error: `Cannot delete this item (status ${row.status}). Only PLANNED rows, or single-unit READY_TO_GO rows with no scans, can be removed.`,
         },
         { status: 409 }
       );

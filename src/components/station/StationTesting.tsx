@@ -109,6 +109,7 @@ export default function StationTesting({
         setActiveOrder({
           id: data.order?.id ?? null,
           orderId: data.order?.orderId ?? 'FNSKU',
+          fnsku,
           productTitle: data.order?.productTitle ?? data.order?.tracking ?? fnsku,
           itemNumber: data.order?.itemNumber ?? null,
           sku: data.order?.sku ?? 'N/A',
@@ -122,6 +123,7 @@ export default function StationTesting({
           shipByDate: data.order?.shipByDate ?? null,
           createdAt: data.order?.createdAt ?? null,
           orderFound: data.orderFound !== false,
+          sourceType: 'fba',
         });
 
         setFbaFeedback({
@@ -490,7 +492,7 @@ export default function StationTesting({
           <LayoutGroup id="station-active-upnext">
             {/* popLayout: exiting card leaves document flow so Up Next reflows up instead of a dead gap */}
             <AnimatePresence mode="popLayout" initial={false}>
-              {activeOrder && isActiveOrderVisible ? (
+              {activeOrder && isActiveOrderVisible && activeOrder.sourceType !== 'fba' ? (
                 <ActiveStationOrderCard
                   key={activeOrder.tracking}
                   activeOrder={activeOrder}

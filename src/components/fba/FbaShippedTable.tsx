@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Loader2, Search } from '@/components/Icons';
 import { FnskuChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
 import WeekHeader from '@/components/ui/WeekHeader';
@@ -37,6 +37,7 @@ export function FbaShippedTable({
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const shouldReduceMotion = useReducedMotion();
 
   const search = searchParams.get('q') || '';
   const openOrderId = Number.parseInt(searchParams.get('openOrderId') || '', 10);
@@ -293,8 +294,9 @@ export function FbaShippedTable({
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Loading FBA shipped records...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-violet-600 mx-auto mb-3" />
+          <p className="text-sm font-semibold text-gray-700">Loading shipped FBA records...</p>
+          <p className="mt-1 text-[11px] font-medium text-gray-500">Preparing this week&apos;s shipment timeline.</p>
         </div>
       </div>
     );
@@ -308,7 +310,7 @@ export function FbaShippedTable({
             stickyDate={stickyDate}
             fallbackDate={fallbackDate}
             count={currentCount || totalCount}
-            countClassName="text-blue-600"
+            countClassName="text-violet-700"
             weekRange={weekRange}
             weekOffset={weekOffset}
             onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
@@ -317,7 +319,7 @@ export function FbaShippedTable({
             showWeekControls
           />
 
-          <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
+          <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full bg-[radial-gradient(circle_at_12%_0%,rgba(139,92,246,0.06),transparent_38%)]">
             {Object.keys(groupedRecords).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-40 text-center">
                 {search ? (
@@ -325,21 +327,21 @@ export function FbaShippedTable({
                     <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Search className="w-8 h-8 text-red-400" />
                     </div>
-                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">Order not found</h3>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                      We couldn&apos;t find any records matching &quot;{search}&quot;
+                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">No shipped order match</h3>
+                    <p className="text-xs text-gray-600 font-bold uppercase tracking-widest leading-relaxed">
+                      No FBA shipped records matched &quot;{search}&quot;.
                     </p>
                     <button
                       type="button"
                       onClick={clearSearch}
-                      className="mt-6 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
+                      className="mt-6 px-6 py-2 bg-violet-700 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-violet-800 transition-all active:scale-95"
                     >
-                      Show All FBA Orders
+                      Show all shipped orders
                     </button>
                   </div>
                 ) : (
                   <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                    <p className="text-gray-500 font-medium italic opacity-20">No FBA shipped records for this week</p>
+                    <p className="text-gray-500 font-semibold">No FBA shipments were recorded for this week.</p>
                   </div>
                 )}
               </div>
@@ -382,13 +384,19 @@ export function FbaShippedTable({
 
                           return (
                             <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
+                              initial={shouldReduceMotion ? false : { opacity: 0, y: 8, scale: 0.99 }}
+                              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+                              whileHover={shouldReduceMotion ? undefined : { x: 2 }}
+                              transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
                               key={record.id}
                               onClick={() => handleRowClick(record)}
                               data-order-row-id={String(record.order_row_id || record.id)}
-                              className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
-                                selectedShipped?.id === detail.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+                              className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer ${
+                                selectedShipped?.id === detail.id
+                                  ? 'bg-violet-100/55 hover:bg-violet-100/70'
+                                  : index % 2 === 0
+                                    ? 'bg-white hover:bg-violet-50/45'
+                                    : 'bg-gray-50/20 hover:bg-violet-50/50'
                               }`}
                             >
                               <div className="flex flex-col min-w-0">
@@ -402,7 +410,7 @@ export function FbaShippedTable({
                                   </div>
                                 </div>
                                 <div className="mt-0.5 flex items-center gap-2">
-                                  <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
+                                  <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
                                     <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                       {parseInt(String(record.quantity || '1'), 10) || 1}
                                     </span>

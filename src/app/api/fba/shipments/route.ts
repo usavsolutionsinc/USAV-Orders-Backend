@@ -1,6 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
+function parseOptionalStaffId(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  const normalized = Math.floor(parsed);
+  return normalized > 0 ? normalized : null;
+}
+
+function getTodayDateOnly(now = new Date()): string {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeDueDate(value: unknown): string {
+  if (typeof value === 'string') {
+    const raw = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const candidate = raw.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return candidate;
+  }
+  return getTodayDateOnly();
+}
+
+function buildAutoShipmentRef(now = new Date()): string {
+  const datePart = getTodayDateOnly(now).replace(/-/g, '');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const ms = String(now.getMilliseconds()).padStart(3, '0');
+  return `FBA-${datePart}-${hh}${mm}${ss}${ms}`;
+}
+
 // ── GET /api/fba/shipments ────────────────────────────────────────────────────
 // Returns shipments with aggregated item counts and staff names.
 // Query params: status (comma-separated), limit, q (search shipment_ref / notes)
@@ -107,8 +140,8 @@ export async function GET(request: NextRequest) {
 
 // ── POST /api/fba/shipments ───────────────────────────────────────────────────
 // Creates a shipment header + optional initial items in a single transaction.
-// Body: { shipment_ref, destination_fc?, due_date?, notes?,
-//         created_by_staff_id, assigned_tech_id?, assigned_packer_id?,
+// Body: { shipment_ref?, destination_fc?, due_date?, notes?,
+//         created_by_staff_id?, assigned_tech_id?, assigned_packer_id?,
 //         items: [{ fnsku, expected_qty, product_title?, asin?, sku? }] }
 export async function POST(request: NextRequest) {
   const client = await pool.connect();
@@ -120,17 +153,20 @@ export async function POST(request: NextRequest) {
       due_date,
       notes,
       created_by_staff_id,
-      assigned_tech_id,
-      assigned_packer_id,
+      assigned_tech_id: rawAssignedTechId,
+      assigned_packer_id: rawAssignedPackerId,
       items = [],
     } = body;
-
-    if (!shipment_ref?.trim()) {
-      return NextResponse.json({ success: false, error: 'shipment_ref is required' }, { status: 400 });
-    }
-    if (!created_by_staff_id) {
-      return NextResponse.json({ success: false, error: 'created_by_staff_id is required' }, { status: 400 });
-    }
+    const normalizedShipmentRef = typeof shipment_ref === 'string' && shipment_ref.trim()
+      ? shipment_ref.trim()
+      : buildAutoShipmentRef();
+    const normalizedDueDate = normalizeDueDate(due_date);
+    const createdByStaffId = parseOptionalStaffId(created_by_staff_id);
+    const assignedTechId = parseOptionalStaffId(rawAssignedTechId);
+    const assignedPackerId = parseOptionalStaffId(rawAssignedPackerId);
+    const shipmentNotes = typeof notes === 'string' && notes.trim() ? notes.trim() : null;
+    const destinationFc = typeof destination_fc === 'string' && destination_fc.trim() ? destination_fc.trim() : null;
+    const incomingItems = Array.isArray(items) ? items : [];
 
     await client.query('BEGIN');
 
@@ -141,20 +177,55 @@ export async function POST(request: NextRequest) {
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
-        shipment_ref.trim(),
-        destination_fc || null,
-        due_date || null,
-        notes || null,
-        created_by_staff_id,
-        assigned_tech_id || null,
-        assigned_packer_id || null,
+        normalizedShipmentRef,
+        destinationFc,
+        normalizedDueDate,
+        shipmentNotes,
+        createdByStaffId,
+        assignedTechId,
+        assignedPackerId,
       ]
     );
 
     const shipment = shipmentRes.rows[0];
     const insertedItems: unknown[] = [];
 
-    for (const item of items) {
+    const existingAssignmentRes = await client.query(
+      `SELECT id
+       FROM work_assignments
+       WHERE entity_type = 'FBA_SHIPMENT'
+         AND entity_id = $1
+         AND work_type = 'QA'
+         AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+       ORDER BY updated_at DESC NULLS LAST, id DESC
+       LIMIT 1`,
+      [shipment.id]
+    );
+
+    if (existingAssignmentRes.rows.length > 0) {
+      await client.query(
+        `UPDATE work_assignments
+         SET deadline_at = COALESCE(
+               deadline_at,
+               ($2::date + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz
+             ),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [existingAssignmentRes.rows[0].id, normalizedDueDate]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO work_assignments
+           (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+         VALUES
+           ('FBA_SHIPMENT', $1, 'QA', $2, $3, 'OPEN', 1,
+            ($4::date + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz,
+            $5, NOW(), NOW(), NOW())`,
+        [shipment.id, assignedTechId, assignedPackerId, normalizedDueDate, shipmentNotes]
+      );
+    }
+
+    for (const item of incomingItems) {
       if (!item.fnsku?.trim()) continue;
 
       // Try to pull product metadata from fba_fnskus if not provided

@@ -90,7 +90,7 @@ export async function GET(
 // ── PATCH /api/fba/shipments/[id] ─────────────────────────────────────────────
 // Update mutable shipment fields.
 // Body (all optional): { shipment_ref, destination_fc, due_date, notes,
-//                        assigned_tech_id, assigned_packer_id, status }
+//                        amazon_shipment_id, assigned_tech_id, assigned_packer_id, status }
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Params }
@@ -126,6 +126,13 @@ export async function PATCH(
     if ('destination_fc' in body) setField('destination_fc', body.destination_fc || null);
     if ('due_date' in body) setField('due_date', body.due_date || null);
     if ('notes' in body) setField('notes', body.notes || null);
+    if ('amazon_shipment_id' in body) {
+      const v = body.amazon_shipment_id;
+      setField(
+        'amazon_shipment_id',
+        v != null && String(v).trim() ? String(v).trim().toUpperCase() : null
+      );
+    }
     if ('assigned_tech_id' in body) setField('assigned_tech_id', body.assigned_tech_id || null);
     if ('assigned_packer_id' in body) setField('assigned_packer_id', body.assigned_packer_id || null);
     if ('status' in body) {

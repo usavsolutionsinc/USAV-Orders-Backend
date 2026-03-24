@@ -72,7 +72,7 @@ function mergeSerialNumbers(a: string | null | undefined, b: string | null | und
     ...String(a || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
     ...String(b || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
   ];
-  return [...new Set(combined)].join(', ');
+  return Array.from(new Set(combined)).join(', ');
 }
 
 export function TechTable({ testedBy }: TechTableProps) {
@@ -416,8 +416,8 @@ export function TechTable({ testedBy }: TechTableProps) {
                           condition: record.condition,
                           trackingNumber: record.shipping_tracking_number,
                         });
-                        const rowIsFba = isFbaOrder(record.order_id, record.account_source);
-                        const fnskuValue = String(record.shipping_tracking_number || record.order_id || '').trim();
+                        const fnskuValue = String(record.fnsku || '').trim();
+                        const rowIsFba = Boolean(fnskuValue) || isFbaOrder(record.order_id, record.account_source);
                         const dotType = getSourceDotType({
                           orderId: record.order_id,
                           accountSource: record.account_source,
@@ -451,7 +451,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              {rowIsFba ? (
+                              {rowIsFba && fnskuValue ? (
                                 <FnskuChip value={fnskuValue} />
                               ) : (
                                 <OrderIdChip

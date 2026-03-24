@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   framerPresence,
@@ -13,10 +13,73 @@ import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
 import { getTrackingUrl } from '@/utils/order-links';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
-function getTrackingLast4(tracking: string) {
-  const digits = String(tracking || '').replace(/\D/g, '');
-  if (digits.length >= 4) return digits.slice(-4);
-  return String(tracking || '').slice(-4);
+type OrderVariant = 'order' | 'fba' | 'repair';
+
+type CopyFieldKey = 'sku' | 'itemNumber' | 'tracking';
+
+function getLast4(value: string | null | undefined) {
+  const raw = String(value || '').trim();
+  if (!raw) return '—';
+  return raw.slice(-4);
+}
+
+function inferOrderVariant(order: ActiveStationOrder): OrderVariant {
+  const sourceType = order.sourceType;
+  if (
+    sourceType === 'fba' ||
+    String(order.orderId || '').toUpperCase() === 'FNSKU' ||
+    /^(X0|B0)/i.test(String(order.fnsku || '').replace(/[^A-Z0-9]/gi, ''))
+  ) {
+    return 'fba';
+  }
+
+  if (sourceType === 'repair' || /^RS-/i.test(String(order.orderId || '')) || /^RS-/i.test(String(order.tracking || ''))) {
+    return 'repair';
+  }
+
+  return 'order';
+}
+
+function getVariantStyles(variant: OrderVariant) {
+  switch (variant) {
+    case 'fba':
+      return {
+        card: 'border-violet-300 hover:border-violet-500',
+        focus: 'focus-visible:ring-violet-400/50',
+        section: 'border-violet-100',
+        accent: 'text-violet-600',
+        badge: 'bg-violet-50 text-violet-700 border-violet-200',
+      };
+    case 'repair':
+      return {
+        card: 'border-orange-300 hover:border-orange-500',
+        focus: 'focus-visible:ring-orange-400/50',
+        section: 'border-orange-100',
+        accent: 'text-orange-600',
+        badge: 'bg-orange-50 text-orange-700 border-orange-200',
+      };
+    case 'order':
+    default:
+      return {
+        card: 'border-emerald-200 hover:border-emerald-500',
+        focus: 'focus-visible:ring-emerald-400/50',
+        section: 'border-emerald-100',
+        accent: 'text-emerald-600',
+        badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      };
+  }
+}
+
+function getOrderVariantLabel(variant: OrderVariant) {
+  switch (variant) {
+    case 'fba':
+      return 'FBA';
+    case 'repair':
+      return 'Repair';
+    case 'order':
+    default:
+      return 'Order';
+  }
 }
 
 function getDisplayShipByDate(order: ActiveStationOrder) {
@@ -63,11 +126,14 @@ export default function ActiveStationOrderCard({
 }: ActiveStationOrderCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastAddedSerial, setLastAddedSerial] = useState<string | null>(null);
-  const [copiedTracking, setCopiedTracking] = useState(false);
+  const [copiedField, setCopiedField] = useState<CopyFieldKey | null>(null);
   const [removingSerialKey, setRemovingSerialKey] = useState<string | null>(null);
   const [serialRemoveError, setSerialRemoveError] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<number | null>(null);
   const prevTrackingRef = React.useRef(activeOrder.tracking);
   const prevSerialCountRef = React.useRef(activeOrder.serialNumbers.length);
+  const orderVariant = inferOrderVariant(activeOrder);
+  const variantStyles = getVariantStyles(orderVariant);
 
   useEffect(() => {
     if (prevTrackingRef.current !== activeOrder.tracking) {
@@ -89,19 +155,33 @@ export default function ActiveStationOrderCard({
     prevSerialCountRef.current = current;
   }, [activeOrder.serialNumbers, activeOrder.tracking]);
 
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const primaryManual = resolvedManuals[0] ?? null;
   const quantity = Math.max(1, Number(activeOrder.quantity) || 1);
   const daysLate = getDaysLateNumber(activeOrder.shipByDate, activeOrder.createdAt);
   const trackingNumber = String(activeOrder.tracking || '').trim();
+  const skuValue = String(activeOrder.sku || '').trim();
+  const itemNumberValue = String(activeOrder.itemNumber || '').trim();
+  const displayIdentifier = activeOrder.fnsku ? getLast4(activeOrder.fnsku) : getOrderIdLast4(activeOrder.orderId);
   const trackingUrl = getTrackingUrl(trackingNumber);
 
-  const handleCopyTracking = async (e: React.MouseEvent) => {
+  const handleCopyValue = async (e: React.MouseEvent, key: CopyFieldKey, value: string) => {
     e.stopPropagation();
-    if (!trackingNumber) return;
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(trackingNumber);
-      setCopiedTracking(true);
-      window.setTimeout(() => setCopiedTracking(false), 1500);
+      await navigator.clipboard.writeText(value);
+      setCopiedField(key);
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = window.setTimeout(() => setCopiedField(null), 1500);
     } catch {
       /* noop */
     }
@@ -129,14 +209,14 @@ export default function ActiveStationOrderCard({
       animate={framerPresence.stationCard.animate}
       exit={framerPresence.stationCard.exit}
       transition={framerTransition.stationCardMount}
-      className="rounded-2xl border-2 border-emerald-200 bg-white shadow-sm overflow-hidden"
+      className={`rounded-2xl border-2 bg-white shadow-sm overflow-hidden transition-colors ${variantStyles.card}`}
     >
       {/* ── Header + title (tap to expand details — matches Up Next OrderCard) ── */}
       <button
         type="button"
         onClick={() => setIsExpanded((v) => !v)}
         aria-expanded={isExpanded}
-        className="w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 focus-visible:ring-inset"
+        className={`w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${variantStyles.focus}`}
       >
         <div className="flex items-center justify-between px-3 pt-3 mb-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -146,6 +226,9 @@ export default function ActiveStationOrderCard({
               showYear={false}
               className="[&>span]:text-[14px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4"
             />
+            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${variantStyles.badge}`}>
+              {getOrderVariantLabel(orderVariant)}
+            </span>
             <span className={`text-[14px] font-black tabular-nums ${getDaysLateTone(daysLate)}`}>
               {daysLate}
             </span>
@@ -175,12 +258,12 @@ export default function ActiveStationOrderCard({
                 {quantity}
               </span>
               <span className="text-[13px] font-black uppercase tracking-wider text-gray-500">-</span>
-              <span className="text-[13px] font-black uppercase truncate text-gray-900">
-                {activeOrder.condition || 'No Condition'}
-              </span>
-            </div>
-            <span className="text-[13px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300 shrink-0">
-              #{getOrderIdLast4(activeOrder.orderId)}
+            <span className="text-[13px] font-black uppercase truncate text-gray-900">
+              {activeOrder.condition || 'No Condition'}
+            </span>
+          </div>
+            <span className={`text-[13px] font-mono font-black px-1.5 py-0.5 rounded border shrink-0 ${variantStyles.badge}`}>
+              #{displayIdentifier}
             </span>
           </div>
           <h3 className="text-base font-black text-gray-900 leading-tight">{activeOrder.productTitle}</h3>
@@ -188,7 +271,7 @@ export default function ActiveStationOrderCard({
       </button>
 
       {activeOrder.notes && (
-        <div className="px-3 mt-2 border-t border-gray-100 pt-2">
+        <div className={`px-3 mt-2 border-t pt-2 ${variantStyles.section}`}>
           <div className="flex items-center gap-2">
             <ClipboardList className={`w-4 h-4 shrink-0 ${activeColorTextClass}`} />
             <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Testing Notes</p>
@@ -201,57 +284,82 @@ export default function ActiveStationOrderCard({
 
       {/* ── Expanded detail grid (OrderCard-style) ── */}
       <AnimatePresence initial={false}>
-        {isExpanded && (
-          <motion.div
-            key="expanded-active-order"
-            initial={framerPresence.collapseHeight.initial}
-            animate={framerPresence.collapseHeight.animate}
-            exit={framerPresence.collapseHeight.exit}
-            transition={framerTransition.stationCollapse}
-            className="overflow-hidden"
-          >
-            <div
-              className="mt-2 border-t border-emerald-100 px-3 pt-3 pb-1"
-              onClick={(e) => e.stopPropagation()}
+          {isExpanded && (
+            <motion.div
+              key="expanded-active-order"
+              initial={framerPresence.collapseHeight.initial}
+              animate={framerPresence.collapseHeight.animate}
+              exit={framerPresence.collapseHeight.exit}
+              transition={framerTransition.stationCollapse}
+              className="overflow-hidden"
             >
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                <div className="min-w-0 rounded-xl bg-gray-50 px-2 py-2">
-                  <div className="mb-1 text-gray-400">SKU</div>
-                  <div className="truncate text-[11px] text-gray-900 normal-case tracking-normal font-mono font-bold" title={activeOrder.sku || undefined}>
-                    {activeOrder.sku || '—'}
-                  </div>
-                </div>
-                <div className="min-w-0 w-fit max-w-full rounded-xl bg-gray-50 px-2 py-2">
-                  <div className="mb-1 whitespace-nowrap text-gray-400">Item #</div>
-                  <div
-                    className="block max-w-full truncate text-[11px] text-gray-900 normal-case tracking-normal"
-                    title={activeOrder.itemNumber || undefined}
-                  >
-                    {activeOrder.itemNumber || 'None'}
-                  </div>
-                </div>
-                <div className="min-w-0 rounded-xl bg-gray-50 px-2 py-2">
-                  <div className="mb-1 text-gray-400">Tracking</div>
-                  <div className="flex items-center justify-between gap-1">
-                    <div
-                      className="min-w-0 truncate text-[11px] text-gray-900 normal-case tracking-normal font-mono font-bold"
-                      title={trackingNumber || undefined}
-                    >
-                      {trackingNumber ? getTrackingLast4(trackingNumber) : '—'}
-                    </div>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={handleCopyTracking}
-                        disabled={!trackingNumber}
-                        className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={copiedTracking ? 'Tracking copied' : 'Copy tracking number'}
+              <div
+                className={`mt-2 border-t px-3 pt-3 pb-1 ${variantStyles.section}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                  <div className="min-w-0 rounded-xl bg-gray-50 px-2 py-2">
+                    <div className="mb-1 text-gray-400">SKU</div>
+                    <div className="flex items-center justify-between gap-1">
+                      <div
+                        className="min-w-0 truncate text-[11px] text-gray-900 normal-case tracking-normal font-mono font-bold"
+                        title={skuValue || undefined}
                       >
-                        {copiedTracking ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                      </button>
+                        {getLast4(skuValue)}
+                      </div>
                       <button
                         type="button"
-                        onClick={(e) => {
+                        onClick={(e) => void handleCopyValue(e, 'sku', skuValue)}
+                        disabled={!skuValue}
+                        className="flex-shrink-0 text-gray-400 hover:text-violet-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={copiedField === 'sku' ? 'SKU copied' : 'Copy SKU'}
+                      >
+                        {copiedField === 'sku' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="min-w-0 w-fit max-w-full rounded-xl bg-gray-50 px-2 py-2">
+                    <div className="mb-1 whitespace-nowrap text-gray-400">Item #</div>
+                    <div className="flex items-center justify-between gap-1">
+                      <div
+                        className="block min-w-0 max-w-full truncate text-[11px] text-gray-900 normal-case tracking-normal"
+                        title={itemNumberValue || undefined}
+                      >
+                        {itemNumberValue ? getLast4(itemNumberValue) : '—'}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => void handleCopyValue(e, 'itemNumber', itemNumberValue)}
+                        disabled={!itemNumberValue}
+                        className="flex-shrink-0 text-gray-400 hover:text-violet-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={copiedField === 'itemNumber' ? 'Item number copied' : 'Copy item number'}
+                      >
+                        {copiedField === 'itemNumber' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="min-w-0 rounded-xl bg-gray-50 px-2 py-2">
+                    <div className="mb-1 text-gray-400">Tracking</div>
+                    <div className="flex items-center justify-between gap-1">
+                      <div
+                        className="min-w-0 truncate text-[11px] text-gray-900 normal-case tracking-normal font-mono font-bold"
+                        title={trackingNumber || undefined}
+                      >
+                        {trackingNumber ? getLast4(trackingNumber) : '—'}
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => void handleCopyValue(e, 'tracking', trackingNumber)}
+                          disabled={!trackingNumber}
+                          className="flex-shrink-0 text-gray-400 hover:text-violet-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={copiedField === 'tracking' ? 'Tracking copied' : 'Copy tracking number'}
+                        >
+                          {copiedField === 'tracking' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
                           e.stopPropagation();
                           if (trackingUrl) window.open(trackingUrl, '_blank', 'noopener,noreferrer');
                         }}
@@ -260,11 +368,11 @@ export default function ActiveStationOrderCard({
                         aria-label="Open tracking in external tab"
                       >
                         <ExternalLink className="w-3 h-3" />
-                      </button>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
             </div>
           </motion.div>
         )}
@@ -273,7 +381,7 @@ export default function ActiveStationOrderCard({
       {/* Manual directly above serials — single column stack */}
       <div className="flex flex-col">
         {activeOrder.orderFound !== false && !isManualLoading && primaryManual && (
-          <div className="border-t border-blue-100 bg-blue-50/40 px-4 py-3">
+          <div className={`border-t bg-blue-50/40 px-4 py-3 ${variantStyles.section}`}>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">Product Manual</p>
@@ -314,10 +422,10 @@ export default function ActiveStationOrderCard({
             animate={framerPresence.collapseHeight.animate}
             exit={framerPresence.collapseHeight.exit}
             transition={framerTransition.stationCollapse}
-            className="overflow-hidden border-t border-emerald-100"
+            className={`overflow-hidden border-t ${variantStyles.section}`}
           >
             <div className="p-4 bg-emerald-50/60 space-y-2">
-              <p className="text-[9px] font-black text-emerald-700 uppercase tracking-wider">
+              <p className={`text-[9px] font-black uppercase tracking-wider ${variantStyles.accent}`}>
                 Scanned Serials ({activeOrder.serialNumbers.length}
                 {quantity > 1 ? ` / ${quantity}` : ''})
               </p>

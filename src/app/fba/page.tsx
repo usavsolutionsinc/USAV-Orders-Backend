@@ -53,7 +53,6 @@ function FbaPageContent() {
 
   // Status filter from sidebar third slider
   const statusFilter = searchParams.get('filter') || 'ALL';
-
   const clearDraftOrPlan = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete('draft');
@@ -71,12 +70,22 @@ function FbaPageContent() {
 
   // Refresh trigger for print table (listen for fba-print-shipped event)
   const [printRefresh, setPrintRefresh] = useState(0);
+  const [printLabelReadyByShipment, setPrintLabelReadyByShipment] = useState<Record<number, boolean>>({});
 
   // Listen to fba-print-shipped to refresh the table
   useEffect(() => {
     const handler = () => setPrintRefresh((n) => n + 1);
     window.addEventListener('fba-print-shipped', handler);
     return () => window.removeEventListener('fba-print-shipped', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const e = ev as CustomEvent<{ readyByShipmentId?: Record<number, boolean> }>;
+      setPrintLabelReadyByShipment(e.detail?.readyByShipmentId || {});
+    };
+    window.addEventListener('fba-print-sidebar-ready', handler);
+    return () => window.removeEventListener('fba-print-sidebar-ready', handler);
   }, []);
 
   // Legacy URLs: mode=out_of_stock → plan view + filter
@@ -89,39 +98,34 @@ function FbaPageContent() {
     router.replace(buildFbaHref(params));
   }, [searchParams, router]);
 
+  const isPrintMainView = legacyLabelsTab || summaryMode === 'PRINT_READY';
+
   return (
-    <div className="flex h-full w-full">
-      <div className="flex-1 min-w-0 h-full overflow-hidden">
-        <div className="flex h-full min-w-0 flex-1 bg-white relative">
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-hidden">
+    <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-stone-50">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-zinc-200/80 bg-white">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 
               {/* Specific plan selected from sidebar */}
-              {hasPlan ? (
+              {activeTab === 'shipped' ? (
+                <FbaShippedHistory refreshTrigger={refreshTrigger} />
+
+              ) : isPrintMainView ? (
+                <FbaPrintReadyTable
+                  refreshTrigger={printRefresh}
+                  shipmentLabelReady={printLabelReadyByShipment}
+                />
+
+              ) : hasPlan ? (
                 <FbaFnskuChecklist planId={planId!} statusFilter={statusFilter} onClear={clearDraftOrPlan} />
 
               /* Draft FNSKUs pasted — review before adding to today's plan */
               ) : hasDraft ? (
                 <FbaFnskuChecklist fnskus={draftFnskus} onClear={clearDraftOrPlan} onCreated={handleCreated} />
 
-              ) : activeTab === 'shipped' ? (
-                <FbaShippedHistory refreshTrigger={refreshTrigger} />
-
-              ) : legacyLabelsTab || summaryMode === 'PRINT_READY' ? (
-                <div className="h-full overflow-y-auto p-5">
-                  <div className="mb-4">
-                    <h2 className="text-sm font-black text-zinc-800 tracking-tight">Print Queue</h2>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">Items ready to ship — select rows, then enter tracking in the sidebar</p>
-                  </div>
-                  <FbaPrintReadyTable refreshTrigger={printRefresh} />
-                </div>
-
               ) : (
                 <FbaFnskuChecklist key={refreshTrigger} statusFilter={statusFilter} />
               )}
 
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -132,11 +136,11 @@ export default function FbaPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full w-full items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-600" />
-            <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Loading FBA
+        <div className="flex h-full w-full items-center justify-center bg-stone-100/80 px-6">
+          <div className="rounded-2xl border border-zinc-200/80 bg-white px-6 py-5 text-center shadow-sm shadow-zinc-200/70">
+            <Loader2 className="mx-auto h-7 w-7 animate-spin text-indigo-600" />
+            <p className="mt-3 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-700">
+              Loading FBA workspace
             </p>
           </div>
         </div>

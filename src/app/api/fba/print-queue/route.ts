@@ -1,25 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 
-const ALLOWED_STATUSES = ['READY_TO_GO', 'OUT_OF_STOCK', 'PACKING', 'PLANNED'] as const;
+const ALLOWED_STATUSES = ['READY_TO_GO', 'OUT_OF_STOCK', 'PACKING', 'PLANNED', 'LABEL_ASSIGNED'] as const;
 type AllowedStatus = typeof ALLOWED_STATUSES[number];
 
+const DEFAULT_PRINT_STATUSES: AllowedStatus[] = ['READY_TO_GO', 'OUT_OF_STOCK', 'PACKING'];
+
 /**
- * GET /api/fba/print-queue?status=READY_TO_GO
+ * GET /api/fba/print-queue
  *
- * Returns fba_shipment_items for the given status (defaults to READY_TO_GO),
+ * Returns fba_shipment_items for print prep (default: READY_TO_GO + OUT_OF_STOCK + PACKING),
  * joined with parent fba_shipments and fba_fnskus catalog metadata.
  *
  * Query params:
- *   status  — item status filter (default: READY_TO_GO)
+ *   status — comma-separated statuses (each must be allowed), or single status
+ *   date   — optional ISO date YYYY-MM-DD; filters rows to shipments with that due_date (calendar day, UTC)
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const rawStatus = String(searchParams.get('status') || 'READY_TO_GO').toUpperCase();
-    const status: AllowedStatus = (ALLOWED_STATUSES as readonly string[]).includes(rawStatus)
-      ? rawStatus as AllowedStatus
-      : 'READY_TO_GO';
+    const rawStatus = searchParams.get('status');
+    const dateFilter = searchParams.get('date');
+
+    let statuses: AllowedStatus[];
+    if (rawStatus && rawStatus.trim()) {
+      const parts = rawStatus.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+      statuses = parts.filter((s): s is AllowedStatus =>
+        (ALLOWED_STATUSES as readonly string[]).includes(s)
+      ) as AllowedStatus[];
+      if (statuses.length === 0) statuses = [...DEFAULT_PRINT_STATUSES];
+    } else {
+      statuses = [...DEFAULT_PRINT_STATUSES];
+    }
+
+    const dateIso =
+      dateFilter && /^\d{4}-\d{2}-\d{2}$/.test(dateFilter.trim()) ? dateFilter.trim() : null;
 
     const result = await pool.query(
       `SELECT
@@ -31,6 +46,7 @@ export async function GET(request: NextRequest) {
          fsi.product_title    AS item_product_title,
          fsi.asin,
          fsi.sku,
+         fsi.notes            AS item_notes,
          fsi.ready_at,
          fsi.shipped_at,
          ff.product_title     AS catalog_product_title,
@@ -49,12 +65,28 @@ export async function GET(request: NextRequest) {
        FROM fba_shipment_items fsi
        JOIN fba_shipments fs ON fs.id = fsi.shipment_id
        LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
-       WHERE fsi.status = $1
+       WHERE fsi.status::text = ANY($1::text[])
+         AND ($2::date IS NULL OR fs.due_date IS NOT NULL AND (fs.due_date AT TIME ZONE 'UTC')::date = $2::date)
        ORDER BY fs.due_date ASC NULLS LAST, fs.id ASC, fsi.fnsku ASC`,
-      [status]
+      [statuses, dateIso]
     );
 
-    return NextResponse.json({ success: true, items: result.rows });
+    const items = result.rows.map((row: Record<string, unknown>) => {
+      const itemStatus = String(row.item_status || '');
+      let pending_reason: string | null = null;
+      if (itemStatus === 'OUT_OF_STOCK') pending_reason = 'out_of_stock';
+      const pending_reason_note =
+        row.item_notes != null && String(row.item_notes).trim()
+          ? String(row.item_notes).trim()
+          : null;
+      return {
+        ...row,
+        pending_reason,
+        pending_reason_note,
+      };
+    });
+
+    return NextResponse.json({ success: true, items });
   } catch (error: any) {
     console.error('[GET /api/fba/print-queue]', error);
     return NextResponse.json(

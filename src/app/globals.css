@@ -71,3 +71,51 @@ body {
 .glass-dark {
   @apply bg-black/70 backdrop-blur-xl border border-white/10;
 }
+
+.fnsku-panel {
+  container-type: size;
+  container-name: fnsku;
+}
+
+/* Sidebar embed: size containment breaks flex intrinsic height and stacks content */
+.fnsku-panel.fnsku-panel--sidebar {
+  container-type: normal;
+  container-name: none;
+}
+
+.fnsku-panel .fnsku-step-body {
+  scrollbar-width: thin;
+}
+
+.fnsku-panel .fnsku-step-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.fnsku-panel .fnsku-step-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.6);
+  border-radius: 999px;
+}
+
+.fnsku-panel .fnsku-header .fnsku-step-dots span {
+  transition: opacity 0.2s ease;
+}
+
+@container fnsku (max-height: 420px) {
+  .fnsku-panel .fnsku-header .fnsku-step-dots span {
+    opacity: 0;
+  }
+  .fnsku-panel .fnsku-footer button {
+    font-size: 9px;
+  }
+}
+
+@container fnsku (max-height: 360px) {
+  .fnsku-panel .fnsku-footer {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  .fnsku-panel .fnsku-footer button {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+}

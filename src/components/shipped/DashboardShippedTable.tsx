@@ -9,7 +9,7 @@ import { OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from 
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
-import { fetchDashboardPackedRecords } from '@/lib/dashboard-table-data';
+import { fetchDashboardPackedRecords, fetchDashboardShippedData } from '@/lib/dashboard-table-data';
 import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { DateGroupHeader } from './DateGroupHeader';
@@ -33,9 +33,12 @@ export function DashboardShippedTable({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
+  const [searchFallbackRecords, setSearchFallbackRecords] = useState<PackerRecord[]>([]);
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
+  const [isResolvingSearch, setIsResolvingSearch] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const resolvedSearchKeyRef = useRef('');
 
   const search = searchParams.get('search') || '';
   const openOrderId = Number.parseInt(searchParams.get('openOrderId') || '', 10);
@@ -108,6 +111,7 @@ export function DashboardShippedTable({
   };
 
   const rawRecords = query.data || [];
+  const normalizedSearch = search.trim().toLowerCase();
 
   const toDetailRecord = useCallback((record: PackerRecord): ShippedOrder => ({
     id: record.order_row_id || record.id,
@@ -140,6 +144,34 @@ export function DashboardShippedTable({
     packer_log_id: record.id,
   } as ShippedOrder), []);
 
+  const toSearchResultRecord = useCallback((record: ShippedOrder): PackerRecord => ({
+    id: Number(record.id),
+    created_at: record.created_at || record.packed_at || null,
+    scan_ref: record.shipping_tracking_number || '',
+    shipping_tracking_number: record.shipping_tracking_number || '',
+    packed_by: record.packer_id ?? record.packed_by ?? null,
+    packed_by_name: record.packed_by_name || null,
+    tracking_type: record.tracking_type || null,
+    packer_photos_url: record.packer_photos_url || [],
+    order_row_id: Number(record.id),
+    shipment_id: record.shipment_id ?? null,
+    order_id: record.order_id || '',
+    account_source: record.account_source || null,
+    product_title: record.product_title || '',
+    quantity: record.quantity || '1',
+    item_number: record.item_number || null,
+    condition: record.condition || '',
+    sku: record.sku || '',
+    notes: record.notes || '',
+    status_history: record.status_history || [],
+    serial_number: record.serial_number || '',
+    tested_by: record.tested_by ?? null,
+    tester_id: record.tester_id ?? null,
+    test_date_time: record.test_date_time || null,
+    tested_by_name: record.tested_by_name || null,
+    tester_name: record.tester_name || null,
+  } as PackerRecord), []);
+
   const seenTracking = new Map<string, PackerRecord>();
   [...rawRecords].sort((a, b) => a.id - b.id).forEach((record) => {
     const key = (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
@@ -147,8 +179,7 @@ export function DashboardShippedTable({
   });
   const dedupedRecords = Array.from(seenTracking.values());
   const nonFbaRecords = dedupedRecords.filter((record) => !isFbaOrder(record.order_id, record.account_source));
-  const normalizedSearch = search.trim().toLowerCase();
-  const records = normalizedSearch
+  const filteredRecords = normalizedSearch
     ? nonFbaRecords.filter((record) => {
         const haystack = [
           record.product_title,
@@ -164,6 +195,96 @@ export function DashboardShippedTable({
         return haystack.includes(normalizedSearch);
       })
     : nonFbaRecords;
+
+  const records = filteredRecords.length > 0 ? filteredRecords : searchFallbackRecords;
+
+  useEffect(() => {
+    if (!normalizedSearch) {
+      resolvedSearchKeyRef.current = '';
+      setSearchFallbackRecords([]);
+      setIsResolvingSearch(false);
+      return;
+    }
+
+    if (filteredRecords.length > 0 || query.isLoading || query.isFetching) {
+      return;
+    }
+
+    const searchKey = [
+      normalizedSearch,
+      packedBy ?? '',
+      testedBy ?? '',
+    ].join('|');
+
+    if (resolvedSearchKeyRef.current === searchKey && searchFallbackRecords.length > 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const resolveSearch = async () => {
+      setIsResolvingSearch(true);
+      try {
+        const shippedResults = await fetchDashboardShippedData({
+          searchQuery: search,
+          packedBy,
+          testedBy,
+        });
+        if (cancelled) return;
+
+        const normalizedResults = shippedResults.map(toSearchResultRecord);
+        resolvedSearchKeyRef.current = searchKey;
+        setSearchFallbackRecords(normalizedResults);
+
+        const directMatch =
+          (Number.isFinite(openOrderId)
+            ? normalizedResults.find((record) => Number(record.order_row_id || record.id) === openOrderId)
+            : null)
+          || normalizedResults.find((record) => {
+            const values = [
+              record.order_id,
+              record.shipping_tracking_number,
+              record.scan_ref,
+              record.product_title,
+              record.sku,
+            ]
+              .map((value) => String(value || '').toLowerCase())
+              .join(' ');
+            return values.includes(normalizedSearch);
+          });
+
+        if (directMatch) {
+          const detail = toDetailRecord(directMatch);
+          window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
+          setSelectedShipped(detail);
+        }
+      } catch {
+        if (!cancelled) {
+          setSearchFallbackRecords([]);
+        }
+      } finally {
+        if (!cancelled) setIsResolvingSearch(false);
+      }
+    };
+
+    void resolveSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    filteredRecords.length,
+    normalizedSearch,
+    openOrderId,
+    packedBy,
+    query.isFetching,
+    query.isLoading,
+    search,
+    searchFallbackRecords.length,
+    testedBy,
+    toDetailRecord,
+    toSearchResultRecord,
+  ]);
 
   useEffect(() => {
     if (!Number.isFinite(openOrderId)) return;
@@ -284,12 +405,14 @@ export function DashboardShippedTable({
     return text;
   };
 
-  if (query.isLoading) {
+  if (query.isLoading || isResolvingSearch) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Loading shipped records...</p>
+          <p className="text-sm font-semibold text-gray-600">
+            {isResolvingSearch ? 'Resolving order search...' : 'Loading shipped records...'}
+          </p>
         </div>
       </div>
     );

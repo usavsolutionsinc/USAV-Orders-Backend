@@ -7,6 +7,7 @@ import { Calendar, Check, ChevronDown, Copy, ExternalLink, Settings } from '@/co
 import { getPresentStaffForToday } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
 import type { WorkOrderRow } from '@/components/work-orders/types';
+import { formatMonthDay } from '@/utils/date';
 import { type FBAQueueItem } from './upnext-types';
 
 const TECH_IDS = [1, 2, 3, 6];
@@ -72,10 +73,8 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
-  const planDateSource = item.deadline_at || item.due_date;
-  const dueDateStr = planDateSource
-    ? new Date(planDateSource).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : null;
+const planDateSource = item.deadline_at || item.due_date;
+  const dueDateStr = formatMonthDay(planDateSource);
   const qtyReady    = Number(item.actual_qty) || 0;
   const qtyExpected = Number(item.expected_qty) || 0;
   const qtyLabel = qtyExpected > 0 ? qtyExpected : qtyReady || 1;
@@ -185,7 +184,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
             <motion.span
               animate={{ rotate: isExpanded ? 180 : 0 }}
               transition={{ duration: 0.18 }}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-pink-200 text-pink-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(236,72,153,0.16)]"
             >
               <ChevronDown className="w-4 h-4" />
             </motion.span>

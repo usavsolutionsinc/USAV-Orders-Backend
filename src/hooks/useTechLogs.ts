@@ -18,6 +18,7 @@ export interface TechRecord {
   tested_by: number;
   ship_by_date?: string | null;
   order_id: string | null;
+  fnsku?: string | null;
   item_number?: string | null;
   product_title: string | null;
   quantity?: string | null;

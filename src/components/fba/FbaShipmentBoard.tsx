@@ -16,6 +16,7 @@ import {
   Search,
 } from '@/components/Icons';
 import { FnskuChip, SerialChip, getLast6Serial } from '@/components/ui/CopyChip';
+import { IconActionButton } from '@/components/ui/IconActionButton';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -92,28 +93,6 @@ function EmptyState({ searchQuery, summaryMode }: { searchQuery: string; summary
   );
 }
 
-function InlineActionButton({
-  label,
-  onClick,
-  icon,
-}: {
-  label: string;
-  onClick: () => void;
-  icon: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
-    >
-      {icon}
-    </button>
-  );
-}
-
 function InlineRowDetails({
   row,
   onRefresh,
@@ -145,9 +124,9 @@ function InlineRowDetails({
           <WorkflowStatusIcon mode={mode} />
         </div>
         <div className="flex items-center gap-1.5">
-          <InlineActionButton label="Copy FNSKU" onClick={copyFnsku} icon={<Copy className="h-3.5 w-3.5" />} />
-          <InlineActionButton label="Open print queue" onClick={onOpenLabels} icon={<Printer className="h-3.5 w-3.5" />} />
-          <InlineActionButton label="Refresh row" onClick={onRefresh} icon={<RefreshCw className="h-3.5 w-3.5" />} />
+          <IconActionButton label="Copy FNSKU" onClick={copyFnsku} icon={<Copy className="h-3.5 w-3.5" />} />
+          <IconActionButton label="Open print queue" onClick={onOpenLabels} icon={<Printer className="h-3.5 w-3.5" />} />
+          <IconActionButton label="Refresh row" onClick={onRefresh} icon={<RefreshCw className="h-3.5 w-3.5" />} />
         </div>
       </div>
 

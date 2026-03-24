@@ -11,6 +11,7 @@ export type StationThemeColor = 'green' | 'blue' | 'purple' | 'yellow';
 export interface ActiveStationOrder {
   id: number | null;
   orderId: string;
+  fnsku?: string | null;
   productTitle: string;
   itemNumber: string | null;
   sku: string;
@@ -24,6 +25,7 @@ export interface ActiveStationOrder {
   shipByDate?: string | null;
   createdAt?: string | null;
   orderFound?: boolean;
+  sourceType?: 'order' | 'fba' | 'repair';
 }
 
 export interface ResolvedProductManual {
