@@ -112,13 +112,13 @@ export function ItemExpandPanel({
     >
       <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">FNSKU details</p>
       <div className="grid gap-2 md:grid-cols-3">
-        {item.asin || item.sku ? (
+        {item.asin ? (
           <div className="rounded-2xl border border-zinc-200 bg-white px-3 py-2.5">
             <p className="text-[9px] font-black uppercase tracking-[0.14em] text-zinc-400">Catalog</p>
             <p className="mt-1 text-[11px] font-mono text-zinc-700">
-              {item.asin ? <span>ASIN <span className="text-zinc-900">{item.asin}</span></span> : null}
-              {item.asin && item.sku ? ' · ' : null}
-              {item.sku ? <span>SKU <span className="text-zinc-900">{item.sku}</span></span> : null}
+              <span>
+                ASIN <span className="text-zinc-900">{item.asin}</span>
+              </span>
             </p>
           </div>
         ) : null}

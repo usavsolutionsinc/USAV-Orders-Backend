@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
-import { classifyInput, findSerialInCatalog } from '@/lib/scan-resolver';
+import { classifyInput, findSerialInCatalog, looksLikeFnsku } from '@/lib/scan-resolver';
+import { detectStationScanType, type StationInputMode, type StationScanType } from '@/lib/station-scan-routing';
 import { stationThemeColors } from '@/utils/staff-colors';
+
+export { getStationInputMode } from '@/lib/station-scan-routing';
+export type { StationInputMode, StationScanType };
 export type StationThemeColor = 'green' | 'blue' | 'purple' | 'yellow';
 
 export interface ActiveStationOrder {
@@ -41,8 +45,6 @@ export interface ResolvedProductManual {
   downloadUrl: string;
 }
 
-export type StationScanType = 'TRACKING' | 'SERIAL' | 'FNSKU' | 'SKU' | 'REPAIR' | 'COMMAND';
-export type StationInputMode = 'tracking' | 'fba' | 'repair' | 'serial';
 type ForcedStationScanType = 'TRACKING' | 'SERIAL' | 'FNSKU' | 'REPAIR';
 
 function parseRepairServiceId(value: string): number | null {
@@ -55,61 +57,11 @@ function parseRepairServiceId(value: string): number | null {
 const LAST_MANUAL_STORAGE_PREFIX = 'usav:last-manual:tech:';
 const COMPLETED_ORDER_AUTO_HIDE_MS = 2 * 60 * 1000;
 
-/**
- * detectType
- *
- * Maps a raw scan to one of the controller action types:
- *   TRACKING | SERIAL | FNSKU | SKU | REPAIR | COMMAND
- *
- * Special inputs (SKU, REPAIR, FNSKU, COMMAND) are checked first.
- * Everything else falls through to classifyInput() from scan-resolver,
- * which tests all carrier patterns (UPS, FedEx, USPS, DHL, Amazon, …).
- * Both serial_full and serial_partial resolve to SERIAL so the controller
- * routes them to add-serial; partial serials are catalog-matched there.
- */
-function detectType(val: string): StationScanType {
-  const input = val.trim();
-  if (!input) return 'SERIAL';
-
-  // Colon-separated SKU
-  if (input.includes(':')) return 'SKU';
-
-  // Repair service ID (RS-12345)
-  if (/^RS-\d+$/i.test(input)) return 'REPAIR';
-
-  // Amazon FBA FNSKU (X0… / B0… prefix)
-  if (/^(X0|B0)/i.test(input.toUpperCase().replace(/[^A-Z0-9]/g, ''))) return 'FNSKU';
-
-  // Operator commands
-  if (['YES', 'USED', 'NEW', 'PARTS', 'TEST'].includes(input.toUpperCase())) return 'COMMAND';
-
-  // Delegate to shared carrier-pattern classifier
-  const { type } = classifyInput(input);
-  if (type === 'tracking') return 'TRACKING';
-
-  // serial_full, serial_partial, unknown → serial path
-  return 'SERIAL';
-}
-
-export function getStationInputMode(val: string): StationInputMode {
-  const input = String(val || '').trim();
-  // Display-level repair cue: any RS- prefix should show Repair mode.
-  if (/^RS-/i.test(input)) return 'repair';
-
-  const type = detectType(input);
-  if (type === 'FNSKU') return 'fba';
-  if (type === 'REPAIR') return 'repair';
-  if (type === 'TRACKING' || type === 'COMMAND') {
-    return 'tracking';
-  }
-  return 'serial';
-}
-
 function resolveScanType(
   val: string,
   _options?: { hasActiveOrderContext?: boolean; activeTracking?: string | null },
 ): StationScanType {
-  return detectType(val);
+  return detectStationScanType(val);
 }
 
 export function getOrderIdLast4(orderId: string) {
@@ -753,7 +705,7 @@ export function useStationTestingController({
       }
 
       // ── Partial serial resolution ──────────────────────────────────────────
-      // classifyInput returns serial_partial for ≤8-char inputs.  Try to
+      // classifyInput returns serial_partial for ≤10-char inputs.  Try to
       // expand the partial by suffix-matching it against already-scanned serials
       // on this order.  If exactly one match is found we use the full canonical
       // serial; if zero or multiple, store the raw partial as-is.
@@ -773,7 +725,8 @@ export function useStationTestingController({
         // matchType === 'none' → fall through and store the raw partial
       }
 
-      const isFbaDuplicateAllowedTracking = /^(X0|B0|FBA)/i.test(String(contextOrder.tracking || '').trim());
+      const trk = String(contextOrder.tracking || '').trim();
+      const isFbaDuplicateAllowedTracking = looksLikeFnsku(trk) || /^FBA/i.test(trk);
 
       setIsLoading(true);
       try {

@@ -3,11 +3,12 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useState, type MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Check, ChevronDown, Copy, ExternalLink, Settings } from '@/components/Icons';
+import { Check, ChevronDown, Copy, ExternalLink, Package, Settings } from '@/components/Icons';
+import { ShipByDate } from '@/components/ui/ShipByDate';
 import { getPresentStaffForToday } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
 import type { WorkOrderRow } from '@/components/work-orders/types';
-import { formatMonthDay } from '@/utils/date';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { type FBAQueueItem } from './upnext-types';
 
 const TECH_IDS = [1, 2, 3, 6];
@@ -39,6 +40,34 @@ function getConditionLabel(value: string | null | undefined) {
   const raw = String(value || '').trim();
   if (!raw) return 'No Condition';
   return raw.replaceAll('_', ' ');
+}
+
+/** Prefer warehouse `deadline_at`; fall back to `due_date` when invalid (same idea as OrderCard ship_by / created). */
+function getDisplayFbaShipByDate(item: FBAQueueItem) {
+  const deadlineRaw = String(item.deadline_at || '').trim();
+  const dueRaw = String(item.due_date || '').trim();
+  const isInvalid =
+    !deadlineRaw ||
+    /^\d+$/.test(deadlineRaw) ||
+    Number.isNaN(new Date(deadlineRaw).getTime());
+  return isInvalid ? dueRaw || null : deadlineRaw;
+}
+
+function getDaysLateNumber(deadlineAt: string | null | undefined, fallbackDate?: string | null) {
+  const shipByKey = toPSTDateKey(deadlineAt) || toPSTDateKey(fallbackDate);
+  const todayKey = getCurrentPSTDateKey();
+  if (!shipByKey || !todayKey) return 0;
+  const [sy, sm, sd] = shipByKey.split('-').map(Number);
+  const [ty, tm, td] = todayKey.split('-').map(Number);
+  const shipByIndex = Math.floor(Date.UTC(sy, sm - 1, sd) / 86400000);
+  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
+  return Math.max(0, todayIndex - shipByIndex);
+}
+
+function getDaysLateTone(daysLate: number) {
+  if (daysLate > 1) return 'text-red-600';
+  if (daysLate === 1) return 'text-yellow-600';
+  return 'text-emerald-600';
 }
 
 function buildWorkOrderRow(item: FBAQueueItem): WorkOrderRow {
@@ -73,8 +102,9 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
-const planDateSource = item.deadline_at || item.due_date;
-  const dueDateStr = formatMonthDay(planDateSource);
+
+  const displayShipBy = getDisplayFbaShipByDate(item);
+  const daysLate = getDaysLateNumber(item.deadline_at, item.due_date);
   const qtyReady    = Number(item.actual_qty) || 0;
   const qtyExpected = Number(item.expected_qty) || 0;
   const qtyLabel = qtyExpected > 0 ? qtyExpected : qtyReady || 1;
@@ -163,24 +193,18 @@ const planDateSource = item.deadline_at || item.due_date;
       >
         <div className="flex items-center justify-between mb-4 px-3">
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 text-[14px] font-black text-gray-900">
-              <Calendar className="w-4 h-4 text-purple-600" />
-              <span>{dueDateStr || 'No Due Date'}</span>
-            </div>
+            <ShipByDate
+              date={displayShipBy || ''}
+              showPrefix={false}
+              showYear={false}
+              icon={Package}
+              iconClassName="w-4 h-4 text-purple-600"
+              textClassName="text-[14px] font-black text-purple-700"
+              className=""
+            />
+            <span className={`text-[14px] font-black ${getDaysLateTone(daysLate)}`}>{daysLate}</span>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (asinUrl) window.open(asinUrl, '_blank', 'noopener,noreferrer');
-              }}
-              disabled={!asinUrl}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Open ASIN in external tab"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </button>
             <motion.span
               animate={{ rotate: isExpanded ? 180 : 0 }}
               transition={{ duration: 0.18 }}
@@ -227,29 +251,6 @@ const planDateSource = item.deadline_at || item.due_date;
                   </div>
 
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">FNSKU</div>
-                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
-                      {fnsku || 'Not available'}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Tech</div>
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] text-gray-900 normal-case tracking-normal">
-                        {item.assigned_tech_name || 'Unassigned'}
-                      </span>
-                      <button
-                        onClick={openAssignment}
-                        className="flex-shrink-0 text-gray-400 hover:text-purple-600 transition-colors"
-                        aria-label="Edit assignment"
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-gray-50 px-3 py-2">
                     <div className="mb-1 text-gray-400">ASIN</div>
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 text-[11px] text-gray-900 normal-case tracking-normal break-words">
@@ -272,12 +273,35 @@ const planDateSource = item.deadline_at || item.due_date;
                             if (asinUrl) window.open(asinUrl, '_blank', 'noopener,noreferrer');
                           }}
                           disabled={!asinUrl}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex-shrink-0 text-gray-400 hover:text-purple-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                           aria-label="Open ASIN in external tab"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">Tech</div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] text-gray-900 normal-case tracking-normal">
+                        {item.assigned_tech_name || 'Unassigned'}
+                      </span>
+                      <button
+                        onClick={openAssignment}
+                        className="flex-shrink-0 text-gray-400 hover:text-purple-600 transition-colors"
+                        aria-label="Edit assignment"
+                      >
+                        <Settings className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">FNSKU</div>
+                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                      {fnsku || 'Not available'}
                     </div>
                   </div>
                 </div>

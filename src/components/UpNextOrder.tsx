@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Package } from './Icons';
@@ -41,7 +41,8 @@ const TAB_ORDER: TabId[] = ['all', 'orders', 'fba', 'repair', 'stock', 'receivin
 
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
-  const [prevTabIndex, setPrevTabIndex] = useState(0);
+  /** +1 = animate like swiping to a tab to the right, -1 = to the left (visible tab bar order). */
+  const [tabSlideDir, setTabSlideDir] = useState(1);
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
@@ -77,19 +78,46 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const filteredReceivingItems = receivingItems;
   const tabCounts = rawTabCounts;
 
-  const visibleTabs: Array<{ id: TabId; label: string; count?: number; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal' }> = [
-    { id: 'all',       label: 'All',       color: 'green',  count: rawTabCounts.all       || undefined },
-    { id: 'orders',    label: 'Orders',    color: 'green',  count: rawTabCounts.orders    || undefined },
-    ...(rawTabCounts.fba       > 0 ? [{ id: 'fba'       as const, label: 'FBA',       color: 'purple' as const, count: rawTabCounts.fba       }] : []),
-    ...(rawTabCounts.repair    > 0 ? [{ id: 'repair'    as const, label: 'Repair', color: 'orange' as const, count: rawTabCounts.repair    }] : []),
-    ...(rawTabCounts.stock     > 0 ? [{ id: 'stock'     as const, label: 'Stock',     color: 'red'    as const, count: rawTabCounts.stock     }] : []),
-    ...(rawTabCounts.receiving > 0 ? [{ id: 'receiving' as const, label: 'Receiving', color: 'teal'   as const, count: rawTabCounts.receiving }] : []),
-  ];
+  type VisibleTab = { id: TabId; label: string; count?: number; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal' };
+  const visibleTabs: VisibleTab[] = useMemo(
+    () => [
+      { id: 'all', label: 'All', color: 'green', count: rawTabCounts.all || undefined },
+      { id: 'orders', label: 'Orders', color: 'green', count: rawTabCounts.orders || undefined },
+      ...(rawTabCounts.fba > 0
+        ? [{ id: 'fba' as const, label: 'FBA', color: 'purple' as const, count: rawTabCounts.fba }]
+        : []),
+      ...(rawTabCounts.repair > 0
+        ? [{ id: 'repair' as const, label: 'Repair', color: 'orange' as const, count: rawTabCounts.repair }]
+        : []),
+      ...(rawTabCounts.stock > 0
+        ? [{ id: 'stock' as const, label: 'Stock', color: 'red' as const, count: rawTabCounts.stock }]
+        : []),
+      ...(rawTabCounts.receiving > 0
+        ? [{ id: 'receiving' as const, label: 'Receiving', color: 'teal' as const, count: rawTabCounts.receiving }]
+        : []),
+    ],
+    [
+      rawTabCounts.all,
+      rawTabCounts.orders,
+      rawTabCounts.fba,
+      rawTabCounts.repair,
+      rawTabCounts.stock,
+      rawTabCounts.receiving,
+    ],
+  );
 
   const activeTabVisible = visibleTabs.some((tab) => tab.id === activeTab);
   const effectiveTab     = activeTabVisible ? activeTab : visibleTabs[0]?.id || 'orders';
-  const orders           = nonStockOrders;
-  const preferred: TabId[] = ['all', 'orders', 'fba', 'repair', 'stock', 'receiving'];
+  const orders = nonStockOrders;
+  const visibleTabBarIndex = useCallback(
+    (id: TabId) => {
+      const v = visibleTabs.findIndex((t) => t.id === id);
+      if (v >= 0) return v;
+      const o = TAB_ORDER.indexOf(id);
+      return o >= 0 ? o : 0;
+    },
+    [visibleTabs],
+  );
 
   // Urgency breakdown for the summary bar (orders tab only)
   const today = new Date();
@@ -104,35 +132,35 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     d.setHours(0, 0, 0, 0);
     return d.getTime() === today.getTime();
   }).length;
-  const currentTabIndex = TAB_ORDER.indexOf(effectiveTab);
-  const slideDirection  = currentTabIndex >= prevTabIndex ? 1 : -1;
-
-  // True swipe: new panel enters from the leading edge, old exits to trailing edge.
-  // "55%" gives a clear directional feel without over-travelling on small screens.
+  // Full-width horizontal pager (mobile-style): both panels move on X; no vertical slide.
   const tabContentVariants = {
     enter: (dir: number) => ({
-      x: prefersReducedMotion ? 0 : (dir > 0 ? '55%' : '-55%'),
-      opacity: prefersReducedMotion ? 0 : 1,
+      x: prefersReducedMotion ? 0 : dir > 0 ? '100%' : '-100%',
+      opacity: prefersReducedMotion ? 1 : 0,
     }),
-    center: {
-      x: 0,
-      opacity: 1,
-    },
+    center: { x: 0, opacity: 1 },
     exit: (dir: number) => ({
-      x: prefersReducedMotion ? 0 : (dir > 0 ? '-28%' : '28%'),
-      opacity: 0,
+      x: prefersReducedMotion ? 0 : dir > 0 ? '-100%' : '100%',
+      opacity: prefersReducedMotion ? 1 : 0,
     }),
   };
+
+  const selectTab = useCallback(
+    (next: TabId, fromTab?: TabId) => {
+      const from = visibleTabBarIndex(fromTab ?? effectiveTab);
+      const to = visibleTabBarIndex(next);
+      setTabSlideDir(to >= from ? 1 : -1);
+      setActiveTab(next);
+    },
+    [effectiveTab, visibleTabBarIndex],
+  );
   const shouldShowStockSection = stockOrders.length > 0 && effectiveTab !== 'stock';
   const showNoCurrentOrdersBanner = allCompletedToday && filteredOrders.length === 0 && filteredStockOrders.length === 0;
 
   useEffect(() => {
-    if (!activeTabVisible && effectiveTab !== activeTab) setActiveTab(effectiveTab);
-  }, [activeTabVisible, effectiveTab, activeTab]);
-
-  useEffect(() => {
-    setPrevTabIndex(TAB_ORDER.indexOf(effectiveTab));
-  }, [effectiveTab]);
+    if (activeTabVisible || effectiveTab === activeTab) return;
+    selectTab(effectiveTab, activeTab);
+  }, [activeTabVisible, effectiveTab, activeTab, selectTab]);
 
   useEffect(() => {
     setExpandedItemKey(null);
@@ -145,10 +173,18 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     // we use tabCounts directly; for order-bucket tabs we fall through the same path.
     if (effectiveTab === 'all' || effectiveTab === 'orders') return;
     if (tabCounts[effectiveTab] > 0) return;
-    const next = preferred.find((id) => tabCounts[id] > 0);
-    if (next && next !== activeTab) setActiveTab(next);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveTab, activeTab, tabCounts.orders, tabCounts.repair, tabCounts.fba, tabCounts.stock, tabCounts.receiving]);
+    const next = TAB_ORDER.find((id) => tabCounts[id] > 0);
+    if (next && next !== activeTab) selectTab(next, effectiveTab);
+  }, [
+    effectiveTab,
+    activeTab,
+    tabCounts.orders,
+    tabCounts.repair,
+    tabCounts.fba,
+    tabCounts.stock,
+    tabCounts.receiving,
+    selectTab,
+  ]);
 
   useEffect(() => {
     const isCompletionView = (effectiveTab === 'orders' || effectiveTab === 'all') && showNoCurrentOrdersBanner;
@@ -302,7 +338,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         <TabSwitch
           tabs={visibleTabs}
           activeTab={effectiveTab}
-          onTabChange={(tab) => setActiveTab(tab as TabId)}
+          onTabChange={(tab) => selectTab(tab as TabId)}
           scrollable
         />
 
@@ -338,19 +374,21 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </AnimatePresence>
 
         {/* ── Primary tab content ── */}
-        <div className="relative overflow-hidden">
-        <AnimatePresence mode="wait" initial={false} custom={slideDirection}>
+        {/* Grid stacks entering + exiting panes in one cell so sync horizontal swipe does not double layout height */}
+        <div className="grid overflow-x-hidden">
+        <AnimatePresence mode="sync" initial={false} custom={tabSlideDir}>
           <motion.div
             key={effectiveTab}
-            custom={slideDirection}
+            custom={tabSlideDir}
             variants={tabContentVariants}
             initial="enter"
             animate="center"
             exit="exit"
             transition={{
-              x: { type: 'spring', stiffness: 340, damping: 32, mass: 0.9 },
-              opacity: { duration: 0.16, ease: 'easeOut' },
+              x: { type: 'tween', duration: prefersReducedMotion ? 0.01 : 0.32, ease: [0.32, 0.72, 0, 1] },
+              opacity: { duration: prefersReducedMotion ? 0.01 : 0.2, ease: 'easeOut' },
             }}
+            className="col-start-1 row-start-1 min-w-0 w-full"
           >
             {effectiveTab === 'stock' ? (
               filteredStockOrders.length === 0 ? (

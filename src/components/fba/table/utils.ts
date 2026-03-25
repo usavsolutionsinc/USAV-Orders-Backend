@@ -107,6 +107,12 @@ export function groupByDayThenShipment(items: EnrichedItem[]): DayBucket[] {
     sm.get(item.shipment_id)!.items.push(item);
   }
 
+  for (const sm of Array.from(dayMap.values())) {
+    for (const g of Array.from(sm.values())) {
+      g.items = sortItemsPrintQueueOrder(g.items);
+    }
+  }
+
   const keys = Array.from(dayMap.keys()).sort((a, b) => {
     if (a === '__nodate__') return 1;
     if (b === '__nodate__') return -1;
@@ -135,6 +141,9 @@ export function groupByShipmentOnly(items: EnrichedItem[]): ShipmentGroup[] {
     }
     map.get(item.shipment_id)!.items.push(item);
   }
+  for (const g of Array.from(map.values())) {
+    g.items = sortItemsPrintQueueOrder(g.items);
+  }
   return Array.from(map.values()).sort((a, b) => {
     const ad = a.due_date ? new Date(a.due_date).getTime() : 0;
     const bd = b.due_date ? new Date(b.due_date).getTime() : 0;
@@ -146,4 +155,35 @@ export function groupByShipmentOnly(items: EnrichedItem[]): ShipmentGroup[] {
 export function sortEnrichedItems(a: EnrichedItem, b: EnrichedItem): number {
   if (a.shipment_id !== b.shipment_id) return a.shipment_id - b.shipment_id;
   return a.fnsku.localeCompare(b.fnsku);
+}
+
+/** Pending / needs-print first; ready-to-print last (labels queue below). */
+export function sortItemsPrintQueueOrder(items: EnrichedItem[]): EnrichedItem[] {
+  const rank = (s: EnrichedItem['status']) => {
+    switch (s) {
+      case 'pending_out_of_stock':
+        return 0;
+      case 'pending_qc_fail':
+        return 1;
+      case 'needs_print':
+        return 2;
+      case 'ready_to_print':
+        return 3;
+      case 'shipped':
+        return 4;
+      default:
+        return 9;
+    }
+  };
+  return [...items].sort((a, b) => {
+    const d = rank(a.status) - rank(b.status);
+    if (d !== 0) return d;
+    return a.fnsku.localeCompare(b.fnsku);
+  });
+}
+
+export function partitionPrintQueueByReady(items: EnrichedItem[]) {
+  const attention = items.filter((i) => i.status !== 'ready_to_print');
+  const ready = items.filter((i) => i.status === 'ready_to_print');
+  return { attention, ready };
 }

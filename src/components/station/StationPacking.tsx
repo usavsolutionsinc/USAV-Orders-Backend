@@ -7,6 +7,7 @@ import { getPackerInputTheme } from '@/utils/staff-colors';
 import { formatPSTTimestamp } from '@/utils/date';
 import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
+import { looksLikeFnsku } from '@/lib/scan-resolver';
 
 interface ActivePackingOrder {
   orderId: string;
@@ -38,12 +39,6 @@ interface StationPackingProps {
   goal?: number;
   onComplete?: () => void;
   embedded?: boolean;
-}
-
-// FNSKUs start with X0, B0, or are exactly 10 alphanumeric chars — Amazon barcode pattern
-function looksLikeFnsku(value: string): boolean {
-  const v = value.trim().toUpperCase();
-  return /^X0[A-Z0-9]{8,10}$/.test(v) || /^B0[A-Z0-9]{8,}$/.test(v);
 }
 
 export default function StationPacking({
@@ -196,7 +191,8 @@ export default function StationPacking({
           />
 
           <p className="text-[10px] font-bold text-gray-400 px-1">
-            Supports tracking, FNSKU (X0.../B0...), FBA, and <code className="font-mono">SKU:VALUE</code> scans.
+            Supports tracking, FNSKU/ASIN (10 chars: <code className="font-mono">X00</code> or <code className="font-mono">B0</code> prefix), FBA, and{' '}
+            <code className="font-mono">SKU:VALUE</code> scans.
           </p>
         </div>
 

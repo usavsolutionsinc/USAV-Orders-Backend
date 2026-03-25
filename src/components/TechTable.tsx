@@ -10,7 +10,6 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
-import { isFbaOrder } from '@/utils/order-platform';
 import { useTechLogs, TechRecord } from '@/hooks/useTechLogs';
 
 interface TechTableProps {
@@ -408,7 +407,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                         className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
                       >
                         <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                        <p className="text-[11px] font-black text-gray-400 uppercase">Total: {dateRecords.length} Units</p>
+                        <p className="text-[11px] font-black text-gray-900 tabular-nums">{dateRecords.length}</p>
                       </div>
                       {sortedRecords.map((record, index) => {
                         const displayValues = getOrderDisplayValues({
@@ -417,7 +416,8 @@ export function TechTable({ testedBy }: TechTableProps) {
                           trackingNumber: record.shipping_tracking_number,
                         });
                         const fnskuValue = String(record.fnsku || '').trim();
-                        const rowIsFba = Boolean(fnskuValue) || isFbaOrder(record.order_id, record.account_source);
+                        /** FNSKU copy chip only when we have a real FNSKU — not tracking / order id (matches PackerTable FBA branch). */
+                        const showFnskuChip = Boolean(fnskuValue);
                         const dotType = getSourceDotType({
                           orderId: record.order_id,
                           accountSource: record.account_source,
@@ -451,18 +451,20 @@ export function TechTable({ testedBy }: TechTableProps) {
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              {rowIsFba && fnskuValue ? (
+                              {showFnskuChip ? (
                                 <FnskuChip value={fnskuValue} />
                               ) : (
-                                <OrderIdChip
-                                  value={record.order_id || ''}
-                                  display={getLast4(record.order_id)}
-                                />
+                                <>
+                                  <OrderIdChip
+                                    value={record.order_id || ''}
+                                    display={getLast4(record.order_id)}
+                                  />
+                                  <TrackingChip
+                                    value={record.shipping_tracking_number || ''}
+                                    display={getLast4(record.shipping_tracking_number)}
+                                  />
+                                </>
                               )}
-                              <TrackingChip
-                                value={record.shipping_tracking_number || ''}
-                                display={getLast4(record.shipping_tracking_number)}
-                              />
                               <SerialChip
                                 value={record.serial_number || ''}
                                 display={

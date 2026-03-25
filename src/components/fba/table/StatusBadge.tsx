@@ -37,10 +37,15 @@ export function StatusBadge({
   status,
   onBadgeClick,
   needsReason,
+  /** When set for `ready_to_print`, shows a text pill instead of a checkmark icon (FBA print queue + staff theme). */
+  readyPillClassName,
+  focusRingClassName = 'focus-visible:ring-2 focus-visible:ring-sky-400',
 }: {
   status: ItemStatus;
   onBadgeClick?: () => void;
   needsReason?: boolean;
+  readyPillClassName?: string;
+  focusRingClassName?: string;
 }) {
   const reduced = useReducedMotion();
   const cfg = copy[status];
@@ -63,8 +68,13 @@ export function StatusBadge({
   }
 
   const interactive = status === 'ready_to_print' && onBadgeClick;
+  const useReadyPill = status === 'ready_to_print' && Boolean(readyPillClassName);
 
-  const inner = (
+  const inner = useReadyPill ? (
+    <span className={readyPillClassName} aria-label={cfg.label} title={cfg.label}>
+      Ready
+    </span>
+  ) : (
     <span
       className={`relative inline-flex h-7 w-7 items-center justify-center ${cfg.tone}`}
       aria-label={cfg.label}
@@ -91,7 +101,9 @@ export function StatusBadge({
         }}
         aria-label={cfg.label}
         title={cfg.label}
-        className="relative inline-flex h-7 w-7 items-center justify-center rounded-none outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+        className={`relative inline-flex min-h-7 items-center justify-center rounded-md outline-none ${focusRingClassName} ${
+          useReadyPill ? 'px-0.5 py-0.5' : 'h-7 w-7 rounded-none'
+        }`}
       >
         <AnimatePresence mode="wait">
           <motion.span

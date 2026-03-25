@@ -119,7 +119,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
   }, [queryClient, techId]);
 
   return (
-    <div className="relative h-full flex flex-col overflow-hidden">
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
       <div className={sidebarHeaderBandClass}>
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
           <div className="min-w-0">
@@ -142,7 +142,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
           </div>
         </div>
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <StationTesting
           embedded
           userId={techId}

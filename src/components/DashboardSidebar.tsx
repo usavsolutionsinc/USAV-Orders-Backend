@@ -18,7 +18,7 @@ import { TabSwitch } from '@/components/ui/TabSwitch';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
-import { FbaSidebarPanel } from '@/components/sidebar/FbaSidebarPanel';
+import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { WorkOrdersSidebarPanel } from '@/components/sidebar/WorkOrdersSidebarPanel';
 import {

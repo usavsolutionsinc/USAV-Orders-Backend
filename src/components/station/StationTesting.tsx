@@ -9,12 +9,6 @@ import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 
-// FNSKUs start with X0, B0, or are exactly 10 alphanumeric chars — Amazon barcode pattern
-function looksLikeFnsku(value: string): boolean {
-  const v = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return /^X0[A-Z0-9]{8,10}$/.test(v) || /^B0[A-Z0-9]{8,}$/.test(v);
-}
-
 const STATION_EASE_OUT = [0.22, 1, 0.36, 1] as const;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
 const stationTween = { duration: 0.26, ease: STATION_EASE_OUT };
@@ -161,35 +155,45 @@ export default function StationTesting({
 
   const handleFormSubmit = useCallback(
     (e?: React.FormEvent, overrideTracking?: string) => {
+      e?.preventDefault();
+
       const value = overrideTracking ?? inputValue;
       const trimmedValue = value.trim();
+      if (!trimmedValue && typeof overrideTracking !== 'string') {
+        return;
+      }
+
+      const fromUpNextTracking = typeof overrideTracking === 'string';
+      const manualForcedType = fromUpNextTracking
+        ? 'TRACKING'
+        : forcedTypeForManualMode(manualMode);
+
+      // One-shot: after arming a mode with the buttons, the next non-empty submit uses it then returns to auto.
+      const hadManualOverride = manualMode !== null && !fromUpNextTracking;
+      if (trimmedValue && hadManualOverride && manualForcedType) {
+        setManualMode(null);
+      }
+
       const detectedInputMode = trimmedValue ? getStationInputMode(value) : null;
-      const isFnskuInput =
-        Boolean(trimmedValue) && (detectedInputMode === 'fba' || looksLikeFnsku(value));
-      const manualForcedType =
-        typeof overrideTracking === 'string'
-          ? 'TRACKING'
-          : forcedTypeForManualMode(manualMode);
+      const isFnskuInput = Boolean(trimmedValue) && detectedInputMode === 'fba';
 
       // In auto mode, FNSKU-looking input routes to the dedicated FBA endpoint.
       // Manual mode now fully overrides auto classification.
-      if (isFnskuInput && typeof overrideTracking !== 'string' && !manualForcedType) {
-        e?.preventDefault();
+      if (isFnskuInput && !fromUpNextTracking && !manualForcedType) {
         setInputValue('');
         handleFnskuScan(value);
         return;
       }
 
       if (manualForcedType === 'FNSKU') {
-        e?.preventDefault();
         setInputValue('');
         handleFnskuScan(value);
         return;
       }
 
-      handleSubmit(e, overrideTracking, manualForcedType ? { forcedType: manualForcedType } : undefined);
+      handleSubmit(undefined, overrideTracking, manualForcedType ? { forcedType: manualForcedType } : undefined);
     },
-    [inputValue, manualMode, forcedTypeForManualMode, handleFnskuScan, handleSubmit, setInputValue]
+    [inputValue, manualMode, forcedTypeForManualMode, handleFnskuScan, handleSubmit, setInputValue, setManualMode]
   );
 
   const handleRemoveSerial = useCallback(
@@ -234,10 +238,10 @@ export default function StationTesting({
     (trimmedInput && detectedMode
       ? detectedMode
       : autoMode);
-  const isTrackingMode = effectiveMode === 'tracking';
-  const isFbaMode = effectiveMode === 'fba';
-  const isRepairMode = effectiveMode === 'repair';
-  const isSerialMode = effectiveMode === 'serial';
+  const isTrackingArmed = manualMode === 'tracking';
+  const isFbaArmed = manualMode === 'fba';
+  const isRepairArmed = manualMode === 'repair';
+  const isSerialArmed = manualMode === 'serial';
 
   const modeBadge = (() => {
     switch (effectiveMode) {
@@ -273,31 +277,50 @@ export default function StationTesting({
     'h-6 w-6 rounded-md flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60';
   const inactiveModeButtonClass = 'text-gray-500 hover:bg-gray-100 hover:text-gray-800';
 
-  const toggleMode = useCallback((nextMode: StationInputMode) => {
-    const nextManualMode = manualMode === nextMode ? null : nextMode;
-    setManualMode(nextManualMode);
+  const toggleMode = useCallback(
+    (nextMode: StationInputMode) => {
+      const togglingOff = manualMode === nextMode;
+      const nextManualMode = togglingOff ? null : nextMode;
+      setManualMode(nextManualMode);
 
-    // Serial mode always targets the last scanned order context and re-opens the card.
-    if (nextManualMode === 'serial') {
-      reopenLastActiveOrderCard();
-    }
+      if (nextManualMode === 'serial') {
+        reopenLastActiveOrderCard();
+      }
 
-    // If there's already input in the field, selecting a manual mode should
-    // immediately force-post using that mode.
-    const pendingInput = inputValue.trim();
-    if (!nextManualMode || !pendingInput) return;
+      const pendingInput = inputValue.trim();
+      if (togglingOff || !pendingInput) {
+        queueMicrotask(() => inputRef.current?.focus());
+        return;
+      }
 
-    const forcedType = forcedTypeForManualMode(nextManualMode);
-    if (!forcedType) return;
+      const forced = forcedTypeForManualMode(nextManualMode);
+      if (!forced) {
+        queueMicrotask(() => inputRef.current?.focus());
+        return;
+      }
 
-    if (forcedType === 'FNSKU') {
-      setInputValue('');
-      handleFnskuScan(inputValue);
-      return;
-    }
+      const raw = inputValue;
+      setManualMode(null);
+      if (forced === 'FNSKU') {
+        setInputValue('');
+        handleFnskuScan(raw);
+        return;
+      }
 
-    handleSubmit(undefined, inputValue, { forcedType });
-  }, [manualMode, inputValue, forcedTypeForManualMode, handleFnskuScan, handleSubmit, reopenLastActiveOrderCard, setInputValue]);
+      handleSubmit(undefined, raw, { forcedType: forced });
+    },
+    [
+      manualMode,
+      inputValue,
+      inputRef,
+      forcedTypeForManualMode,
+      handleFnskuScan,
+      handleSubmit,
+      reopenLastActiveOrderCard,
+      setInputValue,
+      setManualMode,
+    ],
+  );
 
   return (
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
@@ -351,40 +374,72 @@ export default function StationTesting({
                     <button
                       type="button"
                       onClick={() => toggleMode('tracking')}
-                      aria-pressed={isTrackingMode}
-                      aria-label={manualMode === 'tracking' ? 'Tracking mode manual override enabled. Click to return to auto mode.' : 'Switch to tracking mode override.'}
-                      title={manualMode === 'tracking' ? 'Tracking mode (manual override). Click again for auto mode.' : 'Tracking mode'}
-                      className={`${modeButtonBaseClass} ${isTrackingMode ? 'text-blue-700 bg-blue-50' : inactiveModeButtonClass}`}
+                      aria-pressed={isTrackingArmed}
+                      aria-label={
+                        isTrackingArmed
+                          ? 'Tracking armed for next Enter or scan. Click again to cancel.'
+                          : 'Arm tracking: next Enter or scan uses tracking. If the field already has text, send now.'
+                      }
+                      title={
+                        isTrackingArmed
+                          ? 'Tracking armed — next Enter/scan. Click again to cancel.'
+                          : 'Arm tracking (next Enter/scan; or send now if field has text)'
+                      }
+                      className={`${modeButtonBaseClass} ${isTrackingArmed ? 'text-blue-700 bg-blue-50' : inactiveModeButtonClass}`}
                     >
                       <MapPin className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => toggleMode('fba')}
-                      aria-pressed={isFbaMode}
-                      aria-label={manualMode === 'fba' ? 'FBA mode manual override enabled. Click to return to auto mode.' : 'Switch to FBA mode override.'}
-                      title={manualMode === 'fba' ? 'FBA mode (manual override). Click again for auto mode.' : 'FBA mode'}
-                      className={`${modeButtonBaseClass} ${isFbaMode ? 'text-violet-700 bg-violet-50' : inactiveModeButtonClass}`}
+                      aria-pressed={isFbaArmed}
+                      aria-label={
+                        isFbaArmed
+                          ? 'FBA armed for next Enter or scan. Click again to cancel.'
+                          : 'Arm FBA: next Enter or scan uses FNSKU. If the field already has text, send now.'
+                      }
+                      title={
+                        isFbaArmed
+                          ? 'FBA armed — next Enter/scan. Click again to cancel.'
+                          : 'Arm FBA (next Enter/scan; or send now if field has text)'
+                      }
+                      className={`${modeButtonBaseClass} ${isFbaArmed ? 'text-violet-700 bg-violet-50' : inactiveModeButtonClass}`}
                     >
                       <Package className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => toggleMode('repair')}
-                      aria-pressed={isRepairMode}
-                      aria-label={manualMode === 'repair' ? 'Repair mode manual override enabled. Click to return to auto mode.' : 'Switch to repair mode override.'}
-                      title={manualMode === 'repair' ? 'Repair mode (manual override). Click again for auto mode.' : 'Repair mode'}
-                      className={`${modeButtonBaseClass} ${isRepairMode ? 'text-amber-700 bg-amber-50' : inactiveModeButtonClass}`}
+                      aria-pressed={isRepairArmed}
+                      aria-label={
+                        isRepairArmed
+                          ? 'Repair armed for next Enter or scan. Click again to cancel.'
+                          : 'Arm repair: next Enter or scan uses RS- ID. If the field already has text, send now.'
+                      }
+                      title={
+                        isRepairArmed
+                          ? 'Repair armed — next Enter/scan. Click again to cancel.'
+                          : 'Arm repair (next Enter/scan; or send now if field has text)'
+                      }
+                      className={`${modeButtonBaseClass} ${isRepairArmed ? 'text-amber-700 bg-amber-50' : inactiveModeButtonClass}`}
                     >
                       <Settings className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => toggleMode('serial')}
-                      aria-pressed={isSerialMode}
-                      aria-label={manualMode === 'serial' ? 'Serial mode manual override enabled. Click to return to auto mode.' : 'Switch to serial mode override.'}
-                      title={manualMode === 'serial' ? 'Serial mode (manual override). Click again for auto mode.' : 'Serial mode'}
-                      className={`${modeButtonBaseClass} ${isSerialMode ? 'text-emerald-700 bg-emerald-50' : inactiveModeButtonClass}`}
+                      aria-pressed={isSerialArmed}
+                      aria-label={
+                        isSerialArmed
+                          ? 'Serial armed for next Enter or scan. Click again to cancel.'
+                          : 'Arm serial: next Enter or scan adds a serial. If the field already has text, send now.'
+                      }
+                      title={
+                        isSerialArmed
+                          ? 'Serial armed — next Enter/scan. Click again to cancel.'
+                          : 'Arm serial (next Enter/scan; or send now if field has text)'
+                      }
+                      className={`${modeButtonBaseClass} ${isSerialArmed ? 'text-emerald-700 bg-emerald-50' : inactiveModeButtonClass}`}
                     >
                       <Barcode className="h-3.5 w-3.5" />
                     </button>

@@ -10,6 +10,7 @@ import { ShipByDate } from '../ui/ShipByDate';
 import { Check, ClipboardList, Copy, ExternalLink, ChevronDown, Loader2, X } from '@/components/Icons';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
+import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { getTrackingUrl } from '@/utils/order-links';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
@@ -28,7 +29,7 @@ function inferOrderVariant(order: ActiveStationOrder): OrderVariant {
   if (
     sourceType === 'fba' ||
     String(order.orderId || '').toUpperCase() === 'FNSKU' ||
-    /^(X0|B0)/i.test(String(order.fnsku || '').replace(/[^A-Z0-9]/gi, ''))
+    looksLikeFnsku(String(order.fnsku || ''))
   ) {
     return 'fba';
   }

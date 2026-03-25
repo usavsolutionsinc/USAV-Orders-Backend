@@ -2,13 +2,13 @@
 
 import type { Dispatch, KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Barcode, Check, ClipboardList, Clock } from '@/components/Icons';
+import { Check, ClipboardList, Clock } from '@/components/Icons';
 import type { EnrichedItem, TableAction } from './types';
 import { PrintTableCheckbox } from './Checkbox';
 import { StatusBadge } from './StatusBadge';
 import { RemoveFromPlanButton } from './RemoveFromPlanButton';
 import { ItemExpandPanel } from './ItemExpandPanel';
-import { CopyChip, FnskuChip } from '@/components/ui/CopyChip';
+import { FnskuChip } from '@/components/ui/CopyChip';
 
 function rowAccent(item: EnrichedItem): string {
   if (item.status === 'pending_out_of_stock') {
@@ -108,7 +108,6 @@ export function ItemRow({
                   <RemoveFromPlanButton fnsku={item.fnsku} onConfirm={() => onRequestRemove(item)} />
                 ) : null}
               </div>
-              <p className="mt-1 font-mono text-[10px] text-zinc-400">{item.fnsku}</p>
             </div>
           </div>
         </td>
@@ -122,18 +121,8 @@ export function ItemRow({
                 item.status === 'ready_to_print' ? () => onNeedsPrintClick(item) : undefined
               }
             />
-            <div className="flex items-center gap-1">
+            <div className="flex items-center justify-end gap-2">
               <FnskuChip value={item.fnsku} width="w-[58px]" />
-              {item.sku ? (
-                <CopyChip
-                  value={item.sku}
-                  display={item.sku}
-                  icon={<Barcode className="w-4 h-4 shrink-0" />}
-                  underlineClass="border-zinc-400"
-                  iconClass="text-zinc-400"
-                  width="w-[72px]"
-                />
-              ) : null}
             </div>
           </div>
         </td>

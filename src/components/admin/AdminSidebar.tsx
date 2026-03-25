@@ -6,7 +6,7 @@ import { ManualAssignmentSidebarPanel } from './ManualAssignmentSidebarPanel';
 import { ConnectionsSidebarPanel } from '@/components/sidebar/ConnectionsSidebarPanel';
 import { GoalsSidebarPanel } from '@/components/sidebar/GoalsSidebarPanel';
 import { StaffAdminSidebarPanel } from '@/components/sidebar/StaffAdminSidebarPanel';
-import { AdminFbaSidebarPanel } from '@/components/sidebar/AdminFbaSidebarPanel';
+import { AdminFbaSidebarPanel } from '@/components/fba/sidebar';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;

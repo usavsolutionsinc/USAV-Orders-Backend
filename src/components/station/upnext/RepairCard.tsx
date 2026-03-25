@@ -5,7 +5,9 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronDown, Settings } from '@/components/Icons';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
+import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import { ShipByDate } from '@/components/ui/ShipByDate';
+import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { getPresentStaffForToday } from '@/lib/staffCache';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
@@ -71,6 +73,9 @@ interface RepairCardProps {
 }
 
 export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefresh }: RepairCardProps) {
+  const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
+  const skuValue = String(repair.sku || '').trim();
+
   // Assignment overlay
   const [showAssignment, setShowAssignment] = useState(false);
   const [technicianOptions, setTechnicianOptions] = useState<StaffOption[]>([]);
@@ -241,13 +246,21 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
               {daysLate}
             </span>
           </div>
-          <motion.span
-            animate={{ rotate: isExpanded ? 180 : 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(251,146,60,0.16)]"
-          >
-            <ChevronDown className="w-4 h-4" />
-          </motion.span>
+          <div className="flex items-center gap-2">
+            <PlatformExternalChip
+              orderId={skuValue}
+              accountSource={null}
+              canOpen={!!getExternalUrlByItemNumber(skuValue)}
+              onOpen={() => openExternalByItemNumber(skuValue)}
+            />
+            <motion.span
+              animate={{ rotate: isExpanded ? 180 : 0 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(251,146,60,0.16)]"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </motion.span>
+          </div>
         </div>
 
         {/* ── Body ── */}
@@ -389,37 +402,37 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
             >
               <div className="mt-2.5 border-t border-orange-200 px-3 pt-2.5">
                 <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                  <div className="rounded-xl bg-orange-50 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-                    <div className="mb-1 text-orange-400">Customer</div>
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">Customer</div>
                     <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
                       {customerName || 'Unknown'}
                     </div>
                   </div>
-                  <div className="rounded-xl bg-orange-50 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-                    <div className="mb-1 text-orange-400">Phone / Serial</div>
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">Phone / Serial</div>
                     <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
                       {customerPhone || repair.serialNumber || 'None'}
                     </div>
                   </div>
-                  <div className="rounded-xl bg-orange-50 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-                    <div className="mb-1 text-orange-400">Assigned Tech</div>
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">Assigned Tech</div>
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
                         {repair.techName || (isUnassigned ? 'Unassigned' : 'Unknown')}
                       </span>
                       <button
                         onClick={openAssignment}
-                        className="flex-shrink-0 text-orange-400 hover:text-orange-600 transition-colors"
+                        className="flex-shrink-0 text-gray-400 hover:text-orange-600 transition-colors"
                         aria-label="Open work order assignment"
                       >
                         <Settings className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
-                  <div className="rounded-xl bg-orange-50 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
-                    <div className="mb-1 text-orange-400">Ticket</div>
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">Repair ID</div>
                     <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
-                      {repair.ticketNumber || 'Unknown'}
+                      {repair.repairId != null ? String(repair.repairId) : 'Unknown'}
                     </div>
                   </div>
                 </div>

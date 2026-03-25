@@ -2,6 +2,8 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Minus } from '@/components/Icons';
+import type { StationTheme } from '@/utils/staff-colors';
+import { printQueueTableUi } from '@/utils/staff-colors';
 
 export function PrintTableCheckbox({
   checked,
@@ -9,13 +11,17 @@ export function PrintTableCheckbox({
   onChange,
   reducedMotion = false,
   label,
+  stationTheme = 'lightblue',
 }: {
   checked: boolean;
   indeterminate?: boolean;
   onChange: (v: boolean) => void;
   reducedMotion?: boolean;
   label?: string;
+  stationTheme?: StationTheme;
 }) {
+  const u = printQueueTableUi[stationTheme];
+
   return (
     <button
       type="button"
@@ -26,13 +32,13 @@ export function PrintTableCheckbox({
       role="checkbox"
       aria-checked={indeterminate && !checked ? 'mixed' : checked}
       aria-label={label ?? (checked ? 'Deselect item' : 'Select item')}
-      className={`
-        relative flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] transition-all duration-150 outline-none
-        focus-visible:ring-2 focus-visible:ring-sky-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white
-        ${checked || indeterminate
-          ? 'border-sky-700 bg-sky-700'
-          : 'border-zinc-300 bg-white hover:border-sky-400 hover:bg-sky-50'}
-      `}
+      className={[
+        'relative flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] transition-all duration-150 outline-none',
+        u.checkboxFocusRing,
+        checked || indeterminate
+          ? u.checkboxChecked
+          : ['border-zinc-300 bg-white', u.checkboxIdleHover].join(' '),
+      ].join(' ')}
     >
       <AnimatePresence initial={false} mode="wait">
         {indeterminate && !checked ? (

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 
 interface Tab {
   id: string;
@@ -18,7 +18,6 @@ interface TabSwitchProps {
   /** Overrides the default rail container (background, radius, padding). */
   railClassName?: string;
   scrollable?: boolean;
-  layoutId?: string;
 }
 
 const colorTextMap: Record<string, { active: string; shadow: string }> = {
@@ -40,12 +39,43 @@ export function TabSwitch({
   className = '',
   railClassName = 'bg-gray-100 rounded-xl p-1',
   scrollable = false,
-  layoutId,
 }: TabSwitchProps) {
   const railRef = useRef<HTMLDivElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const generatedLayoutId = useId();
-  const activePillLayoutId = layoutId || `tab-switch-active-pill-${generatedLayoutId}`;
+  const [pill, setPill] = useState({ left: 0, width: 0 });
+  const prefersReducedMotion = useReducedMotion();
+
+  const measurePill = useCallback(() => {
+    const track = trackRef.current;
+    const btn = buttonRefs.current[activeTab];
+    if (!track || !btn) {
+      setPill((prev) => ({ ...prev, width: 0 }));
+      return;
+    }
+    setPill({ left: btn.offsetLeft, width: btn.offsetWidth });
+  }, [activeTab]);
+
+  useLayoutEffect(() => {
+    measurePill();
+    const id = requestAnimationFrame(() => measurePill());
+    return () => cancelAnimationFrame(id);
+  }, [measurePill, tabs]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    const btn = buttonRefs.current[activeTab];
+    if (!track || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measurePill());
+    ro.observe(track);
+    if (btn) ro.observe(btn);
+    return () => ro.disconnect();
+  }, [activeTab, measurePill, tabs]);
+
+  useEffect(() => {
+    window.addEventListener('resize', measurePill);
+    return () => window.removeEventListener('resize', measurePill);
+  }, [measurePill]);
 
   useEffect(() => {
     if (!scrollable) return;
@@ -56,47 +86,57 @@ export function TabSwitch({
     const maxScroll = rail.scrollWidth - railWidth;
     const targetLeft = activeButton.offsetLeft + activeButton.offsetWidth / 2 - railWidth / 2;
     const left = Math.max(0, Math.min(targetLeft, Math.max(0, maxScroll)));
-    rail.scrollTo({ left, behavior: 'smooth' });
+    requestAnimationFrame(() => {
+      rail.scrollTo({ left, behavior: 'smooth' });
+    });
   }, [activeTab, scrollable, tabs]);
 
   const activeTabColor = tabs.find((t) => t.id === activeTab)?.color ?? 'blue';
   const activeShadow = (colorTextMap[activeTabColor] ?? colorTextMap.blue).shadow;
+  const pillTransition = prefersReducedMotion
+    ? { duration: 0.01 }
+    : { type: 'spring' as const, stiffness: 400, damping: 36, mass: 0.78 };
 
   return (
     <div
       ref={railRef}
       className={`${railClassName} ${scrollable ? 'overflow-x-auto scrollbar-hide' : ''} ${className}`}
     >
-      {/* flex-1 on each button + min-w-[3rem] = always fills width equally;
-          when many tabs overflow min-w the container scrolls instead of squishing */}
-      <div className="flex gap-1">
+      <div
+        ref={trackRef}
+        className={`relative flex gap-1 ${scrollable ? 'w-max min-w-full' : 'w-full'}`}
+      >
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute z-0 rounded-lg bg-white"
+          style={{
+            top: 0,
+            bottom: 0,
+            boxShadow: activeShadow,
+          }}
+          initial={false}
+          animate={{
+            left: pill.left,
+            width: pill.width,
+            opacity: pill.width > 0 ? 1 : 0,
+          }}
+          transition={pillTransition}
+        />
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           const colors = colorTextMap[tab.color ?? 'blue'] ?? colorTextMap.blue;
           return (
             <button
               key={tab.id}
+              type="button"
               ref={(node) => {
                 buttonRefs.current[tab.id] = node;
               }}
               onClick={() => onTabChange(tab.id)}
-              className={`relative flex-1 min-w-[3rem] whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors duration-150 ${
+              className={`relative z-10 flex-1 min-w-[3rem] whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors duration-150 ${
                 isActive ? colors.active : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              {isActive && (
-                <motion.span
-                  layoutId={activePillLayoutId}
-                  className="absolute inset-0 rounded-lg bg-white"
-                  style={{ boxShadow: activeShadow }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 400,
-                    damping: 34,
-                    mass: 0.75,
-                  }}
-                />
-              )}
               <motion.span
                 className="relative z-10 flex items-center justify-center gap-1"
                 animate={{

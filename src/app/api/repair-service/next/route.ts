@@ -22,6 +22,8 @@ export interface RepairQueueItem {
   techName: string | null;
   outOfStock: string | null;
   repairOutcome: string | null;
+  /** Ecwid / catalog SKU — opens usavshop keyword search like order item # */
+  sku: string | null;
 }
 
 const CLOSED_STATUSES = ['Done', 'Shipped', 'Picked Up'];
@@ -60,6 +62,7 @@ export async function GET(req: NextRequest) {
           rs.product_title    AS "productTitle",
           rs.issue,
           rs.serial_number    AS "serialNumber",
+          rs.source_sku       AS "sku",
           rs.contact_info     AS "contactInfo",
           wa.deadline_at      AS "deadlineAt",
           rs.created_at       AS "dateTime",
@@ -113,6 +116,7 @@ export async function GET(req: NextRequest) {
           rs.product_title    AS "productTitle",
           rs.issue,
           rs.serial_number    AS "serialNumber",
+          rs.source_sku       AS "sku",
           rs.contact_info     AS "contactInfo",
           wa.deadline_at      AS "deadlineAt",
           rs.created_at       AS "dateTime",
@@ -175,6 +179,7 @@ export async function GET(req: NextRequest) {
       techName:         row.techName ?? null,
       outOfStock:       row.outOfStock ?? null,
       repairOutcome:    row.repairOutcome ?? null,
+      sku:              row.sku != null && String(row.sku).trim() !== '' ? String(row.sku).trim() : null,
     }));
 
     return NextResponse.json({ repairs, count: repairs.length });

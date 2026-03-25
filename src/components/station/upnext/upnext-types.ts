@@ -15,6 +15,22 @@ export interface ReceivingQueueItem {
   line_skus: string[];
 }
 
+/**
+ * Open FBA shipment (plan) row for the /fba workspace sidebar.
+ * Not used on station testing routes — pair with {@link FbaPlanCard}.
+ */
+export interface FbaPlanQueueItem {
+  id: number;
+  shipment_ref: string;
+  due_date: string | null;
+  total_items: number;
+  total_expected_qty: number;
+  ready_item_count: number;
+  shipped_item_count: number;
+  created_by_name: string | null;
+  created_at: string;
+}
+
 export interface FBAQueueItem {
   item_id: number;
   shipment_id: number;
@@ -77,6 +93,8 @@ export interface RepairQueueItem {
   techName: string | null;
   outOfStock: string | null;
   repairOutcome: string | null;
+  /** From repair_service.source_sku — opens Ecwid keyword search */
+  sku?: string | null;
 }
 
 export const FBA_ITEM_STATUS_BADGE: Record<string, string> = {

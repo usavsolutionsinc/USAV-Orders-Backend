@@ -345,7 +345,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                         className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
                       >
                         <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                        <p className="text-[11px] font-black text-gray-400 uppercase">Total: {dateRecords.length} Units</p>
+                        <p className="text-[11px] font-black text-gray-900 tabular-nums">{dateRecords.length}</p>
                       </div>
                       {sortedRecords.map((record, index) => {
                         const displayValues = getOrderDisplayValues({

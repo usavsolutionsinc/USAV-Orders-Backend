@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   AlertCircle,
@@ -23,7 +23,13 @@ import { SelectionFloatingBar } from './SelectionFloatingBar';
 import { ShipmentGroupHeaderRow } from './ShipmentGroupHeader';
 import { UndoToast } from './UndoToast';
 import { ViewToggle } from './ViewToggle';
-import { dayKeyFromDue, enrichFromApi, groupByDayThenShipment, groupByShipmentOnly } from './utils';
+import {
+  dayKeyFromDue,
+  enrichFromApi,
+  groupByDayThenShipment,
+  groupByShipmentOnly,
+  partitionPrintQueueByReady,
+} from './utils';
 
 export type { PrintQueueItem, PrintSelectionPayload } from './types';
 
@@ -38,21 +44,37 @@ const tableVariants = {
   visible: { transition: { staggerChildren: 0.025, delayChildren: 0.05 } },
 };
 
+function summarizePrintQueueGroups(groups: { items: EnrichedItem[] }[]) {
+  const items = groups.flatMap((g) => g.items);
+  const n = items.length;
+  const ready = items.filter((i) => i.status === 'ready_to_print').length;
+  const pend = items.filter((i) => i.status === 'pending_out_of_stock' || i.status === 'pending_qc_fail').length;
+  const needs = items.filter((i) => i.status === 'needs_print').length;
+  const ships = groups.length;
+  return `${n} item${n !== 1 ? 's' : ''} · ${ships} shipment${ships !== 1 ? 's' : ''} · ${ready} ready · ${needs} needs print · ${pend} pending`;
+}
+
 interface Props {
   refreshTrigger?: number | string;
   onSelectionChange?: (payload: PrintSelectionPayload) => void;
   /** Shipment IDs that have both Amazon FBA ID + UPS tracking captured in the sidebar */
   shipmentLabelReady?: Record<number, boolean>;
+  /** Fit parent height: no internal scroll; pick due date from dropdown only. */
+  fitHeightNoScroll?: boolean;
 }
 
 export function FbaPrintReadyTable({
   refreshTrigger,
   onSelectionChange,
   shipmentLabelReady = {},
+  fitHeightNoScroll = false,
 }: Props) {
   const [state, dispatch] = useReducer(printQueueReducer, undefined, createInitialTableState);
   const shouldReduceMotion = useReducedMotion();
-  const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
+  /** `att:${dayKey}` / `ready:${dayKey}` for nested due-date buckets (by-day view). */
+  const [collapsedSubBuckets, setCollapsedSubBuckets] = useState<Set<string>>(new Set());
+  const [attentionSectionCollapsed, setAttentionSectionCollapsed] = useState(false);
+  const [readySectionCollapsed, setReadySectionCollapsed] = useState(false);
   const [needsPrintTarget, setNeedsPrintTarget] = useState<EnrichedItem | null>(null);
   const [undoRemove, setUndoRemove] = useState<EnrichedItem | null>(null);
   const [refreshSpin, setRefreshSpin] = useState(false);
@@ -121,12 +143,41 @@ export function FbaPrintReadyTable({
   }, [state.selected, state.items, onSelectionChange]);
 
   const visibleItems = useMemo(() => {
+    if (fitHeightNoScroll) {
+      if (!state.dayFilter) return [];
+      return state.items.filter((i) => dayKeyFromDue(i.due_date) === state.dayFilter);
+    }
     if (!state.dayFilter) return state.items;
     return state.items.filter((i) => dayKeyFromDue(i.due_date) === state.dayFilter);
-  }, [state.items, state.dayFilter]);
+  }, [fitHeightNoScroll, state.items, state.dayFilter]);
 
-  const dayBuckets = useMemo(() => groupByDayThenShipment(visibleItems), [visibleItems]);
-  const shipmentFlat = useMemo(() => groupByShipmentOnly(visibleItems), [visibleItems]);
+  const dayFilterOptions = useMemo(() => groupByDayThenShipment(state.items), [state.items]);
+
+  const { attention: attentionItems, ready: readyItems } = useMemo(
+    () => partitionPrintQueueByReady(visibleItems),
+    [visibleItems]
+  );
+
+  const attentionDayBuckets = useMemo(() => groupByDayThenShipment(attentionItems), [attentionItems]);
+  const readyDayBuckets = useMemo(() => groupByDayThenShipment(readyItems), [readyItems]);
+  const attentionFlat = useMemo(() => groupByShipmentOnly(attentionItems), [attentionItems]);
+  const readyFlat = useMemo(() => groupByShipmentOnly(readyItems), [readyItems]);
+
+  const allDayBucketsForToolbar = useMemo(() => groupByDayThenShipment(state.items), [state.items]);
+
+  const shipmentGroupCount = useMemo(
+    () => groupByShipmentOnly(visibleItems).length,
+    [visibleItems]
+  );
+
+  const attentionSectionSummary = useMemo(
+    () => (attentionFlat.length === 0 ? 'No items' : summarizePrintQueueGroups(attentionFlat)),
+    [attentionFlat]
+  );
+  const readySectionSummary = useMemo(
+    () => (readyFlat.length === 0 ? 'No items' : summarizePrintQueueGroups(readyFlat)),
+    [readyFlat]
+  );
 
   const allIds = useMemo(() => state.items.map((i) => i.item_id), [state.items]);
   const allChecked = allIds.length > 0 && allIds.every((id) => state.selected.has(id));
@@ -145,17 +196,64 @@ export function FbaPrintReadyTable({
     [visibleItems]
   );
 
-  const toggleDay = (dayKey: string) => {
-    setCollapsedDays((prev) => {
-      const next = new Set(prev);
-      next.has(dayKey) ? next.delete(dayKey) : next.add(dayKey);
-      return next;
-    });
-  };
-
   const todayIso = getTodayDateIso();
   const yesterdayIso = shiftLocalIso(todayIso, -1);
   const tomorrowIso = shiftLocalIso(todayIso, 1);
+
+  const toggleSubBucket = useCallback((section: 'att' | 'ready', dayKey: string) => {
+    const k = `${section}:${dayKey}`;
+    setCollapsedSubBuckets((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }, []);
+
+  const applyDueDateLayout = useCallback(
+    (mode: 'expand_all' | 'collapse_past' | 'today_only') => {
+      const keys = groupByDayThenShipment(state.items).map((b) => b.dayKey);
+      if (mode === 'expand_all') {
+        setCollapsedSubBuckets(new Set());
+        return;
+      }
+      if (mode === 'collapse_past') {
+        const next = new Set<string>();
+        for (const dk of keys) {
+          if (dk !== '__nodate__' && dk < todayIso) {
+            next.add(`att:${dk}`);
+            next.add(`ready:${dk}`);
+          }
+        }
+        setCollapsedSubBuckets(next);
+        return;
+      }
+      const next = new Set<string>();
+      for (const dk of keys) {
+        if (dk !== todayIso) {
+          next.add(`att:${dk}`);
+          next.add(`ready:${dk}`);
+        }
+      }
+      setCollapsedSubBuckets(next);
+    },
+    [state.items, todayIso]
+  );
+
+  useLayoutEffect(() => {
+    if (!fitHeightNoScroll || state.loading || state.items.length === 0) return;
+    const buckets = groupByDayThenShipment(state.items);
+    if (buckets.length === 0) return;
+    const keys = new Set(buckets.map((b) => b.dayKey));
+    if (state.dayFilter != null && keys.has(state.dayFilter)) return;
+    const pick = keys.has(todayIso) ? todayIso : buckets[0]!.dayKey;
+    dispatch({ type: 'SET_DAY_FILTER', date: pick });
+  }, [fitHeightNoScroll, state.loading, state.items, state.dayFilter, todayIso]);
+
+  useEffect(() => {
+    if (!fitHeightNoScroll || state.viewMode === 'by_day') return;
+    dispatch({ type: 'SET_VIEW_MODE', mode: 'by_day' });
+  }, [fitHeightNoScroll, state.viewMode]);
   const pillButtonClass =
     'inline-flex h-8 items-center justify-center rounded-md border px-2 text-[10px] font-black uppercase tracking-[0.12em] transition-colors';
   const pillButtonIdleClass = 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50';
@@ -238,16 +336,6 @@ export function FbaPrintReadyTable({
     }
   };
 
-  const daySummary = (groups: { items: EnrichedItem[] }[]) => {
-    const items = groups.flatMap((g) => g.items);
-    const n = items.length;
-    const ready = items.filter((i) => i.status === 'ready_to_print').length;
-    const pend = items.filter((i) => i.status === 'pending_out_of_stock' || i.status === 'pending_qc_fail').length;
-    const needs = items.filter((i) => i.status === 'needs_print').length;
-    const ships = groups.length;
-    return `${n} item${n !== 1 ? 's' : ''} · ${ships} shipment${ships !== 1 ? 's' : ''} · ${ready} ready · ${needs} needs print · ${pend} pending`;
-  };
-
   if (state.loading) {
     return (
       <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-3 bg-stone-50 px-6 text-zinc-500">
@@ -309,10 +397,12 @@ export function FbaPrintReadyTable({
               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">Print queue</p>
             </div>
             <div className="flex items-center gap-2">
-              <ViewToggle
-                value={state.viewMode}
-                onChange={(mode) => dispatch({ type: 'SET_VIEW_MODE', mode })}
-              />
+              {!fitHeightNoScroll && (
+                <ViewToggle
+                  value={state.viewMode}
+                  onChange={(mode) => dispatch({ type: 'SET_VIEW_MODE', mode })}
+                />
+              )}
               <button
                 type="button"
                 title="Refresh"
@@ -339,12 +429,9 @@ export function FbaPrintReadyTable({
                 allChecked ? dispatch({ type: 'DESELECT_ALL' }) : dispatch({ type: 'SELECT_ALL' })
               }
             />
-            <span className="inline-flex items-center gap-1 text-zinc-700" title="Groups">
+            <span className="inline-flex items-center gap-1 text-zinc-700" title="Shipments in view">
               <Package className="h-3.5 w-3.5 text-sky-700" />
-              {(() => {
-                const g = state.viewMode === 'by_day' ? dayBuckets.length : shipmentFlat.length;
-                return g;
-              })()}
+              {shipmentGroupCount}
             </span>
             <span className="inline-flex items-center gap-1 text-zinc-700" title="Planned units">
               <ClipboardList className="h-3.5 w-3.5 text-zinc-500" />
@@ -355,7 +442,52 @@ export function FbaPrintReadyTable({
               {totalRemainingUnits}
             </span>
 
-            {state.viewMode === 'by_day' ? (
+            {state.viewMode === 'by_day' && !fitHeightNoScroll && allDayBucketsForToolbar.length > 1 ? (
+              <label className="flex min-w-0 max-w-[14rem] flex-[1_1_8rem] items-center gap-1">
+                <span className="sr-only">Collapse due-date sections</span>
+                <select
+                  className="h-8 w-full truncate rounded-md border border-zinc-200 bg-white px-2 text-[10px] font-black uppercase tracking-[0.06em] text-zinc-800 shadow-sm"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === 'expand_all' || v === 'collapse_past' || v === 'today_only') {
+                      applyDueDateLayout(v);
+                    }
+                    e.currentTarget.selectedIndex = 0;
+                  }}
+                >
+                  <option value="" disabled>
+                    Hide older plans…
+                  </option>
+                  <option value="expand_all">Show all due dates</option>
+                  <option value="collapse_past">Collapse past due dates</option>
+                  <option value="today_only">Only today expanded</option>
+                </select>
+              </label>
+            ) : null}
+
+            {state.viewMode === 'by_day' && fitHeightNoScroll ? (
+              <label className="ml-auto flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-zinc-500">
+                  <Calendar className="inline h-3.5 w-3.5 align-[-2px] text-sky-700" aria-hidden />
+                </span>
+                <span className="sr-only">Due date</span>
+                <select
+                  className="h-8 max-w-[min(100%,14rem)] truncate rounded-md border border-zinc-200 bg-white px-2 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-800 shadow-sm"
+                  value={state.dayFilter ?? dayFilterOptions[0]?.dayKey ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) dispatch({ type: 'SET_DAY_FILTER', date: v });
+                  }}
+                >
+                  {dayFilterOptions.map((b) => (
+                    <option key={b.dayKey} value={b.dayKey}>
+                      {b.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : state.viewMode === 'by_day' ? (
               <div className="ml-auto flex items-center gap-1">
                 <button
                   type="button"
@@ -398,82 +530,189 @@ export function FbaPrintReadyTable({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto bg-white">
+        <div className={`min-h-0 flex-1 bg-white ${fitHeightNoScroll ? 'overflow-hidden' : 'overflow-auto'}`}>
           <table className="w-full border-collapse text-sm">
-
-            {state.viewMode === 'by_shipment' ? (
-              <motion.tbody
-                variants={shouldReduceMotion ? undefined : tableVariants}
-                initial={shouldReduceMotion ? false : 'hidden'}
-                animate={shouldReduceMotion ? undefined : 'visible'}
-              >
-                {shipmentFlat.map((group) => (
-                  <Fragment key={group.shipment_id}>
-                    <ShipmentGroupHeaderRow
-                      group={group}
-                      selected={state.selected}
-                      dispatch={dispatch}
-                      reducedMotion={Boolean(shouldReduceMotion)}
-                      labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
-                    />
-                {group.items.map((item) => (
-                  <ItemRow
-                    key={item.item_id}
-                    item={item}
-                    selected={state.selected}
-                    dispatch={dispatch}
-                    reducedMotion={Boolean(shouldReduceMotion)}
-                    onRequestRemove={onRequestRemove}
-                    onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
-                  />
-                ))}
-                  </Fragment>
-                ))}
-              </motion.tbody>
-            ) : (
-              dayBuckets.map((bucket) => {
-                const collapsed = collapsedDays.has(bucket.dayKey);
-                return (
-                  <motion.tbody
-                    key={bucket.dayKey}
-                    variants={shouldReduceMotion ? undefined : tableVariants}
-                    initial={shouldReduceMotion ? false : 'hidden'}
-                    animate={shouldReduceMotion ? undefined : 'visible'}
-                  >
-                    <DayBucketHeaderRow
-                      label={bucket.label}
-                      summary={daySummary(bucket.groups)}
-                      collapsed={collapsed}
-                      onToggle={() => toggleDay(bucket.dayKey)}
-                      reducedMotion={Boolean(shouldReduceMotion)}
-                    />
-                    {!collapsed &&
-                      bucket.groups.map((group) => (
-                        <Fragment key={`${bucket.dayKey}-${group.shipment_id}`}>
-                          <ShipmentGroupHeaderRow
-                            group={group}
+            <motion.tbody
+              variants={shouldReduceMotion ? undefined : tableVariants}
+              initial={shouldReduceMotion ? false : 'hidden'}
+              animate={shouldReduceMotion ? undefined : 'visible'}
+            >
+              <DayBucketHeaderRow
+                label="Needs attention"
+                summary={attentionSectionSummary}
+                collapsed={attentionSectionCollapsed}
+                onToggle={() => setAttentionSectionCollapsed((c) => !c)}
+                reducedMotion={Boolean(shouldReduceMotion)}
+              />
+              {!attentionSectionCollapsed &&
+                (state.viewMode === 'by_shipment' ? (
+                  attentionFlat.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-3 text-center text-[11px] text-zinc-400">
+                        Nothing needs attention in this view.
+                      </td>
+                    </tr>
+                  ) : (
+                    attentionFlat.map((group) => (
+                      <Fragment key={`att-ship-${group.shipment_id}`}>
+                        <ShipmentGroupHeaderRow
+                          group={group}
+                          selected={state.selected}
+                          dispatch={dispatch}
+                          reducedMotion={Boolean(shouldReduceMotion)}
+                          labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
+                        />
+                        {group.items.map((item) => (
+                          <ItemRow
+                            key={item.item_id}
+                            item={item}
                             selected={state.selected}
                             dispatch={dispatch}
                             reducedMotion={Boolean(shouldReduceMotion)}
-                            labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
+                            onRequestRemove={onRequestRemove}
+                            onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
                           />
-                          {group.items.map((item) => (
-                            <ItemRow
-                              key={item.item_id}
-                              item={item}
-                              selected={state.selected}
-                              dispatch={dispatch}
-                              reducedMotion={Boolean(shouldReduceMotion)}
-                              onRequestRemove={onRequestRemove}
-                              onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
-                            />
+                        ))}
+                      </Fragment>
+                    ))
+                  )
+                ) : attentionDayBuckets.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-3 text-center text-[11px] text-zinc-400">
+                      Nothing needs attention in this view.
+                    </td>
+                  </tr>
+                ) : (
+                  attentionDayBuckets.map((bucket) => {
+                    const collapsed = collapsedSubBuckets.has(`att:${bucket.dayKey}`);
+                    return (
+                      <Fragment key={`att-day-${bucket.dayKey}`}>
+                        <DayBucketHeaderRow
+                          label={bucket.label}
+                          summary={summarizePrintQueueGroups(bucket.groups)}
+                          collapsed={collapsed}
+                          onToggle={() => toggleSubBucket('att', bucket.dayKey)}
+                          reducedMotion={Boolean(shouldReduceMotion)}
+                        />
+                        {!collapsed &&
+                          bucket.groups.map((group) => (
+                            <Fragment key={`att-${bucket.dayKey}-${group.shipment_id}`}>
+                              <ShipmentGroupHeaderRow
+                                group={group}
+                                selected={state.selected}
+                                dispatch={dispatch}
+                                reducedMotion={Boolean(shouldReduceMotion)}
+                                labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
+                              />
+                              {group.items.map((item) => (
+                                <ItemRow
+                                  key={item.item_id}
+                                  item={item}
+                                  selected={state.selected}
+                                  dispatch={dispatch}
+                                  reducedMotion={Boolean(shouldReduceMotion)}
+                                  onRequestRemove={onRequestRemove}
+                                  onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
+                                />
+                              ))}
+                            </Fragment>
                           ))}
-                        </Fragment>
-                      ))}
-                  </motion.tbody>
-                );
-              })
-            )}
+                      </Fragment>
+                    );
+                  })
+                ))}
+            </motion.tbody>
+
+            <motion.tbody
+              variants={shouldReduceMotion ? undefined : tableVariants}
+              initial={shouldReduceMotion ? false : 'hidden'}
+              animate={shouldReduceMotion ? undefined : 'visible'}
+            >
+              <DayBucketHeaderRow
+                label="Ready to print labels"
+                summary={readySectionSummary}
+                collapsed={readySectionCollapsed}
+                onToggle={() => setReadySectionCollapsed((c) => !c)}
+                reducedMotion={Boolean(shouldReduceMotion)}
+              />
+              {!readySectionCollapsed &&
+                (state.viewMode === 'by_shipment' ? (
+                  readyFlat.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-3 text-center text-[11px] text-zinc-400">
+                        No rows ready to print yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    readyFlat.map((group) => (
+                      <Fragment key={`ready-ship-${group.shipment_id}`}>
+                        <ShipmentGroupHeaderRow
+                          group={group}
+                          selected={state.selected}
+                          dispatch={dispatch}
+                          reducedMotion={Boolean(shouldReduceMotion)}
+                          labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
+                        />
+                        {group.items.map((item) => (
+                          <ItemRow
+                            key={item.item_id}
+                            item={item}
+                            selected={state.selected}
+                            dispatch={dispatch}
+                            reducedMotion={Boolean(shouldReduceMotion)}
+                            onRequestRemove={onRequestRemove}
+                            onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
+                          />
+                        ))}
+                      </Fragment>
+                    ))
+                  )
+                ) : readyDayBuckets.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-3 text-center text-[11px] text-zinc-400">
+                      No rows ready to print yet.
+                    </td>
+                  </tr>
+                ) : (
+                  readyDayBuckets.map((bucket) => {
+                    const collapsed = collapsedSubBuckets.has(`ready:${bucket.dayKey}`);
+                    return (
+                      <Fragment key={`ready-day-${bucket.dayKey}`}>
+                        <DayBucketHeaderRow
+                          label={bucket.label}
+                          summary={summarizePrintQueueGroups(bucket.groups)}
+                          collapsed={collapsed}
+                          onToggle={() => toggleSubBucket('ready', bucket.dayKey)}
+                          reducedMotion={Boolean(shouldReduceMotion)}
+                        />
+                        {!collapsed &&
+                          bucket.groups.map((group) => (
+                            <Fragment key={`ready-${bucket.dayKey}-${group.shipment_id}`}>
+                              <ShipmentGroupHeaderRow
+                                group={group}
+                                selected={state.selected}
+                                dispatch={dispatch}
+                                reducedMotion={Boolean(shouldReduceMotion)}
+                                labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
+                              />
+                              {group.items.map((item) => (
+                                <ItemRow
+                                  key={item.item_id}
+                                  item={item}
+                                  selected={state.selected}
+                                  dispatch={dispatch}
+                                  reducedMotion={Boolean(shouldReduceMotion)}
+                                  onRequestRemove={onRequestRemove}
+                                  onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
+                                />
+                              ))}
+                            </Fragment>
+                          ))}
+                      </Fragment>
+                    );
+                  })
+                ))}
+            </motion.tbody>
           </table>
         </div>
 

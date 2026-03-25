@@ -50,6 +50,8 @@ interface Props {
   /** Today mode — neither prop → auto-loads today's plan */
   onClear?: () => void;
   onCreated?: (id: number, ref: string) => void;
+  /** When true, list area does not scroll (parent handles layout; may clip). */
+  suppressListScroll?: boolean;
 }
 
 // ─── Animated qty number ──────────────────────────────────────────────────────
@@ -163,7 +165,14 @@ function todayLabel() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export function FbaFnskuChecklist({ fnskus = [], planId, statusFilter, onClear, onCreated }: Props) {
+export function FbaFnskuChecklist({
+  fnskus = [],
+  planId,
+  statusFilter,
+  onClear,
+  onCreated,
+  suppressListScroll = false,
+}: Props) {
   const isDraftMode = fnskus.length > 0 && !planId;
   const isTodayMode = !planId && fnskus.length === 0;
 
@@ -624,7 +633,9 @@ export function FbaFnskuChecklist({ fnskus = [], planId, statusFilter, onClear, 
         </div>
 
         {/* Rows */}
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+        <div
+          className={`min-h-0 flex-1 bg-white ${suppressListScroll ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        >
           {loading ? (
             <ShimmerRows count={Math.min(loadingCount || 4, 6)} />
           ) : (isDraftMode ? draftItems.length === 0 : filteredPlanItems.length === 0) ? (
