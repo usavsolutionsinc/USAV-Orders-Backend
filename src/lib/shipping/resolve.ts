@@ -1,3 +1,4 @@
+import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { detectCarrier, normalizeTrackingNumber } from './normalize';
 import { getShipmentByTracking } from './repository';
 import { registerAndSyncShipment } from './sync-shipment';
@@ -18,6 +19,12 @@ export async function resolveShipmentId(rawInput: string): Promise<{
 }> {
   const trimmed = rawInput.trim();
   if (!trimmed) return { shipmentId: null, scanRef: null };
+
+  // Canonical FNSKU / ASIN scans (X00… / B0…) must never resolve to carrier shipment rows;
+  // tech station treats them as FNSKU context (scanRef only), same as deduped tracking elsewhere.
+  if (looksLikeFnsku(trimmed)) {
+    return { shipmentId: null, scanRef: trimmed };
+  }
 
   const normalized = normalizeTrackingNumber(trimmed);
   const carrier = detectCarrier(normalized);

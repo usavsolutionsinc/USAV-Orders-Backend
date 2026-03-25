@@ -8,6 +8,7 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { performTechFnskuScan } from '@/lib/tech/performTechFnskuScan';
 
@@ -89,6 +90,8 @@ export async function POST(req: NextRequest) {
         if (!key18) {
             return NextResponse.json({ success: false, found: false, error: 'Invalid tracking number' }, { status: 400 });
         }
+        /** Full X00… / B0… scans always use the FNSKU ledger path, never order/TSN key18 dedup. */
+        const skipOrderAndTsnMatchForFnsku = looksLikeFnsku(scannedTracking);
         const trackingLast8 = normalizeTrackingLast8(scannedTracking);
         const normalizedLast8 = /^\d{8}$/.test(trackingLast8) ? trackingLast8 : null;
         const resolvedScan = await resolveShipmentId(scannedTracking);
@@ -114,7 +117,9 @@ export async function POST(req: NextRequest) {
 
             // Query orders table by tracking first so active order always has product info.
             // packer_id and tester_id are sourced from work_assignments (removed from orders).
-            const result = await client.query(`
+            const result = skipOrderAndTsnMatchForFnsku
+                ? { rows: [] as Record<string, unknown>[] }
+                : await client.query(`
                 SELECT
                     o.id,
                     o.shipment_id,
@@ -211,7 +216,9 @@ export async function POST(req: NextRequest) {
             `, [resolvedScan.shipmentId, key18, normalizedLast8]);
 
             // Check tech_serial_numbers for existing tracking entry
-            const existingTracking = await client.query(
+            const existingTracking = skipOrderAndTsnMatchForFnsku
+                ? { rows: [] as Record<string, unknown>[] }
+                : await client.query(
                 `SELECT
                     tsn.id,
                     tsn.serial_number,

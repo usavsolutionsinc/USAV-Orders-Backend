@@ -163,6 +163,8 @@ export async function insertTechSerialForTracking(
   } = null;
 
   if (normalizedFnsku) {
+    // Newest TECH/SCANNED log without a serial yet — each FNSKU re-scan inserts a new log;
+    // the next serial must attach to that latest scan, not the oldest open log.
     const unmatchedFnskuLogResult = await db.query(
       `SELECT l.id, l.fba_shipment_id, l.fba_shipment_item_id
                  FROM fba_fnsku_logs l
@@ -177,7 +179,7 @@ export async function insertTechSerialForTracking(
                        AND tsn.serial_number IS NOT NULL
                        AND BTRIM(tsn.serial_number) <> ''
                    )
-                 ORDER BY l.created_at ASC, l.id ASC
+                 ORDER BY l.created_at DESC, l.id DESC
                  LIMIT 1`,
       [normalizedFnsku, staffId],
     );
