@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 
 function parseOptionalStaffId(value: unknown): number | null {
   const parsed = Number(value);
@@ -25,13 +26,9 @@ function normalizeDueDate(value: unknown): string {
   return getTodayDateOnly();
 }
 
-function buildAutoShipmentRef(now = new Date()): string {
-  const datePart = getTodayDateOnly(now).replace(/-/g, '');
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  const ms = String(now.getMilliseconds()).padStart(3, '0');
-  return `FBA-${datePart}-${hh}${mm}${ss}${ms}`;
+/** Plan code when `shipment_ref` omitted: {@link buildFbaPlanRefFromIsoDate} from due date only (no time). */
+function autoPlanRefForDueDate(isoYmd: string): string {
+  return buildFbaPlanRefFromIsoDate(isoYmd);
 }
 
 // ── GET /api/fba/shipments ────────────────────────────────────────────────────
@@ -140,6 +137,9 @@ export async function GET(request: NextRequest) {
 
 // ── POST /api/fba/shipments ───────────────────────────────────────────────────
 // Creates a shipment header + optional initial items in a single transaction.
+// When `shipment_ref` is omitted, a plan code is generated from `due_date` only:
+// `FBA-MM-DD-YY` (no time). Response includes `plan_ref` (same as `shipment.shipment_ref`);
+// `shipment.id` is the internal row id (not the plan code).
 // Body: { shipment_ref?, destination_fc?, due_date?, notes?,
 //         created_by_staff_id?, assigned_tech_id?, assigned_packer_id?,
 //         items: [{ fnsku, expected_qty, product_title?, asin?, sku? }] }
@@ -157,10 +157,11 @@ export async function POST(request: NextRequest) {
       assigned_packer_id: rawAssignedPackerId,
       items = [],
     } = body;
-    const normalizedShipmentRef = typeof shipment_ref === 'string' && shipment_ref.trim()
-      ? shipment_ref.trim()
-      : buildAutoShipmentRef();
     const normalizedDueDate = normalizeDueDate(due_date);
+    const normalizedShipmentRef =
+      typeof shipment_ref === 'string' && shipment_ref.trim()
+        ? shipment_ref.trim()
+        : autoPlanRefForDueDate(normalizedDueDate);
     const createdByStaffId = parseOptionalStaffId(created_by_staff_id);
     const assignedTechId = parseOptionalStaffId(rawAssignedTechId);
     const assignedPackerId = parseOptionalStaffId(rawAssignedPackerId);
@@ -262,7 +263,15 @@ export async function POST(request: NextRequest) {
 
     await client.query('COMMIT');
 
-    return NextResponse.json({ success: true, shipment, items: insertedItems }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        shipment,
+        plan_ref: shipment.shipment_ref,
+        items: insertedItems,
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     await client.query('ROLLBACK');
     console.error('[POST /api/fba/shipments]', error);

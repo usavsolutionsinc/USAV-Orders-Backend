@@ -463,13 +463,13 @@ function FbaWorkspaceSidebarInner() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {activeTab === 'summary' ? (
           <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
-            <FbaWorkspaceScanField staffName={staffName} />
+            <FbaWorkspaceScanField staffName={staffName} staffId={staffIdNum} />
           </div>
         ) : null}
 
         {activeTab === 'shipped' ? (
           <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
-            <FbaWorkspaceScanField staffName={staffName} scanEnabled={false} />
+            <FbaWorkspaceScanField staffName={staffName} staffId={staffIdNum} scanEnabled={false} />
             <p className="mb-2 mt-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
               Filter shipped list
             </p>
@@ -491,16 +491,6 @@ function FbaWorkspaceSidebarInner() {
               className="no-scrollbar w-full shrink-0 border-t border-gray-100"
             >
               <FbaPlansUpNext {...summaryPlansListProps} />
-            </div>
-
-            <div className={`${sidebarSubBandClass} border-t border-gray-100 px-3 py-3`}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">FNSKU catalog</p>
-              <Link
-                href="/admin?section=fba"
-                className="mt-2 flex w-full items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-800 transition-colors hover:bg-gray-50"
-              >
-                Open admin catalog
-              </Link>
             </div>
           </div>
         ) : (

@@ -35,6 +35,7 @@ function FbaPageContent() {
   const draftFnskus = draftParam ? draftParam.split(',').filter(Boolean) : [];
   const hasDraft = draftFnskus.length > 0;
 
+  /** `fba_shipments.id` (internal row id), not the plan code (`shipment_ref`). */
   const planParam = searchParams.get('plan');
   const planId = planParam ? Number(planParam) : null;
   const hasPlan = Boolean(planId && Number.isFinite(planId) && planId > 0);
@@ -47,6 +48,9 @@ function FbaPageContent() {
       : searchParams.get('details') === 'catalog'
         ? 'catalog'
         : 'none';
+  const showFnskuCatalog = activeTab !== 'shipped' && detailsPanel === 'catalog';
+  const staffIdParam = String(searchParams.get('staffId') || '').trim();
+  const staffIdForTheme = /^\d+$/.test(staffIdParam) ? staffIdParam : null;
 
   const clearDraftOrPlan = () => {
     const params = new URLSearchParams(searchParams.toString());
@@ -63,22 +67,12 @@ function FbaPageContent() {
   };
 
   const [printRefresh, setPrintRefresh] = useState(0);
-  const [printLabelReadyByShipment, setPrintLabelReadyByShipment] = useState<Record<number, boolean>>({});
   const [catalogSearch, setCatalogSearch] = useState('');
 
   useEffect(() => {
     const handler = () => setPrintRefresh((n) => n + 1);
     window.addEventListener('fba-print-shipped', handler);
     return () => window.removeEventListener('fba-print-shipped', handler);
-  }, []);
-
-  useEffect(() => {
-    const handler = (ev: Event) => {
-      const e = ev as CustomEvent<{ readyByShipmentId?: Record<number, boolean> }>;
-      setPrintLabelReadyByShipment(e.detail?.readyByShipmentId || {});
-    };
-    window.addEventListener('fba-print-sidebar-ready', handler);
-    return () => window.removeEventListener('fba-print-sidebar-ready', handler);
   }, []);
 
   useEffect(() => {
@@ -110,6 +104,38 @@ function FbaPageContent() {
     <>
       {activeTab === 'shipped' ? (
         <FbaShippedHistory refreshTrigger={refreshTrigger} />
+      ) : showFnskuCatalog ? (
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+          <div className="shrink-0 space-y-2 border-b border-zinc-200 bg-white px-3 py-3 sm:px-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">FNSKU catalog</p>
+              <Link
+                href="/admin?section=fba"
+                className="text-[10px] font-bold uppercase tracking-wide text-violet-700 hover:text-violet-900"
+              >
+                Open in admin →
+              </Link>
+            </div>
+            <SearchBar
+              value={catalogSearch}
+              onChange={setCatalogSearch}
+              onClear={() => setCatalogSearch('')}
+              placeholder="Search title, ASIN, SKU, FNSKU…"
+              variant="blue"
+              className="w-full"
+            />
+            <p className="text-[10px] font-medium leading-relaxed text-zinc-500">
+              Same directory as Admin → FBA. Add or import CSV from admin for bulk edits.
+            </p>
+          </div>
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden p-3 sm:p-4">
+            <FbaFnskuDirectoryPanel
+              searchTerm={catalogSearch}
+              variant="admin"
+              className="h-full min-h-0 rounded-xl shadow-sm shadow-zinc-200/60"
+            />
+          </div>
+        </div>
       ) : (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-white">
@@ -117,8 +143,8 @@ function FbaPageContent() {
               <div id="fba-print-queue" className="flex h-full min-h-0 flex-col">
                 <FbaPrintReadyTable
                   refreshTrigger={printRefresh}
-                  shipmentLabelReady={printLabelReadyByShipment}
                   fitHeightNoScroll
+                  staffId={staffIdForTheme}
                 />
               </div>
             ) : hasPlan ? (
@@ -148,42 +174,8 @@ function FbaPageContent() {
     <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-stone-50">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-zinc-200/80 bg-white">
         <StationFba embedded>
-          <div
-            className={`flex min-h-0 flex-1 flex-col overflow-hidden lg:min-h-0 ${
-              detailsPanel === 'catalog' ? 'lg:flex-row' : ''
-            }`}
-          >
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{mainWorkspace}</div>
-
-            {detailsPanel === 'catalog' ? (
-              <aside className="flex max-h-[52vh] min-h-0 w-full shrink-0 flex-col border-t border-zinc-200 bg-stone-50/90 lg:max-h-none lg:w-[min(480px,44vw)] lg:border-l lg:border-t-0">
-                <div className="shrink-0 space-y-2 border-b border-zinc-200 px-3 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">FNSKU catalog</p>
-                    <Link
-                      href="/admin?section=fba"
-                      className="text-[10px] font-bold uppercase tracking-wide text-violet-700 hover:text-violet-900"
-                    >
-                      Open in admin →
-                    </Link>
-                  </div>
-                  <SearchBar
-                    value={catalogSearch}
-                    onChange={setCatalogSearch}
-                    onClear={() => setCatalogSearch('')}
-                    placeholder="Search title, ASIN, SKU, FNSKU…"
-                    variant="blue"
-                    className="w-full"
-                  />
-                  <p className="text-[10px] font-medium leading-relaxed text-zinc-500">
-                    Same rows as Admin → FBA. Add/import CSV from admin or the FBA sidebar catalog link.
-                  </p>
-                </div>
-                <div className="min-h-0 flex-1 p-3 pt-0">
-                  <FbaFnskuDirectoryPanel searchTerm={catalogSearch} variant="embed" className="h-full min-h-[240px]" />
-                </div>
-              </aside>
-            ) : null}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
+            {mainWorkspace}
           </div>
         </StationFba>
       </div>

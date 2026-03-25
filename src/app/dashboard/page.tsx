@@ -33,7 +33,6 @@ function DashboardPageContent() {
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
-    const [refreshKey, setRefreshKey] = useState(0);
     const orderView = getOrderViewFromSearch(searchParams.toString());
     const detailsEnabled = orderView !== 'fba';
     useRealtimeInvalidation({ dashboard: true });
@@ -143,16 +142,6 @@ function DashboardPageContent() {
     }, [queryClient, orderView]);
 
     useEffect(() => {
-        const handleRefresh = () => setRefreshKey((prev) => prev + 1);
-        window.addEventListener('dashboard-refresh', handleRefresh as any);
-        window.addEventListener('usav-refresh-data', handleRefresh as any);
-        return () => {
-            window.removeEventListener('dashboard-refresh', handleRefresh as any);
-            window.removeEventListener('usav-refresh-data', handleRefresh as any);
-        };
-    }, []);
-
-    useEffect(() => {
         if (!detailsEnabled) {
             setSelectedShipped(null);
         }
@@ -166,13 +155,13 @@ function DashboardPageContent() {
                 </div>
             }>
                 {orderView === 'shipped' ? (
-                    <DashboardShippedTable key={`shipped-${refreshKey}`} />
+                    <DashboardShippedTable />
                 ) : orderView === 'unshipped' ? (
-                    <UnshippedTable key={`unshipped-${refreshKey}`} />
+                    <UnshippedTable />
                 ) : orderView === 'fba' ? (
-                    <FBAShipmentsTable key={`fba-${refreshKey}`} />
+                    <FBAShipmentsTable />
                 ) : (
-                    <PendingOrdersTable key={`pending-${refreshKey}`} />
+                    <PendingOrdersTable />
                 )}
             </Suspense>
 

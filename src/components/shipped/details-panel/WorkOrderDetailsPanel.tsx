@@ -16,6 +16,7 @@ import {
 } from '@/components/Icons';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
 import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
+import { WorkOrderInfoStrip } from '@/components/work-orders/WorkOrderInfoStrip';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { ShippingInformationSection } from '@/components/shipped/details-panel/ShippingInformationSection';
@@ -298,6 +299,7 @@ export function WorkOrderDetailsPanel({
               {row.recordLabel}
             </h2>
             <p className="mt-1 line-clamp-1 text-[12px] font-medium text-slate-500">{row.title}</p>
+            <WorkOrderInfoStrip row={row} className="mt-2 flex min-w-0 items-center justify-between gap-2" />
           </div>
           <Link
             href={buildSourceHref(row)}

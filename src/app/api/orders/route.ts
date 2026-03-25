@@ -50,6 +50,12 @@ async function hasReplenishmentSchema(): Promise<boolean> {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
+    const orderIdRaw       = searchParams.get('orderId');
+    const orderIdFilter =
+      orderIdRaw != null && /^\d+$/.test(orderIdRaw.trim())
+        ? Number(orderIdRaw.trim())
+        : NaN;
+    const singleOrderMode = Number.isFinite(orderIdFilter) && orderIdFilter > 0;
     const status             = searchParams.get('status');
     const assignedTo         = searchParams.get('assignedTo');
     const query              = searchParams.get('q') || '';
@@ -101,9 +107,11 @@ export async function GET(req: NextRequest) {
 
     const CACHE_HEADERS = { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' };
 
-    const cached = await getCachedJson<any>('api:orders', cacheLookup);
-    if (cached) {
-      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
+    if (!singleOrderMode) {
+      const cached = await getCachedJson<any>('api:orders', cacheLookup);
+      if (cached) {
+        return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
+      }
     }
 
     const hasReplenishment = await hasReplenishmentSchema();
@@ -513,6 +521,11 @@ export async function GET(req: NextRequest) {
       sql += `)`;
     }
 
+    if (singleOrderMode) {
+      sql += ` AND o.id = $${paramCount++}`;
+      params.push(orderIdFilter);
+    }
+
     sql += ` ORDER BY wa_deadline.deadline_at ASC NULLS LAST, o.id ASC`;
 
     const result = await pool.query(sql, params);
@@ -523,8 +536,15 @@ export async function GET(req: NextRequest) {
       weekStart: weekStart || null,
       weekEnd:   weekEnd   || null,
     };
-    await setCachedJson('api:orders', cacheLookup, payload, 300, ['orders']);
-    return NextResponse.json(payload, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
+    if (!singleOrderMode) {
+      await setCachedJson('api:orders', cacheLookup, payload, 300, ['orders']);
+    }
+    return NextResponse.json(payload, {
+      headers: {
+        'x-cache': singleOrderMode ? 'BYPASS' : 'MISS',
+        ...CACHE_HEADERS,
+      },
+    });
   } catch (error: any) {
     console.error('Error in GET /api/orders:', error);
     if (isDatabaseUnavailable(error)) {

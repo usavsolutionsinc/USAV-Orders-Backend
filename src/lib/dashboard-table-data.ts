@@ -58,6 +58,28 @@ export async function fetchPendingOrdersData({
   return searchQuery.trim() ? records : records.filter((record) => record.shipment_id != null);
 }
 
+/** One pending-queue row by DB order id (bypasses list cache on the server). */
+export async function fetchPendingOrderRowById(
+  orderId: number,
+  options: { searchQuery?: string; packedBy?: number; testedBy?: number } = {}
+): Promise<ShippedOrder | null> {
+  if (!Number.isFinite(orderId) || orderId <= 0) return null;
+  const params = new URLSearchParams();
+  params.set('orderId', String(orderId));
+  params.set('excludePacked', 'true');
+  const q = String(options.searchQuery || '').trim();
+  if (q) params.set('q', q);
+  if (options.packedBy !== undefined) params.set('packedBy', String(options.packedBy));
+  if (options.testedBy !== undefined) params.set('testedBy', String(options.testedBy));
+
+  const res = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  const visible = q ? records : records.filter((record) => record.shipment_id != null);
+  return visible[0] ?? null;
+}
+
 export async function fetchUnshippedOrdersData({
   searchQuery = '',
   packedBy,

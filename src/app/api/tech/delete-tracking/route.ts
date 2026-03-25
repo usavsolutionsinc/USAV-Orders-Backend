@@ -11,9 +11,12 @@ export async function POST(req: NextRequest) {
     const sourceKind = String(body?.sourceKind || '').trim();
     const techId = body?.techId ? Number(body.techId) : null;
 
-    if (sourceKind === 'tech_scan') {
+    if (sourceKind === 'tech_scan' || sourceKind === 'fba_scan') {
       if (!Number.isFinite(sourceRowId) || sourceRowId <= 0) {
-        return NextResponse.json({ success: false, error: 'Valid sourceRowId is required for tech scan delete' }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: 'Valid sourceRowId is required for this delete' },
+          { status: 400 },
+        );
       }
     } else if (!Number.isFinite(rowId) || rowId <= 0) {
       return NextResponse.json({ success: false, error: 'Valid rowId is required' }, { status: 400 });
@@ -46,6 +49,74 @@ export async function POST(req: NextRequest) {
           [sourceRowId]
         );
         deletedCount = Number(deleteSal.rowCount || 0);
+      } else if (sourceKind === 'fba_scan') {
+        const fetchFnskuSal = await client.query(
+          `SELECT id, staff_id, fnsku, metadata, created_at
+           FROM station_activity_logs
+           WHERE id = $1
+             AND station = 'TECH'
+             AND activity_type = 'FNSKU_SCANNED'
+           LIMIT 1`,
+          [sourceRowId]
+        );
+        const salRow = fetchFnskuSal.rows[0] ?? null;
+        if (!salRow) {
+          await client.query('ROLLBACK');
+          return NextResponse.json({ success: false, error: 'FNSKU scan activity not found' }, { status: 404 });
+        }
+
+        resolvedTechId = salRow.staff_id ?? resolvedTechId ?? null;
+        const meta = (salRow.metadata && typeof salRow.metadata === 'object' ? salRow.metadata : {}) as Record<
+          string,
+          unknown
+        >;
+        let fnskuLogId = Number(meta.fnsku_log_id);
+        if (!Number.isFinite(fnskuLogId) || fnskuLogId <= 0) {
+          const correlate = await client.query(
+            `SELECT l.id
+             FROM fba_fnsku_logs l
+             WHERE l.fnsku = $1
+               AND l.staff_id IS NOT DISTINCT FROM $2
+               AND l.source_stage = 'TECH'
+               AND l.event_type = 'SCANNED'
+               AND l.created_at BETWEEN ($3::timestamptz - interval '5 seconds') AND ($3::timestamptz + interval '5 seconds')
+             ORDER BY abs(extract(epoch from (l.created_at - $3::timestamptz))), l.id DESC
+             LIMIT 1`,
+            [String(salRow.fnsku || '').trim(), resolvedTechId, salRow.created_at]
+          );
+          fnskuLogId = Number(correlate.rows[0]?.id);
+        }
+
+        if (Number.isFinite(fnskuLogId) && fnskuLogId > 0) {
+          const deleteSerialSal = await client.query(
+            `DELETE FROM station_activity_logs
+             WHERE station = 'TECH'
+               AND activity_type = 'SERIAL_ADDED'
+               AND tech_serial_number_id IN (
+                 SELECT id FROM tech_serial_numbers WHERE fnsku_log_id = $1
+               )`,
+            [fnskuLogId]
+          );
+          const deleteTsn = await client.query(
+            `DELETE FROM tech_serial_numbers
+             WHERE fnsku_log_id = $1`,
+            [fnskuLogId]
+          );
+          const deleteFnskuLog = await client.query(`DELETE FROM fba_fnsku_logs WHERE id = $1`, [fnskuLogId]);
+          deletedCount +=
+            Number(deleteSerialSal.rowCount || 0) +
+            Number(deleteTsn.rowCount || 0) +
+            Number(deleteFnskuLog.rowCount || 0);
+        }
+
+        const deleteFnskuSal = await client.query(
+          `DELETE FROM station_activity_logs
+           WHERE id = $1
+             AND station = 'TECH'
+             AND activity_type = 'FNSKU_SCANNED'`,
+          [sourceRowId]
+        );
+        deletedCount += Number(deleteFnskuSal.rowCount || 0);
       } else {
         const fetchResult = await client.query(
           `SELECT id, tested_by, shipment_id, scan_ref, fnsku
@@ -113,10 +184,12 @@ export async function POST(req: NextRequest) {
     await invalidateCacheTags(['tech-logs', 'orders-next', 'shipped', 'orders']);
 
     if (resolvedTechId) {
+      const publishRowId =
+        sourceKind === 'tech_scan' || sourceKind === 'fba_scan' ? sourceRowId : rowId;
       await publishTechLogChanged({
         techId: resolvedTechId,
         action: 'delete',
-        rowId,
+        rowId: publishRowId,
         source: 'tech.delete-tracking',
       });
     }

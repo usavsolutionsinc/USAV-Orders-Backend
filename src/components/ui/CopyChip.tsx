@@ -2,15 +2,14 @@
 
 import React, { MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { isEmptyDisplayValue } from '@/utils/empty-display-value';
 import { Check, Copy, MapPin, Barcode, Settings, Package } from '../Icons';
 
 // --- Helpers ---
 
 function normalizeCopyText(value: string | null | undefined): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  if (/^(not specified|n\/a|null|undefined|none)$/i.test(raw)) return '';
-  return raw;
+  if (isEmptyDisplayValue(value)) return '';
+  return String(value || '').trim();
 }
 
 export function getLast4(value: string | null | undefined): string {

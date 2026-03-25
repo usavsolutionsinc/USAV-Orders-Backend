@@ -64,12 +64,6 @@ function getDaysLateNumber(deadlineAt: string | null | undefined, fallbackDate?:
   return Math.max(0, todayIndex - shipByIndex);
 }
 
-function getDaysLateTone(daysLate: number) {
-  if (daysLate > 1) return 'text-red-600';
-  if (daysLate === 1) return 'text-yellow-600';
-  return 'text-emerald-600';
-}
-
 function buildWorkOrderRow(item: FBAQueueItem): WorkOrderRow {
   return {
     id: `fba-shipment-${item.shipment_id}`,
@@ -77,9 +71,9 @@ function buildWorkOrderRow(item: FBAQueueItem): WorkOrderRow {
     entityId: item.shipment_id,
     queueKey: 'fba_shipments',
     queueLabel: 'FBA Shipments',
-    title: String(item.plan_title || item.shipment_ref || `FBA #${item.shipment_id}`),
+    title: String(item.plan_title || item.shipment_ref || `Shipment row #${item.shipment_id}`),
     subtitle: [item.fnsku, item.asin, item.sku].filter(Boolean).join(' • '),
-    recordLabel: String(item.shipment_ref || `FBA #${item.shipment_id}`),
+    recordLabel: String(item.shipment_ref || `Row #${item.shipment_id}`),
     sourcePath: '/fba',
     techId: item.assigned_tech_id ?? null,
     techName: item.assigned_tech_name ?? null,
@@ -199,10 +193,10 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
               showYear={false}
               icon={Package}
               iconClassName="w-4 h-4 text-purple-600"
-              textClassName="text-[14px] font-black text-purple-700"
+              textClassName="text-[14px] font-black text-blue-700"
               className=""
             />
-            <span className={`text-[14px] font-black ${getDaysLateTone(daysLate)}`}>{daysLate}</span>
+            <span className="text-[14px] font-black tabular-nums text-blue-700">{daysLate}</span>
           </div>
           <div className="flex items-center gap-2">
             <motion.span
@@ -244,9 +238,16 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
               <div className="mt-3 border-t border-purple-100 px-3 pt-3" onClick={(e) => e.stopPropagation()}>
                 <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Source</div>
-                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
-                      {planTitle ? `FBA ${planTitle}` : 'FBA'}
+                    <div className="mb-1 text-gray-400">Plan ID</div>
+                    <div className="text-[11px] font-mono text-gray-900 normal-case tracking-normal break-words">
+                      {planTitle || '—'}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-gray-50 px-3 py-2">
+                    <div className="mb-1 text-gray-400">Shipment row ID</div>
+                    <div className="text-[11px] tabular-nums text-gray-900 normal-case tracking-normal">
+                      {item.shipment_id}
                     </div>
                   </div>
 

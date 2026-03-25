@@ -8,24 +8,12 @@ import ActiveStationOrderCard from './ActiveStationOrderCard';
 import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
+import { looksLikeFnsku } from '@/lib/scan-resolver';
 
 const STATION_EASE_OUT = [0.22, 1, 0.36, 1] as const;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
 const stationTween = { duration: 0.26, ease: STATION_EASE_OUT };
 const stationLayoutTween = { layout: { duration: 0.32, ease: STATION_EASE_HEIGHT } };
-
-interface FbaFeedback {
-  fnsku: string;
-  product_title: string | null;
-  asin: string | null;
-  sku: string | null;
-  log_id: number;
-  tech_scanned_qty: number;
-  pack_ready_qty: number;
-  shipped_qty: number;
-  available_to_ship: number;
-  shipment_ref: string | null;
-}
 
 interface StationTestingProps {
   userId: string;
@@ -50,7 +38,6 @@ export default function StationTesting({
   embedded = false,
   onViewManual,
 }: StationTestingProps) {
-  const [fbaFeedback, setFbaFeedback] = useState<FbaFeedback | null>(null);
   const [fbaError, setFbaError] = useState<string | null>(null);
   const [isFbaLoading, setIsFbaLoading] = useState(false);
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
@@ -90,7 +77,6 @@ export default function StationTesting({
     async (raw: string) => {
       const fnsku = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
       setIsFbaLoading(true);
-      setFbaFeedback(null);
       setFbaError(null);
       try {
         const res = await fetch(`/api/tech/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&techId=${encodeURIComponent(userId)}`);
@@ -120,21 +106,7 @@ export default function StationTesting({
           sourceType: 'fba',
         });
 
-        setFbaFeedback({
-          fnsku,
-          product_title: data.order?.productTitle ?? null,
-          asin: data.order?.asin ?? null,
-          sku: data.order?.sku ?? null,
-          log_id: Number(data.fnskuLogId ?? 0),
-          tech_scanned_qty: Number(data.summary?.tech_scanned_qty ?? 0),
-          pack_ready_qty: Number(data.summary?.pack_ready_qty ?? 0),
-          shipped_qty: Number(data.summary?.shipped_qty ?? 0),
-          available_to_ship: Number(data.summary?.available_to_ship ?? 0),
-          shipment_ref: data.shipment?.shipment_ref ?? null,
-        });
-        // After an FNSKU context is loaded, default the empty-input feedback
-        // to serial mode so the next expected action is clear.
-        setManualMode('serial');
+        setManualMode(null);
         triggerGlobalRefresh();
       } catch {
         setFbaError('Network error — FNSKU scan could not be saved');
@@ -142,7 +114,7 @@ export default function StationTesting({
         setIsFbaLoading(false);
       }
     },
-    [userId]
+    [userId, setActiveOrder, setManualMode, triggerGlobalRefresh]
   );
 
   const forcedTypeForManualMode = useCallback((mode: StationInputMode | null) => {
@@ -174,8 +146,7 @@ export default function StationTesting({
         setManualMode(null);
       }
 
-      const detectedInputMode = trimmedValue ? getStationInputMode(value) : null;
-      const isFnskuInput = Boolean(trimmedValue) && detectedInputMode === 'fba';
+      const isFnskuInput = Boolean(trimmedValue) && looksLikeFnsku(trimmedValue);
 
       // In auto mode, FNSKU-looking input routes to the dedicated FBA endpoint.
       // Manual mode now fully overrides auto classification.
@@ -231,7 +202,9 @@ export default function StationTesting({
 
   const trimmedInput = inputValue.trim();
   const detectedMode = trimmedInput ? getStationInputMode(inputValue) : null;
-  const autoMode: StationInputMode = detectedMode ?? (activeOrder ? 'serial' : 'tracking');
+  const autoMode: StationInputMode =
+    detectedMode ??
+    (activeOrder?.sourceType === 'fba' ? 'fba' : activeOrder ? 'serial' : 'tracking');
   // Manual mode is a hard override for display and submit routing.
   const effectiveMode: StationInputMode =
     manualMode ??
@@ -483,7 +456,7 @@ export default function StationTesting({
             )}
           </AnimatePresence>
 
-          {/* ── FBA FNSKU scan feedback ── */}
+          {/* ── FBA FNSKU scan errors ── */}
           <AnimatePresence mode="wait">
             {fbaError && (
               <motion.div
@@ -498,56 +471,12 @@ export default function StationTesting({
                 <p className="text-xs font-bold text-red-700">{fbaError}</p>
               </motion.div>
             )}
-            {fbaFeedback && !fbaError && (
-              <motion.div
-                key={`fba-${fbaFeedback.log_id}`}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={stationTween}
-                className="rounded-2xl border border-orange-200 bg-orange-50 p-3 space-y-2"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="mt-0.5 p-1.5 bg-orange-100 rounded-xl">
-                    <Package className="w-3.5 h-3.5 text-orange-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-black text-orange-700 uppercase tracking-widest">FBA SCANNED</p>
-                    <p className="text-xs font-bold text-gray-900 truncate">
-                      {fbaFeedback.product_title || fbaFeedback.fnsku}
-                    </p>
-                    <p className="text-[10px] font-mono text-gray-500 truncate">{fbaFeedback.fnsku}</p>
-                    {fbaFeedback.sku && (
-                      <p className="text-[10px] text-gray-400 truncate">SKU: {fbaFeedback.sku}</p>
-                    )}
-                    {fbaFeedback.shipment_ref && (
-                      <p className="text-[10px] text-orange-600 font-bold truncate">
-                        Shipment: {fbaFeedback.shipment_ref}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 gap-1">
-                  {[
-                    { label: 'TECH', value: fbaFeedback.tech_scanned_qty, color: 'text-blue-600' },
-                    { label: 'READY', value: fbaFeedback.pack_ready_qty, color: 'text-green-600' },
-                    { label: 'AVAIL', value: fbaFeedback.available_to_ship, color: 'text-orange-600' },
-                    { label: 'SHIPPED', value: fbaFeedback.shipped_qty, color: 'text-gray-500' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-white rounded-xl px-1 py-1.5 text-center border border-orange-100">
-                      <p className={`text-sm font-black tabular-nums ${color}`}>{value}</p>
-                      <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
           </AnimatePresence>
 
           <LayoutGroup id="station-active-upnext">
             {/* popLayout: exiting card leaves document flow so Up Next reflows up instead of a dead gap */}
             <AnimatePresence mode="popLayout" initial={false}>
-              {activeOrder && isActiveOrderVisible && activeOrder.sourceType !== 'fba' ? (
+              {activeOrder && isActiveOrderVisible ? (
                 <ActiveStationOrderCard
                   key={activeOrder.tracking}
                   activeOrder={activeOrder}
@@ -566,7 +495,6 @@ export default function StationTesting({
                 onStart={(tracking) => {
                   setActiveOrder(null);
                   clearFeedback();
-                  setFbaFeedback(null);
                   setFbaError(null);
                   setTimeout(() => handleFormSubmit(undefined, tracking), 50);
                 }}

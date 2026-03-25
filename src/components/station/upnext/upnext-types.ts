@@ -16,11 +16,15 @@ export interface ReceivingQueueItem {
 }
 
 /**
- * Open FBA shipment (plan) row for the /fba workspace sidebar.
+ * Open FBA plan row for the /fba workspace sidebar.
+ * - `id` — internal `fba_shipments.id` (numeric row id; URL `?plan=` uses this).
+ * - `shipment_ref` — human **plan id** (e.g. `FBA-MM-DD-YY`), not Amazon’s FBA shipment id.
  * Not used on station testing routes — pair with {@link FbaPlanCard}.
  */
 export interface FbaPlanQueueItem {
+  /** Internal DB id (`fba_shipments.id`) — distinct from {@link shipment_ref}. */
   id: number;
+  /** Plan code shown to staff (`fba_shipments.shipment_ref`). */
   shipment_ref: string;
   due_date: string | null;
   total_items: number;
@@ -33,7 +37,9 @@ export interface FbaPlanQueueItem {
 
 export interface FBAQueueItem {
   item_id: number;
+  /** Internal `fba_shipments.id` (same as plan list `id` — not the plan code). */
   shipment_id: number;
+  /** Plan id / human ref (`fba_shipments.shipment_ref`). */
   shipment_ref: string;
   plan_title?: string | null;
   fnsku: string;
@@ -69,6 +75,9 @@ export interface Order {
   tester_id?: number | null;
   /** Display name of the assigned tester */
   tester_name?: string | null;
+  /** PACK work_assignment (realtime may populate before next /api/orders/next fetch) */
+  packer_id?: number | null;
+  packer_name?: string | null;
   /** True when a tech_serial_numbers scan exists for this shipment_id (order already processed) */
   has_tech_scan?: boolean;
   /** Derived from shipping_tracking_numbers carrier status */

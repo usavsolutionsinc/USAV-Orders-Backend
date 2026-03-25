@@ -7,7 +7,7 @@
  */
 
 import type { Dispatch, SetStateAction } from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { Loader2, Package } from '@/components/Icons';
 import type { FbaPlanQueueItem } from './upnext-types';
@@ -79,13 +79,27 @@ export function FbaPlansUpNext({
 }: FbaPlansUpNextProps) {
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!activePlanId) {
+      setExpandedItemKey(null);
+      return;
+    }
+    if (pendingPlans.length === 0) return;
+    const plan = pendingPlans.find((p) => p.id === activePlanId);
+    if (!plan) {
+      updateFbaParams({ plan: null });
+      setExpandedItemKey(null);
+      return;
+    }
+    setExpandedItemKey(`plan-${activePlanId}`);
+  }, [activePlanId, pendingPlans, updateFbaParams]);
+
+  /** Accordion: only one expanded card; opening a plan loads it in the main panel (`?plan=`) and collapses others. */
   const togglePlanCard = useCallback(
     (plan: FbaPlanQueueItem, key: string) => {
-      setExpandedItemKey((cur) => {
-        if (cur === key) {
-          if (activePlanId === plan.id) {
-            updateFbaParams({ plan: null, tab: 'summary' });
-          }
+      setExpandedItemKey((prev) => {
+        if (prev === key) {
+          if (activePlanId === plan.id) updateFbaParams({ plan: null, tab: 'summary' });
           return null;
         }
         updateFbaParams({ plan: plan.id, tab: 'summary' });

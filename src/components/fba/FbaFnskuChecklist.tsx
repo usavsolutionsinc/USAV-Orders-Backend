@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, X, Plus, Minus, Loader2, Package, AlertCircle, ChevronRight, Pencil } from '@/components/Icons';
 import { FnskuChip } from '@/components/ui/CopyChip';
+import { getStaffThemeById, getStaffThemeByName, stationThemeColors } from '@/utils/staff-colors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DraftItem {
@@ -43,7 +44,7 @@ const STATUS_CYCLE: Record<string, string> = {
 interface Props {
   /** Draft mode — new FNSKUs being reviewed before adding to today's plan */
   fnskus?: string[];
-  /** Plan mode — specific plan being edited */
+  /** Internal `fba_shipments.id` (URL `plan=`). Not the plan code string (`shipment_ref`). */
   planId?: number;
   /** Filter by item status: ALL | PACKING | OUT_OF_STOCK */
   statusFilter?: string;
@@ -162,6 +163,21 @@ const rowVariants = {
 
 function todayLabel() {
   return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/** Matches {@link StaffSelector} / assignment chips: theme from staff id, else name. */
+function staffRolePillClass(
+  staffId: number | null | undefined,
+  displayName: string | null | undefined,
+  role: 'technician' | 'packer'
+): string {
+  const id = staffId != null ? Number(staffId) : NaN;
+  const hasValidId = Number.isFinite(id) && id > 0;
+  const theme = hasValidId
+    ? getStaffThemeById(id, role)
+    : getStaffThemeByName(String(displayName || '').trim(), role);
+  const c = stationThemeColors[theme];
+  return `${c.light} ${c.text} border ${c.border}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -744,13 +760,27 @@ export function FbaFnskuChecklist({
                           {item.asin && <span className="truncate">{item.asin}</span>}
                           {(item.ready_by_name || item.verified_by_name) && <span className="shrink-0 opacity-40">·</span>}
                           {item.ready_by_name && (
-                            <span className="shrink-0 truncate rounded-full bg-sky-50 px-2 py-0.5 text-sky-700" title="Tech">
+                            <span
+                              className={`shrink-0 truncate rounded-full px-2 py-0.5 ${staffRolePillClass(
+                                item.ready_by_staff_id,
+                                item.ready_by_name,
+                                'technician'
+                              )}`}
+                              title="Tech"
+                            >
                               Tech {item.ready_by_name}
                             </span>
                           )}
                           {item.ready_by_name && item.verified_by_name && <span className="shrink-0 opacity-40">·</span>}
                           {item.verified_by_name && (
-                            <span className="shrink-0 truncate rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700" title="Packer">
+                            <span
+                              className={`shrink-0 truncate rounded-full px-2 py-0.5 ${staffRolePillClass(
+                                item.verified_by_staff_id,
+                                item.verified_by_name,
+                                'packer'
+                              )}`}
+                              title="Packer"
+                            >
                               Pack {item.verified_by_name}
                             </span>
                           )}

@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizePSTTimestamp } from '@/utils/date';
+import {
+  publishOrderAssignmentsUpdated,
+  publishQueueAssignmentsUpdated,
+} from '@/lib/realtime/publish';
+import {
+  getOrderAssignmentSnapshotsByOrderIds,
+  getStaffNameMap,
+} from '@/lib/work-assignments/order-assignment-snapshot';
 
 type QueueKey =
   | 'all'
@@ -645,11 +653,36 @@ async function upsertAssignment(params: {
 
   if (!shouldInsert) return null;
 
+  // Two concurrent PATCHes can both miss the SELECT and attempt INSERT; the partial
+  // unique index ux_work_assignments_active_entity then raises a duplicate key.
+  // ON CONFLICT makes this path atomic (same pattern as shipstation deadline upsert).
   const inserted = await pool.query<{ id: number }>(
     `INSERT INTO work_assignments
        (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id,
         completed_by_packer_id, status, priority, deadline_at, notes)
      VALUES ($1, $2, $3, $4, $5, $6, $7::assignment_status_enum, $8, $9, $10)
+     ON CONFLICT (entity_type, entity_id, work_type)
+       WHERE (status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS'))
+     DO UPDATE SET
+       assigned_tech_id = EXCLUDED.assigned_tech_id,
+       assigned_packer_id = EXCLUDED.assigned_packer_id,
+       status = EXCLUDED.status,
+       priority = EXCLUDED.priority,
+       deadline_at = EXCLUDED.deadline_at,
+       notes = EXCLUDED.notes,
+       started_at = CASE
+         WHEN EXCLUDED.status::text = 'IN_PROGRESS' THEN COALESCE(work_assignments.started_at, NOW())
+         ELSE work_assignments.started_at
+       END,
+       completed_at = CASE
+         WHEN EXCLUDED.status::text IN ('DONE', 'CANCELED') THEN COALESCE(work_assignments.completed_at, NOW())
+         ELSE NULL
+       END,
+       completed_by_packer_id = CASE
+         WHEN EXCLUDED.status::text = 'DONE' THEN COALESCE(EXCLUDED.completed_by_packer_id, work_assignments.completed_by_packer_id)
+         ELSE work_assignments.completed_by_packer_id
+       END,
+       updated_at = NOW()
      RETURNING id`,
     [
       params.entityType,
@@ -826,6 +859,31 @@ export async function PATCH(request: NextRequest) {
           [assignedTechId, entityId]
         );
       }
+    }
+
+    try {
+      if (entityType === 'ORDER') {
+        const snaps = await getOrderAssignmentSnapshotsByOrderIds([entityId]);
+        const snap = snaps.get(entityId) ?? { testerId: null, packerId: null, deadlineAt: null };
+        const nameMap = await getStaffNameMap([snap.testerId, snap.packerId]);
+        await publishOrderAssignmentsUpdated({
+          orderId: entityId,
+          testerId: snap.testerId,
+          packerId: snap.packerId,
+          testerName: snap.testerId != null ? nameMap.get(snap.testerId) ?? null : null,
+          packerName: snap.packerId != null ? nameMap.get(snap.packerId) ?? null : null,
+          deadlineAt: snap.deadlineAt,
+          source: 'work-orders.patch',
+        });
+      } else {
+        await publishQueueAssignmentsUpdated({
+          entityType,
+          entityId,
+          source: 'work-orders.patch',
+        });
+      }
+    } catch (broadcastErr) {
+      console.warn('[work-orders PATCH] realtime broadcast failed (non-critical):', broadcastErr);
     }
 
     return NextResponse.json({ success: true });

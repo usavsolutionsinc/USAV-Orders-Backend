@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 
 /**
  * POST /api/fba/shipments/today/items
  *
  * Adds FNSKUs to today's plan. If no plan exists for today it is
- * auto-created with shipment_ref = "FBA-{YYYYMMDD}".
+ * auto-created with `shipment_ref` = plan code {@link buildFbaPlanRefFromIsoDate} (`FBA-MM-DD-YY` from `CURRENT_DATE`, no time).
  * FNSKUs already in today's plan are SKIPPED (not duplicated).
  *
  * Body:
@@ -22,8 +23,9 @@ import pool from '@/lib/db';
  * Response:
  * {
  *   success: true,
- *   shipment_id:  number,
- *   shipment_ref: string,
+ *   shipment_id:  number,  // internal `fba_shipments.id` (URL `?plan=` — not the plan code)
+ *   shipment_ref: string,   // plan id / human code (same as plan_ref)
+ *   plan_ref:     string,
  *   added:        { fnsku, expected_qty }[],
  *   skipped:      { fnsku, reason }[],
  * }
@@ -57,10 +59,9 @@ export async function POST(request: NextRequest) {
     let shipmentRef: string;
 
     if (todayShip.rows.length === 0) {
-      // Auto-ref: FBA-YYYYMMDD
-      const today = new Date();
-      const pad  = (n: number) => String(n).padStart(2, '0');
-      shipmentRef = `FBA-${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;
+      const todayIso = await client.query<{ d: string }>(`SELECT CURRENT_DATE::text AS d`);
+      const iso = String(todayIso.rows[0]?.d || '').trim();
+      shipmentRef = buildFbaPlanRefFromIsoDate(iso);
 
       const newShip = await client.query(`
         INSERT INTO fba_shipments (shipment_ref, due_date, status)
@@ -147,8 +148,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      shipment_id:  shipmentId,
+      shipment_id: shipmentId,
       shipment_ref: shipmentRef,
+      plan_ref: shipmentRef,
       added,
       skipped,
     });

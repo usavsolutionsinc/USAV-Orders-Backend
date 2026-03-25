@@ -4,7 +4,7 @@
  *   or: npx tsx scripts/test-station-detection.ts
  */
 
-import { classifyInput } from '../src/lib/scan-resolver';
+import { classifyInput, looksLikeFnskuPrefix } from '../src/lib/scan-resolver';
 import { detectStationScanType, getStationInputMode } from '../src/lib/station-scan-routing';
 
 const endpointForType: Record<string, string> = {
@@ -86,6 +86,23 @@ for (const v of sampleFnsku) {
   }
 }
 
+/** Partial X00/B0 while typing: UI mode FBA, API type still SERIAL until 10 chars. */
+const partialFnskuPrefix = ['X00', 'X00123', 'X00123456', 'B0', 'B0123456'];
+for (const v of partialFnskuPrefix) {
+  if (!looksLikeFnskuPrefix(v)) {
+    console.error(`Expected looksLikeFnskuPrefix("${v}") true`);
+    failures++;
+  }
+  if (getStationInputMode(v) !== 'fba') {
+    console.error(`Expected getStationInputMode("${v}") fba, got ${getStationInputMode(v)}`);
+    failures++;
+  }
+  if (detectStationScanType(v) !== 'SERIAL') {
+    console.error(`Expected detectStationScanType("${v}") SERIAL, got ${detectStationScanType(v)}`);
+    failures++;
+  }
+}
+
 /** Must be classifyInput serial_partial + station SERIAL (not unknown / tracking). */
 const mustBeSerialPartial = ['1ZSHORT', 'ABCDEFGHIJ', '123456789'];
 for (const v of mustBeSerialPartial) {
@@ -105,6 +122,7 @@ assert(failures === 0, `${failures} classification mismatch(es)`);
 logSamples('Tracking candidates', sampleTracking);
 logSamples('Serial candidates', sampleSerial);
 logSamples('FNSKU candidates', sampleFnsku);
+logSamples('Partial FNSKU/ASIN prefix → mode fba, type SERIAL', partialFnskuPrefix);
 logSamples('Short ambiguous → serial_partial', mustBeSerialPartial);
 
 console.log('\nAll station-detection assertions passed.');

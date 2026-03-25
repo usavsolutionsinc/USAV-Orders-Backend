@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 
 /**
  * POST /api/fba/shipments/today/duplicate-yesterday
@@ -51,9 +52,8 @@ export async function POST() {
     let todayRef: string;
 
     if (todayRes.rows.length === 0) {
-      const today = new Date();
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const ref = `FBA-${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;
+      const todayIso = await client.query<{ d: string }>(`SELECT CURRENT_DATE::text AS d`);
+      const ref = buildFbaPlanRefFromIsoDate(String(todayIso.rows[0]?.d || ''));
       const newRes = await client.query(
         `INSERT INTO fba_shipments (shipment_ref, due_date, status)
          VALUES ($1, CURRENT_DATE, 'PLANNED') RETURNING id, shipment_ref`,
@@ -105,6 +105,7 @@ export async function POST() {
       success: true,
       shipment_id: todayId,
       shipment_ref: todayRef,
+      plan_ref: todayRef,
       added: added.length,
       skipped: skipped.length,
     });

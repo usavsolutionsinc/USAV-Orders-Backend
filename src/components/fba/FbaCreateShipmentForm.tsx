@@ -81,13 +81,21 @@ export function FbaCreateShipmentForm({
         </button>
       }
     >
-      <SidebarIntakeFormField label="Shipment reference" required>
+      <SidebarIntakeFormField
+        label="Plan ID"
+        required
+        hintBelow={
+          <p className="text-[10px] leading-snug text-gray-500">
+            Stored as shipment_ref — not the internal DB row id or Amazon&apos;s FBA shipment id.
+          </p>
+        }
+      >
         <input
           type="text"
           value={form.shipment_ref}
           onChange={(e) => setForm((f) => ({ ...f, shipment_ref: e.target.value }))}
-          placeholder="FBA15XXXXX"
-          className={SIDEBAR_INTAKE_INPUT_CLASS}
+          placeholder="FBA-03-24-26"
+          className={SIDEBAR_INTAKE_INPUT_MONO_CLASS}
         />
       </SidebarIntakeFormField>
 

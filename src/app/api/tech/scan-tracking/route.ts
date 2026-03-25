@@ -9,6 +9,7 @@ import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publis
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
+import { performTechFnskuScan } from '@/lib/tech/performTechFnskuScan';
 
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
@@ -279,6 +280,68 @@ export async function POST(req: NextRequest) {
                             : 'Tech scan: tracking not found in orders',
                     }, client);
                     ordersExceptionId = upsertResult.exception?.id ?? null;
+                }
+
+                if (isFbaLikeTracking && fnskuFound) {
+                    const normalizedFnsku = scannedTracking.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    try {
+                        const payload = await performTechFnskuScan(client, {
+                            fnsku: normalizedFnsku,
+                            testedBy,
+                        });
+                        await client.query('COMMIT');
+                        await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']);
+                        await publishTechLogChanged({
+                            techId: testedBy,
+                            action: 'insert',
+                            rowId: payload.fnskuLogId,
+                            source: 'tech.scan-tracking',
+                        });
+                        return NextResponse.json({
+                            success: true,
+                            found: true,
+                            orderFound: false,
+                            techSerialId: null,
+                            techActivityId: payload.fnskuSalId,
+                            fnskuLogId: payload.fnskuLogId,
+                            warning: 'FBA/FNSKU loaded.',
+                            order: {
+                                id: payload.order.id,
+                                orderId: payload.order.orderId,
+                                productTitle: payload.order.productTitle,
+                                itemNumber: payload.order.itemNumber,
+                                sku: payload.order.sku,
+                                condition: payload.order.condition,
+                                notes: payload.order.notes,
+                                tracking: payload.order.tracking,
+                                serialNumbers: payload.order.serialNumbers,
+                                testDateTime: payload.order.testDateTime,
+                                testedBy: payload.order.testedBy,
+                                accountSource: payload.order.accountSource,
+                                quantity: payload.order.quantity,
+                                status: payload.order.status,
+                                statusHistory: payload.order.statusHistory,
+                                isShipped: payload.order.isShipped,
+                                packerId: payload.order.packerId,
+                                testerId: payload.order.testerId,
+                                outOfStock: payload.order.outOfStock,
+                                shipByDate: payload.order.shipByDate,
+                                orderDate: payload.order.orderDate,
+                                createdAt: payload.order.createdAt,
+                                asin: payload.order.asin,
+                            },
+                        });
+                    } catch (scanErr: unknown) {
+                        const code = (scanErr as { code?: string })?.code;
+                        if (code === 'FNSKU_NOT_FOUND') {
+                            await client.query('ROLLBACK');
+                            return NextResponse.json(
+                                { success: false, found: false, error: 'FNSKU not found in fba_fnskus' },
+                                { status: 404 },
+                            );
+                        }
+                        throw scanErr;
+                    }
                 }
 
                 const existingScanLog = await client.query(

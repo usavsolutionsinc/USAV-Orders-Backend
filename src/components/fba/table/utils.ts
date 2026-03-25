@@ -2,14 +2,14 @@ import type { DayBucket, EnrichedItem, ItemStatus, PendingReason, PrintQueueItem
 import { getTodayDateIso } from '@/components/fba/utils/getTodayDate';
 
 export function dueDateLabel(iso: string | null): { text: string; cls: string } {
-  if (!iso) return { text: 'No ship-by date', cls: 'text-zinc-400' };
+  if (!iso) return { text: 'No ship-by date', cls: 'text-gray-400' };
   const d = new Date(iso);
   const now = new Date();
   const diff = Math.ceil((d.getTime() - now.getTime()) / 86_400_000);
   if (diff < 0) return { text: `${Math.abs(diff)}d overdue`, cls: 'text-red-600 font-semibold' };
   if (diff === 0) return { text: 'Ship today', cls: 'text-orange-600 font-semibold' };
   if (diff <= 3) return { text: `${diff}d left`, cls: 'text-violet-700 font-semibold' };
-  return { text: `${diff}d left`, cls: 'text-zinc-500' };
+  return { text: `${diff}d left`, cls: 'text-gray-500' };
 }
 
 function parseQcNote(notes: string | null | undefined): { isQc: boolean; rest: string } {
@@ -65,6 +65,13 @@ export function enrichFromApi(row: PrintQueueItem & { status?: string; notes?: s
     pending_reason_note,
     expanded: false,
   };
+}
+
+/** Matches DELETE rules on `DELETE /api/fba/shipments/[id]/items/[itemId]`. */
+export function canRemoveFbaPrintQueueLine(item: EnrichedItem): boolean {
+  if (Number(item.expected_qty) !== 1 || Number(item.actual_qty) !== 0) return false;
+  const s = String(item.item_status || '').toUpperCase();
+  return s === 'PLANNED' || s === 'READY_TO_GO';
 }
 
 export function dayKeyFromDue(iso: string | null): string {

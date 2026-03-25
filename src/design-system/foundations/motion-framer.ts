@@ -114,6 +114,46 @@ export const framerTransition = {
     stiffness: 380,
     mass: 0.42,
   } satisfies Transition,
+
+  /** Assignment body row change — opacity only (keeps tech/packer from sliding on X). */
+  workOrderBodyCrossfade: {
+    duration: 0.14,
+    ease: motionBezier.easeOut,
+  } satisfies Transition,
+
+  /**
+   * Assignment title block — height/position layout from bottom edge (`transformOrigin: bottom center`)
+   * so multi-line titles feel like they grow upward; pair with `LayoutGroup` scoped to the title only.
+   */
+  workOrderTitleLayoutSpring: {
+    type: 'spring' as const,
+    damping: 38,
+    stiffness: 320,
+    mass: 0.28,
+  } satisfies Transition,
+
+  /**
+   * Title row swap + layout — `layout` for line-wrap; opacity/y for keyed row changes.
+   * Footer stays outside `LayoutGroup` / `AnimatePresence` so it does not crossfade or layout-shift.
+   */
+  workOrderAssignmentTitleBlock: {
+    layout: {
+      type: 'spring' as const,
+      damping: 38,
+      stiffness: 320,
+      mass: 0.28,
+    },
+    opacity: {
+      duration: 0.17,
+      ease: motionBezier.easeOut,
+    },
+    y: {
+      type: 'spring' as const,
+      damping: 24,
+      stiffness: 420,
+      mass: 0.3,
+    },
+  } satisfies Transition,
 } as const;
 
 /**

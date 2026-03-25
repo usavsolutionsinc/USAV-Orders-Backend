@@ -7,11 +7,12 @@ import {
   framerTransition,
 } from '@/design-system';
 import { ShipByDate } from '../ui/ShipByDate';
-import { Check, ClipboardList, Copy, ExternalLink, ChevronDown, Loader2, X } from '@/components/Icons';
+import { Check, ClipboardList, Copy, ExternalLink, ChevronDown, Loader2, Package, X } from '@/components/Icons';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { getTrackingUrl } from '@/utils/order-links';
+import { isEmptyDisplayValue, missingItemNumberLabelForStation } from '@/utils/empty-display-value';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
 type OrderVariant = 'order' | 'fba' | 'repair';
@@ -41,15 +42,20 @@ function inferOrderVariant(order: ActiveStationOrder): OrderVariant {
   return 'order';
 }
 
+const chevronPinkFba =
+  'border-pink-200 text-pink-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(236,72,153,0.16)]';
+
 function getVariantStyles(variant: OrderVariant) {
+  const chevronEmerald =
+    'border-emerald-200 text-emerald-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(34,197,94,0.16)]';
   switch (variant) {
     case 'fba':
       return {
-        card: 'border-violet-300 hover:border-violet-500',
-        focus: 'focus-visible:ring-violet-400/50',
-        section: 'border-violet-100',
-        accent: 'text-violet-600',
-        badge: 'bg-violet-50 text-violet-700 border-violet-200',
+        card: 'border-purple-300 hover:border-purple-500',
+        focus: 'focus-visible:ring-purple-400/50',
+        section: 'border-pink-200',
+        accent: 'text-emerald-600',
+        chevron: chevronPinkFba,
       };
     case 'repair':
       return {
@@ -57,7 +63,8 @@ function getVariantStyles(variant: OrderVariant) {
         focus: 'focus-visible:ring-orange-400/50',
         section: 'border-orange-100',
         accent: 'text-orange-600',
-        badge: 'bg-orange-50 text-orange-700 border-orange-200',
+        chevron:
+          'border-orange-200 text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(234,88,12,0.14)]',
       };
     case 'order':
     default:
@@ -66,20 +73,8 @@ function getVariantStyles(variant: OrderVariant) {
         focus: 'focus-visible:ring-emerald-400/50',
         section: 'border-emerald-100',
         accent: 'text-emerald-600',
-        badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        chevron: chevronEmerald,
       };
-  }
-}
-
-function getOrderVariantLabel(variant: OrderVariant) {
-  switch (variant) {
-    case 'fba':
-      return 'FBA';
-    case 'repair':
-      return 'Repair';
-    case 'order':
-    default:
-      return 'Order';
   }
 }
 
@@ -168,8 +163,10 @@ export default function ActiveStationOrderCard({
   const quantity = Math.max(1, Number(activeOrder.quantity) || 1);
   const daysLate = getDaysLateNumber(activeOrder.shipByDate, activeOrder.createdAt);
   const trackingNumber = String(activeOrder.tracking || '').trim();
-  const skuValue = String(activeOrder.sku || '').trim();
-  const itemNumberValue = String(activeOrder.itemNumber || '').trim();
+  const skuValue = isEmptyDisplayValue(activeOrder.sku) ? '' : String(activeOrder.sku || '').trim();
+  const itemNumberValue = isEmptyDisplayValue(activeOrder.itemNumber)
+    ? ''
+    : String(activeOrder.itemNumber || '').trim();
   const displayIdentifier = activeOrder.fnsku ? getLast4(activeOrder.fnsku) : getOrderIdLast4(activeOrder.orderId);
   const trackingUrl = getTrackingUrl(trackingNumber);
 
@@ -225,32 +222,32 @@ export default function ActiveStationOrderCard({
               date={getDisplayShipByDate(activeOrder) || ''}
               showPrefix={false}
               showYear={false}
-              className="[&>span]:text-[14px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4"
+              {...(orderVariant === 'fba'
+                ? {
+                    icon: Package,
+                    iconClassName: 'w-4 h-4 text-purple-600',
+                    textClassName: 'text-[14px] font-black text-blue-700',
+                    className: '',
+                  }
+                : {
+                    className: '[&>span]:text-[14px] [&>span]:font-black [&>svg]:w-4 [&>svg]:h-4',
+                  })}
             />
-            <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${variantStyles.badge}`}>
-              {getOrderVariantLabel(orderVariant)}
-            </span>
             <span className={`text-[14px] font-black tabular-nums ${getDaysLateTone(daysLate)}`}>
               {daysLate}
             </span>
-            {activeOrder.orderFound === false && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-amber-50 border border-amber-200 text-amber-700 leading-none shrink-0">
-                <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
-                Logged
-              </span>
-            )}
           </div>
           <motion.span
             animate={{ rotate: isExpanded ? 180 : 0 }}
             transition={framerTransition.stationChevron}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 shrink-0"
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border shrink-0 ${variantStyles.chevron}`}
             aria-hidden
           >
             <ChevronDown className="w-4 h-4" />
           </motion.span>
         </div>
 
-        <div className="px-3 pb-2">
+        <div className="px-3 pb-4">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <div className="flex items-center gap-2 min-w-0">
               <span
@@ -263,7 +260,7 @@ export default function ActiveStationOrderCard({
               {activeOrder.condition || 'No Condition'}
             </span>
           </div>
-            <span className={`text-[13px] font-mono font-black px-1.5 py-0.5 rounded border shrink-0 ${variantStyles.badge}`}>
+            <span className="text-[13px] font-mono font-black tabular-nums text-gray-900 px-1.5 py-0.5 rounded border border-gray-300 shrink-0">
               #{displayIdentifier}
             </span>
           </div>
@@ -306,17 +303,18 @@ export default function ActiveStationOrderCard({
                         className="min-w-0 truncate text-[11px] text-gray-900 normal-case tracking-normal font-mono font-bold"
                         title={skuValue || undefined}
                       >
-                        {getLast4(skuValue)}
+                        {skuValue ? getLast4(skuValue) : 'N/A'}
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => void handleCopyValue(e, 'sku', skuValue)}
-                        disabled={!skuValue}
-                        className="flex-shrink-0 text-gray-400 hover:text-violet-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={copiedField === 'sku' ? 'SKU copied' : 'Copy SKU'}
-                      >
-                        {copiedField === 'sku' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                      </button>
+                      {skuValue ? (
+                        <button
+                          type="button"
+                          onClick={(e) => void handleCopyValue(e, 'sku', skuValue)}
+                          className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors"
+                          aria-label={copiedField === 'sku' ? 'SKU copied' : 'Copy SKU'}
+                        >
+                          {copiedField === 'sku' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   <div className="min-w-0 w-fit max-w-full rounded-xl bg-gray-50 px-2 py-2">
@@ -326,17 +324,20 @@ export default function ActiveStationOrderCard({
                         className="block min-w-0 max-w-full truncate text-[11px] text-gray-900 normal-case tracking-normal"
                         title={itemNumberValue || undefined}
                       >
-                        {itemNumberValue ? getLast4(itemNumberValue) : '—'}
+                        {itemNumberValue
+                          ? getLast4(itemNumberValue)
+                          : missingItemNumberLabelForStation(activeOrder.orderId, orderVariant)}
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => void handleCopyValue(e, 'itemNumber', itemNumberValue)}
-                        disabled={!itemNumberValue}
-                        className="flex-shrink-0 text-gray-400 hover:text-violet-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={copiedField === 'itemNumber' ? 'Item number copied' : 'Copy item number'}
-                      >
-                        {copiedField === 'itemNumber' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                      </button>
+                      {itemNumberValue ? (
+                        <button
+                          type="button"
+                          onClick={(e) => void handleCopyValue(e, 'itemNumber', itemNumberValue)}
+                          className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors"
+                          aria-label={copiedField === 'itemNumber' ? 'Item number copied' : 'Copy item number'}
+                        >
+                          {copiedField === 'itemNumber' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   <div className="min-w-0 rounded-xl bg-gray-50 px-2 py-2">
@@ -346,18 +347,19 @@ export default function ActiveStationOrderCard({
                         className="min-w-0 truncate text-[11px] text-gray-900 normal-case tracking-normal font-mono font-bold"
                         title={trackingNumber || undefined}
                       >
-                        {trackingNumber ? getLast4(trackingNumber) : '—'}
+                        {trackingNumber ? getLast4(trackingNumber) : 'N/A'}
                       </div>
                       <div className="flex items-center gap-0.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => void handleCopyValue(e, 'tracking', trackingNumber)}
-                          disabled={!trackingNumber}
-                          className="flex-shrink-0 text-gray-400 hover:text-violet-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={copiedField === 'tracking' ? 'Tracking copied' : 'Copy tracking number'}
-                        >
-                          {copiedField === 'tracking' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                        </button>
+                        {trackingNumber ? (
+                          <button
+                            type="button"
+                            onClick={(e) => void handleCopyValue(e, 'tracking', trackingNumber)}
+                            className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors"
+                            aria-label={copiedField === 'tracking' ? 'Tracking copied' : 'Copy tracking number'}
+                          >
+                            {copiedField === 'tracking' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={(e) => {

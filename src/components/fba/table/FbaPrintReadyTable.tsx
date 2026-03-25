@@ -1,784 +1,342 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import {
-  AlertCircle,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  Clock,
-  Loader2,
-  Package,
-  RefreshCw,
-} from '@/components/Icons';
-import { getTodayDateIso } from '@/components/fba/utils/getTodayDate';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Check, Loader2 } from '@/components/Icons';
+import WeekHeader from '@/components/ui/WeekHeader';
+import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
+import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from './Checkbox';
-import { DayBucketHeaderRow } from './DayBucketSection';
-import { ItemRow } from './ItemRow';
-import { createInitialTableState, printQueueReducer } from './printQueueReducer';
+import { enrichFromApi } from './utils';
+import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import type { EnrichedItem, PrintQueueItem, PrintSelectionPayload } from './types';
-import { SelectionFloatingBar } from './SelectionFloatingBar';
-import { ShipmentGroupHeaderRow } from './ShipmentGroupHeader';
-import { UndoToast } from './UndoToast';
-import { ViewToggle } from './ViewToggle';
-import {
-  dayKeyFromDue,
-  enrichFromApi,
-  groupByDayThenShipment,
-  groupByShipmentOnly,
-  partitionPrintQueueByReady,
-} from './utils';
 
-export type { PrintQueueItem, PrintSelectionPayload } from './types';
+const toIsoDate = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-function shiftLocalIso(iso: string, delta: number): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  const dt = new Date(y, m - 1, d + delta);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+function calculateWeekStart(baseKey: string, offset: number) {
+  const [year, month, day] = baseKey.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = (date.getDay() + 6) % 7;
+  const start = new Date(date);
+  start.setDate(date.getDate() - dayOfWeek + offset * 7);
+  return start;
 }
 
-const tableVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.025, delayChildren: 0.05 } },
-};
-
-function summarizePrintQueueGroups(groups: { items: EnrichedItem[] }[]) {
-  const items = groups.flatMap((g) => g.items);
-  const n = items.length;
-  const ready = items.filter((i) => i.status === 'ready_to_print').length;
-  const pend = items.filter((i) => i.status === 'pending_out_of_stock' || i.status === 'pending_qc_fail').length;
-  const needs = items.filter((i) => i.status === 'needs_print').length;
-  const ships = groups.length;
-  return `${n} item${n !== 1 ? 's' : ''} · ${ships} shipment${ships !== 1 ? 's' : ''} · ${ready} ready · ${needs} needs print · ${pend} pending`;
+function planLabelForItem(item: EnrichedItem) {
+  const ref = String(item.shipment_ref || '').trim();
+  if (ref) return ref;
+  return `Shipment ${item.shipment_id}`;
 }
 
 interface Props {
   refreshTrigger?: number | string;
   onSelectionChange?: (payload: PrintSelectionPayload) => void;
-  /** Shipment IDs that have both Amazon FBA ID + UPS tracking captured in the sidebar */
-  shipmentLabelReady?: Record<number, boolean>;
-  /** Fit parent height: no internal scroll; pick due date from dropdown only. */
   fitHeightNoScroll?: boolean;
+  staffId?: number | string | null;
+}
+
+function PrintReadyRow({
+  item,
+  isSelected,
+  onClick,
+}: {
+  item: EnrichedItem;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 px-3 py-2.5 border-b border-gray-100 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 ${
+        isSelected ? 'bg-indigo-50' : 'bg-white hover:bg-gray-50'
+      }`}
+    >
+      <div className="flex items-start justify-center pt-0.5">
+        <PrintTableCheckbox
+          checked={isSelected}
+          stationTheme="lightblue"
+          reducedMotion={false}
+          label={isSelected ? `Deselect ${item.fnsku}` : `Select ${item.fnsku}`}
+          onChange={onClick}
+        />
+      </div>
+
+      <div className="flex min-w-0 flex-col">
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-bold text-gray-900">
+            {item.display_title || 'Untitled FNSKU'}
+          </p>
+        </div>
+        <div className="mt-0.5 flex items-center gap-2">
+          <div className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            <span className={`tabular-nums ${item.expected_qty > 1 ? 'text-yellow-600' : ''}`}>{item.expected_qty}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-start justify-end gap-2 pt-0.5">
+        <div className="flex shrink-0 items-center gap-1 text-[10px] font-mono text-gray-500">
+          <Check className={`h-3 w-3 ${item.status === 'ready_to_print' ? 'text-emerald-600' : 'text-gray-400'}`} />
+          <span>
+            {item.actual_qty}/{item.expected_qty}
+          </span>
+        </div>
+        <FnskuChip value={item.fnsku} width="w-[58px]" />
+      </div>
+    </div>
+  );
 }
 
 export function FbaPrintReadyTable({
   refreshTrigger,
   onSelectionChange,
-  shipmentLabelReady = {},
   fitHeightNoScroll = false,
+  staffId = null,
 }: Props) {
-  const [state, dispatch] = useReducer(printQueueReducer, undefined, createInitialTableState);
-  const shouldReduceMotion = useReducedMotion();
-  /** `att:${dayKey}` / `ready:${dayKey}` for nested due-date buckets (by-day view). */
-  const [collapsedSubBuckets, setCollapsedSubBuckets] = useState<Set<string>>(new Set());
-  const [attentionSectionCollapsed, setAttentionSectionCollapsed] = useState(false);
-  const [readySectionCollapsed, setReadySectionCollapsed] = useState(false);
-  const [needsPrintTarget, setNeedsPrintTarget] = useState<EnrichedItem | null>(null);
-  const [undoRemove, setUndoRemove] = useState<EnrichedItem | null>(null);
-  const [refreshSpin, setRefreshSpin] = useState(false);
-  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [items, setItems] = useState<EnrichedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [planFilter, setPlanFilter] = useState('all');
+  const [weekOffset, setWeekOffset] = useState(0);
 
-  const load = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', loading: true });
-    dispatch({ type: 'SET_ERROR', error: null });
+  const fetchPrintQueue = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/fba/print-queue', { cache: 'no-store' });
       const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Failed');
-      const raw: PrintQueueItem[] = data.items ?? [];
+      const raw: PrintQueueItem[] = Array.isArray(data?.items) ? data.items : [];
       const enriched = raw.map((row) => enrichFromApi(row));
-      dispatch({ type: 'SET_ITEMS', payload: enriched });
-    } catch (e: unknown) {
-      dispatch({
-        type: 'SET_ERROR',
-        error: e instanceof Error ? e.message : 'Network error',
-      });
-    }
-  }, []);
-
-  const refreshInPlace = useCallback(async () => {
-    try {
-      const res = await fetch('/api/fba/print-queue', { cache: 'no-store' });
-      const data = await res.json();
-      if (!data.success) return;
-      const raw: PrintQueueItem[] = data.items ?? [];
-      const enriched = raw.map((row) => enrichFromApi(row));
-      dispatch({ type: 'REFRESH_ITEMS', payload: enriched });
-    } catch {
-      /* no-op */
+      setItems(enriched);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load print queue.');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load, refreshTrigger]);
+    void fetchPrintQueue();
+  }, [fetchPrintQueue, refreshTrigger]);
+
+  const basePstKey = useMemo(() => getCurrentPSTDateKey(), []);
+  const weekStart = useMemo(() => calculateWeekStart(basePstKey, weekOffset), [basePstKey, weekOffset]);
+  const weekEnd = useMemo(() => {
+    const next = new Date(weekStart);
+    next.setDate(next.getDate() + 6);
+    return next;
+  }, [weekStart]);
+  const weekRange = useMemo(
+    () => ({
+      startStr: formatDateWithOrdinal(toIsoDate(weekStart)),
+      endStr: formatDateWithOrdinal(toIsoDate(weekEnd)),
+    }),
+    [weekEnd, weekStart]
+  );
+
+  const startKey = useMemo(() => toIsoDate(weekStart), [weekStart]);
+  const endKey = useMemo(() => toIsoDate(weekEnd), [weekEnd]);
+
+  const weekFilteredItems = useMemo(() => {
+    return items.filter((item) => {
+      const key = toPSTDateKey(item.due_date);
+      if (!key) return true;
+      return key >= startKey && key <= endKey;
+    });
+  }, [items, startKey, endKey]);
+
+  const planOptions = useMemo(() => {
+    const countMap = new Map<string, number>();
+    weekFilteredItems.forEach((item) => {
+      const label = planLabelForItem(item);
+      countMap.set(label, (countMap.get(label) || 0) + 1);
+    });
+    const entries = Array.from(countMap.entries()).sort();
+    return [
+      { value: 'all', label: `All plans (${weekFilteredItems.length})` },
+      ...entries.map(([label, count]) => ({ value: label, label: `${label} (${count})` })),
+    ];
+  }, [weekFilteredItems]);
 
   useEffect(() => {
-    const h = () => {
-      void refreshInPlace();
-    };
-    window.addEventListener('fba-print-queue-refresh', h);
-    return () => window.removeEventListener('fba-print-queue-refresh', h);
-  }, [refreshInPlace]);
+    if (planFilter === 'all') return;
+    if (planOptions.some((option) => option.value === planFilter)) return;
+    setPlanFilter('all');
+  }, [planFilter, planOptions]);
+
+  const filteredItems = useMemo(() => {
+    if (planFilter === 'all') return weekFilteredItems;
+    return weekFilteredItems.filter((item) => planLabelForItem(item) === planFilter);
+  }, [planFilter, weekFilteredItems]);
+
+  const groupedByPlan = useMemo(() => {
+    const map = new Map<string, EnrichedItem[]>();
+    filteredItems.forEach((item) => {
+      const label = planLabelForItem(item);
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(item);
+    });
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([plan, entries]) => ({
+        plan,
+        items: entries,
+      }));
+  }, [filteredItems]);
+
+  const headerDate = filteredItems[0]?.due_date ? String(filteredItems[0].due_date).slice(0, 10) : basePstKey;
+  const totalCount = filteredItems.length;
+  const selectedItems = useMemo(() => items.filter((item) => selectedIds.has(item.item_id)), [items, selectedIds]);
+  const selectedCount = selectedItems.length;
 
   useEffect(() => {
-    const selectedItems = state.items.filter((i) => state.selected.has(i.item_id));
-    const shipmentIds = Array.from(new Set(selectedItems.map((i) => i.shipment_id)));
-    const readyCount = selectedItems.filter((i) => i.status === 'ready_to_print').length;
+    const readyCount = selectedItems.filter((item) => item.status === 'ready_to_print').length;
     const pendingCount = selectedItems.filter(
-      (i) => i.status === 'pending_out_of_stock' || i.status === 'pending_qc_fail'
+      (item) => item.status === 'pending_out_of_stock' || item.status === 'pending_qc_fail'
     ).length;
-    const needsPrintCount = selectedItems.filter((i) => i.status === 'needs_print').length;
+    const needsPrintCount = selectedItems.filter((item) => item.status === 'needs_print').length;
     const payload: PrintSelectionPayload = {
       selectedItems,
-      shipmentIds,
+      shipmentIds: Array.from(new Set(selectedItems.map((item) => item.shipment_id))),
       readyCount,
       pendingCount,
       needsPrintCount,
     };
     window.dispatchEvent(new CustomEvent('fba-print-selection', { detail: payload }));
     onSelectionChange?.(payload);
-  }, [state.selected, state.items, onSelectionChange]);
+  }, [onSelectionChange, selectedItems]);
 
-  const visibleItems = useMemo(() => {
-    if (fitHeightNoScroll) {
-      if (!state.dayFilter) return [];
-      return state.items.filter((i) => dayKeyFromDue(i.due_date) === state.dayFilter);
-    }
-    if (!state.dayFilter) return state.items;
-    return state.items.filter((i) => dayKeyFromDue(i.due_date) === state.dayFilter);
-  }, [fitHeightNoScroll, state.items, state.dayFilter]);
-
-  const dayFilterOptions = useMemo(() => groupByDayThenShipment(state.items), [state.items]);
-
-  const { attention: attentionItems, ready: readyItems } = useMemo(
-    () => partitionPrintQueueByReady(visibleItems),
-    [visibleItems]
-  );
-
-  const attentionDayBuckets = useMemo(() => groupByDayThenShipment(attentionItems), [attentionItems]);
-  const readyDayBuckets = useMemo(() => groupByDayThenShipment(readyItems), [readyItems]);
-  const attentionFlat = useMemo(() => groupByShipmentOnly(attentionItems), [attentionItems]);
-  const readyFlat = useMemo(() => groupByShipmentOnly(readyItems), [readyItems]);
-
-  const allDayBucketsForToolbar = useMemo(() => groupByDayThenShipment(state.items), [state.items]);
-
-  const shipmentGroupCount = useMemo(
-    () => groupByShipmentOnly(visibleItems).length,
-    [visibleItems]
-  );
-
-  const attentionSectionSummary = useMemo(
-    () => (attentionFlat.length === 0 ? 'No items' : summarizePrintQueueGroups(attentionFlat)),
-    [attentionFlat]
-  );
-  const readySectionSummary = useMemo(
-    () => (readyFlat.length === 0 ? 'No items' : summarizePrintQueueGroups(readyFlat)),
-    [readyFlat]
-  );
-
-  const allIds = useMemo(() => state.items.map((i) => i.item_id), [state.items]);
-  const allChecked = allIds.length > 0 && allIds.every((id) => state.selected.has(id));
-  const someChecked = !allChecked && allIds.some((id) => state.selected.has(id));
-
-  const totalPlannedUnits = useMemo(
-    () => visibleItems.reduce((sum, item) => sum + Math.max(0, Number(item.expected_qty) || 0), 0),
-    [visibleItems]
-  );
-  const totalRemainingUnits = useMemo(
-    () =>
-      visibleItems.reduce(
-        (sum, item) => sum + Math.max(0, Number(item.expected_qty) - Number(item.actual_qty)),
-        0
-      ),
-    [visibleItems]
-  );
-
-  const todayIso = getTodayDateIso();
-  const yesterdayIso = shiftLocalIso(todayIso, -1);
-  const tomorrowIso = shiftLocalIso(todayIso, 1);
-
-  const toggleSubBucket = useCallback((section: 'att' | 'ready', dayKey: string) => {
-    const k = `${section}:${dayKey}`;
-    setCollapsedSubBuckets((prev) => {
+  const handleToggleSelection = useCallback((id: number) => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
 
-  const applyDueDateLayout = useCallback(
-    (mode: 'expand_all' | 'collapse_past' | 'today_only') => {
-      const keys = groupByDayThenShipment(state.items).map((b) => b.dayKey);
-      if (mode === 'expand_all') {
-        setCollapsedSubBuckets(new Set());
-        return;
+  const allVisibleSelected =
+    filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.item_id));
+  const handleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        filteredItems.forEach((item) => next.delete(item.item_id));
+      } else {
+        filteredItems.forEach((item) => next.add(item.item_id));
       }
-      if (mode === 'collapse_past') {
-        const next = new Set<string>();
-        for (const dk of keys) {
-          if (dk !== '__nodate__' && dk < todayIso) {
-            next.add(`att:${dk}`);
-            next.add(`ready:${dk}`);
-          }
-        }
-        setCollapsedSubBuckets(next);
-        return;
-      }
-      const next = new Set<string>();
-      for (const dk of keys) {
-        if (dk !== todayIso) {
-          next.add(`att:${dk}`);
-          next.add(`ready:${dk}`);
-        }
-      }
-      setCollapsedSubBuckets(next);
-    },
-    [state.items, todayIso]
-  );
-
-  useLayoutEffect(() => {
-    if (!fitHeightNoScroll || state.loading || state.items.length === 0) return;
-    const buckets = groupByDayThenShipment(state.items);
-    if (buckets.length === 0) return;
-    const keys = new Set(buckets.map((b) => b.dayKey));
-    if (state.dayFilter != null && keys.has(state.dayFilter)) return;
-    const pick = keys.has(todayIso) ? todayIso : buckets[0]!.dayKey;
-    dispatch({ type: 'SET_DAY_FILTER', date: pick });
-  }, [fitHeightNoScroll, state.loading, state.items, state.dayFilter, todayIso]);
-
-  useEffect(() => {
-    if (!fitHeightNoScroll || state.viewMode === 'by_day') return;
-    dispatch({ type: 'SET_VIEW_MODE', mode: 'by_day' });
-  }, [fitHeightNoScroll, state.viewMode]);
-  const pillButtonClass =
-    'inline-flex h-8 items-center justify-center rounded-md border px-2 text-[10px] font-black uppercase tracking-[0.12em] transition-colors';
-  const pillButtonIdleClass = 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50';
-  const pillButtonActiveClass = 'border-sky-200 bg-sky-50 text-sky-900';
-
-  const handleRefreshClick = () => {
-    setRefreshSpin(true);
-    void load().finally(() => {
-      setTimeout(() => setRefreshSpin(false), 400);
+      return next;
     });
   };
 
-  const cancelScheduledDelete = () => {
-    if (deleteTimerRef.current) {
-      clearTimeout(deleteTimerRef.current);
-      deleteTimerRef.current = null;
-    }
-  };
+  const formatPlanHeader = useCallback((value: string) => value, []);
+  const stationsAccent = staffId ? 'text-violet-700' : 'text-emerald-600';
 
-  const commitDelete = async (item: EnrichedItem) => {
-    try {
-      const res = await fetch(`/api/fba/shipments/${item.shipment_id}/items/${item.item_id}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!data.success && !res.ok) {
-        dispatch({ type: 'RESTORE_ITEM', item });
-      }
-    } catch {
-      dispatch({ type: 'RESTORE_ITEM', item });
-    }
-  };
-
-  const onRequestRemove = (item: EnrichedItem) => {
-    cancelScheduledDelete();
-    dispatch({ type: 'REMOVE_ITEM', id: item.item_id });
-    setUndoRemove(item);
-    deleteTimerRef.current = setTimeout(() => {
-      deleteTimerRef.current = null;
-      setUndoRemove(null);
-      void commitDelete(item);
-    }, 4000);
-  };
-
-  const onUndoRemove = () => {
-    cancelScheduledDelete();
-    if (undoRemove) {
-      dispatch({ type: 'RESTORE_ITEM', item: undoRemove });
-    }
-    setUndoRemove(null);
-  };
-
-  const confirmNeedsPrint = async () => {
-    if (!needsPrintTarget) return;
-    const item = needsPrintTarget;
-    setNeedsPrintTarget(null);
-    dispatch({ type: 'PATCH_ITEM', id: item.item_id, patch: { status: 'needs_print', pending_reason: null } });
-    try {
-      const res = await fetch(`/api/fba/shipments/${item.shipment_id}/items/${item.item_id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'PACKING' }),
-      });
-      const data = await res.json();
-      if (data.success && data.item) {
-        const merged = {
-          ...item,
-          ...data.item,
-          item_status: String(data.item.status ?? ''),
-          item_notes: data.item.notes ?? item.item_notes,
-        };
-        dispatch({
-          type: 'PATCH_ITEM',
-          id: item.item_id,
-          patch: { ...enrichFromApi(merged as PrintQueueItem & { status?: string }), expanded: item.expanded },
-        });
-      }
-    } catch {
-      void load();
-    }
-  };
-
-  if (state.loading) {
+  if (loading) {
     return (
-      <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-3 bg-stone-50 px-6 text-zinc-500">
-        <div className="rounded-2xl border border-zinc-200 bg-white px-6 py-5 text-center shadow-sm shadow-zinc-200/70">
-          <Loader2 className="mx-auto h-7 w-7 animate-spin text-sky-700" />
-          <span className="mt-3 block text-sm font-semibold text-zinc-700">Loading print-ready shipments…</span>
-          <span className="mt-1 block text-[11px] text-zinc-500">Refreshing the label queue and shipment groups.</span>
+      <div className="flex h-full min-w-0 flex-1 items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-600" />
+          <p className="mt-3 text-xs font-black uppercase tracking-[0.2em] text-gray-700">Loading print-ready items…</p>
         </div>
       </div>
     );
   }
 
-  if (state.error) {
+  if (error) {
     return (
-      <div className="flex h-full w-full min-h-0 flex-col items-center justify-center bg-stone-50 px-4 py-16">
-        <div className="max-w-md rounded-3xl border border-red-200 bg-white px-6 py-5 text-center shadow-sm shadow-red-100/70">
-          <AlertCircle className="mx-auto h-[22px] w-[22px] text-red-600" />
-          <p className="mt-3 text-sm font-semibold text-zinc-900">Couldn&apos;t load the print queue.</p>
-          <p className="mt-1 text-xs text-zinc-500">{state.error}</p>
+      <div className="flex h-full min-w-0 flex-1 items-center justify-center bg-gray-50">
+        <div className="max-w-sm rounded-2xl border border-red-200 bg-white px-6 py-5 text-center shadow-sm shadow-red-100/70">
+          <p className="text-sm font-semibold text-red-600">{error}</p>
           <button
             type="button"
-            onClick={() => void load()}
-            className="mt-4 inline-flex rounded-full border border-red-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-50"
+            onClick={() => void fetchPrintQueue()}
+            className="mt-4 inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-100"
           >
-            Retry loading
+            Retry
           </button>
         </div>
       </div>
     );
   }
 
-  if (state.items.length === 0) {
-    return (
-      <motion.div
-        initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
-        animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
-        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-        className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-4 bg-stone-50 px-4 py-20 text-zinc-500"
-      >
-        <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-sky-100 bg-sky-50">
-          <Package className="h-6 w-6 text-sky-400" />
-        </div>
-        <p className="text-sm font-semibold text-zinc-700">No items are waiting for label print.</p>
-        <p className="max-w-[320px] text-center text-xs leading-5 text-zinc-500">
-          Items appear here after a technician marks them <strong>Ready to Go</strong>.
-        </p>
-      </motion.div>
-    );
-  }
-
-  const selectedItems = state.items.filter((i) => state.selected.has(i.item_id));
-
   return (
-    <>
-      <div className="flex h-full w-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-50">
-        <div className="shrink-0 border-b border-zinc-200 bg-white/95 px-3 py-2 backdrop-blur-sm sm:px-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">Print queue</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {!fitHeightNoScroll && (
-                <ViewToggle
-                  value={state.viewMode}
-                  onChange={(mode) => dispatch({ type: 'SET_VIEW_MODE', mode })}
-                />
-              )}
-              <button
-                type="button"
-                title="Refresh"
-                onClick={handleRefreshClick}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-sky-300 hover:text-sky-700"
-              >
-                <motion.span
-                  animate={{ rotate: refreshSpin ? 360 : 0 }}
-                  transition={{ duration: 0.45, ease: 'easeInOut' }}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </motion.span>
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] font-black uppercase tracking-[0.12em] text-zinc-600">
-            <PrintTableCheckbox
-              checked={allChecked}
-              indeterminate={someChecked}
-              reducedMotion={Boolean(shouldReduceMotion)}
-              label={allChecked ? 'Deselect all items' : 'Select all items'}
-              onChange={() =>
-                allChecked ? dispatch({ type: 'DESELECT_ALL' }) : dispatch({ type: 'SELECT_ALL' })
-              }
-            />
-            <span className="inline-flex items-center gap-1 text-zinc-700" title="Shipments in view">
-              <Package className="h-3.5 w-3.5 text-sky-700" />
-              {shipmentGroupCount}
-            </span>
-            <span className="inline-flex items-center gap-1 text-zinc-700" title="Planned units">
-              <ClipboardList className="h-3.5 w-3.5 text-zinc-500" />
-              {totalPlannedUnits}
-            </span>
-            <span className="inline-flex items-center gap-1 text-zinc-700" title="Remaining units">
-              <Clock className="h-3.5 w-3.5 text-amber-600" />
-              {totalRemainingUnits}
-            </span>
-
-            {state.viewMode === 'by_day' && !fitHeightNoScroll && allDayBucketsForToolbar.length > 1 ? (
-              <label className="flex min-w-0 max-w-[14rem] flex-[1_1_8rem] items-center gap-1">
-                <span className="sr-only">Collapse due-date sections</span>
-                <select
-                  className="h-8 w-full truncate rounded-md border border-zinc-200 bg-white px-2 text-[10px] font-black uppercase tracking-[0.06em] text-zinc-800 shadow-sm"
-                  defaultValue=""
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === 'expand_all' || v === 'collapse_past' || v === 'today_only') {
-                      applyDueDateLayout(v);
-                    }
-                    e.currentTarget.selectedIndex = 0;
-                  }}
-                >
-                  <option value="" disabled>
-                    Hide older plans…
-                  </option>
-                  <option value="expand_all">Show all due dates</option>
-                  <option value="collapse_past">Collapse past due dates</option>
-                  <option value="today_only">Only today expanded</option>
-                </select>
-              </label>
-            ) : null}
-
-            {state.viewMode === 'by_day' && fitHeightNoScroll ? (
-              <label className="ml-auto flex min-w-0 items-center gap-2">
-                <span className="shrink-0 text-zinc-500">
-                  <Calendar className="inline h-3.5 w-3.5 align-[-2px] text-sky-700" aria-hidden />
-                </span>
-                <span className="sr-only">Due date</span>
-                <select
-                  className="h-8 max-w-[min(100%,14rem)] truncate rounded-md border border-zinc-200 bg-white px-2 text-[10px] font-black uppercase tracking-[0.08em] text-zinc-800 shadow-sm"
-                  value={state.dayFilter ?? dayFilterOptions[0]?.dayKey ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v) dispatch({ type: 'SET_DAY_FILTER', date: v });
-                  }}
-                >
-                  {dayFilterOptions.map((b) => (
-                    <option key={b.dayKey} value={b.dayKey}>
-                      {b.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : state.viewMode === 'by_day' ? (
-              <div className="ml-auto flex items-center gap-1">
-                <button
-                  type="button"
-                  className={`${pillButtonClass} w-8 px-0 ${state.dayFilter === null ? pillButtonActiveClass : pillButtonIdleClass}`}
-                  onClick={() => dispatch({ type: 'SET_DAY_FILTER', date: null })}
-                  aria-label="All days"
-                  title="All days"
-                >
-                  <Calendar className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className={`${pillButtonClass} w-8 px-0 ${state.dayFilter === yesterdayIso ? pillButtonActiveClass : pillButtonIdleClass}`}
-                  onClick={() => dispatch({ type: 'SET_DAY_FILTER', date: yesterdayIso })}
-                  aria-label="Yesterday"
-                  title="Yesterday"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className={`${pillButtonClass} w-8 px-0 ${state.dayFilter === todayIso ? pillButtonActiveClass : pillButtonIdleClass}`}
-                  onClick={() => dispatch({ type: 'SET_DAY_FILTER', date: todayIso })}
-                  aria-label="Today"
-                  title="Today"
-                >
-                  <Clock className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className={`${pillButtonClass} w-8 px-0 ${state.dayFilter === tomorrowIso ? pillButtonActiveClass : pillButtonIdleClass}`}
-                  onClick={() => dispatch({ type: 'SET_DAY_FILTER', date: tomorrowIso })}
-                  aria-label="Tomorrow"
-                  title="Tomorrow"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className={`min-h-0 flex-1 bg-white ${fitHeightNoScroll ? 'overflow-hidden' : 'overflow-auto'}`}>
-          <table className="w-full border-collapse text-sm">
-            <motion.tbody
-              variants={shouldReduceMotion ? undefined : tableVariants}
-              initial={shouldReduceMotion ? false : 'hidden'}
-              animate={shouldReduceMotion ? undefined : 'visible'}
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-white">
+      <WeekHeader
+        stickyDate={headerDate}
+        fallbackDate={formatDateWithOrdinal(basePstKey)}
+        count={totalCount}
+        countClassName={stationsAccent}
+        weekRange={weekRange}
+        weekOffset={weekOffset}
+        onPrevWeek={() => setWeekOffset((current) => current - 1)}
+        onNextWeek={() => setWeekOffset((current) => Math.min(0, current + 1))}
+        formatDate={formatDateWithOrdinal}
+        showWeekControls
+        rightSlot={
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-700">
+            <select
+              value={planFilter}
+              onChange={(event) => setPlanFilter(event.target.value)}
+              className="h-8 rounded-full border border-gray-200 bg-white px-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-700 shadow-sm"
             >
-              <DayBucketHeaderRow
-                label="Needs attention"
-                summary={attentionSectionSummary}
-                collapsed={attentionSectionCollapsed}
-                onToggle={() => setAttentionSectionCollapsed((c) => !c)}
-                reducedMotion={Boolean(shouldReduceMotion)}
-              />
-              {!attentionSectionCollapsed &&
-                (state.viewMode === 'by_shipment' ? (
-                  attentionFlat.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="px-4 py-3 text-center text-[11px] text-zinc-400">
-                        Nothing needs attention in this view.
-                      </td>
-                    </tr>
-                  ) : (
-                    attentionFlat.map((group) => (
-                      <Fragment key={`att-ship-${group.shipment_id}`}>
-                        <ShipmentGroupHeaderRow
-                          group={group}
-                          selected={state.selected}
-                          dispatch={dispatch}
-                          reducedMotion={Boolean(shouldReduceMotion)}
-                          labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
-                        />
-                        {group.items.map((item) => (
-                          <ItemRow
-                            key={item.item_id}
-                            item={item}
-                            selected={state.selected}
-                            dispatch={dispatch}
-                            reducedMotion={Boolean(shouldReduceMotion)}
-                            onRequestRemove={onRequestRemove}
-                            onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
-                          />
-                        ))}
-                      </Fragment>
-                    ))
-                  )
-                ) : attentionDayBuckets.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-3 text-center text-[11px] text-zinc-400">
-                      Nothing needs attention in this view.
-                    </td>
-                  </tr>
-                ) : (
-                  attentionDayBuckets.map((bucket) => {
-                    const collapsed = collapsedSubBuckets.has(`att:${bucket.dayKey}`);
-                    return (
-                      <Fragment key={`att-day-${bucket.dayKey}`}>
-                        <DayBucketHeaderRow
-                          label={bucket.label}
-                          summary={summarizePrintQueueGroups(bucket.groups)}
-                          collapsed={collapsed}
-                          onToggle={() => toggleSubBucket('att', bucket.dayKey)}
-                          reducedMotion={Boolean(shouldReduceMotion)}
-                        />
-                        {!collapsed &&
-                          bucket.groups.map((group) => (
-                            <Fragment key={`att-${bucket.dayKey}-${group.shipment_id}`}>
-                              <ShipmentGroupHeaderRow
-                                group={group}
-                                selected={state.selected}
-                                dispatch={dispatch}
-                                reducedMotion={Boolean(shouldReduceMotion)}
-                                labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
-                              />
-                              {group.items.map((item) => (
-                                <ItemRow
-                                  key={item.item_id}
-                                  item={item}
-                                  selected={state.selected}
-                                  dispatch={dispatch}
-                                  reducedMotion={Boolean(shouldReduceMotion)}
-                                  onRequestRemove={onRequestRemove}
-                                  onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
-                                />
-                              ))}
-                            </Fragment>
-                          ))}
-                      </Fragment>
-                    );
-                  })
-                ))}
-            </motion.tbody>
-
-            <motion.tbody
-              variants={shouldReduceMotion ? undefined : tableVariants}
-              initial={shouldReduceMotion ? false : 'hidden'}
-              animate={shouldReduceMotion ? undefined : 'visible'}
+              {planOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-gray-700"
             >
-              <DayBucketHeaderRow
-                label="Ready to print labels"
-                summary={readySectionSummary}
-                collapsed={readySectionCollapsed}
-                onToggle={() => setReadySectionCollapsed((c) => !c)}
-                reducedMotion={Boolean(shouldReduceMotion)}
-              />
-              {!readySectionCollapsed &&
-                (state.viewMode === 'by_shipment' ? (
-                  readyFlat.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="px-4 py-3 text-center text-[11px] text-zinc-400">
-                        No rows ready to print yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    readyFlat.map((group) => (
-                      <Fragment key={`ready-ship-${group.shipment_id}`}>
-                        <ShipmentGroupHeaderRow
-                          group={group}
-                          selected={state.selected}
-                          dispatch={dispatch}
-                          reducedMotion={Boolean(shouldReduceMotion)}
-                          labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
-                        />
-                        {group.items.map((item) => (
-                          <ItemRow
-                            key={item.item_id}
-                            item={item}
-                            selected={state.selected}
-                            dispatch={dispatch}
-                            reducedMotion={Boolean(shouldReduceMotion)}
-                            onRequestRemove={onRequestRemove}
-                            onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
-                          />
-                        ))}
-                      </Fragment>
-                    ))
-                  )
-                ) : readyDayBuckets.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-3 text-center text-[11px] text-zinc-400">
-                      No rows ready to print yet.
-                    </td>
-                  </tr>
-                ) : (
-                  readyDayBuckets.map((bucket) => {
-                    const collapsed = collapsedSubBuckets.has(`ready:${bucket.dayKey}`);
-                    return (
-                      <Fragment key={`ready-day-${bucket.dayKey}`}>
-                        <DayBucketHeaderRow
-                          label={bucket.label}
-                          summary={summarizePrintQueueGroups(bucket.groups)}
-                          collapsed={collapsed}
-                          onToggle={() => toggleSubBucket('ready', bucket.dayKey)}
-                          reducedMotion={Boolean(shouldReduceMotion)}
-                        />
-                        {!collapsed &&
-                          bucket.groups.map((group) => (
-                            <Fragment key={`ready-${bucket.dayKey}-${group.shipment_id}`}>
-                              <ShipmentGroupHeaderRow
-                                group={group}
-                                selected={state.selected}
-                                dispatch={dispatch}
-                                reducedMotion={Boolean(shouldReduceMotion)}
-                                labelReady={Boolean(shipmentLabelReady[group.shipment_id])}
-                              />
-                              {group.items.map((item) => (
-                                <ItemRow
-                                  key={item.item_id}
-                                  item={item}
-                                  selected={state.selected}
-                                  dispatch={dispatch}
-                                  reducedMotion={Boolean(shouldReduceMotion)}
-                                  onRequestRemove={onRequestRemove}
-                                  onNeedsPrintClick={(row) => setNeedsPrintTarget(row)}
-                                />
-                              ))}
-                            </Fragment>
-                          ))}
-                      </Fragment>
-                    );
-                  })
-                ))}
-            </motion.tbody>
-          </table>
-        </div>
-
-        <AnimatePresence>
-          {selectedItems.length > 0 && (
-            <SelectionFloatingBar
-              selectedItems={selectedItems}
-              onClear={() => dispatch({ type: 'DESELECT_ALL' })}
-            />
-          )}
-        </AnimatePresence>
-      </div>
-
-      <UndoToast
-        open={undoRemove != null}
-        label={undoRemove ? `${undoRemove.fnsku} removed from plan` : ''}
-        onUndo={onUndoRemove}
+              {allVisibleSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            {selectedCount > 0 ? <span className="text-[10px] text-gray-500">{selectedCount} selected</span> : null}
+          </div>
+        }
       />
 
-      <AnimatePresence>
-        {needsPrintTarget && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-zinc-900/35 p-4"
-            role="presentation"
-            onClick={() => setNeedsPrintTarget(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.98, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              role="dialog"
-              aria-modal
-              aria-labelledby="needs-print-title"
-              onClick={(e) => e.stopPropagation()}
-              className="max-w-sm rounded-3xl border border-zinc-200 bg-white p-5 shadow-xl shadow-zinc-900/10"
-            >
-              <p id="needs-print-title" className="text-sm font-black text-zinc-900">
-                Mark as &quot;Needs Print&quot;?
-              </p>
-              <p className="mt-2 text-xs leading-5 text-zinc-600">
-                Overrides the current status and sends this FNSKU back for re-labeling when a scan or print was missed.
-              </p>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setNeedsPrintTarget(null)}
-                  className="rounded-full border border-zinc-200 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:bg-zinc-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void confirmNeedsPrint()}
-                  className="rounded-full bg-sky-700 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-sky-800"
-                >
-                  Mark Needs Print →
-                </button>
+      <div className={`flex-1 ${fitHeightNoScroll ? 'overflow-hidden' : 'overflow-auto'} no-scrollbar`}>
+        {groupedByPlan.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center px-6 py-20 text-center text-gray-500">
+            <p className="text-xs font-black uppercase tracking-[0.3em]">No print-ready rows</p>
+            <p className="mt-1 text-[11px]">Try a different week or plan.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {groupedByPlan.map((group) => (
+              <div key={group.plan} className="flex flex-col">
+                <DateGroupHeader
+                  date={group.plan}
+                  total={group.items.length}
+                  formatDate={formatPlanHeader}
+                />
+                {group.items.map((item) => (
+                  <PrintReadyRow
+                    key={item.item_id}
+                    item={item}
+                    isSelected={selectedIds.has(item.item_id)}
+                    onClick={() => handleToggleSelection(item.item_id)}
+                  />
+                ))}
               </div>
-            </motion.div>
-          </motion.div>
+            ))}
+          </div>
         )}
-      </AnimatePresence>
-    </>
+      </div>
+    </div>
   );
 }
+
+export type { PrintQueueItem, PrintSelectionPayload } from './types';

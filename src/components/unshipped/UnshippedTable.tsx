@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { fetchUnshippedOrdersData } from '@/lib/dashboard-table-data';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 export interface UnshippedTableProps {
   packedBy?: number;
@@ -63,6 +64,48 @@ export function UnshippedTable({
     placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
   });
+
+  const ordersChannelName = process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
+
+  useAblyChannel(
+    ordersChannelName,
+    'order.assignments',
+    (message: any) => {
+      const d = message?.data;
+      const orderId = Number(d?.orderId);
+      if (!Number.isFinite(orderId)) return;
+
+      const detail = {
+        orderIds: [orderId],
+        testerId: d.testerId,
+        packerId: d.packerId,
+        testerName: d.testerName,
+        packerName: d.packerName,
+        deadlineAt: d.deadlineAt,
+      };
+
+      const hasAnyChange =
+        detail.testerId !== undefined ||
+        detail.packerId !== undefined ||
+        detail.deadlineAt !== undefined;
+      if (!hasAnyChange) return;
+
+      queryClient.setQueriesData(
+        { queryKey: ['dashboard-table', 'unshipped'] },
+        (current: unknown) => {
+          if (!Array.isArray(current)) return current;
+          let changed = false;
+          const next = current.map((row: any) => {
+            if (Number(row?.id) !== orderId) return row;
+            changed = true;
+            return patchOrderRecordFromAssignmentEvent(row, detail);
+          });
+          return changed ? next : current;
+        }
+      );
+    },
+    true,
+  );
 
   useEffect(() => {
     const handleRefresh = () => {

@@ -150,30 +150,37 @@ export async function GET(req: NextRequest) {
           )
       ),
       serial_rows AS (
-        -- DISTINCT ON produces one row per tracking (shipment_id or scan_ref),
-        -- picking the latest SERIAL_ADDED SAL entry for metadata.  The scalar
-        -- subquery aggregates ALL TSN serial numbers for that tracking so that
-        -- multiple scans appear as one combined row rather than split rows.
-        SELECT DISTINCT ON (COALESCE(tsn.shipment_id::text, COALESCE(tsn.scan_ref, '')))
+        -- DISTINCT ON: one row per carrier shipment/scan_ref, OR per FBA
+        -- fnsku_log_id so each FNSKU tech scan stays a distinct line. Timestamp
+        -- for FBA uses fba_fnsku_logs.created_at (immutable) so serial edits do
+        -- not float the row by SERIAL_ADDED or station_activity_logs.updated_at.
+        SELECT DISTINCT ON (
+          CASE
+            WHEN tsn.fnsku_log_id IS NOT NULL THEN 'fba:' || tsn.fnsku_log_id::text
+            ELSE COALESCE(tsn.shipment_id::text, COALESCE(tsn.scan_ref, ''))
+          END
+        )
           sal.id,
           sal.id AS source_row_id,
           'tech_serial'::text AS source_kind,
           tsn.id AS tech_serial_id,
-          -- Always use the original TRACKING_SCANNED SAL created_at so that
-          -- adding or replacing a serial never changes the row's position.
-          -- Falls back to the SERIAL_ADDED SAL created_at when no tracking
-          -- scan exists (e.g. serial added without prior tracking scan).
-          COALESCE(tracking_sal.created_at, sal.created_at) AS created_at,
+          COALESCE(fl.created_at, tracking_sal.created_at, sal.created_at) AS created_at,
           COALESCE(stn.tracking_number_raw, tsn.scan_ref) AS shipping_tracking_number,
-          -- Aggregate every serial number linked to this shipment/scan_ref so
-          -- that all serials scanned for the same tracking appear together.
           (SELECT STRING_AGG(t.serial_number, ',' ORDER BY t.created_at)
            FROM tech_serial_numbers t
-           WHERE (tsn.shipment_id IS NOT NULL AND t.shipment_id = tsn.shipment_id)
-              OR (tsn.shipment_id IS NULL
-                  AND t.shipment_id IS NULL
-                  AND tsn.scan_ref IS NOT NULL
-                  AND COALESCE(t.scan_ref, '') = tsn.scan_ref)
+           WHERE (tsn.fnsku_log_id IS NOT NULL AND t.fnsku_log_id = tsn.fnsku_log_id)
+              OR (
+                tsn.fnsku_log_id IS NULL
+                AND (
+                  (tsn.shipment_id IS NOT NULL AND t.shipment_id = tsn.shipment_id)
+                  OR (
+                    tsn.shipment_id IS NULL
+                    AND t.shipment_id IS NULL
+                    AND tsn.scan_ref IS NOT NULL
+                    AND COALESCE(t.scan_ref, '') = tsn.scan_ref
+                  )
+                )
+              )
           ) AS serial_number,
           sal.staff_id AS tested_by,
           order_match.shipment_id,
@@ -204,6 +211,7 @@ export async function GET(req: NextRequest) {
             OR o_stn.is_out_for_delivery OR o_stn.is_delivered, false) AS is_shipped
         FROM station_activity_logs sal
         JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
+        LEFT JOIN fba_fnsku_logs fl ON fl.id = tsn.fnsku_log_id
         LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
         -- Resolve the original TRACKING_SCANNED SAL row for this staff + tracking
         -- so we can anchor created_at to when the item was first scanned.
@@ -263,9 +271,12 @@ export async function GET(req: NextRequest) {
           AND sal.activity_type = 'SERIAL_ADDED'
           AND sal.staff_id = $1
           ${weekClauseSerial}
-        -- DISTINCT ON requires: same leading expression, then sal.id DESC to pick
-        -- the latest SERIAL_ADDED SAL row as the representative for each tracking.
-        ORDER BY COALESCE(tsn.shipment_id::text, COALESCE(tsn.scan_ref, '')), sal.id DESC
+        ORDER BY
+          CASE
+            WHEN tsn.fnsku_log_id IS NOT NULL THEN 'fba:' || tsn.fnsku_log_id::text
+            ELSE COALESCE(tsn.shipment_id::text, COALESCE(tsn.scan_ref, ''))
+          END,
+          sal.id DESC
       ),
       fnsku_scan_rows AS (
         SELECT
@@ -284,7 +295,7 @@ export async function GET(req: NextRequest) {
           NULL::text AS item_number,
           COALESCE(ff.product_title, sal.metadata->>'product_title') AS product_title,
           COALESCE(sal.metadata->>'quantity', '1') AS quantity,
-          COALESCE(ff.condition, sal.metadata->>'condition', 'FBA Scan') AS condition,
+          COALESCE(NULLIF(TRIM(COALESCE(ff.condition, '')), ''), NULLIF(TRIM(COALESCE(sal.metadata->>'condition', '')), '')) AS condition,
           COALESCE(ff.sku, sal.metadata->>'sku') AS sku,
           sal.fnsku AS fnsku,
           COALESCE(fsi.status::text, fs.status::text, 'READY_TO_GO') AS status,
@@ -304,10 +315,25 @@ export async function GET(req: NextRequest) {
           AND NOT EXISTS (
             SELECT 1
             FROM station_activity_logs sal2
+            JOIN tech_serial_numbers tsn2 ON tsn2.id = sal2.tech_serial_number_id
             WHERE sal2.station = 'TECH'
               AND sal2.activity_type = 'SERIAL_ADDED'
               AND sal2.staff_id = sal.staff_id
-              AND sal2.fnsku = sal.fnsku
+              AND (
+                (
+                  sal.metadata ? 'fnsku_log_id'
+                  AND NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), '') IS NOT NULL
+                  AND tsn2.fnsku_log_id = (NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), ''))::bigint
+                )
+                OR (
+                  (
+                    NOT sal.metadata ? 'fnsku_log_id'
+                    OR NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), '') IS NULL
+                  )
+                  AND sal2.fnsku = sal.fnsku
+                  AND tsn2.fnsku_log_id IS NULL
+                )
+              )
           )
       )
       SELECT

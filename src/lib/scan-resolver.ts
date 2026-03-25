@@ -111,6 +111,19 @@ export function looksLikeFnsku(value: string): boolean {
   return FNSKU_OR_ASIN_REGEX.test(v);
 }
 
+/**
+ * True while input could still become a valid 10-char FNSKU (X00…) or ASIN (B0…).
+ * For station UI mode only — routing to `/api/tech/scan-fnsku` must use {@link looksLikeFnsku} (complete).
+ */
+export function looksLikeFnskuPrefix(value: string): boolean {
+  if (looksLikeFnsku(value)) return true;
+  const v = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!v) return false;
+  if (/^X00[A-Z0-9]{0,7}$/.test(v) && v.length < 10) return true;
+  if (/^B0[A-Z0-9]{0,8}$/.test(v) && v.length < 10) return true;
+  return false;
+}
+
 // ─── CLASSIFIER ───────────────────────────────────────────────────────────────
 
 /**

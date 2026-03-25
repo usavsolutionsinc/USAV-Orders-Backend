@@ -92,6 +92,54 @@ export async function publishOrderChanged(payload: OrderChangedPayload) {
   });
 }
 
+export type OrderAssignmentsBroadcastPayload = {
+  orderId: number;
+  testerId: number | null;
+  packerId: number | null;
+  testerName: string | null;
+  packerName: string | null;
+  deadlineAt: string | null;
+  source: string;
+};
+
+export type QueueAssignmentsBroadcastPayload = {
+  entityType: string;
+  entityId: number;
+  source: string;
+};
+
+/** Broadcast ORDER work_assignment staff + deadline to all clients (dashboard queue, station Up Next). */
+export async function publishOrderAssignmentsUpdated(payload: OrderAssignmentsBroadcastPayload) {
+  const orderId = Number(payload.orderId);
+  if (!Number.isFinite(orderId)) return;
+
+  await publishEvent(getOrdersChannelName(), 'order.assignments', {
+    type: 'order.assignments',
+    orderId,
+    testerId: payload.testerId,
+    packerId: payload.packerId,
+    testerName: payload.testerName,
+    packerName: payload.packerName,
+    deadlineAt: payload.deadlineAt,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+/** Non-order work queues (FBA, receiving, repair, SKU stock) — clients refetch Up Next. */
+export async function publishQueueAssignmentsUpdated(payload: QueueAssignmentsBroadcastPayload) {
+  const entityId = Number(payload.entityId);
+  if (!Number.isFinite(entityId)) return;
+
+  await publishEvent(getOrdersChannelName(), 'queue.assignments', {
+    type: 'queue.assignments',
+    entityType: String(payload.entityType || '').trim(),
+    entityId,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
 export async function publishOrderTested(payload: OrderTestedPayload) {
   const orderId = Number(payload.orderId);
   if (!Number.isFinite(orderId)) return;

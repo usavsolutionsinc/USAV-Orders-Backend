@@ -108,13 +108,18 @@ export function TechDetailsStack({
       const rowId = Number((shipped as any).tech_serial_id);
       const sourceRowId = Number((shipped as any).source_row_id);
       const sourceKind = String((shipped as any).source_kind || '');
+      const needsSerialRow =
+        sourceKind !== 'tech_scan' && sourceKind !== 'fba_scan';
 
-      if (sourceKind !== 'tech_scan' && (!Number.isFinite(rowId) || rowId <= 0)) {
+      if (needsSerialRow && (!Number.isFinite(rowId) || rowId <= 0)) {
         throw new Error('Missing tech row id for delete');
       }
 
-      if (sourceKind === 'tech_scan' && (!Number.isFinite(sourceRowId) || sourceRowId <= 0)) {
-        throw new Error('Missing tracking scan activity id for delete');
+      if (
+        (sourceKind === 'tech_scan' || sourceKind === 'fba_scan') &&
+        (!Number.isFinite(sourceRowId) || sourceRowId <= 0)
+      ) {
+        throw new Error('Missing station activity id for delete');
       }
 
       const response = await fetch('/api/tech/delete-tracking', {

@@ -4,7 +4,7 @@
  * SKU / repair / FNSKU / command precedence.
  */
 
-import { classifyInput, looksLikeFnsku } from './scan-resolver';
+import { classifyInput, looksLikeFnsku, looksLikeFnskuPrefix } from './scan-resolver';
 
 export type StationScanType = 'TRACKING' | 'SERIAL' | 'FNSKU' | 'SKU' | 'REPAIR' | 'COMMAND';
 export type StationInputMode = 'tracking' | 'fba' | 'repair' | 'serial';
@@ -33,6 +33,8 @@ export function detectStationScanType(val: string): StationScanType {
 export function getStationInputMode(val: string): StationInputMode {
   const input = String(val || '').trim();
   if (/^RS-/i.test(input)) return 'repair';
+
+  if (looksLikeFnskuPrefix(input)) return 'fba';
 
   const type = detectStationScanType(input);
   if (type === 'FNSKU') return 'fba';

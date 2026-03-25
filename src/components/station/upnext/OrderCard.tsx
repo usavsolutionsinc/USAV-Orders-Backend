@@ -11,6 +11,7 @@ import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { getTrackingUrl } from '@/utils/order-links';
+import { isEmptyDisplayValue, missingItemNumberLabel } from '@/utils/empty-display-value';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getPresentStaffForToday } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
@@ -35,14 +36,16 @@ function buildWorkOrderRow(order: Order): WorkOrderRow {
     sourcePath:  '/work-orders',
     techId:      order.tester_id ?? null,
     techName:    order.tester_name ?? null,
-    packerId:    null,
-    packerName:  null,
+    packerId:    order.packer_id ?? null,
+    packerName:  order.packer_name ?? null,
     status:      'OPEN',
     priority:    0,
     deadlineAt:  order.ship_by_date ?? null,
     notes:       null,
     assignedAt:  null,
     updatedAt:   null,
+    orderId:     order.order_id || null,
+    trackingNumber: order.shipping_tracking_number || null,
   };
 }
 
@@ -150,7 +153,8 @@ export function OrderCard({
   const quantity      = Math.max(1, parseInt(String(order.quantity || '1'), 10) || 1);
   const daysLate      = getDaysLateNumber(order.ship_by_date, order.created_at);
   const trackingNumber = String(order.shipping_tracking_number || '').trim();
-  const itemNumberValue = String(order.item_number || '').trim();
+  const itemNumberRaw = String(order.item_number || '').trim();
+  const itemNumberValue = isEmptyDisplayValue(order.item_number) ? '' : itemNumberRaw;
   const trackingUrl = getTrackingUrl(trackingNumber);
 
   const handleCopyTracking = async (e: React.MouseEvent) => {
@@ -375,18 +379,21 @@ export function OrderCard({
                     <div className="mb-1 text-gray-400">Item #</div>
                     <div className="flex items-center justify-between gap-1">
                       <div className="min-w-0 text-[11px] text-gray-900 normal-case tracking-normal break-words">
-                        {itemNumberValue ? getLast4(itemNumberValue) : 'None'}
+                        {itemNumberValue
+                          ? getLast4(itemNumberValue)
+                          : missingItemNumberLabel(order.order_id, order.account_source)}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={handleCopyItemNumber}
-                          disabled={!itemNumberValue}
-                          className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={copiedItemNumber ? 'Item number copied' : 'Copy item number'}
-                        >
-                          {copiedItemNumber ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
+                        {itemNumberValue ? (
+                          <button
+                            type="button"
+                            onClick={handleCopyItemNumber}
+                            className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors"
+                            aria-label={copiedItemNumber ? 'Item number copied' : 'Copy item number'}
+                          >
+                            {copiedItemNumber ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -423,18 +430,19 @@ export function OrderCard({
                     <div className="mb-1 text-gray-400">Tracking</div>
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 text-[11px] text-gray-900 normal-case tracking-normal break-words">
-                        {trackingNumber ? getTrackingLast4(trackingNumber) : 'Not available'}
+                        {trackingNumber ? getTrackingLast4(trackingNumber) : 'N/A'}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={handleCopyTracking}
-                          disabled={!trackingNumber}
-                          className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={copiedTracking ? 'Tracking copied' : 'Copy tracking number'}
-                        >
-                          {copiedTracking ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
+                        {trackingNumber ? (
+                          <button
+                            type="button"
+                            onClick={handleCopyTracking}
+                            className="flex-shrink-0 text-gray-400 hover:text-emerald-600 transition-colors"
+                            aria-label={copiedTracking ? 'Tracking copied' : 'Copy tracking number'}
+                          >
+                            {copiedTracking ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={(e) => {

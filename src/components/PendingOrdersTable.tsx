@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import StockZohoOrdersTable from '@/components/dashboard/StockZohoOrdersTable';
 import { dispatchCloseShippedDetails } from '@/utils/events';
-import { fetchPendingOrdersData } from '@/lib/dashboard-table-data';
+import { fetchPendingOrderRowById, fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 export interface PendingOrdersTableProps {
@@ -82,6 +82,46 @@ export default function PendingOrdersTable({
   });
 
   const ordersChannelName = process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
+
+  useAblyChannel(
+    ordersChannelName,
+    'order.assignments',
+    (message: any) => {
+      const d = message?.data;
+      const orderId = Number(d?.orderId);
+      if (!Number.isFinite(orderId)) return;
+
+      const detail = {
+        orderIds: [orderId],
+        testerId: d.testerId,
+        packerId: d.packerId,
+        testerName: d.testerName,
+        packerName: d.packerName,
+        deadlineAt: d.deadlineAt,
+      };
+
+      const hasAnyChange =
+        detail.testerId !== undefined ||
+        detail.packerId !== undefined ||
+        detail.deadlineAt !== undefined;
+      if (!hasAnyChange) return;
+
+      queryClient.setQueriesData(
+        { queryKey: ['dashboard-table', 'pending'] },
+        (current: unknown) => {
+          if (!Array.isArray(current)) return current;
+          let changed = false;
+          const next = current.map((row: any) => {
+            if (Number(row?.id) !== orderId) return row;
+            changed = true;
+            return patchOrderRecordFromAssignmentEvent(row, detail);
+          });
+          return changed ? next : current;
+        }
+      );
+    },
+    true,
+  );
 
   useAblyChannel(
     ordersChannelName,
@@ -168,6 +208,38 @@ export default function PendingOrdersTable({
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
     };
 
+    const handlePendingOrderRefetch = (e: Event) => {
+      const orderId = Number((e as CustomEvent<{ orderId?: number }>)?.detail?.orderId);
+      if (!Number.isFinite(orderId) || orderId <= 0) return;
+
+      void (async () => {
+        try {
+          const fresh = await fetchPendingOrderRowById(orderId, {
+            searchQuery,
+            packedBy,
+            testedBy,
+          });
+          queryClient.setQueriesData(
+            { queryKey: ['dashboard-table', 'pending'] },
+            (current: unknown) => {
+              if (!Array.isArray(current)) return current;
+              const ix = current.findIndex((row: { id?: unknown }) => Number(row?.id) === orderId);
+              if (fresh == null) {
+                if (ix < 0) return current;
+                return current.filter((row: { id?: unknown }) => Number(row?.id) !== orderId);
+              }
+              if (ix < 0) return [...current, fresh];
+              const next = [...current];
+              next[ix] = fresh;
+              return next;
+            }
+          );
+        } catch {
+          // Keep existing cache on failure
+        }
+      })();
+    };
+
     // Patch order fields directly into cached rows when an assignment succeeds
     // so the deadline-driven pending view stays in sync without a round-trip.
     const handleAssignmentUpdated = (e: any) => {
@@ -203,14 +275,16 @@ export default function PendingOrdersTable({
 
     window.addEventListener('usav-refresh-data' as any, handleRefresh as any);
     window.addEventListener('dashboard-refresh' as any, handleRefresh as any);
+    window.addEventListener('dashboard-pending-order-refetch' as any, handlePendingOrderRefetch as any);
     window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
 
     return () => {
       window.removeEventListener('usav-refresh-data' as any, handleRefresh as any);
       window.removeEventListener('dashboard-refresh' as any, handleRefresh as any);
+      window.removeEventListener('dashboard-pending-order-refetch' as any, handlePendingOrderRefetch as any);
       window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
     };
-  }, [queryClient]);
+  }, [queryClient, packedBy, searchQuery, testedBy]);
 
   const clearSearch = () => {
     const params = new URLSearchParams(searchParams.toString());

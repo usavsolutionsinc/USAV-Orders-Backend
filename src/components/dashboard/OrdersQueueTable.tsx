@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2, Search } from '@/components/Icons';
 import { OrderIdChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
@@ -10,10 +10,163 @@ import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 
+function getDaysLateNumber(deadlineAt: string | null | undefined): number | null {
+  const deadlineKey = toPSTDateKey(deadlineAt);
+  if (!deadlineKey) return null;
+  const todayKey = getCurrentPSTDateKey();
+  if (!todayKey) return null;
+  const [dy, dm, dd] = deadlineKey.split('-').map(Number);
+  const [ty, tm, td] = todayKey.split('-').map(Number);
+  const deadlineIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
+  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
+  return Math.max(0, todayIndex - deadlineIndex);
+}
+
+function getDaysLateTone(daysLate: number | null) {
+  if (daysLate === null) return 'text-gray-300';
+  if (daysLate > 1) return 'text-red-600';
+  if (daysLate === 1) return 'text-yellow-600';
+  return 'text-emerald-600';
+}
+
+function normalizePersonName(value: unknown): string {
+  const text = String(value ?? '')
+    .replace(/^tech:\s*/i, '')
+    .replace(/^packer:\s*/i, '')
+    .trim();
+  if (!text) return '---';
+  if (/^(not specified|n\/a|null|undefined)$/i.test(text)) return '---';
+  if (/^staff\s*#\d+$/i.test(text)) return '---';
+  return text;
+}
+
 interface WeekRange {
   startStr: string;
   endStr: string;
 }
+
+type QueueRowRecord = ShippedOrder & Record<string, unknown>;
+
+/** Memoized row: when React Query merges one updated order, unrelated rows skip re-render. */
+const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
+  record,
+  isSelected,
+  useAlternateStripe,
+  testerDisplay,
+  packerDisplay,
+  hasTechScan,
+  hasOutOfStock,
+  outOfStockValue,
+  daysLate,
+  onRowClick,
+}: {
+  record: QueueRowRecord;
+  isSelected: boolean;
+  useAlternateStripe: boolean;
+  testerDisplay: string;
+  packerDisplay: string;
+  hasTechScan: boolean;
+  hasOutOfStock: boolean;
+  outOfStockValue: string;
+  daysLate: number | null;
+  onRowClick: (record: ShippedOrder) => void;
+}) {
+  const qty = parseInt(String(record.quantity || '1'), 10) || 1;
+  const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-400';
+  const trackingRaw =
+    (record.tracking_number as string | undefined) ||
+    record.shipping_tracking_number ||
+    '';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      onClick={() => onRowClick(record)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onRowClick(record);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      aria-label={`Open order ${record.order_id || record.id}`}
+      data-order-row-id={String(record.id)}
+      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+        isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/10'
+      }`}
+    >
+      <div className="flex flex-col min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {hasTechScan ? (
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
+          ) : hasOutOfStock ? (
+            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
+          ) : (
+            <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
+          )}
+          <div className="text-[12px] font-bold text-gray-900 truncate">
+            {record.product_title || 'Unknown Product'}
+          </div>
+        </div>
+        <div className="mt-0.5 flex items-center gap-2">
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate min-w-0 flex-1">
+            <span className={qtyClass}>{qty}</span>
+            {' • '}
+            <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>
+              {record.condition || 'No Condition'}
+            </span>
+            {' • '}
+            {testerDisplay}
+            {' • '}
+            {packerDisplay}
+            {daysLate !== null ? (
+              <>
+                {' • '}
+                <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
+              </>
+            ) : null}
+            {hasOutOfStock ? (
+              <>
+                {' • '}
+                <span className="text-red-600">{outOfStockValue}</span>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 shrink-0">
+        <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
+        <TrackingChip value={trackingRaw} display={getLast4(trackingRaw)} />
+      </div>
+    </motion.div>
+  );
+}, (prev, next) => {
+  if (prev.record.id !== next.record.id) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+  if (prev.useAlternateStripe !== next.useAlternateStripe) return false;
+  if (prev.testerDisplay !== next.testerDisplay) return false;
+  if (prev.packerDisplay !== next.packerDisplay) return false;
+  if (prev.hasTechScan !== next.hasTechScan) return false;
+  if (prev.hasOutOfStock !== next.hasOutOfStock) return false;
+  if (prev.outOfStockValue !== next.outOfStockValue) return false;
+  if (prev.daysLate !== next.daysLate) return false;
+  if (prev.record.deadline_at !== next.record.deadline_at) return false;
+  if (prev.record.product_title !== next.record.product_title) return false;
+  if (prev.record.condition !== next.record.condition) return false;
+  if (prev.record.order_id !== next.record.order_id) return false;
+  if (prev.record.quantity !== next.record.quantity) return false;
+  const prevTr =
+    (prev.record.tracking_number as string | undefined) || prev.record.shipping_tracking_number || '';
+  const nextTr =
+    (next.record.tracking_number as string | undefined) || next.record.shipping_tracking_number || '';
+  if (prevTr !== nextTr) return false;
+  if (prev.onRowClick !== next.onRowClick) return false;
+  return true;
+});
 
 interface OrdersQueueTableProps {
   records: ShippedOrder[];
@@ -295,106 +448,40 @@ export function OrdersQueueTable({
                     <div key={date} className="flex flex-col">
                       <DateGroupHeader date={date} total={dayRecords.length} formatDate={formatDate} />
                       {sortedRecords.map((record, index) => {
+                        const r = record as QueueRowRecord;
                         const testerName = useWaForDisplay
-                          ? getStaffName((record as any).tester_id)
-                          : (record as any).tested_by_name ||
-                            (record as any).tester_name ||
-                            getStaffName((record as any).tested_by) ||
-                            getStaffName((record as any).tester_id);
+                          ? getStaffName(r.tester_id as number | null | undefined)
+                          : (r.tested_by_name as string | undefined) ||
+                            (r.tester_name as string | undefined) ||
+                            getStaffName(r.tested_by as number | null | undefined) ||
+                            getStaffName(r.tester_id as number | null | undefined);
                         const packerName = useWaForDisplay
-                          ? getStaffName((record as any).packer_id)
-                          : (record as any).packed_by_name ||
-                            (record as any).packer_name ||
-                            getStaffName((record as any).packed_by) ||
-                            getStaffName((record as any).packer_id);
+                          ? getStaffName(r.packer_id as number | null | undefined)
+                          : (r.packed_by_name as string | undefined) ||
+                            (r.packer_name as string | undefined) ||
+                            getStaffName(r.packed_by as number | null | undefined) ||
+                            getStaffName(r.packer_id as number | null | undefined);
                         const testerDisplay = normalizePersonName(testerName);
                         const packerDisplay = normalizePersonName(packerName);
-                        const outOfStockValue = String((record as any).out_of_stock || '').trim();
+                        const outOfStockValue = String(r.out_of_stock || '').trim();
                         const hasOutOfStock = outOfStockValue !== '';
-                        // Match UpNextOrder: only an actual tech scan marks the row as tested.
-                        const hasTechScan = Boolean((record as any).has_tech_scan);
-                        const defaultDaysLate = getDaysLateNumber(record.deadline_at as any);
+                        const hasTechScan = Boolean(r.has_tech_scan);
+                        const defaultDaysLate = getDaysLateNumber(r.deadline_at as string | null | undefined);
 
                         return (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
+                          <OrdersQueueTableRow
                             key={record.id}
-                            onClick={() => handleRowClick(record)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                handleRowClick(record);
-                              }
-                            }}
-                            role="button"
-                            tabIndex={0}
-                            aria-pressed={selectedRecord?.id === record.id}
-                            aria-label={`Open order ${record.order_id || record.id}`}
-                            data-order-row-id={String(record.id)}
-                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
-                              selectedRecord?.id === record.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
-                            }`}
-                          >
-                            <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-2 min-w-0">
-                                {hasTechScan ? (
-                                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
-                                ) : hasOutOfStock ? (
-                                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
-                                ) : (
-                                  <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
-                                )}
-                                <div className="text-[12px] font-bold text-gray-900 truncate">
-                                  {record.product_title || 'Unknown Product'}
-                                </div>
-                              </div>
-                              <div className="mt-0.5 flex items-center gap-2">
-                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate min-w-0 flex-1">
-                                  {(() => {
-                                    const qty = parseInt(String((record as any).quantity || '1'), 10) || 1;
-                                    const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-400';
-                                    return (
-                                      <>
-                                        <span className={qtyClass}>{qty}</span>
-                                        {' • '}
-                                      </>
-                                    );
-                                  })()}
-                                  <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>
-                                    {record.condition || 'No Condition'}
-                                  </span>
-                                  {' • '}
-                                  {testerDisplay}
-                                  {' • '}
-                                  {packerDisplay}
-                                  {defaultDaysLate !== null ? (
-                                    <>
-                                      {' • '}
-                                      <span className={getDaysLateTone(defaultDaysLate)}>{defaultDaysLate}</span>
-                                    </>
-                                  ) : null}
-                                  {hasOutOfStock ? (
-                                    <>
-                                      {' • '}
-                                      <span className="text-red-600">{outOfStockValue}</span>
-                                    </>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 shrink-0">
-                              <OrderIdChip
-                                value={record.order_id || ''}
-                                display={getLast4(record.order_id)}
-                              />
-                              <TrackingChip
-                                value={(record as any).tracking_number || record.shipping_tracking_number || ''}
-                                display={getLast4((record as any).tracking_number || record.shipping_tracking_number)}
-                              />
-                            </div>
-                          </motion.div>
+                            record={r}
+                            isSelected={selectedRecord?.id === record.id}
+                            useAlternateStripe={index % 2 === 0}
+                            testerDisplay={testerDisplay}
+                            packerDisplay={packerDisplay}
+                            hasTechScan={hasTechScan}
+                            hasOutOfStock={hasOutOfStock}
+                            outOfStockValue={outOfStockValue}
+                            daysLate={defaultDaysLate}
+                            onRowClick={handleRowClick}
+                          />
                         );
                       })}
                     </div>

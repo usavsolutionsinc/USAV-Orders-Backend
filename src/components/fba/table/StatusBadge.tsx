@@ -14,7 +14,7 @@ const copy: Record<ItemStatus, { label: string; icon: ReactNode; tone: string }>
   needs_print: {
     label: 'Needs Print',
     icon: <Printer className="h-3 w-3" />,
-    tone: 'text-sky-800',
+    tone: 'text-violet-800',
   },
   pending_out_of_stock: {
     label: 'Out of Stock',
@@ -37,9 +37,9 @@ export function StatusBadge({
   status,
   onBadgeClick,
   needsReason,
-  /** When set for `ready_to_print`, shows a text pill instead of a checkmark icon (FBA print queue + staff theme). */
+  /** When set for `ready_to_print`, shows a themed check icon in a pill (FBA print queue + staff theme). */
   readyPillClassName,
-  focusRingClassName = 'focus-visible:ring-2 focus-visible:ring-sky-400',
+  focusRingClassName = 'focus-visible:ring-2 focus-visible:ring-violet-400/60',
 }: {
   status: ItemStatus;
   onBadgeClick?: () => void;
@@ -71,8 +71,12 @@ export function StatusBadge({
   const useReadyPill = status === 'ready_to_print' && Boolean(readyPillClassName);
 
   const inner = useReadyPill ? (
-    <span className={readyPillClassName} aria-label={cfg.label} title={cfg.label}>
-      Ready
+    <span
+      className={`inline-flex items-center justify-center ${readyPillClassName}`}
+      aria-label={cfg.label}
+      title={cfg.label}
+    >
+      <span aria-hidden>{cfg.icon}</span>
     </span>
   ) : (
     <span
@@ -83,7 +87,7 @@ export function StatusBadge({
       <span aria-hidden>{cfg.icon}</span>
       {status === 'needs_print' && !reduced ? (
         <motion.span
-          className="absolute h-1.5 w-1.5 translate-x-[6px] translate-y-[-6px] rounded-full bg-sky-600"
+          className="absolute h-1.5 w-1.5 translate-x-[6px] translate-y-[-6px] rounded-full bg-violet-600"
           animate={{ scale: [1, 1.35, 1], opacity: [1, 0.45, 1] }}
           transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}
         />

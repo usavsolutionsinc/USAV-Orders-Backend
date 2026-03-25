@@ -20,12 +20,6 @@ export interface FbaPlanCardProps {
   qtySaving?: boolean;
 }
 
-function getLast4(value: string | null | undefined) {
-  const raw = String(value || '').trim();
-  if (!raw) return 'Not available';
-  return raw.slice(-4);
-}
-
 function getDaysLateNumber(dueDate: string | null | undefined) {
   const shipByKey = toPSTDateKey(dueDate);
   const todayKey = getCurrentPSTDateKey();
@@ -63,7 +57,7 @@ export function FbaPlanCard({
     plan.total_expected_qty > 0 ? plan.total_expected_qty : Math.max(1, plan.total_items);
   const ref = String(plan.shipment_ref || '').trim();
   const fbaItemsLabel = `${plan.total_items} FBA item${plan.total_items !== 1 ? 's' : ''}`;
-  const planTitle = ref || `Plan #${plan.id}`;
+  const planTitle = ref || `Shipment row #${plan.id}`;
 
   return (
     <motion.div
@@ -72,8 +66,18 @@ export function FbaPlanCard({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      role="button"
+      tabIndex={0}
+      aria-expanded={isExpanded}
+      aria-label={`${planTitle}${isActive ? ', open in workspace' : ''}`}
       onClick={onToggleExpand}
-      className={`border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggleExpand();
+        }
+      }}
+      className={`border-b-2 px-0 py-3 transition-colors relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50 ${
         isExpanded || isActive
           ? 'bg-white border-purple-500'
           : 'bg-white border-purple-300 hover:border-purple-500'
@@ -117,8 +121,11 @@ export function FbaPlanCard({
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-[13px] font-black text-gray-900">{fbaItemsLabel}</span>
           </div>
-          <span className="text-[13px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300 shrink-0">
-            #{getLast4(ref)}
+          <span
+            className="max-w-[9.5rem] truncate text-[11px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300 shrink-0"
+            title={ref || `Row ${plan.id}`}
+          >
+            {ref || `#${plan.id}`}
           </span>
         </div>
         <h4 className="text-base font-black text-gray-900 leading-tight truncate" title={planTitle}>
@@ -139,9 +146,16 @@ export function FbaPlanCard({
             <div className="mt-3 border-t border-purple-100 px-3 pt-3" onClick={(e) => e.stopPropagation()}>
               <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                 <div className="rounded-xl bg-gray-50 px-3 py-2">
-                  <div className="mb-1 text-gray-400">Source</div>
-                  <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
-                    {ref ? `FBA ${ref}` : 'FBA'}
+                  <div className="mb-1 text-gray-400">Plan ID</div>
+                  <div className="text-[11px] font-mono text-gray-900 normal-case tracking-normal break-words">
+                    {ref || '—'}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <div className="mb-1 text-gray-400">Shipment row ID</div>
+                  <div className="text-[11px] tabular-nums text-gray-900 normal-case tracking-normal">
+                    {plan.id}
                   </div>
                 </div>
 

@@ -233,6 +233,8 @@ export const printQueueTableUi: Record<
     toolbarAccent: string;
     toolbarIconMuted: string;
     metaIconAccent: string;
+    refreshHover: string;
+    statusFocusRing: string;
   }
 > = {
   green: {
@@ -366,4 +368,134 @@ export function getPrintQueueStationTheme(
   staffId: number | string | null | undefined
 ): StationTheme {
   return getStaffThemeById(staffId, 'technician');
+}
+
+/**
+ * FBA workspace sidebar ({@link FbaWorkspaceScanField}): tracking card + FNSKU list chrome.
+ * Goal bar uses {@link stationThemeColors}[theme].`text` via `StationGoalBar` `colorClass`.
+ */
+export const fbaWorkspaceScanChrome: Record<
+  StationTheme,
+  {
+    trackingCard: string;
+    trackingSectionBorder: string;
+    selectedItemsLabel: string;
+    fnskuSubtext: string;
+    fieldFocusRing: string;
+    savingSpinner: string;
+    /** {@link StationFbaInput} FNSKU-only scan: leading icon */
+    fnskuScanIconClass: string;
+    /** Typed value + placeholder + focus ring on the scan input */
+    fnskuScanInputClass: string;
+  }
+> = {
+  green: {
+    trackingCard:
+      'space-y-3 rounded-xl border-2 border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-white px-3 py-3 shadow-sm shadow-emerald-100/35',
+    trackingSectionBorder: 'border-t border-emerald-100',
+    selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-emerald-700',
+    fnskuSubtext:
+      'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-800/85',
+    fieldFocusRing: 'focus:ring-emerald-500',
+    savingSpinner: 'text-emerald-500',
+    fnskuScanIconClass: 'text-emerald-600',
+    fnskuScanInputClass:
+      '!text-emerald-800 placeholder:text-emerald-400/90 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/25',
+  },
+  blue: {
+    trackingCard:
+      'space-y-3 rounded-xl border-2 border-blue-200/90 bg-gradient-to-b from-blue-50/90 to-white px-3 py-3 shadow-sm shadow-blue-100/35',
+    trackingSectionBorder: 'border-t border-blue-100',
+    selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-blue-700',
+    fnskuSubtext:
+      'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-800/85',
+    fieldFocusRing: 'focus:ring-blue-500',
+    savingSpinner: 'text-blue-500',
+    fnskuScanIconClass: 'text-blue-600',
+    fnskuScanInputClass:
+      '!text-blue-800 placeholder:text-blue-400/90 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/25',
+  },
+  purple: {
+    trackingCard:
+      'space-y-3 rounded-xl border-2 border-purple-200/90 bg-gradient-to-b from-purple-50/90 to-white px-3 py-3 shadow-sm shadow-purple-100/35',
+    trackingSectionBorder: 'border-t border-purple-100',
+    selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-purple-700',
+    fnskuSubtext:
+      'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-purple-800/85',
+    fieldFocusRing: 'focus:ring-purple-500',
+    savingSpinner: 'text-purple-500',
+    fnskuScanIconClass: 'text-purple-600',
+    fnskuScanInputClass:
+      '!text-purple-800 placeholder:text-purple-400/90 focus:border-purple-400 focus:ring-2 focus:ring-purple-500/25',
+  },
+  yellow: {
+    trackingCard:
+      'space-y-3 rounded-xl border-2 border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-white px-3 py-3 shadow-sm shadow-amber-100/35',
+    trackingSectionBorder: 'border-t border-amber-100',
+    selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-amber-800',
+    fnskuSubtext:
+      'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-900/80',
+    fieldFocusRing: 'focus:ring-amber-500',
+    savingSpinner: 'text-amber-600',
+    fnskuScanIconClass: 'text-amber-600',
+    fnskuScanInputClass:
+      '!text-amber-900 placeholder:text-amber-500/80 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/25',
+  },
+  black: {
+    trackingCard:
+      'space-y-3 rounded-xl border-2 border-slate-300/90 bg-gradient-to-b from-slate-50/90 to-white px-3 py-3 shadow-sm shadow-slate-200/40',
+    trackingSectionBorder: 'border-t border-slate-200',
+    selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-slate-800',
+    fnskuSubtext:
+      'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600',
+    fieldFocusRing: 'focus:ring-slate-500',
+    savingSpinner: 'text-slate-500',
+    fnskuScanIconClass: 'text-slate-700',
+    fnskuScanInputClass:
+      '!text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-500/25',
+  },
+  red: {
+    trackingCard:
+      'space-y-3 rounded-xl border-2 border-red-200/90 bg-gradient-to-b from-red-50/90 to-white px-3 py-3 shadow-sm shadow-red-100/35',
+    trackingSectionBorder: 'border-t border-red-100',
+    selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-red-700',
+    fnskuSubtext:
+      'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-red-800/85',
+    fieldFocusRing: 'focus:ring-red-500',
+    savingSpinner: 'text-red-500',
+    fnskuScanIconClass: 'text-red-600',
+    fnskuScanInputClass:
+      '!text-red-800 placeholder:text-red-400/90 focus:border-red-400 focus:ring-2 focus:ring-red-500/25',
+  },
+  lightblue: {
+    trackingCard:
+      'space-y-3 rounded-xl border-2 border-sky-200/90 bg-gradient-to-b from-sky-50/90 to-white px-3 py-3 shadow-sm shadow-sky-100/35',
+    trackingSectionBorder: 'border-t border-sky-100',
+    selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-sky-700',
+    fnskuSubtext:
+      'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-800/85',
+    fieldFocusRing: 'focus:ring-sky-500',
+    savingSpinner: 'text-sky-500',
+    fnskuScanIconClass: 'text-sky-500',
+    fnskuScanInputClass:
+      '!text-sky-800 placeholder:text-sky-400/90 focus:border-sky-400 focus:ring-2 focus:ring-sky-500/25',
+  },
+  pink: {
+    trackingCard:
+      'space-y-3 rounded-xl border-2 border-pink-200/90 bg-gradient-to-b from-pink-50/90 to-white px-3 py-3 shadow-sm shadow-pink-100/35',
+    trackingSectionBorder: 'border-t border-pink-100',
+    selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-pink-700',
+    fnskuSubtext:
+      'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-pink-800/85',
+    fieldFocusRing: 'focus:ring-pink-500',
+    savingSpinner: 'text-pink-500',
+    fnskuScanIconClass: 'text-pink-600',
+    fnskuScanInputClass:
+      '!text-pink-800 placeholder:text-pink-400/90 focus:border-pink-400 focus:ring-2 focus:ring-pink-500/25',
+  },
+};
+
+export function getFbaWorkspaceScanChrome(staffId: number | string | null | undefined) {
+  const theme = getStaffThemeById(staffId, 'technician');
+  return fbaWorkspaceScanChrome[theme];
 }

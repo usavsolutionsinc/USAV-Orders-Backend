@@ -416,6 +416,16 @@ export function TechTable({ testedBy }: TechTableProps) {
                           trackingNumber: record.shipping_tracking_number,
                         });
                         const fnskuValue = String(record.fnsku || '').trim();
+                        const isFbaRow =
+                          record.account_source === 'fba' ||
+                          record.source_kind === 'fba_scan' ||
+                          String(record.order_id || '').toUpperCase() === 'FBA';
+                        const rawCondition = String(record.condition || '').trim();
+                        const conditionLabel = isFbaRow
+                          ? !rawCondition || /^fba\s*scan$/i.test(rawCondition)
+                            ? 'N/A'
+                            : rawCondition
+                          : displayValues.condition || 'No Condition';
                         /** FNSKU copy chip only when we have a real FNSKU — not tracking / order id (matches PackerTable FBA branch). */
                         const showFnskuChip = Boolean(fnskuValue);
                         const dotType = getSourceDotType({
@@ -447,7 +457,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5 pl-4">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                   {parseInt(String(record.quantity || '1'), 10) || 1}
-                                </span> • {displayValues.condition || 'No Condition'} • {displayValues.sku || 'No SKU'}
+                                </span> • {conditionLabel} • {displayValues.sku || 'No SKU'}
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">

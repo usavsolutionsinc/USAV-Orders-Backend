@@ -9,7 +9,7 @@ import { getActiveStaff, getPresentStaffForToday, type StaffMember } from '@/lib
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
 import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
-import { FnskuChip, OrderIdChip, TicketChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { WorkOrderInfoStrip } from './WorkOrderInfoStrip';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from './WorkOrderAssignmentCard';
 import { SkuStockAssignPanel } from './SkuStockAssignPanel';
@@ -22,6 +22,7 @@ import {
   normalizeQueue,
   formatDate,
 } from './types';
+import { dispatchPendingOrderRowRefetch } from '@/utils/events';
 
 export type { WorkOrderRow };
 
@@ -165,7 +166,7 @@ export function WorkOrdersDashboard() {
     .filter((m) => m.role === 'packer')
     .map((m) => ({ id: Number(m.id), name: m.name }));
 
-  const refreshRows = useCallback(async () => {
+  const refreshRows = useCallback(async (opts?: { pendingOrderId?: number }) => {
     const res = await fetch(
       `/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`,
       
@@ -173,8 +174,13 @@ export function WorkOrdersDashboard() {
     const json = await res.json();
     setRows(Array.isArray(json?.rows) ? json.rows : []);
     setCounts({ ...EMPTY_COUNTS, ...(json?.counts || {}) });
-    window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    const pid = opts?.pendingOrderId;
+    if (pid != null && Number.isFinite(pid) && pid > 0) {
+      dispatchPendingOrderRowRefetch(pid);
+    } else {
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    }
   }, [queue, query]);
 
   const clearEntitySelectionParams = useCallback(() => {
@@ -250,7 +256,9 @@ export function WorkOrdersDashboard() {
         const payload = await res.json().catch(() => ({}));
         throw new Error(payload?.details || payload?.error || 'Failed to assign');
       }
-      await refreshRows();
+      await refreshRows(
+        row.entityType === 'ORDER' ? { pendingOrderId: row.entityId } : undefined
+      );
     } catch (err: any) {
       // Revert optimistic update on failure
       setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
@@ -316,7 +324,9 @@ export function WorkOrdersDashboard() {
         const payload = await res.json().catch(() => ({}));
         throw new Error(payload?.details || payload?.error || 'Failed to assign');
       }
-      void refreshRows();
+      void refreshRows(
+        row.entityType === 'ORDER' ? { pendingOrderId: row.entityId } : undefined
+      );
     } catch (err: any) {
       setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
       window.alert(err?.message || 'Failed to assign staff');
@@ -560,50 +570,6 @@ function WorkOrderTableRow({
       ? (packerName ?? (row.packerId ? `Pack #${row.packerId}` : 'Packer unassigned'))
       : null;
 
-  const renderReferenceChip = () => {
-    if (row.entityType === 'ORDER') {
-      const trackingValue = String(row.trackingNumber || '').trim();
-      if (trackingValue) {
-        return (
-          <TrackingChip
-            value={trackingValue}
-            display={getLast4(trackingValue)}
-          />
-        );
-      }
-      const orderValue = String(row.orderId || row.recordLabel || '').trim();
-      return (
-        <OrderIdChip
-          value={orderValue}
-          display={getLast4(orderValue)}
-        />
-      );
-    }
-
-    if (row.entityType === 'REPAIR') {
-      const ticketValue = String(row.recordLabel || '').trim();
-      return (
-        <TicketChip
-          value={ticketValue}
-          display={getLast4(ticketValue)}
-        />
-      );
-    }
-
-    if (row.entityType === 'FBA_SHIPMENT' || row.entityType === 'SKU_STOCK') {
-      const fnskuValue = String(row.recordLabel || row.sku || '').trim();
-      return <FnskuChip value={fnskuValue} />;
-    }
-
-    const receivingValue = String(row.recordLabel || '').trim();
-    return (
-      <TrackingChip
-        value={receivingValue}
-        display={getLast4(receivingValue)}
-      />
-    );
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -655,6 +621,8 @@ function WorkOrderTableRow({
             {row.title}
           </p>
 
+          <WorkOrderInfoStrip row={row} />
+
           {row.priority < 100 && (
             <div className="mt-0.5 flex items-center gap-2">
               <span className="text-[8px] font-black text-red-500">P{row.priority}</span>
@@ -676,9 +644,8 @@ function WorkOrderTableRow({
           </p>
         </div>
 
-        {/* Right: reference chip + assign button */}
+        {/* Right: assign */}
         <div className="flex items-center gap-2 shrink-0 pt-0.5">
-          {renderReferenceChip()}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenAssign(); }}

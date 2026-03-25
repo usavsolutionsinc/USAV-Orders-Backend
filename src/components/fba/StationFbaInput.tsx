@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Package } from '@/components/Icons';
 import { StationScanBar } from '@/components/station/StationScanBar';
@@ -8,6 +8,8 @@ import { usePendingCatalog } from '@/components/fba/hooks/usePendingCatalog';
 import { useTodayPlan } from '@/components/fba/hooks/useTodayPlan';
 import { getTodayDateIso } from '@/components/fba/utils/getTodayDate';
 import { getStationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
+import { looksLikeFnsku, looksLikeFnskuPrefix } from '@/lib/scan-resolver';
+import { fbaWorkspaceScanChrome, getStaffThemeById } from '@/utils/staff-colors';
 
 interface ValidatedFnskuRow {
   fnsku: string;
@@ -53,6 +55,8 @@ export default function StationFbaInput({
   const searchParams = useSearchParams();
   const staffIdRaw = String(searchParams.get('staffId') || '').trim();
   const userId = /^\d+$/.test(staffIdRaw) ? staffIdRaw : '1';
+  const stationTheme = useMemo(() => getStaffThemeById(staffIdRaw || null, 'technician'), [staffIdRaw]);
+  const workspaceChrome = fbaWorkspaceScanChrome[stationTheme];
 
   const planParam = searchParams.get('plan');
   const planIdNum = planParam ? Number(planParam) : NaN;
@@ -250,12 +254,16 @@ export default function StationFbaInput({
       const trimmed = raw.trim();
       if (!trimmed) return;
 
-      if (fbaScanOnly && getStationInputMode(raw) !== 'fba') {
-        setFbaError('FNSKU only (X00…). No tracking, SKU, RS-, or serial in this field.');
+      if (fbaScanOnly && !looksLikeFnsku(trimmed)) {
+        setFbaError(
+          looksLikeFnskuPrefix(trimmed)
+            ? 'Incomplete FNSKU — full X00… or B0… (10 characters).'
+            : 'FNSKU only (X00…). No tracking, SKU, RS-, or serial in this field.',
+        );
         return;
       }
 
-      if (getStationInputMode(raw) === 'fba') {
+      if (looksLikeFnsku(trimmed)) {
         setInputValue('');
         void handleFnskuPlanFlow(raw);
         return;
@@ -300,18 +308,22 @@ export default function StationFbaInput({
         placeholder={fbaScanOnly ? 'FNSKU (X00…)' : 'FNSKU, tracking, RS-, serial'}
         autoFocus={false}
         hasRightContent={busy}
-        icon={<Package className={`h-4 w-4 ${fbaScanOnly ? 'text-pink-600' : 'text-violet-600'}`} />}
+        icon={
+          <Package
+            className={`h-4 w-4 ${fbaScanOnly ? workspaceChrome.fnskuScanIconClass : 'text-violet-600'}`}
+          />
+        }
         iconClassName=""
         inputClassName={
           fbaScanOnly
-            ? '!py-2.5 !text-sm !rounded-xl !font-bold !text-pink-700 placeholder:text-pink-400 focus:border-pink-400 focus:ring-2 focus:ring-pink-500/25'
+            ? `!py-2.5 !text-sm !rounded-xl !font-bold ${workspaceChrome.fnskuScanInputClass}`
             : '!py-2.5 !text-sm !rounded-xl focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20'
         }
         rightContentClassName="right-2"
         rightContent={
           busy ? (
             <Loader2
-              className={`h-4 w-4 shrink-0 animate-spin ${fbaScanOnly ? 'text-pink-600' : 'text-zinc-600'}`}
+              className={`h-4 w-4 shrink-0 animate-spin ${fbaScanOnly ? workspaceChrome.savingSpinner : 'text-zinc-600'}`}
             />
           ) : null
         }

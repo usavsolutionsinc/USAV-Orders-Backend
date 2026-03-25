@@ -15,10 +15,15 @@ import {
   persistAmazonShipmentId,
   persistUpsTracking,
 } from '@/components/fba/sidebar/fbaShipmentTracking';
+import {
+  fbaWorkspaceScanChrome,
+  getStaffThemeById,
+  stationThemeColors,
+} from '@/utils/staff-colors';
 
 const sectionLabelClass = 'block text-[9px] font-bold uppercase tracking-widest text-gray-600';
-const fieldClass =
-  'mt-1 w-full rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-violet-500 disabled:opacity-50';
+const fieldBaseClass =
+  'mt-1 w-full rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 disabled:opacity-50';
 
 const LAYOUT_EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -26,17 +31,24 @@ const PRINT_SIDEBAR_READY_EVENT = 'fba-print-sidebar-ready';
 
 export interface FbaWorkspaceScanFieldProps {
   staffName: string;
+  /** Staff selector id — drives goal bar + tracking/FNSKU chrome ({@link stationThemeColors}). */
+  staffId?: number | string | null;
   /** When false, only Welcome + FBA goal (matches shipped sidebar strip). */
   scanEnabled?: boolean;
 }
 
 /** Sidebar: Welcome + FBA goal (same type scale as {@link StationTesting}) + scan; floating FBA/UPS for primary selected row. */
-export function FbaWorkspaceScanField({ staffName, scanEnabled = true }: FbaWorkspaceScanFieldProps) {
+export function FbaWorkspaceScanField({ staffName, staffId = null, scanEnabled = true }: FbaWorkspaceScanFieldProps) {
   const [selectedItems, setSelectedItems] = useState<EnrichedItem[]>([]);
   const [trackingByShipment, setTrackingByShipment] = useState<
     Record<number, { amazon: string; ups: string }>
   >({});
   const [saving, setSaving] = useState(false);
+
+  const stationTheme = useMemo(() => getStaffThemeById(staffId, 'technician'), [staffId]);
+  const themeColors = stationThemeColors[stationTheme];
+  const scanChrome = fbaWorkspaceScanChrome[stationTheme];
+  const fieldClass = `${fieldBaseClass} ${scanChrome.fieldFocusRing}`;
 
   useEffect(() => {
     const h = (ev: Event) => {
@@ -171,7 +183,7 @@ export function FbaWorkspaceScanField({ staffName, scanEnabled = true }: FbaWork
               <h2 className="text-xl font-black tracking-tighter text-gray-900">Welcome, {staffName}</h2>
             </div>
           </div>
-          <StationGoalBar count={0} goal={50} label="- FBA GOAL" colorClass="text-pink-600" />
+          <StationGoalBar count={0} goal={50} label="- FBA GOAL" colorClass={themeColors.text} />
         </motion.div>
 
         {scanEnabled ? (
@@ -189,12 +201,15 @@ export function FbaWorkspaceScanField({ staffName, scanEnabled = true }: FbaWork
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.24, ease: LAYOUT_EASE }}
-              className="space-y-3 rounded-xl border-2 border-violet-200/90 bg-gradient-to-b from-violet-50/90 to-white px-3 py-3 shadow-sm shadow-violet-200/30"
+              className={scanChrome.trackingCard}
             >
               {saving || trackingReady ? (
                 <div className="flex items-center justify-end gap-2">
                   {saving ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-400" aria-hidden />
+                    <Loader2
+                      className={`h-4 w-4 shrink-0 animate-spin ${scanChrome.savingSpinner}`}
+                      aria-hidden
+                    />
                   ) : (
                     <span className="inline-flex shrink-0 text-emerald-600" title="FBA + UPS valid" aria-label="Ready">
                       <Check className="h-4 w-4" />
@@ -234,22 +249,21 @@ export function FbaWorkspaceScanField({ staffName, scanEnabled = true }: FbaWork
 
               {extraShipments > 0 ? (
                 <p className="text-[9px] font-semibold text-amber-700">
-                  +{extraShipments} other shipment{extraShipments !== 1 ? 's' : ''} in selection — IDs above apply to{' '}
-                  <span className="font-mono">{primary.shipment_ref}</span>
+                  +{extraShipments} other plan{extraShipments !== 1 ? 's' : ''} in selection — tracking fields above apply to plan{' '}
+                  <span className="font-mono">{primary.shipment_ref}</span>{' '}
+                  <span className="text-amber-600/90">(row id {primary.shipment_id})</span>
                 </p>
               ) : null}
 
-              <div className="border-t border-violet-100 pt-3">
-                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-violet-600">Selected items</p>
+              <div className={`${scanChrome.trackingSectionBorder} pt-3`}>
+                <p className={scanChrome.selectedItemsLabel}>Selected items</p>
                 <ul className="mt-2.5 space-y-4">
                   {selectedItems.map((it) => (
                     <li key={it.item_id} className="min-w-0">
                       <p className="text-[15px] font-bold leading-snug tracking-tight text-gray-900 line-clamp-3">
                         {it.display_title}
                       </p>
-                      <p className="mt-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                        {it.fnsku}
-                      </p>
+                      <p className={`mt-1 ${scanChrome.fnskuSubtext}`}>{it.fnsku}</p>
                     </li>
                   ))}
                 </ul>

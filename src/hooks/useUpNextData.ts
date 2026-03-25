@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Order, RepairQueueItem, FBAQueueItem, ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
 import { parsePositiveInt } from '@/utils/number';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 interface UseUpNextDataOptions {
   techId: string;
@@ -172,6 +173,48 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techId]);
+
+  const ordersChannelName = process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
+
+  useAblyChannel(
+    ordersChannelName,
+    'order.assignments',
+    (message: any) => {
+      const d = message?.data;
+      const orderId = Number(d?.orderId);
+      if (!Number.isFinite(orderId)) return;
+
+      setAllOrders((prev) => {
+        let hit = false;
+        const next = prev.map((o) => {
+          if (Number(o.id) !== orderId) return o;
+          hit = true;
+          return {
+            ...o,
+            tester_id: d.testerId ?? null,
+            tester_name: d.testerName ?? null,
+            packer_id: d.packerId ?? null,
+            packer_name: d.packerName ?? null,
+            ship_by_date:
+              d.deadlineAt != null && String(d.deadlineAt).trim() !== ''
+                ? String(d.deadlineAt)
+                : o.ship_by_date,
+          };
+        });
+        return hit ? next : prev;
+      });
+    },
+    true,
+  );
+
+  useAblyChannel(
+    ordersChannelName,
+    'queue.assignments',
+    () => {
+      refreshRef.current();
+    },
+    true,
+  );
 
   // Mirror the real-time update strategy from PendingOrdersTable: respond to
   // broadcast refresh events so data stays in sync without waiting for the poll.

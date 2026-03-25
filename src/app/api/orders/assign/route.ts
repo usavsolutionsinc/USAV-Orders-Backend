@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import { publishOrderChanged } from '@/lib/realtime/publish';
+import { publishOrderAssignmentsUpdated, publishOrderChanged } from '@/lib/realtime/publish';
+import {
+  getOrderAssignmentSnapshotsByOrderIds,
+  getStaffNameMap,
+} from '@/lib/work-assignments/order-assignment-snapshot';
 import { clearReplenishmentForOrder, ensureReplenishmentForOrder } from '@/lib/replenishment';
 import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize';
 
@@ -428,6 +432,25 @@ export async function POST(req: NextRequest) {
       await publishOrderChanged({ orderIds: idsToUpdate, source: 'orders.assign' });
     } catch (realtimeErr) {
       console.warn('[orders/assign] realtime publish failed (non-critical):', realtimeErr);
+    }
+    try {
+      const snaps = await getOrderAssignmentSnapshotsByOrderIds(idsToUpdate);
+      const staffIds = Array.from(snaps.values()).flatMap((s) => [s.testerId, s.packerId]);
+      const nameMap = await getStaffNameMap(staffIds);
+      for (const orderId of idsToUpdate) {
+        const snap = snaps.get(orderId) ?? { testerId: null, packerId: null, deadlineAt: null };
+        await publishOrderAssignmentsUpdated({
+          orderId,
+          testerId: snap.testerId,
+          packerId: snap.packerId,
+          testerName: snap.testerId != null ? nameMap.get(snap.testerId) ?? null : null,
+          packerName: snap.packerId != null ? nameMap.get(snap.packerId) ?? null : null,
+          deadlineAt: snap.deadlineAt,
+          source: 'orders.assign',
+        });
+      }
+    } catch (assignBroadcastErr) {
+      console.warn('[orders/assign] assignment broadcast failed (non-critical):', assignBroadcastErr);
     }
     return NextResponse.json({ success: true });
   } catch (error: any) {

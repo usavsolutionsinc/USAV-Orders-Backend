@@ -1,17 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight } from '@/components/Icons';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { ChevronLeft, ChevronRight, History } from '@/components/Icons';
 import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
-import { getAccountSourceLabel } from '@/utils/order-links';
+import { getOrderPlatformLabel, getOrderSourceTag } from '@/utils/order-platform';
+import { WorkOrderInfoChips } from '@/components/work-orders/WorkOrderInfoStrip';
 import { toDateInputValue, type WorkOrderRow, type WorkStatus } from '@/components/work-orders/types';
 import { AssignmentOverlayCard } from './AssignmentOverlayCard';
+import { framerGesture, framerTransition } from '../foundations/motion-framer';
 import {
-  framerGesture,
-  framerTransition,
-  workOrderAssignmentSlideVariants,
-} from '../foundations/motion-framer';
+  pushRecentAssignmentJump,
+  readRecentAssignmentJumps,
+  type RecentAssignmentJump,
+} from '@/utils/work-order-recent-assignments';
 
 interface StaffOption {
   id: number;
@@ -51,24 +53,17 @@ function resolveTechTheme(staffId: number) {
   return getStaffThemeById(staffId, 'technician');
 }
 
-function getSourceLabel(row: WorkOrderRow): string {
+/** Plain text only (no chips): e.g. “Orders · Amazon”, “FBA”, or queue label. */
+function assignmentHeaderContextText(row: WorkOrderRow): string {
   if (row.entityType === 'ORDER') {
-    const platform = getAccountSourceLabel(row.recordLabel, null);
-    return platform ? `${row.queueLabel} · ${platform}` : row.queueLabel;
+    const orderKey = row.orderId ?? row.recordLabel;
+    const channel = getOrderSourceTag(orderKey, row.accountSource);
+    const platform = getOrderPlatformLabel(row.recordLabel, row.accountSource).trim();
+    if (!platform) return channel || row.queueLabel;
+    if (platform.toLowerCase() === channel.toLowerCase()) return channel;
+    return `${channel} · ${platform}`;
   }
   return row.queueLabel;
-}
-
-function formatSubtitle(row: WorkOrderRow): string {
-  if (row.entityType === 'ORDER' && row.subtitle) {
-    const [orderIdPart, trackingPart, skuPart] = row.subtitle.split(' • ');
-    const pieces: string[] = [];
-    if (orderIdPart) pieces.push(`#${orderIdPart.trim().slice(-4)}`);
-    if (trackingPart) pieces.push(trackingPart.trim().slice(-4));
-    if (skuPart) pieces.push(skuPart.trim());
-    return pieces.join(' · ');
-  }
-  return row.subtitle || '';
 }
 
 function toDraft(row: WorkOrderRow): AssignmentDraft {
@@ -84,6 +79,12 @@ function isDraftComplete(row: WorkOrderRow, draft: AssignmentDraft): boolean {
   return draft.techId != null && draft.packerId != null;
 }
 
+function chipLabel(entry: RecentAssignmentJump): string {
+  const raw = (entry.title || entry.queueLabel || entry.rowId).trim();
+  if (raw.length <= 28) return raw;
+  return `${raw.slice(0, 26)}…`;
+}
+
 export function WorkOrderAssignmentCard({
   rows,
   startIndex,
@@ -96,10 +97,53 @@ export function WorkOrderAssignmentCard({
   closeWhenCompleted = true,
 }: WorkOrderAssignmentCardProps) {
   const [index, setIndex] = useState(0);
-  const [direction, setDirection] = useState<'next' | 'prev'>('next');
   const confirmedIdsRef = useRef(new Set<string>());
   const [confirmedCount, setConfirmedCount] = useState(0);
   const [drafts, setDrafts] = useState<Record<string, AssignmentDraft>>({});
+  const saveDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recentVersion, setRecentVersion] = useState(0);
+  const [recentMissMessage, setRecentMissMessage] = useState<string | null>(null);
+
+  const recentJumps = useMemo(() => readRecentAssignmentJumps(), [recentVersion]);
+
+  const recordRecentAssignment = useCallback((r: WorkOrderRow, tech: number | null, pack: number | null) => {
+    const title =
+      (r.recordLabel && String(r.recordLabel).trim()) ||
+      (r.title && String(r.title).trim()) ||
+      (r.subtitle && String(r.subtitle).trim()) ||
+      r.id;
+    pushRecentAssignmentJump({
+      rowId: r.id,
+      entityType: r.entityType,
+      entityId: r.entityId,
+      title,
+      queueLabel: r.queueLabel || '',
+      techId: tech,
+      packerId: pack,
+    });
+    setRecentVersion((v) => v + 1);
+  }, []);
+
+  const jumpToRecentRow = useCallback(
+    (rowId: string) => {
+      const i = rows.findIndex((r) => r.id === rowId);
+      if (i < 0) {
+        setRecentMissMessage('Not in this assign list');
+        window.setTimeout(() => setRecentMissMessage(null), 2200);
+        return;
+      }
+      setRecentMissMessage(null);
+      setIndex(i);
+    },
+    [rows]
+  );
+
+  const cancelPendingDebouncedSave = useCallback(() => {
+    if (saveDebounceTimerRef.current != null) {
+      clearTimeout(saveDebounceTimerRef.current);
+      saveDebounceTimerRef.current = null;
+    }
+  }, []);
 
   const row = rows[index];
   const [techId, setTechId] = useState<number | null>(null);
@@ -204,7 +248,7 @@ export function WorkOrderAssignmentCard({
   const advance = useCallback(() => {
     const next = findNextIndex(index, 'next');
     if (next !== null) {
-      setTimeout(() => { setDirection('next'); setIndex(next); }, 300);
+      setTimeout(() => { setIndex(next); }, 300);
     } else if (closeWhenCompleted) {
       if (storageKey && typeof window !== 'undefined') {
         try {
@@ -235,26 +279,43 @@ export function WorkOrderAssignmentCard({
 
   const commit = useCallback((opts?: Partial<AssignmentConfirmPayload>) => {
     if (!row) return;
+    cancelPendingDebouncedSave();
     markConfirmed(row.id);
+    const nextTech = opts?.techId !== undefined ? opts.techId : techId;
+    const nextPack = opts?.packerId !== undefined ? opts.packerId : packerId;
     onConfirm(row, {
-      techId: opts?.techId !== undefined ? opts.techId : techId,
-      packerId: opts?.packerId !== undefined ? opts.packerId : packerId,
+      techId: nextTech,
+      packerId: nextPack,
       deadline: opts?.deadline !== undefined ? opts.deadline : (deadline || null),
       status: opts?.status,
     });
+    recordRecentAssignment(row, nextTech, nextPack);
     advance();
-  }, [row, onConfirm, techId, packerId, deadline, markConfirmed, advance]);
+  }, [
+    row,
+    onConfirm,
+    techId,
+    packerId,
+    deadline,
+    markConfirmed,
+    advance,
+    cancelPendingDebouncedSave,
+    recordRecentAssignment,
+  ]);
 
   useEffect(() => {
     if (!changed) return;
-    const timer = setTimeout(() => save(), 450);
-    return () => clearTimeout(timer);
-  }, [techId, packerId, deadline, changed, save]);
+    cancelPendingDebouncedSave();
+    saveDebounceTimerRef.current = setTimeout(() => {
+      saveDebounceTimerRef.current = null;
+      save();
+    }, 450);
+    return () => cancelPendingDebouncedSave();
+  }, [techId, packerId, deadline, changed, save, cancelPendingDebouncedSave]);
 
   const navigate = useCallback((dir: 'next' | 'prev') => {
     const next = findNextIndex(index, dir);
     if (next === null) return;
-    setDirection(dir);
     setIndex(next);
   }, [index, findNextIndex]);
 
@@ -296,8 +357,10 @@ export function WorkOrderAssignmentCard({
     if (isDraftComplete(row, { techId: next, packerId, deadline })) {
       setTimeout(() => {
         if (!row) return;
+        cancelPendingDebouncedSave();
         markConfirmed(row.id);
         onConfirm(row, { techId: next, packerId, deadline: deadline || null });
+        recordRecentAssignment(row, next, packerId);
         advance();
       }, 350);
     }
@@ -310,8 +373,10 @@ export function WorkOrderAssignmentCard({
     if (isDraftComplete(row, { techId, packerId: next, deadline })) {
       setTimeout(() => {
         if (!row) return;
+        cancelPendingDebouncedSave();
         markConfirmed(row.id);
         onConfirm(row, { techId, packerId: next, deadline: deadline || null });
+        recordRecentAssignment(row, techId, next);
         advance();
       }, 350);
     }
@@ -319,28 +384,10 @@ export function WorkOrderAssignmentCard({
 
   const handleMarkDone = () => commit({ status: 'DONE' });
   const handleMarkShipped = () => commit({ status: 'DONE', packerId: packerId ?? null });
-  const handleClearStaff = () => {
-    setTechId(null);
-    setPackerId(null);
-    updateCurrentDraft({ techId: null, packerId: null });
-  };
-  const titleNode = (
-    <span className="block max-h-[2.35em] overflow-y-auto pr-1 leading-[1.15]">
-      {row.title}
-    </span>
-  );
 
-  return (
-    <AssignmentOverlayCard
-      title={titleNode}
-      subtitle={row.subtitle ? formatSubtitle(row) : undefined}
-      onClose={onClose}
-      widthClassName="w-[96vw] max-w-[780px] sm:w-[760px]"
-      showHeaderGradient={false}
-      bodyClassName="p-0"
-      showCloseButton={false}
-    >
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2">
+  const topBar = (
+    <Fragment>
+      <div className="flex items-center justify-between px-4 py-2">
         <button
           type="button"
           disabled={!hasPrev}
@@ -364,41 +411,102 @@ export function WorkOrderAssignmentCard({
         </button>
       </div>
 
-      <div className="overflow-visible">
-        <AnimatePresence mode="wait" custom={direction} initial={false}>
-          <motion.div
-            key={row.id}
-            custom={direction}
-            variants={workOrderAssignmentSlideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={framerTransition.workOrderSlideSpring}
-          >
-            <div className="px-5 pt-3 pb-2">
-              <p className="text-[9px] font-black uppercase tracking-[0.26em] text-emerald-600">
-                {getSourceLabel(row)}
-              </p>
-            </div>
-
-            <div className="mx-5 h-px bg-gray-100" />
-
-            <div className="space-y-4 px-5 pb-5 pt-4">
-              <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2">
-                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">
-                  Showing staff scheduled for today
-                </p>
+      {recentJumps.length > 0 ? (
+        <div className="border-t border-slate-100 px-3 pb-2.5 pt-1.5">
+          <div className="mb-1.5 flex items-center gap-1.5 text-slate-400">
+            <History className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="text-[8px] font-black uppercase tracking-[0.2em]">Recent</span>
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+            {recentJumps.map((entry) => {
+              const inList = rows.some((r) => r.id === entry.rowId);
+              const isCurrent = entry.rowId === row.id;
+              return (
                 <button
+                  key={entry.rowId}
                   type="button"
-                  onClick={handleClearStaff}
-                  className="touch-manipulation rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100"
+                  title={entry.title}
+                  disabled={!inList}
+                  onClick={() => jumpToRecentRow(entry.rowId)}
+                  className={[
+                    'shrink-0 touch-manipulation rounded-lg border px-2.5 py-1.5 text-left transition-colors',
+                    isCurrent
+                      ? 'border-blue-400 bg-blue-50 text-slate-900'
+                      : inList
+                        ? 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                        : 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300',
+                  ].join(' ')}
                 >
-                  Clear Staff
+                  <span className="block max-w-[140px] truncate text-[10px] font-bold leading-tight">
+                    {chipLabel(entry)}
+                  </span>
+                  <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-wide text-slate-400">
+                    {inList ? 'Jump' : 'Not here'}
+                  </span>
                 </button>
-              </div>
+              );
+            })}
+          </div>
+          {recentMissMessage ? (
+            <p className="mt-1.5 text-center text-[9px] font-bold uppercase tracking-wider text-amber-600">
+              {recentMissMessage}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </Fragment>
+  );
 
+  const headerEyebrow = (
+    <div className="flex w-full min-w-0 items-center justify-between gap-3">
+      <div className="flex min-h-[26px] min-w-0 flex-1 items-center">
+        <span className="truncate text-[13px] font-black uppercase tracking-[0.08em] leading-none text-slate-500">
+          {assignmentHeaderContextText(row)}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <WorkOrderInfoChips row={row} />
+      </div>
+    </div>
+  );
+
+  return (
+    <AssignmentOverlayCard
+      topBar={topBar}
+      headerEyebrow={headerEyebrow}
+      onClose={onClose}
+      widthClassName="w-[96vw] max-w-[780px] sm:w-[760px]"
+      headerClassName="!py-2"
+      dialogPosition="midAnchor"
+      showHeaderGradient={false}
+      bodyClassName="p-0"
+      showCloseButton={false}
+    >
+      <div className="flex min-w-0 flex-col">
+        <LayoutGroup id="work-order-assign-title">
+          <div className="min-w-0 shrink-0 px-5 pb-2 pt-1">
+            <AnimatePresence initial={false} mode="popLayout">
+              <motion.div
+                key={row.id}
+                layout
+                style={{ transformOrigin: '50% 100%' }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={framerTransition.workOrderAssignmentTitleBlock}
+                className="min-w-0"
+              >
+                <h2 className="break-words text-[22px] font-black leading-tight tracking-tight text-slate-950 [overflow-wrap:anywhere]">
+                  {row.title}
+                </h2>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </LayoutGroup>
+
+        <div className="shrink-0 space-y-4 border-t border-slate-100 px-5 pb-5 pt-2.5">
               <div>
-                <p className="mb-2.5 text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Technician</p>
+                <p className="mb-2 text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Technician</p>
                 {technicianOptions.length > 0 ? (
                   <div
                     className="grid w-full gap-2"
@@ -414,11 +522,11 @@ export function WorkOrderAssignmentCard({
                           whileTap={framerGesture.tapPress}
                           onClick={() => handleTech(m.id)}
                           className={[
-                            'touch-manipulation flex h-[84px] w-full min-w-0 flex-col items-center justify-center rounded-xl border-2 px-4 transition-all active:scale-[0.98]',
+                            'touch-manipulation flex h-11 w-full min-w-0 flex-col items-center justify-center rounded-lg border-2 px-2 transition-all active:scale-[0.98]',
                             active ? `${cls.active} border-transparent shadow-lg` : cls.inactive,
                           ].join(' ')}
                         >
-                          <span className="w-full text-center text-[12px] font-black uppercase leading-tight tracking-[0.04em]">
+                          <span className="w-full text-center text-[10px] font-black uppercase leading-tight tracking-[0.04em]">
                             {m.name}
                           </span>
                         </motion.button>
@@ -427,7 +535,7 @@ export function WorkOrderAssignmentCard({
                   </div>
                 ) : (
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                    No technicians scheduled today
+                    No technicians
                   </p>
                 )}
               </div>
@@ -446,11 +554,11 @@ export function WorkOrderAssignmentCard({
                           whileTap={framerGesture.tapPress}
                           onClick={() => handlePacker(m.id)}
                           className={[
-                            'touch-manipulation flex h-[84px] w-full min-w-0 flex-col items-center justify-center rounded-xl border-2 px-4 transition-all active:scale-[0.98]',
+                            'touch-manipulation flex h-11 w-full min-w-0 flex-col items-center justify-center rounded-lg border-2 px-2 transition-all active:scale-[0.98]',
                             active ? `${cls.active} border-transparent shadow-lg` : cls.inactive,
                           ].join(' ')}
                         >
-                          <span className="w-full text-center text-[12px] font-black uppercase leading-tight tracking-[0.04em]">
+                          <span className="w-full text-center text-[10px] font-black uppercase leading-tight tracking-[0.04em]">
                             {m.name}
                           </span>
                         </motion.button>
@@ -459,7 +567,7 @@ export function WorkOrderAssignmentCard({
                   </div>
                 ) : (
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                    No packers scheduled today
+                    No packers
                   </p>
                 )}
               </div>
@@ -476,7 +584,7 @@ export function WorkOrderAssignmentCard({
                     setDeadline(next);
                     updateCurrentDraft({ deadline: next });
                   }}
-                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-800 outline-none transition-colors focus:border-slate-400 tabular-nums"
+                  className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-800 outline-none transition-colors focus:border-slate-400 tabular-nums"
                 />
               </div>
 
@@ -484,7 +592,7 @@ export function WorkOrderAssignmentCard({
                 <button
                   type="button"
                   onClick={handleMarkDone}
-                  className="h-10 rounded-xl border border-slate-200 bg-slate-50 text-[10px] font-black uppercase tracking-[0.18em] text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
+                  className="h-8 rounded-lg border border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-[0.18em] text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
                 >
                   Mark as Done
                 </button>
@@ -492,16 +600,14 @@ export function WorkOrderAssignmentCard({
                   <button
                     type="button"
                     onClick={handleMarkShipped}
-                    className="h-10 rounded-xl bg-emerald-600 text-[10px] font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-emerald-700 shadow-sm"
+                    className="h-8 rounded-lg bg-emerald-600 text-[9px] font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-emerald-700 shadow-sm"
                   >
                     Mark as Shipped
                   </button>
                 )}
               </div>
 
-            </div>
-          </motion.div>
-        </AnimatePresence>
+        </div>
       </div>
     </AssignmentOverlayCard>
   );
