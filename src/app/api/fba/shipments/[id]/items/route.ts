@@ -1,6 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
+import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 
 // â”€â”€ GET /api/fba/shipments/[id]/items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns all items for a specific FBA shipment with staff names joined.
@@ -82,7 +83,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'fnsku is required' }, { status: 400 });
     }
 
-    const expectedQty = Math.max(0, Number(body?.expected_qty) || 0);
+    const expectedQty = Math.max(1, Number(body?.expected_qty) || 1);
 
     await client.query('BEGIN');
 
@@ -102,22 +103,15 @@ export async function POST(
       );
     }
 
-    // Pull metadata from fba_fnskus if not provided
-    let productTitle = body?.product_title || null;
-    let asin = body?.asin || null;
-    let sku = body?.sku || null;
-
-    if (!productTitle) {
-      const lookup = await client.query(
-        `SELECT product_title, asin, sku FROM fba_fnskus WHERE fnsku = $1 LIMIT 1`,
-        [fnsku]
-      );
-      if (lookup.rows[0]) {
-        productTitle = lookup.rows[0].product_title;
-        asin = asin || lookup.rows[0].asin;
-        sku = sku || lookup.rows[0].sku;
-      }
-    }
+    const catalogRow = await upsertFnskuCatalogRow(client, {
+      fnsku,
+      productTitle: body?.product_title,
+      asin: body?.asin,
+      sku: body?.sku,
+    });
+    const productTitle = catalogRow?.product_title ?? null;
+    const asin = catalogRow?.asin ?? null;
+    const sku = catalogRow?.sku ?? null;
 
     const result = await client.query(
       `INSERT INTO fba_shipment_items
@@ -147,4 +141,3 @@ export async function POST(
     client.release();
   }
 }
-

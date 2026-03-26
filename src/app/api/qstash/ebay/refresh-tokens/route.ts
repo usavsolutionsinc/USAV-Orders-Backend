@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
 import { getAppBaseUrl } from '@/lib/qstash';
+import { runEbayRefreshTokensJob } from '@/lib/jobs/ebay-refresh-tokens';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 async function handleRefreshTokens(request: NextRequest) {
-  const baseUrl = getAppBaseUrl();
-  const url = `${baseUrl}/api/ebay/refresh-tokens`;
-  const payload = await request.json().catch(() => ({}));
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
-  }
-  return NextResponse.json(data);
+  await request.json().catch(() => ({}));
+  return NextResponse.json(await runEbayRefreshTokensJob());
 }
 
 export const POST = verifySignatureAppRouter(handleRefreshTokens, {

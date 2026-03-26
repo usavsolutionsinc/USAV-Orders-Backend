@@ -22,7 +22,6 @@ export async function GET(req: NextRequest) {
     let sql = `
       SELECT
         id,
-        date_time,
         static_sku,
         serial_number,
         shipping_tracking_number,

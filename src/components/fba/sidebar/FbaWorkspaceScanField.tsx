@@ -6,8 +6,10 @@ import { AlertCircle, Check, Loader2 } from '@/components/Icons';
 import StationFbaInput from '@/components/fba/StationFbaInput';
 import { useFbaWorkspace } from '@/contexts/FbaWorkspaceContext';
 import StationGoalBar from '@/components/station/StationGoalBar';
-import type { EnrichedItem } from '@/components/fba/table/types';
 import { getPlanId, getPlanLabel } from '@/components/fba/table/utils';
+import { resolveFbaItemDisplayQty } from '@/lib/fba/qty';
+import { SelectionFloatingBar } from '@/components/fba/table/SelectionFloatingBar';
+import type { EnrichedItem } from '@/components/fba/table/types';
 import {
   FBA_ID_RE,
   UPS_RE,
@@ -18,16 +20,16 @@ import {
 } from '@/components/fba/sidebar/fbaShipmentTracking';
 import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import {
+  fbaSidebarThemeChrome,
   fbaWorkspaceScanChrome,
   getStaffThemeById,
   stationThemeColors,
 } from '@/utils/staff-colors';
+import { SIDEBAR_INTAKE_LABEL_CLASS } from '@/design-system/components/sidebar-intake/intakeFormClasses';
+import { motionBezier, framerTransition } from '@/design-system/foundations/motion-framer';
 
-const sectionLabelClass = 'block text-[9px] font-bold uppercase tracking-widest text-gray-600';
 const fieldBaseClass =
   'mt-1 w-full rounded-xl border-2 border-gray-400 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 disabled:opacity-50';
-
-const LAYOUT_EASE = [0.22, 1, 0.36, 1] as const;
 
 const TRACKING_PANEL_VARIANTS = {
   hidden: { opacity: 0 },
@@ -71,10 +73,11 @@ export function FbaWorkspaceScanField({
   }, [staffId, lienStaffId]);
 
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const reduceMotion = useReducedMotion();
 
   const trackingTransition = useMemo(
-    () => (reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [...LAYOUT_EASE] }),
+    () => (reduceMotion ? { duration: 0 } : framerTransition.stationSerialRow),
     [reduceMotion]
   );
 
@@ -84,6 +87,7 @@ export function FbaWorkspaceScanField({
   );
   const themeColors = stationThemeColors[stationTheme];
   const scanChrome = fbaWorkspaceScanChrome[stationTheme];
+  const sidebarChrome = fbaSidebarThemeChrome[stationTheme];
   const fieldClass = `${fieldBaseClass} ${scanChrome.fieldFocusRing}`;
   const selectedItems = selection.selectedItems;
 
@@ -92,7 +96,11 @@ export function FbaWorkspaceScanField({
     [selectedItems]
   );
   const activePlanId = selection.activePlanId;
-  const pairingLocked = selectedPlanIds.length > 1;
+  const trackingTargetPlanIds = selectedPlanIds.length > 0
+    ? selectedPlanIds
+    : activePlanId != null
+      ? [activePlanId]
+      : [];
 
   const readyByPlanId = useMemo(() => {
     const next: Record<number, boolean> = {};
@@ -129,65 +137,113 @@ export function FbaWorkspaceScanField({
     };
   }, []);
 
-  const activeTracking =
-    activePlanId != null ? trackingByPlan[activePlanId] ?? { amazon: '', ups: '' } : { amazon: '', ups: '' };
-  const amazonOk = activePlanId != null && FBA_ID_RE.test(normalizeFbaId(activeTracking.amazon));
-  const upsOk = activePlanId != null && UPS_RE.test(normalizeUps(activeTracking.ups));
-  const trackingReady = amazonOk && upsOk;
+  const activeTracking = useMemo(() => {
+    if (trackingTargetPlanIds.length === 0) return { amazon: '', ups: '' };
+    const base = trackingByPlan[trackingTargetPlanIds[0]] ?? { amazon: '', ups: '' };
+    const amazonShared = trackingTargetPlanIds.every(
+      (planId) => (trackingByPlan[planId]?.amazon ?? '') === (base.amazon ?? '')
+    );
+    const upsShared = trackingTargetPlanIds.every(
+      (planId) => (trackingByPlan[planId]?.ups ?? '') === (base.ups ?? '')
+    );
+    return {
+      amazon: amazonShared ? base.amazon ?? '' : '',
+      ups: upsShared ? base.ups ?? '' : '',
+    };
+  }, [trackingByPlan, trackingTargetPlanIds]);
+  const amazonOk = trackingTargetPlanIds.length > 0 && FBA_ID_RE.test(normalizeFbaId(activeTracking.amazon));
+  const upsOk = trackingTargetPlanIds.length > 0 && UPS_RE.test(normalizeUps(activeTracking.ups));
+  const trackingReady =
+    trackingTargetPlanIds.length > 0 && trackingTargetPlanIds.every((planId) => readyByPlanId[planId]);
 
   const setActiveTracking = useCallback(
     (patch: Partial<{ amazon: string; ups: string }>) => {
-      if (activePlanId == null) return;
-      patchTracking(activePlanId, patch);
+      if (trackingTargetPlanIds.length === 0) return;
+      trackingTargetPlanIds.forEach((planId) => patchTracking(planId, patch));
     },
-    [activePlanId, patchTracking]
+    [patchTracking, trackingTargetPlanIds]
   );
 
   const onBlurAmazon = useCallback(async () => {
-    if (activePlanId == null || pairingLocked) return;
+    if (trackingTargetPlanIds.length === 0) return;
     if (!FBA_ID_RE.test(normalizeFbaId(activeTracking.amazon))) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const normalizedAmazon = normalizeFbaId(activeTracking.amazon);
-      const ok = await persistAmazonShipmentId(activePlanId, normalizedAmazon);
-      if (ok) patchTracking(activePlanId, { amazon: normalizedAmazon });
+      const results = await Promise.all(
+        trackingTargetPlanIds.map((planId) => persistAmazonShipmentId(planId, normalizedAmazon))
+      );
+      if (results.some(Boolean)) {
+        trackingTargetPlanIds.forEach((planId) => patchTracking(planId, { amazon: normalizedAmazon }));
+      }
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to save Amazon shipment ID');
     } finally {
       setSaving(false);
     }
-  }, [activePlanId, activeTracking.amazon, pairingLocked, patchTracking]);
+  }, [activeTracking.amazon, patchTracking, trackingTargetPlanIds]);
 
   const onBlurUps = useCallback(async () => {
-    if (activePlanId == null || pairingLocked) return;
+    if (trackingTargetPlanIds.length === 0) return;
     if (!UPS_RE.test(normalizeUps(activeTracking.ups))) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const normalizedUps = normalizeUps(activeTracking.ups);
-      const ok = await persistUpsTracking(activePlanId, normalizedUps);
-      if (ok) patchTracking(activePlanId, { ups: normalizedUps });
+      const results = await Promise.all(
+        trackingTargetPlanIds.map((planId) => persistUpsTracking(planId, normalizedUps))
+      );
+      if (results.some(Boolean)) {
+        trackingTargetPlanIds.forEach((planId) => patchTracking(planId, { ups: normalizedUps }));
+      }
+    } catch (err: any) {
+      setSaveError(err?.message || 'Failed to save UPS tracking');
     } finally {
       setSaving(false);
     }
-  }, [activePlanId, activeTracking.ups, pairingLocked, patchTracking]);
+  }, [activeTracking.ups, patchTracking, trackingTargetPlanIds]);
 
-  const selectedItemRows = useMemo(() => {
-    return [...selectedItems].sort((a, b) => {
-      const planA = getPlanId(a);
-      const planB = getPlanId(b);
-      if (activePlanId != null) {
-        if (planA === activePlanId && planB !== activePlanId) return -1;
-        if (planB === activePlanId && planA !== activePlanId) return 1;
-      }
-      const labelA = getPlanLabel(a);
-      const labelB = getPlanLabel(b);
-      if (labelA !== labelB) return labelA.localeCompare(labelB);
-      return String(a.display_title || a.fnsku).localeCompare(String(b.display_title || b.fnsku));
+
+  /** Map board-selected items to EnrichedItem[] for the SelectionFloatingBar. */
+  const selectedAsEnriched = useMemo((): EnrichedItem[] => {
+    const sorted = [...selectedItems].sort((a, b) => {
+      const pa = getPlanId(a);
+      const pb = getPlanId(b);
+      if (pa !== pb) return pa - pb;
+      return (a.fnsku ?? '').localeCompare(b.fnsku ?? '');
     });
-  }, [activePlanId, selectedItems]);
+    return sorted.map((item) => ({
+      item_id: item.item_id ?? 0,
+      fnsku: item.fnsku ?? '',
+      expected_qty: item.expected_qty ?? 0,
+      actual_qty: item.actual_qty ?? 0,
+      item_status: item.item_status ?? '',
+      display_title: item.display_title || item.fnsku || '—',
+      asin: item.asin ?? null,
+      sku: item.sku ?? null,
+      plan_id: getPlanId(item),
+      plan_ref: getPlanLabel(item),
+      shipment_id: getPlanId(item),
+      shipment_ref: getPlanLabel(item),
+      amazon_shipment_id: item.amazon_shipment_id ?? null,
+      due_date: item.due_date ?? null,
+      destination_fc: item.destination_fc ?? null,
+      status: 'ready_to_print' as const,
+      pending_reason: null,
+      expanded: false,
+    }));
+  }, [selectedItems]);
+
+  const selectedTotalQty = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + resolveFbaItemDisplayQty(item), 0),
+    [selectedItems],
+  );
 
   const showTrackingCard = scanEnabled && selectedItems.length > 0;
 
   return (
-    <div className="space-y-2">
+    <div className="min-h-0 space-y-2">
       <div className="space-y-2 pb-1">
         <div className="space-y-0.5">
           <div className="flex items-center justify-between gap-2">
@@ -232,111 +288,60 @@ export function FbaWorkspaceScanField({
               </div>
             ) : null}
 
-            {pairingLocked ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">Select 1 plan to pair</p>
-                    <p className="mt-1 text-[11px] leading-5 text-amber-900">
-                      {selectedPlanIds.length} plans are selected. Amazon FBA shipment ID and UPS tracking stay disabled until the selection narrows to a single internal plan row.
-                    </p>
+            <div className="space-y-3">
+              {trackingTargetPlanIds.length > 1 ? (
+                <div className={`rounded-2xl ${themeColors.border} ${themeColors.light} px-3 py-3`}>
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className={`mt-0.5 h-4 w-4 shrink-0 ${themeColors.text}`} />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-800">Apply to selected plans</p>
+                      <p className="mt-1 text-[11px] leading-5 text-gray-900">
+                        Changes here will apply to all {trackingTargetPlanIds.length} selected plans.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <label className="block">
-                  <span className={sectionLabelClass}>Amazon FBA shipment ID</span>
-                  <input
-                    value={activeTracking.amazon}
-                    onChange={(e) => setActiveTracking({ amazon: e.target.value })}
-                    onBlur={() => void onBlurAmazon()}
-                    disabled={saving || activePlanId == null}
-                    placeholder="FBA17XXXXXXXX"
-                    className={`${fieldClass} font-mono text-xs ${
-                      activeTracking.amazon && !amazonOk ? 'border-amber-400' : ''
-                    } ${!activeTracking.amazon ? 'text-gray-500' : ''}`}
-                  />
-                </label>
-                <label className="block">
-                  <span className={sectionLabelClass}>UPS shipping label / tracking</span>
-                  <input
-                    value={activeTracking.ups}
-                    onChange={(e) => setActiveTracking({ ups: e.target.value })}
-                    onBlur={() => void onBlurUps()}
-                    disabled={saving || activePlanId == null}
-                    placeholder="1Z999AA10123456784"
-                    className={`${fieldClass} font-mono text-xs ${activeTracking.ups && !upsOk ? 'border-amber-400' : ''} ${
-                      !activeTracking.ups ? 'text-gray-500' : ''
-                    }`}
-                  />
-                </label>
-              </div>
+              ) : null}
+              <label className="block">
+                <span className={SIDEBAR_INTAKE_LABEL_CLASS}>Amazon FBA shipment ID</span>
+                <input
+                  value={activeTracking.amazon}
+                  onChange={(e) => setActiveTracking({ amazon: e.target.value })}
+                  onBlur={() => void onBlurAmazon()}
+                  disabled={saving || trackingTargetPlanIds.length === 0}
+                  placeholder="FBA17XXXXXXXX"
+                  className={`${fieldClass} font-mono text-xs ${
+                    activeTracking.amazon && !amazonOk ? 'border-amber-400' : ''
+                  } ${!activeTracking.amazon ? 'text-gray-500' : ''}`}
+                />
+              </label>
+              <label className="block">
+                <span className={SIDEBAR_INTAKE_LABEL_CLASS}>UPS shipping label / tracking</span>
+                <input
+                  value={activeTracking.ups}
+                  onChange={(e) => setActiveTracking({ ups: e.target.value })}
+                  onBlur={() => void onBlurUps()}
+                  disabled={saving || trackingTargetPlanIds.length === 0}
+                  placeholder="1Z999AA10123456784"
+                  className={`${fieldClass} font-mono text-xs ${activeTracking.ups && !upsOk ? 'border-amber-400' : ''} ${
+                    !activeTracking.ups ? 'text-gray-500' : ''
+                  }`}
+                />
+              </label>
+            </div>
+
+            {saveError && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] font-semibold text-red-700">
+                {saveError}
+              </p>
             )}
 
             <div className={`${scanChrome.trackingSectionBorder} pt-3`}>
-              <div className="flex items-center justify-between gap-2">
-                <p className={scanChrome.selectedItemsLabel}>Selected items</p>
-                <button
-                  type="button"
-                  onClick={() => clearSelection()}
-                  className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50"
-                >
-                  Clear
-                </button>
-              </div>
-              <motion.ul layout className="mt-2.5 space-y-2">
-                <AnimatePresence initial={false}>
-                  {selectedItemRows.map((item) => {
-                    const itemPlanId = getPlanId(item);
-                    const itemQty = (() => {
-                      const actual = Number(item.actual_qty || 0);
-                      const remaining = Math.max(0, Number(item.expected_qty || 0) - actual);
-                      return actual > 0 ? actual : remaining;
-                    })();
-                    return (
-                      <motion.li
-                        key={item.item_id}
-                        layout
-                        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
-                        transition={trackingTransition}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            window.dispatchEvent(
-                              new CustomEvent('fba-print-focus-plan', {
-                                detail: { planId: itemPlanId, shipmentId: itemPlanId },
-                              })
-                            );
-                          }}
-                          className="w-full border-b border-gray-200/80 pb-2 text-left last:border-b-0 last:pb-0"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-[12px] font-black uppercase leading-snug tracking-[0.12em] text-gray-900">
-                                {item.display_title || item.fnsku}
-                              </p>
-                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px]">
-                                <span className={scanChrome.fnskuSubtext}>{item.fnsku}</span>
-                                {selectedPlanIds.length > 1 ? (
-                                  <span className="font-semibold uppercase tracking-[0.12em] text-gray-500">
-                                    {getPlanLabel(item)}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                            <span className="shrink-0 text-[10px] font-black tabular-nums text-gray-700">Qty {itemQty}</span>
-                          </div>
-                        </button>
-                      </motion.li>
-                    );
-                  })}
-                </AnimatePresence>
-              </motion.ul>
+              <SelectionFloatingBar
+                selectedItems={selectedAsEnriched}
+                onClear={() => clearSelection()}
+                attachmentQty={selectedTotalQty}
+              />
             </div>
           </motion.div>
         ) : null}
@@ -344,4 +349,3 @@ export function FbaWorkspaceScanField({
     </div>
   );
 }
-

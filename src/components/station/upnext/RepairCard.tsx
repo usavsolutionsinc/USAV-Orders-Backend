@@ -10,7 +10,7 @@ import { ShipByDate } from '@/components/ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { getPresentStaffForToday } from '@/lib/staffCache';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { RepairQueueItem } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';

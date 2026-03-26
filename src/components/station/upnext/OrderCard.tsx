@@ -14,7 +14,7 @@ import { getTrackingUrl } from '@/utils/order-links';
 import { isEmptyDisplayValue, missingItemNumberLabel } from '@/utils/empty-display-value';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getPresentStaffForToday } from '@/lib/staffCache';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { Order } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';

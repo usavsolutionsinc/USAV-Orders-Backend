@@ -67,6 +67,25 @@ This design system implements the "Kinetic Ledger" direction for dense operation
     - `SidebarIntakeFormShell.tsx` — header + optional band + scroll body + footer
     - `SidebarIntakeFormField.tsx` — stacked label + control + optional hints
 
+## CopyChip Semantic Rules
+
+**Hard rule: chip variants are semantically bound to data types and must never be interchanged.**
+
+| Chip | Color | Icon | Use for | Never use for |
+|------|-------|------|---------|---------------|
+| `TrackingChip` | Blue / `border-blue-500` | MapPin | Carrier shipping tracking numbers (UPS, FedEx, USPS…) | FNSKU codes, order IDs |
+| `FnskuChip` | Purple / `border-purple-500` | Package | Amazon FNSKU identifiers (e.g. `X001ABC123`) | Shipping tracking numbers |
+| `SerialChip` | Emerald / `border-emerald-500` | Barcode | Device / unit serial numbers | Any non-serial value |
+| `OrderIdChip` | Gray / `border-gray-400` | Hash | Internal order IDs | Tracking or FNSKU |
+| `TicketChip` | Orange / `border-orange-500` | Settings | Repair / support ticket IDs | Any other type |
+| `SourceOrderChip` | Gray / `border-gray-400` | Hash | External platform order numbers | Tracking or FNSKU |
+
+**FNSKU ≠ Tracking Number.** FNSKUs are Amazon product identifiers scanned at FBA intake. Tracking numbers are carrier labels attached to outbound shipments. Displaying an FNSKU inside a `TrackingChip` (blue, MapPin) or a tracking number inside an `FnskuChip` (purple, Package) is a design-system violation.
+
+## Tab Switcher Rules
+
+**Hard rule: all tab-like UI must use `TabSwitch` from `src/components/ui/TabSwitch.tsx`.** Custom pill buttons or ad-hoc toggle rows are not permitted. Wrap the switcher in `SidebarTabSwitchChrome` when it sits in a sidebar header row.
+
 ## Functional Color Mapping
 
 - Repair / Support ticket: Orange
@@ -93,7 +112,7 @@ Adopt the new exported primitives in:
 - `src/components/ui/CopyChip.tsx`
 - `src/components/station/upnext/OrderCard.tsx`
 - `src/components/shipped/details-panel/ShippingInformationSection.tsx` (optional: wrap blocks with `PanelSection`; `DetailsPanelRow` re-exports from design-system)
-- `src/design-system/components/OutOfStockField.tsx` (also re-exported from `src/components/ui/OutOfStockField.tsx`)
+- `src/components/ui/OutOfStockField.tsx`
 - `src/components/ui/SearchBar.tsx`
 
 This keeps implementation aligned with the Kinetic Ledger contract while avoiding one-off styling drift.

@@ -75,7 +75,7 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
         params.set('weekStart', weekRange.startStr);
         params.set('weekEnd', weekRange.endStr);
       }
-      const res = await fetch(`/api/packerlogs?${params}`, { cache: 'no-store' });
+      const res = await fetch(`/api/packerlogs?${params}`);
       if (!res.ok) throw new Error('Failed to fetch packer logs');
       const data = await res.json();
       return Array.isArray(data) ? data : [];

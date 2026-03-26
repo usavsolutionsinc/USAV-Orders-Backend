@@ -3,11 +3,15 @@ import pool from '@/lib/db';
 
 // ── GET /api/fba/fnskus/validate?fnskus=X00XXXXXXX,X00YYYYYYY ─────────────────
 // Validates a comma-separated list of FNSKUs against the fba_fnskus table.
-// Returns found/not-found status with product metadata for each.
+// Optional: `persist_missing=1` upserts stub catalog rows for unknown FNSKUs so
+// metadata can be filled in later, while still returning them as not ready.
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const raw = String(searchParams.get('fnskus') || '').trim();
+    const persistMissing = new Set(['1', 'true', 'yes']).has(
+      String(searchParams.get('persist_missing') || '').trim().toLowerCase()
+    );
     if (!raw) {
       return NextResponse.json({ success: true, results: [] });
     }
@@ -40,12 +44,38 @@ export async function GET(request: NextRequest) {
     );
 
     const foundMap = new Map(result.rows.map((r) => [r.fnsku.toUpperCase(), r]));
+    const missingFnskus = fnskus.filter((fnsku) => !foundMap.has(fnsku));
+    let upsertedStubSet = new Set<string>();
+
+    if (persistMissing && missingFnskus.length > 0) {
+      const upsertResult = await pool.query(
+        `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
+         SELECT missing.fnsku, NULL, NULL, NULL, TRUE, NOW(), NOW()
+         FROM UNNEST($1::text[]) AS missing(fnsku)
+         ON CONFLICT (fnsku) DO UPDATE
+           SET is_active = TRUE,
+               last_seen_at = EXCLUDED.last_seen_at,
+               updated_at = EXCLUDED.updated_at
+         RETURNING fnsku`,
+        [missingFnskus]
+      );
+      upsertedStubSet = new Set(
+        upsertResult.rows.map((row) => String(row.fnsku || '').trim().toUpperCase()).filter(Boolean)
+      );
+    }
 
     const results = fnskus.map((fnsku) => {
       const match = foundMap.get(fnsku);
+      const hasCatalogMetadata = Boolean(
+        match && [match.product_title, match.asin, match.sku].some((value) => String(value || '').trim())
+      );
+      const catalogExists = Boolean(match) || upsertedStubSet.has(fnsku);
       return {
         fnsku,
-        found: !!match,
+        found: hasCatalogMetadata,
+        catalog_exists: catalogExists,
+        needs_details: catalogExists && !hasCatalogMetadata,
+        upserted_stub: upsertedStubSet.has(fnsku),
         product_title: match?.product_title ?? null,
         asin: match?.asin ?? null,
         sku: match?.sku ?? null,

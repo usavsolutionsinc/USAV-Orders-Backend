@@ -240,6 +240,8 @@ const ORDER_SERIALS_CTE = `
 /**
  * Get all shipped orders with optional limit and offset
  */
+export type ShippedFilterMode = 'all' | 'orders' | 'sku' | 'fba';
+
 export interface GetAllShippedOrdersOptions {
   limit?: number;
   offset?: number;
@@ -248,6 +250,8 @@ export interface GetAllShippedOrdersOptions {
   packedBy?: number | null;
   testedBy?: number | null;
   missingTrackingOnly?: boolean;
+  /** Filter records by order type. 'all' returns everything; default is no restriction. */
+  shippedFilter?: ShippedFilterMode;
 }
 
 export async function getAllShippedOrders(limit: number, offset?: number): Promise<ShippedOrder[]>;
@@ -286,6 +290,14 @@ export async function getAllShippedOrders(
     if (options.missingTrackingOnly) {
       conditions.push(`COALESCE(BTRIM(os.tracking_number), '') = ''`);
     }
+    if (options.shippedFilter === 'orders') {
+      conditions.push(`(LOWER(COALESCE(os.account_source, '')) != 'fba' AND os.order_id NOT ILIKE 'FBA%')`);
+    } else if (options.shippedFilter === 'fba') {
+      conditions.push(`(LOWER(COALESCE(os.account_source, '')) = 'fba' OR os.order_id ILIKE 'FBA%')`);
+    } else if (options.shippedFilter === 'sku') {
+      conditions.push(`BTRIM(COALESCE(os.sku, '')) != ''`);
+    }
+    // 'all' → no additional restriction
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(Math.max(1, limit), Math.max(0, offset));
@@ -445,7 +457,10 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
  * Uses ORDER_SERIALS_CTE (carrier-shipped only). For packed-but-not-yet-carrier-shipped
  * orders, use searchPackedOrders as fallback.
  */
-export async function searchShippedOrders(query: string): Promise<ShippedOrder[]> {
+export async function searchShippedOrders(
+  query: string,
+  options?: { shippedFilter?: ShippedFilterMode },
+): Promise<ShippedOrder[]> {
   try {
     const searchTerm = `%${query}%`;
     const digitsOnly = query.replace(/\D/g, '');
@@ -460,6 +475,16 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
       : '';
     if (key18) params.push(key18);
 
+    // Build an optional AND clause for the type filter
+    let typeFilterClause = '';
+    if (options?.shippedFilter === 'orders') {
+      typeFilterClause = ` AND (LOWER(COALESCE(os.account_source, '')) != 'fba' AND os.order_id NOT ILIKE 'FBA%')`;
+    } else if (options?.shippedFilter === 'fba') {
+      typeFilterClause = ` AND (LOWER(COALESCE(os.account_source, '')) = 'fba' OR os.order_id ILIKE 'FBA%')`;
+    } else if (options?.shippedFilter === 'sku') {
+      typeFilterClause = ` AND BTRIM(COALESCE(os.sku, '')) != ''`;
+    }
+
     const result = await pool.query(
       `WITH ${ORDER_SERIALS_CTE}
        SELECT
@@ -471,7 +496,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
        LEFT JOIN staff s1 ON os.tested_by = s1.id
        LEFT JOIN staff s2 ON os.packed_by = s2.id
        LEFT JOIN staff s3 ON os.tester_id = s3.id
-       WHERE
+       WHERE (
          os.tracking_number::text = $2
          OR os.order_id::text = $2
          OR os.tracking_number::text ILIKE $1
@@ -485,6 +510,7 @@ export async function searchShippedOrders(query: string): Promise<ShippedOrder[]
              OR RIGHT(regexp_replace(COALESCE(os.order_id::text, ''), '[^0-9]', '', 'g'), 8) = $3
            )
          )${key18Clause}
+       )${typeFilterClause}
        ORDER BY
          CASE WHEN os.tracking_number::text = $2 OR os.order_id::text = $2 THEN 1 ELSE 2 END,
          COALESCE(os.packed_at, os.created_at)::timestamp DESC NULLS LAST,

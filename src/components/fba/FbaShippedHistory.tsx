@@ -2,14 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { ChevronDown, Loader2, RefreshCw, X } from '@/components/Icons';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import WeekHeader from '@/components/ui/WeekHeader';
+import type { StationTheme } from '@/utils/staff-colors';
+import { stationThemeColors, fbaWorkspaceScanChrome } from '@/utils/staff-colors';
+import { FbaLoadingState, FbaErrorState } from '@/components/fba/FbaStateShells';
+import { StatusBadge } from '@/design-system/components/StatusBadge';
 
 export interface FbaShippedHistoryProps {
   refreshTrigger?: number;
+  stationTheme?: StationTheme;
 }
 
 type TrackingEntry = {
@@ -52,7 +58,10 @@ type ItemRow = {
   actual_qty: number | null;
 };
 
-export function FbaShippedHistory({ refreshTrigger = 0 }: FbaShippedHistoryProps) {
+export function FbaShippedHistory({ refreshTrigger = 0, stationTheme: theme = 'green' }: FbaShippedHistoryProps) {
+  const themeColors = stationThemeColors[theme];
+  const scanChrome = fbaWorkspaceScanChrome[theme];
+  const reducedMotion = !!useReducedMotion();
   const searchParams = useSearchParams();
   const searchQuery = (searchParams.get('q') || '').trim();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -199,24 +208,11 @@ export function FbaShippedHistory({ refreshTrigger = 0 }: FbaShippedHistoryProps
   };
 
   if (loading && shipments.length === 0) {
-    return (
-      <div className="flex h-full flex-1 items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm font-semibold text-gray-600">Loading shipment close history…</p>
-        </div>
-      </div>
-    );
+    return <FbaLoadingState theme={theme} label="Loading shipment close history…" />;
   }
 
   if (error) {
-    return (
-      <div className="flex h-full flex-1 items-center justify-center px-6">
-        <div className="max-w-md rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {error}
-        </div>
-      </div>
-    );
+    return <FbaErrorState message={error} onRetry={load} theme={theme} />;
   }
 
   return (
@@ -225,7 +221,7 @@ export function FbaShippedHistory({ refreshTrigger = 0 }: FbaShippedHistoryProps
         stickyDate={stickyDate}
         fallbackDate={fallbackDate}
         count={currentCount || totalCount}
-        countClassName="text-gray-600"
+        countClassName={themeColors.text}
         formatDate={formatDate}
         showWeekControls={false}
         rightSlot={(
@@ -293,34 +289,41 @@ export function FbaShippedHistory({ refreshTrigger = 0 }: FbaShippedHistoryProps
                           <AnimatePresence initial={false}>
                             {isOpen ? (
                               <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden border-t border-gray-100 bg-slate-50/80"
+                                initial={reducedMotion ? false : framerPresence.collapseHeight.initial}
+                                animate={framerPresence.collapseHeight.animate}
+                                exit={framerPresence.collapseHeight.exit}
+                                transition={reducedMotion ? { duration: 0 } : framerTransition.upNextCollapse}
+                                className="overflow-hidden border-t border-gray-100 bg-white"
                               >
                                 <div className="px-3 py-2 space-y-3">
                                   {/* Tracking numbers */}
                                   <div>
-                                    <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-400">
+                                    <p className={`mb-1.5 text-[10px] font-black uppercase tracking-widest ${themeColors.text}`}>
                                       Tracking
                                     </p>
                                     {(row.tracking_numbers || []).length > 0 ? (
-                                      <ul className="mb-2 space-y-1">
+                                      <div className="mb-2">
                                         {(row.tracking_numbers || []).map((tn) => (
-                                          <li
+                                          <div
                                             key={tn.link_id}
-                                            className="flex items-center justify-between gap-2 rounded-md border border-zinc-100 bg-zinc-50 px-2 py-1.5"
+                                            className="flex items-center justify-between gap-2 border-b border-gray-100 px-1 py-1.5 last:border-b-0"
                                           >
                                             <div className="min-w-0 flex-1">
                                               <p className="font-mono text-[11px] font-bold text-zinc-900">
                                                 {tn.tracking_number}
                                               </p>
-                                              <p className="text-[9px] font-semibold text-zinc-400">
-                                                {tn.carrier}
-                                                {tn.status_description ? ` · ${tn.status_description}` : ''}
-                                                {tn.is_delivered ? ' · Delivered' : tn.is_in_transit ? ' · In transit' : ''}
-                                                {tn.has_exception ? ' · ⚠ Exception' : ''}
-                                              </p>
+                                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] font-semibold text-zinc-400">
+                                                <span>{tn.carrier}</span>
+                                                {tn.status_description ? <span>{tn.status_description}</span> : null}
+                                                {tn.is_delivered ? (
+                                                  <StatusBadge status="delivered" />
+                                                ) : tn.is_in_transit ? (
+                                                  <StatusBadge status="shipped" label="In transit" />
+                                                ) : null}
+                                                {tn.has_exception ? (
+                                                  <StatusBadge status="overdue" label="Exception" />
+                                                ) : null}
+                                              </div>
                                             </div>
                                             <button
                                               type="button"
@@ -330,9 +333,9 @@ export function FbaShippedHistory({ refreshTrigger = 0 }: FbaShippedHistoryProps
                                             >
                                               <X className="h-3 w-3" />
                                             </button>
-                                          </li>
+                                          </div>
                                         ))}
-                                      </ul>
+                                      </div>
                                     ) : (
                                       <p className="mb-2 text-[10px] font-semibold text-zinc-400">No tracking linked</p>
                                     )}
@@ -348,7 +351,7 @@ export function FbaShippedHistory({ refreshTrigger = 0 }: FbaShippedHistoryProps
                                           if (e.key === 'Enter') addTracking(row.id);
                                         }}
                                         placeholder="Paste tracking number…"
-                                        className="h-7 min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 font-mono text-[11px] font-bold text-zinc-900 outline-none placeholder:font-sans placeholder:font-normal placeholder:text-zinc-400 focus:border-blue-400"
+                                        className={`h-7 min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 font-mono text-[11px] font-bold text-zinc-900 outline-none placeholder:font-sans placeholder:font-normal placeholder:text-zinc-400 ${scanChrome.fieldFocusRing}`}
                                       />
                                       <button
                                         type="button"
@@ -378,7 +381,7 @@ export function FbaShippedHistory({ refreshTrigger = 0 }: FbaShippedHistoryProps
                                     </div>
                                   ) : (
                                     <div>
-                                      <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-400">
+                                      <p className={`mb-1.5 text-[10px] font-black uppercase tracking-widest ${themeColors.text}`}>
                                         Line items
                                       </p>
                                       <ul className="space-y-1">

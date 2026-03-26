@@ -2,6 +2,7 @@
 
 import type { MouseEvent } from 'react';
 import { ExternalLink } from '@/components/Icons';
+import { IconButton } from '../primitives';
 
 interface ExternalLinkActionIconProps {
   href?: string | null;
@@ -33,15 +34,14 @@ export function ExternalLinkActionIcon({
   };
 
   return (
-    <button
-      type="button"
+    <IconButton
+      icon={<ExternalLink className="h-[14px] w-[14px]" />}
       onClick={handleClick}
       disabled={!canOpen}
-      className={`text-slate-400 transition-colors duration-100 ease-out hover:text-blue-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${className}`.trim()}
-      aria-label={ariaLabel}
+      className={className}
+      ariaLabel={ariaLabel}
       title={title}
-    >
-      <ExternalLink className="h-[14px] w-[14px]" />
-    </button>
+      tone="accent"
+    />
   );
 }

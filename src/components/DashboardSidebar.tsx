@@ -29,10 +29,7 @@ import {
 } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails } from '@/utils/events';
-import { resolveOrderSearchView } from '@/lib/order-search-resolver';
-
-type DashboardOrderView = 'pending' | 'unshipped' | 'shipped';
-type PendingStockFilter = 'all' | 'pending' | 'stock';
+import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
@@ -41,22 +38,6 @@ const DASHBOARD_TABS = [
   { id: 'shipped',   label: 'Shipped',  color: 'blue' as const },
   { id: 'unshipped', label: 'Awaiting', color: 'blue' as const },
 ];
-
-function getOrderViewFromSearch(searchParams: { has: (key: string) => boolean }): DashboardOrderView {
-  if (searchParams.has('shipped')) return 'shipped';
-  if (searchParams.has('unshipped')) return 'unshipped';
-  if (searchParams.has('pending')) return 'pending';
-  return 'pending';
-}
-
-function normalizeOrderViewParams(params: URLSearchParams, preferredView?: DashboardOrderView): DashboardOrderView {
-  const nextView = preferredView ?? getOrderViewFromSearch(params);
-  params.delete('unshipped');
-  params.delete('pending');
-  params.delete('shipped');
-  params.set(nextView, '');
-  return nextView;
-}
 
 function getPathStaffId(pathname: string | null, segment: 'tech' | 'packer'): string | null {
   if (!pathname) return null;
@@ -193,6 +174,7 @@ function SidebarContextPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const routeKey = getSidebarRouteKey(pathname);
+  const dashboardSearch = useDashboardSearchController();
 
   const updateSearch = (mutate: (params: URLSearchParams) => void, nextPathname?: string) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -202,39 +184,9 @@ function SidebarContextPanel() {
     router.replace(nextSearch ? `${targetPath}?${nextSearch}` : targetPath);
   };
 
-  const handleDashboardOrderSearch = async (nextValue: string) => {
-    const trimmed = nextValue.trim();
-    if (!trimmed) {
-      updateSearch((params) => {
-        params.delete('search');
-        params.delete('openOrderId');
-      }, '/dashboard');
-      return;
-    }
-
-    try {
-      const result = await resolveOrderSearchView(trimmed);
-      if (result.view === 'shipped' || result.view === 'pending') {
-        updateSearch((params) => {
-          normalizeOrderViewParams(params, result.view!);
-          params.set('search', trimmed);
-          if (result.firstOrderId) params.set('openOrderId', String(result.firstOrderId));
-          else params.delete('openOrderId');
-        }, '/dashboard');
-        return;
-      }
-    } catch (_error) {
-      // Fall back to the current view search if the lookup fails.
-    }
-
-    updateSearch((params) => {
-      if (trimmed) params.set('search', trimmed);
-      else params.delete('search');
-      params.delete('openOrderId');
-    }, '/dashboard');
-  };
-
-  const closeIntakeForm = () => updateSearch((params) => { params.delete('new'); });
+  const closeIntakeForm = routeKey === 'dashboard'
+    ? dashboardSearch.closeIntakeForm
+    : () => updateSearch((params) => { params.delete('new'); });
 
   const submitShippedForm = async (data: ShippedFormData) => {
     try {
@@ -272,77 +224,66 @@ function SidebarContextPanel() {
   };
 
   if (routeKey === 'dashboard') {
-    const orderView = getOrderViewFromSearch(searchParams);
-    const dashboardSearch = searchParams.get('search') || '';
-    const pendingFilterParam = searchParams.get('pendingFilter');
-    const pendingFilter: PendingStockFilter =
-      pendingFilterParam === 'stock'
-        ? 'stock'
-        : pendingFilterParam === 'pending'
-          ? 'pending'
-          : 'all';
-    const activeTabId: string = orderView;
+    const activeTabId: string = dashboardSearch.orderView;
     const filterControl = (
       <SidebarTabSwitchChrome>
         <TabSwitch
           tabs={DASHBOARD_TABS}
           activeTab={activeTabId}
           highContrast
-          onTabChange={(tab) =>
-            updateSearch((params) => {
-              normalizeOrderViewParams(params, tab as DashboardOrderView);
-            }, '/dashboard')
-          }
+          onTabChange={(tab) => dashboardSearch.setOrderView(tab as typeof dashboardSearch.orderView)}
         />
       </SidebarTabSwitchChrome>
     );
 
-    if (orderView === 'shipped') {
+    if (dashboardSearch.orderView === 'shipped') {
       return (
         <ShippedSidebar
           embedded
           hideSectionHeader
-          showIntakeForm={searchParams.get('new') === 'true'}
+          showIntakeForm={dashboardSearch.showIntakeForm}
           onCloseForm={closeIntakeForm}
           onFormSubmit={submitShippedForm}
           filterControl={filterControl}
           showDetailsPanel={false}
+          searchValue={dashboardSearch.searchQuery}
+          onSearchChange={dashboardSearch.setSearch}
+          shippedFilter={dashboardSearch.shippedFilter}
+          onShippedFilterChange={dashboardSearch.setShippedFilter}
         />
       );
     }
 
-    if (orderView === 'unshipped') {
+    if (dashboardSearch.orderView === 'unshipped') {
       return (
         <UnshippedSidebar
           embedded
           hideSectionHeader
-          showIntakeForm={searchParams.get('new') === 'true'}
+          showIntakeForm={dashboardSearch.showIntakeForm}
           onCloseForm={closeIntakeForm}
           onFormSubmit={submitShippedForm}
           filterControl={filterControl}
-          searchValue={dashboardSearch}
-          onSearchChange={handleDashboardOrderSearch}
+          searchValue={dashboardSearch.searchQuery}
+          onSearchChange={dashboardSearch.setSearch}
+          onOpenShippedMatches={dashboardSearch.openShippedMatches}
         />
       );
     }
 
     return (
       <DashboardManagementPanel
-        showIntakeForm={searchParams.get('new') === 'true'}
+        showIntakeForm={dashboardSearch.showIntakeForm}
         onCloseForm={closeIntakeForm}
         onFormSubmit={submitShippedForm}
         filterControl={filterControl}
-        showNextUnassignedButton={orderView === 'pending'}
-        searchValue={dashboardSearch}
-        onSearchChange={handleDashboardOrderSearch}
-        showPendingFilterControl={orderView === 'pending'}
-        pendingFilterValue={pendingFilter}
+        showNextUnassignedButton={dashboardSearch.orderView === 'pending'}
+        searchValue={dashboardSearch.searchQuery}
+        onSearchChange={dashboardSearch.setSearch}
+        onOpenShippedMatches={dashboardSearch.openShippedMatches}
+        showPendingFilterControl={dashboardSearch.orderView === 'pending'}
+        pendingFilterValue={dashboardSearch.pendingFilter}
         highContrastSliders
-        onPendingFilterChange={(value) =>
-          updateSearch((params) => {
-            params.set('pendingFilter', value);
-          }, '/dashboard')
-        }
+        onPendingFilterChange={dashboardSearch.setPendingFilter}
       />
     );
   }

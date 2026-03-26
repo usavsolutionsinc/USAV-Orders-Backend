@@ -148,8 +148,8 @@ export default function FBAShipmentsTable() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['dashboard-fba-shipments'],
     queryFn: fetchFbaShipments,
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 
   const rows = data?.rows ?? [];

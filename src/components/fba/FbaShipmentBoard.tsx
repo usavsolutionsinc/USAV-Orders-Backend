@@ -15,8 +15,8 @@ import {
   RefreshCw,
   Search,
 } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { FnskuChip, SerialChip, getLast6Serial } from '@/components/ui/CopyChip';
-import { IconActionButton } from '@/components/ui/IconActionButton';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -124,9 +124,27 @@ function InlineRowDetails({
           <WorkflowStatusIcon mode={mode} />
         </div>
         <div className="flex items-center gap-1.5">
-          <IconActionButton label="Copy FNSKU" onClick={copyFnsku} icon={<Copy className="h-3.5 w-3.5" />} />
-          <IconActionButton label="Open print queue" onClick={onOpenLabels} icon={<Printer className="h-3.5 w-3.5" />} />
-          <IconActionButton label="Refresh row" onClick={onRefresh} icon={<RefreshCw className="h-3.5 w-3.5" />} />
+          <IconButton
+            ariaLabel="Copy FNSKU"
+            title="Copy FNSKU"
+            onClick={copyFnsku}
+            icon={<Copy className="h-3.5 w-3.5" />}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+          />
+          <IconButton
+            ariaLabel="Open print queue"
+            title="Open print queue"
+            onClick={onOpenLabels}
+            icon={<Printer className="h-3.5 w-3.5" />}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+          />
+          <IconButton
+            ariaLabel="Refresh row"
+            title="Refresh row"
+            onClick={onRefresh}
+            icon={<RefreshCw className="h-3.5 w-3.5" />}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+          />
         </div>
       </div>
 

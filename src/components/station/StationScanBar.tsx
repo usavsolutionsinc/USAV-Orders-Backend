@@ -1,7 +1,7 @@
 'use client';
 
-import type { FormEvent, ReactNode, Ref } from 'react';
-import { Barcode } from '../Icons';
+import { useCallback, type FormEvent, type ReactNode, type Ref } from 'react';
+import { Barcode, Clipboard } from '../Icons';
 
 interface StationScanBarProps {
   value: string;
@@ -23,6 +23,8 @@ interface StationScanBarProps {
   leadingIcon?: boolean;
   onInputBlur?: () => void;
   disabled?: boolean;
+  /** Show clipboard paste button when input is empty — calls onChange with clipboard text. */
+  onPaste?: (text: string) => void;
 }
 
 export function StationScanBar({
@@ -43,9 +45,21 @@ export function StationScanBar({
   leadingIcon = true,
   onInputBlur,
   disabled = false,
+  onPaste,
 }: StationScanBarProps) {
+  const handlePasteClick = useCallback(async () => {
+    if (!onPaste) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text.trim()) onPaste(text.trim());
+    } catch { /* clipboard blocked */ }
+  }, [onPaste]);
+
+  const showPaste = !!onPaste && !value.trim();
+  const showRight = hasRightContent || showPaste;
+
   const padLeft = leadingIcon ? 'pl-11' : 'pl-4';
-  const padRight = hasRightContent ? 'pr-28' : 'pr-4';
+  const padRight = showRight ? 'pr-28' : 'pr-4';
 
   return (
     <form onSubmit={onSubmit} className={`relative group ${className}`.trim()}>
@@ -72,9 +86,20 @@ export function StationScanBar({
             inputClassName,
           ].join(' ').trim()}
         />
-        {hasRightContent ? (
+        {showRight ? (
           <div className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 ${rightContentClassName}`.trim()}>
-            {rightContent}
+            {hasRightContent && rightContent}
+            {showPaste && (
+              <button
+                type="button"
+                onClick={() => void handlePasteClick()}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60"
+                title="Paste from clipboard"
+                aria-label="Paste from clipboard"
+              >
+                <Clipboard className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         ) : null}
       </div>

@@ -1,3 +1,5 @@
+import type { ShippedOrder } from '@/lib/neon/orders-queries';
+
 export function dispatchDashboardAndStationRefresh(): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('dashboard-refresh'));
@@ -14,6 +16,29 @@ export function dispatchPendingOrderRowRefetch(orderId: number): void {
 export function dispatchCloseShippedDetails(): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('close-shipped-details'));
+}
+
+export type ShippedDetailsContext = 'shipped' | 'queue';
+
+export interface OpenShippedDetailsPayload {
+  order: ShippedOrder;
+  context?: ShippedDetailsContext;
+}
+
+export function dispatchOpenShippedDetails(order: ShippedOrder, context?: ShippedDetailsContext): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: { order, context } }));
+}
+
+export function getOpenShippedDetailsPayload(detail: unknown): OpenShippedDetailsPayload | null {
+  if (!detail || typeof detail !== 'object') return null;
+
+  const payload = detail as { order?: ShippedOrder; context?: ShippedDetailsContext };
+  if (payload.order && typeof payload.order === 'object') {
+    return { order: payload.order, context: payload.context };
+  }
+
+  return { order: detail as ShippedOrder };
 }
 
 export type ShippedDetailsNavigationDirection = 'up' | 'down';

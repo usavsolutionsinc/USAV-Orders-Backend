@@ -1,5 +1,7 @@
 'use client';
 
+import { StatusText } from '../primitives';
+
 const STATUS_MAP: Record<string, { label: string; colorVar: string }> = {
   active: { label: 'Active', colorVar: '--color-status-active' },
   inactive: { label: 'Inactive', colorVar: '--color-status-inactive' },
@@ -56,15 +58,5 @@ export function StatusBadge({
     colorVar: '--color-neutral-700',
   };
 
-  return (
-    <span
-      className={`inline-flex items-center border-b-2 border-current pb-0.5 text-[9px] font-black uppercase tracking-[0.08em] leading-none ${className}`.trim()}
-      style={{
-        color: `var(${config.colorVar})`,
-        borderBottomColor: `color-mix(in srgb, var(${config.colorVar}) 82%, transparent)`,
-      }}
-    >
-      {label || config.label}
-    </span>
-  );
+  return <StatusText label={label || config.label} colorVar={config.colorVar} className={className} />;
 }

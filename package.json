@@ -18,6 +18,9 @@
     "electron:build:mac": "electron-builder --mac",
     "electron:build:win": "electron-builder --win",
     "lint": "next lint",
+    "test:dashboard-state": "tsx --test src/utils/dashboard-search-state.test.ts",
+    "test:e2e:fba-sidebar": "node scripts/e2e-fba-sidebar.mjs",
+    "test:e2e:station-serial": "node scripts/e2e-station-serial.mjs",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
@@ -63,6 +66,7 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/cors": "^2.8.19",
     "@types/multer": "^2.1.0",

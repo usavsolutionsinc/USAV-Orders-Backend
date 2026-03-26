@@ -48,9 +48,9 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
     setStatus(null);
     try {
       const data = await zohoRefreshMutation.mutateAsync();
-      setStatus({ type: 'success', message: data?.message || 'Zoho token refresh completed successfully.' });
+      setStatus({ type: 'success', message: data?.message || 'Zoho token refreshed.' });
     } catch (error: any) {
-      setStatus({ type: 'error', message: error?.message || 'Zoho token refresh failed' });
+      setStatus({ type: 'error', message: error?.message || 'Zoho token refresh failed.' });
     }
   };
 
@@ -60,11 +60,11 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
       const data = await zohoSyncMutation.mutateAsync();
       setStatus({
         type: 'success',
-        message: `Zoho sync completed. Processed ${data?.totals?.processed || 0}, line items ${data?.totals?.line_items_synced || 0}, created ${data?.totals?.created || 0}, updated ${data?.totals?.updated || 0}, failed ${data?.totals?.failed || 0}.`,
+        message: `Zoho sync finished. Processed ${data?.totals?.processed || 0}, synced ${data?.totals?.line_items_synced || 0} line items, created ${data?.totals?.created || 0}, updated ${data?.totals?.updated || 0}, failed ${data?.totals?.failed || 0}.`,
       });
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error: any) {
-      setStatus({ type: 'error', message: error?.message || 'Zoho sync failed' });
+      setStatus({ type: 'error', message: error?.message || 'Zoho sync failed.' });
     }
   };
 
@@ -76,11 +76,11 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
       const data = await zohoImportOneMutation.mutateAsync(id);
       setStatus({
         type: 'success',
-        message: `Zoho receive ${data?.purchase_receive_id || id} imported. Receiving #${data?.receiving_id || '-'} with ${data?.line_items_imported || 0} line item(s).`,
+        message: `Imported purchase receive ${data?.purchase_receive_id || id}. Receiving #${data?.receiving_id || '-'} has ${data?.line_items_imported || 0} line item(s).`,
       });
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (error: any) {
-      setStatus({ type: 'error', message: error?.message || 'Zoho single import failed' });
+      setStatus({ type: 'error', message: error?.message || 'Zoho import failed.' });
     }
   };
 
@@ -91,7 +91,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
       <div className={`flex items-center justify-between gap-3 ${embedded ? 'border-b border-gray-200 pb-3' : ''}`}>
         <div>
           <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Zoho Receiving Sync</h2>
-          <p className="text-[9px] font-bold text-gray-500 mt-1">Refresh Zoho token, then sync expected PO lines into receiving_lines before physical scans link them</p>
+          <p className="text-[9px] font-bold text-gray-500 mt-1">Refresh the Zoho token, sync expected PO lines, or import one purchase receive.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -117,7 +117,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
         <input
           value={purchaseReceiveId}
           onChange={(e) => setPurchaseReceiveId(e.target.value)}
-          placeholder="Purchase Receive ID"
+          placeholder="Enter purchase receive ID"
           className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-900 outline-none focus:border-emerald-500"
         />
         <button
@@ -125,7 +125,7 @@ export function ZohoSyncCard({ embedded = false }: { embedded?: boolean }) {
           disabled={!purchaseReceiveId.trim() || anyPending}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
         >
-          {zohoImportOneMutation.isPending ? 'Importing...' : 'Import One'}
+          {zohoImportOneMutation.isPending ? 'Importing...' : 'Import Receive'}
         </button>
       </div>
 

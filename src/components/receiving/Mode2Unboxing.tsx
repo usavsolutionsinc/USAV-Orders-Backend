@@ -88,8 +88,8 @@ function usePendingEntries() {
             const data: ReceivingLog[] = await res.json();
             return data.filter((l) => !l.qa_status || l.qa_status === 'PENDING');
         },
-        staleTime: 15_000,
-        refetchInterval: 30_000,
+        staleTime: 45_000,
+        refetchInterval: 60_000,
     });
 }
 
@@ -104,7 +104,8 @@ function usePhotos(receivingId: string | null, enabled: boolean) {
             return Array.isArray(data.photos) ? data.photos : [];
         },
         enabled: enabled && !!receivingId,
-        refetchInterval: 3_000,
+        refetchInterval: 15_000,
+        staleTime: 10_000,
     });
 }
 

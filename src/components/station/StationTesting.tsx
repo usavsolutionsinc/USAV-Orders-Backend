@@ -39,8 +39,6 @@ export default function StationTesting({
   embedded = false,
   onViewManual,
 }: StationTestingProps) {
-  const [fbaError, setFbaError] = useState<string | null>(null);
-  const [isFbaLoading, setIsFbaLoading] = useState(false);
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
 
   const {
@@ -72,86 +70,10 @@ export default function StationTesting({
     onActiveOrderCardAutoHidden: useCallback(() => {
       setManualMode('tracking');
     }, []),
+    onFnskuOrderLoaded: useCallback(() => {
+      setManualMode((m) => (m === 'fba' ? null : m));
+    }, []),
   });
-
-  const handleFnskuScan = useCallback(
-    async (raw: string) => {
-      const fnsku = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-      setIsFbaLoading(true);
-      setFbaError(null);
-      try {
-        const res = await fetch(`/api/tech/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&techId=${encodeURIComponent(userId)}`);
-        const data = await res.json();
-        if (!res.ok || !data.found) {
-          setFbaError(data.error || 'FNSKU scan failed');
-          return;
-        }
-
-        setActiveOrder({
-          id: data.order?.id ?? null,
-          orderId: data.order?.orderId ?? 'FNSKU',
-          fnsku,
-          productTitle: data.order?.productTitle ?? data.order?.tracking ?? fnsku,
-          itemNumber: data.order?.itemNumber ?? null,
-          sku: data.order?.sku ?? 'N/A',
-          condition: data.order?.condition ?? 'N/A',
-          notes: data.order?.notes ?? '',
-          tracking: data.order?.tracking ?? fnsku,
-          serialNumbers: Array.isArray(data.order?.serialNumbers) ? data.order.serialNumbers : [],
-          testDateTime: data.order?.testDateTime ?? null,
-          testedBy: data.order?.testedBy ?? null,
-          quantity: parseInt(String(data.order?.quantity || 1), 10) || 1,
-          shipByDate: data.order?.shipByDate ?? null,
-          createdAt: data.order?.createdAt ?? null,
-          orderFound: data.orderFound !== false,
-          sourceType: 'fba',
-        });
-
-        if (data.fnskuSalId) {
-          window.dispatchEvent(new CustomEvent('tech-log-added', {
-            detail: {
-              id: -1 * Number(data.fnskuSalId),
-              source_row_id: Number(data.fnskuSalId),
-              source_kind: 'fba_scan',
-              tech_serial_id: null,
-              fnsku_log_id:
-                data.fnskuLogId != null && Number.isFinite(Number(data.fnskuLogId))
-                  ? Number(data.fnskuLogId)
-                  : null,
-              created_at: data.order?.testDateTime ?? data.order?.createdAt ?? null,
-              shipping_tracking_number: data.order?.tracking ?? fnsku,
-              serial_number: '',
-              tested_by: data.order?.testedBy ?? Number(userId),
-              shipment_id: data.shipment?.shipment_id ?? null,
-              order_db_id: null,
-              order_id: data.order?.orderId ?? 'FBA',
-              product_title: data.order?.productTitle ?? null,
-              item_number: data.order?.itemNumber ?? null,
-              sku: data.order?.sku ?? null,
-              condition: data.order?.condition ?? null,
-              fnsku,
-              status: data.order?.status ?? null,
-              status_history: data.order?.statusHistory ?? [],
-              notes: data.order?.notes ?? null,
-              account_source: data.order?.accountSource ?? 'fba',
-              quantity: String(data.order?.quantity || '1'),
-              is_shipped: Boolean(data.order?.isShipped),
-              ship_by_date: data.order?.shipByDate ?? null,
-              out_of_stock: data.order?.outOfStock ?? null,
-            },
-          }));
-        }
-
-        setManualMode(null);
-        triggerGlobalRefresh();
-      } catch {
-        setFbaError('Network error — FNSKU scan could not be saved');
-      } finally {
-        setIsFbaLoading(false);
-      }
-    },
-    [userId, setActiveOrder, setManualMode, triggerGlobalRefresh]
-  );
 
   const forcedTypeForManualMode = useCallback((mode: StationInputMode | null) => {
     if (mode === 'tracking') return 'TRACKING' as const;
@@ -186,21 +108,22 @@ export default function StationTesting({
 
       // In auto mode, FNSKU-looking input routes to the dedicated FBA endpoint.
       // Manual mode now fully overrides auto classification.
+      // Route through handleSubmit so the hook's handleFnskuScan runs and calls
+      // syncActiveOrderState — this updates lastScannedOrderRef so serials always
+      // anchor to the latest FNSKU_SCANNED SAL entry.
       if (isFnskuInput && !fromUpNextTracking && !manualForcedType) {
-        setInputValue('');
-        handleFnskuScan(value);
+        handleSubmit(undefined, value, { forcedType: 'FNSKU' });
         return;
       }
 
       if (manualForcedType === 'FNSKU') {
-        setInputValue('');
-        handleFnskuScan(value);
+        handleSubmit(undefined, value, { forcedType: 'FNSKU' });
         return;
       }
 
       handleSubmit(undefined, overrideTracking, manualForcedType ? { forcedType: manualForcedType } : undefined);
     },
-    [inputValue, manualMode, forcedTypeForManualMode, handleFnskuScan, handleSubmit, setInputValue, setManualMode]
+    [inputValue, manualMode, forcedTypeForManualMode, handleSubmit, setManualMode]
   );
 
   const handleRemoveSerial = useCallback(
@@ -311,8 +234,7 @@ export default function StationTesting({
       const raw = inputValue;
       setManualMode(null);
       if (forced === 'FNSKU') {
-        setInputValue('');
-        handleFnskuScan(raw);
+        handleSubmit(undefined, raw, { forcedType: 'FNSKU' });
         return;
       }
 
@@ -323,10 +245,8 @@ export default function StationTesting({
       inputValue,
       inputRef,
       forcedTypeForManualMode,
-      handleFnskuScan,
       handleSubmit,
       reopenLastActiveOrderCard,
-      setInputValue,
       setManualMode,
     ],
   );
@@ -377,7 +297,7 @@ export default function StationTesting({
               rightContentClassName="right-1.5 gap-0.5"
               rightContent={(
                 <>
-                  {(isLoading || isFbaLoading) && (
+                  {isLoading && (
                     <Loader2 className="h-4 w-4 animate-spin text-gray-700" />
                   )}
                   <div className="flex items-center gap-0">
@@ -493,23 +413,6 @@ export default function StationTesting({
             )}
           </AnimatePresence>
 
-          {/* ── FBA FNSKU scan errors ── */}
-          <AnimatePresence mode="wait">
-            {fbaError && (
-              <motion.div
-                key="fba-error"
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={stationTween}
-                className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2"
-              >
-                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                <p className="text-xs font-bold text-red-700">{fbaError}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           <LayoutGroup id="station-active-upnext">
             {/* popLayout: exiting card leaves document flow so Up Next reflows up instead of a dead gap */}
             <AnimatePresence mode="popLayout" initial={false}>
@@ -532,7 +435,6 @@ export default function StationTesting({
                 onStart={(tracking) => {
                   setActiveOrder(null);
                   clearFeedback();
-                  setFbaError(null);
                   setTimeout(() => handleFormSubmit(undefined, tracking), 50);
                 }}
                 onMissingParts={() => {

@@ -3,17 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Plus } from '@/components/Icons';
 import { motion } from 'framer-motion';
+import type { StationTheme } from '@/utils/staff-colors';
+import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 
 interface FbaAddToShipmentPanelProps {
   shipmentOptions: number[];
   planRefById: Map<number, string>;
   onAdded?: () => void;
+  stationTheme?: StationTheme;
 }
 
-const fieldClass =
-  'w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none placeholder:text-gray-400 transition focus:border-transparent focus:ring-2 focus:ring-blue-500 disabled:opacity-50';
-
-export function FbaAddToShipmentPanel({ shipmentOptions, planRefById, onAdded }: FbaAddToShipmentPanelProps) {
+export function FbaAddToShipmentPanel({
+  shipmentOptions,
+  planRefById,
+  onAdded,
+  stationTheme = 'blue',
+}: FbaAddToShipmentPanelProps) {
+  const chrome = fbaSidebarThemeChrome[stationTheme];
   const [open, setOpen] = useState(true);
   const dropdownEase = [0.22, 1, 0.36, 1] as const;
   const dropdownMotion = useRef(false);
@@ -52,22 +58,20 @@ export function FbaAddToShipmentPanel({ shipmentOptions, planRefById, onAdded }:
     setAddError(null);
     setAddLoading(true);
     try {
-      const validate = await fetch(`/api/fba/fnskus/validate?fnskus=${encodeURIComponent(fnsku)}`);
+      const validate = await fetch(
+        `/api/fba/fnskus/validate?fnskus=${encodeURIComponent(fnsku)}&persist_missing=1`
+      );
       const validateJson = await validate.json();
       const row = Array.isArray(validateJson?.results) ? validateJson.results[0] : null;
-      if (!row?.found) {
-        setAddError('FNSKU not in catalog');
-        return;
-      }
       const res = await fetch(`/api/fba/shipments/${sid}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fnsku,
           expected_qty: quantity,
-          product_title: row.product_title,
-          asin: row.asin,
-          sku: row.sku,
+          product_title: row?.product_title ?? null,
+          asin: row?.asin ?? null,
+          sku: row?.sku ?? null,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -95,7 +99,7 @@ export function FbaAddToShipmentPanel({ shipmentOptions, planRefById, onAdded }:
           <button
             type="button"
             onClick={toggleOpen}
-            className="w-full py-0 pr-10 text-left outline-none transition-colors hover:bg-zinc-100/80 focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className={`w-full py-0 pr-10 text-left outline-none transition-colors hover:bg-zinc-100/80 ${chrome.cardFocusRing}`}
             aria-expanded={open}
             aria-controls="add-fnsku-panel"
             aria-label={
@@ -107,7 +111,7 @@ export function FbaAddToShipmentPanel({ shipmentOptions, planRefById, onAdded }:
           >
             <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">Add FNSKU</h2>
             {open ? (
-              <p className="text-[8px] font-bold uppercase tracking-widest text-blue-600">Manual entry ready</p>
+              <p className={`text-[8px] font-bold uppercase tracking-widest ${chrome.sectionLabel}`}>Manual entry ready</p>
             ) : null}
           </button>
           <motion.span
@@ -140,7 +144,7 @@ export function FbaAddToShipmentPanel({ shipmentOptions, planRefById, onAdded }:
               value={addShipmentId === '' ? '' : String(addShipmentId)}
               onChange={(e) => setAddShipmentId(e.target.value ? Number(e.target.value) : '')}
               disabled={!hasShipments}
-              className={fieldClass}
+              className={chrome.input}
             >
               <option value="">Shipment…</option>
               {sortedShipments.map((id) => (
@@ -154,7 +158,7 @@ export function FbaAddToShipmentPanel({ shipmentOptions, planRefById, onAdded }:
                 placeholder="FNSKU"
                 value={addFnsku}
                 onChange={(e) => setAddFnsku(e.target.value.toUpperCase())}
-                className={fieldClass}
+                className={chrome.monoInput}
                 disabled={!hasShipments}
               />
               <input
@@ -162,7 +166,7 @@ export function FbaAddToShipmentPanel({ shipmentOptions, planRefById, onAdded }:
                 min={1}
                 value={addQty}
                 onChange={(e) => setAddQty(e.target.value)}
-                className={`${fieldClass} text-center`}
+                className={`${chrome.input} text-center`}
                 disabled={!hasShipments}
               />
             </div>
@@ -171,7 +175,7 @@ export function FbaAddToShipmentPanel({ shipmentOptions, planRefById, onAdded }:
               type="button"
               onClick={() => void handleAddFnsku()}
               disabled={addLoading || !hasShipments}
-              className="flex h-10 w-full items-center justify-center gap-1 rounded-xl border border-blue-600 bg-blue-600 px-4 text-xs font-bold uppercase tracking-wide text-white transition hover:bg-blue-700 disabled:border-gray-200 disabled:bg-gray-200 disabled:text-gray-500"
+              className={`flex h-10 items-center justify-center gap-1 ${chrome.primaryButton}`}
             >
               {addLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-white" /> : <Plus className="h-3.5 w-3.5" />}
               Add to shipment

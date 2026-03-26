@@ -1,17 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { PanelRow, type PanelRowProps } from '../primitives';
 
-interface DetailLineRowProps {
-  label: ReactNode;
-  headerAccessory?: ReactNode;
-  actions?: ReactNode;
-  children: ReactNode;
-  className?: string;
-  contentClassName?: string;
-  dividerClassName?: string;
-  interactive?: boolean;
-}
+export interface DetailLineRowProps extends PanelRowProps {}
 
 export function DetailLineRow({
   label,
@@ -24,24 +15,16 @@ export function DetailLineRow({
   interactive = true,
 }: DetailLineRowProps) {
   return (
-    <div
-      className={[
-        dividerClassName,
-        'py-3 transition-colors duration-150 ease-out',
-        interactive ? 'hover:bg-slate-50/70' : '',
-        className,
-      ].join(' ').trim()}
+    <PanelRow
+      label={label}
+      headerAccessory={headerAccessory}
+      actions={actions}
+      className={className}
+      contentClassName={contentClassName}
+      dividerClassName={dividerClassName}
+      interactive={interactive}
     >
-      <div className="mb-1 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-[9px] font-black uppercase tracking-[0.10rem] leading-none text-gray-500">
-            {label}
-          </span>
-          {headerAccessory}
-        </div>
-        {actions}
-      </div>
-      <div className={contentClassName}>{children}</div>
-    </div>
+      {children}
+    </PanelRow>
   );
 }

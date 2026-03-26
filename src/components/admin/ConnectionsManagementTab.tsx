@@ -65,17 +65,17 @@ export function ConnectionsManagementTab() {
     <section className="flex h-full min-h-0 w-full flex-col border border-gray-200 bg-white">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Connections Log</p>
+          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Connection Activity</p>
           <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-500">
             <button
               type="button"
               onClick={() => navigateTo('zoho-management')}
               className="hidden border-b border-gray-900 py-1 text-[10px] font-black uppercase tracking-widest text-gray-900 sm:inline-block"
             >
-              Zoho Management
+              Open Zoho Tools
             </button>
             <span>Success {groupedSummary.success}</span>
-            <span>Error {groupedSummary.error}</span>
+            <span>Errors {groupedSummary.error}</span>
             <span>Total {logs.length}</span>
           </div>
         </div>
@@ -83,24 +83,24 @@ export function ConnectionsManagementTab() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-4 border border-gray-200 bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-900">Sync Activity Feed</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-900">Recent Activity</p>
           <p className="mt-1 text-[11px] font-bold text-gray-500">
-            Actions triggered from the sidebar write outcomes here so the connections surface stays auditable.
+            Every sync, import, and upload run from the sidebar writes a result here so you can confirm what happened.
           </p>
           <button
             type="button"
             onClick={() => navigateTo('zoho-management')}
             className="mt-3 inline-flex border-b border-gray-900 py-1 text-[10px] font-black uppercase tracking-widest text-gray-900 sm:hidden"
           >
-            Zoho Management
+            Open Zoho Tools
           </button>
         </div>
 
         {logs.length === 0 ? (
           <div className="border border-dashed border-gray-200 px-5 py-10 text-center">
-            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-gray-500">No Sync Activity Yet</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-gray-500">No Connection Activity Yet</p>
             <p className="mt-2 text-[11px] font-bold text-gray-500">
-              Run a connection action from the sidebar to capture update details here.
+              Run a sync or upload from the sidebar to see results here.
             </p>
           </div>
         ) : (

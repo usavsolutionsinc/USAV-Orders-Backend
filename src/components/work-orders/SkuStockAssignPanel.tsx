@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from './WorkOrderAssignmentCard';
 import type { WorkOrderRow } from './types';
 
 interface StaffOption {

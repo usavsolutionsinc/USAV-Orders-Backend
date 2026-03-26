@@ -17,6 +17,19 @@ export function AdminSidebar({
   activeSection,
   onSectionChange,
 }: AdminSidebarProps) {
+  const activePanel =
+    activeSection === 'manuals' ? (
+      <ManualAssignmentSidebarPanel />
+    ) : activeSection === 'goals' ? (
+      <GoalsSidebarPanel />
+    ) : activeSection === 'staff' ? (
+      <StaffAdminSidebarPanel />
+    ) : activeSection === 'fba' ? (
+      <AdminFbaSidebarPanel />
+    ) : activeSection === 'connections' ? (
+      <ConnectionsSidebarPanel />
+    ) : null;
+
   return (
     <div className="h-full flex flex-col overflow-hidden bg-white">
       <ViewDropdown
@@ -24,30 +37,7 @@ export function AdminSidebar({
         value={activeSection}
         onChange={onSectionChange}
       />
-
-      {activeSection === 'manuals' ? (
-        <div className="flex-1 overflow-hidden">
-          <ManualAssignmentSidebarPanel />
-        </div>
-      ) : activeSection === 'goals' ? (
-        <div className="flex-1 overflow-hidden">
-          <GoalsSidebarPanel />
-        </div>
-      ) : activeSection === 'staff' ? (
-        <div className="flex-1 overflow-hidden">
-          <StaffAdminSidebarPanel />
-        </div>
-      ) : activeSection === 'fba' ? (
-        <div className="flex-1 overflow-hidden">
-          <AdminFbaSidebarPanel />
-        </div>
-      ) : activeSection === 'connections' ? (
-        <div className="flex-1 overflow-hidden">
-          <ConnectionsSidebarPanel />
-        </div>
-      ) : (
-        <div className="flex-1 bg-white" />
-      )}
+      <div className="min-h-0 flex-1 overflow-hidden">{activePanel}</div>
     </div>
   );
 }

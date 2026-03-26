@@ -322,8 +322,8 @@ export default function PendingUnboxingQueue({ onSelectReceivingId }: PendingUnb
       if (!res.ok) throw new Error('Failed to fetch pending unboxing');
       return res.json();
     },
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: 45_000,
+    refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
 

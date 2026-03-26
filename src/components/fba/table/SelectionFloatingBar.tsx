@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Check } from '@/components/Icons';
 import type { EnrichedItem } from './types';
 import { getPlanId } from './utils';
+import { resolveFbaItemDisplayQty } from '@/lib/fba/qty';
 
 export function SelectionFloatingBar({
   selectedItems,
@@ -17,11 +18,7 @@ export function SelectionFloatingBar({
   const n = selectedItems.length;
   const planIds = Array.from(new Set(selectedItems.map((i) => getPlanId(i))));
   const allReady = n > 0 && selectedItems.every((i) => i.status === 'ready_to_print');
-  const computedQty = selectedItems.reduce((sum, item) => {
-    const actual = Number(item.actual_qty || 0);
-    const remaining = Math.max(0, Number(item.expected_qty || 0) - actual);
-    return sum + (actual > 0 ? actual : remaining);
-  }, 0);
+  const computedQty = selectedItems.reduce((sum, item) => sum + resolveFbaItemDisplayQty(item), 0);
   const qty = Number.isFinite(attachmentQty) ? Number(attachmentQty) : computedQty;
   const pairingCopy =
     planIds.length === 1

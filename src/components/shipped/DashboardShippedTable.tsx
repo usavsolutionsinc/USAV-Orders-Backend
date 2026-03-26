@@ -4,29 +4,59 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Loader2, Search } from '@/components/Icons';
-import { OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
+import { Loader2 } from '@/components/Icons';
+import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
+import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { fetchDashboardPackedRecords, fetchDashboardShippedData } from '@/lib/dashboard-table-data';
 import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
-import { dispatchCloseShippedDetails } from '@/utils/events';
+import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
 import { DateGroupHeader } from './DateGroupHeader';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
-import { isFbaOrder } from '@/utils/order-platform';
+
+// FBA records are identified by scan_ref matching Amazon's FBA shipment ID format
+// (FBAxxxxxxxx) or by tracking_type being 'FBA' / 'FNSKU'.
+const FBA_SHIPMENT_ID_RE = /^FBA[0-9A-Z]{8,}$/i;
+function isFbaPackerRecord(record: { scan_ref?: string | null; tracking_type?: string | null }): boolean {
+  const scanRef = String(record.scan_ref || '').trim();
+  const ttype = String(record.tracking_type || '').toUpperCase();
+  return FBA_SHIPMENT_ID_RE.test(scanRef) || ttype === 'FBA' || ttype === 'FNSKU';
+}
+// SKU records are identified by tracking_type === 'SKU' (set by packer_logs.tracking_type)
+// or by scan_ref containing ':' (the "SKU_VALUE:QUANTITY" format used at the pack station).
+function isSkuPackerRecord(record: { scan_ref?: string | null; tracking_type?: string | null }): boolean {
+  const ttype = String(record.tracking_type || '').toUpperCase();
+  if (ttype === 'SKU') return true;
+  const scanRef = String(record.scan_ref || '').trim();
+  return scanRef.includes(':');
+}
 import { getStaffName } from '@/utils/staff';
+import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
+import { isEmptyDisplayValue } from '@/utils/empty-display-value';
 
 export interface DashboardShippedTableProps {
   packedBy?: number;
   testedBy?: number;
+  bannerTitle?: DashboardSearchSectionProps['bannerTitle'];
+  bannerSubtitle?: DashboardSearchSectionProps['bannerSubtitle'];
+  searchEmptyTitle?: DashboardSearchSectionProps['searchEmptyTitle'];
+  searchResultLabel?: DashboardSearchSectionProps['searchResultLabel'];
+  clearSearchLabel?: DashboardSearchSectionProps['clearSearchLabel'];
 }
 
 export function DashboardShippedTable({
   packedBy,
   testedBy,
+  bannerTitle,
+  bannerSubtitle,
+  searchEmptyTitle = 'No shipped orders found',
+  searchResultLabel = 'shipped orders',
+  clearSearchLabel = 'Show All Shipped Orders',
 }: DashboardShippedTableProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
@@ -41,12 +71,12 @@ export function DashboardShippedTable({
   const resolvedSearchKeyRef = useRef('');
 
   const search = searchParams.get('search') || '';
-  const openOrderId = Number.parseInt(searchParams.get('openOrderId') || '', 10);
+  const shippedFilterParam = searchParams.get('shippedFilter') || 'all';
   const weekOffset = Math.max(0, Number.parseInt(searchParams.get('shippedWeekOffset') || '0', 10) || 0);
   const weekRange = getWeekRangeForOffset(weekOffset);
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
-  const queryKey = ['dashboard-table', 'shipped', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr, packedBy, testedBy }] as const;
+  const queryKey = ['dashboard-table', 'shipped', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr, packedBy, testedBy, shippedFilter: shippedFilterParam }] as const;
 
   const query = useQuery({
     queryKey,
@@ -56,6 +86,7 @@ export function DashboardShippedTable({
         testedBy,
         weekStart: weekRange.startStr,
         weekEnd: weekRange.endStr,
+        shippedFilter: shippedFilterParam,
       }),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
@@ -80,7 +111,8 @@ export function DashboardShippedTable({
 
   useEffect(() => {
     const handleOpen = (e: CustomEvent<ShippedOrder>) => {
-      if (e.detail) setSelectedShipped(e.detail);
+      const payload = getOpenShippedDetailsPayload(e.detail);
+      if (payload?.order) setSelectedShipped(payload.order);
     };
     const handleClose = () => setSelectedShipped(null);
 
@@ -179,9 +211,18 @@ export function DashboardShippedTable({
     seenTracking.set(key, record);
   });
   const dedupedRecords = Array.from(seenTracking.values());
-  const nonFbaRecords = dedupedRecords.filter((record) => !isFbaOrder(record.order_id, record.account_source));
+  // Client-side guard — server already filters by shippedFilter, but this prevents
+  // stale cached records from a prior filter mode appearing while the new fetch loads.
+  const typeFilteredRecords =
+    shippedFilterParam === 'fba'
+      ? dedupedRecords.filter(isFbaPackerRecord)
+      : shippedFilterParam === 'orders'
+        ? dedupedRecords.filter((r) => !isFbaPackerRecord(r))
+        : shippedFilterParam === 'sku'
+          ? dedupedRecords.filter(isSkuPackerRecord)
+          : dedupedRecords; // 'all' — show everything
   const filteredRecords = normalizedSearch
-    ? nonFbaRecords.filter((record) => {
+    ? typeFilteredRecords.filter((record) => {
         const haystack = [
           record.product_title,
           record.order_id,
@@ -195,7 +236,7 @@ export function DashboardShippedTable({
           .join(' ');
         return haystack.includes(normalizedSearch);
       })
-    : nonFbaRecords;
+    : typeFilteredRecords;
 
   const records = filteredRecords.length > 0 ? filteredRecords : searchFallbackRecords;
 
@@ -215,6 +256,7 @@ export function DashboardShippedTable({
       normalizedSearch,
       packedBy ?? '',
       testedBy ?? '',
+      shippedFilterParam,
     ].join('|');
 
     if (resolvedSearchKeyRef.current === searchKey && searchFallbackRecords.length > 0) {
@@ -230,35 +272,13 @@ export function DashboardShippedTable({
           searchQuery: search,
           packedBy,
           testedBy,
+          shippedFilter: shippedFilterParam,
         });
         if (cancelled) return;
 
         const normalizedResults = shippedResults.map(toSearchResultRecord);
         resolvedSearchKeyRef.current = searchKey;
         setSearchFallbackRecords(normalizedResults);
-
-        const directMatch =
-          (Number.isFinite(openOrderId)
-            ? normalizedResults.find((record) => Number(record.order_row_id || record.id) === openOrderId)
-            : null)
-          || normalizedResults.find((record) => {
-            const values = [
-              record.order_id,
-              record.shipping_tracking_number,
-              record.scan_ref,
-              record.product_title,
-              record.sku,
-            ]
-              .map((value) => String(value || '').toLowerCase())
-              .join(' ');
-            return values.includes(normalizedSearch);
-          });
-
-        if (directMatch) {
-          const detail = toDetailRecord(directMatch);
-          window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
-          setSelectedShipped(detail);
-        }
       } catch {
         if (!cancelled) {
           setSearchFallbackRecords([]);
@@ -276,32 +296,14 @@ export function DashboardShippedTable({
   }, [
     filteredRecords.length,
     normalizedSearch,
-    openOrderId,
     packedBy,
     query.isFetching,
     query.isLoading,
     search,
     searchFallbackRecords.length,
     testedBy,
-    toDetailRecord,
     toSearchResultRecord,
   ]);
-
-  useEffect(() => {
-    if (!Number.isFinite(openOrderId)) return;
-    const match = records.find((record) => Number(record.order_row_id || record.id) === openOrderId);
-    if (!match) return;
-
-    const detail = toDetailRecord(match);
-    window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
-    setSelectedShipped(detail);
-
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('openOrderId');
-    const nextSearch = params.toString();
-    const nextPath = pathname || '/dashboard';
-    router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
-  }, [records, openOrderId, pathname, router, searchParams, toDetailRecord]);
 
   const handleRowClick = useCallback((record: PackerRecord) => {
     const detail = toDetailRecord(record);
@@ -311,7 +313,7 @@ export function DashboardShippedTable({
       return;
     }
 
-    window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
+    dispatchOpenShippedDetails(detail, 'shipped');
     setSelectedShipped(detail);
   }, [selectedShipped, toDetailRecord]);
 
@@ -353,7 +355,7 @@ export function DashboardShippedTable({
       if (!nextRecord) return;
 
       const nextDetail = toDetailRecord(nextRecord);
-      window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: nextDetail }));
+      dispatchOpenShippedDetails(nextDetail, 'shipped');
       setSelectedShipped(nextDetail);
     };
 
@@ -422,41 +424,48 @@ export function DashboardShippedTable({
   return (
     <div className="flex-1 min-w-0 h-full overflow-hidden">
       <div className="flex h-full min-w-0 flex-1 bg-white relative">
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <WeekHeader
-            stickyDate={stickyDate}
-            fallbackDate={fallbackDate}
-            count={currentCount || totalCount}
-            countClassName="text-blue-700"
-            weekRange={weekRange}
-            weekOffset={weekOffset}
-            onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
-            onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
-            formatDate={formatDate}
-            showWeekControls
-            highContrast
-          />
+      <div className="flex-1 flex flex-col overflow-hidden">
+          {bannerTitle ? (
+            <div className={mainStickyHeaderClass}>
+              <div className={mainStickyHeaderRowClass}>
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">{bannerTitle}</p>
+                  {bannerSubtitle ? (
+                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">{bannerSubtitle}</p>
+                  ) : null}
+                </div>
+                <div className="min-w-[18px] flex items-center justify-end">
+                  {query.isFetching && !query.isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <WeekHeader
+              stickyDate={stickyDate}
+              fallbackDate={fallbackDate}
+              count={currentCount || totalCount}
+              countClassName="text-blue-700"
+              weekRange={weekRange}
+              weekOffset={weekOffset}
+              onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
+              onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
+              formatDate={formatDate}
+              showWeekControls
+              highContrast
+            />
+          )}
 
           <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
             {Object.keys(groupedRecords).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-40 text-center">
                 {search ? (
-                  <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                    <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Search className="w-8 h-8 text-red-400" />
-                    </div>
-                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">Order not found</h3>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                      We couldn&apos;t find any records matching &quot;{search}&quot;
-                    </p>
-                    <button
-                      type="button"
-                      onClick={clearSearch}
-                      className="mt-6 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
-                    >
-                      Show All Orders
-                    </button>
-                  </div>
+                  <OrderSearchEmptyState
+                    query={search}
+                    title={searchEmptyTitle}
+                    resultLabel={searchResultLabel}
+                    clearLabel={clearSearchLabel}
+                    onClear={clearSearch}
+                  />
                 ) : (
                   <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
                     <p className="text-gray-500 font-medium italic opacity-20">No shipped records for this week</p>
@@ -490,6 +499,8 @@ export function DashboardShippedTable({
                             trackingType: record.tracking_type,
                             scanRef: record.scan_ref,
                           });
+                          const rowIsFba = isFbaPackerRecord(record);
+                          const fnskuValue = String(record.scan_ref || '').trim();
                           const techName = String(
                             (record as any).tested_by_name
                             || (record as any).tester_name
@@ -502,6 +513,11 @@ export function DashboardShippedTable({
                           ).trim();
                           const techDisplay = normalizePersonName(techName);
                           const packerDisplay = normalizePersonName(packerName);
+                          const serialValue = String(record.serial_number || '').trim();
+                          const serialDisplay =
+                            isEmptyDisplayValue(serialValue) || serialValue === '---'
+                              ? 'SERIAL'
+                              : getLast6Serial(serialValue);
 
                           return (
                             <motion.div
@@ -552,18 +568,27 @@ export function DashboardShippedTable({
                               </div>
 
                               <div className="flex items-center gap-3 shrink-0">
-                                <OrderIdChip
-                                  value={record.order_id || ''}
-                                  display={getLast4(record.order_id)}
-                                />
-                                <TrackingChip
-                                  value={record.shipping_tracking_number || ''}
-                                  display={getLast4(record.shipping_tracking_number)}
-                                />
-                                <SerialChip
-                                  value={record.serial_number || ''}
-                                  display={getLast6Serial(record.serial_number)}
-                                />
+                                {rowIsFba ? (
+                                  <>
+                                    <FnskuChip value={fnskuValue} />
+                                    <SerialChip value={serialValue} display={serialDisplay} />
+                                  </>
+                                ) : (
+                                  <>
+                                    <OrderIdChip
+                                      value={record.order_id || ''}
+                                      display={getLast4(record.order_id)}
+                                    />
+                                    <TrackingChip
+                                      value={record.shipping_tracking_number || ''}
+                                      display={getLast4(record.shipping_tracking_number)}
+                                    />
+                                    <SerialChip
+                                      value={serialValue}
+                                      display={serialDisplay}
+                                    />
+                                  </>
+                                )}
                               </div>
                             </motion.div>
                           );

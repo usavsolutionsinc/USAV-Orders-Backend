@@ -17,7 +17,7 @@ import { getStaffName } from '@/utils/staff';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { toPSTDateKey } from '@/utils/date';
 import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 
 interface ShippedDetailsPanelProps {

@@ -80,8 +80,8 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    // Current week stays fresh for 2 min; historical weeks cache for 30 min.
-    staleTime: weekOffset === 0 ? 2 * 60 * 1000 : 30 * 60 * 1000,
+    // Current week stays fresh for 5 min (matches server 120s TTL + buffer); historical 30 min.
+    staleTime: weekOffset === 0 ? 5 * 60 * 1000 : 30 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
     refetchOnWindowFocus: false,

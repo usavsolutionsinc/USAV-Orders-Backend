@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, Search } from '@/components/Icons';
+import { Loader2 } from '@/components/Icons';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { OrderIdChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
+import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
+import { getOpenShippedDetailsPayload } from '@/utils/events';
 
 function getDaysLateNumber(deadlineAt: string | null | undefined): number | null {
   const deadlineKey = toPSTDateKey(deadlineAt);
@@ -181,6 +184,11 @@ interface OrdersQueueTableProps {
   showWeekControls?: boolean;
   onClearSearch: () => void;
   emptyMessage: string;
+  searchEmptyTitle?: string;
+  searchResultLabel?: string;
+  clearSearchLabel?: string;
+  bannerTitle?: string;
+  bannerSubtitle?: string;
   onOpenRecord?: (record: ShippedOrder) => void;
   onCloseRecord?: (record: ShippedOrder | null) => void;
   /** When true, display tester/packer from work_assignments (tester_id, packer_id) only */
@@ -200,6 +208,11 @@ export function OrdersQueueTable({
   showWeekControls = false,
   onClearSearch,
   emptyMessage,
+  searchEmptyTitle = 'Order not found',
+  searchResultLabel = 'records',
+  clearSearchLabel = 'Show All Orders',
+  bannerTitle,
+  bannerSubtitle,
   onOpenRecord,
   onCloseRecord,
   useWaForDisplay = false,
@@ -247,7 +260,8 @@ export function OrdersQueueTable({
 
   useEffect(() => {
     const handleOpen = (e: CustomEvent<ShippedOrder>) => {
-      if (e.detail) setSelectedRecord(e.detail);
+      const payload = getOpenShippedDetailsPayload(e.detail);
+      if (payload?.order) setSelectedRecord(payload.order);
     };
     const handleClose = () => setSelectedRecord(null);
     window.addEventListener('open-shipped-details' as any, handleOpen as any);
@@ -380,45 +394,52 @@ export function OrdersQueueTable({
   return (
     <div className="flex h-full min-w-0 flex-1 bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
-        <WeekHeader
-          stickyDate={stickyDate}
-          fallbackDate={fallbackDate}
-          count={currentCount || totalCount}
-          countClassName="text-blue-600"
-          showCount={false}
-          weekRange={weekRange}
-          weekOffset={weekOffset}
-          onPrevWeek={onPrevWeek}
-          onNextWeek={onNextWeek}
-          formatDate={formatDate}
-          showWeekControls={showWeekControls}
-          rightSlot={
-            showWeekControls
-              ? undefined
-              : <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}</div>
-          }
-        />
+        {bannerTitle ? (
+          <div className={mainStickyHeaderClass}>
+            <div className={mainStickyHeaderRowClass}>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">{bannerTitle}</p>
+                {bannerSubtitle ? (
+                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">{bannerSubtitle}</p>
+                ) : null}
+              </div>
+              <div className="min-w-[18px] flex items-center justify-end">
+                {isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <WeekHeader
+            stickyDate={stickyDate}
+            fallbackDate={fallbackDate}
+            count={currentCount || totalCount}
+            countClassName="text-blue-600"
+            showCount={false}
+            weekRange={weekRange}
+            weekOffset={weekOffset}
+            onPrevWeek={onPrevWeek}
+            onNextWeek={onNextWeek}
+            formatDate={formatDate}
+            showWeekControls={showWeekControls}
+            rightSlot={
+              showWeekControls
+                ? undefined
+                : <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}</div>
+            }
+          />
+        )}
 
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {Object.keys(groupedRecords).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               {searchValue ? (
-                <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Search className="w-8 h-8 text-red-400" />
-                  </div>
-                  <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-1">Order not found</h3>
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-                    We couldn&apos;t find any records matching &quot;{searchValue}&quot;
-                  </p>
-                  <button
-                    type="button"
-                    onClick={onClearSearch}
-                    className="mt-6 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
-                  >
-                    Show All Orders
-                  </button>
-                </div>
+                <OrderSearchEmptyState
+                  query={searchValue}
+                  title={searchEmptyTitle}
+                  resultLabel={searchResultLabel}
+                  clearLabel={clearSearchLabel}
+                  onClear={onClearSearch}
+                />
               ) : (
                 <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
                   <p className="text-gray-500 font-medium italic opacity-20">{emptyMessage}</p>

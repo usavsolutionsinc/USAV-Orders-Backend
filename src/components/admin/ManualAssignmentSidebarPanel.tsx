@@ -33,7 +33,7 @@ interface DateGroup {
 }
 
 const MODE_TABS = [
-  { id: 'category' as ManualMode, label: 'By Category', color: 'blue' as const },
+  { id: 'category' as ManualMode, label: 'Categories', color: 'blue' as const },
   { id: 'orders' as ManualMode, label: 'Recent Orders', color: 'blue' as const },
 ];
 
@@ -178,7 +178,7 @@ export function ManualAssignmentSidebarPanel() {
           onChange={handleSearchChange}
           onSearch={handleSearchChange}
           onClear={() => handleSearchChange('')}
-          placeholder={mode === 'category' ? 'Search categories...' : 'Search orders...'}
+          placeholder={mode === 'category' ? 'Search categories' : 'Search orders, items, or titles'}
           isSearching={categoriesLoading || ordersLoading}
           variant="blue"
           className="w-full"
@@ -204,7 +204,7 @@ export function ManualAssignmentSidebarPanel() {
             </div>
           ) : filteredCategories.length === 0 ? (
             <p className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
-              No categories found
+              No categories match this search
             </p>
           ) : (
             filteredCategories.map((cat) => {
@@ -239,7 +239,7 @@ export function ManualAssignmentSidebarPanel() {
           </div>
         ) : filteredGroups.length === 0 ? (
           <p className="py-6 text-center text-[10px] font-black uppercase tracking-widest text-gray-400">
-            No orders found
+            No recent orders match this search
           </p>
         ) : (
           filteredGroups.map((group) => (

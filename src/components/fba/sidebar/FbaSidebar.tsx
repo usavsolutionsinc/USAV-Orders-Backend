@@ -4,9 +4,13 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
+import { resolveFbaPlanQtyBase } from '@/lib/fba/qty';
+import { FbaFnskuScanToast } from '@/components/fba/sidebar/FbaFnskuScanToast';
+import { FBA_OPEN_CREATE_PLAN_EVENT } from '@/components/fba/FbaCreatePlanModal';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
-import { sidebarHeaderBandClass, sidebarHeaderControlClass } from '@/components/layout/header-shell';
+import { TabSwitch } from '@/components/ui/TabSwitch';
+import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
+import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import StaffSelector from '@/components/StaffSelector';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
@@ -14,6 +18,9 @@ import { FbaPlansUpNext } from '@/components/station/upnext/FbaPlansUpNext';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
 import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScanField';
 import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
+import { getStaffThemeById } from '@/utils/staff-colors';
+import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
+import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
 const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
@@ -21,16 +28,8 @@ const FBA_SHIPMENTS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipments'
 const FBA_SHIPMENT_ITEMS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_items');
 const FBA_SHIPMENT_TRACKING_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_tracking');
 
-type FbaTab = 'summary' | 'shipped';
-type FbaWorkspaceMode = 'print' | 'plan' | 'shipped' | 'catalog';
+type FbaTab = 'summary' | 'shipped' | 'awaiting' | 'packed' | 'paired';
 type PendingPlan = FbaPlanQueueItem;
-
-const FBA_WORKSPACE_OPTIONS = [
-  { value: 'print', label: 'Print queue' },
-  { value: 'plan', label: 'Plan & pick list' },
-  { value: 'shipped', label: 'Shipped' },
-  { value: 'catalog', label: 'FNSKU catalog' },
-] as const satisfies ReadonlyArray<{ value: FbaWorkspaceMode; label: string }>;
 
 function emitOpenAddFba() {
   window.dispatchEvent(new CustomEvent('admin-fba-open-add'));
@@ -97,7 +96,7 @@ function FbaCatalogSidebarInner() {
           value={searchValue}
           onChange={updateSearch}
           onClear={() => updateSearch('')}
-          placeholder="ASIN, SKU, FNSKU…"
+          placeholder="Search ASIN, SKU, or FNSKU"
           variant="blue"
           className="w-full"
         />
@@ -108,8 +107,8 @@ function FbaCatalogSidebarInner() {
 
         <button type="button" onClick={emitOpenAddFba} className={actionRowClass}>
           <span>
-            <span className="block text-xs font-bold text-zinc-900">Add FNSKU row</span>
-            <span className="mt-0.5 block text-[11px] text-zinc-500">Manual entry for one SKU</span>
+            <span className="block text-xs font-bold text-zinc-900">Add Catalog Row</span>
+            <span className="mt-0.5 block text-[11px] text-zinc-500">Create one FNSKU mapping manually</span>
           </span>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600">
             <Plus className="h-4 w-4" />
@@ -119,7 +118,7 @@ function FbaCatalogSidebarInner() {
         <button type="button" onClick={emitOpenUploadFba} className={actionRowClass}>
           <span>
             <span className="block text-xs font-bold text-zinc-900">Upload CSV</span>
-            <span className="mt-0.5 block text-[11px] text-zinc-500">Bulk import mappings</span>
+            <span className="mt-0.5 block text-[11px] text-zinc-500">Import many FNSKU mappings from a file</span>
           </span>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -136,7 +135,7 @@ function FbaCatalogSidebarInner() {
         <button type="button" onClick={clearFilters} className={actionRowClass}>
           <span>
             <span className="block text-xs font-bold text-zinc-900">Clear search</span>
-            <span className="mt-0.5 block text-[11px] text-zinc-500">Reset catalog filters</span>
+            <span className="mt-0.5 block text-[11px] text-zinc-500">Reset the current catalog search</span>
           </span>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-600">
             <X className="h-4 w-4" />
@@ -145,12 +144,12 @@ function FbaCatalogSidebarInner() {
       </div>
 
       <div className={`${sidebarSubBandClass} mt-auto px-3 py-3`}>
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Station workspace</p>
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">FBA Station</p>
         <Link
           href="/fba"
           className="mt-2 flex w-full items-center justify-center rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-900 transition-colors hover:bg-violet-100"
         >
-          Open FBA workspace
+          Open FBA Station
         </Link>
       </div>
     </div>
@@ -182,8 +181,47 @@ function FbaWorkspaceSidebarInner() {
   const searchParams = useSearchParams();
   const staffDirectory = useActiveStaffDirectory();
 
-  const activeTab: FbaTab = searchParams.get('tab') === 'shipped' ? 'shipped' : 'summary';
+  const rawTab = searchParams.get('tab');
+  const activeTab: FbaTab =
+    rawTab === 'shipped' ? 'shipped' :
+    rawTab === 'packed' ? 'packed' :
+    rawTab === 'paired' ? 'paired' :
+    rawTab === 'awaiting' ? 'awaiting' : 'summary';
   const activePlanId = searchParams.get('plan') ? Number(searchParams.get('plan')) : null;
+
+  // Board selection: listen for selection events from FbaBoardTable
+  const [boardSelection, setBoardSelection] = useState<FbaBoardItem[]>([]);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const items = (e as CustomEvent<FbaBoardItem[]>).detail;
+      setBoardSelection(items ?? []);
+    };
+    window.addEventListener('fba-board-selection', handler);
+    window.addEventListener('fba-paired-selection', handler);
+    return () => {
+      window.removeEventListener('fba-board-selection', handler);
+      window.removeEventListener('fba-paired-selection', handler);
+    };
+  }, []);
+
+  // Clear selection when switching to shipped — also reset board checkboxes
+  useEffect(() => {
+    if (activeTab === 'shipped') {
+      setBoardSelection([]);
+      window.dispatchEvent(new CustomEvent('fba-board-toggle-all', { detail: 'none' }));
+    }
+  }, [activeTab]);
+
+  // Board selection counts from FbaBoardTable
+  const [boardSelectionCount, setBoardSelectionCount] = useState({ selected: 0, total: 0, selectedQty: 0, totalQty: 0 });
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const counts = (e as CustomEvent<{ selected: number; total: number; selectedQty: number; totalQty: number }>).detail;
+      setBoardSelectionCount(counts);
+    };
+    window.addEventListener('fba-board-selection-count', handler);
+    return () => window.removeEventListener('fba-board-selection-count', handler);
+  }, []);
 
   const staffIdRaw = String(searchParams.get('staffId') || '').trim();
   const staffIdFromUrl = /^\d+$/.test(staffIdRaw) ? parseInt(staffIdRaw, 10) : null;
@@ -197,6 +235,10 @@ function FbaWorkspaceSidebarInner() {
     selectedStaffMember?.name || (staffDirectory.length === 0 ? '…' : `Staff ${staffIdNum}`);
   const staffRoleForTheme: 'technician' | 'packer' =
     selectedStaffMember?.role === 'packer' ? 'packer' : 'technician';
+  const stationTheme = useMemo(
+    () => getStaffThemeById(staffIdNum, staffRoleForTheme),
+    [staffIdNum, staffRoleForTheme]
+  );
 
   useEffect(() => {
     if (staffIdFromUrl != null || lienStaffId == null) return;
@@ -206,24 +248,13 @@ function FbaWorkspaceSidebarInner() {
     router.replace(q ? `/fba?${q}` : '/fba');
   }, [staffIdFromUrl, lienStaffId, router, searchParams]);
 
-  const mainPanel = searchParams.get('main') === 'plan' ? 'plan' : 'print';
-  const detailsCatalog = searchParams.get('details') === 'catalog';
-  const fbaWorkspaceMode: FbaWorkspaceMode =
-    activeTab === 'shipped'
-      ? 'shipped'
-      : detailsCatalog
-        ? 'catalog'
-        : mainPanel === 'plan'
-          ? 'plan'
-          : 'print';
-
   const [localSearch, setLocalSearch] = useState('');
   const urlHydratedRef = useRef(false);
 
   const [pendingPlans, setPendingPlans] = useState<PendingPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
+  const [plansError, setPlansError] = useState<string | null>(null);
 
-  const [planQtyDraft, setPlanQtyDraft] = useState<Record<number, string>>({});
   const [qtySavingPlanId, setQtySavingPlanId] = useState<number | null>(null);
 
   const refreshToken = Number(searchParams.get('r') || 0);
@@ -275,28 +306,41 @@ function FbaWorkspaceSidebarInner() {
     [router, searchParams]
   );
 
-  const setWorkspaceMode = useCallback(
-    (mode: FbaWorkspaceMode) => {
+  const handleTabChange = useCallback(
+    (tabId: string) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (mode === 'shipped') {
-        params.set('tab', 'shipped');
-        params.delete('details');
-        params.delete('main');
-      } else {
+      if (tabId === 'board') {
         params.delete('tab');
-        if (mode === 'catalog') {
-          params.set('details', 'catalog');
-          if (!params.get('main')) params.set('main', 'print');
-        } else {
-          params.delete('details');
-          params.set('main', mode === 'plan' ? 'plan' : 'print');
-        }
+      } else {
+        params.set('tab', tabId);
       }
+      params.delete('details');
+      params.delete('main');
+      params.delete('mode');
       const q = params.toString();
       router.replace(q ? `/fba?${q}` : '/fba');
     },
-    [router, searchParams]
+    [router, searchParams],
   );
+
+  const boardTabs = useMemo(
+    () => [
+      { id: 'board', label: 'Combine', color: 'purple' as const },
+      { id: 'paired', label: 'Review', color: 'green' as const },
+      { id: 'shipped', label: 'Shipped', color: 'gray' as const },
+    ],
+    [],
+  );
+
+  const tabSwitchActiveId =
+    activeTab === 'summary' || activeTab === 'awaiting' || activeTab === 'packed'
+      ? 'board' : activeTab;
+
+  const handleSelectAll = useCallback(() => {
+    const action = boardSelectionCount.selected === boardSelectionCount.total && boardSelectionCount.total > 0
+      ? 'none' : 'all';
+    window.dispatchEvent(new CustomEvent('fba-board-toggle-all', { detail: action }));
+  }, [boardSelectionCount]);
 
   useLayoutEffect(() => {
     setLocalSearch(searchParams.get('q') || '');
@@ -318,9 +362,11 @@ function FbaWorkspaceSidebarInner() {
 
   const loadPendingPlans = useCallback(async () => {
     setPlansLoading(true);
+    setPlansError(null);
     try {
       const res = await fetch('/api/fba/shipments?status=PLANNED&limit=50', { cache: 'no-store' });
       const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to load plans');
       if (!Array.isArray(data?.shipments)) return;
       const sorted = [...data.shipments].sort((a: any, b: any) => {
         if (!a.due_date && !b.due_date) return 0;
@@ -341,60 +387,41 @@ function FbaWorkspaceSidebarInner() {
           created_at: s.created_at,
         }))
       );
-    } catch {
-      /* no-op */
+    } catch (err: any) {
+      setPlansError(err?.message || 'Could not load plans');
     } finally {
       setPlansLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'summary') loadPendingPlans();
+    if (activeTab !== 'shipped' && activeTab !== 'paired') loadPendingPlans();
   }, [activeTab, refreshToken, loadPendingPlans]);
 
   useAblyChannel(FBA_SHIPMENT_ITEMS_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab !== 'summary') return;
+    if (activeTab === 'shipped' || activeTab === 'paired') return;
     void loadPendingPlans();
   });
 
   useAblyChannel(FBA_SHIPMENTS_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab !== 'summary') return;
+    if (activeTab === 'shipped' || activeTab === 'paired') return;
     void loadPendingPlans();
   });
 
   useAblyChannel(FBA_SHIPMENT_TRACKING_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab !== 'summary') return;
+    if (activeTab === 'shipped' || activeTab === 'paired') return;
     void loadPendingPlans();
   });
 
   useEffect(() => {
-    if (activeTab !== 'summary') return;
+    if (activeTab === 'shipped' || activeTab === 'paired') return;
     const interval = setInterval(() => loadPendingPlans(), 60_000);
     return () => clearInterval(interval);
   }, [activeTab, loadPendingPlans]);
 
   const handleCommitPlanQty = useCallback(
-    async (plan: PendingPlan) => {
-      const draft = planQtyDraft[plan.id];
-      const qtyBase = plan.total_expected_qty > 0 ? plan.total_expected_qty : Math.max(1, plan.total_items);
-      if (draft === undefined) return;
-      const nextQty = Math.max(0, Math.floor(Number(draft) || 0));
-      if (nextQty === qtyBase) {
-        setPlanQtyDraft((d) => {
-          const n = { ...d };
-          delete n[plan.id];
-          return n;
-        });
-        return;
-      }
-      if (plan.total_items !== 1 || plan.ready_item_count > 0) {
-        setPlanQtyDraft((d) => {
-          const n = { ...d };
-          delete n[plan.id];
-          return n;
-        });
-        return;
-      }
+    async (plan: PendingPlan, nextQty: number) => {
+      if (plan.total_items !== 1 || plan.ready_item_count > 0) return;
       setQtySavingPlanId(plan.id);
       try {
         const itemsRes = await fetch(`/api/fba/shipments/${plan.id}/items`, { cache: 'no-store' });
@@ -407,21 +434,14 @@ function FbaWorkspaceSidebarInner() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ expected_qty: nextQty }),
         });
-        if (patchRes.ok) {
-          setPlanQtyDraft((d) => {
-            const n = { ...d };
-            delete n[plan.id];
-            return n;
-          });
-          loadPendingPlans();
-        }
-      } catch {
-        /* no-op */
+        if (patchRes.ok) loadPendingPlans();
+      } catch (err: any) {
+        setPlansError(err?.message || 'Could not save qty');
       } finally {
         setQtySavingPlanId(null);
       }
     },
-    [planQtyDraft, loadPendingPlans]
+    [loadPendingPlans]
   );
 
   useEffect(() => {
@@ -458,63 +478,50 @@ function FbaWorkspaceSidebarInner() {
     pendingPlans,
     plansByDay,
     activePlanId,
-    updateFbaParams,
-    planQtyDraft,
-    setPlanQtyDraft,
     qtySavingPlanId,
     onCommitPlanQty: handleCommitPlanQty,
+    stationTheme,
   };
+
+  const isBoard = activeTab !== 'shipped';
+  const allBoardSelected =
+    boardSelectionCount.total > 0 && boardSelectionCount.selected === boardSelectionCount.total;
+  const someBoardSelected = boardSelectionCount.selected > 0;
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
+      {/* Staff selector header */}
       <div className={sidebarHeaderBandClass}>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
-          <div className="min-w-0">
-            <StaffSelector
-              role="all"
-              variant="boxy"
-              selectedStaffId={staffIdNum}
-              onSelect={(id) => {
-                const params = new URLSearchParams(searchParams.toString());
-                params.set('staffId', String(id));
-                const q = params.toString();
-                router.replace(q ? `/fba?${q}` : '/fba');
-              }}
-            />
-          </div>
-          <div className="relative min-w-0">
-            <ViewDropdown
-              options={FBA_WORKSPACE_OPTIONS}
-              value={fbaWorkspaceMode}
-              onChange={(next) => setWorkspaceMode(next as FbaWorkspaceMode)}
-              variant="boxy"
-              buttonClassName={sidebarHeaderControlClass}
-              optionClassName="text-[10px] font-black tracking-wider"
-            />
-          </div>
-        </div>
+        <StaffSelector
+          role="all"
+          variant="boxy"
+          selectedStaffId={staffIdNum}
+          onSelect={(id) => {
+            const params = new URLSearchParams(searchParams.toString());
+            params.set('staffId', String(id));
+            const q = params.toString();
+            router.replace(q ? `/fba?${q}` : '/fba');
+          }}
+        />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {activeTab === 'summary' ? (
-          <div className={`${sidebarSubBandClass} overflow-x-hidden px-3 py-2.5`}>
+      {/* Single scroll container */}
+      <div data-testid="fba-sidebar-scroll" className="min-h-0 flex-1 overflow-y-auto scrollbar-hide bg-white">
+        {/* Welcome + goal + scan — hidden in shipped mode */}
+        {isBoard && (
+          <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
             <FbaWorkspaceScanField
               staffName={staffName}
               staffId={staffIdFromUrl ?? undefined}
               staffRole={staffRoleForTheme}
             />
           </div>
-        ) : null}
+        )}
 
-        {activeTab === 'shipped' ? (
-          <div className={`${sidebarSubBandClass} overflow-x-hidden px-3 py-2.5`}>
-            <FbaWorkspaceScanField
-              staffName={staffName}
-              staffId={staffIdFromUrl ?? undefined}
-              staffRole={staffRoleForTheme}
-              scanEnabled={false}
-            />
-            <p className="mb-2 mt-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+        {/* Shipped: search filter */}
+        {activeTab === 'shipped' && (
+          <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
               Filter shipped list
             </p>
             <SearchBar
@@ -526,26 +533,75 @@ function FbaWorkspaceSidebarInner() {
               className="w-full"
             />
           </div>
-        ) : null}
+        )}
 
-        {activeTab === 'summary' ? (
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white">
-            <div
-              aria-label="Open plans"
-              className="no-scrollbar w-full shrink-0 border-t border-gray-100"
+        {/* Tab switch — below scan/search bar */}
+        <div className={`${sidebarSubBandClass} px-3 py-2`}>
+          <TabSwitch
+            tabs={boardTabs}
+            activeTab={tabSwitchActiveId}
+            onTabChange={handleTabChange}
+            highContrast
+          />
+        </div>
+
+        {/* Select all row — board tabs only */}
+        {isBoard && boardSelectionCount.total > 0 && (
+          <div className="flex items-center gap-2.5 border-b border-gray-100 px-3 py-2">
+            <PrintTableCheckbox
+              checked={allBoardSelected}
+              indeterminate={someBoardSelected && !allBoardSelected}
+              onChange={handleSelectAll}
+              stationTheme={stationTheme}
+              label={allBoardSelected ? 'Deselect all' : 'Select all'}
+            />
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              className="text-[10px] font-black uppercase tracking-widest text-gray-600 hover:text-gray-900"
             >
-              <FbaPlansUpNext {...summaryPlansListProps} />
-            </div>
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto bg-white">
-            <div className="px-3 py-4 text-center">
-              <p className="text-xs text-gray-500">
-                Shipped history and UPS tracking live in the main panel →
-              </p>
-            </div>
+              {allBoardSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            {someBoardSelected && (
+              <span className="ml-auto text-[10px] font-bold tabular-nums text-gray-400">
+                {boardSelectionCount.selectedQty}
+              </span>
+            )}
           </div>
         )}
+
+        {/* Pairing panel — shows when items selected on board or paired */}
+        {isBoard && boardSelection.length > 0 && (
+          <FbaPairedReviewPanel
+            selectedItems={boardSelection}
+            stationTheme={stationTheme}
+          />
+        )}
+
+        {/* Station FNSKU scan toast */}
+        {isBoard && (
+          <FbaFnskuScanToast pendingPlans={pendingPlans} stationTheme={stationTheme} />
+        )}
+
+        {/* Plans error banner */}
+        {plansError && (
+          <div className="mx-3 my-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] font-semibold text-red-700">
+            {plansError}
+          </div>
+        )}
+
+        {/* Tab-specific content */}
+        {activeTab !== 'shipped' && activeTab !== 'paired' ? (
+          <div
+            aria-label="Open plans"
+            className="w-full shrink-0 border-t border-gray-100"
+          >
+            <FbaPlansUpNext
+              {...summaryPlansListProps}
+              onCreatePlan={() => window.dispatchEvent(new CustomEvent(FBA_OPEN_CREATE_PLAN_EVENT))}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -11,11 +11,12 @@ import {
   Plus,
   X,
 } from '@/components/Icons';
+import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { TabSwitch } from '@/components/ui/TabSwitch';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { getPresentStaffForToday } from '@/lib/staffCache';
 import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimaryButtons';
@@ -36,6 +37,7 @@ interface DashboardManagementPanelProps {
   showNextUnassignedButton?: boolean;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  onOpenShippedMatches?: (searchQuery: string) => void;
   showPendingFilterControl?: boolean;
   pendingFilterValue?: PendingStockFilter;
   onPendingFilterChange?: (value: PendingStockFilter) => void;
@@ -57,6 +59,7 @@ export function DashboardManagementPanel({
   showNextUnassignedButton = false,
   searchValue = '',
   onSearchChange,
+  onOpenShippedMatches,
   showPendingFilterControl = false,
   pendingFilterValue = 'all',
   onPendingFilterChange,
@@ -332,6 +335,12 @@ export function DashboardManagementPanel({
                 />
               </motion.div>
             ) : null}
+            <motion.div variants={itemVariants} className="-mt-2">
+              <DashboardShippedSearchHandoffCard
+                searchQuery={searchQuery}
+                onOpenShippedMatches={onOpenShippedMatches}
+              />
+            </motion.div>
             <motion.div variants={itemVariants} className="-mt-1">
               <RecentSearchesList
                 items={visibleSearchHistory}

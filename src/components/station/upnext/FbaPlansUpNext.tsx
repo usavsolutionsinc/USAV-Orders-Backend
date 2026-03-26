@@ -6,10 +6,10 @@
  * Do not mount on station/testing routes.
  */
 
-import type { Dispatch, SetStateAction } from 'react';
-import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { Loader2, Package } from '@/components/Icons';
+import type { StationTheme } from '@/utils/staff-colors';
+import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import type { FbaPlanQueueItem } from './upnext-types';
 import { FbaPlanCard } from './FbaPlanCard';
 
@@ -18,54 +18,49 @@ const stationLayoutTween = { layout: { duration: 0.32, ease: STATION_EASE_HEIGHT
 
 type FbaTab = 'summary' | 'shipped';
 
-function formatPlanDayHeader(dayKey: string): string {
-  if (dayKey === '__nodate__') return 'No due date';
-  const [y, m, d] = dayKey.split('-').map(Number);
-  if (!y || !m || !d) return dayKey;
-  const dt = new Date(y, m - 1, d);
-  return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
 
-type UpdateFbaParams = (patch: {
-  plan?: number | null;
-  tab?: FbaTab;
-  main?: 'print' | 'plan' | null;
-}) => void;
 
 export interface FbaPlansUpNextProps {
   plansLoading: boolean;
   pendingPlans: FbaPlanQueueItem[];
   plansByDay: { dayKey: string; plans: FbaPlanQueueItem[] }[];
   activePlanId: number | null;
-  updateFbaParams: UpdateFbaParams;
-  planQtyDraft: Record<number, string>;
-  setPlanQtyDraft: Dispatch<SetStateAction<Record<number, string>>>;
   qtySavingPlanId: number | null;
-  onCommitPlanQty: (plan: FbaPlanQueueItem) => void;
+  onCommitPlanQty: (plan: FbaPlanQueueItem, nextQty: number) => void;
+  stationTheme: StationTheme;
+  onCreatePlan?: () => void;
 }
 
-function PlansSectionHeader({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
-      <div className="h-px flex-1 bg-purple-200" />
-      <span className="text-[9px] font-black uppercase tracking-widest text-purple-600">{label}</span>
-      <div className="h-px flex-1 bg-purple-200" />
-    </div>
-  );
-}
-
-function EmptyPlansSlate({ label }: { label: string }) {
+function EmptyPlansSlate({
+  label,
+  stationTheme,
+  onCreatePlan,
+}: {
+  label: string;
+  stationTheme: StationTheme;
+  onCreatePlan?: () => void;
+}) {
+  const chrome = fbaSidebarThemeChrome[stationTheme];
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-      className="rounded-2xl px-4 py-3 border bg-purple-50 border-purple-100"
+      className={chrome.emptyShell}
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-bold uppercase tracking-widest text-purple-400">{label}</p>
-        <Package className="w-5 h-5 flex-shrink-0 text-purple-200" />
+        <p className={`text-xs font-bold uppercase tracking-widest ${chrome.emptyLabel}`}>{label}</p>
+        <Package className={`w-5 h-5 flex-shrink-0 ${chrome.emptyIcon}`} />
       </div>
+      {onCreatePlan ? (
+        <button
+          type="button"
+          onClick={onCreatePlan}
+          className="mt-2 text-[10px] font-black uppercase tracking-[0.14em] text-purple-700 underline"
+        >
+          + Create new plan
+        </button>
+      ) : null}
     </motion.div>
   );
 }
@@ -75,62 +70,29 @@ export function FbaPlansUpNext({
   pendingPlans,
   plansByDay,
   activePlanId,
-  updateFbaParams,
-  planQtyDraft,
-  setPlanQtyDraft,
   qtySavingPlanId,
   onCommitPlanQty,
+  stationTheme,
+  onCreatePlan,
 }: FbaPlansUpNextProps) {
-  const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!activePlanId) {
-      setExpandedItemKey(null);
-      return;
-    }
-    if (pendingPlans.length === 0) return;
-    const plan = pendingPlans.find((p) => p.id === activePlanId);
-    if (!plan) {
-      updateFbaParams({ plan: null });
-      setExpandedItemKey(null);
-      return;
-    }
-    setExpandedItemKey(`plan-${activePlanId}`);
-  }, [activePlanId, pendingPlans, updateFbaParams]);
-
-  /** Accordion: only one expanded card; opening a plan loads it in the main panel (`?plan=`) and collapses others. */
-  const togglePlanCard = useCallback(
-    (plan: FbaPlanQueueItem, key: string) => {
-      setExpandedItemKey((prev) => {
-        if (prev === key) {
-          return null;
-        }
-        return key;
-      });
-    },
-    [],
-  );
+  const chrome = fbaSidebarThemeChrome[stationTheme];
 
   return (
     <div className="space-y-3 px-1 pb-2">
       {plansLoading && pendingPlans.length === 0 ? (
         <div className="flex h-24 items-center justify-center">
-          <Loader2 className="h-5 w-5 animate-spin text-purple-300" />
+          <Loader2 className={`h-5 w-5 animate-spin ${chrome.loading}`} />
         </div>
       ) : !plansLoading && pendingPlans.length === 0 ? (
-        <EmptyPlansSlate label="No open plans" />
+        <EmptyPlansSlate label="No open plans" stationTheme={stationTheme} onCreatePlan={onCreatePlan} />
       ) : (
         <LayoutGroup id="fba-open-plans-upnext">
           <motion.div layout transition={stationLayoutTween} className="space-y-2">
-            {plansByDay.map(({ dayKey, plans }, gi) => (
+            {plansByDay.map(({ dayKey, plans }) => (
               <div key={dayKey}>
-                {gi > 0 ? <div className="pt-1" /> : null}
-                <PlansSectionHeader label={formatPlanDayHeader(dayKey)} />
                 <div className="flex flex-col">
                   <AnimatePresence mode="popLayout" initial={false}>
                     {plans.map((plan) => {
-                      const key = `plan-${plan.id}`;
-                      const isExpanded = expandedItemKey === key;
                       const isActive = activePlanId === plan.id;
                       const canEditQty = plan.total_items === 1 && plan.ready_item_count === 0;
 
@@ -145,13 +107,10 @@ export function FbaPlansUpNext({
                         >
                           <FbaPlanCard
                             plan={plan}
-                            isExpanded={isExpanded}
-                            onToggleExpand={() => togglePlanCard(plan, key)}
+                            stationTheme={stationTheme}
                             isActive={isActive}
                             canEditQty={canEditQty}
-                            qtyDraft={planQtyDraft[plan.id]}
-                            onQtyChange={(v) => setPlanQtyDraft((d) => ({ ...d, [plan.id]: v }))}
-                            onQtyBlur={() => void onCommitPlanQty(plan)}
+                            onCommitQty={canEditQty ? (v) => onCommitPlanQty(plan, v) : undefined}
                             qtySaving={qtySavingPlanId === plan.id}
                           />
                         </motion.div>

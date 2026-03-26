@@ -6,10 +6,10 @@ import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { RefreshCw, X } from '@/components/Icons';
 
 const GOAL_VIEW_OPTIONS = [
-  { value: 'all', label: 'All Performance' },
+  { value: 'all', label: 'All Staff' },
   { value: 'behind', label: 'Behind Goal' },
   { value: 'on-track', label: 'On Track' },
-  { value: 'exceeded', label: 'Exceeded Goal' },
+  { value: 'exceeded', label: 'Goal Met' },
 ] as const;
 
 type GoalViewMode = (typeof GOAL_VIEW_OPTIONS)[number]['value'];
@@ -70,14 +70,14 @@ export function GoalsSidebarPanel() {
           value={searchValue}
           onChange={(value) => updateParams({ search: value })}
           onClear={() => updateParams({ search: '' })}
-          placeholder="Search staff..."
+          placeholder="Search staff or role"
           variant="blue"
         />
       </div>
 
       <div className="flex-1 overflow-y-auto">
         <div className="border-b border-gray-200 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">Goal Actions</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">Goal Tools</p>
         </div>
 
         <button
@@ -86,8 +86,8 @@ export function GoalsSidebarPanel() {
           className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
         >
           <div>
-            <p className="text-[11px] font-black tracking-widest text-gray-900">Refresh Analytics</p>
-            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Pull fresh counts and targets</p>
+            <p className="text-[11px] font-black tracking-widest text-gray-900">Refresh Goal Data</p>
+            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Reload counts and saved daily goals</p>
           </div>
           <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
             <RefreshCw className="h-3.5 w-3.5" />
@@ -101,7 +101,7 @@ export function GoalsSidebarPanel() {
         >
           <div>
             <p className="text-[11px] font-black tracking-widest text-gray-900">Clear Filters</p>
-            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Reset search and performance view</p>
+            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Reset search and goal view</p>
           </div>
           <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
             <X className="h-3.5 w-3.5" />

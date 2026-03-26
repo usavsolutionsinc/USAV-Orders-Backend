@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { logRouteMetric } from '@/lib/route-metrics';
 
 let replenishmentSchemaCheck:
   | { value: boolean; checkedAt: number }
@@ -48,6 +49,9 @@ async function hasReplenishmentSchema(): Promise<boolean> {
  * Assignment info (tester_id / packer_id) is sourced from work_assignments.
  */
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
+  let ok = false;
+  let cache = 'BYPASS';
   try {
     const { searchParams } = new URL(req.url);
     const orderIdRaw       = searchParams.get('orderId');
@@ -110,6 +114,8 @@ export async function GET(req: NextRequest) {
     if (!singleOrderMode) {
       const cached = await getCachedJson<any>('api:orders', cacheLookup);
       if (cached) {
+        ok = true;
+        cache = 'HIT';
         return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
       }
     }
@@ -538,7 +544,9 @@ export async function GET(req: NextRequest) {
     };
     if (!singleOrderMode) {
       await setCachedJson('api:orders', cacheLookup, payload, 300, ['orders']);
+      cache = 'MISS';
     }
+    ok = true;
     return NextResponse.json(payload, {
       headers: {
         'x-cache': singleOrderMode ? 'BYPASS' : 'MISS',
@@ -557,5 +565,13 @@ export async function GET(req: NextRequest) {
       { error: 'Failed to fetch orders', details: error.message },
       { status: 500 }
     );
+  } finally {
+    logRouteMetric({
+      route: '/api/orders',
+      method: 'GET',
+      startedAt,
+      ok,
+      details: { cache },
+    });
   }
 }

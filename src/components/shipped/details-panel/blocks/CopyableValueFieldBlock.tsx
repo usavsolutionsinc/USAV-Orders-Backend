@@ -2,7 +2,7 @@
 
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import { Check, Copy, ExternalLink } from '@/components/Icons';
-import { DetailsPanelRow } from './DetailsPanelRow';
+import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 
 interface CopyableValueFieldBlockProps {
   label: string;

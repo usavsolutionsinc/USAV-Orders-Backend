@@ -82,11 +82,13 @@ function resolveScanType(val: string, contextOrder: ActiveStationOrder | null): 
   const incomplete = contextOrder.serialNumbers.length < qty;
   if (!incomplete || base !== 'TRACKING') return base;
 
-  const { type, carrier } = classifyInput(val);
-  if (type === 'tracking' && carrier === null) {
-    return 'SERIAL';
-  }
-  return base;
+  // When an active order still needs serials, route ANY tracking-shaped input as
+  // SERIAL. Product serial numbers routinely match carrier patterns (e.g. a 12-digit
+  // serial triggers the FedEx heuristic). Routing those as TRACKING would hit the
+  // scan-tracking API, fail to find an order, clear the active card, and show the
+  // "not found" alert — exactly the bug. Techs who genuinely need to scan a new
+  // label while a card is open can use the tracking mode button to force it.
+  return 'SERIAL';
 }
 
 export function getOrderIdLast4(orderId: string) {
@@ -103,6 +105,7 @@ export function useStationTestingController({
   onTrackingScan,
   onTrackingOrderLoaded,
   onActiveOrderCardAutoHidden,
+  onFnskuOrderLoaded,
 }: {
   userId: string;
   userName: string;
@@ -113,9 +116,13 @@ export function useStationTestingController({
   onTrackingOrderLoaded?: () => void;
   /** Fired when the active order card auto-hides after qty-complete timeout (UI can switch back to tracking mode). */
   onActiveOrderCardAutoHidden?: () => void;
+  /** Fired after an FNSKU scan successfully loads order context. UI can clear FBA manual mode override. */
+  onFnskuOrderLoaded?: () => void;
 }) {
   const queryClient = useQueryClient();
   const onAutoHiddenRef = useRef(onActiveOrderCardAutoHidden);
+  const onFnskuOrderLoadedRef = useRef(onFnskuOrderLoaded);
+  useEffect(() => { onFnskuOrderLoadedRef.current = onFnskuOrderLoaded; }, [onFnskuOrderLoaded]);
   useEffect(() => {
     onAutoHiddenRef.current = onActiveOrderCardAutoHidden;
   }, [onActiveOrderCardAutoHidden]);
@@ -355,14 +362,15 @@ export function useStationTestingController({
       }
 
       syncActiveOrderState({
-        id: data.order.id,
-        orderId: data.order.orderId,
-        productTitle: data.order.productTitle,
+        id: data.order.id ?? null,
+        orderId: data.order.orderId ?? 'FNSKU',
+        fnsku,
+        productTitle: data.order.productTitle ?? data.order.tracking ?? fnsku,
         itemNumber: data.order.itemNumber ?? null,
-        sku: data.order.sku,
-        condition: data.order.condition,
-        notes: data.order.notes,
-        tracking: data.order.tracking,
+        sku: data.order.sku ?? 'N/A',
+        condition: data.order.condition ?? 'N/A',
+        notes: data.order.notes ?? '',
+        tracking: data.order.tracking ?? fnsku,
         serialNumbers: data.order.serialNumbers || [],
         testDateTime: data.order.testDateTime,
         testedBy: data.order.testedBy,
@@ -370,6 +378,7 @@ export function useStationTestingController({
         shipByDate: data.order.shipByDate || null,
         createdAt: data.order.createdAt || null,
         orderFound: data.orderFound !== false,
+        sourceType: 'fba',
       });
 
       const serialCount = data.order.serialNumbers?.length || 0;
@@ -387,6 +396,8 @@ export function useStationTestingController({
       } else {
         void resolveManual(data.order.sku, data.order.itemNumber ?? null);
       }
+
+      onFnskuOrderLoadedRef.current?.();
 
       if (data.fnskuSalId) {
         window.dispatchEvent(new CustomEvent('tech-log-added', {
@@ -418,6 +429,18 @@ export function useStationTestingController({
           },
         }));
       }
+      // Notify FBA workspace sidebar so techs can add this FNSKU to an open plan.
+      window.dispatchEvent(
+        new CustomEvent('fba-fnsku-station-scanned', {
+          detail: {
+            fnsku,
+            productTitle: data.order?.productTitle ?? null,
+            shipmentId: data.shipment?.shipment_id ?? null,
+            planRef: data.shipment?.shipment_ref ?? null,
+          },
+        }),
+      );
+
       triggerGlobalRefresh();
     } catch (err) {
       console.error('FNSKU scan failed:', err);

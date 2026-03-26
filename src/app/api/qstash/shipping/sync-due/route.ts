@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
 import { getAppBaseUrl } from '@/lib/qstash';
+import { runShippingSyncDueJob, type ShippingSyncDuePayload } from '@/lib/jobs/shipping-sync-due';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
 async function handleSyncDue(request: NextRequest) {
-  const baseUrl = getAppBaseUrl();
-  const url = `${baseUrl}/api/shipping/track/sync-due`;
-  const payload = await request.json().catch(() => ({}));
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
-  }
-  return NextResponse.json(data);
+  const payload = (await request.json().catch(() => ({}))) as ShippingSyncDuePayload;
+  return NextResponse.json(await runShippingSyncDueJob(payload));
 }
 
 export const POST = verifySignatureAppRouter(handleSyncDue, {

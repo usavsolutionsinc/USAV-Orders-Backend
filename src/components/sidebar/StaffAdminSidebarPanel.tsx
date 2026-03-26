@@ -71,7 +71,7 @@ export function StaffAdminSidebarPanel() {
           value={searchValue}
           onChange={(value) => updateParams({ search: value })}
           onClear={() => updateParams({ search: '' })}
-          placeholder="Search staff..."
+          placeholder="Search name or ID"
           variant="blue"
         />
       </div>
@@ -83,8 +83,8 @@ export function StaffAdminSidebarPanel() {
           className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
         >
           <div>
-            <p className="text-[11px] font-black tracking-widest text-gray-900">Add Staff Member</p>
-            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Open the personnel creation form</p>
+            <p className="text-[11px] font-black tracking-widest text-gray-900">Add Team Member</p>
+            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Open the form to create a new staff record</p>
           </div>
           <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
             <Plus className="h-3.5 w-3.5" />

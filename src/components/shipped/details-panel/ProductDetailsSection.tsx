@@ -5,7 +5,7 @@ import { AlertTriangle } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useOrderAssignment } from '@/hooks';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
-import { DetailsPanelRow } from '@/components/shipped/details-panel/blocks/DetailsPanelRow';
+import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 
 type ConditionValue = 'NEW' | 'USED' | 'PARTS';

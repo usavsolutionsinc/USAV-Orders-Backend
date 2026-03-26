@@ -253,9 +253,9 @@ export function StaffManagementTab() {
             Staff Directory
           </p>
           <div className="hidden items-center gap-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 sm:flex">
-            <span>Visible {summary.total}</span>
+            <span>Shown {summary.total}</span>
             <span className="text-slate-300">/</span>
-            <span>On Duty Today {summary.presentToday}</span>
+            <span>Scheduled Today {summary.presentToday}</span>
             <span className="text-slate-300">/</span>
             <span>{todayLabel}</span>
           </div>
@@ -287,7 +287,7 @@ export function StaffManagementTab() {
                 value={newStaffEmployeeId}
                 onChange={(e) => setNewStaffEmployeeId(e.target.value)}
                 className="h-9 w-full border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 outline-none transition-colors focus:border-slate-400"
-                placeholder="Enter ID"
+                placeholder="Enter employee ID"
               />
             </label>
 
@@ -325,7 +325,7 @@ export function StaffManagementTab() {
               }
               className="h-9 border border-emerald-700 bg-emerald-700 px-4 text-[10px] font-black uppercase tracking-[0.16em] text-white transition-colors hover:bg-emerald-800"
             >
-              Add Staff
+              Add Staff Member
             </button>
           </div>
         </motion.div>
@@ -333,15 +333,15 @@ export function StaffManagementTab() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-4 grid gap-2 sm:grid-cols-5">
-          <SummaryCell label="Visible" value={summary.total} />
+          <SummaryCell label="Shown" value={summary.total} />
           <SummaryCell label="Active" value={summary.active} />
-          <SummaryCell label="Tech" value={summary.technicians} />
-          <SummaryCell label="Packer" value={summary.packers} />
-          <SummaryCell label="On Duty Today" value={summary.presentToday} tone="emerald" />
+          <SummaryCell label="Technicians" value={summary.technicians} />
+          <SummaryCell label="Packers" value={summary.packers} />
+          <SummaryCell label="Scheduled Today" value={summary.presentToday} tone="emerald" />
         </div>
 
         <div className="mb-2 flex items-center justify-between text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-          <span>Weekly Availability</span>
+          <span>Weekly Schedule</span>
           <span>{todayLabel} • {timezoneLabel}</span>
         </div>
 
@@ -379,7 +379,7 @@ export function StaffManagementTab() {
                         value={editEmployeeId}
                         onChange={(e) => setEditEmployeeId(e.target.value)}
                         className="h-9 border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-slate-400"
-                        placeholder="Employee ID"
+                        placeholder="Enter employee ID"
                       />
                       <select
                         value={editRole}
@@ -398,7 +398,7 @@ export function StaffManagementTab() {
                         onChange={(e) => setEditActive(e.target.checked)}
                         className="h-4 w-4 border-slate-300 text-slate-900"
                       />
-                      Active
+                      Active Staff Record
                     </label>
 
                     <div className="mt-3 flex gap-2">
@@ -427,9 +427,9 @@ export function StaffManagementTab() {
                       <button
                         type="button"
                         onClick={() => deleteStaffMutation.mutate(member.id)}
-                        className="h-9 border border-red-300 px-4 text-[10px] font-black uppercase tracking-[0.16em] text-red-700 hover:bg-red-50"
-                      >
-                        Deactivate
+                      className="h-9 border border-red-300 px-4 text-[10px] font-black uppercase tracking-[0.16em] text-red-700 hover:bg-red-50"
+                    >
+                        Deactivate Staff
                       </button>
                     </div>
                   </div>
@@ -500,9 +500,9 @@ export function StaffManagementTab() {
 
         {filteredStaff.length === 0 && (
           <div className="border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
-            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">No Staff Matched</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">No Staff Match</p>
             <p className="mt-2 text-[12px] font-bold text-slate-500">
-              Adjust the sidebar filters or add a new team member.
+              Change the sidebar filters or add a team member.
             </p>
           </div>
         )}

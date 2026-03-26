@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'next/navigation';
 import { AnimatePresence } from 'framer-motion';
 import { DashboardShippedTable, ShippedDetailsPanel } from '@/components/shipped';
 import PendingOrdersTable from '@/components/PendingOrdersTable';
@@ -10,73 +9,28 @@ import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPa
 import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
 import FBAShipmentsTable from '@/components/dashboard/FBAShipmentsTable';
 import { Loader2 } from '@/components/Icons';
-import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
+import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
+import { useDashboardSelectedOrder } from '@/hooks/useDashboardSelectedOrder';
 import {
   fetchDashboardShippedData,
   fetchPendingOrdersData,
   fetchUnshippedOrdersData,
 } from '@/lib/dashboard-table-data';
 
-type DashboardOrderView = 'pending' | 'unshipped' | 'shipped' | 'fba';
-
-const getOrderViewFromSearch = (search: string): DashboardOrderView => {
-    const params = new URLSearchParams(search);
-    if (params.has('shipped')) return 'shipped';
-    if (params.has('unshipped')) return 'unshipped';
-    if (params.has('pending')) return 'pending';
-    if (params.has('fba')) return 'fba';
-    return 'pending';
-};
-
 function DashboardPageContent() {
-    const searchParams = useSearchParams();
     const queryClient = useQueryClient();
-    const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
-    const orderView = getOrderViewFromSearch(searchParams.toString());
-    const detailsEnabled = orderView !== 'fba';
+    const {
+        detailsEnabled,
+        orderView,
+        searchQuery,
+    } = useDashboardSearchController();
+    const {
+        selectedShipped,
+        selectedContext,
+        requestCloseSelectedOrder,
+    } = useDashboardSelectedOrder(detailsEnabled);
     useRealtimeInvalidation({ dashboard: true });
-
-    useEffect(() => {
-        const handleOpen = (e: CustomEvent<ShippedOrder>) => {
-            if (e.detail) setSelectedShipped(e.detail);
-        };
-        const handleClose = () => setSelectedShipped(null);
-        const handleAssignmentUpdate = (e: any) => {
-            const detail = e?.detail || {};
-            const ids = new Set<number>((detail.orderIds || []).map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id)));
-            if (ids.size === 0) return;
-
-            setSelectedShipped((current) => {
-                if (!current || !ids.has(Number(current.id))) return current;
-
-                const next: any = { ...current };
-                if (detail.testerId !== undefined) {
-                    next.tester_id = detail.testerId;
-                }
-                if (detail.packerId !== undefined) {
-                    next.packer_id = detail.packerId;
-                }
-                if (detail.shipByDate !== undefined) next.ship_by_date = detail.shipByDate;
-                if (detail.outOfStock !== undefined) next.out_of_stock = detail.outOfStock;
-                if (detail.notes !== undefined) next.notes = detail.notes;
-                if (detail.shippingTrackingNumber !== undefined) next.shipping_tracking_number = detail.shippingTrackingNumber;
-                if (detail.itemNumber !== undefined) next.item_number = detail.itemNumber;
-                if (detail.condition !== undefined) next.condition = detail.condition;
-                return next;
-            });
-        };
-
-        window.addEventListener('open-shipped-details' as any, handleOpen as any);
-        window.addEventListener('close-shipped-details' as any, handleClose as any);
-        window.addEventListener('order-assignment-updated' as any, handleAssignmentUpdate as any);
-
-        return () => {
-            window.removeEventListener('open-shipped-details' as any, handleOpen as any);
-            window.removeEventListener('close-shipped-details' as any, handleClose as any);
-            window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdate as any);
-        };
-    }, []);
 
     useEffect(() => {
         const STALE = 5 * 60 * 1000;
@@ -85,14 +39,14 @@ function DashboardPageContent() {
         const prefetchActive = () => {
             if (orderView === 'pending') {
                 queryClient.prefetchQuery({
-                    queryKey: ['dashboard-table', 'pending', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
-                    queryFn: () => fetchPendingOrdersData({}),
+                    queryKey: ['dashboard-table', 'pending', { searchQuery, packedBy: undefined, testedBy: undefined, strictSearchScope: true }],
+                    queryFn: () => fetchPendingOrdersData({ searchQuery, strictSearchScope: true }),
                     staleTime: STALE,
                 });
             } else if (orderView === 'unshipped') {
                 queryClient.prefetchQuery({
-                    queryKey: ['dashboard-table', 'unshipped', { searchQuery: '', packedBy: undefined, testedBy: undefined }],
-                    queryFn: () => fetchUnshippedOrdersData({}),
+                    queryKey: ['dashboard-table', 'unshipped', { searchQuery, packedBy: undefined, testedBy: undefined, strictSearchScope: true }],
+                    queryFn: () => fetchUnshippedOrdersData({ searchQuery, strictSearchScope: true }),
                     staleTime: STALE,
                 });
             } else if (orderView === 'fba') {
@@ -110,8 +64,8 @@ function DashboardPageContent() {
                 // shipped view — no weekStart/weekEnd here; DashboardShippedTable
                 // will supply those once it mounts.
                 queryClient.prefetchQuery({
-                    queryKey: ['dashboard-table', 'shipped', { search: '', packedBy: undefined, testedBy: undefined }],
-                    queryFn: () => fetchDashboardShippedData({}),
+                    queryKey: ['dashboard-table', 'shipped', { search: searchQuery, packedBy: undefined, testedBy: undefined }],
+                    queryFn: () => fetchDashboardShippedData({ searchQuery }),
                     staleTime: STALE,
                 });
             }
@@ -139,13 +93,7 @@ function DashboardPageContent() {
         }, 400);
 
         return () => clearTimeout(timer);
-    }, [queryClient, orderView]);
-
-    useEffect(() => {
-        if (!detailsEnabled) {
-            setSelectedShipped(null);
-        }
-    }, [detailsEnabled]);
+    }, [queryClient, orderView, searchQuery]);
 
     return (
         <div className="flex h-full w-full">
@@ -157,23 +105,20 @@ function DashboardPageContent() {
                 {orderView === 'shipped' ? (
                     <DashboardShippedTable />
                 ) : orderView === 'unshipped' ? (
-                    <UnshippedTable />
+                    <UnshippedTable strictSearchScope />
                 ) : orderView === 'fba' ? (
                     <FBAShipmentsTable />
                 ) : (
-                    <PendingOrdersTable />
+                    <PendingOrdersTable strictSearchScope />
                 )}
             </Suspense>
 
             <AnimatePresence>
                 {detailsEnabled && selectedShipped && (
-                    orderView === 'unshipped' ? (
+                    selectedContext === 'queue' ? (
                         <UnshippedDetailsPanel
                             shipped={selectedShipped}
-                            onClose={() => {
-                                window.dispatchEvent(new CustomEvent('close-shipped-details'));
-                                setSelectedShipped(null);
-                            }}
+                            onClose={requestCloseSelectedOrder}
                             onUpdate={() => {
                                 window.dispatchEvent(new CustomEvent('dashboard-refresh'));
                             }}
@@ -181,11 +126,8 @@ function DashboardPageContent() {
                     ) : (
                         <ShippedDetailsPanel
                             shipped={selectedShipped}
-                            context={orderView === 'shipped' ? 'shipped' : 'queue'}
-                            onClose={() => {
-                                window.dispatchEvent(new CustomEvent('close-shipped-details'));
-                                setSelectedShipped(null);
-                            }}
+                            context="shipped"
+                            onClose={requestCloseSelectedOrder}
                             onUpdate={() => {
                                 window.dispatchEvent(new CustomEvent('dashboard-refresh'));
                             }}

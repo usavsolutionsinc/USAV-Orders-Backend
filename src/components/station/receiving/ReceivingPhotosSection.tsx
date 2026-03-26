@@ -25,8 +25,8 @@ export function ReceivingPhotosSection({ receivingId }: ReceivingPhotosSectionPr
       const data = await res.json();
       return Array.isArray(data.photos) ? data.photos : [];
     },
-    refetchInterval: 3_000,
-    staleTime: 2_000,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
   });
 
   const deletePhoto = async (photoId: number) => {

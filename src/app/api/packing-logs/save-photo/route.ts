@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
+import { db } from '@/lib/drizzle/db';
+import { photos } from '@/lib/drizzle/schema';
 
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { photo, orderId, packerId, photoIndex } = body;
+        const { photo, orderId, packerId, photoIndex, packerLogId, photoType } = body;
 
         if (!photo || !orderId || !packerId || photoIndex === undefined) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -25,17 +27,33 @@ export async function POST(req: NextRequest) {
             contentType: 'image/jpeg',
         });
 
-        // Return the full URL from Vercel Blob
-        return NextResponse.json({ 
-            success: true, 
+        // Write to Neon DB photos table
+        let photoId: number | null = null;
+        if (packerLogId) {
+            const [inserted] = await db
+                .insert(photos)
+                .values({
+                    entityType: 'PACKER_LOG',
+                    entityId: Number(packerLogId),
+                    url: blob.url,
+                    takenByStaffId: Number(packerId),
+                    photoType: photoType ?? 'packer_photo',
+                })
+                .returning({ id: photos.id });
+            photoId = inserted?.id ?? null;
+        }
+
+        return NextResponse.json({
+            success: true,
             path: blob.url,
-            filename 
+            filename,
+            photoId,
         });
     } catch (error: any) {
         console.error('Error saving photo:', error);
-        return NextResponse.json({ 
-            error: 'Failed to save photo', 
-            details: error.message 
+        return NextResponse.json({
+            error: 'Failed to save photo',
+            details: error.message
         }, { status: 500 });
     }
 }

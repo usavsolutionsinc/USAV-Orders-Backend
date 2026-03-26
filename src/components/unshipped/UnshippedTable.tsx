@@ -3,12 +3,13 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
-import { dispatchCloseShippedDetails } from '@/utils/events';
+import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
 import { fetchUnshippedOrdersData } from '@/lib/dashboard-table-data';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
-export interface UnshippedTableProps {
+export interface UnshippedTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
   testedBy?: number;
 }
@@ -49,16 +50,22 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
 export function UnshippedTable({
   packedBy,
   testedBy,
+  strictSearchScope = false,
+  bannerTitle,
+  bannerSubtitle,
+  searchEmptyTitle = 'No awaiting orders found',
+  searchResultLabel = 'awaiting orders',
+  clearSearchLabel = 'Show All Awaiting Orders',
 }: UnshippedTableProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
-  const queryKey = ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy }] as const;
+  const queryKey = ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy, strictSearchScope }] as const;
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy }),
+    queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy, strictSearchScope }),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     placeholderData: (previousData) => previousData,
@@ -169,8 +176,13 @@ export function UnshippedTable({
       searchValue={searchQuery}
       onClearSearch={clearSearch}
       emptyMessage="No unshipped order records found"
+      searchEmptyTitle={searchEmptyTitle}
+      searchResultLabel={searchResultLabel}
+      clearSearchLabel={clearSearchLabel}
+      bannerTitle={bannerTitle}
+      bannerSubtitle={bannerSubtitle}
       onOpenRecord={(record) => {
-        window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: record }));
+        dispatchOpenShippedDetails(record, 'queue');
       }}
       onCloseRecord={() => {
         dispatchCloseShippedDetails();

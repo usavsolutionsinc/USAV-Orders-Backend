@@ -178,30 +178,37 @@ export function CopyChip({
 
 // --- Pre-configured chips ---
 
+/** Internal order ID. Gray / Hash icon. Do NOT use for tracking numbers or FNSKUs. */
 export const OrderIdChip = ({ value, display }: { value: string; display: string }) => (
   <CopyChip
     value={value}
-    display={display}
+    display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
     icon={<HashIcon />}
     underlineClass="border-gray-400"
     iconClass="text-gray-400"
   />
 );
 
+/**
+ * Carrier shipping tracking number. Blue / MapPin icon.
+ * DESIGN SYSTEM RULE: Use ONLY for outbound carrier tracking numbers (UPS, FedEx, USPS…).
+ * Do NOT use for FNSKU codes — use FnskuChip (purple/Package) for those.
+ */
 export const TrackingChip = ({ value, display }: { value: string; display: string }) => (
   <CopyChip
     value={value}
-    display={display}
+    display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
     icon={<MapPin className="w-4 h-4 shrink-0" />}
     underlineClass="border-blue-500"
     iconClass="text-blue-500"
   />
 );
 
+/** Device / unit serial number. Emerald / Barcode icon. */
 export const SerialChip = ({ value, display }: { value: string; display: string }) => (
   <CopyChip
     value={value}
-    display={display}
+    display={isEmptyDisplayValue(display) ? 'SERIAL' : display}
     icon={<Barcode className="w-4 h-4 shrink-0" />}
     underlineClass="border-emerald-500"
     iconClass="text-emerald-500"
@@ -218,6 +225,11 @@ export const TicketChip = ({ value, display }: { value: string; display: string 
   />
 );
 
+/**
+ * Amazon FNSKU identifier (e.g. X001ABC123). Purple / Package icon.
+ * DESIGN SYSTEM RULE: Use ONLY for FNSKU values scanned at FBA intake.
+ * Do NOT use for carrier tracking numbers — use TrackingChip (blue/MapPin) for those.
+ */
 export const FnskuChip = ({ value, width }: { value: string; width?: string }) => (
   <CopyChip
     value={value}

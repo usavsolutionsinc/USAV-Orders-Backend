@@ -1,25 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
 import { getAppBaseUrl } from '@/lib/qstash';
+import {
+  GoogleSheetsTransferOrdersJobError,
+  runGoogleSheetsTransferOrders,
+} from '@/lib/jobs/google-sheets-transfer-orders';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 async function handleTransferOrders(request: NextRequest) {
-  const baseUrl = getAppBaseUrl();
-  const url = `${baseUrl}/api/google-sheets/transfer-orders`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return NextResponse.json(data, { status: res.status });
+  const body = (await request.json().catch(() => ({}))) as { manualSheetName?: string };
+  try {
+    return NextResponse.json(await runGoogleSheetsTransferOrders(body.manualSheetName));
+  } catch (error: any) {
+    if (error instanceof GoogleSheetsTransferOrdersJobError) {
+      return NextResponse.json(error.body, { status: error.status });
+    }
+    return NextResponse.json(
+      { success: false, error: error?.message || 'Internal Server Error' },
+      { status: 500 }
+    );
   }
-  return NextResponse.json(data);
 }
 
 export const POST = verifySignatureAppRouter(handleTransferOrders, {

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronDown, Copy, ExternalLink, Package, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { getPresentStaffForToday } from '@/lib/staffCache';
-import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/design-system/components';
+import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { type FBAQueueItem } from './upnext-types';

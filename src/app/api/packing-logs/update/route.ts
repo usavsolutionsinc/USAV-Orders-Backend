@@ -132,21 +132,23 @@ export async function POST(req: NextRequest) {
         UPDATE orders
         SET status = 'shipped'
         WHERE shipment_id = $1
+          AND shipment_id IS NOT NULL
           AND (status IS NULL OR status != 'shipped')
-        RETURNING id, order_id, shipping_tracking_number
+        RETURNING id, order_id
       `, [resolvedShipmentId]);
 
       console.log('=== UPDATE RESULT ===');
       if (updateResult.rows.length === 0) {
-        // Fallback: match by last-8 text for legacy unlinked rows
+        // Fallback: match via shipping_tracking_numbers join for legacy unlinked rows
         const fallbackUpdate = await client.query(`
-          UPDATE orders
+          UPDATE orders o
           SET status = 'shipped'
-          WHERE RIGHT(shipping_tracking_number, 8) = RIGHT($1, 8)
-            AND shipping_tracking_number IS NOT NULL
-            AND shipping_tracking_number != ''
-            AND (status IS NULL OR status != 'shipped')
-          RETURNING id, order_id, shipping_tracking_number
+          FROM shipping_tracking_numbers stn
+          WHERE o.shipment_id = stn.id
+            AND RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 8)
+                = RIGHT(regexp_replace(UPPER($1), '[^A-Z0-9]', '', 'g'), 8)
+            AND (o.status IS NULL OR o.status != 'shipped')
+          RETURNING o.id, o.order_id
         `, [shippingTrackingNumber]);
         if (fallbackUpdate.rows.length > 0) {
           const orderId = fallbackUpdate.rows[0].id;

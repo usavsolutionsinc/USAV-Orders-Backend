@@ -7,6 +7,11 @@ import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/componen
 
 type GoalViewMode = 'all' | 'behind' | 'on-track' | 'exceeded';
 
+function parseGoalView(value: string | null): GoalViewMode {
+  if (value === 'behind' || value === 'on-track' || value === 'exceeded') return value;
+  return 'all';
+}
+
 function getProgress(row: GoalRow, overrideValue?: string) {
   const goal = Math.max(1, Number(overrideValue) || row.daily_goal || 50);
   const progress = row.today_count / goal;
@@ -21,26 +26,23 @@ function getPerformanceTone(progress: number) {
   if (progress >= 1) {
     return {
       label: 'Exceeded',
-      chipClass: 'bg-emerald-100 text-emerald-700',
-      barClass: 'bg-emerald-500',
-      railClass: 'bg-emerald-100',
+      textClass: 'text-emerald-700',
+      barClass: 'bg-emerald-600',
     };
   }
 
   if (progress >= 0.7) {
     return {
       label: 'On Track',
-      chipClass: 'bg-blue-100 text-blue-700',
-      barClass: 'bg-blue-500',
-      railClass: 'bg-blue-100',
+      textClass: 'text-blue-700',
+      barClass: 'bg-blue-600',
     };
   }
 
   return {
     label: 'Behind',
-    chipClass: 'bg-amber-100 text-amber-700',
-    barClass: 'bg-amber-500',
-    railClass: 'bg-amber-100',
+    textClass: 'text-amber-700',
+    barClass: 'bg-amber-600',
   };
 }
 
@@ -54,12 +56,14 @@ function matchesView(progress: number, goalView: GoalViewMode) {
 export function GoalsAnalyticsTab() {
   const searchParams = useSearchParams();
   const searchTerm = (searchParams.get('search') || '').trim().toLowerCase();
-  const goalView = (searchParams.get('goalView') as GoalViewMode) || 'all';
+  const goalView = parseGoalView(searchParams.get('goalView'));
 
   const [rows, setRows] = useState<GoalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [goalInputs, setGoalInputs] = useState<Record<number, string>>({});
+  const tableGridClass =
+    'grid grid-cols-[minmax(180px,1.4fr)_minmax(168px,1fr)_88px_88px_88px_minmax(220px,1fr)] gap-x-3';
 
   const fetchRows = async () => {
     setLoading(true);
@@ -146,68 +150,43 @@ export function GoalsAnalyticsTab() {
   };
 
   return (
-    <section className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]">
+    <section className="flex h-full min-h-0 w-full flex-col bg-white">
       <div className={mainStickyHeaderClass}>
-        <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-slate-900">Daily Goal Analytics</p>
-          <div className="hidden items-center gap-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 sm:flex">
-            <span>Visible {summary.total}</span>
-            <span className="text-slate-300">/</span>
-            <span>Today {summary.today}</span>
-            <span className="text-slate-300">/</span>
-            <span>Week {summary.week}</span>
+        <div className={`${mainStickyHeaderShellRowClass} flex-wrap gap-y-2 px-6`}>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-900">Daily Goals</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+            <span>{summary.total} staff shown</span>
+            <span>{summary.today} done today</span>
+            <span>{summary.week} this week</span>
+            <span>
+              {summary.exceeded} met goal / {summary.behind} behind
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden px-6 py-6">
-        <div className="flex h-full min-h-0 flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Visible Staff</p>
-              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{summary.total}</p>
-            </div>
-            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Today</p>
-              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{summary.today}</p>
-            </div>
-            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">This Week</p>
-              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">{summary.week}</p>
-            </div>
-            <div className="border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">Exceeded / Behind</p>
-              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">
-                {summary.exceeded}
-                <span className="mx-1 text-slate-300">/</span>
-                {summary.behind}
-              </p>
-            </div>
-          </div>
+      <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden border border-slate-200">
+          <div className="min-h-0 flex-1 overflow-auto">
+            <div className="min-w-[920px]">
+              <div
+                className={`${tableGridClass} border-b border-slate-200 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500`}
+              >
+                <p>Staff</p>
+                <p>Daily Goal</p>
+                <p className="text-right">Done Today</p>
+                <p className="text-right">This Week</p>
+                <p className="text-right">7-Day Avg</p>
+                <p>Performance</p>
+              </div>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-slate-200 bg-white">
-            <div className="grid grid-cols-[minmax(180px,1.4fr)_110px_90px_90px_90px_minmax(220px,1fr)] border-b border-slate-200 bg-slate-50 px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
-              <p>Staff</p>
-              <p>Daily Goal</p>
-              <p>Today</p>
-              <p>Week</p>
-              <p>7D Avg</p>
-              <p>Performance</p>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto">
               {loading ? (
-                <div className="flex h-full items-center justify-center px-6 text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">
-                  Loading goals...
+                <div className="flex h-full items-center justify-center px-6 py-10 text-xs text-slate-500">
+                  Loading goal progress...
                 </div>
               ) : filteredRows.length === 0 ? (
-                <div className="flex h-full items-center justify-center px-6 text-center">
-                  <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">No Staff Matched</p>
-                    <p className="mt-2 text-[12px] font-bold text-slate-500">
-                      Adjust the goals sidebar filters or refresh the analytics feed.
-                    </p>
-                  </div>
+                <div className="flex h-full items-center justify-center px-6 py-10 text-center text-xs text-slate-500">
+                  No staff match this search or goal view.
                 </div>
               ) : (
                 filteredRows.map((row) => {
@@ -217,50 +196,46 @@ export function GoalsAnalyticsTab() {
                   return (
                     <div
                       key={row.staff_id}
-                      className="grid grid-cols-[minmax(180px,1.4fr)_110px_90px_90px_90px_minmax(220px,1fr)] items-center border-b border-slate-200 px-4 py-3 last:border-b-0"
+                      className={`${tableGridClass} items-center border-b border-slate-200 px-4 py-3 text-sm last:border-b-0`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-[12px] font-black uppercase tracking-[0.08em] text-slate-900">{row.name}</p>
-                        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{row.role}</p>
+                        <p className="truncate font-semibold text-slate-900">{row.name}</p>
+                        <p className="truncate text-xs text-slate-500">{row.role}</p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex items-center gap-2">
                         <input
                           type="number"
                           min={1}
                           value={goalInputs[row.staff_id] ?? String(row.daily_goal)}
                           onChange={(e) => setGoalInputs((current) => ({ ...current, [row.staff_id]: e.target.value }))}
-                          className="w-16 border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] font-black text-slate-900 outline-none focus:border-blue-400"
+                          aria-label={`Daily goal for ${row.name}`}
+                          className="w-14 border border-slate-300 px-2 py-1 text-xs font-medium text-slate-900 outline-none focus:border-slate-500"
                         />
                         <button
                           type="button"
                           onClick={() => saveGoal(row.staff_id)}
                           disabled={savingId === row.staff_id}
-                          className="border border-blue-200 bg-blue-50 px-2 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-blue-700 disabled:opacity-50"
+                          className="shrink-0 border border-slate-300 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-700 disabled:opacity-50"
                         >
-                          {savingId === row.staff_id ? 'Wait' : 'Save'}
+                          {savingId === row.staff_id ? 'Saving' : 'Save'}
                         </button>
                       </div>
 
-                      <p className="text-[12px] font-black text-slate-900">{row.today_count}</p>
-                      <p className="text-[12px] font-black text-slate-900">{row.week_count}</p>
-                      <p className="text-[12px] font-black text-slate-900">{row.avg_daily_last_7d}</p>
+                      <p className="text-right font-medium text-slate-900">{row.today_count}</p>
+                      <p className="text-right font-medium text-slate-900">{row.week_count}</p>
+                      <p className="text-right font-medium text-slate-900">{row.avg_daily_last_7d}</p>
 
-                      <div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-[0.22em] ${tone.chipClass}`}>
-                            {tone.label}
-                          </span>
-                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                      <div className="min-w-0">
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <span className={`font-semibold ${tone.textClass}`}>{tone.label}</span>
+                          <span className="text-slate-500">
                             {row.today_count}/{goal}
                           </span>
                         </div>
-                        <div className={`mt-2 h-2 overflow-hidden ${tone.railClass}`}>
+                        <div className="mt-2 h-1.5 overflow-hidden bg-slate-100">
                           <div className={`h-full ${tone.barClass}`} style={{ width: `${percent}%` }} />
                         </div>
-                        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                          {Math.round(percent)}% complete today
-                        </p>
                       </div>
                     </div>
                   );

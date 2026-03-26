@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { motion } from 'framer-motion';
-import { Check, ChevronDown, Loader2 } from '@/components/Icons';
+import { motion, useReducedMotion } from 'framer-motion';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { Check, ChevronDown } from '@/components/Icons';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useFbaWorkspace } from '@/contexts/FbaWorkspaceContext';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
@@ -11,6 +12,9 @@ import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from './Checkbox';
 import { enrichFromApi, getPlanId, getPlanLabel } from './utils';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import type { StationTheme } from '@/utils/staff-colors';
+import { printQueueTableUi, stationThemeColors } from '@/utils/staff-colors';
+import { FbaLoadingState, FbaErrorState, FbaEmptyState } from '@/components/fba/FbaStateShells';
 import type { EnrichedItem, PrintQueueItem, PrintSelectionPayload } from './types';
 
 const FBA_SHIPMENTS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipments');
@@ -43,6 +47,7 @@ interface Props {
   onSelectionChange?: (payload: PrintSelectionPayload) => void;
   fitHeightNoScroll?: boolean;
   staffId?: number | string | null;
+  stationTheme?: StationTheme;
   activePlanId?: number | null;
 }
 
@@ -59,6 +64,7 @@ function PrintReadyRow({
   onClick,
   displayExpectedQty,
   showExpectedQty = true,
+  theme = 'green',
 }: {
   item: EnrichedItem;
   isSelected: boolean;
@@ -66,8 +72,11 @@ function PrintReadyRow({
   onClick: () => void;
   displayExpectedQty?: number;
   showExpectedQty?: boolean;
+  theme?: StationTheme;
 }) {
   const expectedDisplay = displayExpectedQty ?? item.expected_qty;
+  const ui = printQueueTableUi[theme];
+  const reducedMotion = !!useReducedMotion();
 
   return (
     <div
@@ -82,15 +91,15 @@ function PrintReadyRow({
           onClick();
         }
       }}
-      className={`grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-gray-300 px-3 py-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 ${
-        isSelected ? 'bg-indigo-50' : 'bg-white hover:bg-gray-50'
+      className={`grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-gray-300 px-3 py-2.5 transition-colors ${ui.rowFocusRing} ${
+        isSelected ? ui.rowSelected : 'bg-white hover:bg-gray-50'
       }`}
     >
       <div className="flex items-center justify-center">
         <PrintTableCheckbox
           checked={isSelected}
-          stationTheme="lightblue"
-          reducedMotion={false}
+          stationTheme={theme}
+          reducedMotion={reducedMotion}
           disabled={!selectable}
           label={isSelected ? `Deselect ${item.fnsku}` : `Select ${item.fnsku}`}
           onChange={onClick}
@@ -132,6 +141,7 @@ function PrintQueueSection({
   isIndeterminate,
   onToggleAll,
   selectedCount,
+  theme = 'green',
 }: {
   items: EnrichedItem[];
   selectedIds: Set<number>;
@@ -141,7 +151,10 @@ function PrintQueueSection({
   isIndeterminate: boolean;
   onToggleAll: () => void;
   selectedCount: number;
+  theme?: StationTheme;
 }) {
+  const ui = printQueueTableUi[theme];
+  const reducedMotion = !!useReducedMotion();
   return (
     <>
       <div className="sticky top-0 z-20 border-y border-gray-300 bg-white px-3 py-1.5">
@@ -152,13 +165,13 @@ function PrintQueueSection({
                 checked={allSelected}
                 indeterminate={isIndeterminate}
                 onChange={onToggleAll}
-                reducedMotion={false}
-                stationTheme="lightblue"
+                reducedMotion={reducedMotion}
+                stationTheme={theme}
                 className="h-5 w-5"
                 label={allSelected ? 'Deselect all print queue rows' : 'Select all print queue rows'}
               />
             </motion.div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-violet-700">
+            <p className={`text-[10px] font-black uppercase tracking-widest ${ui.toolbarAccent}`}>
               Print Queue ({items.length})
             </p>
           </div>
@@ -182,6 +195,7 @@ function PrintQueueSection({
               isSelected={selectedIds.has(item.item_id)}
               selectable={selectable}
               showExpectedQty={false}
+              theme={theme}
               onClick={() => {
                 if (!selectable) return;
                 onToggleSelection(item);
@@ -202,6 +216,7 @@ function PlanGroupsSection({
   setExpandedPlans,
   onToggleSelection,
   onSetGroupSelection,
+  theme = 'green',
 }: {
   plannedByPlan: PlanGroup[];
   plannedItemsCount: number;
@@ -210,11 +225,14 @@ function PlanGroupsSection({
   setExpandedPlans: Dispatch<SetStateAction<Set<number>>>;
   onToggleSelection: (item: EnrichedItem) => void;
   onSetGroupSelection: (itemIds: number[], shouldSelect: boolean) => void;
+  theme?: StationTheme;
 }) {
+  const ui = printQueueTableUi[theme];
+  const reducedMotion = !!useReducedMotion();
   return (
     <>
       <div className="sticky top-0 z-20 border-y border-gray-300 bg-white px-3 py-1.5">
-        <p className="text-[10px] font-black uppercase tracking-widest text-violet-700">
+        <p className={`text-[10px] font-black uppercase tracking-widest ${ui.toolbarAccent}`}>
           Planned by Plan ({plannedItemsCount})
         </p>
       </div>
@@ -266,7 +284,7 @@ function PlanGroupsSection({
                   togglePlanExpanded();
                 }
               }}
-              className="z-10 flex w-full cursor-pointer items-center justify-between gap-2 border-y border-gray-200 bg-gray-50 px-3 py-1.5 text-left transition-colors hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+              className={`z-10 flex w-full cursor-pointer items-center justify-between gap-2 border-y border-gray-200 bg-gray-50 px-3 py-1.5 text-left transition-colors hover:bg-gray-100 ${ui.rowFocusRing}`}
             >
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div
@@ -280,8 +298,8 @@ function PlanGroupsSection({
                   <PrintTableCheckbox
                     checked={groupAllSelected}
                     indeterminate={groupIndeterminate}
-                    stationTheme="lightblue"
-                    reducedMotion={false}
+                    stationTheme={theme}
+                    reducedMotion={reducedMotion}
                     disabled={selectableItems.length === 0}
                     label={groupAllSelected ? `Deselect all for ${group.plan}` : `Select all for ${group.plan}`}
                     onChange={onToggleGroupSelection}
@@ -295,7 +313,7 @@ function PlanGroupsSection({
                 <motion.span
                   className="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-600"
                   animate={{ rotate: isExpanded ? 180 : 0 }}
-                  transition={{ type: 'spring', stiffness: 440, damping: 30 }}
+                  transition={framerTransition.upNextChevron}
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </motion.span>
@@ -316,6 +334,7 @@ function PlanGroupsSection({
                       selectable={selectable}
                       showExpectedQty
                       displayExpectedQty={getRemainingQty(item)}
+                      theme={theme}
                       onClick={() => {
                         if (!selectable) return;
                         onToggleSelection(item);
@@ -337,6 +356,7 @@ export function FbaPrintReadyTable({
   onSelectionChange,
   fitHeightNoScroll = false,
   staffId = null,
+  stationTheme: theme = 'green',
   activePlanId = null,
 }: Props) {
   const { clearSelection, clearSelectionVersion, setSelection } = useFbaWorkspace();
@@ -361,7 +381,7 @@ export function FbaPrintReadyTable({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/fba/print-queue?status=PLANNED,PACKING,READY_TO_GO,OUT_OF_STOCK,LABEL_ASSIGNED', {
+      const res = await fetch('/api/fba/print-queue?status=PACKING,READY_TO_GO,OUT_OF_STOCK,LABEL_ASSIGNED', {
         cache: 'no-store',
       });
       const data = await res.json();
@@ -639,34 +659,14 @@ export function FbaPrintReadyTable({
   const headerDate = filteredItems[0]?.due_date ? String(filteredItems[0].due_date).slice(0, 10) : basePstKey;
   const totalCount = filteredItems.length;
   const selectedCount = selectedItems.length;
-  const stationsAccent = staffId ? 'text-violet-700' : 'text-emerald-600';
+  const themeAccent = stationThemeColors[theme].text;
 
   if (loading) {
-    return (
-      <div className="flex h-full min-w-0 flex-1 items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-600" />
-          <p className="mt-3 text-xs font-black uppercase tracking-[0.2em] text-gray-700">Loading print-ready items...</p>
-        </div>
-      </div>
-    );
+    return <FbaLoadingState theme={theme} label="Loading print-ready items…" />;
   }
 
   if (error) {
-    return (
-      <div className="flex h-full min-w-0 flex-1 items-center justify-center bg-gray-50">
-        <div className="max-w-sm rounded-2xl border border-red-200 bg-white px-6 py-5 text-center shadow-sm shadow-red-100/70">
-          <p className="text-sm font-semibold text-red-600">{error}</p>
-          <button
-            type="button"
-            onClick={() => void fetchPrintQueue()}
-            className="mt-4 inline-flex items-center justify-center rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-red-700 transition-colors hover:bg-red-100"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
+    return <FbaErrorState message={error} onRetry={() => void fetchPrintQueue()} theme={theme} />;
   }
 
   return (
@@ -675,7 +675,7 @@ export function FbaPrintReadyTable({
         stickyDate={headerDate}
         fallbackDate={formatDateWithOrdinal(basePstKey)}
         count={totalCount}
-        countClassName={stationsAccent}
+        countClassName={themeAccent}
         weekRange={weekRange}
         weekOffset={weekOffset}
         onPrevWeek={() => setWeekOffset((current) => current - 1)}
@@ -694,10 +694,7 @@ export function FbaPrintReadyTable({
 
       <div className={`flex-1 ${fitHeightNoScroll ? 'overflow-hidden' : 'overflow-auto'}`}>
         {printQueueItems.length === 0 && plannedByPlan.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center px-6 py-20 text-center text-gray-500">
-            <p className="text-xs font-black uppercase tracking-[0.3em]">No items this week</p>
-            <p className="mt-1 text-[11px]">Try a different week or plan.</p>
-          </div>
+          <FbaEmptyState title="No items this week" subtitle="Try a different week or plan." />
         ) : (
           <div className="flex flex-col">
             <PrintQueueSection
@@ -709,6 +706,7 @@ export function FbaPrintReadyTable({
               isIndeterminate={printQueueIndeterminate}
               onToggleAll={toggleAllPrintQueue}
               selectedCount={printQueueSelectedCount}
+              theme={theme}
             />
             <PlanGroupsSection
               plannedByPlan={plannedByPlan}
@@ -718,6 +716,7 @@ export function FbaPrintReadyTable({
               setExpandedPlans={setExpandedPlans}
               onToggleSelection={handleToggleSelection}
               onSetGroupSelection={setGroupSelection}
+              theme={theme}
             />
           </div>
         )}
@@ -727,6 +726,5 @@ export function FbaPrintReadyTable({
 }
 
 export type { PrintQueueItem, PrintSelectionPayload } from './types';
-
 
 

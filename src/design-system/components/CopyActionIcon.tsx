@@ -2,6 +2,7 @@
 
 import { useState, type MouseEvent } from 'react';
 import { Check, Copy } from '@/components/Icons';
+import { IconButton } from '../primitives';
 
 interface CopyActionIconProps {
   value: string;
@@ -37,15 +38,14 @@ export function CopyActionIcon({
   };
 
   return (
-    <button
-      type="button"
+    <IconButton
+      icon={copied ? <Check className="h-[14px] w-[14px]" /> : <Copy className="h-[14px] w-[14px]" />}
       onClick={handleClick}
       disabled={!canCopy}
-      className={`text-slate-400 transition-colors duration-100 ease-out hover:text-slate-900 active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${className}`.trim()}
-      aria-label={ariaLabel}
+      className={className}
+      ariaLabel={ariaLabel}
       title={title}
-    >
-      {copied ? <Check className="h-[14px] w-[14px]" /> : <Copy className="h-[14px] w-[14px]" />}
-    </button>
+      tone="neutral"
+    />
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
+import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 
 /**
  * POST /api/fba/shipments/today/items
@@ -97,24 +98,15 @@ export async function POST(request: NextRequest) {
       }
 
       const qty   = Math.max(1, Number(item.expected_qty) || 1);
-      const title = item.product_title ? String(item.product_title).trim() : null;
-      const asin  = item.asin          ? String(item.asin).trim()          : null;
-      const sku   = item.sku           ? String(item.sku).trim()           : null;
-
-      // Try to pull missing metadata from fba_fnskus catalog
-      let catalogTitle = title;
-      let catalogAsin  = asin;
-      let catalogSku   = sku;
-      if (!catalogTitle || !catalogAsin) {
-        const cat = await client.query(
-          `SELECT product_title, asin FROM fba_fnskus WHERE fnsku = $1 LIMIT 1`,
-          [fnsku]
-        );
-        if (cat.rows.length > 0) {
-          catalogTitle = catalogTitle || cat.rows[0].product_title || null;
-          catalogAsin  = catalogAsin  || cat.rows[0].asin          || null;
-        }
-      }
+      const catalogRow = await upsertFnskuCatalogRow(client, {
+        fnsku,
+        productTitle: item.product_title,
+        asin: item.asin,
+        sku: item.sku,
+      });
+      const catalogTitle = catalogRow?.product_title ?? null;
+      const catalogAsin = catalogRow?.asin ?? null;
+      const catalogSku = catalogRow?.sku ?? null;
 
       const itemRes = await client.query(
         `INSERT INTO fba_shipment_items

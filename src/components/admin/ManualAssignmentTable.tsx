@@ -35,13 +35,13 @@ export function ManualAssignmentTable({
   onRowClick,
   renderExpanded,
   loading = false,
-  emptyMessage = 'Select a category or order to view products.',
+  emptyMessage = 'Choose a category or order from the sidebar.',
   getRowKey,
 }: ManualAssignmentTableProps) {
   if (loading) {
     return (
       <div className="flex h-48 items-center justify-center">
-        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading...</p>
+        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading Manual Records...</p>
       </div>
     );
   }
@@ -59,9 +59,9 @@ export function ManualAssignmentTable({
     <div className="w-full">
       {/* Header */}
       <div className="sticky top-0 z-10 grid min-h-[44px] grid-cols-[1fr_2fr_auto] items-end gap-3 border-b border-gray-200 bg-gray-50/90 px-5 pb-2.5 pt-3 backdrop-blur-sm">
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Item #</p>
+        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Item Number</p>
         <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Product</p>
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Manual</p>
+        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Manual Status</p>
       </div>
 
       {/* Rows with inline expansion */}
@@ -112,7 +112,7 @@ export function ManualAssignmentTable({
                       : 'bg-amber-50 text-amber-700 border-amber-200'
                   }`}
                 >
-                  {hasManual ? 'Linked' : 'Missing'}
+                  {hasManual ? 'Linked' : 'Needs Link'}
                 </span>
               </motion.button>
 

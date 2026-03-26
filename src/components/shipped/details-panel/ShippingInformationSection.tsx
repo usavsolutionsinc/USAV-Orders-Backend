@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Copy, ExternalLink, Pencil, Plus, X } from '@/components/Icons';
+import { Check, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, X } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
 import { formatDateTimePST, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
-import { DetailsPanelRow } from '@/components/shipped/details-panel/blocks/DetailsPanelRow';
+import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { InlineSaveIndicator } from '@/design-system/components';
 import { getStaffName } from '@/utils/staff';
+import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 
 export interface EditableShippingFields {
   orderNumber: string;
@@ -538,6 +539,46 @@ function ShippingSerialNumberRow({
   );
 }
 
+export interface PrepackedSkuInfo {
+  staticSku: string;
+  productTitle?: string | null;
+  photos?: string[];
+}
+
+function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
+  const hasPhotos = Array.isArray(sku.photos) && sku.photos.length > 0;
+
+  return (
+    <DetailsPanelRow
+      label="From Prepacked SKU"
+      dividerClassName="border-b border-gray-100"
+      className="!border-b !border-gray-100"
+      actions={
+        hasPhotos ? (
+          <span className="flex items-center gap-1 text-indigo-500 pointer-events-none">
+            <ImageIcon className="w-3 h-3" />
+            <span className="text-[9px] font-black uppercase tracking-wide">{sku.photos!.length} photo{sku.photos!.length !== 1 ? 's' : ''}</span>
+          </span>
+        ) : undefined
+      }
+    >
+      <div className="space-y-1.5">
+        <p className="text-sm font-bold text-indigo-700 font-mono">{sku.staticSku}</p>
+        {sku.productTitle ? (
+          <p className="text-[10px] font-semibold text-gray-500 truncate">{sku.productTitle}</p>
+        ) : null}
+        {hasPhotos && (
+          <PhotoGallery
+            photos={sku.photos!}
+            orderId={sku.staticSku}
+            compact
+          />
+        )}
+      </div>
+    </DetailsPanelRow>
+  );
+}
+
 interface ShippingInformationSectionProps {
   shipped: ShippedOrder;
   copiedAll: boolean;
@@ -548,6 +589,7 @@ interface ShippingInformationSectionProps {
   showShippingTimestamp?: boolean;
   editableShippingFields?: EditableShippingFields;
   metaFields?: ShippingMetaFields;
+  prepackedSku?: PrepackedSkuInfo | null;
 }
 
 export function ShippingInformationSection({
@@ -560,6 +602,7 @@ export function ShippingInformationSection({
   showShippingTimestamp = false,
   editableShippingFields,
   metaFields,
+  prepackedSku,
 }: ShippingInformationSectionProps) {
   const { getExternalUrlByItemNumber } = useExternalItemUrl();
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
@@ -731,6 +774,8 @@ export function ShippingInformationSection({
               onUpdate={onUpdate}
             />
           ) : null}
+
+          {prepackedSku ? <PrepackedSkuRow sku={prepackedSku} /> : null}
 
           {metaFields ? (
             <>

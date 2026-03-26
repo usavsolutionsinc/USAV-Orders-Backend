@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
+import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import StockZohoOrdersTable from '@/components/dashboard/StockZohoOrdersTable';
-import { dispatchCloseShippedDetails } from '@/utils/events';
+import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
 import { fetchPendingOrderRowById, fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
-export interface PendingOrdersTableProps {
+export interface PendingOrdersTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
   testedBy?: number;
+  overridePendingFilter?: PendingStockFilter;
 }
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
@@ -52,6 +54,13 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
 export default function PendingOrdersTable({
   packedBy,
   testedBy,
+  overridePendingFilter,
+  strictSearchScope = false,
+  bannerTitle,
+  bannerSubtitle,
+  searchEmptyTitle,
+  searchResultLabel,
+  clearSearchLabel,
 }: PendingOrdersTableProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
@@ -59,14 +68,15 @@ export default function PendingOrdersTable({
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
   const pendingFilterParam = searchParams.get('pendingFilter');
-  const pendingFilter: PendingStockFilter =
-    pendingFilterParam === 'stock'
-      ? 'stock'
-      : pendingFilterParam === 'pending'
-        ? 'pending'
-        : 'all';
-  const shippedRedirectAttemptRef = useRef<string>('');
-  const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy }] as const;
+  const pendingFilter: PendingStockFilter = overridePendingFilter
+    ?? (
+      pendingFilterParam === 'stock'
+        ? 'stock'
+        : pendingFilterParam === 'pending'
+          ? 'pending'
+          : 'all'
+    );
+  const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy, strictSearchScope }] as const;
 
   const query = useQuery({
     queryKey,
@@ -74,6 +84,7 @@ export default function PendingOrdersTable({
       searchQuery,
       packedBy,
       testedBy,
+      strictSearchScope,
     }),
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
@@ -153,55 +164,6 @@ export default function PendingOrdersTable({
     },
     true,
   );
-
-  useEffect(() => {
-    if (pendingFilter === 'stock') return;
-    if ((pathname || '/dashboard') !== '/dashboard') return;
-    if (!searchQuery) {
-      shippedRedirectAttemptRef.current = '';
-      return;
-    }
-    if (query.isLoading || query.isFetching) return;
-    if ((query.data || []).length > 0) return;
-    if (shippedRedirectAttemptRef.current === searchQuery) return;
-
-    let cancelled = false;
-
-    const redirectToShippedIfNeeded = async () => {
-      shippedRedirectAttemptRef.current = searchQuery;
-      try {
-        const params = new URLSearchParams({ q: searchQuery });
-        const response = await fetch(`/api/shipped?${params.toString()}`);
-        if (!response.ok || cancelled) return;
-        const json = await response.json();
-        const records = Array.isArray(json?.results)
-          ? json.results
-          : Array.isArray(json?.shipped)
-            ? json.shipped
-            : [];
-        if (!records.length || cancelled) return;
-
-        const nextParams = new URLSearchParams(searchParams.toString());
-        nextParams.delete('pending');
-        nextParams.delete('unshipped');
-        nextParams.set('shipped', '');
-        nextParams.set('search', searchQuery);
-        if (records.length === 1) nextParams.set('openOrderId', String(records[0].id));
-        else nextParams.delete('openOrderId');
-
-        const nextSearch = nextParams.toString();
-        router.replace(nextSearch ? `/dashboard?${nextSearch}` : '/dashboard');
-      } catch {
-        // Leave the pending empty state in place if the shipped lookup fails.
-      }
-    };
-
-    void redirectToShippedIfNeeded();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname, pendingFilter, query.data, query.isFetching, query.isLoading, router, searchParams, searchQuery]);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -284,7 +246,7 @@ export default function PendingOrdersTable({
       window.removeEventListener('dashboard-pending-order-refetch' as any, handlePendingOrderRefetch as any);
       window.removeEventListener('order-assignment-updated' as any, handleAssignmentUpdated as any);
     };
-  }, [queryClient, packedBy, searchQuery, testedBy]);
+  }, [queryClient, packedBy, searchQuery, strictSearchScope, testedBy]);
 
   const clearSearch = () => {
     const params = new URLSearchParams(searchParams.toString());
@@ -298,6 +260,15 @@ export default function PendingOrdersTable({
   const pendingUntestedRecords = allPendingRecords.filter(
     (record) => !Boolean((record as any).has_tech_scan)
   );
+  const pendingSearchEmptyTitle =
+    searchEmptyTitle
+      ?? (pendingFilter === 'all' ? 'No pending orders found' : 'No pending untested orders found');
+  const pendingSearchResultLabel =
+    searchResultLabel
+      ?? (pendingFilter === 'all' ? 'pending orders' : 'pending untested orders');
+  const pendingClearSearchLabel =
+    clearSearchLabel
+      ?? (pendingFilter === 'all' ? 'Show All Pending Orders' : 'Show All Pending Untested Orders');
 
   if (pendingFilter === 'stock') {
     return (
@@ -316,9 +287,14 @@ export default function PendingOrdersTable({
       searchValue={searchQuery}
       onClearSearch={clearSearch}
       emptyMessage={pendingFilter === 'all' ? 'No pending orders found' : 'No pending untested orders found'}
+      searchEmptyTitle={pendingSearchEmptyTitle}
+      searchResultLabel={pendingSearchResultLabel}
+      clearSearchLabel={pendingClearSearchLabel}
+      bannerTitle={bannerTitle}
+      bannerSubtitle={bannerSubtitle}
       useWaForDisplay
       onOpenRecord={(record) => {
-        window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: record }));
+        dispatchOpenShippedDetails(record, 'queue');
       }}
       onCloseRecord={() => {
         dispatchCloseShippedDetails();

@@ -14,13 +14,12 @@ export async function GET(req: NextRequest) {
 
   const today = getCurrentPSTDateKey();
   const isHistoricalWeek = Boolean(weekEnd && weekEnd < today);
-  const cacheTTL = isHistoricalWeek ? 86400 : 0;
-  const cacheHeaders = isHistoricalWeek
-    ? { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` }
-    : { 'Cache-Control': 'no-store' };
+  // Current week: 120s TTL (matches packerlogs). Historical weeks: 24h.
+  const cacheTTL = isHistoricalWeek ? 86400 : 120;
+  const cacheHeaders = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` };
 
   try {
-    const cached = isHistoricalWeek ? await getCachedJson<any[]>('api:tech-logs', cacheLookup) : null;
+    const cached = await getCachedJson<any[]>('api:tech-logs', cacheLookup);
     if (cached) {
       return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...cacheHeaders } });
     }
@@ -378,9 +377,7 @@ export async function GET(req: NextRequest) {
       params,
     );
 
-    if (isHistoricalWeek) {
-      await setCachedJson('api:tech-logs', cacheLookup, result.rows, cacheTTL, ['tech-logs']);
-    }
+    await setCachedJson('api:tech-logs', cacheLookup, result.rows, cacheTTL, ['tech-logs']);
     return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS', ...cacheHeaders } });
   } catch (error: any) {
     console.error('Error fetching tech logs:', error);

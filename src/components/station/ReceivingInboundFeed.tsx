@@ -106,8 +106,8 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    refetchInterval: 30_000,
-    staleTime: 20_000,
+    refetchInterval: 60_000,
+    staleTime: 45_000,
   });
 
   const needsTesting = allLogs.filter((l) => l.needs_test);

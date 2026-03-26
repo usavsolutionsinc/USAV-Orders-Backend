@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllShippedOrders, updateShippedOrderField, searchShippedOrders } from '@/lib/neon/orders-queries';
+import { getAllShippedOrders, updateShippedOrderField, searchShippedOrders, type ShippedFilterMode } from '@/lib/neon/orders-queries';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
+import { logRouteMetric } from '@/lib/route-metrics';
 
 const CACHE_HEADERS = {
   'Cache-Control': 'private, max-age=300, stale-while-revalidate=60',
@@ -14,6 +15,9 @@ const CACHE_HEADERS = {
  * remains lightweight for dashboard views.
  */
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
+  let ok = false;
+  let cache = 'BYPASS';
   try {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('q');
@@ -24,6 +28,12 @@ export async function GET(req: NextRequest) {
     const packedBy = searchParams.get('packedBy') || '';
     const testedBy = searchParams.get('testedBy') || '';
     const missingTrackingOnly = searchParams.get('missingTrackingOnly') === 'true';
+    const rawShippedFilter = searchParams.get('shippedFilter') || '';
+    const shippedFilter: ShippedFilterMode =
+      rawShippedFilter === 'orders' ? 'orders'
+      : rawShippedFilter === 'fba' ? 'fba'
+      : rawShippedFilter === 'sku' ? 'sku'
+      : 'all';
     const cacheLookup = createCacheLookupKey({
       query: query || '',
       page,
@@ -33,15 +43,18 @@ export async function GET(req: NextRequest) {
       packedBy,
       testedBy,
       missingTrackingOnly,
+      shippedFilter,
     });
 
     const cached = await getCachedJson<any>('api:shipped', cacheLookup);
     if (cached) {
+      ok = true;
+      cache = 'HIT';
       return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
     }
 
     if (query) {
-      let results = await searchShippedOrders(query);
+      let results = await searchShippedOrders(query, { shippedFilter });
       const packedById = packedBy ? Number(packedBy) : null;
       const testedById = testedBy ? Number(testedBy) : null;
 
@@ -62,6 +75,8 @@ export async function GET(req: NextRequest) {
         query
       };
       await setCachedJson('api:shipped', cacheLookup, payload, 300, ['shipped']);
+      ok = true;
+      cache = 'MISS';
       return NextResponse.json(payload, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     }
 
@@ -76,6 +91,7 @@ export async function GET(req: NextRequest) {
       packedBy: Number.isFinite(packedById) ? packedById : null,
       testedBy: Number.isFinite(testedById) ? testedById : null,
       missingTrackingOnly,
+      shippedFilter,
     });
 
     const payload = {
@@ -87,6 +103,8 @@ export async function GET(req: NextRequest) {
       weekEnd: weekEnd || null,
     };
     await setCachedJson('api:shipped', cacheLookup, payload, 300, ['shipped']);
+    ok = true;
+    cache = 'MISS';
     return NextResponse.json(payload, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
   } catch (error: any) {
     console.error('Error in GET /api/shipped:', error);
@@ -94,6 +112,14 @@ export async function GET(req: NextRequest) {
       { error: 'Failed to fetch shipped records', details: error.message },
       { status: 500 }
     );
+  } finally {
+    logRouteMetric({
+      route: '/api/shipped',
+      method: 'GET',
+      startedAt,
+      ok,
+      details: { cache },
+    });
   }
 }
 
@@ -101,6 +127,8 @@ export async function GET(req: NextRequest) {
  * PATCH /api/shipped - Update status or fields
  */
 export async function PATCH(req: NextRequest) {
+  const startedAt = Date.now();
+  let ok = false;
   try {
     const body = await req.json();
     const { id, status, field, value } = body;
@@ -118,6 +146,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     await invalidateCacheTags(['shipped', 'orders']);
+    ok = true;
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error in PATCH /api/shipped:', error);
@@ -125,5 +154,12 @@ export async function PATCH(req: NextRequest) {
       { error: 'Failed to update shipped record', details: error.message },
       { status: 500 }
     );
+  } finally {
+    logRouteMetric({
+      route: '/api/shipped',
+      method: 'PATCH',
+      startedAt,
+      ok,
+    });
   }
 }

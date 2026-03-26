@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
+import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 
 function parseOptionalStaffId(value: unknown): number | null {
   const parsed = Number(value);
@@ -229,24 +230,15 @@ export async function POST(request: NextRequest) {
     for (const item of incomingItems) {
       if (!item.fnsku?.trim()) continue;
 
-      // Try to pull product metadata from fba_fnskus if not provided
-      let productTitle = item.product_title || null;
-      let asin = item.asin || null;
-      let sku = item.sku || null;
-
-      if (!productTitle) {
-        const lookup = await client.query(
-          `SELECT product_title, asin, sku FROM fba_fnskus
-           WHERE UPPER(TRIM(COALESCE(fnsku,''))) = UPPER(TRIM($1))
-           LIMIT 1`,
-          [item.fnsku.trim()]
-        );
-        if (lookup.rows[0]) {
-          productTitle = lookup.rows[0].product_title;
-          asin = lookup.rows[0].asin;
-          sku = lookup.rows[0].sku;
-        }
-      }
+      const catalogRow = await upsertFnskuCatalogRow(client, {
+        fnsku: item.fnsku,
+        productTitle: item.product_title,
+        asin: item.asin,
+        sku: item.sku,
+      });
+      const productTitle = catalogRow?.product_title ?? null;
+      const asin = catalogRow?.asin ?? null;
+      const sku = catalogRow?.sku ?? null;
 
       const itemRes = await client.query(
         `INSERT INTO fba_shipment_items

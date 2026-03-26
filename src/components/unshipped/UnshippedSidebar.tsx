@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
 import { Plus } from '@/components/Icons';
+import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { AwaitingEbayPanel } from '@/components/unshipped/AwaitingEbayPanel';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
@@ -19,6 +20,7 @@ interface UnshippedSidebarProps {
   hideSectionHeader?: boolean;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  onOpenShippedMatches?: (searchQuery: string) => void;
 }
 
 interface SearchHistory {
@@ -40,6 +42,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     hideSectionHeader = false,
     searchValue = '',
     onSearchChange,
+    onOpenShippedMatches,
   } = props;
   const [searchQuery, setSearchQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
@@ -195,6 +198,10 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
               setSearchQuery(query);
               handleSearch(query);
             }}
+          />
+          <DashboardShippedSearchHandoffCard
+            searchQuery={searchQuery}
+            onOpenShippedMatches={onOpenShippedMatches}
           />
         </motion.div>
 

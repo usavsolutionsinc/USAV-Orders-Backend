@@ -41,8 +41,8 @@ export function ZohoInboundStatusBanner() {
       const res = await fetch('/api/zoho/health');
       return res.json();
     },
-    staleTime: 15_000,
-    refetchInterval: 15_000,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 
   const syncMutation = useMutation({

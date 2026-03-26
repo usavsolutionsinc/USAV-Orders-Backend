@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getCurrentPSTDateKey, normalizePSTTimestamp, toPSTDateKey } from '@/utils/date';
+import { logRouteMetric } from '@/lib/route-metrics';
 
 interface RecentOrder {
   id: number;
@@ -30,6 +31,8 @@ interface DateGroup {
  * grouped by creation date descending. Used by ManualAssignmentSidebarPanel.
  */
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
+  let ok = false;
   try {
     const { searchParams } = new URL(req.url);
     const days = Math.min(Math.max(parseInt(searchParams.get('days') || '7', 10), 1), 60);
@@ -121,9 +124,17 @@ export async function GET(req: NextRequest) {
       return { date, label, orders: dateOrders };
     });
 
+    ok = true;
     return NextResponse.json({ groups, total: orders.length });
   } catch (err) {
     console.error('[/api/orders/recent] Error:', err);
     return NextResponse.json({ error: 'Failed to fetch recent orders' }, { status: 500 });
+  } finally {
+    logRouteMetric({
+      route: '/api/orders/recent',
+      method: 'GET',
+      startedAt,
+      ok,
+    });
   }
 }

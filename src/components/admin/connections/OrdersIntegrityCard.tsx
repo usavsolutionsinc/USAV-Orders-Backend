@@ -149,8 +149,8 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
       />
 
       <div className={embedded ? 'border-b border-gray-200 pb-3' : ''}>
-        <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Orders Integrity</h2>
-        <p className="text-[9px] font-bold text-gray-500 mt-1">Primary flow: eBay tracking-match sync, Ecwid exception sync, then exception reconciliation</p>
+        <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Order Sync Health</h2>
+        <p className="text-[9px] font-bold text-gray-500 mt-1">Run the eBay sync, Ecwid exception sync, exception cleanup, and ShipStation upload from one place.</p>
       </div>
 
       <div className="overflow-x-auto">
@@ -161,7 +161,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
             className="flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isFullSyncRunning ? 'animate-spin' : ''}`} />
-            {isFullSyncRunning ? 'Running...' : 'Run Full Integrity'}
+            {isFullSyncRunning ? 'Running...' : 'Run Full Sync'}
           </button>
           <button
             onClick={() => ebaySyncMutation.mutate()}
@@ -169,7 +169,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${ebaySyncMutation.isPending ? 'animate-spin' : ''}`} />
-            {ebaySyncMutation.isPending ? 'Running...' : 'eBay'}
+            {ebaySyncMutation.isPending ? 'Running...' : 'Sync eBay'}
           </button>
           <button
             onClick={() => ecwidExceptionTrackingMutation.mutate()}
@@ -177,7 +177,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
             className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${ecwidExceptionTrackingMutation.isPending ? 'animate-spin' : ''}`} />
-            {ecwidExceptionTrackingMutation.isPending ? 'Running...' : 'Ecwid'}
+            {ecwidExceptionTrackingMutation.isPending ? 'Running...' : 'Sync Ecwid'}
           </button>
           <button
             onClick={() => exceptionsSyncMutation.mutate()}
@@ -185,7 +185,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${exceptionsSyncMutation.isPending ? 'animate-spin' : ''}`} />
-            {exceptionsSyncMutation.isPending ? 'Checking...' : 'Exceptions'}
+            {exceptionsSyncMutation.isPending ? 'Checking...' : 'Clear Exceptions'}
           </button>
           <button
             onClick={() => setIsShipStationInfoOpen(true)}
@@ -206,7 +206,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
 
       {/* Token refresh row */}
       <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-t border-gray-100 pt-4">
-        <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Token Refresh</div>
+        <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500">eBay Token Refresh</div>
         {tokenAccounts.length === 0 ? (
           <div className="text-[9px] font-bold uppercase tracking-widest text-green-700 bg-green-50 border border-green-200 px-2 py-1">
             All Tokens Healthy
@@ -238,8 +238,8 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
           <button className="absolute inset-0 bg-black/30" onClick={() => setIsShipStationInfoOpen(false)} aria-label="Close" />
           <div className="relative w-full max-w-md bg-white border border-gray-200 shadow-xl p-5 space-y-4">
             <div>
-              <h3 className="text-xs font-black uppercase tracking-widest text-gray-900">ShipStation CSV Upload</h3>
-              <p className="text-[10px] font-bold text-gray-600 mt-2">Upload a ShipStation CSV export to import orders and update tracking data. This action requires selecting a local CSV file.</p>
+              <h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Upload ShipStation CSV</h3>
+              <p className="text-[10px] font-bold text-gray-600 mt-2">Choose a ShipStation CSV export to import orders and refresh tracking data.</p>
             </div>
             <div className="flex items-center justify-end gap-2">
               <button onClick={() => setIsShipStationInfoOpen(false)} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-600 bg-gray-100 hover:bg-gray-200">Cancel</button>
@@ -248,7 +248,7 @@ export function OrdersIntegrityCard({ embedded = false }: { embedded?: boolean }
                 disabled={anyPending}
                 className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
               >
-                {isShipStationSyncing ? 'Uploading...' : 'Choose CSV'}
+                {isShipStationSyncing ? 'Uploading...' : 'Choose File'}
               </button>
             </div>
           </div>

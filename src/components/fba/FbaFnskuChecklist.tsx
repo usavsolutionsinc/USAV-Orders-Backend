@@ -5,7 +5,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, X, Plus, Minus, Loader2, Package, AlertCircle, ChevronRight, Pencil } from '@/components/Icons';
 import { useFbaWorkspace } from '@/contexts/FbaWorkspaceContext';
 import { FnskuChip } from '@/components/ui/CopyChip';
+import { emitOpenQuickAddFnsku, FBA_FNSKU_SAVED_EVENT } from '@/components/fba/FbaQuickAddFnskuModal';
 import {
+  fbaSidebarThemeChrome,
   getStaffThemeById,
   getStaffThemeByName,
   stationThemeColors,
@@ -41,6 +43,54 @@ interface PlanItem {
   ready_by_name: string | null;
   verified_by_staff_id: number | null;
   verified_by_name: string | null;
+}
+
+interface StoredPlanSelectionEntry {
+  itemId: number | null;
+  fnsku: string;
+}
+
+const PRINT_QUEUE_STATUSES = new Set(['PACKING', 'READY_TO_GO', 'OUT_OF_STOCK', 'LABEL_ASSIGNED', 'SHIPPED']);
+
+function getPlanSelectionStorageKey(planId: number) {
+  return `fba-plan-checklist-selection:${planId}`;
+}
+
+function normalizePlanItemStatus(status: string | null | undefined) {
+  return String(status || '').trim().toUpperCase();
+}
+
+function isPlanChecklistVisibleItem(item: Pick<PlanItem, 'status'>) {
+  return !PRINT_QUEUE_STATUSES.has(normalizePlanItemStatus(item.status));
+}
+
+function readStoredPlanSelection(planId: number): StoredPlanSelectionEntry[] {
+  try {
+    const raw = localStorage.getItem(getPlanSelectionStorageKey(planId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => ({
+        itemId: Number.isFinite(Number(entry?.itemId)) ? Number(entry.itemId) : null,
+        fnsku: String(entry?.fnsku || '').trim().toUpperCase(),
+      }))
+      .filter((entry) => entry.itemId != null || entry.fnsku);
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredPlanSelection(planId: number, entries: StoredPlanSelectionEntry[]) {
+  try {
+    if (entries.length === 0) {
+      localStorage.removeItem(getPlanSelectionStorageKey(planId));
+      return;
+    }
+    localStorage.setItem(getPlanSelectionStorageKey(planId), JSON.stringify(entries));
+  } catch {
+    /* no-op */
+  }
 }
 
 function planItemToSidebarEnriched(
@@ -252,6 +302,7 @@ export function FbaFnskuChecklist({
   const stationTheme = useMemo(() => getStaffThemeById(staffId, staffRole), [staffId, staffRole]);
   const themeColors = stationThemeColors[stationTheme];
   const checklistChrome = fbaFnskuChecklistChrome[stationTheme];
+  const sidebarChrome = fbaSidebarThemeChrome[stationTheme];
   const printUi = printQueueTableUi[stationTheme];
 
   // Draft state
@@ -298,7 +349,7 @@ export function FbaFnskuChecklist({
     setDraftLoading(true);
 
     Promise.all([
-      fetch(`/api/fba/fnskus/validate?fnskus=${encodeURIComponent(fnskus.join(','))}`).then((r) => r.json()),
+      fetch(`/api/fba/fnskus/validate?fnskus=${encodeURIComponent(fnskus.join(','))}&persist_missing=1`).then((r) => r.json()),
       fetch('/api/fba/shipments/today').then((r) => r.json()),
     ])
       .then(([validateData, todayData]) => {
@@ -464,7 +515,7 @@ export function FbaFnskuChecklist({
   const removeDraftItem = (fnsku: string) => setDraftItems((prev) => prev.filter((i) => i.fnsku !== fnsku));
 
   // ── Draft: add to today's plan ───────────────────────────────────────────
-  const newDraftItems = draftItems.filter((i) => i.found && !i.alreadyInPlan);
+  const newDraftItems = draftItems.filter((i) => !i.alreadyInPlan);
   const alreadyInPlanCount = draftItems.filter((i) => i.alreadyInPlan).length;
   const notFoundCount = draftItems.filter((i) => !i.found).length;
 
@@ -495,6 +546,10 @@ export function FbaFnskuChecklist({
 
   // ── Computed IDs ────────────────────────────────────────────────────────
   const activePlanId = planId ?? todayPlanId;
+  const visiblePlanItems = useMemo(
+    () => planItems.filter((item) => isPlanChecklistVisibleItem(item)),
+    [planItems]
+  );
 
   // ── Bulk-assign event (fired by sidebar) ─────────────────────────────────
   useEffect(() => {
@@ -599,24 +654,47 @@ export function FbaFnskuChecklist({
   const normalizedFilter = (statusFilter || 'ALL').toUpperCase();
   const filteredPlanItems = useMemo(() => {
     if (!isViewMode) return planItems;
-    if (normalizedFilter === 'ALL') return planItems;
-    return planItems.filter((i) => {
+    if (normalizedFilter === 'ALL') return visiblePlanItems;
+    return visiblePlanItems.filter((i) => {
       if (normalizedFilter === 'READY_TO_GO') return i.status === 'READY_TO_GO' || i.status === 'SHIPPED';
       return i.status === normalizedFilter;
     });
-  }, [isViewMode, planItems, normalizedFilter]);
+  }, [isViewMode, planItems, normalizedFilter, visiblePlanItems]);
 
   useEffect(() => {
-    setSidebarSelectionIds(new Set());
-  }, [activePlanId]);
+    if (!isViewMode || !activePlanId) {
+      setSidebarSelectionIds(new Set());
+      return;
+    }
+    const visibleIds = new Set(visiblePlanItems.map((item) => item.id));
+    const firstVisibleIdByFnsku = new Map<string, number>();
+    visiblePlanItems.forEach((item) => {
+      const normalizedFnsku = String(item.fnsku || '').trim().toUpperCase();
+      if (normalizedFnsku && !firstVisibleIdByFnsku.has(normalizedFnsku)) {
+        firstVisibleIdByFnsku.set(normalizedFnsku, item.id);
+      }
+    });
+
+    const restoredIds = new Set<number>();
+    readStoredPlanSelection(activePlanId).forEach((entry) => {
+      if (entry.itemId != null && visibleIds.has(entry.itemId)) {
+        restoredIds.add(entry.itemId);
+        return;
+      }
+      const fallbackId = firstVisibleIdByFnsku.get(entry.fnsku);
+      if (fallbackId != null) restoredIds.add(fallbackId);
+    });
+    setSidebarSelectionIds(restoredIds);
+  }, [activePlanId, isViewMode, visiblePlanItems]);
 
   useEffect(() => {
-    const valid = new Set(planItems.map((i) => i.id));
+    if (!isViewMode || !activePlanId) return;
+    const visibleIds = new Set(visiblePlanItems.map((item) => item.id));
     setSidebarSelectionIds((prev) => {
-      const next = new Set(Array.from(prev).filter((id) => valid.has(id)));
+      const next = new Set(Array.from(prev).filter((id) => visibleIds.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [planItems]);
+  }, [activePlanId, isViewMode, visiblePlanItems]);
 
   const buildSidebarSelectionPayload = useCallback((selectionIds: Set<number>): PrintSelectionPayload => {
     if (!isViewMode || !activePlanId) {
@@ -630,7 +708,7 @@ export function FbaFnskuChecklist({
       };
     }
 
-    const selected = planItems.filter((i) => selectionIds.has(i.id));
+    const selected = visiblePlanItems.filter((i) => selectionIds.has(i.id));
     const enriched = selected.map((i) =>
       planItemToSidebarEnriched(i, activePlanId, planRef, planDueDate, planAmazonShipmentId, planTrackingNumbers)
     );
@@ -649,7 +727,7 @@ export function FbaFnskuChecklist({
       pendingCount,
       needsPrintCount,
     };
-  }, [isViewMode, activePlanId, planItems, planRef, planDueDate, planAmazonShipmentId, planTrackingNumbers]);
+  }, [isViewMode, activePlanId, visiblePlanItems, planRef, planDueDate, planAmazonShipmentId, planTrackingNumbers]);
 
   const toggleSidebarLineImmediate = useCallback((itemId: number) => {
     setSidebarSelectionIds((prev) => {
@@ -679,11 +757,49 @@ export function FbaFnskuChecklist({
   }, [buildSidebarSelectionPayload, setSelection, sidebarSelectionIds]);
 
   useEffect(() => {
+    if (!isViewMode || !activePlanId) return;
+    const entries = visiblePlanItems
+      .filter((item) => sidebarSelectionIds.has(item.id))
+      .map((item) => ({
+        itemId: item.id,
+        fnsku: String(item.fnsku || '').trim().toUpperCase(),
+      }));
+    writeStoredPlanSelection(activePlanId, entries);
+  }, [activePlanId, isViewMode, sidebarSelectionIds, visiblePlanItems]);
+
+  useEffect(() => {
     if (clearSelectionVersion === 0) return;
+    if (activePlanId) writeStoredPlanSelection(activePlanId, []);
     setSidebarSelectionIds(new Set());
-  }, [clearSelectionVersion]);
+  }, [activePlanId, clearSelectionVersion]);
 
   useEffect(() => () => clearSelection(selectionOwnerRef.current), [clearSelection]);
+
+  useEffect(() => {
+    const handleSavedFnsku = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        fnsku?: string;
+        product_title?: string | null;
+        asin?: string | null;
+      }>).detail;
+      const normalizedFnsku = String(detail?.fnsku || '').trim().toUpperCase();
+      if (!normalizedFnsku) return;
+      setDraftItems((prev) =>
+        prev.map((item) =>
+          item.fnsku === normalizedFnsku
+            ? {
+                ...item,
+                found: true,
+                product_title: detail?.product_title ?? item.product_title,
+                asin: detail?.asin ?? item.asin,
+              }
+            : item,
+        ),
+      );
+    };
+    window.addEventListener(FBA_FNSKU_SAVED_EVENT, handleSavedFnsku as EventListener);
+    return () => window.removeEventListener(FBA_FNSKU_SAVED_EVENT, handleSavedFnsku as EventListener);
+  }, []);
 
   // ── Success screen ───────────────────────────────────────────────────────
   if (created) {
@@ -723,18 +839,22 @@ export function FbaFnskuChecklist({
   const headerSubtitle = loading
     ? isDraftMode ? `Validating ${fnskus.length} FNSKUs…` : 'Loading…'
     : isDraftMode
-      ? `${draftItems.length} FNSKUs · ${newDraftItems.length} new${alreadyInPlanCount > 0 ? ` · ${alreadyInPlanCount} already planned` : ''}${notFoundCount > 0 ? ` · ${notFoundCount} not in catalog` : ''}`
-      : `${filteredPlanItems.length}${filteredPlanItems.length !== planItems.length ? `/${planItems.length}` : ''} items${planDueDate ? ` · Due ${new Date(planDueDate).toLocaleDateString()}` : ''}${filterLabel}`;
+      ? `${draftItems.length} FNSKUs · ${newDraftItems.length} queued for add${alreadyInPlanCount > 0 ? ` · ${alreadyInPlanCount} already planned` : ''}${notFoundCount > 0 ? ` · ${notFoundCount} need details` : ''}`
+      : `${filteredPlanItems.length}${filteredPlanItems.length !== visiblePlanItems.length ? `/${visiblePlanItems.length}` : ''} items${planDueDate ? ` · Due ${new Date(planDueDate).toLocaleDateString()}` : ''}${filterLabel}`;
   const emptyTitle = isDraftMode
     ? 'Nothing to review'
     : isTodayMode
       ? 'Today’s plan is clear'
-      : 'No matching items';
+      : visiblePlanItems.length === 0 && planItems.length > 0
+        ? 'Everything is already in print queue'
+        : 'No matching items';
   const emptyDescription = isDraftMode
     ? 'Paste FNSKUs from the sidebar to validate and queue them for today.'
     : isTodayMode
       ? 'Paste FNSKUs in the sidebar to start building today’s plan.'
-      : 'Change the filter or return to the full shipment plan.';
+      : visiblePlanItems.length === 0 && planItems.length > 0
+        ? 'Plan-stage rows are hidden once they move into the print queue. Open Print queue to keep working those items.'
+        : 'Change the filter or return to the full shipment plan.';
 
   return (
     <>
@@ -818,7 +938,7 @@ export function FbaFnskuChecklist({
               <PrintTableCheckbox
                 checked={sidebarAllFilteredSelected}
                 indeterminate={sidebarSomeFilteredSelected}
-                stationTheme="lightblue"
+                stationTheme={stationTheme}
                 reducedMotion={false}
                 label={
                   sidebarAllFilteredSelected
@@ -836,7 +956,7 @@ export function FbaFnskuChecklist({
             {isViewMode && <p className="w-[7.5rem] text-center text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">Print queue</p>}
           </div>
           {isViewMode && sidebarSelectionIds.size > 0 ? (
-            <p className="ml-auto shrink-0 text-[9px] font-black uppercase tracking-[0.16em] text-sky-600">
+            <p className={`ml-auto shrink-0 ${sidebarChrome.selectedCountText}`}>
               {sidebarSelectionIds.size} selected
             </p>
           ) : null}
@@ -871,8 +991,26 @@ export function FbaFnskuChecklist({
                   exit="exit"
                   transition={{ delay: idx * 0.03 }}
                   layout
-                  className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-zinc-100 px-4 py-3 transition-colors hover:bg-stone-50 ${item.alreadyInPlan ? 'opacity-50' : !item.found ? 'opacity-60' : ''}`}
+                  className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-zinc-100 px-4 py-3 transition-colors hover:bg-stone-50 ${item.alreadyInPlan ? 'opacity-50' : !item.found ? 'bg-amber-50/20' : ''}`}
                 >
+                  <div className="flex w-9 shrink-0 items-center justify-center">
+                    {!item.found ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          emitOpenQuickAddFnsku({
+                            fnsku: item.fnsku,
+                            product_title: item.product_title,
+                          })
+                        }
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 ${printUi.rowFocusRing}`}
+                        title={`Add details for ${item.fnsku}`}
+                        aria-label={`Add details for ${item.fnsku}`}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
                   {/* Left: Title */}
                   <div className="min-w-0 flex flex-col">
                     <div className="flex min-w-0 items-center gap-1.5">
@@ -887,13 +1025,15 @@ export function FbaFnskuChecklist({
                         </span>
                       )}
                       {!item.found && !item.alreadyInPlan && (
-                        <span className="shrink-0 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1 text-[8px] font-black uppercase tracking-[0.14em] text-zinc-500">
-                          Not in catalog
+                        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[8px] font-black uppercase tracking-[0.14em] text-amber-700">
+                          Needs details
                         </span>
                       )}
                     </div>
                     <div className="mt-1 truncate text-[10px] font-medium text-zinc-500">
-                      {[item.asin].filter(Boolean).join(' · ') || 'No metadata'}
+                      {item.found
+                        ? [item.asin].filter(Boolean).join(' · ') || 'No metadata'
+                        : 'You can still add this now and complete product details later.'}
                     </div>
                   </div>
 
@@ -904,7 +1044,7 @@ export function FbaFnskuChecklist({
                       value={item.qty}
                       onMinus={() => adjustDraftQty(item.fnsku, -1)}
                       onPlus={() => adjustDraftQty(item.fnsku, 1)}
-                      disabled={item.alreadyInPlan || !item.found}
+                      disabled={item.alreadyInPlan}
                       focusRingClassName={printUi.rowFocusRing}
                     />
                     <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => removeDraftItem(item.fnsku)}
@@ -933,7 +1073,7 @@ export function FbaFnskuChecklist({
                     onClick={() => toggleSidebarLineImmediate(item.id)}
                     className={`border-b border-zinc-100 transition-colors hover:bg-stone-50 ${
                       isSidebarSelected
-                        ? 'border-l-4 border-l-sky-400 bg-sky-50/70'
+                        ? sidebarChrome.selectedRow
                         : isCompleted
                           ? 'bg-emerald-50/30'
                           : 'bg-white'
@@ -947,7 +1087,7 @@ export function FbaFnskuChecklist({
                       >
                         <PrintTableCheckbox
                           checked={sidebarSelectionIds.has(item.id)}
-                          stationTheme="lightblue"
+                          stationTheme={stationTheme}
                           reducedMotion={false}
                           label={
                             sidebarSelectionIds.has(item.id)

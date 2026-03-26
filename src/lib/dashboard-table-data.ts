@@ -28,10 +28,12 @@ export async function fetchPendingOrdersData({
   searchQuery = '',
   packedBy,
   testedBy,
+  strictSearchScope = false,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
+  strictSearchScope?: boolean;
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) {
@@ -44,7 +46,7 @@ export async function fetchPendingOrdersData({
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
 
   const url = params.toString() ? `/api/orders?${params.toString()}` : '/api/orders';
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error('Failed to fetch pending orders');
   }
@@ -55,7 +57,8 @@ export async function fetchPendingOrdersData({
   // with no label is still discoverable from the pending view search bar.
   // Without a search query the view is scoped to label-assigned orders only
   // (those with a shipment_id); no-label orders belong in the unshipped view.
-  return searchQuery.trim() ? records : records.filter((record) => record.shipment_id != null);
+  if (searchQuery.trim() && !strictSearchScope) return records;
+  return records.filter((record) => record.shipment_id != null);
 }
 
 /** One pending-queue row by DB order id (bypasses list cache on the server). */
@@ -72,7 +75,7 @@ export async function fetchPendingOrderRowById(
   if (options.packedBy !== undefined) params.set('packedBy', String(options.packedBy));
   if (options.testedBy !== undefined) params.set('testedBy', String(options.testedBy));
 
-  const res = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
+  const res = await fetch(`/api/orders?${params.toString()}`);
   if (!res.ok) return null;
   const data = await res.json();
   const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
@@ -80,14 +83,43 @@ export async function fetchPendingOrderRowById(
   return visible[0] ?? null;
 }
 
+export async function fetchDashboardOrderRowById(orderId: number): Promise<ShippedOrder | null> {
+  if (!Number.isFinite(orderId) || orderId <= 0) return null;
+
+  const params = new URLSearchParams();
+  params.set('orderId', String(orderId));
+  params.set('includeShipped', 'true');
+
+  const res = await fetch(`/api/orders?${params.toString()}`);
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  const orderRecord = records[0] ?? null;
+  if (!orderRecord) return null;
+
+  const shippedSearchKey = String(orderRecord.order_id || orderId).trim();
+  if (!shippedSearchKey) return orderRecord;
+
+  try {
+    const shippedResults = await fetchDashboardShippedData({ searchQuery: shippedSearchKey });
+    const exact = shippedResults.find((record) => Number(record.id) === orderId);
+    return exact ?? orderRecord;
+  } catch {
+    return orderRecord;
+  }
+}
+
 export async function fetchUnshippedOrdersData({
   searchQuery = '',
   packedBy,
   testedBy,
+  strictSearchScope = false,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
+  strictSearchScope?: boolean;
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) params.set('q', searchQuery.trim());
@@ -97,7 +129,7 @@ export async function fetchUnshippedOrdersData({
   // omit so search can find any order; client still filters for display.
   if (!searchQuery.trim()) params.set('awaitingOnly', 'true');
 
-  const res = await fetch(`/api/orders?${params.toString()}`, { cache: 'no-store' });
+  const res = await fetch(`/api/orders?${params.toString()}`);
   if (!res.ok) {
     throw new Error('Failed to fetch unshipped orders');
   }
@@ -106,7 +138,8 @@ export async function fetchUnshippedOrdersData({
   const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
   // When searching, show all matches (including those with tracking) so user can find any order.
   // When not searching, API already filtered via awaitingOnly=true.
-  return records;
+  if (searchQuery.trim() && !strictSearchScope) return records;
+  return records.filter((record) => record.shipment_id == null);
 }
 
 export async function fetchDashboardShippedData({
@@ -115,12 +148,15 @@ export async function fetchDashboardShippedData({
   testedBy,
   weekStart,
   weekEnd,
+  shippedFilter,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
   weekStart?: string;
   weekEnd?: string;
+  /** When provided the server filters by type; omit for backward-compat (client filters FBA). */
+  shippedFilter?: string;
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) {
@@ -131,9 +167,10 @@ export async function fetchDashboardShippedData({
   }
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+  if (shippedFilter) params.set('shippedFilter', shippedFilter);
 
   const url = `/api/shipped?${params.toString()}`;
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error('Failed to fetch shipped orders');
   }
@@ -146,7 +183,10 @@ export async function fetchDashboardShippedData({
       : Array.isArray(data.results)
         ? data.results
         : [];
-  return ((shipped || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  const records = (shipped || []).map(toOrderRecord) as ShippedOrder[];
+  // When shippedFilter is provided the server already scopes the results;
+  // fall back to client-side FBA exclusion only for backward-compat callers.
+  return shippedFilter ? records : records.filter(isNonFbaRecord);
 }
 
 export async function fetchDashboardPackedRecords({
@@ -154,19 +194,22 @@ export async function fetchDashboardPackedRecords({
   testedBy,
   weekStart,
   weekEnd,
+  shippedFilter,
 }: {
   packedBy?: number;
   testedBy?: number;
   weekStart?: string;
   weekEnd?: string;
+  shippedFilter?: string;
 }) {
   const params = new URLSearchParams({ limit: '1000' });
   if (weekStart) params.set('weekStart', weekStart);
   if (weekEnd) params.set('weekEnd', weekEnd);
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+  if (shippedFilter) params.set('shippedFilter', shippedFilter);
 
-  const res = await fetch(`/api/packerlogs?${params.toString()}`, { cache: 'no-store' });
+  const res = await fetch(`/api/packerlogs?${params.toString()}`);
   if (!res.ok) {
     throw new Error('Failed to fetch packed records');
   }

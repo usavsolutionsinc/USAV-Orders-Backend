@@ -8,9 +8,10 @@ import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
+import { TabSwitch } from './ui/TabSwitch';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { formatDateTimePST } from '@/utils/date';
-import { dispatchCloseShippedDetails } from '@/utils/events';
+import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { isFbaOrder } from '@/utils/order-platform';
 
@@ -20,6 +21,8 @@ interface SearchHistory {
     resultCount?: number;
 }
 
+type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
+
 interface ShippedSidebarProps {
     showIntakeForm?: boolean;
     onCloseForm?: () => void;
@@ -28,6 +31,10 @@ interface ShippedSidebarProps {
     showDetailsPanel?: boolean;
     embedded?: boolean;
     hideSectionHeader?: boolean;
+    searchValue?: string;
+    onSearchChange?: (value: string) => void;
+    shippedFilter?: ShippedTypeFilter;
+    onShippedFilterChange?: (value: ShippedTypeFilter) => void;
 }
 
 // Hard-coded staff ID to name mapping
@@ -56,6 +63,13 @@ function toShippedOrder(order: any): ShippedOrder {
     };
 }
 
+const SHIPPED_FILTER_TABS: { id: ShippedTypeFilter; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'orders', label: 'Orders' },
+    { id: 'sku', label: 'SKU' },
+    { id: 'fba', label: 'FBA' },
+];
+
 export default function ShippedSidebar({
     showIntakeForm = false,
     onCloseForm,
@@ -64,6 +78,10 @@ export default function ShippedSidebar({
     showDetailsPanel = true,
     embedded = false,
     hideSectionHeader = false,
+    searchValue = '',
+    onSearchChange,
+    shippedFilter = 'all',
+    onShippedFilterChange,
 }: ShippedSidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
@@ -80,12 +98,15 @@ export default function ShippedSidebar({
     const searchHistoryStorageKey = embedded && hideSectionHeader ? 'dashboard_search_history' : 'shipped_search_history';
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    useEffect(() => {
+        setSearchQuery(searchValue);
+    }, [searchValue]);
+
     // Listen for custom events to coordinate details panel
     useEffect(() => {
         const handleOpenDetails = (e: CustomEvent<ShippedOrder>) => {
-            if (e.detail) {
-                setSelectedShipped(e.detail);
-            }
+            const payload = getOpenShippedDetailsPayload(e.detail);
+            if (payload?.order) setSelectedShipped(payload.order);
         };
         const handleCloseDetails = () => {
             setSelectedShipped(null);
@@ -112,7 +133,7 @@ export default function ShippedSidebar({
             if (!nextRecord) return;
 
             setSelectedShipped(nextRecord);
-            window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: nextRecord }));
+            dispatchOpenShippedDetails(nextRecord, 'shipped');
         };
 
         window.addEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
@@ -128,9 +149,7 @@ export default function ShippedSidebar({
             return;
         }
 
-        // Use custom event to coordinate single instance behavior
-        const event = new CustomEvent('open-shipped-details', { detail: result });
-        window.dispatchEvent(event);
+        dispatchOpenShippedDetails(result, 'shipped');
         setSelectedShipped(result);
     };
 
@@ -179,6 +198,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
         if (!trimmedQuery) {
             setResults([]);
             setHasSearched(false);
+            await onSearchChange?.('');
             return;
         }
 
@@ -209,19 +229,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
             
             setResults(records);
             saveSearchHistory(trimmedQuery, records.length);
-
-            if (pathname === '/dashboard') {
-                const params = new URLSearchParams(searchParams.toString());
-                params.delete('pending');
-                params.delete('unshipped');
-                params.delete('fba');
-                params.set('shipped', '');
-                params.set('search', trimmedQuery);
-                if (records.length === 1) params.set('openOrderId', String(records[0].id));
-                else params.delete('openOrderId');
-                const nextSearch = params.toString();
-                router.replace(nextSearch ? `/dashboard?${nextSearch}` : '/dashboard');
-            }
+            await onSearchChange?.(trimmedQuery);
 
             if (records.length === 1) {
                 if (pathname === '/dashboard') {
@@ -233,11 +241,12 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
         } catch (error) {
             console.error('Search error:', error);
             setResults([]);
+            await onSearchChange?.(trimmedQuery);
         } finally {
             setIsSearching(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname, searchParams, router, normalizeTrackingQuery]);
+    }, [pathname, normalizeTrackingQuery, onSearchChange]);
 
     const handleInputChange = useCallback((value: string) => {
         setSearchQuery(value);
@@ -322,6 +331,16 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 </button>
                             }
                         />
+
+                        {/* Type filter — canonical TabSwitch (see design system) */}
+                        {onShippedFilterChange && (
+                            <TabSwitch
+                                tabs={SHIPPED_FILTER_TABS}
+                                activeTab={shippedFilter}
+                                onTabChange={(id) => onShippedFilterChange(id as ShippedTypeFilter)}
+                            />
+                        )}
+
                         <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
                             Click a Shipped Row for More Details
                         </p>

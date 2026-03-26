@@ -127,12 +127,12 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
 
   const handleSave = async () => {
     if (!effectiveItemNumber) {
-      setSaveError('Enter an item number first.');
+      setSaveError('Enter the item number before linking a manual.');
       itemNumRef.current?.focus();
       return;
     }
     const docId = normalizeGoogleDocId(draft);
-    if (!docId) { setSaveError('Enter a Google Doc ID or full Google Drive URL.'); return; }
+    if (!docId) { setSaveError('Paste a Google Drive link or file ID.'); return; }
     setSaveError(null);
     setIsSaving(true);
 
@@ -161,14 +161,14 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setSaveError(data?.error || `Failed (HTTP ${res.status})`); return; }
+      if (!res.ok) { setSaveError(data?.error || `Save failed (HTTP ${res.status})`); return; }
       const savedId = String(data?.manual?.google_file_id || docId).trim();
       setDraft(savedId);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
       onSaved(effectiveItemNumber, savedId);
       await loadManuals();
-    } catch { setSaveError('Network error. Please try again.'); }
+    } catch { setSaveError('Network error. Try again.'); }
     finally { setIsSaving(false); }
   };
 
@@ -204,13 +204,13 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
               <div className="flex items-center gap-2 min-w-0">
                 <FileText className="w-3.5 h-3.5 text-indigo-300 flex-shrink-0" />
                 <p className="text-[10px] font-black uppercase tracking-wider text-white">
-                  {activeManual?.type || 'Product Manual'} — linked
+                  {activeManual?.type || 'Product Manual'} linked
                 </p>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <a href={viewUrl} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[9px] font-black uppercase tracking-wider transition-all">
-                  <ExternalLink className="w-3 h-3" /> Open
+                  <ExternalLink className="w-3 h-3" /> Open Doc
                 </a>
                 {downloadUrl && (
                   <a href={downloadUrl} target="_blank" rel="noopener noreferrer"
@@ -220,7 +220,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
                 )}
                 <button type="button" onClick={() => setPreviewActive((v) => !v)}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[9px] font-black uppercase tracking-wider transition-all">
-                  {previewActive ? 'Hide' : 'Preview'}
+                  {previewActive ? 'Hide Preview' : 'Show Preview'}
                 </button>
               </div>
             </div>
@@ -240,11 +240,11 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
             {/* ── Linked paperwork — directly below banner ── */}
             {(manualsLoading || manuals.length > 0) && (
               <div className="bg-indigo-50 border-b border-indigo-100 px-5 py-3 space-y-1.5">
-                <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-2">Linked Paperwork</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-2">Recent Manual Records</p>
                 {manualsLoading ? (
                   <div className="flex items-center gap-2 py-1">
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                    <p className="text-[10px] font-semibold text-indigo-400">Loading...</p>
+                    <p className="text-[10px] font-semibold text-indigo-400">Loading manual records...</p>
                   </div>
                 ) : (
                   manuals.map((manual) => (
@@ -282,11 +282,11 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
       <div className="px-5 py-4 bg-blue-50/40 border-b border-blue-100">
         <div className="flex items-center justify-between mb-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-            {hasLinked ? 'Update Manual' : 'Add Manual'}
+            {hasLinked ? 'Update Manual Link' : 'Add Manual Link'}
           </p>
           <button type="button" onClick={onClose}
             className="text-[9px] font-black uppercase tracking-wider text-gray-400 hover:text-gray-600 transition-colors px-2 py-1 rounded-lg hover:bg-gray-100">
-            Close ✕
+            Close
           </button>
         </div>
 
@@ -295,7 +295,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
           {itemNumberMissing && (
             <div className="flex flex-col gap-1">
               <label className="text-[9px] font-black uppercase tracking-wider text-amber-600">
-                Item Number Required
+                Item Number
               </label>
               <input
                 ref={itemNumRef}
@@ -303,7 +303,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
                 value={localItemNumber}
                 onChange={(e) => { setLocalItemNumber(e.target.value.toUpperCase()); setSaveError(null); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') inputRef.current?.focus(); }}
-                placeholder="Enter item number first…"
+                placeholder="Enter item number first"
                 autoComplete="off"
                 autoFocus
                 className="h-[38px] w-full rounded-xl border border-amber-300 bg-white px-4 text-xs font-bold text-gray-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-colors shadow-sm"
@@ -312,14 +312,18 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
           )}
 
           {/* Step 2 — Google Doc input + Paste + Save */}
-          <div className="flex items-center gap-2">
+          <label className="flex flex-col gap-1">
+            <span className={`text-[9px] font-black uppercase tracking-wider ${effectiveItemNumber ? 'text-blue-700' : 'text-gray-400'}`}>
+              Google Drive Link or File ID
+            </span>
+            <div className="flex items-center gap-2">
             <input
               ref={inputRef}
               type="text"
               value={draft}
               onChange={(e) => { setDraft(e.target.value); setSaveError(null); }}
               onKeyDown={(e) => { if (e.key === 'Enter') void handleSave(); }}
-              placeholder={effectiveItemNumber ? 'Google Drive link or File ID' : 'Enter item number first…'}
+              placeholder={effectiveItemNumber ? 'Paste Google Drive link or file ID' : 'Enter item number first'}
               disabled={!effectiveItemNumber}
               autoComplete="off"
               className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-400 transition-colors shadow-sm"
@@ -333,9 +337,10 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
             </button>
             <button type="button" onClick={() => void handleSave()} disabled={isSaving || !draft.trim() || !effectiveItemNumber}
               className="flex-shrink-0 h-[38px] px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50 transition-colors flex items-center gap-1.5 shadow-sm">
-              {isSaving ? <><Loader2 className="w-3 h-3 animate-spin" /> Saving</> : saveSuccess ? 'Saved!' : 'Save'}
+              {isSaving ? <><Loader2 className="w-3 h-3 animate-spin" /> Saving</> : saveSuccess ? 'Saved' : 'Save'}
             </button>
-          </div>
+            </div>
+          </label>
         </div>
 
         {saveError && (
@@ -479,11 +484,11 @@ export function ManualAssignmentTab({
       <div className="flex-1 overflow-y-auto no-scrollbar">
         {manualMode === 'category' && !categoryId ? (
           <div className="flex h-48 items-center justify-center">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Select a category from the sidebar</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Choose a category from the sidebar to load products</p>
           </div>
         ) : manualMode === 'orders' && !orderId ? (
           <div className="flex h-48 items-center justify-center">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Select an order from the sidebar</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Choose an order from the sidebar to load products</p>
           </div>
         ) : (
           <ManualAssignmentTable
@@ -492,9 +497,9 @@ export function ManualAssignmentTab({
             onRowClick={handleRowClick}
             loading={loading}
             emptyMessage={
-              loading ? 'Loading...'
-                : manualMode === 'category' ? 'No products found in this category.'
-                  : 'No items found for this order.'
+              loading ? 'Loading products...'
+                : manualMode === 'category' ? 'No products were found in this category.'
+                  : 'No product lines were found for this order.'
             }
             renderExpanded={(row) => (
               <InlineManualForm

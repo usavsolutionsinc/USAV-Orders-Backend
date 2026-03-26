@@ -17,6 +17,13 @@ export async function GET(req: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const weekStart = searchParams.get('weekStart') || '';
     const weekEnd = searchParams.get('weekEnd') || '';
+    // Accept shippedFilter (from dashboard) or trackingType (legacy direct callers)
+    const rawTypeFilter = searchParams.get('shippedFilter') || searchParams.get('trackingType') || 'all';
+    const trackingTypeFilter: 'all' | 'orders' | 'sku' | 'fba' =
+      rawTypeFilter === 'orders' ? 'orders'
+      : rawTypeFilter === 'fba' ? 'fba'
+      : rawTypeFilter === 'sku' ? 'sku'
+      : 'all';
     const cacheLookup = createCacheLookupKey({
         packerId: packerId || '',
         testedBy: testedBy || '',
@@ -24,6 +31,7 @@ export async function GET(req: NextRequest) {
         offset,
         weekStart,
         weekEnd,
+        trackingTypeFilter,
     });
 
     const today = getCurrentPSTDateKey();
@@ -63,6 +71,25 @@ export async function GET(req: NextRequest) {
             conditions.push(`sal.created_at >= ($${ws}::date - interval '1 day')`);
             conditions.push(`sal.created_at <  ($${we}::date + interval '2 days')`);
         }
+
+        // Type filter — FBA records are identified by scan_ref matching the Amazon FBA
+        // shipment ID format (FBA + 8+ alphanumeric chars) or tracking_type IN ('FBA','FNSKU').
+        if (trackingTypeFilter === 'fba') {
+            conditions.push(
+                `(COALESCE(pl.tracking_type, '') IN ('FBA', 'FNSKU')`
+                + ` OR sal.activity_type = 'FBA_READY'`
+                + ` OR COALESCE(sal.scan_ref, '') ~* '^FBA[0-9A-Z]{8,}$')`,
+            );
+        } else if (trackingTypeFilter === 'orders') {
+            conditions.push(
+                `(COALESCE(pl.tracking_type, 'ORDERS') = 'ORDERS'`
+                + ` AND COALESCE(sal.scan_ref, '') !~* '^FBA[0-9A-Z]{8,}$'`
+                + ` AND sal.activity_type != 'FBA_READY')`,
+            );
+        } else if (trackingTypeFilter === 'sku') {
+            conditions.push(`COALESCE(pl.tracking_type, '') = 'SKU'`);
+        }
+        // 'all' → no restriction
 
         const whereClause = `WHERE ${conditions.join(' AND ')}`;
         params.push(limit, offset);
@@ -111,7 +138,16 @@ export async function GET(req: NextRequest) {
                 o.item_number,
                 NULLIF(TRIM(COALESCE(o.condition, '')), '') AS condition,
                 COALESCE(o.quantity, sal.metadata->>'quantity') AS quantity,
-                COALESCE(o.sku, ff.sku, sal.metadata->>'sku') AS sku,
+                COALESCE(
+                    o.sku,
+                    ff.sku,
+                    sal.metadata->>'sku',
+                    -- SKU scans store "SKU_VALUE:QUANTITY" in scan_ref; extract the SKU part
+                    CASE WHEN POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
+                         THEN TRIM(split_part(sal.scan_ref, ':', 1))
+                         ELSE NULL
+                    END
+                ) AS sku,
                 COALESCE(o.notes, '') AS notes,
                 COALESCE(o.status_history, '[]'::jsonb) AS status_history,
                 COALESCE(test_data.serial_number, '') AS serial_number,
