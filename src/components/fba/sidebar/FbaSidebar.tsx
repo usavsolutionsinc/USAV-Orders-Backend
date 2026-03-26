@@ -8,13 +8,18 @@ import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { sidebarHeaderBandClass, sidebarHeaderControlClass } from '@/components/layout/header-shell';
 import StaffSelector from '@/components/StaffSelector';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { getDbTableChannelName } from '@/lib/realtime/channels';
 import { FbaPlansUpNext } from '@/components/station/upnext/FbaPlansUpNext';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
 import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScanField';
-import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
+import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
 const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
+const FBA_SHIPMENTS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipments');
+const FBA_SHIPMENT_ITEMS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_items');
+const FBA_SHIPMENT_TRACKING_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_tracking');
 
 type FbaTab = 'summary' | 'shipped';
 type FbaWorkspaceMode = 'print' | 'plan' | 'shipped' | 'catalog';
@@ -181,10 +186,25 @@ function FbaWorkspaceSidebarInner() {
   const activePlanId = searchParams.get('plan') ? Number(searchParams.get('plan')) : null;
 
   const staffIdRaw = String(searchParams.get('staffId') || '').trim();
-  const staffIdNum = /^\d+$/.test(staffIdRaw) ? parseInt(staffIdRaw, 10) : 1;
+  const staffIdFromUrl = /^\d+$/.test(staffIdRaw) ? parseInt(staffIdRaw, 10) : null;
+  const lienStaffId = useMemo(
+    () => findStaffIdByNormalizedName(staffDirectory, 'lien'),
+    [staffDirectory]
+  );
+  const staffIdNum = staffIdFromUrl ?? lienStaffId ?? 1;
+  const selectedStaffMember = staffDirectory.find((m) => m.id === staffIdNum);
   const staffName =
-    staffDirectory.find((m) => m.id === staffIdNum)?.name ||
-    (staffDirectory.length === 0 ? '…' : `Staff ${staffIdNum}`);
+    selectedStaffMember?.name || (staffDirectory.length === 0 ? '…' : `Staff ${staffIdNum}`);
+  const staffRoleForTheme: 'technician' | 'packer' =
+    selectedStaffMember?.role === 'packer' ? 'packer' : 'technician';
+
+  useEffect(() => {
+    if (staffIdFromUrl != null || lienStaffId == null) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('staffId', String(lienStaffId));
+    const q = params.toString();
+    router.replace(q ? `/fba?${q}` : '/fba');
+  }, [staffIdFromUrl, lienStaffId, router, searchParams]);
 
   const mainPanel = searchParams.get('main') === 'plan' ? 'plan' : 'print';
   const detailsCatalog = searchParams.get('details') === 'catalog';
@@ -332,6 +352,21 @@ function FbaWorkspaceSidebarInner() {
     if (activeTab === 'summary') loadPendingPlans();
   }, [activeTab, refreshToken, loadPendingPlans]);
 
+  useAblyChannel(FBA_SHIPMENT_ITEMS_DB_CHANNEL, 'db.row.changed', () => {
+    if (activeTab !== 'summary') return;
+    void loadPendingPlans();
+  });
+
+  useAblyChannel(FBA_SHIPMENTS_DB_CHANNEL, 'db.row.changed', () => {
+    if (activeTab !== 'summary') return;
+    void loadPendingPlans();
+  });
+
+  useAblyChannel(FBA_SHIPMENT_TRACKING_DB_CHANNEL, 'db.row.changed', () => {
+    if (activeTab !== 'summary') return;
+    void loadPendingPlans();
+  });
+
   useEffect(() => {
     if (activeTab !== 'summary') return;
     const interval = setInterval(() => loadPendingPlans(), 60_000);
@@ -462,14 +497,23 @@ function FbaWorkspaceSidebarInner() {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {activeTab === 'summary' ? (
-          <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
-            <FbaWorkspaceScanField staffName={staffName} staffId={staffIdNum} />
+          <div className={`${sidebarSubBandClass} overflow-x-hidden px-3 py-2.5`}>
+            <FbaWorkspaceScanField
+              staffName={staffName}
+              staffId={staffIdFromUrl ?? undefined}
+              staffRole={staffRoleForTheme}
+            />
           </div>
         ) : null}
 
         {activeTab === 'shipped' ? (
-          <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
-            <FbaWorkspaceScanField staffName={staffName} staffId={staffIdNum} scanEnabled={false} />
+          <div className={`${sidebarSubBandClass} overflow-x-hidden px-3 py-2.5`}>
+            <FbaWorkspaceScanField
+              staffName={staffName}
+              staffId={staffIdFromUrl ?? undefined}
+              staffRole={staffRoleForTheme}
+              scanEnabled={false}
+            />
             <p className="mb-2 mt-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
               Filter shipped list
             </p>

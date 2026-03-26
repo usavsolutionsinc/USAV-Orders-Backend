@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
 
 type Params = Promise<{ id: string }>;
@@ -12,15 +13,16 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const shipmentId = Number(id);
-    if (!Number.isFinite(shipmentId) || shipmentId < 1) {
-      return NextResponse.json({ success: false, error: 'Invalid shipment id' }, { status: 400 });
+    const planId = parseFbaPlanId(id);
+    if (planId == null) {
+      return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
     const result = await pool.query(
       `SELECT
          fs.id,
          fs.shipment_ref,
+         fs.amazon_shipment_id,
          fs.destination_fc,
          fs.due_date,
          fs.status,
@@ -70,7 +72,7 @@ export async function GET(
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
        WHERE fs.id = $1
        GROUP BY fs.id, creator.name, tech.name, packer.name`,
-      [shipmentId]
+      [planId]
     );
 
     if (!result.rows[0]) {
@@ -97,9 +99,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const shipmentId = Number(id);
-    if (!Number.isFinite(shipmentId) || shipmentId < 1) {
-      return NextResponse.json({ success: false, error: 'Invalid shipment id' }, { status: 400 });
+    const planId = parseFbaPlanId(id);
+    if (planId == null) {
+      return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
     const body = await request.json();
@@ -145,7 +147,7 @@ export async function PATCH(
     }
 
     fields.push(`updated_at = NOW()`);
-    values.push(shipmentId);
+    values.push(planId);
 
     const result = await pool.query(
       `UPDATE fba_shipments
@@ -178,14 +180,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const shipmentId = Number(id);
-    if (!Number.isFinite(shipmentId) || shipmentId < 1) {
-      return NextResponse.json({ success: false, error: 'Invalid shipment id' }, { status: 400 });
+    const planId = parseFbaPlanId(id);
+    if (planId == null) {
+      return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
     const check = await pool.query(
       `SELECT id, status FROM fba_shipments WHERE id = $1`,
-      [shipmentId]
+      [planId]
     );
     if (!check.rows[0]) {
       return NextResponse.json({ success: false, error: 'Shipment not found' }, { status: 404 });
@@ -197,9 +199,9 @@ export async function DELETE(
       );
     }
 
-    await pool.query(`DELETE FROM fba_shipments WHERE id = $1`, [shipmentId]);
+    await pool.query(`DELETE FROM fba_shipments WHERE id = $1`, [planId]);
 
-    return NextResponse.json({ success: true, deleted_id: shipmentId });
+    return NextResponse.json({ success: true, deleted_id: planId });
   } catch (error: any) {
     console.error('[DELETE /api/fba/shipments/[id]]', error);
     return NextResponse.json(

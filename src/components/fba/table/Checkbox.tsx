@@ -12,6 +12,8 @@ export function PrintTableCheckbox({
   reducedMotion = false,
   label,
   stationTheme = 'lightblue',
+  disabled = false,
+  className,
 }: {
   checked: boolean;
   indeterminate?: boolean;
@@ -19,6 +21,9 @@ export function PrintTableCheckbox({
   reducedMotion?: boolean;
   label?: string;
   stationTheme?: StationTheme;
+  disabled?: boolean;
+  /** Merged onto the root button (e.g. larger hit target in table headers). */
+  className?: string;
 }) {
   const u = printQueueTableUi[stationTheme];
 
@@ -27,14 +32,18 @@ export function PrintTableCheckbox({
       type="button"
       onClick={(event) => {
         event.stopPropagation();
+        if (disabled) return;
         onChange(!checked);
       }}
       role="checkbox"
       aria-checked={indeterminate && !checked ? 'mixed' : checked}
+      aria-disabled={disabled}
       aria-label={label ?? (checked ? 'Deselect item' : 'Select item')}
       className={[
         'relative flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] transition-all duration-150 outline-none',
         u.checkboxFocusRing,
+        disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
+        className ?? '',
         checked || indeterminate
           ? u.checkboxChecked
           : ['border-zinc-300 bg-white', u.checkboxIdleHover].join(' '),

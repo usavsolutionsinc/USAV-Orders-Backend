@@ -20,7 +20,7 @@ export async function resolveShipmentId(rawInput: string): Promise<{
   const trimmed = rawInput.trim();
   if (!trimmed) return { shipmentId: null, scanRef: null };
 
-  // Canonical FNSKU / ASIN scans (X00… / B0…) must never resolve to carrier shipment rows;
+  // Canonical FNSKU / ASIN scans (X0... / B0...) must never resolve to carrier shipment rows;
   // tech station treats them as FNSKU context (scanRef only), same as deduped tracking elsewhere.
   if (looksLikeFnsku(trimmed)) {
     return { shipmentId: null, scanRef: trimmed };

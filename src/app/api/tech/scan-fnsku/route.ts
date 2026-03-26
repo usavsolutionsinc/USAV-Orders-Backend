@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     await invalidateCacheTags(['tech-logs', 'orders-next']);
     await publishTechLogChanged({
       techId: testedBy,
-      action: 'update',
+      action: 'insert',
       rowId: payload.fnskuLogId,
       source: 'tech.scan-fnsku',
     });

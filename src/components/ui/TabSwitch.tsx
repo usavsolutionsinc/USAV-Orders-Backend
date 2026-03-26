@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 
@@ -18,6 +19,12 @@ interface TabSwitchProps {
   /** Overrides the default rail container (background, radius, padding). */
   railClassName?: string;
   scrollable?: boolean;
+  /** Light gray rail only (no outer chrome); stronger inactive legibility for bright / glare-heavy screens. */
+  highContrast?: boolean;
+  /** Station up-next queue: tinted rail, semantic tab label hues; outline from `stationChromeOutlineClassName` only. */
+  variant?: 'default' | 'upNext';
+  /** When `variant` is `upNext`, 1px outline on rail + sliding pill (e.g. `getTechStationLightChromeOutlineClass`). */
+  stationChromeOutlineClassName?: string;
 }
 
 const colorTextMap: Record<string, { active: string; shadow: string }> = {
@@ -32,14 +39,46 @@ const colorTextMap: Record<string, { active: string; shadow: string }> = {
   teal:    { active: 'text-teal-600',    shadow: '0 1px 4px 0 rgb(20 184 166 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
 };
 
+/** Semantic tab label text for `variant="upNext"` (rail/pill outline stays station-themed). */
+const upNextLabelTextClass: Record<string, { active: string; inactive: string }> = {
+  blue:    { active: 'text-blue-600',    inactive: 'text-blue-600/55 hover:text-blue-700' },
+  emerald: { active: 'text-emerald-600', inactive: 'text-emerald-600/55 hover:text-emerald-700' },
+  green:   { active: 'text-emerald-600', inactive: 'text-emerald-600/55 hover:text-emerald-700' },
+  orange:  { active: 'text-orange-600',  inactive: 'text-orange-600/55 hover:text-orange-700' },
+  purple:  { active: 'text-purple-600',  inactive: 'text-purple-600/55 hover:text-purple-700' },
+  yellow:  { active: 'text-amber-600',   inactive: 'text-amber-600/55 hover:text-amber-700' },
+  gray:    { active: 'text-slate-600',   inactive: 'text-slate-600/55 hover:text-slate-800' },
+  red:     { active: 'text-red-600',     inactive: 'text-red-600/55 hover:text-red-700' },
+  teal:    { active: 'text-teal-600',    inactive: 'text-teal-600/55 hover:text-teal-700' },
+};
+
+const upNextRailBaseClass =
+  'rounded-xl bg-neutral-300 p-1.5 shadow-[inset_0_1px_4px_rgba(0,0,0,0.14)]';
+
+/** Shared chrome for sidebar order/view TabSwitch rows (dashboard, repair, etc.). */
+export function SidebarTabSwitchChrome({ children }: { children: ReactNode }) {
+  return <div className="border-b border-gray-300 px-4 py-3">{children}</div>;
+}
+
 export function TabSwitch({
   tabs,
   activeTab,
   onTabChange,
   className = '',
-  railClassName = 'bg-gray-100 rounded-xl p-1',
+  railClassName,
   scrollable = false,
+  highContrast = false,
+  variant = 'default',
+  stationChromeOutlineClassName,
 }: TabSwitchProps) {
+  const upNext = variant === 'upNext';
+  const upNextOutline = stationChromeOutlineClassName ?? 'border border-neutral-300';
+  const defaultRailClass = upNext
+    ? `${upNextRailBaseClass} ${upNextOutline}`
+    : highContrast
+      ? 'rounded-xl bg-neutral-300 p-1.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.08)]'
+      : 'bg-gray-100 rounded-xl p-1';
+  const railCombined = railClassName ?? defaultRailClass;
   const railRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -93,6 +132,9 @@ export function TabSwitch({
 
   const activeTabColor = tabs.find((t) => t.id === activeTab)?.color ?? 'blue';
   const activeShadow = (colorTextMap[activeTabColor] ?? colorTextMap.blue).shadow;
+  const pillShadow = upNext
+    ? '0 1px 4px 0 rgb(0 0 0 / 0.16), 0 0.5px 2px 0 rgb(0 0 0 / 0.08)'
+    : activeShadow;
   const pillTransition = prefersReducedMotion
     ? { duration: 0.01 }
     : { type: 'spring' as const, stiffness: 400, damping: 36, mass: 0.78 };
@@ -100,7 +142,7 @@ export function TabSwitch({
   return (
     <div
       ref={railRef}
-      className={`${railClassName} ${scrollable ? 'overflow-x-auto scrollbar-hide' : ''} ${className}`}
+      className={`${railCombined} ${scrollable ? 'overflow-x-auto scrollbar-hide' : ''} ${className}`}
     >
       <div
         ref={trackRef}
@@ -108,11 +150,13 @@ export function TabSwitch({
       >
         <motion.div
           aria-hidden
-          className="pointer-events-none absolute z-0 rounded-lg bg-white"
+          className={`pointer-events-none absolute z-0 rounded-lg bg-white ${
+            upNext ? upNextOutline : ''
+          }`}
           style={{
             top: 0,
             bottom: 0,
-            boxShadow: activeShadow,
+            boxShadow: pillShadow,
           }}
           initial={false}
           animate={{
@@ -125,6 +169,7 @@ export function TabSwitch({
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           const colors = colorTextMap[tab.color ?? 'blue'] ?? colorTextMap.blue;
+          const upNextLabels = upNextLabelTextClass[tab.color ?? 'blue'] ?? upNextLabelTextClass.blue;
           return (
             <button
               key={tab.id}
@@ -133,15 +178,25 @@ export function TabSwitch({
                 buttonRefs.current[tab.id] = node;
               }}
               onClick={() => onTabChange(tab.id)}
-              className={`relative z-10 flex-1 min-w-[3rem] whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors duration-150 ${
-                isActive ? colors.active : 'text-gray-500 hover:text-gray-700'
+              className={`relative z-10 flex-1 min-w-[3rem] whitespace-nowrap rounded-lg font-black uppercase tracking-widest transition-colors duration-150 ${
+                upNext || highContrast ? 'px-3 py-2 text-[11px]' : 'px-3 py-1.5 text-[10px]'
+              } ${
+                upNext
+                  ? isActive
+                    ? upNextLabels.active
+                    : upNextLabels.inactive
+                  : isActive
+                    ? colors.active
+                    : highContrast
+                      ? 'text-neutral-800 hover:text-neutral-950'
+                      : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               <motion.span
                 className="relative z-10 flex items-center justify-center gap-1"
                 animate={{
-                  scale: isActive ? 1 : 0.93,
-                  opacity: isActive ? 1 : 0.52,
+                  scale: isActive ? 1 : upNext || highContrast ? 0.98 : 0.93,
+                  opacity: isActive ? 1 : upNext ? 1 : highContrast ? 0.9 : 0.52,
                 }}
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
               >
@@ -153,9 +208,13 @@ export function TabSwitch({
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: 'spring', stiffness: 420, damping: 26 }}
                     className={`inline-flex items-center justify-center min-w-[14px] h-[14px] px-[3px] rounded-full text-[8px] font-black tabular-nums leading-none ${
-                      isActive
-                        ? 'bg-current/[0.12] text-current'
-                        : 'bg-gray-300/70 text-gray-600'
+                      upNext
+                        ? 'bg-current/[0.14] text-current'
+                        : isActive
+                          ? 'bg-current/[0.12] text-current'
+                          : highContrast
+                            ? 'bg-neutral-600/20 text-neutral-900'
+                            : 'bg-gray-300/70 text-gray-600'
                     }`}
                   >
                     {tab.count > 99 ? '99+' : tab.count}

@@ -55,7 +55,8 @@ export interface CopyChipProps {
   icon?: React.ReactNode;
   underlineClass: string;
   iconClass?: string;
-  width: string;
+  /** Width utility on the wrapper; default sizes to content (still respects `max-w-full` in tight layouts). */
+  width?: string;
   disableCopy?: boolean;
   truncateDisplay?: boolean;
 }
@@ -66,7 +67,7 @@ export function CopyChip({
   icon,
   underlineClass,
   iconClass,
-  width,
+  width = 'w-fit max-w-full',
   disableCopy = false,
   truncateDisplay = true,
 }: CopyChipProps) {
@@ -149,10 +150,10 @@ export function CopyChip({
         onFocus={openTooltip}
         onBlur={closeTooltip}
         disabled={isDisabled}
-        className="w-full flex items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95 disabled:opacity-30"
+        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95 disabled:opacity-30"
       >
-        <span className={`shrink-0 ${iconClass}`}>{icon}</span>
-        <span className={`font-mono text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 flex-1 min-w-0 text-left ${displayOverflowClass} ${underlineClass}`}>
+        {icon ? <span className={`shrink-0 ${iconClass ?? ''}`}>{icon}</span> : null}
+        <span className={`font-mono text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 min-w-0 text-left ${displayOverflowClass} ${underlineClass}`}>
           {normalizedDisplay || '---'}
         </span>
       </button>
@@ -184,7 +185,6 @@ export const OrderIdChip = ({ value, display }: { value: string; display: string
     icon={<HashIcon />}
     underlineClass="border-gray-400"
     iconClass="text-gray-400"
-    width="w-[50px]"
   />
 );
 
@@ -195,7 +195,6 @@ export const TrackingChip = ({ value, display }: { value: string; display: strin
     icon={<MapPin className="w-4 h-4 shrink-0" />}
     underlineClass="border-blue-500"
     iconClass="text-blue-500"
-    width="w-[50px]"
   />
 );
 
@@ -206,7 +205,6 @@ export const SerialChip = ({ value, display }: { value: string; display: string 
     icon={<Barcode className="w-4 h-4 shrink-0" />}
     underlineClass="border-emerald-500"
     iconClass="text-emerald-500"
-    width="w-[64px]"
   />
 );
 
@@ -217,11 +215,10 @@ export const TicketChip = ({ value, display }: { value: string; display: string 
     icon={<Settings className="w-4 h-4 shrink-0" />}
     underlineClass="border-orange-500"
     iconClass="text-orange-500"
-    width="w-[52px]"
   />
 );
 
-export const FnskuChip = ({ value, width = 'w-[50px]' }: { value: string; width?: string }) => (
+export const FnskuChip = ({ value, width }: { value: string; width?: string }) => (
   <CopyChip
     value={value}
     display={getLast4(value)}
@@ -235,7 +232,7 @@ export const FnskuChip = ({ value, width = 'w-[50px]' }: { value: string; width?
 export const SourceOrderChip = ({
   value,
   display,
-  width = 'w-[50px]',
+  width,
   disableCopy = false,
 }: {
   value: string;

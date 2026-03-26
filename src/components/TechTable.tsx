@@ -10,6 +10,7 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { useTechLogs, TechRecord } from '@/hooks/useTechLogs';
 
 interface TechTableProps {
@@ -56,6 +57,105 @@ function hasSerialValue(value: string | null | undefined): boolean {
   return Boolean(String(value || '').trim());
 }
 
+function isFbaTechRecord(record: TechRecord): boolean {
+  return (
+    record.source_kind === 'fba_scan' ||
+    record.account_source === 'fba' ||
+    Boolean(String(record.fnsku || '').trim()) ||
+    String(record.order_id || '').toUpperCase() === 'FBA'
+  );
+}
+
+/** FNSKU-style tech lines that can appear twice (empty fba_scan stub + tech_serial row) after serial edits. */
+function shouldDedupeFbaFnskuLine(record: TechRecord): boolean {
+  if (record.source_kind === 'fba_scan') return true;
+  if (String(record.fnsku || '').trim()) return true;
+  if (String(record.order_id || '').toUpperCase() === 'FBA') {
+    const trk = String(record.shipping_tracking_number || '').trim();
+    if (/^(X0|B0)/i.test(trk)) return true;
+  }
+  return false;
+}
+
+function getFbaFnskuDedupeKey(record: TechRecord): string {
+  const fromFnsku = String(record.fnsku || '').trim();
+  const fallback = fromFnsku || String(record.shipping_tracking_number || '').trim();
+  return normalizeTrackingKey(fallback);
+}
+
+/** One table row per FNSKU *scan* (fba_fnsku_logs row), while still merging stub + tech_serial for the same scan. */
+function getFbaFnskuMergeGroupKey(record: TechRecord): string {
+  const fl = Number(record.fnsku_log_id);
+  if (Number.isFinite(fl) && fl > 0) {
+    return `${record.tested_by}:fl:${fl}`;
+  }
+  if (record.source_kind === 'fba_scan' && record.source_row_id != null) {
+    const sid = Number(record.source_row_id);
+    if (Number.isFinite(sid) && sid > 0) {
+      return `${record.tested_by}:fba_scan:${sid}`;
+    }
+  }
+  if (record.source_kind === 'tech_serial') {
+    const tsn = record.tech_serial_id ?? record.source_row_id;
+    const tid = tsn != null ? Number(tsn) : NaN;
+    if (Number.isFinite(tid) && tid > 0) {
+      return `${record.tested_by}:ts:${tid}`;
+    }
+  }
+  const fk = getFbaFnskuDedupeKey(record);
+  if (fk) {
+    return `${record.tested_by}:fnsku:${fk}:id:${record.id}`;
+  }
+  return `${record.tested_by}:row:${record.id}`;
+}
+
+function fbaFnskuRowScore(record: TechRecord): number {
+  let score = 0;
+  if (record.source_kind === 'tech_serial') score += 100;
+  if (record.tech_serial_id != null && Number(record.tech_serial_id) > 0) score += 40;
+  if (hasSerialValue(record.serial_number)) score += 10;
+  if (record.source_kind !== 'fba_scan') score += 5;
+  return score;
+}
+
+function mergeFbaFnskuTechRecords(a: TechRecord, b: TechRecord): TechRecord {
+  const primary = fbaFnskuRowScore(a) >= fbaFnskuRowScore(b) ? a : b;
+  const secondary = primary === a ? b : a;
+  const mergedSerial = mergeSerialNumbers(primary.serial_number, secondary.serial_number);
+  const mergedProductTitle = hasUsableProductTitle(primary.product_title)
+    ? normalizeProductTitle(primary.product_title)
+    : hasUsableProductTitle(secondary.product_title)
+      ? normalizeProductTitle(secondary.product_title)
+      : primary.product_title;
+  const mergedSku = pickBestValue(primary.sku, secondary.sku);
+  const mergedCondition = pickBestValue(primary.condition, secondary.condition);
+  const mergedFnsku =
+    String(primary.fnsku || '').trim()
+    || String(secondary.fnsku || '').trim()
+    || null;
+  const tPri = new Date(primary.created_at || 0).getTime();
+  const tSec = new Date(secondary.created_at || 0).getTime();
+  const mergedCreatedAt =
+    Number.isFinite(tPri) && Number.isFinite(tSec)
+      ? (tPri <= tSec ? primary.created_at : secondary.created_at)
+      : primary.created_at || secondary.created_at;
+
+  return {
+    ...primary,
+    fnsku: mergedFnsku,
+    fnsku_log_id: primary.fnsku_log_id ?? secondary.fnsku_log_id ?? null,
+    serial_number: mergedSerial,
+    product_title: mergedProductTitle,
+    sku: mergedSku,
+    condition: mergedCondition,
+    created_at: mergedCreatedAt || primary.created_at,
+    tech_serial_id: primary.tech_serial_id ?? secondary.tech_serial_id ?? null,
+    source_row_id: primary.source_row_id ?? secondary.source_row_id,
+    source_kind: primary.source_kind,
+    order_db_id: primary.order_db_id ?? secondary.order_db_id,
+  };
+}
+
 /** Returns the first value that is non-empty and not a placeholder like "N/A". */
 function pickBestValue(primary: string | null | undefined, fallback: string | null | undefined): string | null {
   const a = String(primary || '').trim();
@@ -87,6 +187,7 @@ export function TechTable({ testedBy }: TechTableProps) {
   const { data: records = [], isLoading, isFetching } = useTechLogs(testedBy, { weekOffset, weekRange });
   const loading = isLoading && records.length === 0;
   const isRefreshing = isFetching && !isLoading;
+  const weekHeaderCountClass = stationThemeColors[getStaffThemeById(testedBy, 'technician')].text;
 
   useEffect(() => {
     const handleOpenDetails = (e: any) => {
@@ -196,8 +297,29 @@ export function TechTable({ testedBy }: TechTableProps) {
     });
 
     const trackingIndexByKey = new Map<string, number>();
+    const fbaFnskuIndexByKey = new Map<string, number>();
     const unique: TechRecord[] = [];
     for (const record of sorted) {
+      if (shouldDedupeFbaFnskuLine(record)) {
+        const mergeKey = getFbaFnskuMergeGroupKey(record);
+        const existingIndex = fbaFnskuIndexByKey.get(mergeKey);
+        if (existingIndex === undefined) {
+          fbaFnskuIndexByKey.set(mergeKey, unique.length);
+          unique.push(record);
+        } else {
+          const existing = unique[existingIndex];
+          if (existing) {
+            unique[existingIndex] = mergeFbaFnskuTechRecords(existing, record);
+          }
+        }
+        continue;
+      }
+
+      if (isFbaTechRecord(record)) {
+        unique.push(record);
+        continue;
+      }
+
       const trackingKey = normalizeTrackingKey(record.shipping_tracking_number);
       if (!trackingKey) {
         unique.push(record);
@@ -376,7 +498,7 @@ export function TechTable({ testedBy }: TechTableProps) {
           stickyDate={stickyDate}
           fallbackDate={formatHeaderDate()}
           count={currentCount || getWeekCount()}
-          countClassName="text-emerald-600"
+          countClassName={weekHeaderCountClass}
           weekRange={weekRange}
           weekOffset={weekOffset}
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
@@ -404,7 +526,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                         data-day-header
                         data-date={date}
                         data-count={dateRecords.length}
-                        className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
+                        className="bg-gray-50/80 border-y border-gray-300 px-2 py-1 flex items-center justify-between z-10"
                       >
                         <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
                         <p className="text-[11px] font-black text-gray-900 tabular-nums">{dateRecords.length}</p>
@@ -415,7 +537,6 @@ export function TechTable({ testedBy }: TechTableProps) {
                           condition: record.condition,
                           trackingNumber: record.shipping_tracking_number,
                         });
-                        const fnskuValue = String(record.fnsku || '').trim();
                         const isFbaRow =
                           record.account_source === 'fba' ||
                           record.source_kind === 'fba_scan' ||
@@ -426,8 +547,13 @@ export function TechTable({ testedBy }: TechTableProps) {
                             ? 'N/A'
                             : rawCondition
                           : displayValues.condition || 'No Condition';
-                        /** FNSKU copy chip only when we have a real FNSKU — not tracking / order id (matches PackerTable FBA branch). */
-                        const showFnskuChip = Boolean(fnskuValue);
+                        const fnskuValue = String(record.fnsku || '').trim();
+                        const isFnskuRow = Boolean(fnskuValue);
+                        const serialChipDisplay = record.serial_number
+                          ? getLast6Serial(record.serial_number)
+                          : record.source_kind === 'fba_scan' || record.source_kind === 'tech_scan'
+                            ? 'SERIAL'
+                            : '---';
                         const dotType = getSourceDotType({
                           orderId: record.order_id,
                           accountSource: record.account_source,
@@ -438,7 +564,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                             animate={{ opacity: 1 }}
                             key={getRowKey(record)}
                             onClick={() => openDetails(record)}
-                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                             }`}
                           >
@@ -457,12 +583,15 @@ export function TechTable({ testedBy }: TechTableProps) {
                               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5 pl-4">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                   {parseInt(String(record.quantity || '1'), 10) || 1}
-                                </span> • {conditionLabel} • {displayValues.sku || 'No SKU'}
+                                </span> • {conditionLabel}
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              {showFnskuChip ? (
-                                <FnskuChip value={fnskuValue} />
+                              {isFnskuRow ? (
+                                <>
+                                  <FnskuChip value={fnskuValue} />
+                                  <SerialChip value={record.serial_number || ''} display={serialChipDisplay} />
+                                </>
                               ) : (
                                 <>
                                   <OrderIdChip
@@ -473,18 +602,9 @@ export function TechTable({ testedBy }: TechTableProps) {
                                     value={record.shipping_tracking_number || ''}
                                     display={getLast4(record.shipping_tracking_number)}
                                   />
+                                  <SerialChip value={record.serial_number || ''} display={serialChipDisplay} />
                                 </>
                               )}
-                              <SerialChip
-                                value={record.serial_number || ''}
-                                display={
-                                  record.serial_number
-                                    ? getLast6Serial(record.serial_number)
-                                    : record.source_kind === 'fba_scan' || record.source_kind === 'tech_scan'
-                                      ? 'SERIAL'
-                                      : '---'
-                                }
-                              />
                             </div>
                           </motion.div>
                         );

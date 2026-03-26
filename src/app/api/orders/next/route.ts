@@ -62,11 +62,33 @@ export async function GET(req: NextRequest) {
     );
 
     // $1 = techIdScope array — used for the assignment visibility filter throughout
+    // Hide from up-next when any station_activity_log is tied to this shipment, OR when
+    // a TECH scan row matches the order's tracking via scan_ref (same idea as /api/tech-logs
+    // order_match) — otherwise SAL rows with NULL shipment_id still show in TechTable but
+    // would not match `sal.shipment_id = o.shipment_id`.
+    const techSalTrackingMatch = `
+      sal.station = 'TECH'
+      AND sal.activity_type IN ('TRACKING_SCANNED', 'SERIAL_ADDED', 'FNSKU_SCANNED')
+      AND stn.id IS NOT NULL
+      AND stn.tracking_number_raw IS NOT NULL
+      AND BTRIM(stn.tracking_number_raw) <> ''
+      AND COALESCE(sal.scan_ref, sal_stn.tracking_number_raw, '') <> ''
+      AND BTRIM(COALESCE(sal.scan_ref, sal_stn.tracking_number_raw, '')) <> ''
+      AND RIGHT(regexp_replace(UPPER(stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
+          RIGHT(regexp_replace(UPPER(COALESCE(sal.scan_ref, sal_stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
+    `;
     const noTechScanClause = `
       NOT EXISTS (
         SELECT 1
         FROM station_activity_logs sal
-        WHERE sal.shipment_id = o.shipment_id
+        LEFT JOIN shipping_tracking_numbers sal_stn ON sal_stn.id = sal.shipment_id
+        WHERE (
+          sal.shipment_id IS NOT NULL
+          AND sal.shipment_id = o.shipment_id
+        )
+        OR (
+          ${techSalTrackingMatch}
+        )
       )
     `;
 
@@ -103,7 +125,14 @@ export async function GET(req: NextRequest) {
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS scan_count
         FROM station_activity_logs sal
-        WHERE sal.shipment_id = o.shipment_id
+        LEFT JOIN shipping_tracking_numbers sal_stn ON sal_stn.id = sal.shipment_id
+        WHERE (
+          sal.shipment_id IS NOT NULL
+          AND sal.shipment_id = o.shipment_id
+        )
+        OR (
+          ${techSalTrackingMatch}
+        )
       ) sal_scan ON true
     `;
 

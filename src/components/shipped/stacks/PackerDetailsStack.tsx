@@ -162,12 +162,19 @@ export function PackerDetailsStack({
 
     setIsDeleting(true);
     try {
-      const logId = Number((shipped as any).packer_log_id);
-      if (!Number.isFinite(logId) || logId <= 0) {
-        throw new Error('Missing packer log id for delete');
+      const packerLogId = Number((shipped as any).packer_log_id);
+      const activityLogId = Number((shipped as any).station_activity_log_id);
+      const deleteUrl =
+        Number.isFinite(packerLogId) && packerLogId > 0
+          ? `/api/packerlogs?id=${encodeURIComponent(String(packerLogId))}`
+          : Number.isFinite(activityLogId) && activityLogId > 0
+            ? `/api/packerlogs?activityLogId=${encodeURIComponent(String(activityLogId))}`
+            : null;
+      if (!deleteUrl) {
+        throw new Error('Missing packer or activity log id for delete');
       }
 
-      const response = await fetch(`/api/packerlogs?id=${encodeURIComponent(String(logId))}`, {
+      const response = await fetch(deleteUrl, {
         method: 'DELETE',
       });
 

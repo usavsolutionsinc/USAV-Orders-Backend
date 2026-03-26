@@ -43,8 +43,8 @@ export function ShipmentGroupHeaderRow({
             indeterminate={someSel}
             reducedMotion={reducedMotion}
             stationTheme={stationTheme}
-            label={allSel ? `Deselect shipment ${group.shipment_ref}` : `Select shipment ${group.shipment_ref}`}
-            onChange={() => dispatch({ type: 'SELECT_SHIPMENT', shipment_id: group.shipment_id })}
+            label={allSel ? `Deselect plan ${group.shipment_ref}` : `Select plan ${group.shipment_ref}`}
+            onChange={() => dispatch({ type: 'SELECT_PLAN', plan_id: group.shipment_id })}
           />
           <span className={T.shipmentRef}>{group.shipment_ref}</span>
           {group.amazon_shipment_id ? (

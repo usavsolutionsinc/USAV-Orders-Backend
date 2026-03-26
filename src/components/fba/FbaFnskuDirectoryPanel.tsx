@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2 } from '@/components/Icons';
 
 export interface FbaFnskuRow {
@@ -25,6 +25,16 @@ export function FbaFnskuDirectoryPanel({
 }: FbaFnskuDirectoryPanelProps) {
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const isEmbed = variant === 'embed';
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (isEmbed) return;
+    const refresh = () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-fba-fnskus'] });
+    };
+    window.addEventListener('usav-refresh-data', refresh);
+    return () => window.removeEventListener('usav-refresh-data', refresh);
+  }, [isEmbed, queryClient]);
 
   const { data, isLoading } = useQuery<{ rows: FbaFnskuRow[] }>({
     queryKey: ['admin-fba-fnskus', searchTerm],
@@ -39,7 +49,28 @@ export function FbaFnskuDirectoryPanel({
     },
   });
 
-  const rows = useMemo(() => data?.rows || [], [data]);
+  const rows = useMemo(() => {
+    const list = data?.rows || [];
+    if (isEmbed) return list;
+    // Match API ordering: stubs (no title/asin/sku) first; tie-break for hydration.
+    return [...list].sort((a, b) => {
+      const empty = (r: FbaFnskuRow) =>
+        !String(r.product_title || '').trim() &&
+        !String(r.asin || '').trim() &&
+        !String(r.sku || '').trim();
+      const ae = empty(a);
+      const be = empty(b);
+      if (ae !== be) return ae ? -1 : 1;
+      if (ae) {
+        return String(a.fnsku || '').localeCompare(String(b.fnsku || ''), undefined, { sensitivity: 'base' });
+      }
+      return (
+        String(a.product_title || '').localeCompare(String(b.product_title || ''), undefined, {
+          sensitivity: 'base',
+        }) || String(a.fnsku || '').localeCompare(String(b.fnsku || ''), undefined, { sensitivity: 'base' })
+      );
+    });
+  }, [data, isEmbed]);
 
   const copyValue = async (value: string | null | undefined) => {
     const text = String(value || '').trim();
@@ -79,10 +110,17 @@ export function FbaFnskuDirectoryPanel({
               : 'h-[calc(100%-49px)] overflow-y-auto divide-y divide-gray-100'
           }
         >
-          {rows.map((row, index) => (
+          {rows.map((row, index) => {
+            const needsReconciliation =
+              !String(row.product_title || '').trim() &&
+              !String(row.asin || '').trim() &&
+              !String(row.sku || '').trim();
+            return (
             <div
               key={`${row.fnsku || 'row'}-${index}`}
-              className="grid grid-cols-[minmax(0,1fr)_92px_92px_132px] gap-0 px-4 py-3 items-center"
+              className={`grid grid-cols-[minmax(0,1fr)_92px_92px_132px] gap-0 px-4 py-3 items-center ${
+                !isEmbed && needsReconciliation ? 'bg-amber-50/80' : ''
+              }`}
             >
               <button
                 type="button"
@@ -132,7 +170,8 @@ export function FbaFnskuDirectoryPanel({
                 {row.fnsku || '-'}
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

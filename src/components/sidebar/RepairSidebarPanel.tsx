@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { Barcode, Check, Loader2, Plus } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { TabSwitch } from '@/components/ui/TabSwitch';
+import { SidebarTabSwitchChrome, TabSwitch } from '@/components/ui/TabSwitch';
 import {
   RepairIntakeForm,
   type RepairFormData,
@@ -199,15 +199,15 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   const content = (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      <div className="border-b border-gray-100 px-4 py-4">
+      <div className="shrink-0">
         {!hideSectionHeader ? (
-          <div className="mb-4">
+          <div className="border-b border-gray-100 px-4 pt-4 pb-3">
             <p className="text-[9px] font-black uppercase tracking-[0.3em] text-orange-500">Repair Service</p>
             <h2 className="mt-1 text-xl font-black tracking-tight text-gray-900">Repairs</h2>
           </div>
         ) : null}
 
-        <div className="mb-3">
+        <SidebarTabSwitchChrome>
           <TabSwitch
             tabs={[
               { id: 'incoming', label: 'Incoming', color: 'orange' },
@@ -215,6 +215,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
               { id: 'done', label: 'Done', color: 'orange' },
             ]}
             activeTab={activeTab}
+            highContrast
             onTabChange={(tab) =>
               updateParams((params) => {
                 if (tab === 'active') params.delete('tab');
@@ -222,37 +223,39 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
               })
             }
           />
-        </div>
+        </SidebarTabSwitchChrome>
 
-        <SearchBar
-          value={searchValue}
-          onChange={setSearchValue}
-          onSearch={() =>
-            updateParams((params) => {
-              if (searchValue.trim()) params.set('search', searchValue.trim());
-              else params.delete('search');
-            })
-          }
-          onClear={handleClearSearch}
-          placeholder="Search repairs, tickets, SKU…"
-          variant="orange"
-          size="compact"
-          rightElement={
-            <button
-              type="button"
-              onClick={() => {
-                setIntakeDraft(undefined);
-                setShowIntakeForm(true);
-              }}
-              disabled={isSubmitting}
-              className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-300"
-              title="New repair"
-              aria-label="Open new repair order form"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-          }
-        />
+        <div className="border-b border-gray-100 px-4 py-3">
+          <SearchBar
+            value={searchValue}
+            onChange={setSearchValue}
+            onSearch={() =>
+              updateParams((params) => {
+                if (searchValue.trim()) params.set('search', searchValue.trim());
+                else params.delete('search');
+              })
+            }
+            onClear={handleClearSearch}
+            placeholder="Search repairs, tickets, SKU…"
+            variant="orange"
+            size="compact"
+            rightElement={
+              <button
+                type="button"
+                onClick={() => {
+                  setIntakeDraft(undefined);
+                  setShowIntakeForm(true);
+                }}
+                disabled={isSubmitting}
+                className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-300"
+                title="New repair"
+                aria-label="Open new repair order form"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            }
+          />
+        </div>
       </div>
 
       <div className="relative flex-1 overflow-y-auto px-4 py-4">

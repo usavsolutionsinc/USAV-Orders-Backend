@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
         const query = `
             SELECT
                 sal.id,
+                sal.packer_log_id AS packer_log_id,
                 sal.created_at,
                 sal.scan_ref,
                 COALESCE(stn.tracking_number_raw, sal.scan_ref, sal.fnsku) AS shipping_tracking_number,
@@ -277,27 +278,69 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const activityLogId = searchParams.get('activityLogId');
+
+    const client = await pool.connect();
     try {
-        const { searchParams } = new URL(req.url);
-        const id = searchParams.get('id');
+        await client.query('BEGIN');
+
+        if (activityLogId) {
+            const salId = parseInt(activityLogId, 10);
+            if (Number.isNaN(salId)) {
+                await client.query('ROLLBACK');
+                return NextResponse.json({ error: 'Invalid activityLogId' }, { status: 400 });
+            }
+            const sel = await client.query(
+                'SELECT packer_log_id FROM station_activity_logs WHERE id = $1',
+                [salId]
+            );
+            if (!sel.rows[0]) {
+                await client.query('ROLLBACK');
+                return NextResponse.json({ error: 'Log not found' }, { status: 404 });
+            }
+            const plId: number | null = sel.rows[0].packer_log_id ?? null;
+            await client.query('DELETE FROM station_activity_logs WHERE id = $1', [salId]);
+            if (plId != null) {
+                await client.query('DELETE FROM packer_logs WHERE id = $1', [plId]);
+            }
+            await client.query('COMMIT');
+            await invalidateCacheTags(['packerlogs', 'orders']);
+            return NextResponse.json({ success: true });
+        }
 
         if (!id) {
+            await client.query('ROLLBACK');
             return NextResponse.json({ error: 'ID is required' }, { status: 400 });
         }
 
-        const deletedLog = await db
-            .delete(packerLogs)
-            .where(eq(packerLogs.id, parseInt(id)))
-            .returning();
+        const plId = parseInt(id, 10);
+        if (Number.isNaN(plId)) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+        }
 
-        if (deletedLog.length === 0) {
+        const plCheck = await client.query('SELECT id FROM packer_logs WHERE id = $1', [plId]);
+        if (!plCheck.rows[0]) {
+            await client.query('ROLLBACK');
             return NextResponse.json({ error: 'Log not found' }, { status: 404 });
         }
 
-        await invalidateCacheTags(['packerlogs']);
-        return NextResponse.json({ success: true, deletedLog: deletedLog[0] });
+        await client.query('DELETE FROM station_activity_logs WHERE packer_log_id = $1', [plId]);
+        await client.query('DELETE FROM packer_logs WHERE id = $1', [plId]);
+        await client.query('COMMIT');
+        await invalidateCacheTags(['packerlogs', 'orders']);
+        return NextResponse.json({ success: true, deletedLog: { id: plId } });
     } catch (error: any) {
+        try {
+            await client.query('ROLLBACK');
+        } catch {
+            /* ignore */
+        }
         console.error('Error deleting packer log:', error);
         return NextResponse.json({ error: 'Failed to delete log', details: error.message }, { status: 500 });
+    } finally {
+        client.release();
     }
 }

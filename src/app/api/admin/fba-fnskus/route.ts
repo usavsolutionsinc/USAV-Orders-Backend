@@ -19,12 +19,31 @@ export async function GET(req: NextRequest) {
       : '';
     const params = hasQuery ? [`%${q}%`, limit] : [limit];
 
+    const orderSql = `
+      ORDER BY
+        CASE
+          WHEN (product_title IS NULL OR TRIM(COALESCE(product_title, '')) = '')
+           AND (asin IS NULL OR TRIM(COALESCE(asin, '')) = '')
+           AND (sku IS NULL OR TRIM(COALESCE(sku, '')) = '')
+          THEN 0
+          ELSE 1
+        END,
+        CASE
+          WHEN (product_title IS NULL OR TRIM(COALESCE(product_title, '')) = '')
+           AND (asin IS NULL OR TRIM(COALESCE(asin, '')) = '')
+           AND (sku IS NULL OR TRIM(COALESCE(sku, '')) = '')
+          THEN COALESCE(fnsku, '')
+          ELSE COALESCE(NULLIF(TRIM(product_title), ''), '')
+        END ASC,
+        COALESCE(fnsku, '') ASC
+    `;
+
     const result = await pool.query(
       `
         SELECT product_title, asin, sku, fnsku
         FROM fba_fnskus
         ${whereSql}
-        ORDER BY COALESCE(product_title, '') ASC, COALESCE(fnsku, '') ASC
+        ${orderSql}
         LIMIT $${hasQuery ? 2 : 1}
       `,
       params

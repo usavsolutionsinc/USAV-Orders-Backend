@@ -101,10 +101,13 @@ export const SERIAL_FULL_REGEX    = /^[A-Z0-9]{15,17}([A-Z]{2})?$/i;
 export const SERIAL_PARTIAL_REGEX = /^[A-Z0-9]{1,10}$/i;
 
 /**
- * Amazon FNSKU (X00 + 7) or ASIN (B0 + 8). Exactly 10 A–Z/0–9 characters.
+ * Amazon FNSKU (X0 + 8) or ASIN (B0 + 8). Exactly 10 A-Z/0-9 characters.
  * Normalized before matching so scanner punctuation does not break detection.
+ *
+ * FNSKUs in this app are treated as the broader X0... family, not just X00...,
+ * because live station scans include values like X004MW2DMB.
  */
-export const FNSKU_OR_ASIN_REGEX = /^(X00[A-Z0-9]{7}|B0[A-Z0-9]{8})$/;
+export const FNSKU_OR_ASIN_REGEX = /^(X0[A-Z0-9]{8}|B0[A-Z0-9]{8})$/;
 
 export function looksLikeFnsku(value: string): boolean {
   const v = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -112,14 +115,14 @@ export function looksLikeFnsku(value: string): boolean {
 }
 
 /**
- * True while input could still become a valid 10-char FNSKU (X00…) or ASIN (B0…).
+ * True while input could still become a valid 10-char FNSKU (X0...) or ASIN (B0...).
  * For station UI mode only — routing to `/api/tech/scan-fnsku` must use {@link looksLikeFnsku} (complete).
  */
 export function looksLikeFnskuPrefix(value: string): boolean {
   if (looksLikeFnsku(value)) return true;
   const v = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!v) return false;
-  if (/^X00[A-Z0-9]{0,7}$/.test(v) && v.length < 10) return true;
+  if (/^X0[A-Z0-9]{0,8}$/.test(v) && v.length < 10) return true;
   if (/^B0[A-Z0-9]{0,8}$/.test(v) && v.length < 10) return true;
   return false;
 }

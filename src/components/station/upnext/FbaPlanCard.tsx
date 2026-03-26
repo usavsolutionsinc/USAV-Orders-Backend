@@ -1,10 +1,15 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ChevronDown, Loader2, Package } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import type { FbaPlanQueueItem } from './upnext-types';
+
+/** Matches {@link FbaPlansUpNext} list easing; card root is a plain div so list wrapper owns `layout` + enter/exit. */
+const CARD_EASE = [0.22, 1, 0.36, 1] as const;
+/** Softer open/close — ease-out-heavy cubic for height + opacity. */
+const PANEL_EASE = [0.25, 0.82, 0.2, 1] as const;
 
 export interface FbaPlanCardProps {
   plan: FbaPlanQueueItem;
@@ -51,29 +56,47 @@ export function FbaPlanCard({
   onQtyBlur,
   qtySaving = false,
 }: FbaPlanCardProps) {
+  const reduceMotion = useReducedMotion();
   const displayShipBy = plan.due_date || '';
+
+  const chevronTransition = reduceMotion
+    ? { duration: 0.01 }
+    : ({ type: 'tween' as const, duration: 0.32, ease: PANEL_EASE });
+
+  const panelTransition = reduceMotion
+    ? { duration: 0.01 }
+    : {
+        height: { duration: 0.42, ease: PANEL_EASE },
+        opacity: { duration: 0.34, ease: PANEL_EASE },
+      };
   const daysLate = getDaysLateNumber(plan.due_date);
   const qtyBase =
     plan.total_expected_qty > 0 ? plan.total_expected_qty : Math.max(1, plan.total_items);
   const ref = String(plan.shipment_ref || '').trim();
   const fbaItemsLabel = `${plan.total_items} FBA item${plan.total_items !== 1 ? 's' : ''}`;
   const planTitle = ref || `Shipment row #${plan.id}`;
+  const emitFocusPrintGroup = () => {
+    window.dispatchEvent(
+      new CustomEvent('fba-print-focus-plan', {
+        detail: { shipmentId: plan.id, shipmentRef: ref || null },
+      }),
+    );
+  };
 
   return (
-    <motion.div
-      key={`fba-plan-${plan.id}`}
-      layout
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+    <div
       role="button"
       tabIndex={0}
       aria-expanded={isExpanded}
       aria-label={`${planTitle}${isActive ? ', open in workspace' : ''}`}
-      onClick={onToggleExpand}
+      onClick={() => {
+        emitFocusPrintGroup();
+        onToggleExpand();
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
+          emitFocusPrintGroup();
           onToggleExpand();
         }
       }}
@@ -108,7 +131,7 @@ export function FbaPlanCard({
           ) : null}
           <motion.span
             animate={{ rotate: isExpanded ? 180 : 0 }}
-            transition={{ duration: 0.18 }}
+            transition={chevronTransition}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-pink-200 text-pink-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(236,72,153,0.16)]"
           >
             <ChevronDown className="w-4 h-4" />
@@ -134,13 +157,13 @@ export function FbaPlanCard({
       </div>
 
       <AnimatePresence initial={false}>
-        {isExpanded && (
+        {isExpanded ? (
           <motion.div
-            key="expanded-fba-plan"
-            initial={{ height: 0, opacity: 0 }}
+            key={`fba-plan-expanded-${plan.id}`}
+            initial={reduceMotion ? false : { height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            transition={panelTransition}
             className="overflow-hidden"
           >
             <div className="mt-3 border-t border-purple-100 px-3 pt-3" onClick={(e) => e.stopPropagation()}>
@@ -225,15 +248,20 @@ export function FbaPlanCard({
                     animate={{
                       width: `${Math.round((plan.ready_item_count / plan.total_items) * 100)}%`,
                     }}
-                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    transition={{
+                      type: 'tween',
+                      duration: reduceMotion ? 0.01 : 0.48,
+                      ease: CARD_EASE,
+                      delay: reduceMotion ? 0 : 0.07,
+                    }}
                     className="h-full rounded-full bg-emerald-400"
                   />
                 </div>
               ) : null}
             </div>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }

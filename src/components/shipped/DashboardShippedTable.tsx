@@ -141,7 +141,8 @@ export function DashboardShippedTable({
     tested_by_name: record.tested_by_name || null,
     packed_by_name: record.packed_by_name || null,
     tester_name: record.tester_name || null,
-    packer_log_id: record.id,
+    packer_log_id: record.packer_log_id ?? null,
+    station_activity_log_id: record.id,
   } as ShippedOrder), []);
 
   const toSearchResultRecord = useCallback((record: ShippedOrder): PackerRecord => ({
@@ -426,13 +427,14 @@ export function DashboardShippedTable({
             stickyDate={stickyDate}
             fallbackDate={fallbackDate}
             count={currentCount || totalCount}
-            countClassName="text-blue-600"
+            countClassName="text-blue-700"
             weekRange={weekRange}
             weekOffset={weekOffset}
             onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
             onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
             formatDate={formatDate}
             showWeekControls
+            highContrast
           />
 
           <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">

@@ -26,7 +26,11 @@ function formatPlanDayHeader(dayKey: string): string {
   return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-type UpdateFbaParams = (patch: { plan?: number | null; tab?: FbaTab }) => void;
+type UpdateFbaParams = (patch: {
+  plan?: number | null;
+  tab?: FbaTab;
+  main?: 'print' | 'plan' | null;
+}) => void;
 
 export interface FbaPlansUpNextProps {
   plansLoading: boolean;
@@ -99,14 +103,12 @@ export function FbaPlansUpNext({
     (plan: FbaPlanQueueItem, key: string) => {
       setExpandedItemKey((prev) => {
         if (prev === key) {
-          if (activePlanId === plan.id) updateFbaParams({ plan: null, tab: 'summary' });
           return null;
         }
-        updateFbaParams({ plan: plan.id, tab: 'summary' });
         return key;
       });
     },
-    [activePlanId, updateFbaParams],
+    [],
   );
 
   return (

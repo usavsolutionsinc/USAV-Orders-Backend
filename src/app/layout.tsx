@@ -5,6 +5,7 @@ import "./globals.css";
 import Providers from "../components/Providers";
 import DashboardSidebar from "../components/DashboardSidebar";
 import { HeaderProvider } from "../contexts/HeaderContext";
+import { FbaWorkspaceProvider } from "../contexts/FbaWorkspaceContext";
 import { designTokenStyleText } from '@/styles/tokens';
 
 export default function RootLayout({
@@ -24,20 +25,22 @@ export default function RootLayout({
             <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100vh' }}>
                 <Providers>
                     <HeaderProvider>
-                        <div className="flex h-full w-full overflow-hidden">
-                            {/* Global Sidebar - Now permanent on the left */}
-                            <Suspense fallback={null}>
-                                <DashboardSidebar />
-                            </Suspense>
+                        <FbaWorkspaceProvider>
+                            <div className="flex h-full w-full overflow-hidden">
+                                {/* Global Sidebar - Now permanent on the left */}
+                                <Suspense fallback={null}>
+                                    <DashboardSidebar />
+                                </Suspense>
 
-                            {/* Main Content Area */}
-                            <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-                                {/* Optional Header overlay or replacement if needed for panelContent */}
-                                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                                    {children}
-                                </main>
+                                {/* Main Content Area */}
+                                <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
+                                    {/* Optional Header overlay or replacement if needed for panelContent */}
+                                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                                        {children}
+                                    </main>
+                                </div>
                             </div>
-                        </div>
+                        </FbaWorkspaceProvider>
                     </HeaderProvider>
                 </Providers>
             </body>

@@ -760,6 +760,7 @@ export const fbaFnskus = pgTable('fba_fnskus', {
 export const fbaShipments = pgTable('fba_shipments', {
   id: serial('id').primaryKey(),
   shipmentRef: text('shipment_ref').notNull(),
+  amazonShipmentId: text('amazon_shipment_id'),
   destinationFc: text('destination_fc'),
   dueDate: date('due_date'),
   status: text('status').notNull().default('PLANNED'),
@@ -797,6 +798,18 @@ export const fbaShipmentItems = pgTable('fba_shipment_items', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Junction table between internal FBA plans and carrier tracking rows.
+// `tracking_id` points at `shipping_tracking_numbers.id`, which is managed outside this Drizzle schema file.
+export const fbaShipmentTracking = pgTable('fba_shipment_tracking', {
+  id: serial('id').primaryKey(),
+  shipmentId: integer('shipment_id').notNull().references(() => fbaShipments.id, { onDelete: 'cascade' }),
+  trackingId: bigint('tracking_id', { mode: 'number' }).notNull(),
+  label: text('label'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  shipmentTrackingUnique: uniqueIndex('ux_fba_shipment_tracking_plan_tracking').on(table.shipmentId, table.trackingId),
+}));
+
 export const fbaFnskuLogs = pgTable('fba_fnsku_logs', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   fnsku: text('fnsku').notNull().references(() => fbaFnskus.fnsku, { onDelete: 'restrict' }),
@@ -832,6 +845,11 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   fnskuLogId: bigint('fnsku_log_id', { mode: 'number' }),
   fbaShipmentId: integer('fba_shipment_id').references(() => fbaShipments.id, { onDelete: 'set null' }),
   fbaShipmentItemId: integer('fba_shipment_item_id').references(() => fbaShipmentItems.id, { onDelete: 'set null' }),
+  /** TRACKING_SCANNED / FNSKU_SCANNED SAL row that opened this serial session (not scan_ref-based). */
+  contextStationActivityLogId: integer('context_station_activity_log_id').references(
+    () => stationActivityLogs.id,
+    { onDelete: 'set null' },
+  ),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -904,6 +922,8 @@ export type FbaShipment = typeof fbaShipments.$inferSelect;
 export type NewFbaShipment = typeof fbaShipments.$inferInsert;
 export type FbaShipmentItem = typeof fbaShipmentItems.$inferSelect;
 export type NewFbaShipmentItem = typeof fbaShipmentItems.$inferInsert;
+export type FbaShipmentTracking = typeof fbaShipmentTracking.$inferSelect;
+export type NewFbaShipmentTracking = typeof fbaShipmentTracking.$inferInsert;
 export type FbaFnskuLog = typeof fbaFnskuLogs.$inferSelect;
 export type NewFbaFnskuLog = typeof fbaFnskuLogs.$inferInsert;
 export type TechSerialNumber = typeof techSerialNumbers.$inferSelect;

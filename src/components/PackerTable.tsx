@@ -11,13 +11,21 @@ import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/uti
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
-import { getPackerThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { isFbaOrder } from '@/utils/order-platform';
 import { usePackerLogs, PackerRecord } from '@/hooks/usePackerLogs';
 
 interface PackerTableProps {
   packedBy: number;
+}
+
+/** FBA / FNSKU pack rows: each activity log is its own row (matches TechTable — no tracking-key merge). */
+function isFbaPackerRecord(record: PackerRecord): boolean {
+  return (
+    isFbaOrder(record.order_id, record.account_source) ||
+    String(record.tracking_type || '').toUpperCase() === 'FNSKU'
+  );
 }
 
 function computeWeekRange(weekOffset: number) {
@@ -51,8 +59,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
   const [searchInput, setSearchInput] = useState(String(searchParams.get('search') || ''));
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const packerTheme = getPackerThemeById(packedBy);
-  const counterColorClass = stationThemeColors[packerTheme].text;
+  const counterColorClass = stationThemeColors[getStaffThemeById(packedBy, 'packer')].text;
   const currentSearch = String(searchParams.get('search') || '');
   const searchOpen = searchParams.get('searchOpen') === '1';
   const showSearch = searchOpen || Boolean(currentSearch);
@@ -110,7 +117,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       is_shipped: undefined,
       created_at: record.created_at || null,
       quantity: record.quantity || '1',
-      packer_log_id: record.id,
+      packer_log_id: record.packer_log_id ?? null,
+      station_activity_log_id: record.id,
     };
   };
 
@@ -209,9 +217,13 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     return () => window.clearTimeout(timeoutId);
   }, [showSearch]);
 
-  // Deduplicate: keep only the latest record per tracking number (highest id)
+  // Deduplicate: latest record per tracking key — except FBA/FNSKU rows (each scan stays visible).
   const seenTracking = new Map<string, PackerRecord>();
-  [...records].sort((a, b) => a.id - b.id).forEach(record => {
+  [...records].sort((a, b) => a.id - b.id).forEach((record) => {
+    if (isFbaPackerRecord(record)) {
+      seenTracking.set(`fba:${record.id}`, record);
+      return;
+    }
     const key = (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
     seenTracking.set(key, record);
   });
@@ -342,7 +354,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                         data-day-header
                         data-date={date}
                         data-count={dateRecords.length}
-                        className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
+                        className="bg-gray-50/80 border-y border-gray-300 px-2 py-1 flex items-center justify-between z-10"
                       >
                         <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
                         <p className="text-[11px] font-black text-gray-900 tabular-nums">{dateRecords.length}</p>
@@ -353,8 +365,9 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                           condition: record.condition,
                           trackingNumber: record.shipping_tracking_number,
                         });
-                        const rowIsFba = isFbaOrder(record.order_id, record.account_source);
-                        const fnskuValue = String(record.scan_ref || record.shipping_tracking_number || record.order_id || '').trim();
+                        const rowIsFba = isFbaPackerRecord(record);
+                        const fnskuValue = String(record.scan_ref || '').trim();
+                        const showFnskuChip = rowIsFba && Boolean(fnskuValue);
                         const dotType = getSourceDotType({
                           orderId: record.order_id,
                           accountSource: record.account_source,
@@ -367,7 +380,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                             animate={{ opacity: 1 }}
                             key={record.id}
                             onClick={() => openDetails(record)}
-                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/40 ${
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                             }`}
                           >
@@ -384,11 +397,11 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                               <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5 pl-4">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                   {parseInt(String(record.quantity || '1'), 10) || 1}
-                                </span> • {displayValues.condition || 'No Condition'} • {displayValues.sku || 'No SKU'}
+                                </span> • {displayValues.condition || 'No Condition'}
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              {rowIsFba ? (
+                              {showFnskuChip ? (
                                 <FnskuChip value={fnskuValue} />
                               ) : (
                                 <>

@@ -52,8 +52,10 @@ export type TechFnskuScanApiPayload = {
 };
 
 /**
- * Tech FNSKU scan: always inserts a new `fba_fnsku_logs` row (TECH/SCANNED) and a
- * matching `FNSKU_SCANNED` station_activity_logs row. Does not commit.
+ * Tech FNSKU scan: inserts a new `fba_fnsku_logs` row (TECH/SCANNED) and a matching
+ * `FNSKU_SCANNED` station_activity_logs row. Does not create TSN rows and does not
+ * pre-fill serials from existing TSN — serials are added only when the tech scans them.
+ * Does not commit.
  */
 export async function performTechFnskuScan(
   client: Queryable,
@@ -105,6 +107,26 @@ export async function performTechFnskuScan(
     [fnsku],
   );
   const openItem = openItemResult.rows[0] ?? null;
+  let lifecycleItem = openItem;
+
+  if (openItem && String(openItem.status) === 'PLANNED') {
+    const bumpToPacking = await client.query(
+      `UPDATE fba_shipment_items
+       SET status = 'PACKING'::fba_shipment_status_enum,
+           ready_by_staff_id = COALESCE(ready_by_staff_id, $1),
+           ready_at = COALESCE(ready_at, NOW()),
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, shipment_id, expected_qty, actual_qty, status`,
+      [testedBy, openItem.id]
+    );
+    if (bumpToPacking.rows[0]) {
+      lifecycleItem = {
+        ...openItem,
+        ...bumpToPacking.rows[0],
+      };
+    }
+  }
 
   const fnskuLogResult = await client.query(
     `INSERT INTO fba_fnsku_logs
@@ -115,8 +137,8 @@ export async function performTechFnskuScan(
       fnsku,
       testedBy,
       null,
-      openItem?.shipment_id ?? null,
-      openItem?.id ?? null,
+      lifecycleItem?.shipment_id ?? null,
+      lifecycleItem?.id ?? null,
       'Tech FNSKU scan',
       JSON.stringify({
         product_title: meta.product_title ?? null,
@@ -137,7 +159,7 @@ export async function performTechFnskuScan(
     scanRef: fnsku,
     fnsku,
     fbaShipmentId: openItem?.shipment_id ?? null,
-    fbaShipmentItemId: openItem?.id ?? null,
+    fbaShipmentItemId: lifecycleItem?.id ?? null,
     notes: 'Tech FNSKU scan',
     metadata: {
       fnsku_log_id: fnskuLogId,
@@ -151,15 +173,8 @@ export async function performTechFnskuScan(
     throw new Error('Failed to create FNSKU_SCANNED station_activity_logs row');
   }
 
-  const serialsResult = await client.query(
-    `SELECT serial_number
-     FROM tech_serial_numbers
-     WHERE fnsku = $1
-       AND serial_number IS NOT NULL
-       AND BTRIM(serial_number) <> ''
-     ORDER BY created_at ASC NULLS LAST, id ASC`,
-    [fnsku],
-  );
+  // Blank serial list on each FNSKU scan: TSN rows are created only when the tech scans
+  // a serial (insertTechSerialForTracking), not by re-hydrating prior TSN rows for this FNSKU.
 
   const summaryResult = await client.query(
     `SELECT
@@ -195,12 +210,12 @@ export async function performTechFnskuScan(
     },
     shipment: openItem
       ? {
-          shipment_id: Number(openItem.shipment_id),
+          shipment_id: Number(lifecycleItem?.shipment_id ?? openItem.shipment_id),
           shipment_ref: openItem.shipment_ref ?? null,
-          item_id: Number(openItem.id),
-          expected_qty: Number(openItem.expected_qty || 0),
-          actual_qty: Number(openItem.actual_qty || 0),
-          status: openItem.status,
+          item_id: Number(lifecycleItem?.id ?? openItem.id),
+          expected_qty: Number((lifecycleItem?.expected_qty ?? openItem.expected_qty) || 0),
+          actual_qty: Number((lifecycleItem?.actual_qty ?? openItem.actual_qty) || 0),
+          status: String(lifecycleItem?.status ?? openItem.status),
         }
       : null,
     order: {
@@ -212,14 +227,12 @@ export async function performTechFnskuScan(
       condition: 'N/A',
       notes: '',
       tracking: fnsku,
-      serialNumbers: serialsResult.rows
-        .map((r: { serial_number: string | null }) => r.serial_number)
-        .filter(Boolean) as string[],
+      serialNumbers: [],
       testDateTime: logCreatedAt,
       testedBy,
       accountSource: 'fba',
       quantity: 1,
-      status: openItem?.status || null,
+      status: lifecycleItem?.status ?? openItem?.status ?? null,
       statusHistory: [],
       isShipped: false,
       packerId: null,

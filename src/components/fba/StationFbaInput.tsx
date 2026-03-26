@@ -2,14 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, Loader2, Package } from '@/components/Icons';
+import { AlertCircle, Loader2, Minus, Package, Plus } from '@/components/Icons';
 import { StationScanBar } from '@/components/station/StationScanBar';
 import { usePendingCatalog } from '@/components/fba/hooks/usePendingCatalog';
 import { useTodayPlan } from '@/components/fba/hooks/useTodayPlan';
 import { getTodayDateIso } from '@/components/fba/utils/getTodayDate';
 import { getStationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku, looksLikeFnskuPrefix } from '@/lib/scan-resolver';
-import { fbaWorkspaceScanChrome, getStaffThemeById } from '@/utils/staff-colors';
+import {
+  fbaWorkspaceScanChrome,
+  getStaffThemeById,
+  stationScanInputBorderClass,
+  type StationTheme,
+} from '@/utils/staff-colors';
 
 interface ValidatedFnskuRow {
   fnsku: string;
@@ -31,6 +36,15 @@ interface FbaFeedback {
   shipment_ref: string | null;
 }
 
+interface BulkScanCandidate {
+  fnsku: string;
+  qty: number;
+  found: boolean;
+  product_title: string | null;
+  asin: string | null;
+  sku: string | null;
+}
+
 export interface StationFbaInputProps {
   /** Show the “Station scan” caption and FNSKU routing hint */
   showLabels?: boolean;
@@ -40,23 +54,53 @@ export interface StationFbaInputProps {
    * Used by the FBA workspace sidebar scan field.
    */
   fbaScanOnly?: boolean;
+  /** Theme-colored outline on the scan bar (same as {@link StationTesting} `inputBorderClassName`). */
+  inputBorderClassName?: string;
+  /** When set, drives FNSKU chrome + default border; usually matches selected staff ({@link getStaffThemeById}). */
+  workspaceTheme?: StationTheme;
+  /** When URL has no `staffId`, FBA workspace passes resolved default (e.g. Lien) so scans attribute correctly. */
+  techStaffIdOverride?: number | string | null;
 }
 
 function normalizeFnsku(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+function extractFnskuCounts(raw: string): Map<string, number> {
+  const normalized = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const matches = normalized.match(/(?:X0|B0)[A-Z0-9]{8}/g) ?? [];
+  const counts = new Map<string, number>();
+  for (const match of matches) {
+    counts.set(match, (counts.get(match) || 0) + 1);
+  }
+  return counts;
+}
+
 export default function StationFbaInput({
   showLabels = true,
   className = '',
   fbaScanOnly = false,
+  inputBorderClassName,
+  workspaceTheme: workspaceThemeProp,
+  techStaffIdOverride,
 }: StationFbaInputProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const staffIdRaw = String(searchParams.get('staffId') || '').trim();
-  const userId = /^\d+$/.test(staffIdRaw) ? staffIdRaw : '1';
-  const stationTheme = useMemo(() => getStaffThemeById(staffIdRaw || null, 'technician'), [staffIdRaw]);
+  const userId = useMemo(() => {
+    if (techStaffIdOverride != null && techStaffIdOverride !== '') {
+      const n = Number(techStaffIdOverride);
+      if (Number.isFinite(n) && n > 0) return String(n);
+    }
+    return /^\d+$/.test(staffIdRaw) ? staffIdRaw : '1';
+  }, [techStaffIdOverride, staffIdRaw]);
+  const stationTheme = useMemo((): StationTheme => {
+    if (workspaceThemeProp) return workspaceThemeProp;
+    return getStaffThemeById(staffIdRaw || null, 'technician');
+  }, [workspaceThemeProp, staffIdRaw]);
   const workspaceChrome = fbaWorkspaceScanChrome[stationTheme];
+  const scanOutlineClass =
+    inputBorderClassName ?? stationScanInputBorderClass[stationTheme];
 
   const planParam = searchParams.get('plan');
   const planIdNum = planParam ? Number(planParam) : NaN;
@@ -79,6 +123,8 @@ export default function StationFbaInput({
   const [fbaError, setFbaError] = useState<string | null>(null);
   const [planHint, setPlanHint] = useState<string | null>(null);
   const [isFbaLoading, setIsFbaLoading] = useState(false);
+  const [bulkCandidates, setBulkCandidates] = useState<BulkScanCandidate[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const {
     inputValue,
@@ -99,6 +145,53 @@ export default function StationFbaInput({
     onTrackingOrderLoaded: useCallback(() => {}, []),
     onActiveOrderCardAutoHidden: useCallback(() => {}, []),
   });
+
+  const clearBulkCandidates = useCallback(() => {
+    setBulkCandidates([]);
+    setBulkLoading(false);
+  }, []);
+
+  const validateBulkCandidates = useCallback(async (counts: Map<string, number>) => {
+    if (counts.size === 0) {
+      clearBulkCandidates();
+      return;
+    }
+    setBulkLoading(true);
+    try {
+      const uniqueFnskus = Array.from(counts.keys());
+      const res = await fetch(`/api/fba/fnskus/validate?fnskus=${encodeURIComponent(uniqueFnskus.join(','))}`);
+      const json = await res.json().catch(() => ({}));
+      const results = Array.isArray(json?.results) ? (json.results as ValidatedFnskuRow[]) : [];
+      const foundMap = new Map(results.map((row) => [String(row.fnsku || '').toUpperCase(), row]));
+      const rows: BulkScanCandidate[] = uniqueFnskus.map((fnsku) => {
+        const row = foundMap.get(fnsku);
+        return {
+          fnsku,
+          qty: Math.max(1, counts.get(fnsku) || 1),
+          found: Boolean(row?.found),
+          product_title: row?.product_title ?? null,
+          asin: row?.asin ?? null,
+          sku: row?.sku ?? null,
+        };
+      });
+      setBulkCandidates(rows);
+    } catch {
+      setBulkCandidates([]);
+      setFbaError('Could not validate pasted FNSKUs right now.');
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [clearBulkCandidates]);
+
+  const adjustBulkQty = useCallback((fnsku: string, delta: number) => {
+    setBulkCandidates((prev) =>
+      prev.map((row) =>
+        row.fnsku === fnsku
+          ? { ...row, qty: Math.max(0, row.qty + delta) }
+          : row,
+      ),
+    );
+  }, []);
 
   const applyScanFnskuFeedback = useCallback(
     async (fnsku: string) => {
@@ -247,12 +340,121 @@ export default function StationFbaInput({
     ]
   );
 
+  const handleBulkFnskuPlanFlow = useCallback(
+    async (rows: BulkScanCandidate[]) => {
+      const validRows = rows.filter((row) => row.found && row.qty > 0);
+      const missingFnskus = rows.filter((row) => !row.found).map((row) => row.fnsku);
+      if (missingFnskus.length > 0) addPending(missingFnskus);
+      if (validRows.length === 0) {
+        setFbaError('No valid catalog FNSKUs in pasted list. Missing rows were saved as pending.');
+        return;
+      }
+
+      setIsFbaLoading(true);
+      setFbaFeedback(null);
+      setFbaError(null);
+      setPlanHint(null);
+      try {
+        if (openPlanId) {
+          for (const row of validRows) {
+            const res = await fetch(`/api/fba/shipments/${openPlanId}/items`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fnsku: row.fnsku,
+                expected_qty: row.qty,
+                product_title: row.product_title,
+                asin: row.asin,
+                sku: row.sku,
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.success === false) {
+              setFbaError(data?.error || `Could not add ${row.fnsku} to this plan.`);
+              return;
+            }
+          }
+          setPlanHint(`Added ${validRows.length} FNSKU row${validRows.length === 1 ? '' : 's'} to open plan (#${openPlanId}).`);
+          addFnskus(validRows.map((row) => row.fnsku));
+          window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
+          window.dispatchEvent(new Event('fba-plan-created'));
+          bumpFbaRefresh();
+        } else {
+          const res = await fetch('/api/fba/shipments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              due_date: getTodayDateIso(),
+              items: validRows.map((row) => ({
+                fnsku: row.fnsku,
+                expected_qty: row.qty,
+                product_title: row.product_title,
+                asin: row.asin,
+                sku: row.sku,
+              })),
+              unresolved_fnskus: missingFnskus,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.success === false) {
+            setFbaError(data?.error || 'Could not create a new plan from pasted FNSKUs.');
+            return;
+          }
+          const shipmentId = Number(data.shipment?.id);
+          const shipmentRef = String(data.shipment?.shipment_ref ?? '');
+          if (!Number.isFinite(shipmentId) || shipmentId < 1) {
+            setFbaError('Plan created but response was incomplete.');
+            return;
+          }
+          setPlanHint(
+            shipmentRef
+              ? `New plan ${shipmentRef} with ${validRows.length} FNSKU row${validRows.length === 1 ? '' : 's'}.`
+              : 'New plan created from pasted FNSKUs.',
+          );
+          addFnskus(validRows.map((row) => row.fnsku));
+          const params = new URLSearchParams(searchParams.toString());
+          params.set('plan', String(shipmentId));
+          params.delete('draft');
+          params.set('r', String(Date.now()));
+          router.replace(`/fba?${params.toString()}`);
+          window.dispatchEvent(new Event('fba-plan-created'));
+          window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
+        }
+
+        await applyScanFnskuFeedback(validRows[0].fnsku);
+        setInputValue('');
+        clearBulkCandidates();
+      } catch {
+        setFbaError('Network error - try again.');
+      } finally {
+        setIsFbaLoading(false);
+        inputRef.current?.focus();
+      }
+    },
+    [
+      addFnskus,
+      addPending,
+      applyScanFnskuFeedback,
+      bumpFbaRefresh,
+      clearBulkCandidates,
+      inputRef,
+      openPlanId,
+      router,
+      searchParams,
+      setInputValue,
+    ],
+  );
+
   const handleFormSubmit = useCallback(
     (e?: React.FormEvent) => {
       e?.preventDefault();
       const raw = inputValue;
       const trimmed = raw.trim();
       if (!trimmed) return;
+      if (fbaScanOnly && bulkCandidates.length > 0) {
+        void handleBulkFnskuPlanFlow(bulkCandidates);
+        return;
+      }
 
       if (fbaScanOnly && !looksLikeFnsku(trimmed)) {
         setFbaError(
@@ -264,6 +466,7 @@ export default function StationFbaInput({
       }
 
       if (looksLikeFnsku(trimmed)) {
+        clearBulkCandidates();
         setInputValue('');
         void handleFnskuPlanFlow(raw);
         return;
@@ -274,11 +477,29 @@ export default function StationFbaInput({
       setPlanHint(null);
       void handleSubmit(undefined, undefined, undefined);
     },
-    [inputValue, handleFnskuPlanFlow, handleSubmit, setInputValue, fbaScanOnly]
+    [inputValue, handleFnskuPlanFlow, handleSubmit, setInputValue, fbaScanOnly, bulkCandidates, handleBulkFnskuPlanFlow, clearBulkCandidates]
+  );
+
+  const handleInputChange = useCallback(
+    (value: string) => {
+      setInputValue(value);
+      if (!fbaScanOnly) return;
+      setFbaError(null);
+      setPlanHint(null);
+      setFbaFeedback(null);
+      const counts = extractFnskuCounts(value);
+      const hasBatch = counts.size > 1 || (counts.size === 1 && /[\s,;|]/.test(value));
+      if (!hasBatch) {
+        clearBulkCandidates();
+        return;
+      }
+      void validateBulkCandidates(counts);
+    },
+    [clearBulkCandidates, fbaScanOnly, setInputValue, validateBulkCandidates]
   );
 
   const scanError = fbaScanOnly ? fbaError : trackingNotFoundAlert || errorMessage || fbaError;
-  const busy = fbaScanOnly ? isFbaLoading : isLoading || isFbaLoading;
+  const busy = fbaScanOnly ? isFbaLoading || bulkLoading : isLoading || isFbaLoading;
 
   const routingHint = openPlanId
     ? 'FNSKU adds to the open plan. No plan selected → FNSKU starts a new plan.'
@@ -302,9 +523,10 @@ export default function StationFbaInput({
 
       <StationScanBar
         value={inputValue}
-        onChange={setInputValue}
+        onChange={handleInputChange}
         onSubmit={handleFormSubmit}
         inputRef={inputRef}
+        inputBorderClassName={scanOutlineClass}
         placeholder={fbaScanOnly ? 'FNSKU (X00…)' : 'FNSKU, tracking, RS-, serial'}
         autoFocus={false}
         hasRightContent={busy}
@@ -328,6 +550,56 @@ export default function StationFbaInput({
           ) : null
         }
       />
+
+      {fbaScanOnly && bulkCandidates.length > 0 ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-2.5 py-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-800">
+              Pasted FNSKU validation
+            </p>
+            <p className="text-[10px] font-semibold tabular-nums text-violet-700">
+              {bulkCandidates.length} rows
+            </p>
+          </div>
+          <ul className="space-y-1.5">
+            {bulkCandidates.map((row) => (
+              <li key={row.fnsku} className="flex items-center gap-2 rounded-lg border border-violet-100 bg-white px-2 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-bold text-zinc-900">
+                    {row.product_title || row.fnsku}
+                  </p>
+                  <p className={`text-[10px] font-mono ${row.found ? 'text-zinc-500' : 'text-red-600'}`}>
+                    {row.fnsku} {row.found ? '' : '- not in fba_fnskus'}
+                  </p>
+                </div>
+                <div className="flex w-7 flex-col items-center justify-center rounded-md border border-violet-200 bg-violet-50">
+                  <button
+                    type="button"
+                    onClick={() => adjustBulkQty(row.fnsku, 1)}
+                    className="flex h-5 w-full items-center justify-center text-violet-700 hover:bg-violet-100"
+                    aria-label={`Increase ${row.fnsku} quantity`}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                  <span className="text-[10px] font-black tabular-nums text-violet-900">{row.qty}</span>
+                  <button
+                    type="button"
+                    onClick={() => adjustBulkQty(row.fnsku, -1)}
+                    className="flex h-5 w-full items-center justify-center text-violet-700 hover:bg-violet-100 disabled:opacity-40"
+                    disabled={row.qty <= 0}
+                    aria-label={`Decrease ${row.fnsku} quantity`}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-violet-700">
+            Press Enter to add valid rows using the quantities on the right.
+          </p>
+        </div>
+      ) : null}
 
       {scanError ? (
         <div

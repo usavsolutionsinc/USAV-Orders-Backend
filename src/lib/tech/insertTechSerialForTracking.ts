@@ -1,11 +1,10 @@
 import type { Pool } from 'pg';
 import { formatPSTTimestamp } from '@/utils/date';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
-import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
+import { resolveTechSerialInsertContextFromSal } from '@/lib/tech/resolveTechSerialInsertContextFromSal';
 
 export type TechSerialInsertDb = Pick<Pool, 'query'>;
 
@@ -31,98 +30,20 @@ export type InsertTechSerialFailure = {
 export type InsertTechSerialResult = InsertTechSerialSuccess | InsertTechSerialFailure;
 
 /**
- * Single-serial insert for tech station: duplicate checks (CSV-aware), TSN row, SERIAL_ADDED SAL, order status_history.
- * Mirrors POST /api/tech/add-serial behavior.
+ * Inserts one tech_serial_numbers row + SERIAL_ADDED SAL. Context comes only from the latest
+ * TECH `station_activity_logs` row for this staff (`updated_at`), not from client tracking
+ * or `scan_ref` matching. Sets `context_station_activity_log_id` when the anchor SAL is known.
  */
 export async function insertTechSerialForTracking(
   db: TechSerialInsertDb,
   params: {
-    tracking: string;
     serial: string;
     techId: string | number;
     allowFbaDuplicates?: boolean;
-    /** When batching (e.g. SKU inject), reuse one resolveShipmentId result per tracking. */
-    resolvedScan?: { shipmentId: number | null; scanRef: string | null };
   },
   options?: InsertTechSerialOptions,
 ): Promise<InsertTechSerialResult> {
-  const { tracking, serial, techId, allowFbaDuplicates, resolvedScan: resolvedScanParam } = params;
-  const scannedTracking = String(tracking || '').trim();
-  const key18 = normalizeTrackingKey18(scannedTracking);
-  if (!key18 || key18.length < 8) {
-    return { ok: false, error: 'Invalid tracking number', status: 400 };
-  }
-
-  const resolvedScan = resolvedScanParam ?? (await resolveShipmentId(scannedTracking));
-  const isFbaLikeTracking = /^(X0|B0|FBA)/i.test(scannedTracking);
-  const normalizedFnsku = isFbaLikeTracking
-    ? scannedTracking.toUpperCase().replace(/[^A-Z0-9]/g, '')
-    : null;
-  let fnskuCatalogExists = false;
-  if (normalizedFnsku) {
-    const fnskuLookup = await db.query(
-      `SELECT 1
-       FROM fba_fnskus
-       WHERE fnsku = $1
-       LIMIT 1`,
-      [normalizedFnsku],
-    );
-    fnskuCatalogExists = fnskuLookup.rows.length > 0;
-  }
-
-  let orderResult = resolvedScan.shipmentId
-    ? await db.query(
-        `
-                SELECT o.id, o.account_source,
-                       stn.tracking_number_raw AS shipping_tracking_number
-                FROM orders o
-                LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-                WHERE o.shipment_id = $1
-                ORDER BY o.id DESC
-                LIMIT 1
-            `,
-        [resolvedScan.shipmentId],
-      )
-    : { rows: [] as any[] };
-
-  if (orderResult.rows.length === 0) {
-    orderResult = await db.query(
-      `
-                SELECT o.id, stn.tracking_number_raw AS shipping_tracking_number, o.account_source
-                FROM orders o
-                JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-                WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
-                ORDER BY o.id DESC
-                LIMIT 1
-            `,
-      [key18],
-    );
-  }
-  const order = orderResult.rows[0] || null;
-  let ordersExceptionId: number | null = null;
-
-  if (!order && !fnskuCatalogExists) {
-    const exceptionResult = await db.query(
-      `SELECT id
-                 FROM orders_exceptions
-                 WHERE status = 'open'
-                   AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
-                 ORDER BY id DESC
-                 LIMIT 1`,
-      [key18],
-    );
-    if (exceptionResult.rows.length === 0) {
-      return { ok: false, error: 'Tracking not found in orders or orders_exceptions', status: 404 };
-    }
-    ordersExceptionId = Number(exceptionResult.rows[0].id);
-  }
-
-  let serialType = 'SERIAL';
-  if (/^X0|^B0/i.test(serial)) {
-    serialType = 'FNSKU';
-  } else if (order?.account_source === 'fba') {
-    serialType = 'FNSKU';
-  }
+  const { serial, techId, allowFbaDuplicates } = params;
 
   const techIdNum = parseInt(String(techId), 10);
   let staffResult = { rows: [] as Array<{ id: number; name: string }> };
@@ -156,54 +77,70 @@ export async function insertTechSerialForTracking(
     return { ok: false, error: 'Serial is required', status: 400 };
   }
 
-  let unmatchedFnskuLog: null | {
-    id: number;
-    fba_shipment_id: number | null;
-    fba_shipment_item_id: number | null;
-  } = null;
-
-  if (normalizedFnsku) {
-    // Newest TECH/SCANNED log without a serial yet — each FNSKU re-scan inserts a new log;
-    // the next serial must attach to that latest scan, not the oldest open log.
-    const unmatchedFnskuLogResult = await db.query(
-      `SELECT l.id, l.fba_shipment_id, l.fba_shipment_item_id
-                 FROM fba_fnsku_logs l
-                 WHERE l.fnsku = $1
-                   AND l.staff_id = $2
-                   AND l.source_stage = 'TECH'
-                   AND l.event_type = 'SCANNED'
-                   AND NOT EXISTS (
-                     SELECT 1
-                     FROM tech_serial_numbers tsn
-                     WHERE tsn.fnsku_log_id = l.id
-                       AND tsn.serial_number IS NOT NULL
-                       AND BTRIM(tsn.serial_number) <> ''
-                   )
-                 ORDER BY l.created_at DESC, l.id DESC
-                 LIMIT 1`,
-      [normalizedFnsku, staffId],
-    );
-    unmatchedFnskuLog = unmatchedFnskuLogResult.rows[0] ?? null;
+  const salCtx = await resolveTechSerialInsertContextFromSal(db, staffId);
+  if (!salCtx.ok) {
+    return { ok: false, error: salCtx.error, status: salCtx.status };
   }
+
+  const ctx = salCtx.ctx;
+  const isFbaLikeContext =
+    Boolean(ctx.normalizedFnsku && /^(X0|B0|FBA)/i.test(ctx.normalizedFnsku))
+    || Boolean(ctx.displayTracking && /^(X0|B0|FBA)/i.test(ctx.displayTracking));
+
+  let orderResult =
+    ctx.shipmentId != null
+      ? await db.query(
+          `
+                SELECT o.id, o.account_source,
+                       stn.tracking_number_raw AS shipping_tracking_number
+                FROM orders o
+                LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+                WHERE o.shipment_id = $1
+                ORDER BY o.id DESC
+                LIMIT 1
+            `,
+          [ctx.shipmentId],
+        )
+      : { rows: [] as any[] };
+
+  const order = orderResult.rows[0] || null;
+
+  let serialType = 'SERIAL';
+  if (/^X0|^B0/i.test(upperSerial)) {
+    serialType = 'FNSKU';
+  } else if (order?.account_source === 'fba') {
+    serialType = 'FNSKU';
+  }
+
+  const fnskuLogIdForAgg =
+    ctx.matchedFnskuLog?.id != null &&
+    Number.isFinite(Number(ctx.matchedFnskuLog.id)) &&
+    Number(ctx.matchedFnskuLog.id) > 0
+      ? Number(ctx.matchedFnskuLog.id)
+      : null;
+
+  const ctxAnchor = ctx.anchorStationActivityLogId;
 
   const allTsnResult = await db.query(
     `SELECT serial_number
-             FROM tech_serial_numbers
-             WHERE ($1::bigint IS NOT NULL AND shipment_id = $1)
-                OR ($2::int    IS NOT NULL AND shipment_id IS NULL AND orders_exception_id = $2)
-                OR (
-                    $1::bigint IS NULL AND $2::int IS NULL
-                    AND scan_ref IS NOT NULL
-                    AND RIGHT(regexp_replace(UPPER(scan_ref), '[^A-Z0-9]', '', 'g'), 18) = $3
-                )
-             ORDER BY id ASC`,
-    [resolvedScan.shipmentId ?? null, ordersExceptionId, key18],
+       FROM tech_serial_numbers
+       WHERE ($4::int IS NOT NULL AND context_station_activity_log_id = $4)
+          OR (
+            $4::int IS NULL
+            AND (
+              ($1::bigint IS NOT NULL AND shipment_id = $1)
+              OR ($2::int IS NOT NULL AND shipment_id IS NULL AND orders_exception_id = $2)
+              OR ($3::bigint IS NOT NULL AND fnsku_log_id = $3)
+            )
+          )
+       ORDER BY id ASC`,
+    [ctx.shipmentId ?? null, ctx.ordersExceptionId ?? null, fnskuLogIdForAgg, ctxAnchor],
   );
 
   const allExistingSerials = mergeSerialsFromTsnRows(allTsnResult.rows);
 
   const shouldAllowDuplicateSerial =
-    Boolean(allowFbaDuplicates) || isFbaLikeTracking || order?.account_source === 'fba';
+    Boolean(allowFbaDuplicates) || isFbaLikeContext || order?.account_source === 'fba';
 
   if (allExistingSerials.includes(upperSerial) && !shouldAllowDuplicateSerial) {
     return {
@@ -213,31 +150,32 @@ export async function insertTechSerialForTracking(
     };
   }
 
-  if (!resolvedScan.shipmentId && ordersExceptionId == null && !fnskuCatalogExists) {
+  if (!ctx.shipmentId && ctx.ordersExceptionId == null && !ctx.fnskuCatalogExists) {
     return {
       ok: false,
-      error: 'Tracking did not resolve to a shipment or open exception',
+      error: 'Scan context did not resolve to a shipment, open exception, or catalog FNSKU',
       status: 400,
     };
   }
 
   const insertResult = await db.query(
     `INSERT INTO tech_serial_numbers
-             (shipment_id, orders_exception_id, scan_ref, serial_number, serial_type,
-              tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-             RETURNING id`,
+       (shipment_id, orders_exception_id, scan_ref, serial_number, serial_type,
+        tested_by, fnsku, fnsku_log_id, fba_shipment_id, fba_shipment_item_id,
+        context_station_activity_log_id)
+       VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING id`,
     [
-      resolvedScan.shipmentId ?? null,
-      ordersExceptionId,
-      resolvedScan.scanRef ?? (resolvedScan.shipmentId ? null : scannedTracking),
+      ctx.shipmentId ?? null,
+      ctx.ordersExceptionId ?? null,
       upperSerial,
       serialType,
       staffId,
-      normalizedFnsku,
-      unmatchedFnskuLog?.id ?? null,
-      unmatchedFnskuLog?.fba_shipment_id ?? null,
-      unmatchedFnskuLog?.fba_shipment_item_id ?? null,
+      ctx.normalizedFnsku,
+      ctx.matchedFnskuLog?.id ?? null,
+      ctx.matchedFnskuLog?.fba_shipment_id ?? null,
+      ctx.matchedFnskuLog?.fba_shipment_item_id ?? null,
+      ctxAnchor,
     ],
   );
 
@@ -251,16 +189,18 @@ export async function insertTechSerialForTracking(
     station: 'TECH',
     activityType: 'SERIAL_ADDED',
     staffId,
-    shipmentId: resolvedScan.shipmentId ?? null,
-    scanRef: resolvedScan.scanRef ?? scannedTracking,
-    fnsku: normalizedFnsku,
-    fbaShipmentId: unmatchedFnskuLog?.fba_shipment_id ?? null,
-    fbaShipmentItemId: unmatchedFnskuLog?.fba_shipment_item_id ?? null,
+    shipmentId: ctx.shipmentId ?? null,
+    scanRef: null,
+    fnsku: ctx.normalizedFnsku,
+    ordersExceptionId: ctx.ordersExceptionId ?? null,
+    fbaShipmentId: ctx.matchedFnskuLog?.fba_shipment_id ?? null,
+    fbaShipmentItemId: ctx.matchedFnskuLog?.fba_shipment_item_id ?? null,
     techSerialNumberId: targetTechSerialId,
     notes: `Serial added: ${upperSerial}`,
     metadata: {
       serial: upperSerial,
       serial_type: serialType,
+      context_station_activity_log_id: ctxAnchor,
     },
     createdAt: formatPSTTimestamp(),
   });
@@ -300,7 +240,6 @@ export async function insertTechSerialForTracking(
     await invalidateCacheTags(['tech-logs', 'orders-next']);
     await publishTechLogChanged({
       techId: staffId,
-      // This function always creates a new TSN row + SERIAL_ADDED SAL row.
       action: 'insert',
       source: 'tech.add-serial',
     });

@@ -344,7 +344,6 @@ export function RepairTable({ filter }: RepairTableProps) {
                             <SourceOrderChip
                               value={String(repair.source_order_id || '').trim() || 'WALK-IN'}
                               display={String(repair.source_order_id || '').trim() ? getLast4(repair.source_order_id) : 'WALK-IN'}
-                              width={String(repair.source_order_id || '').trim() ? 'w-[50px]' : 'w-[76px]'}
                               disableCopy={!String(repair.source_order_id || '').trim()}
                             />
                           </div>

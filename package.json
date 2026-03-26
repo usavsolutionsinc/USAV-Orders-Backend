@@ -21,6 +21,8 @@
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:migrate:station-sessions": "node scripts/migrate-station-scan-sessions.mjs",
+    "db:migrate:tsn-context-sal": "node scripts/add-tech-serial-context-sal-column.mjs",
     "realtime:relay": "node scripts/realtime-outbox-relay.js",
     "debug:transfer-order": "node scripts/debug-transfer-order-match.js",
     "check:mobile-endpoints": "node scripts/check-mobile-endpoint-integrity.js",

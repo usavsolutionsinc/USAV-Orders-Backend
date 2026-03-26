@@ -16,7 +16,7 @@ import pool from '@/lib/db';
 export async function GET() {
   try {
     const shipRes = await pool.query(`
-      SELECT id, shipment_ref, due_date, status
+      SELECT id, shipment_ref, due_date, status, amazon_shipment_id
       FROM fba_shipments
       WHERE due_date = CURRENT_DATE AND status = 'PLANNED'
       ORDER BY created_at DESC
@@ -45,6 +45,33 @@ export async function GET() {
       ORDER BY fsi.created_at ASC
     `, [shipment.id]);
 
+    const trackingRes = await pool.query(
+      `SELECT
+         fst.id          AS link_id,
+         fst.label,
+         fst.created_at  AS linked_at,
+         stn.id          AS tracking_id,
+         stn.tracking_number_raw AS tracking_number,
+         stn.tracking_number_normalized,
+         stn.carrier,
+         stn.latest_status_category AS status_category,
+         stn.latest_status_description AS status_description,
+         stn.is_label_created,
+         stn.is_carrier_accepted,
+         stn.is_in_transit,
+         stn.is_out_for_delivery,
+         stn.is_delivered,
+         stn.has_exception,
+         stn.is_terminal,
+         stn.delivered_at,
+         stn.latest_event_at
+       FROM fba_shipment_tracking fst
+       JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
+       WHERE fst.shipment_id = $1
+       ORDER BY fst.created_at DESC`,
+      [shipment.id]
+    );
+
     return NextResponse.json({
       success: true,
       shipment: {
@@ -52,6 +79,8 @@ export async function GET() {
         shipment_ref: shipment.shipment_ref,
         due_date: shipment.due_date,
         status: shipment.status,
+        amazon_shipment_id: shipment.amazon_shipment_id ?? null,
+        tracking_numbers: trackingRes.rows,
         items: itemsRes.rows,
       },
     });

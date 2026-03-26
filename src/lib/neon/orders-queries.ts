@@ -49,6 +49,10 @@ export interface ShippedOrder {
   tested_by_name?: string | null;
   packed_by_name?: string | null;
   tester_name?: string | null;
+  /** `packer_logs.id` for DELETE; from packerlogs API join. */
+  packer_log_id?: number | null;
+  /** `station_activity_logs.id` when delete has no packer_logs row (e.g. some FBA scans). */
+  station_activity_log_id?: number | null;
   row_source?: 'order' | 'exception';
   exception_reason?: string | null;
   exception_status?: string | null;

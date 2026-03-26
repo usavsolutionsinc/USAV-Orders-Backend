@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
 
 type Params = Promise<{ id: string; itemId: string }>;
@@ -7,13 +8,13 @@ type Params = Promise<{ id: string; itemId: string }>;
 const STATUS_ORDER: Record<string, number> = {
   PLANNED: 0,
   PACKING: 1,
-  OUT_OF_STOCK: 1, // same level as PACKING — sideways transition
+  OUT_OF_STOCK: 1, // same level as PACKING â€” sideways transition
   READY_TO_GO: 2,
   LABEL_ASSIGNED: 3,
   SHIPPED: 4,
 };
 
-// ── GET /api/fba/shipments/[id]/items/[itemId] ────────────────────────────────
+// â”€â”€ GET /api/fba/shipments/[id]/items/[itemId] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns a single shipment item with staff name joins.
 export async function GET(
   _request: NextRequest,
@@ -21,10 +22,11 @@ export async function GET(
 ) {
   try {
     const { id, itemId } = await params;
-    const shipmentId = Number(id);
+    const shipmentId = parseFbaPlanId(id);
     const itemIdNum = Number(itemId);
-    if (!Number.isFinite(shipmentId) || !Number.isFinite(itemIdNum)) {
-      return NextResponse.json({ success: false, error: 'Invalid id' }, { status: 400 });
+    if (shipmentId == null || !Number.isFinite(itemIdNum)) {
+      const error = shipmentId == null ? getInvalidFbaPlanIdMessage(id) : 'Invalid id';
+      return NextResponse.json({ success: false, error }, { status: 400 });
     }
 
     const result = await pool.query(
@@ -75,7 +77,7 @@ export async function GET(
   }
 }
 
-// ── PATCH /api/fba/shipments/[id]/items/[itemId] ─────────────────────────────
+// â”€â”€ PATCH /api/fba/shipments/[id]/items/[itemId] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Update mutable item fields.
 // Body (all optional): { expected_qty, status, product_title, asin, sku,
 //                        notes, staff_id }
@@ -87,10 +89,11 @@ export async function PATCH(
   const client = await pool.connect();
   try {
     const { id, itemId } = await params;
-    const shipmentId = Number(id);
+    const shipmentId = parseFbaPlanId(id);
     const itemIdNum = Number(itemId);
-    if (!Number.isFinite(shipmentId) || !Number.isFinite(itemIdNum)) {
-      return NextResponse.json({ success: false, error: 'Invalid id' }, { status: 400 });
+    if (shipmentId == null || !Number.isFinite(itemIdNum)) {
+      const error = shipmentId == null ? getInvalidFbaPlanIdMessage(id) : 'Invalid id';
+      return NextResponse.json({ success: false, error }, { status: 400 });
     }
 
     const body = await request.json();
@@ -116,7 +119,7 @@ export async function PATCH(
 
     const currentStatus = existing.rows[0].status as string;
     if (body.status) {
-      // Block only SHIPPED→anything (irreversible) or LABEL_ASSIGNED→PLANNED
+      // Block only SHIPPEDâ†’anything (irreversible) or LABEL_ASSIGNEDâ†’PLANNED
       const currentRank = STATUS_ORDER[currentStatus] ?? 0;
       if (currentStatus === 'SHIPPED') {
         await client.query('ROLLBACK');
@@ -222,7 +225,7 @@ export async function PATCH(
   }
 }
 
-// ── DELETE /api/fba/shipments/[id]/items/[itemId] ─────────────────────────────
+// â”€â”€ DELETE /api/fba/shipments/[id]/items/[itemId] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Hard-delete a shipment item. Only allowed when status = 'PLANNED'.
 export async function DELETE(
   _request: NextRequest,
@@ -230,10 +233,11 @@ export async function DELETE(
 ) {
   try {
     const { id, itemId } = await params;
-    const shipmentId = Number(id);
+    const shipmentId = parseFbaPlanId(id);
     const itemIdNum = Number(itemId);
-    if (!Number.isFinite(shipmentId) || !Number.isFinite(itemIdNum)) {
-      return NextResponse.json({ success: false, error: 'Invalid id' }, { status: 400 });
+    if (shipmentId == null || !Number.isFinite(itemIdNum)) {
+      const error = shipmentId == null ? getInvalidFbaPlanIdMessage(id) : 'Invalid id';
+      return NextResponse.json({ success: false, error }, { status: 400 });
     }
 
     const check = await pool.query(
@@ -277,3 +281,4 @@ export async function DELETE(
     );
   }
 }
+

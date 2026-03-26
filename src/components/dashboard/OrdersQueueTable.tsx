@@ -94,7 +94,7 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       aria-pressed={isSelected}
       aria-label={`Open order ${record.order_id || record.id}`}
       data-order-row-id={String(record.id)}
-      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/50 ${
         isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/10'
       }`}
     >
@@ -385,6 +385,7 @@ export function OrdersQueueTable({
           fallbackDate={fallbackDate}
           count={currentCount || totalCount}
           countClassName="text-blue-600"
+          showCount={false}
           weekRange={weekRange}
           weekOffset={weekOffset}
           onPrevWeek={onPrevWeek}

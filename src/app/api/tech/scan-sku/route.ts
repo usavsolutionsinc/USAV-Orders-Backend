@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getApiIdempotencyResponse, readIdempotencyKey, saveApiIdempotencyResponse } from '@/lib/api-idempotency';
+import { getValidStationScanSession, trackingMatchesSession } from '@/lib/station-scan-session';
 import { normalizeSku } from '@/utils/sku';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishTechLogChanged } from '@/lib/realtime/publish';
-import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { parseSerialCsvField } from '@/lib/tech/serialFields';
 import { insertTechSerialForTracking } from '@/lib/tech/insertTechSerialForTracking';
+import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+
+const ROUTE = 'tech.scan-sku';
 
 export async function POST(req: NextRequest) {
   const client = await pool.connect();
   try {
-    const { skuCode, tracking, techId } = await req.json();
+    const body = await req.json();
+    const { skuCode, tracking, techId } = body;
+    const scanSessionId = body?.scanSessionId != null ? String(body.scanSessionId).trim() : '';
+    const idemKey = readIdempotencyKey(req, body?.idempotencyKey);
+
+    if (idemKey) {
+      const hit = await getApiIdempotencyResponse(pool, idemKey, ROUTE);
+      if (hit && hit.status_code === 200) {
+        return NextResponse.json(hit.response_body, { status: 200 });
+      }
+    }
 
     if (!skuCode || !tracking || !techId) {
       return NextResponse.json({
@@ -69,6 +83,24 @@ export async function POST(req: NextRequest) {
 
     const staffId = staffResult.rows[0].id;
 
+    if (scanSessionId) {
+      const sess = await getValidStationScanSession(client, scanSessionId, staffId);
+      if (!sess || sess.session_kind === 'REPAIR') {
+        return NextResponse.json(
+          { success: false, error: 'Invalid scan session for SKU scan.' },
+          { status: 400 },
+        );
+      }
+      const trk = String(tracking || '').trim();
+      const k18 = normalizeTrackingKey18(trk);
+      if (!trackingMatchesSession(sess, trk, k18)) {
+        return NextResponse.json(
+          { success: false, error: 'Tracking does not match the active scan session.' },
+          { status: 400 },
+        );
+      }
+    }
+
     const exactSku = await client.query(
       `SELECT id, serial_number, notes, static_sku
        FROM sku
@@ -101,26 +133,6 @@ export async function POST(req: NextRequest) {
     const normalizedTracking = String(tracking || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     const isFnskuTracking = /^(X00|X0|B0)/i.test(normalizedTracking);
     const pairingTracking = isFnskuTracking ? normalizedTracking : String(tracking || '').trim();
-    const resolvedOnce = await resolveShipmentId(pairingTracking);
-
-    let fnskuContextExists = false;
-    if (isFnskuTracking) {
-      const fnskuLookup = await client.query(
-        `SELECT 1
-         FROM fba_fnskus
-         WHERE fnsku = $1
-         LIMIT 1`,
-        [normalizedTracking],
-      );
-      fnskuContextExists = fnskuLookup.rows.length > 0;
-    }
-
-    if (!resolvedOnce.shipmentId && !fnskuContextExists) {
-      return NextResponse.json({
-        success: false,
-        error: 'Tracking/FNSKU context not found',
-      }, { status: 404 });
-    }
 
     const insertedSerials: string[] = [];
     let canonicalSerialList: string[] = [];
@@ -133,7 +145,7 @@ export async function POST(req: NextRequest) {
         for (const rawSerial of serialsFromSku) {
           const ins = await insertTechSerialForTracking(
             client,
-            { tracking: pairingTracking, serial: rawSerial, techId, resolvedScan: resolvedOnce },
+            { serial: rawSerial, techId },
             { skipInvalidateAndPublish: true },
           );
           if (!ins.ok) {
@@ -171,14 +183,27 @@ export async function POST(req: NextRequest) {
       source: 'tech.scan-sku',
     });
 
-    return NextResponse.json({
+    const responsePayload: Record<string, unknown> = {
       success: true,
       serialNumbers: insertedSerials,
       productTitle,
       notes: skuRecord.notes,
       quantityDecremented: qtyToDecrement,
+      scanSessionId: scanSessionId || null,
       ...(serialsFromSku.length > 0 ? { updatedSerials: canonicalSerialList } : {}),
-    });
+    };
+
+    if (idemKey) {
+      await saveApiIdempotencyResponse(pool, {
+        idempotencyKey: idemKey,
+        route: ROUTE,
+        staffId,
+        statusCode: 200,
+        responseBody: responsePayload,
+      });
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (error: any) {
     console.error('SKU scan error:', error);
     return NextResponse.json({

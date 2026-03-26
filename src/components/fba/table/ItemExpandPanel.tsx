@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import type { Dispatch } from 'react';
@@ -8,11 +8,11 @@ import { enrichFromApi } from './utils';
 import type { PrintQueueItem } from './types';
 
 async function patchItem(
-  shipmentId: number,
+  planId: number,
   itemId: number,
   body: Record<string, unknown>
 ): Promise<{ ok: boolean; item?: PrintQueueItem }> {
-  const res = await fetch(`/api/fba/shipments/${shipmentId}/items/${itemId}`, {
+  const res = await fetch(`/api/fba/shipments/${planId}/items/${itemId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -66,16 +66,16 @@ export function ItemExpandPanel({
       item_status: String(raw.status ?? item.item_status ?? ''),
       item_notes: (raw.notes as string | null | undefined) ?? item.item_notes ?? null,
     } as PrintQueueItem & { status?: string; notes?: string | null };
-    const e = enrichFromApi(merged);
-    dispatch({ type: 'PATCH_ITEM', id: item.item_id, patch: { ...e, expanded: item.expanded } });
+    const enriched = enrichFromApi(merged);
+    dispatch({ type: 'PATCH_ITEM', id: item.item_id, patch: { ...enriched, expanded: item.expanded } });
   };
 
   const savePatch = async (body: Record<string, unknown>, optimistic: Partial<EnrichedItem>) => {
     setSaving(true);
     dispatch({ type: 'PATCH_ITEM', id: item.item_id, patch: optimistic });
-    const r = await patchItem(item.shipment_id, item.item_id, body);
+    const response = await patchItem(item.plan_id, item.item_id, body);
     setSaving(false);
-    if (r.ok && r.item) applyServerItem(r.item as unknown as Record<string, unknown>);
+    if (response.ok && response.item) applyServerItem(response.item as unknown as Record<string, unknown>);
   };
 
   const commitStatus = async (next: ItemStatus) => {
@@ -123,13 +123,15 @@ export function ItemExpandPanel({
           </div>
         ) : null}
         <div className="rounded-2xl border border-zinc-200 bg-white px-3 py-2.5">
-          <p className="text-[9px] font-black uppercase tracking-[0.14em] text-zinc-400">Shipment</p>
+          <p className="text-[9px] font-black uppercase tracking-[0.14em] text-zinc-400">Plan</p>
           <p className="mt-1 text-[11px] font-mono text-zinc-700">
-            <span className="text-zinc-900">{item.shipment_ref}</span>
+            <span className="text-zinc-900">{item.plan_ref}</span>
             {item.amazon_shipment_id ? (
               <>
                 {' '}
-                · Amazon <span className="text-zinc-900">{item.amazon_shipment_id}</span>
+                <span>
+                  | Amazon <span className="text-zinc-900">{item.amazon_shipment_id}</span>
+                </span>
               </>
             ) : null}
           </p>
@@ -185,7 +187,7 @@ export function ItemExpandPanel({
             }}
             rows={2}
             className="rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-800 outline-none transition-colors focus:border-sky-400 focus:ring-2 focus:ring-sky-400/15"
-            placeholder="Restock expected, QC notes…"
+            placeholder="Restock expected, QC notes..."
           />
         </div>
       )}
@@ -195,7 +197,7 @@ export function ItemExpandPanel({
           <RemoveFromPlanButton fnsku={item.fnsku} onConfirm={() => onRequestRemove(item)} />
         ) : null}
       </div>
-      {saving ? <p className="mt-2 text-[10px] font-medium text-zinc-400">Saving changes…</p> : null}
+      {saving ? <p className="mt-2 text-[10px] font-medium text-zinc-400">Saving changes...</p> : null}
     </div>
   );
 }

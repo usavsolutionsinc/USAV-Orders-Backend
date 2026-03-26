@@ -57,6 +57,14 @@ export function printQueueReducer(state: TableState, action: TableAction): Table
       return { ...state, selected: new Set(state.items.map((i) => i.item_id)) };
     case 'DESELECT_ALL':
       return { ...state, selected: new Set() };
+    case 'SELECT_PLAN': {
+      const ids = state.items.filter((i) => i.plan_id === action.plan_id).map((i) => i.item_id);
+      const allSel = ids.length > 0 && ids.every((id) => state.selected.has(id));
+      const next = new Set(state.selected);
+      if (allSel) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
+      return { ...state, selected: next };
+    }
     case 'SELECT_SHIPMENT': {
       const ids = state.items.filter((i) => i.shipment_id === action.shipment_id).map((i) => i.item_id);
       const allSel = ids.length > 0 && ids.every((id) => state.selected.has(id));

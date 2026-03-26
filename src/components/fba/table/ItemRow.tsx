@@ -179,7 +179,7 @@ export function ItemRow({
                 </button>
               </div>
             ) : null}
-            <FnskuChip value={item.fnsku} width="w-[58px]" />
+            <FnskuChip value={item.fnsku} />
           </div>
         </td>
       </motion.tr>

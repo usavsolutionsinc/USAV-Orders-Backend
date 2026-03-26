@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 
 type Params = Promise<{ id: string }>;
 
@@ -11,9 +12,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const shipmentId = Number(id);
-    if (!Number.isFinite(shipmentId) || shipmentId < 1) {
-      return NextResponse.json({ success: false, error: 'Invalid shipment id' }, { status: 400 });
+    const planId = parseFbaPlanId(id);
+    if (planId == null) {
+      return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
     const result = await pool.query(
@@ -40,7 +41,7 @@ export async function GET(
        JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
        WHERE fst.shipment_id = $1
        ORDER BY fst.created_at DESC`,
-      [shipmentId]
+      [planId]
     );
 
     return NextResponse.json({ success: true, tracking: result.rows });
@@ -65,9 +66,9 @@ export async function POST(
   const client = await pool.connect();
   try {
     const { id } = await params;
-    const shipmentId = Number(id);
-    if (!Number.isFinite(shipmentId) || shipmentId < 1) {
-      return NextResponse.json({ success: false, error: 'Invalid shipment id' }, { status: 400 });
+    const planId = parseFbaPlanId(id);
+    if (planId == null) {
+      return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
     const body = await request.json();
@@ -102,7 +103,7 @@ export async function POST(
          SET label = COALESCE(EXCLUDED.label, fba_shipment_tracking.label),
              created_at = fba_shipment_tracking.created_at
        RETURNING id, label, created_at`,
-      [shipmentId, trackingId, label]
+      [planId, trackingId, label]
     );
 
     await client.query('COMMIT');
@@ -138,17 +139,18 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const shipmentId = Number(id);
+    const planId = parseFbaPlanId(id);
     const { searchParams } = new URL(request.url);
     const linkId = Number(searchParams.get('link_id') || '');
 
-    if (!Number.isFinite(shipmentId) || !Number.isFinite(linkId)) {
-      return NextResponse.json({ success: false, error: 'Invalid ids' }, { status: 400 });
+    if (planId == null || !Number.isFinite(linkId)) {
+      const error = planId == null ? getInvalidFbaPlanIdMessage(id) : 'Invalid ids';
+      return NextResponse.json({ success: false, error }, { status: 400 });
     }
 
     await pool.query(
       'DELETE FROM fba_shipment_tracking WHERE id = $1 AND shipment_id = $2',
-      [linkId, shipmentId]
+      [linkId, planId]
     );
 
     return NextResponse.json({ success: true });

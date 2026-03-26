@@ -25,18 +25,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
     }
 
+    // Ensure FNSKU exists in catalog (pack-station creates stub rows for reconciliation in admin).
     const metaRes = await client.query(
-      `SELECT fnsku, product_title, asin, sku
-       FROM fba_fnskus
-       WHERE fnsku = $1
-       LIMIT 1`,
+      `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
+       VALUES ($1, NULL, NULL, NULL, TRUE, NOW(), NOW())
+       ON CONFLICT (fnsku) DO UPDATE SET
+         last_seen_at = EXCLUDED.last_seen_at,
+         updated_at = EXCLUDED.updated_at
+       RETURNING fnsku, product_title, asin, sku`,
       [normalizedFnsku]
     );
-
-    if (!metaRes.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: `FNSKU ${normalizedFnsku} not found in fba_fnskus` }, { status: 404 });
-    }
     const meta = metaRes.rows[0];
 
     const itemRes = await client.query(
@@ -51,9 +49,10 @@ export async function POST(request: NextRequest) {
          AND fsi.status != 'SHIPPED'
        ORDER BY
          CASE fsi.status
-           WHEN 'PLANNED' THEN 1
-           WHEN 'READY_TO_GO' THEN 2
-           WHEN 'LABEL_ASSIGNED' THEN 3
+           WHEN 'PACKING' THEN 1
+           WHEN 'PLANNED' THEN 2
+           WHEN 'READY_TO_GO' THEN 3
+           WHEN 'LABEL_ASSIGNED' THEN 4
            ELSE 4
          END,
          fs.created_at ASC,
@@ -70,11 +69,11 @@ export async function POST(request: NextRequest) {
         `UPDATE fba_shipment_items
          SET actual_qty = actual_qty + 1,
              status = CASE
-                        WHEN status = 'PLANNED' THEN 'READY_TO_GO'::fba_shipment_status_enum
+                        WHEN status IN ('PLANNED', 'PACKING') THEN 'READY_TO_GO'::fba_shipment_status_enum
                         ELSE status
                       END,
-             ready_by_staff_id = COALESCE(ready_by_staff_id, $1),
-             ready_at = COALESCE(ready_at, NOW()),
+             verified_by_staff_id = COALESCE(verified_by_staff_id, $1),
+             verified_at = COALESCE(verified_at, NOW()),
              updated_at = NOW()
          WHERE id = $2
          RETURNING *`,
@@ -157,8 +156,6 @@ export async function POST(request: NextRequest) {
       [normalizedFnsku]
     );
 
-    await client.query('COMMIT');
-
     const summary = summaryRes.rows[0] || {
       tech_scanned_qty: 0,
       pack_ready_qty: 0,
@@ -167,6 +164,25 @@ export async function POST(request: NextRequest) {
     const techScannedQty = Number(summary.tech_scanned_qty || 0);
     const packReadyQty = Number(summary.pack_ready_qty || 0);
     const shippedQty = Number(summary.shipped_qty || 0);
+
+    // All packers' pack-station scans for this shipment line (ledger), or FNSKU-wide when no line match.
+    let combinedPackScannedQty = packReadyQty;
+    if (updatedItem?.id != null) {
+      const itemPackRes = await client.query(
+        `SELECT COALESCE(SUM(quantity), 0)::int AS q
+         FROM fba_fnsku_logs
+         WHERE fba_shipment_item_id = $1
+           AND source_stage = 'PACK'
+           AND event_type IN ('READY', 'VERIFIED', 'BOXED')
+           AND event_type != 'VOID'`,
+        [updatedItem.id]
+      );
+      combinedPackScannedQty = Number(itemPackRes.rows[0]?.q ?? 0);
+    }
+
+    const plannedQty = Number(updatedItem?.expected_qty ?? 0);
+
+    await client.query('COMMIT');
 
     return NextResponse.json({
       success: true,
@@ -180,6 +196,8 @@ export async function POST(request: NextRequest) {
       item_id: updatedItem?.id ?? null,
       actual_qty: updatedItem?.actual_qty ?? 0,
       expected_qty: updatedItem?.expected_qty ?? 0,
+      planned_qty: plannedQty,
+      combined_pack_scanned_qty: combinedPackScannedQty,
       status: updatedItem?.status || 'READY_TO_GO',
       is_new: !openItem,
       summary: {

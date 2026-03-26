@@ -8,6 +8,16 @@ export type StaffMember = {
   role: string;
 };
 
+/** Case-insensitive match on trimmed `name` (e.g. default FBA workspace staff "Lien"). */
+export function findStaffIdByNormalizedName(
+  directory: StaffMember[],
+  normalizedName: string
+): number | null {
+  const key = normalizedName.trim().toLowerCase();
+  const row = directory.find((m) => String(m.name || '').trim().toLowerCase() === key);
+  return row?.id ?? null;
+}
+
 export function useActiveStaffDirectory(): StaffMember[] {
   const [staff, setStaff] = useState<StaffMember[]>([]);
 

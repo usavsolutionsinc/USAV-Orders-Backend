@@ -1,12 +1,13 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from '@/components/Icons';
+import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { FbaPrintReadyTable } from '@/components/fba/FbaPrintReadyTable';
-import { FbaShippedHistory } from '@/components/fba/FbaShippedHistory';
 import { FbaFnskuChecklist } from '@/components/fba/FbaFnskuChecklist';
+import { FbaShippedHistory } from '@/components/fba/FbaShippedHistory';
 import { FbaFnskuDirectoryPanel } from '@/components/fba/FbaFnskuDirectoryPanel';
 import { SearchBar } from '@/components/ui/SearchBar';
 import StationFba from '@/components/station/StationFba';
@@ -31,17 +32,10 @@ function FbaPageContent() {
   const refreshTrigger = Number(searchParams.get('r') || 0);
   const activeTab = resolveActiveTab(searchParams.get('tab'));
 
-  const draftParam = searchParams.get('draft') || '';
-  const draftFnskus = draftParam ? draftParam.split(',').filter(Boolean) : [];
-  const hasDraft = draftFnskus.length > 0;
-
   /** `fba_shipments.id` (internal row id), not the plan code (`shipment_ref`). */
   const planParam = searchParams.get('plan');
   const planId = planParam ? Number(planParam) : null;
-  const hasPlan = Boolean(planId && Number.isFinite(planId) && planId > 0);
 
-  const statusFilter = searchParams.get('filter') || 'ALL';
-  const workspacePanel = searchParams.get('main') === 'plan' ? 'plan' : 'print';
   const detailsPanel: DetailsPanel =
     activeTab === 'shipped'
       ? 'none'
@@ -49,22 +43,18 @@ function FbaPageContent() {
         ? 'catalog'
         : 'none';
   const showFnskuCatalog = activeTab !== 'shipped' && detailsPanel === 'catalog';
+  const mainPanel = searchParams.get('main') === 'plan' ? 'plan' : 'print';
+  const staffDirectory = useActiveStaffDirectory();
   const staffIdParam = String(searchParams.get('staffId') || '').trim();
-  const staffIdForTheme = /^\d+$/.test(staffIdParam) ? staffIdParam : null;
-
-  const clearDraftOrPlan = () => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('draft');
-    params.delete('plan');
-    router.replace(buildFbaHref(params));
-  };
-
-  const handleCreated = (_id: number, _ref: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('draft');
-    params.set('r', String(Date.now()));
-    router.replace(buildFbaHref(params));
-  };
+  const staffIdFromUrl = /^\d+$/.test(staffIdParam) ? parseInt(staffIdParam, 10) : null;
+  const lienStaffId = useMemo(
+    () => findStaffIdByNormalizedName(staffDirectory, 'lien'),
+    [staffDirectory],
+  );
+  const effectiveStaffIdForTheme = staffIdFromUrl ?? lienStaffId ?? 1;
+  const selectedStaff = staffDirectory.find((member) => member.id === effectiveStaffIdForTheme);
+  const staffRoleForTheme: 'technician' | 'packer' =
+    selectedStaff?.role === 'packer' ? 'packer' : 'technician';
 
   const [printRefresh, setPrintRefresh] = useState(0);
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -136,34 +126,27 @@ function FbaPageContent() {
             />
           </div>
         </div>
+      ) : mainPanel === 'plan' ? (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+          <FbaFnskuChecklist
+            key={`fba-plan-checklist-${refreshTrigger}-${printRefresh}-${planId ?? 'today'}`}
+            planId={planId && Number.isFinite(planId) && planId > 0 ? planId : undefined}
+            suppressListScroll
+            staffId={effectiveStaffIdForTheme}
+            staffRole={staffRoleForTheme}
+          />
+        </div>
       ) : (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden bg-white">
-            {workspacePanel === 'print' ? (
-              <div id="fba-print-queue" className="flex h-full min-h-0 flex-col">
-                <FbaPrintReadyTable
-                  refreshTrigger={printRefresh}
-                  fitHeightNoScroll
-                  staffId={staffIdForTheme}
-                />
-              </div>
-            ) : hasPlan ? (
-              <FbaFnskuChecklist
-                planId={planId!}
-                statusFilter={statusFilter}
-                onClear={clearDraftOrPlan}
-                suppressListScroll
+            <div id="fba-print-queue" className="flex h-full min-h-0 flex-col">
+              <FbaPrintReadyTable
+                key={`fba-unified-${refreshTrigger}-${printRefresh}`}
+                refreshTrigger={printRefresh}
+                staffId={effectiveStaffIdForTheme}
+                activePlanId={planId && Number.isFinite(planId) && planId > 0 ? planId : null}
               />
-            ) : hasDraft ? (
-              <FbaFnskuChecklist
-                fnskus={draftFnskus}
-                onClear={clearDraftOrPlan}
-                onCreated={handleCreated}
-                suppressListScroll
-              />
-            ) : (
-              <FbaFnskuChecklist key={refreshTrigger} statusFilter={statusFilter} suppressListScroll />
-            )}
+            </div>
           </div>
         </div>
       )}

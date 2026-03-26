@@ -12,7 +12,7 @@ export function DateGroupHeader({ date, total, formatDate }: DateGroupHeaderProp
       data-day-header
       data-date={date}
       data-count={total}
-      className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
+      className="bg-gray-50/80 border-y border-gray-300 px-2 py-1 flex items-center justify-between z-10"
     >
       <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
       <p className="text-[11px] font-black text-gray-700 uppercase">{total}</p>

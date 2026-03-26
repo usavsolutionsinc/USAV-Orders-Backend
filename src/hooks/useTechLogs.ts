@@ -19,6 +19,8 @@ export interface TechRecord {
   ship_by_date?: string | null;
   order_id: string | null;
   fnsku?: string | null;
+  /** `fba_fnsku_logs.id` for FNSKU tech scans; pairs fba_scan stub with tech_serial row. */
+  fnsku_log_id?: number | null;
   item_number?: string | null;
   product_title: string | null;
   quantity?: string | null;

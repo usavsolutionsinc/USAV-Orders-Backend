@@ -1,3 +1,9 @@
+/**
+ * Legacy helper module for the pre-`fba_shipments.id` model.
+ * Active FBA pages now use raw SQL routes keyed by the internal plan row id.
+ * Do not wire new features to this file without reconciling the schema first.
+ */
+
 import pool from '../db';
 
 export type FbaShipmentStatus = 'PLANNED' | 'READY_TO_GO' | 'LABEL_ASSIGNED' | 'SHIPPED';

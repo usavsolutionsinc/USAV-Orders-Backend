@@ -39,6 +39,8 @@ interface DashboardManagementPanelProps {
   showPendingFilterControl?: boolean;
   pendingFilterValue?: PendingStockFilter;
   onPendingFilterChange?: (value: PendingStockFilter) => void;
+  /** Match dashboard order-view TabSwitch (high contrast for bright / glare-heavy screens). */
+  highContrastSliders?: boolean;
 }
 
 interface SearchHistory {
@@ -58,6 +60,7 @@ export function DashboardManagementPanel({
   showPendingFilterControl = false,
   pendingFilterValue = 'all',
   onPendingFilterChange,
+  highContrastSliders = false,
 }: DashboardManagementPanelProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -324,6 +327,7 @@ export function DashboardManagementPanel({
                 <TabSwitch
                   tabs={PENDING_STOCK_FILTER_TABS}
                   activeTab={pendingFilterValue}
+                  highContrast={highContrastSliders}
                   onTabChange={(tab) => onPendingFilterChange?.(tab === 'stock' ? 'stock' : tab === 'pending' ? 'pending' : 'all')}
                 />
               </motion.div>

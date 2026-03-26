@@ -123,7 +123,7 @@ export function ViewDropdown<T extends string>({
           }}
           className={
             buttonClassName ||
-            `h-14 w-full border-b border-gray-200 bg-white px-4 pr-12 text-left text-[13px] uppercase tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50 ${dmSans.className} font-bold`
+            `h-14 w-full border-b border-gray-400 bg-white px-4 pr-12 text-left text-[13px] uppercase tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50 ${dmSans.className} font-bold`
           }
         >
           <span className="truncate">{selectedOption?.label || ''}</span>
@@ -146,7 +146,7 @@ export function ViewDropdown<T extends string>({
               ...(backgroundColor ? { backgroundColor } : {}),
               ...(borderRadius ? { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius } : {}),
             }}
-            className={`absolute left-0 top-full z-50 w-full border border-gray-200 bg-white shadow-lg ${
+            className={`absolute left-0 top-full z-50 w-full border border-gray-400 bg-white shadow-lg ${
               isBoxy ? 'rounded-none border-t-0' : 'rounded-b-xl -mt-[1px]'
             }`}
           >

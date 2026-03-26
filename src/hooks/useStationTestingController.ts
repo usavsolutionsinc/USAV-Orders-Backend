@@ -30,6 +30,8 @@ export interface ActiveStationOrder {
   createdAt?: string | null;
   orderFound?: boolean;
   sourceType?: 'order' | 'fba' | 'repair';
+  /** Server-issued anchor for serial/SKU scans (tracking / exception / FNSKU / repair session). */
+  scanSessionId?: string | null;
 }
 
 export interface ResolvedProductManual {
@@ -57,11 +59,34 @@ function parseRepairServiceId(value: string): number | null {
 const LAST_MANUAL_STORAGE_PREFIX = 'usav:last-manual:tech:';
 const COMPLETED_ORDER_AUTO_HIDE_MS = 2 * 60 * 1000;
 
-function resolveScanType(
-  val: string,
-  _options?: { hasActiveOrderContext?: boolean; activeTracking?: string | null },
-): StationScanType {
-  return detectStationScanType(val);
+function newStationIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/**
+ * When an order is still short on serials, barcodes that look like "generic" tracking
+ * (classifier carrier unknown — e.g. 10+ chars ending in a digit, or 20+ chars) are
+ * usually product serials. Routing them as TRACKING would run scan-tracking, reuse/widen
+ * SAL rows by last-8, and the next "add serial to last" can attach to the wrong shipment.
+ * Explicit carrier-shaped labels (UPS 1Z…, etc.) still route as TRACKING so a new label
+ * can be scanned; use the tracking mode button if a generic-looking code is truly a label.
+ */
+function resolveScanType(val: string, contextOrder: ActiveStationOrder | null): StationScanType {
+  const base = detectStationScanType(val);
+  if (!contextOrder) return base;
+
+  const qty = Math.max(1, Number(contextOrder.quantity) || 1);
+  const incomplete = contextOrder.serialNumbers.length < qty;
+  if (!incomplete || base !== 'TRACKING') return base;
+
+  const { type, carrier } = classifyInput(val);
+  if (type === 'tracking' && carrier === null) {
+    return 'SERIAL';
+  }
+  return base;
 }
 
 export function getOrderIdLast4(orderId: string) {
@@ -100,6 +125,7 @@ export function useStationTestingController({
 
   const [activeOrder, setActiveOrder] = useState<ActiveStationOrder | null>(null);
   const lastScannedOrderRef = useRef<ActiveStationOrder | null>(null);
+  const scanSessionIdRef = useRef<string | null>(null);
   const [isActiveOrderVisible, setIsActiveOrderVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -134,12 +160,16 @@ export function useStationTestingController({
 
     if (!nextOrder) {
       lastScannedOrderRef.current = null;
+      scanSessionIdRef.current = null;
       clearCompletedOrderHideTimer();
       setIsActiveOrderVisible(false);
       return;
     }
 
     lastScannedOrderRef.current = nextOrder;
+    if (nextOrder.scanSessionId) {
+      scanSessionIdRef.current = nextOrder.scanSessionId;
+    }
     const shouldShow = options?.preserveHidden ? isActiveOrderVisible : true;
     setIsActiveOrderVisible(shouldShow);
     clearCompletedOrderHideTimer();
@@ -357,6 +387,37 @@ export function useStationTestingController({
       } else {
         void resolveManual(data.order.sku, data.order.itemNumber ?? null);
       }
+
+      if (data.fnskuSalId) {
+        window.dispatchEvent(new CustomEvent('tech-log-added', {
+          detail: {
+            id: -1 * Number(data.fnskuSalId),
+            source_row_id: Number(data.fnskuSalId),
+            source_kind: 'fba_scan',
+            tech_serial_id: null,
+            created_at: data.order.testDateTime ?? data.order.createdAt ?? null,
+            shipping_tracking_number: data.order.tracking ?? fnsku,
+            serial_number: '',
+            tested_by: data.order.testedBy ?? (Number.isFinite(Number(userId)) ? Number(userId) : null),
+            shipment_id: data.shipment?.shipment_id ?? null,
+            order_db_id: null,
+            order_id: data.order.orderId ?? 'FBA',
+            product_title: data.order.productTitle ?? null,
+            item_number: data.order.itemNumber ?? null,
+            sku: data.order.sku ?? null,
+            condition: data.order.condition ?? null,
+            fnsku,
+            status: data.order.status ?? null,
+            status_history: data.order.statusHistory ?? [],
+            notes: data.order.notes ?? null,
+            account_source: data.order.accountSource ?? 'fba',
+            quantity: String(data.order.quantity || '1'),
+            is_shipped: Boolean(data.order.isShipped),
+            ship_by_date: data.order.shipByDate ?? null,
+            out_of_stock: data.order.outOfStock ?? null,
+          },
+        }));
+      }
       triggerGlobalRefresh();
     } catch (err) {
       console.error('FNSKU scan failed:', err);
@@ -379,36 +440,27 @@ export function useStationTestingController({
 
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/repair-service/${repairId}`);
+      const res = await fetch('/api/tech/scan-repair-station', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repairScan: repairScan.trim(),
+          repairId,
+          techId: userId,
+          userName: userName || null,
+          idempotencyKey: newStationIdempotencyKey(),
+        }),
+      });
       const data = await res.json();
 
-      if (!res.ok || !(data?.id || data?.repair?.id)) {
+      if (!res.ok || !data?.success || !data?.repair?.id) {
         setErrorMessage(data?.error || 'Repair not found');
         return;
       }
 
-      const repair = data?.repair ?? data;
-      try {
-        await fetch('/api/repair-service', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: Number(repair.id),
-            statusHistoryEntry: {
-              status: 'station_testing_scan',
-              source: 'station-testing.scan',
-              user_id: Number.isFinite(Number(userId)) ? Number(userId) : null,
-              user_name: userName || null,
-              metadata: {
-                scanned_input: repairScan.trim().toUpperCase(),
-                screen: 'StationTesting',
-                station: 'TECH',
-              },
-            },
-          }),
-        });
-      } catch (historyError) {
-        console.warn('Repair status history append failed:', historyError);
+      const repair = data.repair;
+      if (typeof data.scanSessionId === 'string' && data.scanSessionId) {
+        scanSessionIdRef.current = data.scanSessionId;
       }
 
       window.dispatchEvent(new CustomEvent('open-repair-details', {
@@ -451,10 +503,7 @@ export function useStationTestingController({
       forcedType === 'FNSKU' ||
       forcedType === 'REPAIR'
         ? forcedType
-        : resolveScanType(input, {
-            hasActiveOrderContext: Boolean(contextOrder),
-            activeTracking: contextOrder?.tracking ?? null,
-          });
+        : resolveScanType(input, contextOrder);
 
     if (type === 'REPAIR') {
       await handleRepairScan(input);
@@ -465,7 +514,11 @@ export function useStationTestingController({
         const res = await fetch('/api/tech/scan-tracking', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tracking: input, techId: userId }),
+          body: JSON.stringify({
+            tracking: input,
+            techId: userId,
+            idempotencyKey: newStationIdempotencyKey(),
+          }),
         });
         const data = await res.json();
 
@@ -503,6 +556,7 @@ export function useStationTestingController({
           shipByDate: data.order.shipByDate || null,
           createdAt: data.order.createdAt || null,
           orderFound: data.orderFound !== false,
+          scanSessionId: typeof data.scanSessionId === 'string' ? data.scanSessionId : null,
         });
 
         const serialCount = data.order.serialNumbers?.length || 0;
@@ -608,6 +662,8 @@ export function useStationTestingController({
             skuCode,
             tracking: contextOrder.tracking,
             techId: userId,
+            scanSessionId: (contextOrder.scanSessionId ?? scanSessionIdRef.current) || undefined,
+            idempotencyKey: newStationIdempotencyKey(),
           }),
         });
 
@@ -629,6 +685,10 @@ export function useStationTestingController({
         syncActiveOrderState({
           ...contextOrder,
           serialNumbers: nextSerials,
+          scanSessionId:
+            typeof data.scanSessionId === 'string'
+              ? data.scanSessionId
+              : contextOrder.scanSessionId ?? scanSessionIdRef.current,
         });
 
         const addedCount = Array.isArray(data.serialNumbers) ? data.serialNumbers.length : 0;
@@ -660,7 +720,12 @@ export function useStationTestingController({
           const res = await fetch('/api/tech/add-serial-to-last', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ serial: input.toUpperCase(), techId: userId }),
+            body: JSON.stringify({
+              serial: input.toUpperCase(),
+              techId: userId,
+              scanSessionId: scanSessionIdRef.current || undefined,
+              idempotencyKey: newStationIdempotencyKey(),
+            }),
           });
           const data = await res.json();
 
@@ -685,6 +750,10 @@ export function useStationTestingController({
             shipByDate: data.order.shipByDate ?? null,
             createdAt: data.order.createdAt ?? null,
             orderFound: data.order.orderFound !== false,
+            scanSessionId:
+              typeof data.scanSessionId === 'string'
+                ? data.scanSessionId
+                : scanSessionIdRef.current,
           });
 
           setSuccessMessage(`Serial ${input.toUpperCase()} added ✓ (${data.serialNumbers.length} total)`);
@@ -730,6 +799,8 @@ export function useStationTestingController({
 
       setIsLoading(true);
       try {
+        const sessionForSerial =
+          (contextOrder.scanSessionId ?? scanSessionIdRef.current) || undefined;
         const res = await fetch('/api/tech/add-serial', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -738,6 +809,8 @@ export function useStationTestingController({
             serial: finalSerial,
             techId: userId,
             allowFbaDuplicates: isFbaDuplicateAllowedTracking,
+            scanSessionId: sessionForSerial,
+            idempotencyKey: newStationIdempotencyKey(),
           }),
         });
 
@@ -751,6 +824,10 @@ export function useStationTestingController({
         const nextOrder = {
           ...contextOrder,
           serialNumbers: data.serialNumbers,
+          scanSessionId:
+            typeof data.scanSessionId === 'string'
+              ? data.scanSessionId
+              : contextOrder.scanSessionId ?? scanSessionIdRef.current,
         };
         const completedExceptionOrder =
           nextOrder.orderFound === false && isOrderComplete(nextOrder);

@@ -14,7 +14,7 @@ import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
 import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
-import { TabSwitch } from '@/components/ui/TabSwitch';
+import { SidebarTabSwitchChrome, TabSwitch } from '@/components/ui/TabSwitch';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
@@ -283,17 +283,18 @@ function SidebarContextPanel() {
           : 'all';
     const activeTabId: string = orderView;
     const filterControl = (
-      <div className="border-b border-gray-100 px-4 py-3">
+      <SidebarTabSwitchChrome>
         <TabSwitch
           tabs={DASHBOARD_TABS}
           activeTab={activeTabId}
+          highContrast
           onTabChange={(tab) =>
             updateSearch((params) => {
               normalizeOrderViewParams(params, tab as DashboardOrderView);
             }, '/dashboard')
           }
         />
-      </div>
+      </SidebarTabSwitchChrome>
     );
 
     if (orderView === 'shipped') {
@@ -336,6 +337,7 @@ function SidebarContextPanel() {
         onSearchChange={handleDashboardOrderSearch}
         showPendingFilterControl={orderView === 'pending'}
         pendingFilterValue={pendingFilter}
+        highContrastSliders
         onPendingFilterChange={(value) =>
           updateSearch((params) => {
             params.set('pendingFilter', value);
@@ -560,7 +562,7 @@ export default function DashboardSidebar() {
         variants={itemVariants}
         type="button"
         onClick={() => setShowHomeNavigation(true)}
-        className="w-full flex min-h-[44px] items-center gap-2 border-b border-gray-100 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
+        className="w-full flex min-h-[44px] items-center gap-2 border-b border-gray-300 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
         aria-label="Back to navigation"
       >
         <div className="h-9 w-7 flex items-center justify-start text-gray-500">
@@ -577,7 +579,7 @@ export default function DashboardSidebar() {
   );
 
   const shell = (
-    <aside className="h-full w-full bg-white border-r border-gray-200 overflow-hidden shadow-xl shadow-slate-900/5">
+    <aside className="h-full w-full bg-white border-r border-gray-400 overflow-hidden shadow-xl shadow-slate-900/5">
       {showHomeNavigation || routeKey === 'unknown' ? homePanel : contextPanel}
     </aside>
   );
@@ -596,7 +598,7 @@ export default function DashboardSidebar() {
         <button
           type="button"
           onClick={() => { dispatchCloseShippedDetails(); setIsDetailsPanelOpen(false); }}
-          className="hidden md:flex fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-slate-900/10 items-center justify-center"
+          className="hidden md:flex fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-slate-900/10 items-center justify-center"
           aria-label="Open station navigation"
         >
           <Menu className="w-5 h-5" />
@@ -621,7 +623,7 @@ export default function DashboardSidebar() {
           <button
             type="button"
             onClick={() => setIsMobileOpen(false)}
-            className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-slate-900/10 flex items-center justify-center"
+            className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-slate-900/10 flex items-center justify-center"
             aria-label="Close sidebar"
           >
             <X className="w-5 h-5" />

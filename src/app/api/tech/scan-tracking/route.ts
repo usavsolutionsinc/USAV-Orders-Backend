@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getApiIdempotencyResponse, readIdempotencyKey, saveApiIdempotencyResponse } from '@/lib/api-idempotency';
+import { createStationScanSession } from '@/lib/station-scan-session';
 import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-format';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, found: false, error: 'Request body is required' }, { status: 400 });
     }
 
-    let parsed: { tracking?: string; techId?: string | number };
+    let parsed: { tracking?: string; techId?: string | number; idempotencyKey?: string };
     try {
         parsed = JSON.parse(rawBody);
     } catch {
@@ -84,13 +86,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, found: false, error: 'Tech ID is required' }, { status: 400 });
     }
 
+    const idemKey = readIdempotencyKey(req, parsed.idempotencyKey);
+    if (idemKey) {
+        const cached = await getApiIdempotencyResponse(pool, idemKey, 'tech.scan-tracking');
+        if (cached && cached.status_code === 200) {
+            return NextResponse.json(cached.response_body, { status: 200 });
+        }
+    }
+
     try {
         const scannedTracking = String(tracking || '').trim();
         const key18 = normalizeTrackingKey18(scannedTracking);
         if (!key18) {
             return NextResponse.json({ success: false, found: false, error: 'Invalid tracking number' }, { status: 400 });
         }
-        /** Full X00… / B0… scans always use the FNSKU ledger path, never order/TSN key18 dedup. */
+        /** Full X0... / B0... scans always use the FNSKU ledger path, never order/TSN key18 dedup. */
         const skipOrderAndTsnMatchForFnsku = looksLikeFnsku(scannedTracking);
         const trackingLast8 = normalizeTrackingLast8(scannedTracking);
         const normalizedLast8 = /^\d{8}$/.test(trackingLast8) ? trackingLast8 : null;
@@ -304,7 +314,7 @@ export async function POST(req: NextRequest) {
                             rowId: payload.fnskuLogId,
                             source: 'tech.scan-tracking',
                         });
-                        return NextResponse.json({
+                        const fnskuBody: Record<string, unknown> = {
                             success: true,
                             found: true,
                             orderFound: false,
@@ -337,7 +347,26 @@ export async function POST(req: NextRequest) {
                                 createdAt: payload.order.createdAt,
                                 asin: payload.order.asin,
                             },
+                        };
+                        const scanSessionIdFnsku = await createStationScanSession(pool, {
+                            staffId: testedBy,
+                            sessionKind: 'FNSKU',
+                            fnsku: normalizedFnsku,
+                            trackingRaw: String(payload.order.tracking || normalizedFnsku),
+                            trackingKey18: normalizeTrackingKey18(normalizedFnsku),
+                            scanRef: normalizedFnsku,
                         });
+                        const fnskuOut = { ...fnskuBody, scanSessionId: scanSessionIdFnsku };
+                        if (idemKey) {
+                            await saveApiIdempotencyResponse(pool, {
+                                idempotencyKey: idemKey,
+                                route: 'tech.scan-tracking',
+                                staffId: testedBy,
+                                statusCode: 200,
+                                responseBody: fnskuOut,
+                            });
+                        }
+                        return NextResponse.json(fnskuOut);
                     } catch (scanErr: unknown) {
                         const code = (scanErr as { code?: string })?.code;
                         if (code === 'FNSKU_NOT_FOUND') {
@@ -402,12 +431,21 @@ export async function POST(req: NextRequest) {
                     const updateResult = await client.query(
                         `UPDATE station_activity_logs
                          SET updated_at = date_trunc('second', NOW()),
-                             shipment_id = COALESCE(shipment_id, $2),
+                             shipment_id = CASE WHEN $2::bigint IS NOT NULL THEN $2 ELSE shipment_id END,
+                             scan_ref = $5,
                              notes = COALESCE(notes, $1),
-                             orders_exception_id = COALESCE($3, orders_exception_id)
+                             orders_exception_id = COALESCE($3, orders_exception_id),
+                             metadata = COALESCE(metadata, '{}'::jsonb)
+                               || jsonb_build_object('tracking', to_jsonb($5::text))
                          WHERE id = $4
                          RETURNING id, created_at::text AS created_at`,
-                        ['Tracking scan without matched order', resolvedScan.shipmentId ?? null, ordersExceptionId, existingScanLog.rows[0].id]
+                        [
+                            'Tracking scan without matched order',
+                            resolvedScan.shipmentId ?? null,
+                            ordersExceptionId,
+                            existingScanLog.rows[0].id,
+                            scannedTracking,
+                        ]
                     );
                     techActivityId = updateResult.rows[0]?.id ?? existingScanLog.rows[0].id ?? null;
                     techTestDateTime = updateResult.rows[0]?.created_at ?? null;
@@ -425,7 +463,7 @@ export async function POST(req: NextRequest) {
                     });
                 }
 
-                return NextResponse.json({
+                const exceptionBody: Record<string, unknown> = {
                     success: true,
                     found: true,
                     orderFound: false,
@@ -458,7 +496,27 @@ export async function POST(req: NextRequest) {
                         orderDate: null,
                         createdAt: null
                     }
+                };
+                const scanSessionIdExc = await createStationScanSession(pool, {
+                    staffId: testedBy,
+                    sessionKind: 'EXCEPTION',
+                    shipmentId: resolvedScan.shipmentId ?? null,
+                    ordersExceptionId,
+                    trackingKey18: key18,
+                    trackingRaw: scannedTracking,
+                    scanRef: resolvedScan.scanRef ?? scannedTracking,
                 });
+                const exceptionOut = { ...exceptionBody, scanSessionId: scanSessionIdExc };
+                if (idemKey) {
+                    await saveApiIdempotencyResponse(pool, {
+                        idempotencyKey: idemKey,
+                        route: 'tech.scan-tracking',
+                        staffId: testedBy,
+                        statusCode: 200,
+                        responseBody: exceptionOut,
+                    });
+                }
+                return NextResponse.json(exceptionOut);
             }
 
             let techActivityId: number | null = null;
@@ -508,20 +566,44 @@ export async function POST(req: NextRequest) {
                     createdAt: techTestDateTime,
                 });
             } else {
+                const orderIdForMeta =
+                    row.order_id != null && row.order_id !== ''
+                        ? String(row.order_id)
+                        : null;
                 const updateResult = await client.query(
                     `UPDATE station_activity_logs
                      SET updated_at = date_trunc('second', NOW()),
                          staff_id = $1,
-                         shipment_id = COALESCE(shipment_id, $2)
+                         shipment_id = CASE WHEN $2::bigint IS NOT NULL THEN $2 ELSE shipment_id END,
+                         scan_ref = $4,
+                         metadata = COALESCE(metadata, '{}'::jsonb)
+                           || jsonb_build_object(
+                             'tracking', to_jsonb($5::text),
+                             'order_found', 'true'::jsonb
+                           )
+                           || CASE
+                             WHEN $6::text IS NOT NULL AND BTRIM($6::text) <> ''
+                             THEN jsonb_build_object('order_id', to_jsonb($6::text))
+                             ELSE '{}'::jsonb
+                           END
                      WHERE id = $3
                      RETURNING id, created_at::text AS created_at`,
-                    [testedBy, matchedShipmentId, existingScanLog.rows[0].id]
+                    [
+                        testedBy,
+                        matchedShipmentId,
+                        existingScanLog.rows[0].id,
+                        scannedTracking,
+                        trackingValue,
+                        orderIdForMeta,
+                    ]
                 );
                 techActivityId = updateResult.rows[0]?.id ?? existingScanLog.rows[0].id ?? null;
                 techTestDateTime = updateResult.rows[0]?.created_at ?? null;
             }
             const serialNumbers = mergeSerialsFromTsnRows(existingTracking.rows);
-            const techSerialRowIds = existingTracking.rows.map((r: { id: number }) => Number(r.id)).filter(Boolean);
+            const techSerialRowIds = existingTracking.rows
+                .map((r) => Number((r as { id?: unknown }).id))
+                .filter((id) => Number.isFinite(id) && id > 0);
             const techSerialIdForPayload =
                 techSerialRowIds.length > 0 ? Math.max(...techSerialRowIds) : null;
 
@@ -544,7 +626,7 @@ export async function POST(req: NextRequest) {
                 source: 'tech.scan-tracking',
             });
 
-            return NextResponse.json({
+            const orderOkBody: Record<string, unknown> = {
                 success: true,
                 found: true,
                 orderFound: true,
@@ -575,7 +657,26 @@ export async function POST(req: NextRequest) {
                     orderDate: row.order_date || null,
                     createdAt: row.created_at || null
                 }
+            };
+            const scanSessionIdOrder = await createStationScanSession(pool, {
+                staffId: testedBy,
+                sessionKind: 'ORDER',
+                shipmentId: matchedShipmentId,
+                trackingKey18: key18,
+                trackingRaw: scannedTracking,
+                scanRef: resolvedScan.scanRef ?? String(trackingValue),
             });
+            const orderOkOut = { ...orderOkBody, scanSessionId: scanSessionIdOrder };
+            if (idemKey) {
+                await saveApiIdempotencyResponse(pool, {
+                    idempotencyKey: idemKey,
+                    route: 'tech.scan-tracking',
+                    staffId: testedBy,
+                    statusCode: 200,
+                    responseBody: orderOkOut,
+                });
+            }
+            return NextResponse.json(orderOkOut);
         } catch (txError) {
             await client.query('ROLLBACK');
             throw txError;

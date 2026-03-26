@@ -97,7 +97,8 @@ export async function GET(req: NextRequest) {
           COALESCE(o.notes, sal.notes) AS notes,
           o.out_of_stock,
           COALESCE(o_stn.is_carrier_accepted OR o_stn.is_in_transit
-            OR o_stn.is_out_for_delivery OR o_stn.is_delivered, false) AS is_shipped
+            OR o_stn.is_out_for_delivery OR o_stn.is_delivered, false) AS is_shipped,
+          NULL::bigint AS fnsku_log_id
         FROM station_activity_logs sal
         LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
         LEFT JOIN LATERAL (
@@ -208,7 +209,8 @@ export async function GET(req: NextRequest) {
           COALESCE(o.notes, sal.notes) AS notes,
           o.out_of_stock,
           COALESCE(o_stn.is_carrier_accepted OR o_stn.is_in_transit
-            OR o_stn.is_out_for_delivery OR o_stn.is_delivered, false) AS is_shipped
+            OR o_stn.is_out_for_delivery OR o_stn.is_delivered, false) AS is_shipped,
+          tsn.fnsku_log_id AS fnsku_log_id
         FROM station_activity_logs sal
         JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
         LEFT JOIN fba_fnsku_logs fl ON fl.id = tsn.fnsku_log_id
@@ -303,7 +305,8 @@ export async function GET(req: NextRequest) {
           'fba'::text AS account_source,
           sal.notes,
           NULL::text AS out_of_stock,
-          false AS is_shipped
+          false AS is_shipped,
+          (NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), ''))::bigint AS fnsku_log_id
         FROM station_activity_logs sal
         LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
         LEFT JOIN fba_shipment_items fsi ON fsi.id = sal.fba_shipment_item_id
@@ -360,7 +363,8 @@ export async function GET(req: NextRequest) {
         rows.account_source,
         rows.notes,
         rows.out_of_stock,
-        rows.is_shipped
+        rows.is_shipped,
+        rows.fnsku_log_id
       FROM (
         SELECT * FROM tracking_scan_rows
         UNION ALL

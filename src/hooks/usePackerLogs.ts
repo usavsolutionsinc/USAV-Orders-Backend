@@ -6,6 +6,8 @@ import { useAblyChannel } from './useAblyChannel';
 
 export interface PackerRecord {
   id: number;
+  /** `packer_logs.id` when present; DELETE uses this (not station_activity_logs.id). */
+  packer_log_id?: number | null;
   created_at: string;
   scan_ref: string | null;
   shipping_tracking_number: string;

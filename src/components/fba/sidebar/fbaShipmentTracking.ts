@@ -11,37 +11,44 @@ export function normalizeUps(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, '');
 }
 
-export function dispatchFbaTrackingPatch(detail: { shipmentId: number; amazon?: string; ups?: string }) {
+export function dispatchFbaTrackingPatch(detail: { planId: number; shipmentId?: number; amazon?: string; ups?: string }) {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(FBA_TRACKING_PATCH_EVENT, { detail }));
+  window.dispatchEvent(
+    new CustomEvent(FBA_TRACKING_PATCH_EVENT, {
+      detail: {
+        ...detail,
+        shipmentId: detail.shipmentId ?? detail.planId,
+      },
+    })
+  );
 }
 
-export async function persistAmazonShipmentId(shipmentId: number, amazonRaw: string): Promise<boolean> {
+export async function persistAmazonShipmentId(planId: number, amazonRaw: string): Promise<boolean> {
   const amazon = normalizeFbaId(amazonRaw);
   if (!FBA_ID_RE.test(amazon)) return false;
-  const res = await fetch(`/api/fba/shipments/${shipmentId}`, {
+  const res = await fetch(`/api/fba/shipments/${planId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ amazon_shipment_id: amazon }),
   });
   const data = await res.json().catch(() => ({}));
   if (!data.success && !res.ok) return false;
-  dispatchFbaTrackingPatch({ shipmentId, amazon });
+  dispatchFbaTrackingPatch({ planId, amazon });
   window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
   return true;
 }
 
-export async function persistUpsTracking(shipmentId: number, upsRaw: string): Promise<boolean> {
+export async function persistUpsTracking(planId: number, upsRaw: string): Promise<boolean> {
   const tracking_number = normalizeUps(upsRaw);
   if (!UPS_RE.test(tracking_number)) return false;
-  const res = await fetch(`/api/fba/shipments/${shipmentId}/tracking`, {
+  const res = await fetch(`/api/fba/shipments/${planId}/tracking`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tracking_number, carrier: 'UPS', label: 'Print queue' }),
   });
   const data = await res.json().catch(() => ({}));
   if (!data.success && !res.ok) return false;
-  dispatchFbaTrackingPatch({ shipmentId, ups: tracking_number });
+  dispatchFbaTrackingPatch({ planId, ups: tracking_number });
   window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
   return true;
 }

@@ -10,6 +10,7 @@ import { OrderCard } from './station/upnext/OrderCard';
 import { RepairCard } from './station/upnext/RepairCard';
 import { FbaItemCard } from './station/upnext/FbaItemCard';
 import { ReceivingAssignmentCard } from './station/upnext/ReceivingAssignmentCard';
+import { getTechStationLightChromeOutlineClass } from '@/utils/staff-colors';
 
 type TabId = 'all' | 'orders' | 'repair' | 'fba' | 'stock' | 'receiving';
 
@@ -52,10 +53,10 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const { allOrders, allRepairs, fbaItems, receivingItems, loading, allCompletedToday, fetchOrders } =
     useUpNextData({ techId, onAllCompleted });
 
+  // Server omits orders when station_activity_logs ties to the shipment_id or when a TECH
+  // TRACKING_SCANNED / SERIAL_ADDED / FNSKU_SCANNED row matches this order's tracking
+  // fingerprint (same rule as /api/tech-logs). Client filter catches stale payloads.
   const pendingVisibleOrders = allOrders.filter((order) => !order.has_tech_scan);
-
-  // Hide orders already completed at the testing station. `has_tech_scan` comes
-  // from a shipment_id match in tech_serial_numbers.
   const stockOrders = pendingVisibleOrders.filter(isOutOfStock);
   // Match the pending orders source data and only split out stock blockers here.
   const nonStockOrders = pendingVisibleOrders.filter((order) => !isOutOfStock(order));
@@ -77,11 +78,17 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const filteredFbaItems = activeFbaItems;
   const filteredReceivingItems = receivingItems;
   const tabCounts = rawTabCounts;
+  const stationTabChromeOutline = useMemo(() => getTechStationLightChromeOutlineClass(techId), [techId]);
 
-  type VisibleTab = { id: TabId; label: string; count?: number; color: 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal' };
+  type VisibleTab = {
+    id: TabId;
+    label: string;
+    count?: number;
+    color: 'blue' | 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal';
+  };
   const visibleTabs: VisibleTab[] = useMemo(
     () => [
-      { id: 'all', label: 'All', color: 'green', count: rawTabCounts.all || undefined },
+      { id: 'all', label: 'All', color: 'blue', count: rawTabCounts.all || undefined },
       { id: 'orders', label: 'Orders', color: 'green', count: rawTabCounts.orders || undefined },
       ...(rawTabCounts.fba > 0
         ? [{ id: 'fba' as const, label: 'FBA', color: 'purple' as const, count: rawTabCounts.fba }]
@@ -340,6 +347,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           activeTab={effectiveTab}
           onTabChange={(tab) => selectTab(tab as TabId)}
           scrollable
+          variant="upNext"
+          stationChromeOutlineClassName={stationTabChromeOutline}
         />
 
         {/* ── Urgency summary bar ── */}

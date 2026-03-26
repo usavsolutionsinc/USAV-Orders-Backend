@@ -1,10 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, X, Plus, Minus, Loader2, Package, AlertCircle, ChevronRight, Pencil } from '@/components/Icons';
+import { useFbaWorkspace } from '@/contexts/FbaWorkspaceContext';
 import { FnskuChip } from '@/components/ui/CopyChip';
-import { getStaffThemeById, getStaffThemeByName, stationThemeColors } from '@/utils/staff-colors';
+import {
+  getStaffThemeById,
+  getStaffThemeByName,
+  stationThemeColors,
+  fbaFnskuChecklistChrome,
+  printQueueTableUi,
+} from '@/utils/staff-colors';
+import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
+import { enrichFromApi } from '@/components/fba/table/utils';
+import type { EnrichedItem, PrintSelectionPayload, ShipmentTrackingEntry } from '@/components/fba/table/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DraftItem {
@@ -33,6 +43,35 @@ interface PlanItem {
   verified_by_name: string | null;
 }
 
+function planItemToSidebarEnriched(
+  item: PlanItem,
+  planId: number,
+  planRef: string,
+  dueDate: string | null,
+  amazonShipmentId: string | null,
+  trackingNumbers: ShipmentTrackingEntry[]
+): EnrichedItem {
+  return enrichFromApi({
+    item_id: item.id,
+    fnsku: item.fnsku,
+    expected_qty: item.expected_qty,
+    actual_qty: 0,
+    item_status: item.status,
+    display_title: item.display_title || item.product_title || item.fnsku,
+    asin: item.asin,
+    sku: item.sku,
+    plan_id: planId,
+    plan_ref: planRef,
+    shipment_id: planId,
+    shipment_ref: planRef,
+    amazon_shipment_id: amazonShipmentId,
+    tracking_numbers: trackingNumbers,
+    due_date: dueDate,
+    destination_fc: null,
+    item_notes: item.notes,
+  });
+}
+
 // Status cycle order (tap dot to advance)
 const STATUS_CYCLE: Record<string, string> = {
   PLANNED:      'PACKING',
@@ -53,6 +92,9 @@ interface Props {
   onCreated?: (id: number, ref: string) => void;
   /** When true, list area does not scroll (parent handles layout; may clip). */
   suppressListScroll?: boolean;
+  /** Selected staff — theme matches {@link FbaWorkspaceScanField} / URL `staffId`. */
+  staffId?: number | string | null;
+  staffRole?: 'technician' | 'packer';
 }
 
 // ─── Animated qty number ──────────────────────────────────────────────────────
@@ -136,18 +178,29 @@ function StatusDot({ status }: { status: string }) {
 }
 
 // ─── Qty stepper ─────────────────────────────────────────────────────────────
-function QtyControl({ value, onMinus, onPlus, disabled }: {
-  value: number; onMinus: () => void; onPlus: () => void; disabled?: boolean;
+function QtyControl({
+  value,
+  onMinus,
+  onPlus,
+  disabled,
+  focusRingClassName = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40',
+}: {
+  value: number;
+  onMinus: () => void;
+  onPlus: () => void;
+  disabled?: boolean;
+  /** Theme-matched focus ring (e.g. `printQueueTableUi[theme].rowFocusRing`). */
+  focusRingClassName?: string;
 }) {
   return (
     <div className="flex items-center gap-1">
       <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={onMinus} disabled={disabled || value <= 1}
-        className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 disabled:cursor-not-allowed disabled:opacity-25">
+        className={`flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 ${focusRingClassName} disabled:cursor-not-allowed disabled:opacity-25`}>
         <Minus className="h-2.5 w-2.5" />
       </motion.button>
       <AnimatedQty value={value} />
       <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={onPlus} disabled={disabled}
-        className="flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/40 disabled:opacity-25">
+        className={`flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 ${focusRingClassName} disabled:opacity-25`}>
         <Plus className="h-2.5 w-2.5" />
       </motion.button>
     </div>
@@ -188,9 +241,18 @@ export function FbaFnskuChecklist({
   onClear,
   onCreated,
   suppressListScroll = false,
+  staffId = null,
+  staffRole = 'technician',
 }: Props) {
+  const { clearSelection, clearSelectionVersion, setSelection } = useFbaWorkspace();
   const isDraftMode = fnskus.length > 0 && !planId;
   const isTodayMode = !planId && fnskus.length === 0;
+  const selectionOwnerRef = useRef(`fba-plan-checklist-${Math.random().toString(36).slice(2)}`);
+
+  const stationTheme = useMemo(() => getStaffThemeById(staffId, staffRole), [staffId, staffRole]);
+  const themeColors = stationThemeColors[stationTheme];
+  const checklistChrome = fbaFnskuChecklistChrome[stationTheme];
+  const printUi = printQueueTableUi[stationTheme];
 
   // Draft state
   const [draftItems,   setDraftItems]   = useState<DraftItem[]>([]);
@@ -202,6 +264,10 @@ export function FbaFnskuChecklist({
   const [planLoading, setPlanLoading] = useState(false);
   const [planRef,     setPlanRef]     = useState('');
   const [planDueDate, setPlanDueDate] = useState<string | null>(null);
+  const [planAmazonShipmentId, setPlanAmazonShipmentId] = useState<string | null>(null);
+  const [planTrackingNumbers, setPlanTrackingNumbers] = useState<ShipmentTrackingEntry[]>([]);
+  /** Line ids selected for the shared FBA workspace sidebar. */
+  const [sidebarSelectionIds, setSidebarSelectionIds] = useState<Set<number>>(new Set());
   const savingRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   // Create state
@@ -285,6 +351,13 @@ export function FbaFnskuChecklist({
       if (shipData?.shipment) {
         setPlanRef(shipData.shipment.shipment_ref || '');
         setPlanDueDate(shipData.shipment.due_date || null);
+        const amz = shipData.shipment.amazon_shipment_id;
+        setPlanAmazonShipmentId(amz != null && String(amz).trim() ? String(amz).trim() : null);
+        setPlanTrackingNumbers(
+          Array.isArray(shipData.shipment.tracking_numbers) ? shipData.shipment.tracking_numbers : []
+        );
+      } else {
+        setPlanTrackingNumbers([]);
       }
       if (Array.isArray(itemsData?.items)) {
         setPlanItems(itemsData.items.map((i: any) => ({
@@ -317,6 +390,11 @@ export function FbaFnskuChecklist({
         setTodayPlanId(data.shipment.id);
         setPlanRef(data.shipment.shipment_ref || '');
         setPlanDueDate(data.shipment.due_date || null);
+        const amz = data.shipment.amazon_shipment_id;
+        setPlanAmazonShipmentId(amz != null && String(amz).trim() ? String(amz).trim() : null);
+        setPlanTrackingNumbers(
+          Array.isArray(data.shipment.tracking_numbers) ? data.shipment.tracking_numbers : []
+        );
         setPlanItems((data.shipment.items || []).map((i: any) => ({
           id: Number(i.id),
           fnsku: i.fnsku,
@@ -335,6 +413,8 @@ export function FbaFnskuChecklist({
       } else {
         setPlanItems([]);
         setTodayPlanId(null);
+        setPlanAmazonShipmentId(null);
+        setPlanTrackingNumbers([]);
       }
     } catch { /* no-op */ }
     finally { setPlanLoading(false); }
@@ -515,6 +595,96 @@ export function FbaFnskuChecklist({
     }, 600);
   };
 
+  const isViewMode = !isDraftMode;
+  const normalizedFilter = (statusFilter || 'ALL').toUpperCase();
+  const filteredPlanItems = useMemo(() => {
+    if (!isViewMode) return planItems;
+    if (normalizedFilter === 'ALL') return planItems;
+    return planItems.filter((i) => {
+      if (normalizedFilter === 'READY_TO_GO') return i.status === 'READY_TO_GO' || i.status === 'SHIPPED';
+      return i.status === normalizedFilter;
+    });
+  }, [isViewMode, planItems, normalizedFilter]);
+
+  useEffect(() => {
+    setSidebarSelectionIds(new Set());
+  }, [activePlanId]);
+
+  useEffect(() => {
+    const valid = new Set(planItems.map((i) => i.id));
+    setSidebarSelectionIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [planItems]);
+
+  const buildSidebarSelectionPayload = useCallback((selectionIds: Set<number>): PrintSelectionPayload => {
+    if (!isViewMode || !activePlanId) {
+      return {
+        selectedItems: [],
+        planIds: [],
+        shipmentIds: [],
+        readyCount: 0,
+        pendingCount: 0,
+        needsPrintCount: 0,
+      };
+    }
+
+    const selected = planItems.filter((i) => selectionIds.has(i.id));
+    const enriched = selected.map((i) =>
+      planItemToSidebarEnriched(i, activePlanId, planRef, planDueDate, planAmazonShipmentId, planTrackingNumbers)
+    );
+    const readyCount = enriched.filter((i) => i.status === 'ready_to_print').length;
+    const pendingCount = enriched.filter(
+      (i) => i.status === 'pending_out_of_stock' || i.status === 'pending_qc_fail'
+    ).length;
+    const needsPrintCount = enriched.filter((i) => i.status === 'needs_print').length;
+    const planIds = Array.from(new Set(enriched.map((i) => i.plan_id)));
+
+    return {
+      selectedItems: enriched,
+      planIds,
+      shipmentIds: planIds,
+      readyCount,
+      pendingCount,
+      needsPrintCount,
+    };
+  }, [isViewMode, activePlanId, planItems, planRef, planDueDate, planAmazonShipmentId, planTrackingNumbers]);
+
+  const toggleSidebarLineImmediate = useCallback((itemId: number) => {
+    setSidebarSelectionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }, []);
+
+  const toggleSidebarSelectAllFilteredImmediate = useCallback(() => {
+    const ids = filteredPlanItems.map((i) => i.id);
+    setSidebarSelectionIds((prev) => {
+      const allOn = ids.length > 0 && ids.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allOn) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, [filteredPlanItems]);
+
+  useEffect(() => {
+    setSelection(selectionOwnerRef.current, buildSidebarSelectionPayload(sidebarSelectionIds));
+  }, [buildSidebarSelectionPayload, setSelection, sidebarSelectionIds]);
+
+  useEffect(() => {
+    if (clearSelectionVersion === 0) return;
+    setSidebarSelectionIds(new Set());
+  }, [clearSelectionVersion]);
+
+  useEffect(() => () => clearSelection(selectionOwnerRef.current), [clearSelection]);
+
   // ── Success screen ───────────────────────────────────────────────────────
   if (created) {
     return (
@@ -532,20 +702,14 @@ export function FbaFnskuChecklist({
     );
   }
 
-  const isViewMode    = !isDraftMode; // plan or today mode
   const loading       = isDraftMode ? draftLoading : planLoading;
   const loadingCount  = isDraftMode ? fnskus.length : planItems.length;
 
-  // Apply status filter to plan items
-  const normalizedFilter = (statusFilter || 'ALL').toUpperCase();
-  const filteredPlanItems = isViewMode
-    ? (normalizedFilter === 'ALL'
-        ? planItems
-        : planItems.filter((i) => {
-            if (normalizedFilter === 'READY_TO_GO') return i.status === 'READY_TO_GO' || i.status === 'SHIPPED';
-            return i.status === normalizedFilter;
-          }))
-    : planItems;
+  const sidebarSelectFilteredCount = filteredPlanItems.filter((i) => sidebarSelectionIds.has(i.id)).length;
+  const sidebarAllFilteredSelected =
+    filteredPlanItems.length > 0 && sidebarSelectFilteredCount === filteredPlanItems.length;
+  const sidebarSomeFilteredSelected =
+    sidebarSelectFilteredCount > 0 && !sidebarAllFilteredSelected;
 
   // Header content
   const headerTitle = isDraftMode
@@ -574,12 +738,14 @@ export function FbaFnskuChecklist({
 
   return (
     <>
-      <div className="relative flex h-full flex-col bg-stone-50">
+      <div className={checklistChrome.shell}>
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-zinc-200 bg-[linear-gradient(180deg,rgba(246,248,251,0.98),rgba(255,255,255,0.98))] px-4 py-4">
+        <div
+          className={`flex items-start justify-between gap-3 bg-white/90 px-4 py-4 backdrop-blur-sm ${checklistChrome.headerBarDivider}`}
+        >
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">{headerEyebrow}</p>
+            <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${themeColors.text}`}>{headerEyebrow}</p>
             <h2 className="mt-2 text-[15px] font-black tracking-tight text-zinc-900">{headerTitle}</h2>
             <p className="mt-1 max-w-md text-[11px] leading-5 text-zinc-500">{headerSubtitle}</p>
           </div>
@@ -595,7 +761,7 @@ export function FbaFnskuChecklist({
                   whileTap={{ scale: 0.95 }}
                   onClick={handleAddToTodayPlan}
                   disabled={creating || newDraftItems.length === 0}
-                  className="flex h-9 items-center gap-1.5 rounded-full bg-sky-700 px-4 text-[10px] font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  className={`flex h-9 items-center gap-1.5 rounded-full px-4 text-[10px] font-black uppercase tracking-[0.14em] text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${themeColors.bg} ${themeColors.hover}`}
                 >
                   {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Package className="h-3 w-3" />}
                   Add {newDraftItems.length > 0 ? `${newDraftItems.length} ` : ''}to plan
@@ -629,8 +795,13 @@ export function FbaFnskuChecklist({
         {/* Already-in-plan notice */}
         <AnimatePresence>
           {isDraftMode && alreadyInPlanCount > 0 && !loading && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden border-b border-sky-100 bg-sky-50 px-4 py-2.5">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold text-sky-700">
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className={`overflow-hidden border-b px-4 py-2.5 ${themeColors.border} ${themeColors.light}`}
+            >
+              <div className={`flex items-center gap-1.5 text-[10px] font-semibold ${themeColors.text}`}>
                 <Check className="h-3 w-3" />
                 {alreadyInPlanCount} FNSKU{alreadyInPlanCount !== 1 ? 's' : ''} already in today&apos;s plan — skipped
               </div>
@@ -639,13 +810,36 @@ export function FbaFnskuChecklist({
         </AnimatePresence>
 
         {/* Column header — 44px */}
-        <div className="sticky top-0 z-10 flex h-12 items-center border-b border-zinc-200 bg-white/95 px-4 backdrop-blur-sm">
-          <p className="flex-1 text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">Item</p>
+        <div
+          className={`sticky top-0 z-10 flex h-12 items-center gap-2 border-b bg-white/95 px-4 backdrop-blur-sm ${themeColors.border}`}
+        >
+          <div className="flex w-9 shrink-0 items-center justify-center">
+            {isViewMode && filteredPlanItems.length > 0 ? (
+              <PrintTableCheckbox
+                checked={sidebarAllFilteredSelected}
+                indeterminate={sidebarSomeFilteredSelected}
+                stationTheme="lightblue"
+                reducedMotion={false}
+                label={
+                  sidebarAllFilteredSelected
+                    ? 'Clear sidebar selection for visible rows'
+                    : 'Select visible rows for print sidebar'
+                }
+                onChange={() => toggleSidebarSelectAllFilteredImmediate()}
+              />
+            ) : null}
+          </div>
+          <p className="min-w-0 flex-1 text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">Item</p>
           <div className="flex items-center gap-2 pr-0.5">
             <p className="w-16 text-right text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">FNSKU</p>
             <p className="w-24 text-center text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">Units</p>
             {isViewMode && <p className="w-[7.5rem] text-center text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">Print queue</p>}
           </div>
+          {isViewMode && sidebarSelectionIds.size > 0 ? (
+            <p className="ml-auto shrink-0 text-[9px] font-black uppercase tracking-[0.16em] text-sky-600">
+              {sidebarSelectionIds.size} selected
+            </p>
+          ) : null}
         </div>
 
         {/* Rows */}
@@ -656,8 +850,10 @@ export function FbaFnskuChecklist({
             <ShimmerRows count={Math.min(loadingCount || 4, 6)} />
           ) : (isDraftMode ? draftItems.length === 0 : filteredPlanItems.length === 0) ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-sky-100 bg-sky-50">
-                <Package className="h-6 w-6 text-sky-400" />
+              <div
+                className={`flex h-14 w-14 items-center justify-center rounded-3xl border-2 ${themeColors.border} ${themeColors.light}`}
+              >
+                <Package className={`h-6 w-6 ${printUi.toolbarAccent}`} />
               </div>
               <p className="text-sm font-semibold text-zinc-700">{emptyTitle}</p>
               <p className="max-w-sm text-xs leading-5 text-zinc-500">{emptyDescription}</p>
@@ -684,7 +880,9 @@ export function FbaFnskuChecklist({
                         {item.product_title || item.fnsku}
                       </p>
                       {item.alreadyInPlan && (
-                        <span className="shrink-0 rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[8px] font-black uppercase tracking-[0.14em] text-sky-700">
+                        <span
+                          className={`shrink-0 rounded-full border-2 px-2 py-1 text-[8px] font-black uppercase tracking-[0.14em] ${themeColors.border} ${themeColors.light} ${themeColors.text}`}
+                        >
                           In today&apos;s plan
                         </span>
                       )}
@@ -701,12 +899,13 @@ export function FbaFnskuChecklist({
 
                   {/* Right: FNSKU chip + qty + remove */}
                   <div className="flex shrink-0 items-center gap-2">
-                    <FnskuChip value={item.fnsku} width="w-[64px]" />
+                    <FnskuChip value={item.fnsku} />
                     <QtyControl
                       value={item.qty}
                       onMinus={() => adjustDraftQty(item.fnsku, -1)}
                       onPlus={() => adjustDraftQty(item.fnsku, 1)}
                       disabled={item.alreadyInPlan || !item.found}
+                      focusRingClassName={printUi.rowFocusRing}
                     />
                     <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => removeDraftItem(item.fnsku)}
                       className="flex h-7 w-7 items-center justify-center rounded-full border border-transparent text-zinc-300 transition-colors hover:border-red-100 hover:bg-red-50 hover:text-red-500">
@@ -721,18 +920,43 @@ export function FbaFnskuChecklist({
                 const isCompleted  = item.status === 'READY_TO_GO' || item.status === 'SHIPPED';
                 const isCycling    = cyclingItemId === item.id;
                 const noteOpen     = expandedNoteId === item.id;
+                const isSidebarSelected = sidebarSelectionIds.has(item.id);
                 return (
                   <motion.div
                     key={item.id}
                     variants={rowVariants}
                     initial="hidden"
-                  animate="visible"
-                  exit="exit"
-                  transition={{ delay: idx * 0.025 }}
-                  layout
-                  className={`border-b border-zinc-100 transition-colors hover:bg-stone-50 ${isCompleted ? 'bg-emerald-50/30' : 'bg-white'}`}
-                >
-                    <div className="flex items-center gap-3 px-4 py-3">
+                    animate="visible"
+                    exit="exit"
+                    transition={{ delay: idx * 0.025 }}
+                    layout
+                    onClick={() => toggleSidebarLineImmediate(item.id)}
+                    className={`border-b border-zinc-100 transition-colors hover:bg-stone-50 ${
+                      isSidebarSelected
+                        ? 'border-l-4 border-l-sky-400 bg-sky-50/70'
+                        : isCompleted
+                          ? 'bg-emerald-50/30'
+                          : 'bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 px-4 py-3">
+                      <div
+                        className="flex w-9 shrink-0 items-center justify-center"
+                        role="presentation"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <PrintTableCheckbox
+                          checked={sidebarSelectionIds.has(item.id)}
+                          stationTheme="lightblue"
+                          reducedMotion={false}
+                          label={
+                            sidebarSelectionIds.has(item.id)
+                              ? `Remove ${item.fnsku} from print sidebar`
+                              : `Add ${item.fnsku} to print sidebar`
+                          }
+                          onChange={() => toggleSidebarLineImmediate(item.id)}
+                        />
+                      </div>
                       {/* Clickable status dot */}
                       <motion.button
                         type="button"
@@ -795,12 +1019,13 @@ export function FbaFnskuChecklist({
 
                       {/* Right: FNSKU chip + qty + notes + print */}
                       <div className="flex shrink-0 items-center gap-2">
-                        <FnskuChip value={item.fnsku} width="w-[64px]" />
+                        <FnskuChip value={item.fnsku} />
                         <QtyControl
                           value={item.expected_qty}
                           onMinus={() => adjustPlanQty(item.id, -1)}
                           onPlus={() => adjustPlanQty(item.id, 1)}
                           disabled={isCompleted}
+                          focusRingClassName={printUi.rowFocusRing}
                         />
                         {/* Note toggle */}
                         <motion.button

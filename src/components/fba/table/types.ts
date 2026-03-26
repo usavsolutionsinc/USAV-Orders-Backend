@@ -7,6 +7,20 @@ export type ItemStatus =
 
 export type PendingReason = 'out_of_stock' | 'qc_fail' | null;
 
+export interface ShipmentTrackingEntry {
+  link_id?: number;
+  tracking_id?: number;
+  tracking_number: string;
+  carrier: string | null;
+  status_category?: string | null;
+  status_description?: string | null;
+  is_delivered?: boolean | null;
+  is_in_transit?: boolean | null;
+  has_exception?: boolean | null;
+  latest_event_at?: string | null;
+  label?: string | null;
+}
+
 export interface PrintQueueItem {
   item_id: number;
   fnsku: string;
@@ -16,9 +30,21 @@ export interface PrintQueueItem {
   display_title: string;
   asin: string | null;
   sku: string | null;
+  /** Canonical internal `fba_shipments.id` used for plan selection + pairing. */
+  plan_id?: number;
+  /** Canonical human-facing plan code stored in `fba_shipments.shipment_ref`. */
+  plan_ref?: string | null;
+  /**
+   * Legacy API alias for `plan_id`.
+   * This is still the raw SQL column name from joins and is not Amazon's shipment id.
+   */
   shipment_id: number;
+  /** Legacy API alias for `plan_ref`. */
   shipment_ref: string;
+  /** External Amazon FBA shipment id stamped onto a plan after pairing. */
   amazon_shipment_id: string | null;
+  /** Carrier tracking rows linked to this plan. */
+  tracking_numbers?: ShipmentTrackingEntry[] | null;
   due_date: string | null;
   destination_fc: string | null;
   item_notes?: string | null;
@@ -27,6 +53,8 @@ export interface PrintQueueItem {
 }
 
 export interface EnrichedItem extends PrintQueueItem {
+  plan_id: number;
+  plan_ref: string;
   status: ItemStatus;
   pending_reason: PendingReason;
   pending_reason_note?: string;
@@ -49,6 +77,7 @@ export type TableAction =
   | { type: 'TOGGLE_SELECT'; id: number }
   | { type: 'SELECT_ALL' }
   | { type: 'DESELECT_ALL' }
+  | { type: 'SELECT_PLAN'; plan_id: number }
   | { type: 'SELECT_SHIPMENT'; shipment_id: number }
   | { type: 'TOGGLE_EXPAND'; id: number }
   | { type: 'SET_EXPANDED'; id: number | null }
@@ -62,6 +91,9 @@ export type TableAction =
 
 export interface PrintSelectionPayload {
   selectedItems: EnrichedItem[];
+  /** Canonical internal `fba_shipments.id` targets for sidebar pairing. */
+  planIds: number[];
+  /** Compatibility alias for older listeners. Mirrors `planIds`. */
   shipmentIds: number[];
   readyCount: number;
   pendingCount: number;

@@ -54,6 +54,30 @@ export async function GET(request: NextRequest) {
          fs.id                AS shipment_id,
          fs.shipment_ref,
          fs.amazon_shipment_id,
+         COALESCE(
+           (
+             SELECT jsonb_agg(
+               jsonb_build_object(
+                 'link_id',            fst.id,
+                 'tracking_id',        stn.id,
+                 'tracking_number',    stn.tracking_number_raw,
+                 'carrier',            stn.carrier,
+                 'status_category',    stn.latest_status_category,
+                 'status_description', stn.latest_status_description,
+                 'is_delivered',       stn.is_delivered,
+                 'is_in_transit',      stn.is_in_transit,
+                 'has_exception',      stn.has_exception,
+                 'latest_event_at',    stn.latest_event_at,
+                 'label',              fst.label
+               )
+               ORDER BY fst.created_at DESC
+             )
+             FROM fba_shipment_tracking fst
+             JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
+             WHERE fst.shipment_id = fs.id
+           ),
+           '[]'::jsonb
+         )                   AS tracking_numbers,
          fs.due_date,
          fs.status            AS shipment_status,
          fs.destination_fc,

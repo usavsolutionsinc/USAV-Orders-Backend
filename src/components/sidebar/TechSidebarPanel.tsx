@@ -121,7 +121,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
       <div className={sidebarHeaderBandClass}>
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-400">
           <div className="min-w-0">
             <StaffSelector
               role="technician"

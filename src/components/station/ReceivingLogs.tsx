@@ -342,10 +342,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                                             <CopyChip
                                                 value={log.tracking || ''}
                                                 display={getLast4(log.tracking)}
-                                                icon={null}
-                                                iconClass=""
                                                 underlineClass="border-blue-500"
-                                                width="w-[40px]"
                                                 truncateDisplay={false}
                                             />
                                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60 truncate">

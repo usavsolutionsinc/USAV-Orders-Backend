@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getApiIdempotencyResponse, readIdempotencyKey, saveApiIdempotencyResponse } from '@/lib/api-idempotency';
+import { getValidStationScanSession } from '@/lib/station-scan-session';
 import { insertTechSerialForTracking } from '@/lib/tech/insertTechSerialForTracking';
+import { resolveStaffIdFromTechParam } from '@/lib/tech/resolveStaffIdFromTechParam';
+
+const ROUTE = 'tech.add-serial-to-last';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const idemKey = readIdempotencyKey(req, body?.idempotencyKey);
+    if (idemKey) {
+      const hit = await getApiIdempotencyResponse(pool, idemKey, ROUTE);
+      if (hit && hit.status_code === 200) {
+        return NextResponse.json(hit.response_body, { status: 200 });
+      }
+    }
+
     const serial = String(body?.serial || '').trim();
     const techId = String(body?.techId || '').trim();
+    const scanSessionId = body?.scanSessionId != null ? String(body.scanSessionId).trim() : '';
 
     if (!serial || !techId) {
       return NextResponse.json(
@@ -23,56 +37,54 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Find the most recent TRACKING_SCANNED activity log for this tech
-    const lastScanResult = await pool.query(
-      `SELECT sal.id, sal.shipment_id, sal.scan_ref,
-              COALESCE(stn.tracking_number_raw, sal.scan_ref) AS tracking
-       FROM station_activity_logs sal
-       LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
-       WHERE sal.station = 'TECH'
-         AND sal.activity_type = 'TRACKING_SCANNED'
-         AND sal.staff_id = $1
-       ORDER BY sal.created_at DESC, sal.id DESC
-       LIMIT 1`,
-      [techIdNum],
-    );
-
-    if (lastScanResult.rows.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No previous tracking scan found — scan a tracking number first.' },
-        { status: 404 },
-      );
+    const staffId = await resolveStaffIdFromTechParam(pool, techId);
+    if (!staffId) {
+      return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
     }
 
-    const lastScan = lastScanResult.rows[0];
-    const tracking = String(lastScan.tracking || lastScan.scan_ref || '').trim();
-
-    if (!tracking) {
-      return NextResponse.json(
-        { success: false, error: 'Last tracking scan has no resolvable tracking number.' },
-        { status: 400 },
-      );
+    if (scanSessionId) {
+      const sess = await getValidStationScanSession(pool, scanSessionId, staffId);
+      if (!sess) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid or expired scan session — scan tracking again.' },
+          { status: 400 },
+        );
+      }
+      if (sess.session_kind === 'REPAIR') {
+        return NextResponse.json(
+          { success: false, error: 'Repair session cannot accept serial scans here.' },
+          { status: 400 },
+        );
+      }
     }
-
-    const resolvedScan = {
-      shipmentId: lastScan.shipment_id != null ? Number(lastScan.shipment_id) : null,
-      scanRef: lastScan.scan_ref ?? null,
-    };
 
     const result = await insertTechSerialForTracking(pool, {
-      tracking,
       serial,
       techId,
-      resolvedScan,
     });
 
     if (!result.ok) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
 
-    // Load order info so the controller can restore the active order card
+    let tracking = '';
+    const shipQ = await pool.query(
+      `SELECT COALESCE(stn.tracking_number_raw, tsn.fnsku, '') AS trk
+       FROM tech_serial_numbers tsn
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = tsn.shipment_id
+       WHERE tsn.id = $1`,
+      [result.techSerialId],
+    );
+    tracking = String(shipQ.rows[0]?.trk || '').trim();
+
     let orderInfo = null;
-    if (resolvedScan.shipmentId) {
+    const resolvedShipmentQ = await pool.query(
+      `SELECT shipment_id FROM tech_serial_numbers WHERE id = $1`,
+      [result.techSerialId],
+    );
+    const resolvedShipmentId = resolvedShipmentQ.rows[0]?.shipment_id;
+
+    if (resolvedShipmentId) {
       const orderResult = await pool.query(
         `SELECT o.id, o.order_id, o.product_title, o.item_number, o.sku,
                 o.condition, o.notes, o.quantity, o.account_source,
@@ -90,7 +102,7 @@ export async function POST(req: NextRequest) {
          ) wa ON TRUE
          WHERE o.shipment_id = $1
          ORDER BY o.id DESC LIMIT 1`,
-        [resolvedScan.shipmentId, tracking],
+        [resolvedShipmentId, tracking],
       );
       if (orderResult.rows[0]) {
         const row = orderResult.rows[0];
@@ -111,7 +123,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fallback when order is in exceptions / no match
     if (!orderInfo) {
       orderInfo = {
         id: null,
@@ -121,7 +132,7 @@ export async function POST(req: NextRequest) {
         sku: 'N/A',
         condition: 'N/A',
         notes: '',
-        tracking,
+        tracking: tracking || 'N/A',
         quantity: 1,
         shipByDate: null,
         createdAt: null,
@@ -129,16 +140,30 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    return NextResponse.json({
+    const out = {
       success: true,
       order: orderInfo,
       serialNumbers: result.serialNumbers,
       techSerialId: result.techSerialId,
-    });
-  } catch (error: any) {
+      scanSessionId: scanSessionId || null,
+    };
+
+    if (idemKey) {
+      await saveApiIdempotencyResponse(pool, {
+        idempotencyKey: idemKey,
+        route: ROUTE,
+        staffId,
+        statusCode: 200,
+        responseBody: out,
+      });
+    }
+
+    return NextResponse.json(out);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error in add-serial-to-last:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to add serial', details: error.message },
+      { success: false, error: 'Failed to add serial', details: message },
       { status: 500 },
     );
   }

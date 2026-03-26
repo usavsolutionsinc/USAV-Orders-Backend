@@ -1,5 +1,43 @@
-import type { DayBucket, EnrichedItem, ItemStatus, PendingReason, PrintQueueItem, ShipmentGroup } from './types';
+import type {
+  DayBucket,
+  EnrichedItem,
+  ItemStatus,
+  PendingReason,
+  PrintQueueItem,
+  ShipmentGroup,
+  ShipmentTrackingEntry,
+} from './types';
 import { getTodayDateIso } from '@/components/fba/utils/getTodayDate';
+
+export function getPlanId(item: { plan_id?: number | null; shipment_id?: number | null }): number {
+  const direct = Number(item.plan_id);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const legacy = Number(item.shipment_id);
+  if (Number.isFinite(legacy) && legacy > 0) return legacy;
+  return 0;
+}
+
+export function getPlanRef(item: { plan_ref?: string | null; shipment_ref?: string | null }): string {
+  const canonical = String(item.plan_ref || '').trim();
+  if (canonical) return canonical;
+  return String(item.shipment_ref || '').trim();
+}
+
+export function getPlanLabel(item: { plan_id?: number | null; shipment_id?: number | null; plan_ref?: string | null; shipment_ref?: string | null }): string {
+  const ref = getPlanRef(item);
+  if (ref) return ref;
+  const planId = getPlanId(item);
+  return planId > 0 ? `Plan ${planId}` : 'Plan';
+}
+
+export function getPrimaryTrackingNumber(item: { tracking_numbers?: ShipmentTrackingEntry[] | null }): string {
+  const trackingNumbers = Array.isArray(item.tracking_numbers) ? item.tracking_numbers : [];
+  const upsTracking = trackingNumbers.find(
+    (entry) => String(entry.carrier || '').toUpperCase() === 'UPS' && String(entry.tracking_number || '').trim()
+  );
+  const fallbackTracking = trackingNumbers.find((entry) => String(entry.tracking_number || '').trim());
+  return String((upsTracking ?? fallbackTracking)?.tracking_number || '').trim();
+}
 
 export function dueDateLabel(iso: string | null): { text: string; cls: string } {
   if (!iso) return { text: 'No ship-by date', cls: 'text-gray-400' };
@@ -52,14 +90,24 @@ export function deriveItemStatus(row: PrintQueueItem): {
 }
 
 export function enrichFromApi(row: PrintQueueItem & { status?: string; notes?: string | null }): EnrichedItem {
+  const planId = getPlanId(row);
+  const planRef = getPlanRef(row);
   const merged: PrintQueueItem = {
     ...row,
+    plan_id: planId,
+    plan_ref: planRef,
+    shipment_id: planId,
+    shipment_ref: planRef,
     item_status: row.item_status || String(row.status || ''),
     item_notes: row.item_notes ?? row.notes ?? null,
   };
   const { status, pending_reason, pending_reason_note } = deriveItemStatus(merged);
   return {
     ...merged,
+    plan_id: planId,
+    plan_ref: planRef,
+    shipment_id: planId,
+    shipment_ref: planRef,
     status,
     pending_reason,
     pending_reason_note,
@@ -99,19 +147,21 @@ export function groupByDayThenShipment(items: EnrichedItem[]): DayBucket[] {
 
   for (const item of items) {
     const dk = dayKeyFromDue(item.due_date);
+    const planId = getPlanId(item);
+    const planRef = getPlanRef(item);
     if (!dayMap.has(dk)) dayMap.set(dk, new Map());
     const sm = dayMap.get(dk)!;
-    if (!sm.has(item.shipment_id)) {
-      sm.set(item.shipment_id, {
-        shipment_id: item.shipment_id,
-        shipment_ref: item.shipment_ref,
+    if (!sm.has(planId)) {
+      sm.set(planId, {
+        shipment_id: planId,
+        shipment_ref: planRef,
         amazon_shipment_id: item.amazon_shipment_id,
         due_date: item.due_date,
         destination_fc: item.destination_fc,
         items: [],
       });
     }
-    sm.get(item.shipment_id)!.items.push(item);
+    sm.get(planId)!.items.push(item);
   }
 
   for (const sm of Array.from(dayMap.values())) {
@@ -136,17 +186,19 @@ export function groupByDayThenShipment(items: EnrichedItem[]): DayBucket[] {
 export function groupByShipmentOnly(items: EnrichedItem[]): ShipmentGroup[] {
   const map = new Map<number, ShipmentGroup>();
   for (const item of items) {
-    if (!map.has(item.shipment_id)) {
-      map.set(item.shipment_id, {
-        shipment_id: item.shipment_id,
-        shipment_ref: item.shipment_ref,
+    const planId = getPlanId(item);
+    const planRef = getPlanRef(item);
+    if (!map.has(planId)) {
+      map.set(planId, {
+        shipment_id: planId,
+        shipment_ref: planRef,
         amazon_shipment_id: item.amazon_shipment_id,
         due_date: item.due_date,
         destination_fc: item.destination_fc,
         items: [],
       });
     }
-    map.get(item.shipment_id)!.items.push(item);
+    map.get(planId)!.items.push(item);
   }
   for (const g of Array.from(map.values())) {
     g.items = sortItemsPrintQueueOrder(g.items);
@@ -160,7 +212,7 @@ export function groupByShipmentOnly(items: EnrichedItem[]): ShipmentGroup[] {
 }
 
 export function sortEnrichedItems(a: EnrichedItem, b: EnrichedItem): number {
-  if (a.shipment_id !== b.shipment_id) return a.shipment_id - b.shipment_id;
+  if (a.plan_id !== b.plan_id) return a.plan_id - b.plan_id;
   return a.fnsku.localeCompare(b.fnsku);
 }
 

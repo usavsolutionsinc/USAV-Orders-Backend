@@ -9,6 +9,7 @@ import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
+import { techStationScanInputBorderClass, type TechStationTheme } from '@/utils/staff-colors';
 
 const STATION_EASE_OUT = [0.22, 1, 0.36, 1] as const;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
@@ -105,6 +106,41 @@ export default function StationTesting({
           orderFound: data.orderFound !== false,
           sourceType: 'fba',
         });
+
+        if (data.fnskuSalId) {
+          window.dispatchEvent(new CustomEvent('tech-log-added', {
+            detail: {
+              id: -1 * Number(data.fnskuSalId),
+              source_row_id: Number(data.fnskuSalId),
+              source_kind: 'fba_scan',
+              tech_serial_id: null,
+              fnsku_log_id:
+                data.fnskuLogId != null && Number.isFinite(Number(data.fnskuLogId))
+                  ? Number(data.fnskuLogId)
+                  : null,
+              created_at: data.order?.testDateTime ?? data.order?.createdAt ?? null,
+              shipping_tracking_number: data.order?.tracking ?? fnsku,
+              serial_number: '',
+              tested_by: data.order?.testedBy ?? Number(userId),
+              shipment_id: data.shipment?.shipment_id ?? null,
+              order_db_id: null,
+              order_id: data.order?.orderId ?? 'FBA',
+              product_title: data.order?.productTitle ?? null,
+              item_number: data.order?.itemNumber ?? null,
+              sku: data.order?.sku ?? null,
+              condition: data.order?.condition ?? null,
+              fnsku,
+              status: data.order?.status ?? null,
+              status_history: data.order?.statusHistory ?? [],
+              notes: data.order?.notes ?? null,
+              account_source: data.order?.accountSource ?? 'fba',
+              quantity: String(data.order?.quantity || '1'),
+              is_shipped: Boolean(data.order?.isShipped),
+              ship_by_date: data.order?.shipByDate ?? null,
+              out_of_stock: data.order?.outOfStock ?? null,
+            },
+          }));
+        }
 
         setManualMode(null);
         triggerGlobalRefresh();
@@ -324,6 +360,7 @@ export default function StationTesting({
               onChange={setInputValue}
               onSubmit={handleFormSubmit}
               inputRef={inputRef}
+              inputBorderClassName={techStationScanInputBorderClass[themeColor as TechStationTheme]}
               placeholder="ORDERS, FNSKU, RS, SN"
               autoFocus
               icon={(

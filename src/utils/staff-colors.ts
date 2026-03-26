@@ -2,6 +2,42 @@ export type StationTheme = 'green' | 'purple' | 'blue' | 'yellow' | 'black' | 'r
 export type TechStationTheme = 'green' | 'purple' | 'blue' | 'yellow';
 export type PackerStationTheme = 'black' | 'red';
 
+/** Visible theme border on the tech {@link StationScanBar} `<input>` only (no outer wrapper). */
+export const techStationScanInputBorderClass: Record<TechStationTheme, string> = {
+  green: 'border-2 border-emerald-500',
+  blue: 'border-2 border-blue-500',
+  purple: 'border-2 border-purple-500',
+  yellow: 'border-2 border-amber-500',
+};
+
+/**
+ * Soft 1px outline in the same hue as {@link techStationScanInputBorderClass} (e.g. up-next TabSwitch rail + pill).
+ */
+export const techStationLightChromeOutlineClass: Record<TechStationTheme, string> = {
+  green: 'border border-emerald-200',
+  blue: 'border border-blue-200',
+  purple: 'border border-purple-200',
+  yellow: 'border border-amber-200',
+};
+
+export function getTechStationLightChromeOutlineClass(
+  techId: number | string | null | undefined,
+): string {
+  return techStationLightChromeOutlineClass[getTechThemeById(techId)];
+}
+
+/** Same stroke weights as {@link techStationScanInputBorderClass}, for all {@link StationTheme} (FBA sidebar, staff 7/8, etc.). */
+export const stationScanInputBorderClass: Record<StationTheme, string> = {
+  green: 'border-2 border-emerald-500',
+  blue: 'border-2 border-blue-500',
+  purple: 'border-2 border-purple-500',
+  yellow: 'border-2 border-amber-500',
+  black: 'border-2 border-slate-700',
+  red: 'border-2 border-red-500',
+  lightblue: 'border-2 border-sky-500',
+  pink: 'border-2 border-pink-500',
+};
+
 export interface StationThemeColors {
   bg: string;
   hover: string;
@@ -391,8 +427,8 @@ export const fbaWorkspaceScanChrome: Record<
 > = {
   green: {
     trackingCard:
-      'space-y-3 rounded-xl border-2 border-emerald-200/90 bg-gradient-to-b from-emerald-50/90 to-white px-3 py-3 shadow-sm shadow-emerald-100/35',
-    trackingSectionBorder: 'border-t border-emerald-100',
+      'space-y-3 rounded-xl border-2 border-emerald-400/95 bg-gradient-to-b from-emerald-50/90 to-white px-3 py-3 shadow-sm shadow-emerald-100/35',
+    trackingSectionBorder: 'border-t border-emerald-300',
     selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-emerald-700',
     fnskuSubtext:
       'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-800/85',
@@ -404,8 +440,8 @@ export const fbaWorkspaceScanChrome: Record<
   },
   blue: {
     trackingCard:
-      'space-y-3 rounded-xl border-2 border-blue-200/90 bg-gradient-to-b from-blue-50/90 to-white px-3 py-3 shadow-sm shadow-blue-100/35',
-    trackingSectionBorder: 'border-t border-blue-100',
+      'space-y-3 rounded-xl border-2 border-blue-400/95 bg-gradient-to-b from-blue-50/90 to-white px-3 py-3 shadow-sm shadow-blue-100/35',
+    trackingSectionBorder: 'border-t border-blue-300',
     selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-blue-700',
     fnskuSubtext:
       'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-blue-800/85',
@@ -417,8 +453,8 @@ export const fbaWorkspaceScanChrome: Record<
   },
   purple: {
     trackingCard:
-      'space-y-3 rounded-xl border-2 border-purple-200/90 bg-gradient-to-b from-purple-50/90 to-white px-3 py-3 shadow-sm shadow-purple-100/35',
-    trackingSectionBorder: 'border-t border-purple-100',
+      'space-y-3 rounded-xl border-2 border-purple-400/95 bg-gradient-to-b from-purple-50/90 to-white px-3 py-3 shadow-sm shadow-purple-100/35',
+    trackingSectionBorder: 'border-t border-purple-300',
     selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-purple-700',
     fnskuSubtext:
       'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-purple-800/85',
@@ -430,8 +466,8 @@ export const fbaWorkspaceScanChrome: Record<
   },
   yellow: {
     trackingCard:
-      'space-y-3 rounded-xl border-2 border-amber-200/90 bg-gradient-to-b from-amber-50/90 to-white px-3 py-3 shadow-sm shadow-amber-100/35',
-    trackingSectionBorder: 'border-t border-amber-100',
+      'space-y-3 rounded-xl border-2 border-amber-400/95 bg-gradient-to-b from-amber-50/90 to-white px-3 py-3 shadow-sm shadow-amber-100/35',
+    trackingSectionBorder: 'border-t border-amber-300',
     selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-amber-800',
     fnskuSubtext:
       'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-900/80',
@@ -443,8 +479,8 @@ export const fbaWorkspaceScanChrome: Record<
   },
   black: {
     trackingCard:
-      'space-y-3 rounded-xl border-2 border-slate-300/90 bg-gradient-to-b from-slate-50/90 to-white px-3 py-3 shadow-sm shadow-slate-200/40',
-    trackingSectionBorder: 'border-t border-slate-200',
+      'space-y-3 rounded-xl border-2 border-slate-500/90 bg-gradient-to-b from-slate-50/90 to-white px-3 py-3 shadow-sm shadow-slate-200/40',
+    trackingSectionBorder: 'border-t border-slate-400',
     selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-slate-800',
     fnskuSubtext:
       'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600',
@@ -456,8 +492,8 @@ export const fbaWorkspaceScanChrome: Record<
   },
   red: {
     trackingCard:
-      'space-y-3 rounded-xl border-2 border-red-200/90 bg-gradient-to-b from-red-50/90 to-white px-3 py-3 shadow-sm shadow-red-100/35',
-    trackingSectionBorder: 'border-t border-red-100',
+      'space-y-3 rounded-xl border-2 border-red-400/95 bg-gradient-to-b from-red-50/90 to-white px-3 py-3 shadow-sm shadow-red-100/35',
+    trackingSectionBorder: 'border-t border-red-300',
     selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-red-700',
     fnskuSubtext:
       'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-red-800/85',
@@ -469,8 +505,8 @@ export const fbaWorkspaceScanChrome: Record<
   },
   lightblue: {
     trackingCard:
-      'space-y-3 rounded-xl border-2 border-sky-200/90 bg-gradient-to-b from-sky-50/90 to-white px-3 py-3 shadow-sm shadow-sky-100/35',
-    trackingSectionBorder: 'border-t border-sky-100',
+      'space-y-3 rounded-xl border-2 border-sky-400/95 bg-gradient-to-b from-sky-50/90 to-white px-3 py-3 shadow-sm shadow-sky-100/35',
+    trackingSectionBorder: 'border-t border-sky-300',
     selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-sky-700',
     fnskuSubtext:
       'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-800/85',
@@ -482,8 +518,8 @@ export const fbaWorkspaceScanChrome: Record<
   },
   pink: {
     trackingCard:
-      'space-y-3 rounded-xl border-2 border-pink-200/90 bg-gradient-to-b from-pink-50/90 to-white px-3 py-3 shadow-sm shadow-pink-100/35',
-    trackingSectionBorder: 'border-t border-pink-100',
+      'space-y-3 rounded-xl border-2 border-pink-400/95 bg-gradient-to-b from-pink-50/90 to-white px-3 py-3 shadow-sm shadow-pink-100/35',
+    trackingSectionBorder: 'border-t border-pink-300',
     selectedItemsLabel: 'text-[9px] font-black uppercase tracking-[0.14em] text-pink-700',
     fnskuSubtext:
       'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-pink-800/85',
@@ -492,6 +528,56 @@ export const fbaWorkspaceScanChrome: Record<
     fnskuScanIconClass: 'text-pink-600',
     fnskuScanInputClass:
       '!text-pink-800 placeholder:text-pink-400/90 focus:border-pink-400 focus:ring-2 focus:ring-pink-500/25',
+  },
+};
+
+/**
+ * FBA plan / FNSKU checklist main column: same gradient family as {@link fbaWorkspaceScanChrome}.`trackingCard`,
+ * with a darker frame than the sidebar tracking card (`border-*-600` vs `border-*-400/95`).
+ */
+export const fbaFnskuChecklistChrome: Record<
+  StationTheme,
+  { shell: string; headerBarDivider: string }
+> = {
+  green: {
+    shell:
+      'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-emerald-600/90 bg-gradient-to-b from-emerald-50/88 via-white to-stone-50 shadow-md shadow-emerald-200/25',
+    headerBarDivider: 'border-b-2 border-emerald-300',
+  },
+  blue: {
+    shell:
+      'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-blue-600/90 bg-gradient-to-b from-blue-50/88 via-white to-stone-50 shadow-md shadow-blue-200/25',
+    headerBarDivider: 'border-b-2 border-blue-300',
+  },
+  purple: {
+    shell:
+      'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-purple-600/90 bg-gradient-to-b from-purple-50/88 via-white to-stone-50 shadow-md shadow-purple-200/25',
+    headerBarDivider: 'border-b-2 border-purple-300',
+  },
+  yellow: {
+    shell:
+      'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-amber-500/90 bg-gradient-to-b from-amber-50/88 via-white to-stone-50 shadow-md shadow-amber-200/25',
+    headerBarDivider: 'border-b-2 border-amber-300',
+  },
+  black: {
+    shell:
+      'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-slate-700/95 bg-gradient-to-b from-slate-50/90 via-white to-stone-50 shadow-md shadow-slate-300/30',
+    headerBarDivider: 'border-b-2 border-slate-400',
+  },
+  red: {
+    shell:
+      'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-red-600/90 bg-gradient-to-b from-red-50/88 via-white to-stone-50 shadow-md shadow-red-200/25',
+    headerBarDivider: 'border-b-2 border-red-300',
+  },
+  lightblue: {
+    shell:
+      'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-sky-600/90 bg-gradient-to-b from-sky-50/88 via-white to-stone-50 shadow-md shadow-sky-200/25',
+    headerBarDivider: 'border-b-2 border-sky-300',
+  },
+  pink: {
+    shell:
+      'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border-2 border-pink-600/90 bg-gradient-to-b from-pink-50/88 via-white to-stone-50 shadow-md shadow-pink-200/25',
+    headerBarDivider: 'border-b-2 border-pink-300',
   },
 };
 

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 
-// ── GET /api/fba/shipments/[id]/items ────────────────────────────────────────
+// â”€â”€ GET /api/fba/shipments/[id]/items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns all items for a specific FBA shipment with staff names joined.
 export async function GET(
   _request: NextRequest,
@@ -9,9 +10,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const shipmentId = Number(id);
-    if (!Number.isFinite(shipmentId) || shipmentId < 1) {
-      return NextResponse.json({ success: false, error: 'Invalid shipment id' }, { status: 400 });
+    const shipmentId = parseFbaPlanId(id);
+    if (shipmentId == null) {
+      return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
     const result = await pool.query(
@@ -59,7 +60,7 @@ export async function GET(
   }
 }
 
-// ── POST /api/fba/shipments/[id]/items ───────────────────────────────────────
+// â”€â”€ POST /api/fba/shipments/[id]/items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Add (or upsert) an item to an existing shipment.
 // Pulls product metadata from fba_fnskus if product_title is not provided.
 // Body: { fnsku, expected_qty?, product_title?, asin?, sku? }
@@ -70,9 +71,9 @@ export async function POST(
   const client = await pool.connect();
   try {
     const { id } = await params;
-    const shipmentId = Number(id);
-    if (!Number.isFinite(shipmentId) || shipmentId < 1) {
-      return NextResponse.json({ success: false, error: 'Invalid shipment id' }, { status: 400 });
+    const shipmentId = parseFbaPlanId(id);
+    if (shipmentId == null) {
+      return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
     const body = await request.json();
@@ -146,3 +147,4 @@ export async function POST(
     client.release();
   }
 }
+
