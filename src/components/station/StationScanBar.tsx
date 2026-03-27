@@ -55,7 +55,7 @@ export function StationScanBar({
     } catch { /* clipboard blocked */ }
   }, [onPaste]);
 
-  const showPaste = !!onPaste && !value.trim();
+  const showPaste = !!onPaste;
   const showRight = hasRightContent || showPaste;
 
   const padLeft = leadingIcon ? 'pl-11' : 'pl-4';

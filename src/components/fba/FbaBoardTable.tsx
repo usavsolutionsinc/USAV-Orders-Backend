@@ -41,12 +41,22 @@ const STATUS_SORT_ORDER: Record<string, number> = {
   PLANNED: 2,
   OUT_OF_STOCK: 3,
   LABEL_ASSIGNED: 4,
+  SHIPPED: 5,
 };
 
-function sortByStatus(a: FbaBoardItem, b: FbaBoardItem) {
-  const aOrder = STATUS_SORT_ORDER[a.item_status.toUpperCase()] ?? 9;
-  const bOrder = STATUS_SORT_ORDER[b.item_status.toUpperCase()] ?? 9;
-  return aOrder - bOrder;
+function sortBoardItems(a: FbaBoardItem, b: FbaBoardItem) {
+  const fa = a.fnsku.toUpperCase();
+  const fb = b.fnsku.toUpperCase();
+  if (fa !== fb) return fa.localeCompare(fb);
+
+  const aOrder = STATUS_SORT_ORDER[a.item_status.toUpperCase()] ?? 99;
+  const bOrder = STATUS_SORT_ORDER[b.item_status.toUpperCase()] ?? 99;
+  if (aOrder !== bOrder) return aOrder - bOrder;
+
+  const refCmp = (a.shipment_ref || '').localeCompare(b.shipment_ref || '');
+  if (refCmp !== 0) return refCmp;
+
+  return a.item_id - b.item_id;
 }
 
 export function FbaBoardTable({
@@ -58,7 +68,7 @@ export function FbaBoardTable({
 }: FbaBoardTableProps) {
   const ui = printQueueTableUi[stationTheme];
 
-  const sortedItems = useMemo(() => [...items].sort(sortByStatus), [items]);
+  const sortedItems = useMemo(() => [...items].sort(sortBoardItems), [items]);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
@@ -243,8 +253,8 @@ export function FbaBoardTable({
                 </div>
               </div>
 
-              {/* Right: plan ref + fnsku */}
-              <div className="flex shrink-0 flex-col items-end gap-1">
+              {/* Right: plan ref + fnsku (single row) */}
+              <div className="flex max-w-[min(100%,14rem)] shrink-0 flex-row flex-wrap items-center justify-end gap-x-2 gap-y-0.5">
                 <span className="whitespace-nowrap font-mono text-[10px] font-bold text-gray-500">
                   {item.shipment_ref || '—'}
                 </span>

@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
 // ── POST /api/fba/shipments ───────────────────────────────────────────────────
 // Creates a shipment header + optional initial items in a single transaction.
 // When `shipment_ref` is omitted, a plan code is generated from `due_date` only:
-// `FBA-MM-DD-YY` (no time). Response includes `plan_ref` (same as `shipment.shipment_ref`);
+// `FBA-MM/DD/YY` (no time). Response includes `plan_ref` (same as `shipment.shipment_ref`);
 // `shipment.id` is the internal row id (not the plan code).
 // Body: { shipment_ref?, destination_fc?, due_date?, notes?,
 //         created_by_staff_id?, assigned_tech_id?, assigned_packer_id?,

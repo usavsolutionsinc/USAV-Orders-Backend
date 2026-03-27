@@ -164,9 +164,11 @@ export function CopyChip({
               style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
               className="pointer-events-none fixed z-[2147483647]"
             >
-              <div className="flex max-w-[min(90vw,24rem)] items-start gap-2 rounded border border-gray-300 bg-gray-100 px-2 py-1 text-[10px] font-bold text-black shadow-sm">
+              <div className="relative flex max-w-[min(90vw,24rem)] items-start gap-2 rounded-md bg-gray-900 px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-md">
                 <span className="font-mono break-all leading-tight">{normalizedValue}</span>
-                {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0" />}
+                {copied ? <Check className="h-3 w-3 shrink-0 text-emerald-400" /> : <Copy className="h-3 w-3 shrink-0 text-gray-400" />}
+                {/* Downward caret */}
+                <span className="absolute left-1/2 top-full -translate-x-1/2 border-x-4 border-b-0 border-t-4 border-x-transparent border-t-gray-900" />
               </div>
             </div>,
             document.body

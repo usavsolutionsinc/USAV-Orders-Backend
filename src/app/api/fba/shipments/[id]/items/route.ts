@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
@@ -118,7 +118,7 @@ export async function POST(
          (shipment_id, fnsku, product_title, asin, sku, expected_qty)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (shipment_id, fnsku) DO UPDATE
-         SET expected_qty  = EXCLUDED.expected_qty,
+         SET expected_qty  = fba_shipment_items.expected_qty + EXCLUDED.expected_qty,
              product_title = COALESCE(EXCLUDED.product_title, fba_shipment_items.product_title),
              asin          = COALESCE(EXCLUDED.asin, fba_shipment_items.asin),
              sku           = COALESCE(EXCLUDED.sku, fba_shipment_items.sku),

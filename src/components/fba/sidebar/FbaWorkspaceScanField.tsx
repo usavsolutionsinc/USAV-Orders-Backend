@@ -2,14 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { AlertCircle, Check, Loader2 } from '@/components/Icons';
+import { AlertCircle, Loader2 } from '@/components/Icons';
 import StationFbaInput from '@/components/fba/StationFbaInput';
 import { useFbaWorkspace } from '@/contexts/FbaWorkspaceContext';
 import StationGoalBar from '@/components/station/StationGoalBar';
-import { getPlanId, getPlanLabel } from '@/components/fba/table/utils';
-import { resolveFbaItemDisplayQty } from '@/lib/fba/qty';
-import { SelectionFloatingBar } from '@/components/fba/table/SelectionFloatingBar';
-import type { EnrichedItem } from '@/components/fba/table/types';
 import {
   FBA_ID_RE,
   UPS_RE,
@@ -20,13 +16,12 @@ import {
 } from '@/components/fba/sidebar/fbaShipmentTracking';
 import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import {
-  fbaSidebarThemeChrome,
   fbaWorkspaceScanChrome,
   getStaffThemeById,
   stationThemeColors,
 } from '@/utils/staff-colors';
 import { SIDEBAR_INTAKE_LABEL_CLASS } from '@/design-system/components/sidebar-intake/intakeFormClasses';
-import { motionBezier, framerTransition } from '@/design-system/foundations/motion-framer';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
 
 const fieldBaseClass =
   'mt-1 w-full rounded-xl border-2 border-gray-400 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 disabled:opacity-50';
@@ -40,14 +35,8 @@ const PRINT_SIDEBAR_READY_EVENT = 'fba-print-sidebar-ready';
 
 export interface FbaWorkspaceScanFieldProps {
   staffName: string;
-  /**
-   * Staff id from URL / explicit pick. When omitted, resolves Lien from active staff (`/api/staff?active=true`)
-   * and uses that id for theme + FNSKU scan attribution.
-   */
   staffId?: number | string | null;
-  /** Matches selected row in staff directory so packers get packer theme colors. */
   staffRole?: 'technician' | 'packer';
-  /** When false, only Welcome + FBA goal (matches shipped sidebar strip). */
   scanEnabled?: boolean;
 }
 
@@ -87,12 +76,18 @@ export function FbaWorkspaceScanField({
   );
   const themeColors = stationThemeColors[stationTheme];
   const scanChrome = fbaWorkspaceScanChrome[stationTheme];
-  const sidebarChrome = fbaSidebarThemeChrome[stationTheme];
   const fieldClass = `${fieldBaseClass} ${scanChrome.fieldFocusRing}`;
   const selectedItems = selection.selectedItems;
 
   const selectedPlanIds = useMemo(
-    () => Array.from(new Set(selectedItems.map((item) => getPlanId(item)).filter((id) => id > 0))),
+    () => {
+      const ids = new Set<number>();
+      for (const item of selectedItems) {
+        const id = Number(item.plan_id ?? item.shipment_id ?? 0);
+        if (Number.isFinite(id) && id > 0) ids.add(id);
+      }
+      return Array.from(ids);
+    },
     [selectedItems]
   );
   const activePlanId = selection.activePlanId;
@@ -164,83 +159,42 @@ export function FbaWorkspaceScanField({
     [patchTracking, trackingTargetPlanIds]
   );
 
-  const onBlurAmazon = useCallback(async () => {
+  const onSaveTracking = useCallback(async () => {
     if (trackingTargetPlanIds.length === 0) return;
-    if (!FBA_ID_RE.test(normalizeFbaId(activeTracking.amazon))) return;
+    if (!amazonOk || !upsOk) return;
     setSaving(true);
     setSaveError(null);
     try {
       const normalizedAmazon = normalizeFbaId(activeTracking.amazon);
-      const results = await Promise.all(
+      const normalizedUps = normalizeUps(activeTracking.ups);
+      const amazonResults = await Promise.all(
         trackingTargetPlanIds.map((planId) => persistAmazonShipmentId(planId, normalizedAmazon))
       );
-      if (results.some(Boolean)) {
-        trackingTargetPlanIds.forEach((planId) => patchTracking(planId, { amazon: normalizedAmazon }));
-      }
-    } catch (err: any) {
-      setSaveError(err?.message || 'Failed to save Amazon shipment ID');
-    } finally {
-      setSaving(false);
-    }
-  }, [activeTracking.amazon, patchTracking, trackingTargetPlanIds]);
-
-  const onBlurUps = useCallback(async () => {
-    if (trackingTargetPlanIds.length === 0) return;
-    if (!UPS_RE.test(normalizeUps(activeTracking.ups))) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const normalizedUps = normalizeUps(activeTracking.ups);
-      const results = await Promise.all(
+      const upsResults = await Promise.all(
         trackingTargetPlanIds.map((planId) => persistUpsTracking(planId, normalizedUps))
       );
-      if (results.some(Boolean)) {
+      if (amazonResults.some(Boolean)) {
+        trackingTargetPlanIds.forEach((planId) => patchTracking(planId, { amazon: normalizedAmazon }));
+      }
+      if (upsResults.some(Boolean)) {
         trackingTargetPlanIds.forEach((planId) => patchTracking(planId, { ups: normalizedUps }));
       }
     } catch (err: any) {
-      setSaveError(err?.message || 'Failed to save UPS tracking');
+      setSaveError(err?.message || 'Failed to save tracking');
     } finally {
       setSaving(false);
     }
-  }, [activeTracking.ups, patchTracking, trackingTargetPlanIds]);
+  }, [
+    activeTracking.amazon,
+    activeTracking.ups,
+    amazonOk,
+    upsOk,
+    patchTracking,
+    trackingTargetPlanIds,
+  ]);
 
-
-  /** Map board-selected items to EnrichedItem[] for the SelectionFloatingBar. */
-  const selectedAsEnriched = useMemo((): EnrichedItem[] => {
-    const sorted = [...selectedItems].sort((a, b) => {
-      const pa = getPlanId(a);
-      const pb = getPlanId(b);
-      if (pa !== pb) return pa - pb;
-      return (a.fnsku ?? '').localeCompare(b.fnsku ?? '');
-    });
-    return sorted.map((item) => ({
-      item_id: item.item_id ?? 0,
-      fnsku: item.fnsku ?? '',
-      expected_qty: item.expected_qty ?? 0,
-      actual_qty: item.actual_qty ?? 0,
-      item_status: item.item_status ?? '',
-      display_title: item.display_title || item.fnsku || '—',
-      asin: item.asin ?? null,
-      sku: item.sku ?? null,
-      plan_id: getPlanId(item),
-      plan_ref: getPlanLabel(item),
-      shipment_id: getPlanId(item),
-      shipment_ref: getPlanLabel(item),
-      amazon_shipment_id: item.amazon_shipment_id ?? null,
-      due_date: item.due_date ?? null,
-      destination_fc: item.destination_fc ?? null,
-      status: 'ready_to_print' as const,
-      pending_reason: null,
-      expanded: false,
-    }));
-  }, [selectedItems]);
-
-  const selectedTotalQty = useMemo(
-    () => selectedItems.reduce((sum, item) => sum + resolveFbaItemDisplayQty(item), 0),
-    [selectedItems],
-  );
-
-  const showTrackingCard = scanEnabled && selectedItems.length > 0;
+  const selectedCount = selectedItems.length;
+  const showTrackingCard = scanEnabled && selectedCount > 0;
 
   return (
     <div className="min-h-0 space-y-2">
@@ -258,6 +212,7 @@ export function FbaWorkspaceScanField({
           <StationFbaInput
             fbaScanOnly
             showLabels={false}
+            ignoreUrlPlan
             workspaceTheme={stationTheme}
             techStaffIdOverride={effectiveStaffId ?? undefined}
           />
@@ -276,15 +231,9 @@ export function FbaWorkspaceScanField({
             transition={trackingTransition}
             className={scanChrome.trackingCard}
           >
-            {saving || trackingReady ? (
+            {saving ? (
               <div className="flex items-center justify-end gap-2">
-                {saving ? (
-                  <Loader2 className={`h-4 w-4 shrink-0 animate-spin ${scanChrome.savingSpinner}`} aria-hidden />
-                ) : (
-                  <span className="inline-flex shrink-0 text-emerald-600" title="FBA + UPS valid" aria-label="Ready">
-                    <Check className="h-4 w-4" />
-                  </span>
-                )}
+                <Loader2 className={`h-4 w-4 shrink-0 animate-spin ${scanChrome.savingSpinner}`} aria-hidden />
               </div>
             ) : null}
 
@@ -307,7 +256,6 @@ export function FbaWorkspaceScanField({
                 <input
                   value={activeTracking.amazon}
                   onChange={(e) => setActiveTracking({ amazon: e.target.value })}
-                  onBlur={() => void onBlurAmazon()}
                   disabled={saving || trackingTargetPlanIds.length === 0}
                   placeholder="FBA17XXXXXXXX"
                   className={`${fieldClass} font-mono text-xs ${
@@ -320,7 +268,6 @@ export function FbaWorkspaceScanField({
                 <input
                   value={activeTracking.ups}
                   onChange={(e) => setActiveTracking({ ups: e.target.value })}
-                  onBlur={() => void onBlurUps()}
                   disabled={saving || trackingTargetPlanIds.length === 0}
                   placeholder="1Z999AA10123456784"
                   className={`${fieldClass} font-mono text-xs ${activeTracking.ups && !upsOk ? 'border-amber-400' : ''} ${
@@ -328,6 +275,19 @@ export function FbaWorkspaceScanField({
                   }`}
                 />
               </label>
+
+              <button
+                type="button"
+                onClick={() => void onSaveTracking()}
+                disabled={saving || !trackingReady}
+                className={`w-full rounded-xl border-2 px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.12em] transition-colors ${
+                  trackingReady && !saving
+                    ? `${themeColors.border} ${themeColors.light} text-gray-900 hover:opacity-95`
+                    : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+                }`}
+              >
+                {trackingReady ? 'Save tracking' : 'Enter valid FBA ID and UPS to save'}
+              </button>
             </div>
 
             {saveError && (
@@ -336,12 +296,18 @@ export function FbaWorkspaceScanField({
               </p>
             )}
 
-            <div className={`${scanChrome.trackingSectionBorder} pt-3`}>
-              <SelectionFloatingBar
-                selectedItems={selectedAsEnriched}
-                onClear={() => clearSelection()}
-                attachmentQty={selectedTotalQty}
-              />
+            {/* Selection summary + clear */}
+            <div className={`${scanChrome.trackingSectionBorder} flex items-center justify-between gap-2 pt-3`}>
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
+                {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
+              </span>
+              <button
+                type="button"
+                onClick={() => clearSelection()}
+                className="rounded-full border border-gray-200 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+              >
+                Clear
+              </button>
             </div>
           </motion.div>
         ) : null}

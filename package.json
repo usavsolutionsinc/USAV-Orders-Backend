@@ -32,7 +32,9 @@
     "sync:repair-incoming-ecwid": "node scripts/sync-ecwid-incoming-repairs.js",
     "qstash:ensure:google-sheets": "node scripts/ensure-google-sheets-qstash-schedules.js",
     "sync:packer-logs": "node sync-packer-sheets-to-logs.js",
-    "sync:packer-logs:preview": "node sync-packer-sheets-to-logs-dry-run.js"
+    "sync:packer-logs:preview": "node sync-packer-sheets-to-logs-dry-run.js",
+    "fba:consolidate-fnsku-plans": "node scripts/fba-consolidate-fnsku-plans.js",
+    "fba:backfill-shipment-refs": "node scripts/fba-backfill-shipment-refs.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

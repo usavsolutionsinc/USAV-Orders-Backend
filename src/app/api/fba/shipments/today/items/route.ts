@@ -7,29 +7,16 @@ import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
  * POST /api/fba/shipments/today/items
  *
  * Adds FNSKUs to today's plan. If no plan exists for today it is
- * auto-created with `shipment_ref` = plan code {@link buildFbaPlanRefFromIsoDate} (`FBA-MM-DD-YY` from `CURRENT_DATE`, no time).
- * FNSKUs already in today's plan are SKIPPED (not duplicated).
+ * auto-created with `shipment_ref` = plan code {@link buildFbaPlanRefFromIsoDate}.
  *
- * Body:
- * {
- *   items: Array<{
- *     fnsku:          string;
- *     expected_qty:   number;    // default 1
- *     product_title?: string;
- *     asin?:          string;
- *     sku?:           string;
- *   }>
- * }
+ * - FNSKUs already on today's plan: **set** `expected_qty` to the request value (replace, not add);
+ *   any **other** PLANNED lines for the same FNSKU on non-today shipments are deleted first.
+ * - FNSKU only on other pending (PLANNED) plans: rows are **moved** to today with `expected_qty`
+ *   set from the request (other duplicate lines removed; not summed with previous qty).
  *
- * Response:
- * {
- *   success: true,
- *   shipment_id:  number,  // internal `fba_shipments.id` (URL `?plan=` — not the plan code)
- *   shipment_ref: string,   // plan id / human code (same as plan_ref)
- *   plan_ref:     string,
- *   added:        { fnsku, expected_qty }[],
- *   skipped:      { fnsku, reason }[],
- * }
+ * Body: { items: [{ fnsku, expected_qty?, product_title?, asin?, sku? }] }
+ *
+ * Response: { added, merged, moved, skipped: [] } — same row shape for merged/moved.
  */
 export async function POST(request: NextRequest) {
   const client = await pool.connect();
@@ -49,7 +36,6 @@ export async function POST(request: NextRequest) {
 
     await client.query('BEGIN');
 
-    // ── 1. Find or create today's PLANNED shipment ────────────────────────────
     let todayShip = await client.query(`
       SELECT id, shipment_ref FROM fba_shipments
       WHERE due_date = CURRENT_DATE AND status = 'PLANNED'
@@ -70,34 +56,147 @@ export async function POST(request: NextRequest) {
         RETURNING id, shipment_ref
       `, [shipmentRef]);
 
-      shipmentId  = newShip.rows[0].id;
+      shipmentId = newShip.rows[0].id;
       shipmentRef = newShip.rows[0].shipment_ref;
     } else {
-      shipmentId  = todayShip.rows[0].id;
+      shipmentId = todayShip.rows[0].id;
       shipmentRef = todayShip.rows[0].shipment_ref;
     }
 
-    // ── 2. Load existing FNSKUs in today's plan ───────────────────────────────
     const existingRes = await client.query(
       `SELECT fnsku FROM fba_shipment_items WHERE shipment_id = $1`,
       [shipmentId]
     );
     const existingFnskus = new Set<string>(existingRes.rows.map((r) => r.fnsku));
 
-    // ── 3. Insert new items, skip duplicates ──────────────────────────────────
-    const added:   { fnsku: string; expected_qty: number }[] = [];
-    const skipped: { fnsku: string; reason: string }[]       = [];
+    type LineOut = {
+      fnsku: string;
+      expected_qty: number;
+      item_id: number;
+      display_title: string;
+    };
+
+    const added: LineOut[] = [];
+    const merged: LineOut[] = [];
+    const moved: LineOut[] = [];
+    const skipped: { fnsku: string; reason: string }[] = [];
+
+    const deleteWaForItems = async (itemIds: number[]) => {
+      if (itemIds.length === 0) return;
+      await client.query(
+        `DELETE FROM work_assignments
+         WHERE entity_type = 'FBA_SHIPMENT' AND entity_id = ANY($1::int[])`,
+        [itemIds]
+      );
+    };
 
     for (const item of items) {
       const fnsku = String(item.fnsku || '').trim().toUpperCase();
       if (!fnsku) continue;
 
+      const qty = Math.max(1, Number(item.expected_qty) || 1);
+
+      const othersRes = await client.query<{ id: number; expected_qty: number }>(
+        `SELECT fsi.id, fsi.expected_qty
+         FROM fba_shipment_items fsi
+         JOIN fba_shipments fs ON fs.id = fsi.shipment_id
+         WHERE fsi.fnsku = $1
+           AND fs.id <> $2
+           AND fs.status = 'PLANNED'
+           AND fsi.status = 'PLANNED'
+         ORDER BY fs.due_date ASC NULLS LAST, fsi.id ASC`,
+        [fnsku, shipmentId]
+      );
+      const otherRows = othersRes.rows;
+      const otherIds = otherRows.map((r) => r.id);
+
       if (existingFnskus.has(fnsku)) {
-        skipped.push({ fnsku, reason: 'Already in today\'s plan' });
+        if (otherIds.length > 0) {
+          await deleteWaForItems(otherIds);
+          await client.query(`DELETE FROM fba_shipment_items WHERE id = ANY($1::int[])`, [otherIds]);
+        }
+        const bumpRes = await client.query<{
+          id: number;
+          fnsku: string;
+          expected_qty: number;
+          display_title: string;
+        }>(
+          `UPDATE fba_shipment_items fsi
+           SET expected_qty = $1::int,
+               updated_at = NOW()
+           WHERE fsi.shipment_id = $2 AND fsi.fnsku = $3
+           RETURNING
+             fsi.id,
+             fsi.fnsku,
+             fsi.expected_qty,
+             COALESCE(
+               NULLIF(TRIM(fsi.product_title), ''),
+               (SELECT ff.product_title FROM fba_fnskus ff WHERE ff.fnsku = fsi.fnsku),
+               fsi.fnsku
+             ) AS display_title`,
+          [qty, shipmentId, fnsku]
+        );
+        const row = bumpRes.rows[0];
+        if (row) {
+          merged.push({
+            fnsku: row.fnsku,
+            expected_qty: Number(row.expected_qty),
+            item_id: row.id,
+            display_title: String(row.display_title || row.fnsku),
+          });
+        }
         continue;
       }
 
-      const qty   = Math.max(1, Number(item.expected_qty) || 1);
+      if (otherRows.length > 0) {
+        const keepId = otherRows[0].id;
+        const restIds = otherRows.slice(1).map((r) => r.id);
+        const totalQty = qty;
+        if (restIds.length > 0) {
+          await deleteWaForItems(restIds);
+          await client.query(`DELETE FROM fba_shipment_items WHERE id = ANY($1::int[])`, [restIds]);
+        }
+        const moveRes = await client.query<{
+          id: number;
+          fnsku: string;
+          expected_qty: number;
+          display_title: string;
+        }>(
+          `UPDATE fba_shipment_items fsi
+           SET shipment_id = $1,
+               expected_qty = $2::int,
+               updated_at = NOW()
+           WHERE fsi.id = $3
+           RETURNING
+             fsi.id,
+             fsi.fnsku,
+             fsi.expected_qty,
+             COALESCE(
+               NULLIF(TRIM(fsi.product_title), ''),
+               (SELECT ff.product_title FROM fba_fnskus ff WHERE ff.fnsku = fsi.fnsku),
+               fsi.fnsku
+             ) AS display_title`,
+          [shipmentId, totalQty, keepId]
+        );
+        await client.query(
+          `UPDATE work_assignments
+           SET deadline_at = (CURRENT_DATE + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz
+           WHERE entity_type = 'FBA_SHIPMENT' AND entity_id = $1`,
+          [keepId]
+        );
+        const row = moveRes.rows[0];
+        if (row) {
+          moved.push({
+            fnsku: row.fnsku,
+            expected_qty: Number(row.expected_qty),
+            item_id: row.id,
+            display_title: String(row.display_title || row.fnsku),
+          });
+        }
+        existingFnskus.add(fnsku);
+        continue;
+      }
+
       const catalogRow = await upsertFnskuCatalogRow(client, {
         fnsku,
         productTitle: item.product_title,
@@ -117,7 +216,6 @@ export async function POST(request: NextRequest) {
       );
       const itemId: number = itemRes.rows[0].id;
 
-      // Create a work assignment so deadline_at is tracked for today
       await client.query(
         `INSERT INTO work_assignments
            (entity_type, entity_id, work_type, status, priority, deadline_at)
@@ -126,11 +224,17 @@ export async function POST(request: NextRequest) {
         [itemId]
       );
 
-      added.push({ fnsku, expected_qty: qty });
-      existingFnskus.add(fnsku); // prevent duplication within same request
+      const displayTitle = (catalogTitle && String(catalogTitle).trim()) || fnsku;
+
+      added.push({
+        fnsku,
+        expected_qty: qty,
+        item_id: itemId,
+        display_title: displayTitle,
+      });
+      existingFnskus.add(fnsku);
     }
 
-    // ── 4. Update total item count on shipment ────────────────────────────────
     await client.query(
       `UPDATE fba_shipments SET updated_at = NOW() WHERE id = $1`,
       [shipmentId]
@@ -144,6 +248,8 @@ export async function POST(request: NextRequest) {
       shipment_ref: shipmentRef,
       plan_ref: shipmentRef,
       added,
+      merged,
+      moved,
       skipped,
     });
   } catch (error: any) {

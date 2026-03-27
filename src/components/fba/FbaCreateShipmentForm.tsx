@@ -65,10 +65,10 @@ export function FbaCreateShipmentForm({
   );
   const isAutoRef =
     form.shipment_ref === '' || form.shipment_ref === lastAutoRefRef.current;
-  const refIsInvalid = form.shipment_ref === 'FBA-00-00-00';
+  const refIsInvalid = form.shipment_ref === 'FBA-00/00/00';
 
   useEffect(() => {
-    if (!derivedRef || derivedRef === 'FBA-00-00-00') return;
+    if (!derivedRef || derivedRef === 'FBA-00/00/00') return;
     if (isAutoRef) {
       lastAutoRefRef.current = derivedRef;
       setForm((f) => ({ ...f, shipment_ref: derivedRef }));
@@ -114,7 +114,7 @@ export function FbaCreateShipmentForm({
         required
         hintBelow={
           <div className="space-y-1">
-            {derivedRef && derivedRef !== 'FBA-00-00-00' ? (
+            {derivedRef && derivedRef !== 'FBA-00/00/00' ? (
               <p className="font-mono text-[10px] text-emerald-700">
                 Auto: {derivedRef}
               </p>
@@ -124,7 +124,7 @@ export function FbaCreateShipmentForm({
                 type="button"
                 className="text-[10px] text-blue-600 underline"
                 onClick={() => {
-                  if (!derivedRef || derivedRef === 'FBA-00-00-00') return;
+                  if (!derivedRef || derivedRef === 'FBA-00/00/00') return;
                   lastAutoRefRef.current = derivedRef;
                   setForm((f) => ({ ...f, shipment_ref: derivedRef }));
                 }}
@@ -150,7 +150,7 @@ export function FbaCreateShipmentForm({
             lastAutoRefRef.current = '';
             setForm((f) => ({ ...f, shipment_ref: e.target.value }));
           }}
-          placeholder="FBA-03-26-26"
+          placeholder="FBA-03/24/26"
           className={chrome.monoInput}
         />
       </SidebarIntakeFormField>

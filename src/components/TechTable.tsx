@@ -6,7 +6,6 @@ import { Loader2 } from './Icons';
 import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from './ui/CopyChip';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
@@ -64,96 +63,6 @@ function isFbaTechRecord(record: TechRecord): boolean {
     Boolean(String(record.fnsku || '').trim()) ||
     String(record.order_id || '').toUpperCase() === 'FBA'
   );
-}
-
-/** FNSKU-style tech lines that can appear twice (empty fba_scan stub + tech_serial row) after serial edits. */
-function shouldDedupeFbaFnskuLine(record: TechRecord): boolean {
-  if (record.source_kind === 'fba_scan') return true;
-  if (String(record.fnsku || '').trim()) return true;
-  if (String(record.order_id || '').toUpperCase() === 'FBA') {
-    const trk = String(record.shipping_tracking_number || '').trim();
-    if (/^(X0|B0)/i.test(trk)) return true;
-  }
-  return false;
-}
-
-function getFbaFnskuDedupeKey(record: TechRecord): string {
-  const fromFnsku = String(record.fnsku || '').trim();
-  const fallback = fromFnsku || String(record.shipping_tracking_number || '').trim();
-  return normalizeTrackingKey(fallback);
-}
-
-/** One table row per FNSKU *scan* (fba_fnsku_logs row), while still merging stub + tech_serial for the same scan. */
-function getFbaFnskuMergeGroupKey(record: TechRecord): string {
-  const fl = Number(record.fnsku_log_id);
-  if (Number.isFinite(fl) && fl > 0) {
-    return `${record.tested_by}:fl:${fl}`;
-  }
-  if (record.source_kind === 'fba_scan' && record.source_row_id != null) {
-    const sid = Number(record.source_row_id);
-    if (Number.isFinite(sid) && sid > 0) {
-      return `${record.tested_by}:fba_scan:${sid}`;
-    }
-  }
-  if (record.source_kind === 'tech_serial') {
-    const tsn = record.tech_serial_id ?? record.source_row_id;
-    const tid = tsn != null ? Number(tsn) : NaN;
-    if (Number.isFinite(tid) && tid > 0) {
-      return `${record.tested_by}:ts:${tid}`;
-    }
-  }
-  const fk = getFbaFnskuDedupeKey(record);
-  if (fk) {
-    return `${record.tested_by}:fnsku:${fk}:id:${record.id}`;
-  }
-  return `${record.tested_by}:row:${record.id}`;
-}
-
-function fbaFnskuRowScore(record: TechRecord): number {
-  let score = 0;
-  if (record.source_kind === 'tech_serial') score += 100;
-  if (record.tech_serial_id != null && Number(record.tech_serial_id) > 0) score += 40;
-  if (hasSerialValue(record.serial_number)) score += 10;
-  if (record.source_kind !== 'fba_scan') score += 5;
-  return score;
-}
-
-function mergeFbaFnskuTechRecords(a: TechRecord, b: TechRecord): TechRecord {
-  const primary = fbaFnskuRowScore(a) >= fbaFnskuRowScore(b) ? a : b;
-  const secondary = primary === a ? b : a;
-  const mergedSerial = mergeSerialNumbers(primary.serial_number, secondary.serial_number);
-  const mergedProductTitle = hasUsableProductTitle(primary.product_title)
-    ? normalizeProductTitle(primary.product_title)
-    : hasUsableProductTitle(secondary.product_title)
-      ? normalizeProductTitle(secondary.product_title)
-      : primary.product_title;
-  const mergedSku = pickBestValue(primary.sku, secondary.sku);
-  const mergedCondition = pickBestValue(primary.condition, secondary.condition);
-  const mergedFnsku =
-    String(primary.fnsku || '').trim()
-    || String(secondary.fnsku || '').trim()
-    || null;
-  const tPri = new Date(primary.created_at || 0).getTime();
-  const tSec = new Date(secondary.created_at || 0).getTime();
-  const mergedCreatedAt =
-    Number.isFinite(tPri) && Number.isFinite(tSec)
-      ? (tPri <= tSec ? primary.created_at : secondary.created_at)
-      : primary.created_at || secondary.created_at;
-
-  return {
-    ...primary,
-    fnsku: mergedFnsku,
-    fnsku_log_id: primary.fnsku_log_id ?? secondary.fnsku_log_id ?? null,
-    serial_number: mergedSerial,
-    product_title: mergedProductTitle,
-    sku: mergedSku,
-    condition: mergedCondition,
-    created_at: mergedCreatedAt || primary.created_at,
-    tech_serial_id: primary.tech_serial_id ?? secondary.tech_serial_id ?? null,
-    source_row_id: primary.source_row_id ?? secondary.source_row_id,
-    source_kind: primary.source_kind,
-    order_db_id: primary.order_db_id ?? secondary.order_db_id,
-  };
 }
 
 /** Returns the first value that is non-empty and not a placeholder like "N/A". */
@@ -297,24 +206,8 @@ export function TechTable({ testedBy }: TechTableProps) {
     });
 
     const trackingIndexByKey = new Map<string, number>();
-    const fbaFnskuIndexByKey = new Map<string, number>();
     const unique: TechRecord[] = [];
     for (const record of sorted) {
-      if (shouldDedupeFbaFnskuLine(record)) {
-        const mergeKey = getFbaFnskuMergeGroupKey(record);
-        const existingIndex = fbaFnskuIndexByKey.get(mergeKey);
-        if (existingIndex === undefined) {
-          fbaFnskuIndexByKey.set(mergeKey, unique.length);
-          unique.push(record);
-        } else {
-          const existing = unique[existingIndex];
-          if (existing) {
-            unique[existingIndex] = mergeFbaFnskuTechRecords(existing, record);
-          }
-        }
-        continue;
-      }
-
       if (isFbaTechRecord(record)) {
         unique.push(record);
         continue;

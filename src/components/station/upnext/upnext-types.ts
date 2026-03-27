@@ -18,7 +18,7 @@ export interface ReceivingQueueItem {
 /**
  * Open FBA plan row for the /fba workspace sidebar.
  * - `id` — internal `fba_shipments.id` (numeric row id; URL `?plan=` uses this).
- * - `shipment_ref` — human **plan id** (e.g. `FBA-MM-DD-YY`), not Amazon’s FBA shipment id.
+ * - `shipment_ref` — human **plan id** (e.g. `FBA-03/24/26`), not Amazon’s FBA shipment id.
  * Not used on station testing routes — pair with {@link FbaPlanCard}.
  */
 export interface FbaPlanQueueItem {

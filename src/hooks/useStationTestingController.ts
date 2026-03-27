@@ -418,6 +418,7 @@ export function useStationTestingController({
             sku: data.order.sku ?? null,
             condition: data.order.condition ?? null,
             fnsku,
+            fnsku_log_id: data.fnskuLogId ?? null,
             status: data.order.status ?? null,
             status_history: data.order.statusHistory ?? [],
             notes: data.order.notes ?? null,
@@ -429,6 +430,12 @@ export function useStationTestingController({
           },
         }));
       }
+      const techLogsTechId = Number(userId);
+      queryClient.invalidateQueries(
+        Number.isFinite(techLogsTechId) && techLogsTechId > 0
+          ? { queryKey: ['tech-logs', techLogsTechId] }
+          : { queryKey: ['tech-logs'] },
+      );
       // Notify FBA workspace sidebar so techs can add this FNSKU to an open plan.
       window.dispatchEvent(
         new CustomEvent('fba-fnsku-station-scanned', {

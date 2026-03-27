@@ -3,8 +3,8 @@
 import { useCallback, useState } from 'react';
 import { Loader2, Minus, Plus } from '@/components/Icons';
 import { DeferredQtyInput } from '@/design-system/primitives';
-import { FnskuChip } from '@/components/ui/CopyChip';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
+import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 
@@ -150,55 +150,51 @@ export function FbaPairedReviewPanel({
         {selectedItems.map((item) => {
           const qty = getQty(item);
           return (
-            <div key={item.item_id} className="flex items-start gap-2 px-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="whitespace-normal break-words text-sm font-black leading-snug text-gray-900">
-                  {item.display_title}
-                </p>
-                <div className="mt-1.5">
-                  <FnskuChip value={item.fnsku} />
-                </div>
-              </div>
-              {/* Vertical qty stepper with editable input */}
-              <div className="flex shrink-0 flex-col items-center">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); adjustQty(item, 1, item.expected_qty); }}
-                  className="flex h-6 w-10 items-center justify-center rounded-t-md border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-                  aria-label={`Increase ${item.fnsku} quantity`}
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-                <DeferredQtyInput
-                  value={qty}
-                  min={0}
-                  max={item.expected_qty}
-                  onChange={(v) => {
-                    if (v <= 0) {
-                      window.dispatchEvent(new CustomEvent('fba-board-deselect-item', { detail: item.item_id }));
-                      setQtyOverrides((prev) => { const n = { ...prev }; delete n[item.item_id]; return n; });
-                    } else {
-                      setQtyOverrides((prev) => ({ ...prev, [item.item_id]: v }));
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-7 w-10 border-x border-gray-200 bg-white text-center text-[13px] font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); adjustQty(item, -1, item.expected_qty); }}
-                  disabled={qty <= 0}
-                  className={`flex h-6 w-10 items-center justify-center rounded-b-md border transition-colors ${
-                    qty <= 1
-                      ? 'border-red-300 text-red-500 hover:bg-red-50'
-                      : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-                  } disabled:opacity-40`}
-                  aria-label={`Decrease ${item.fnsku} quantity`}
-                >
-                  <Minus className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
+            <FbaSelectedLineRow
+              key={item.item_id}
+              displayTitle={item.display_title}
+              fnsku={item.fnsku}
+              rightSlot={
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); adjustQty(item, 1, item.expected_qty); }}
+                    className="flex h-6 w-10 items-center justify-center rounded-t-md border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
+                    aria-label={`Increase ${item.fnsku} quantity`}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                  <DeferredQtyInput
+                    value={qty}
+                    min={0}
+                    max={item.expected_qty}
+                    onChange={(v) => {
+                      if (v <= 0) {
+                        window.dispatchEvent(new CustomEvent('fba-board-deselect-item', { detail: item.item_id }));
+                        setQtyOverrides((prev) => { const n = { ...prev }; delete n[item.item_id]; return n; });
+                      } else {
+                        setQtyOverrides((prev) => ({ ...prev, [item.item_id]: v }));
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-7 w-10 border-x border-gray-200 bg-white text-center text-[13px] font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); adjustQty(item, -1, item.expected_qty); }}
+                    disabled={qty <= 0}
+                    className={`flex h-6 w-10 items-center justify-center rounded-b-md border transition-colors ${
+                      qty <= 1
+                        ? 'border-red-300 text-red-500 hover:bg-red-50'
+                        : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                    } disabled:opacity-40`}
+                    aria-label={`Decrease ${item.fnsku} quantity`}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                </>
+              }
+            />
           );
         })}
       </div>

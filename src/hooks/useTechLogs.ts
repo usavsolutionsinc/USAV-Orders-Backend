@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { toPSTDateKey } from '@/utils/date';
 import { useAblyChannel } from './useAblyChannel';
 
 export interface TechRecord {
@@ -41,18 +42,46 @@ export interface UseTechLogsOptions {
   weekRange?: { startStr: string; endStr: string };
 }
 
-/** Compute PST Mon–Fri range for the current week. */
-function computeCurrentPSTWeek(): { startStr: string; endStr: string } {
-  const d = new Date();
-  const pstMs = d.getTime() - 7 * 60 * 60 * 1000;
-  const pst = new Date(pstMs);
-  const dow = pst.getUTCDay();
-  const daysFromMonday = dow === 0 ? 6 : dow - 1;
-  const mon = new Date(pstMs - daysFromMonday * 86400000);
-  const fri = new Date(pstMs + (4 - daysFromMonday) * 86400000);
-  const fmt = (x: Date) =>
-    `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
-  return { startStr: fmt(mon), endStr: fmt(fri) };
+function prependTechRecordToMatchingWeekCaches(
+  queryClient: QueryClient,
+  techId: number,
+  record: TechRecord,
+) {
+  const createdAt = record.created_at || new Date().toISOString();
+  const recordDate = toPSTDateKey(createdAt);
+  const recordForCache: TechRecord = {
+    ...record,
+    created_at: record.created_at || createdAt,
+  };
+
+  const queries = queryClient.getQueriesData<TechRecord[]>({
+    queryKey: ['tech-logs', techId],
+  });
+
+  /** Only one week cache mounted — week bounds can disagree with PST (timezone); always prepend. */
+  const singleWeekCache = queries.length === 1;
+
+  for (const [queryKey, prev] of queries) {
+    if (!prev || !Array.isArray(prev)) continue;
+    const weekPart = queryKey[2] as { weekStart?: string; weekEnd?: string } | undefined;
+    const start = String(weekPart?.weekStart ?? '').trim();
+    const end = String(weekPart?.weekEnd ?? '').trim();
+    if (
+      !singleWeekCache
+      && recordDate
+      && start
+      && end
+      && (recordDate < start || recordDate > end)
+    ) {
+      continue;
+    }
+    if (prev.some((r) => r.id === recordForCache.id)) continue;
+    queryClient.setQueryData<TechRecord[]>(queryKey, (old) => {
+      if (!old) return old;
+      if (old.some((r) => r.id === recordForCache.id)) return old;
+      return [recordForCache, ...old];
+    });
+  }
 }
 
 const STATION_CHANNEL =
@@ -75,7 +104,8 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
         params.set('weekStart', weekRange.startStr);
         params.set('weekEnd', weekRange.endStr);
       }
-      const res = await fetch(`/api/tech-logs?${params}`);
+      // Avoid browser HTTP cache (API sends max-age=120); stale responses overwrite optimistic prepends.
+      const res = await fetch(`/api/tech-logs?${params}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch tech logs');
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -101,16 +131,7 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
       if (Number(changedId) !== techId) return;
 
       if (action === 'insert' && row) {
-        // Surgical prepend — no refetch needed for a known new row.
-        const currentWeek = computeCurrentPSTWeek();
-        queryClient.setQueryData<TechRecord[]>(
-          ['tech-logs', techId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
-          (prev) => {
-            if (!prev) return undefined;
-            if (prev.some((r) => r.id === (row as TechRecord).id)) return prev;
-            return [row as TechRecord, ...prev];
-          },
-        );
+        prependTechRecordToMatchingWeekCaches(queryClient, techId, row as TechRecord);
       } else if (action === 'insert' || action === 'update' || action === 'delete') {
         // Covers: insert without full row data, updates to existing rows,
         // and deletions (e.g. undo-last) from any client or device.
@@ -125,17 +146,12 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
   useEffect(() => {
     const handleNewLog = (e: any) => {
       const record = e?.detail as TechRecord | null;
-      if (!record?.id || record.tested_by !== techId) return;
+      if (!record) return;
+      if (Number(record.tested_by) !== techId) return;
+      const rid = record.id;
+      if (rid == null || (typeof rid === 'number' && !Number.isFinite(rid))) return;
 
-      const currentWeek = computeCurrentPSTWeek();
-      queryClient.setQueryData<TechRecord[]>(
-        ['tech-logs', techId, { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
-        (prev) => {
-          if (!prev) return undefined;
-          if (prev.some((r) => r.id === record.id)) return prev;
-          return [record, ...prev];
-        },
-      );
+      prependTechRecordToMatchingWeekCaches(queryClient, techId, record);
     };
     window.addEventListener('tech-log-added', handleNewLog);
     return () => window.removeEventListener('tech-log-added', handleNewLog);

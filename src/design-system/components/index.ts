@@ -12,4 +12,5 @@ export * from './ExternalLinkActionIcon';
 export * from './StatusMicroLabel';
 export * from './CompactSearchInput';
 export * from './AssignmentOverlayCard';
+export * from './Tooltip';
 export * from './sidebar-intake';

@@ -1,7 +1,9 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { Package } from '@/components/Icons';
+import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import type { StationTheme } from '@/utils/staff-colors';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -41,8 +43,6 @@ const FBA_PLAN_CHROME = {
   cardIdle: 'bg-white border-purple-300 hover:border-purple-500',
   cardFocusRing: 'focus-visible:ring-2 focus-visible:ring-purple-400/50',
   cardDateText: 'text-[14px] font-black text-blue-700',
-  cardOpenPill:
-    'rounded-full bg-purple-100 px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-purple-800',
   cardChevron:
     'inline-flex h-8 w-8 items-center justify-center rounded-full border border-purple-200 text-purple-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(147,51,234,0.16)]',
   cardExpandedDivider: 'border-t border-blue-200',
@@ -58,11 +58,12 @@ const FBA_PLAN_CHROME = {
  */
 export function FbaPlanCard({
   plan,
-  stationTheme: _stationTheme,
+  stationTheme,
   isActive,
 }: FbaPlanCardProps) {
   const reduceMotion = useReducedMotion();
   const chrome = FBA_PLAN_CHROME;
+  const [daySelected, setDaySelected] = useState(false);
   const displayShipBy = plan.due_date || '';
 
   const daysLate = getDaysLateNumber(plan.due_date);
@@ -77,12 +78,28 @@ export function FbaPlanCard({
         detail: { shipmentId: plan.id, shipmentRef: ref || null },
       }),
     );
-    // Select matching board items by due date
-    if (plan.due_date) {
-      const dayKey = String(plan.due_date).slice(0, 10);
-      if (dayKey) {
-        window.dispatchEvent(new CustomEvent('fba-board-select-by-day', { detail: dayKey }));
-      }
+  };
+
+  // Reset checked state when sidebar clears all selections
+  useEffect(() => {
+    const handler = (e: Event) => {
+      if ((e as CustomEvent).detail === 'none') setDaySelected(false);
+    };
+    window.addEventListener('fba-board-toggle-all', handler);
+    return () => window.removeEventListener('fba-board-toggle-all', handler);
+  }, []);
+
+  const selectBoardItemsByDay = (e: { stopPropagation(): void }) => {
+    e.stopPropagation();
+    if (!plan.due_date) return;
+    const dayKey = String(plan.due_date).slice(0, 10);
+    if (!dayKey) return;
+    if (daySelected) {
+      setDaySelected(false);
+      window.dispatchEvent(new CustomEvent('fba-board-deselect-by-day', { detail: dayKey }));
+    } else {
+      setDaySelected(true);
+      window.dispatchEvent(new CustomEvent('fba-board-select-by-day', { detail: dayKey }));
     }
   };
 
@@ -90,7 +107,7 @@ export function FbaPlanCard({
     <div
       role="button"
       tabIndex={0}
-      aria-label={`${planTitle}${isActive ? ', open in workspace' : ''}`}
+      aria-label={`${planTitle}${isActive ? ', loaded in workspace' : ''}`}
       onClick={() => emitFocusPrintGroup()}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -103,28 +120,21 @@ export function FbaPlanCard({
       }`}
     >
       {/* Header: date + days late + active badge */}
-      <div className="flex items-center justify-between mb-2 px-3">
-        <div className="flex items-center gap-2 min-w-0">
-          {displayShipBy ? (
-            <ShipByDate
-              date={displayShipBy}
-              showPrefix={false}
-              showYear={false}
-              icon={Package}
-              iconClassName={`w-4 h-4 ${chrome.iconClass}`}
-              textClassName={chrome.cardDateText}
-              className=""
-            />
-          ) : (
-            <span className={chrome.cardDateText}>No due date</span>
-          )}
-          <span className={`text-[14px] font-black shrink-0 ${getDaysLateTone(daysLate)}`}>{daysLate}</span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {isActive ? (
-            <span className={chrome.cardOpenPill}>Open</span>
-          ) : null}
-        </div>
+      <div className="flex items-center gap-2 mb-2 px-3 min-w-0">
+        {displayShipBy ? (
+          <ShipByDate
+            date={displayShipBy}
+            showPrefix={false}
+            showYear={false}
+            icon={Package}
+            iconClassName={`w-4 h-4 ${chrome.iconClass}`}
+            textClassName={chrome.cardDateText}
+            className=""
+          />
+        ) : (
+          <span className={chrome.cardDateText}>No due date</span>
+        )}
+        <span className={`text-[14px] font-black shrink-0 ${getDaysLateTone(daysLate)}`}>{daysLate}</span>
       </div>
 
       {/* Title + ref */}
@@ -138,9 +148,29 @@ export function FbaPlanCard({
             {ref || `#${plan.id}`}
           </span>
         </div>
-        <h4 className="text-base font-black text-gray-900 leading-tight truncate" title={planTitle}>
-          {planTitle}
-        </h4>
+        {plan.due_date ? (
+          <div className="flex items-center gap-2">
+            <PrintTableCheckbox
+              checked={daySelected}
+              onChange={() => selectBoardItemsByDay({ stopPropagation: () => {} })}
+              stationTheme={stationTheme}
+              label="Select all items for this day"
+            />
+            <button
+              type="button"
+              onClick={selectBoardItemsByDay}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  selectBoardItemsByDay(e);
+                }
+              }}
+              className="text-[10px] font-black uppercase tracking-widest text-gray-600 hover:text-gray-900 focus-visible:outline-none"
+            >
+              Select All
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {/* Always-visible details — no expand/collapse */}
