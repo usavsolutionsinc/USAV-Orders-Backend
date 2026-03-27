@@ -25,8 +25,6 @@ export interface FbaPlansUpNextProps {
   pendingPlans: FbaPlanQueueItem[];
   plansByDay: { dayKey: string; plans: FbaPlanQueueItem[] }[];
   activePlanId: number | null;
-  qtySavingPlanId: number | null;
-  onCommitPlanQty: (plan: FbaPlanQueueItem, nextQty: number) => void;
   stationTheme: StationTheme;
   onCreatePlan?: () => void;
 }
@@ -70,8 +68,6 @@ export function FbaPlansUpNext({
   pendingPlans,
   plansByDay,
   activePlanId,
-  qtySavingPlanId,
-  onCommitPlanQty,
   stationTheme,
   onCreatePlan,
 }: FbaPlansUpNextProps) {
@@ -94,7 +90,6 @@ export function FbaPlansUpNext({
                   <AnimatePresence mode="popLayout" initial={false}>
                     {plans.map((plan) => {
                       const isActive = activePlanId === plan.id;
-                      const canEditQty = plan.total_items === 1 && plan.ready_item_count === 0;
 
                       return (
                         <motion.div
@@ -109,9 +104,6 @@ export function FbaPlansUpNext({
                             plan={plan}
                             stationTheme={stationTheme}
                             isActive={isActive}
-                            canEditQty={canEditQty}
-                            onCommitQty={canEditQty ? (v) => onCommitPlanQty(plan, v) : undefined}
-                            qtySaving={qtySavingPlanId === plan.id}
                           />
                         </motion.div>
                       );

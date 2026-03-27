@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, ClipboardList, Loader2, Package, Pencil, Plus } from '@/components/Icons';
-import { SelectionFloatingBar } from '@/components/fba/table/SelectionFloatingBar';
-import type { EnrichedItem } from '@/components/fba/table/types';
+import { FbaSelectionItemList, type FbaListItemRow } from '@/components/fba/sidebar/FbaSelectionItemList';
 import { StationScanBar } from '@/components/station/StationScanBar';
 import { usePendingCatalog } from '@/components/fba/hooks/usePendingCatalog';
 import { useTodayPlan } from '@/components/fba/hooks/useTodayPlan';
-import { emitOpenQuickAddFnsku, FBA_FNSKU_SAVED_EVENT } from '@/components/fba/FbaQuickAddFnskuModal';
+import { emitOpenQuickAddFnsku } from '@/components/fba/FbaQuickAddFnskuModal';
 import { getStationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku, looksLikeFnskuPrefix } from '@/lib/scan-resolver';
 import {
@@ -59,25 +58,6 @@ interface FnskuSelectResult {
   found: boolean;
   count: number;
   title?: string;
-}
-
-function getBulkCandidateStatus(row: Pick<BulkScanCandidate, 'found' | 'catalog_exists' | 'upserted_stub'>) {
-  if (row.found) {
-    return {
-      label: 'Ready to add',
-      toneClass: 'text-emerald-700',
-    };
-  }
-  if (row.upserted_stub || row.catalog_exists) {
-    return {
-      label: 'Needs product details',
-      toneClass: 'text-amber-700',
-    };
-  }
-  return {
-    label: 'Add details to match later',
-    toneClass: 'text-red-600',
-  };
 }
 
 export interface StationFbaInputProps {
@@ -159,8 +139,6 @@ export default function StationFbaInput({
   const [fbaError, setFbaError] = useState<string | null>(null);
   const [planHint, setPlanHint] = useState<string | null>(null);
   const [isFbaLoading, setIsFbaLoading] = useState(false);
-  const [bulkCandidates, setBulkCandidates] = useState<BulkScanCandidate[]>([]);
-  const [bulkLoading, setBulkLoading] = useState(false);
   const [fbaMode, setFbaMode] = useState<'plan' | 'select'>('plan');
   const [selectResult, setSelectResult] = useState<FnskuSelectResult | null>(null);
 
@@ -183,89 +161,6 @@ export default function StationFbaInput({
     onTrackingOrderLoaded: useCallback(() => {}, []),
     onActiveOrderCardAutoHidden: useCallback(() => {}, []),
   });
-
-  const clearBulkCandidates = useCallback(() => {
-    setBulkCandidates([]);
-    setBulkLoading(false);
-  }, []);
-
-  const validateBulkCandidates = useCallback(async (counts: Map<string, number>) => {
-    if (counts.size === 0) {
-      clearBulkCandidates();
-      return;
-    }
-    setBulkLoading(true);
-    try {
-      const uniqueFnskus = Array.from(counts.keys());
-      const res = await fetch(
-        `/api/fba/fnskus/validate?fnskus=${encodeURIComponent(uniqueFnskus.join(','))}&persist_missing=1`
-      );
-      const json = await res.json().catch(() => ({}));
-      const results = Array.isArray(json?.results) ? (json.results as ValidatedFnskuRow[]) : [];
-      const foundMap = new Map(results.map((row) => [String(row.fnsku || '').toUpperCase(), row]));
-      const rows: BulkScanCandidate[] = uniqueFnskus.map((fnsku) => {
-        const row = foundMap.get(fnsku);
-        return {
-          fnsku,
-          qty: Math.max(1, counts.get(fnsku) || 1),
-          found: Boolean(row?.found),
-          catalog_exists: Boolean(row?.catalog_exists),
-          needs_details: Boolean(row?.needs_details),
-          upserted_stub: Boolean(row?.upserted_stub),
-          product_title: row?.product_title ?? null,
-          asin: row?.asin ?? null,
-          sku: row?.sku ?? null,
-        };
-      });
-      setBulkCandidates(rows);
-    } catch {
-      setBulkCandidates([]);
-      setFbaError('Could not validate pasted FNSKUs right now.');
-    } finally {
-      setBulkLoading(false);
-    }
-  }, [clearBulkCandidates]);
-
-  const adjustBulkQty = useCallback((fnsku: string, delta: number) => {
-    setBulkCandidates((prev) =>
-      prev.map((row) =>
-        row.fnsku === fnsku
-          ? { ...row, qty: Math.max(0, row.qty + delta) }
-          : row,
-      ),
-    );
-  }, []);
-
-  useEffect(() => {
-    const handleSavedFnsku = (event: Event) => {
-      const detail = (event as CustomEvent<{
-        fnsku?: string;
-        product_title?: string | null;
-        asin?: string | null;
-        sku?: string | null;
-      }>).detail;
-      const normalizedFnsku = normalizeFnsku(String(detail?.fnsku || ''));
-      if (!normalizedFnsku) return;
-      setBulkCandidates((prev) =>
-        prev.map((row) =>
-          row.fnsku === normalizedFnsku
-            ? {
-                ...row,
-                found: true,
-                catalog_exists: true,
-                needs_details: false,
-                upserted_stub: false,
-                product_title: detail?.product_title ?? row.product_title,
-                asin: detail?.asin ?? row.asin,
-                sku: detail?.sku ?? row.sku,
-              }
-            : row,
-        ),
-      );
-    };
-    window.addEventListener(FBA_FNSKU_SAVED_EVENT, handleSavedFnsku as EventListener);
-    return () => window.removeEventListener(FBA_FNSKU_SAVED_EVENT, handleSavedFnsku as EventListener);
-  }, []);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -545,7 +440,7 @@ export default function StationFbaInput({
 
         await applyScanFnskuFeedback(addableRows[0].fnsku);
         setInputValue('');
-        clearBulkCandidates();
+        // bulk candidates cleared (auto-submit, no review)
       } catch {
         setFbaError('Network error - try again.');
       } finally {
@@ -558,7 +453,6 @@ export default function StationFbaInput({
       addPending,
       applyScanFnskuFeedback,
       bumpFbaRefresh,
-      clearBulkCandidates,
       inputRef,
       openPlanId,
       router,
@@ -573,10 +467,6 @@ export default function StationFbaInput({
       const raw = inputValue;
       const trimmed = raw.trim();
       if (!trimmed) return;
-      if (fbaScanOnly && bulkCandidates.length > 0) {
-        void handleBulkFnskuPlanFlow(bulkCandidates);
-        return;
-      }
 
       if (fbaScanOnly && !looksLikeFnsku(trimmed)) {
         setFbaError(
@@ -588,7 +478,6 @@ export default function StationFbaInput({
       }
 
       if (looksLikeFnsku(trimmed)) {
-        clearBulkCandidates();
         setInputValue('');
         if (fbaScanOnly && fbaMode === 'select') {
           handleFnskuSelectFlow(trimmed);
@@ -603,7 +492,7 @@ export default function StationFbaInput({
       setPlanHint(null);
       void handleSubmit(undefined, undefined, undefined);
     },
-    [inputValue, handleFnskuPlanFlow, handleFnskuSelectFlow, handleSubmit, setInputValue, fbaScanOnly, fbaMode, bulkCandidates, handleBulkFnskuPlanFlow, clearBulkCandidates]
+    [inputValue, handleFnskuPlanFlow, handleFnskuSelectFlow, handleSubmit, setInputValue, fbaScanOnly, fbaMode]
   );
 
   const handleInputChange = useCallback(
@@ -614,49 +503,23 @@ export default function StationFbaInput({
       setPlanHint(null);
       setFbaFeedback(null);
       setSelectResult(null);
-      if (fbaMode === 'select') return; // no bulk validation in select mode
+      if (fbaMode === 'select') return;
+      // Detect bulk paste — auto-submit immediately, no intermediate review
       const counts = extractFnskuCounts(value);
       const hasBatch = counts.size > 1 || (counts.size === 1 && /[\s,;|]/.test(value));
-      if (!hasBatch) {
-        clearBulkCandidates();
-        return;
+      if (hasBatch && counts.size > 0) {
+        setInputValue('');
+        const rows: BulkScanCandidate[] = Array.from(counts.entries()).map(([fnsku, qty]) => ({
+          fnsku, qty, found: true, product_title: null, asin: null, sku: null,
+        }));
+        void handleBulkFnskuPlanFlow(rows);
       }
-      void validateBulkCandidates(counts);
     },
-    [clearBulkCandidates, fbaScanOnly, fbaMode, setInputValue, validateBulkCandidates]
-  );
-
-  /** Map bulk candidates → minimal EnrichedItem[] for SelectionFloatingBar summary. */
-  const bulkAsEnrichedItems = useMemo((): EnrichedItem[] =>
-    bulkCandidates.filter((r) => r.qty > 0).map((row, idx) => ({
-      item_id: idx,
-      fnsku: row.fnsku,
-      expected_qty: row.qty,
-      actual_qty: 0,
-      item_status: row.found ? 'READY_TO_GO' : 'PLANNED',
-      display_title: row.product_title || row.fnsku,
-      asin: row.asin,
-      sku: row.sku,
-      plan_id: 0,
-      plan_ref: "Today's plan",
-      shipment_id: 0,
-      shipment_ref: "Today's plan",
-      amazon_shipment_id: null,
-      due_date: null,
-      destination_fc: null,
-      status: row.found ? 'ready_to_print' as const : 'needs_print' as const,
-      pending_reason: null,
-      expanded: false,
-    })),
-  [bulkCandidates]);
-
-  const bulkTotalQty = useMemo(
-    () => bulkCandidates.reduce((sum, r) => sum + r.qty, 0),
-    [bulkCandidates],
+    [fbaScanOnly, fbaMode, setInputValue, handleBulkFnskuPlanFlow]
   );
 
   const scanError = fbaScanOnly ? fbaError : trackingNotFoundAlert || errorMessage || fbaError;
-  const busy = fbaScanOnly ? isFbaLoading || bulkLoading : isLoading || isFbaLoading;
+  const busy = fbaScanOnly ? isFbaLoading : isLoading || isFbaLoading;
 
   const routingHint = openPlanId
     ? 'FNSKU adds to the open plan. No plan selected → FNSKU starts a new plan.'
@@ -736,75 +599,6 @@ export default function StationFbaInput({
         }
       />
 
-      {fbaScanOnly && bulkCandidates.length > 0 ? (
-        <section data-testid="fba-bulk-validation-section" className="space-y-0 border-t border-gray-100">
-          {/* Compact FNSKU rows with inline qty */}
-          <ul className="divide-y divide-gray-100">
-            {bulkCandidates.map((row) => {
-              const status = getBulkCandidateStatus(row);
-              return (
-                <li key={row.fnsku} className="flex items-center gap-2 px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    {row.product_title ? (
-                      <p className="truncate text-xs font-bold text-gray-900">
-                        {row.product_title}
-                      </p>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          emitOpenQuickAddFnsku({ fnsku: row.fnsku });
-                        }}
-                        className="flex items-center gap-1 text-xs font-bold text-purple-700 hover:text-purple-900 transition-colors"
-                      >
-                        <Plus className="h-3 w-3" />
-                        Add title to system
-                      </button>
-                    )}
-                    <div className="flex items-center gap-1.5 text-[10px]">
-                      <span className="font-mono text-gray-500">{row.fnsku}</span>
-                      <span className={`font-semibold uppercase tracking-wide ${status.toneClass}`}>
-                        {status.label}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => adjustBulkQty(row.fnsku, -1)}
-                      disabled={row.qty <= 0}
-                      className="flex h-6 w-6 items-center justify-center rounded bg-red-50 text-red-500 text-xs font-bold transition-colors hover:bg-red-100 disabled:opacity-30"
-                    >
-                      −
-                    </button>
-                    <span className="w-6 text-center text-xs font-black tabular-nums text-gray-900">
-                      {row.qty}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => adjustBulkQty(row.fnsku, 1)}
-                      className="flex h-6 w-6 items-center justify-center rounded bg-gray-50 text-gray-600 text-xs font-bold transition-colors hover:bg-gray-100"
-                    >
-                      +
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          {/* Summary floating bar */}
-          <SelectionFloatingBar
-            selectedItems={bulkAsEnrichedItems}
-            onClear={clearBulkCandidates}
-            attachmentQty={bulkTotalQty}
-          />
-          <p className={`px-3 py-2 ${sidebarChrome.scanResultsHint}`}>
-            Press Enter to add to today&apos;s plan.
-          </p>
-        </section>
-      ) : null}
-
       {fbaScanOnly && fbaMode === 'select' && selectResult ? (
         selectResult.found ? (
           <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs font-semibold text-emerald-900">
@@ -848,29 +642,27 @@ export default function StationFbaInput({
       ) : null}
 
       {fbaFeedback && !fbaError ? (
-        <div className="rounded-lg border border-orange-200 bg-orange-50/90 px-2.5 py-2 text-xs">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-800">FNSKU auto added to plan</p>
-          {fbaFeedback.product_title ? (
-            <p className="mt-0.5 line-clamp-2 font-bold text-zinc-900">
-              {fbaFeedback.product_title}
-            </p>
-          ) : (
-            <button
-              type="button"
-              onClick={() => emitOpenQuickAddFnsku({ fnsku: fbaFeedback.fnsku })}
-              className="mt-0.5 flex items-center gap-1 text-xs font-bold text-purple-700 hover:text-purple-900 transition-colors"
-            >
-              <Plus className="h-3 w-3" />
-              Add title to system
-            </button>
-          )}
-          <p className="mt-0.5 font-mono text-[11px] text-zinc-600">{fbaFeedback.fnsku}</p>
-          {fbaFeedback.shipment_ref ? (
-            <p className="mt-1 text-[11px] font-semibold text-orange-800">
-              Shipment {fbaFeedback.shipment_ref}
-            </p>
-          ) : null}
-          <p className="mt-1.5 tabular-nums text-[11px] text-zinc-700">
+        <div className="space-y-1.5">
+          <FbaSelectionItemList
+            items={[{
+              id: fbaFeedback.fnsku,
+              displayTitle: fbaFeedback.product_title || fbaFeedback.fnsku,
+              fnskuSubtext: fbaFeedback.fnsku,
+              subLabel: fbaFeedback.shipment_ref
+                ? `Plan ${fbaFeedback.shipment_ref}`
+                : 'Added to plan',
+              subLabelClass: 'text-purple-600',
+              qty: fbaFeedback.available_to_ship,
+              ...(fbaFeedback.product_title
+                ? {}
+                : {
+                    onFocus: () => emitOpenQuickAddFnsku({ fnsku: fbaFeedback.fnsku }),
+                  }),
+            } satisfies FbaListItemRow]}
+            fnskuSubtextClass={fbaScanOnly ? workspaceChrome.fnskuSubtext : 'font-mono text-gray-500'}
+            focusRingClass={sidebarChrome.cardFocusRing ?? ''}
+          />
+          <p className="tabular-nums text-[10px] text-zinc-500">
             Tech {fbaFeedback.tech_scanned_qty} · Ready {fbaFeedback.pack_ready_qty} · Avail{' '}
             {fbaFeedback.available_to_ship} · Ship {fbaFeedback.shipped_qty}
           </p>

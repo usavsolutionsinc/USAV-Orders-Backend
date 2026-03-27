@@ -1,8 +1,7 @@
 'use client';
 
 import { motion, useReducedMotion } from 'framer-motion';
-import { Loader2, Package } from '@/components/Icons';
-import { DeferredQtyInput } from '@/design-system/primitives';
+import { Package } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import type { StationTheme } from '@/utils/staff-colors';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -15,17 +14,8 @@ const CARD_EASE = [0.22, 1, 0.36, 1] as const;
 export interface FbaPlanCardProps {
   plan: FbaPlanQueueItem;
   stationTheme: StationTheme;
-  /** @deprecated Ignored — card is always flat (no expand/collapse). */
-  isExpanded?: boolean;
-  /** @deprecated Ignored — card is always flat. Use onClick for focus. */
-  onToggleExpand?: () => void;
   /** Highlights when this plan is loaded in the main /fba panel */
   isActive: boolean;
-  /** Single-line plans: editable total qty */
-  canEditQty?: boolean;
-  /** Called on blur/Enter with the committed value. */
-  onCommitQty?: (value: number) => void;
-  qtySaving?: boolean;
 }
 
 function getDaysLateNumber(dueDate: string | null | undefined) {
@@ -70,9 +60,6 @@ export function FbaPlanCard({
   plan,
   stationTheme: _stationTheme,
   isActive,
-  canEditQty = false,
-  onCommitQty,
-  qtySaving = false,
 }: FbaPlanCardProps) {
   const reduceMotion = useReducedMotion();
   const chrome = FBA_PLAN_CHROME;
@@ -83,13 +70,20 @@ export function FbaPlanCard({
   const ref = String(plan.shipment_ref || '').trim();
   const fbaItemsLabel = `${plan.total_items} FBA item${plan.total_items !== 1 ? 's' : ''}`;
   const planTitle = ref || `Shipment row #${plan.id}`;
-  const progressPct = plan.total_items > 0 ? Math.round((plan.ready_item_count / plan.total_items) * 100) : 0;
+  const progressPct = qtyBase > 0 ? Math.min(100, Math.round((plan.ready_item_count / qtyBase) * 100)) : 0;
   const emitFocusPrintGroup = () => {
     window.dispatchEvent(
       new CustomEvent('fba-print-focus-plan', {
         detail: { shipmentId: plan.id, shipmentRef: ref || null },
       }),
     );
+    // Select matching board items by due date
+    if (plan.due_date) {
+      const dayKey = String(plan.due_date).slice(0, 10);
+      if (dayKey) {
+        window.dispatchEvent(new CustomEvent('fba-board-select-by-day', { detail: dayKey }));
+      }
+    }
   };
 
   return (
@@ -161,19 +155,7 @@ export function FbaPlanCard({
           <div className="rounded-xl bg-gray-50 px-2.5 py-2">
             <div className="mb-0.5 text-gray-400">Qty</div>
             <div className="text-[11px] tabular-nums text-gray-900 normal-case tracking-normal">
-              {canEditQty && onCommitQty ? (
-                <DeferredQtyInput
-                  value={qtyBase}
-                  onChange={onCommitQty}
-                  min={0}
-                  disabled={qtySaving}
-                  onClick={(e) => e.stopPropagation()}
-                  className={chrome.cardQtyInput}
-                />
-              ) : (
-                <span>{qtyBase}</span>
-              )}
-              {qtySaving ? <Loader2 className="ml-1 inline h-3 w-3 animate-spin text-gray-400" /> : null}
+              {qtyBase}
             </div>
           </div>
           <div className="rounded-xl bg-gray-50 px-2.5 py-2">

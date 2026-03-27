@@ -478,8 +478,6 @@ function FbaWorkspaceSidebarInner() {
     pendingPlans,
     plansByDay,
     activePlanId,
-    qtySavingPlanId,
-    onCommitPlanQty: handleCommitPlanQty,
     stationTheme,
   };
 

@@ -75,16 +75,20 @@ export function FbaBoardTable({
   );
 
   useEffect(() => {
-    const qtyOrOne = (i: FbaBoardItem) => Math.max(1, Number(i.actual_qty || 0));
-    const selectedQty = sortedItems
-      .filter((i) => selectedIds.has(i.item_id))
-      .reduce((sum, i) => sum + qtyOrOne(i), 0);
-    const totalQty = sortedItems.reduce((sum, i) => sum + qtyOrOne(i), 0);
-    window.dispatchEvent(
-      new CustomEvent('fba-board-selection-count', {
-        detail: { selected: selectedIds.size, total: sortedItems.length, selectedQty, totalQty },
-      }),
-    );
+    // Defer dispatch to avoid setState-during-render in listening components (FbaSidebar)
+    const id = requestAnimationFrame(() => {
+      const qtyOrOne = (i: FbaBoardItem) => Math.max(1, Number(i.actual_qty || 0));
+      const selectedQty = sortedItems
+        .filter((i) => selectedIds.has(i.item_id))
+        .reduce((sum, i) => sum + qtyOrOne(i), 0);
+      const totalQty = sortedItems.reduce((sum, i) => sum + qtyOrOne(i), 0);
+      window.dispatchEvent(
+        new CustomEvent('fba-board-selection-count', {
+          detail: { selected: selectedIds.size, total: sortedItems.length, selectedQty, totalQty },
+        }),
+      );
+    });
+    return () => cancelAnimationFrame(id);
   }, [selectedIds, sortedItems]);
 
   const toggleItem = useCallback(
