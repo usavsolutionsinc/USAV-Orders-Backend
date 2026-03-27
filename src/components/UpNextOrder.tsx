@@ -10,7 +10,10 @@ import { OrderCard } from './station/upnext/OrderCard';
 import { RepairCard } from './station/upnext/RepairCard';
 import { FbaItemCard } from './station/upnext/FbaItemCard';
 import { ReceivingAssignmentCard } from './station/upnext/ReceivingAssignmentCard';
+import { UpNextFilterBar } from './station/upnext/UpNextFilterBar';
 import { getTechStationLightChromeOutlineClass } from '@/utils/staff-colors';
+import { getOrderPlatformLabel } from '@/utils/order-platform';
+import type { HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 
 type TabId = 'all' | 'orders' | 'repair' | 'fba' | 'stock' | 'receiving';
 
@@ -40,6 +43,35 @@ function getRepairSortValue(deadlineAt: string | null | undefined, fallbackDateT
 
 const TAB_ORDER: TabId[] = ['all', 'orders', 'fba', 'repair', 'stock', 'receiving'];
 
+function matchesSearch(needle: string, fields: (string | null | undefined)[]): boolean {
+  const trimmed = needle.trim();
+  if (!trimmed) return true;
+  const tokens = trimmed.toLowerCase().split(/\s+/);
+  const haystack = fields.map((f) => (f || '').toLowerCase()).join(' ');
+  return tokens.every((t) => haystack.includes(t));
+}
+
+const QUICK_FILTER_ITEMS: Record<TabId, HorizontalSliderItem[]> = {
+  all:       [{ id: 'all', label: 'All' }],
+  orders:    [
+    { id: 'all', label: 'All' },
+    { id: 'amazon', label: 'Amazon' },
+    { id: 'ebay', label: 'eBay' },
+    { id: 'ecwid', label: 'Website' },
+  ],
+  fba:       [
+    { id: 'all', label: 'All' },
+    { id: 'PLANNED', label: 'Planned' },
+    { id: 'READY_TO_GO', label: 'Ready' },
+  ],
+  repair:    [
+    { id: 'all', label: 'All' },
+    { id: 'unassigned', label: 'Unassigned' },
+  ],
+  stock:     [{ id: 'all', label: 'All' }],
+  receiving: [{ id: 'all', label: 'All' }],
+};
+
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
   /** +1 = animate like swiping to a tab to the right, -1 = to the left (visible tab bar order). */
@@ -48,6 +80,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const prefersReducedMotion = useReducedMotion();
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [quickFilter, setQuickFilter] = useState('all');
   const hasCelebratedRef = useRef(false);
 
   const { allOrders, allRepairs, fbaItems, receivingItems, loading, allCompletedToday, fetchOrders } =
@@ -72,11 +106,53 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     receiving: receivingItems.length,
     all: nonStockOrders.length + sortedRepairs.length + activeFbaItems.length + receivingItems.length,
   };
-  const filteredOrders = nonStockOrders;
-  const filteredStockOrders = stockOrders;
-  const filteredRepairs = sortedRepairs;
-  const filteredFbaItems = activeFbaItems;
-  const filteredReceivingItems = receivingItems;
+  const filteredOrders = useMemo(() => {
+    let list = nonStockOrders;
+    if (quickFilter !== 'all') {
+      list = list.filter((o) => {
+        const plat = getOrderPlatformLabel(o.order_id || '', o.account_source).toLowerCase();
+        if (quickFilter === 'ecwid') return plat === 'ecwid' || (!plat.includes('amazon') && !plat.includes('ebay') && !plat.includes('walmart'));
+        return plat.includes(quickFilter);
+      });
+    }
+    if (searchText.trim()) {
+      list = list.filter((o) => matchesSearch(searchText, [o.product_title, o.order_id, o.shipping_tracking_number, o.sku, o.condition]));
+    }
+    return list;
+  }, [nonStockOrders, quickFilter, searchText]);
+
+  const filteredStockOrders = useMemo(() => {
+    if (!searchText.trim()) return stockOrders;
+    return stockOrders.filter((o) => matchesSearch(searchText, [o.product_title, o.order_id, o.shipping_tracking_number, o.sku, o.condition, o.out_of_stock]));
+  }, [stockOrders, searchText]);
+
+  const filteredRepairs = useMemo(() => {
+    let list = sortedRepairs;
+    if (quickFilter === 'unassigned') {
+      list = list.filter((r) => r.assignedTechId === null);
+    }
+    if (searchText.trim()) {
+      list = list.filter((r) => matchesSearch(searchText, [r.productTitle, r.ticketNumber, r.serialNumber, r.sku, r.issue]));
+    }
+    return list;
+  }, [sortedRepairs, quickFilter, searchText]);
+
+  const filteredFbaItems = useMemo(() => {
+    let list = activeFbaItems;
+    if (quickFilter !== 'all') {
+      list = list.filter((i) => i.status === quickFilter);
+    }
+    if (searchText.trim()) {
+      list = list.filter((i) => matchesSearch(searchText, [i.product_title, i.fnsku, i.condition]));
+    }
+    return list;
+  }, [activeFbaItems, quickFilter, searchText]);
+
+  const filteredReceivingItems = useMemo(() => {
+    if (!searchText.trim()) return receivingItems;
+    return receivingItems.filter((i) => matchesSearch(searchText, [i.tracking_number, i.notes, ...(i.line_skus || [])]));
+  }, [receivingItems, searchText]);
+
   const tabCounts = rawTabCounts;
   const stationTabChromeOutline = useMemo(() => getTechStationLightChromeOutlineClass(techId), [techId]);
 
@@ -173,6 +249,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     setExpandedItemKey(null);
     setShowMissingPartsInput(null);
     setMissingPartsReason('');
+    setSearchText('');
+    setQuickFilter('all');
   }, [effectiveTab]);
 
   useEffect(() => {
@@ -267,25 +345,30 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     />
   );
 
+  const isFiltering = Boolean(searchText.trim() || quickFilter !== 'all');
+  const Wrap = isFiltering
+    ? ({ children }: { children: React.ReactNode }) => <>{children}</>
+    : ({ children }: { children: React.ReactNode }) => <AnimatePresence mode="popLayout">{children}</AnimatePresence>;
+
   const allSections = [
     {
       id: 'orders',
-      label: 'Orders',
+      label: 'Pending Orders',
       headerColor: 'orange' as const,
       count: filteredOrders.length,
       render: () => (
-        <AnimatePresence mode="popLayout">
+        <Wrap>
           {filteredOrders.map((order) => renderOrderCard(order))}
-        </AnimatePresence>
+        </Wrap>
       ),
     },
     {
       id: 'fba',
-      label: 'FBA Planned Items',
+      label: 'FBA Pending Items',
       headerColor: 'purple' as const,
       count: filteredFbaItems.length,
       render: () => (
-        <AnimatePresence mode="popLayout">
+        <Wrap>
           {filteredFbaItems.map((item) => (
             <FbaItemCard
               key={item.item_id}
@@ -294,7 +377,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               onToggleExpand={() => toggleExpandedItem(`fba-${item.item_id}`)}
             />
           ))}
-        </AnimatePresence>
+        </Wrap>
       ),
     },
     {
@@ -303,7 +386,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       headerColor: 'orange' as const,
       count: filteredRepairs.length,
       render: () => (
-        <AnimatePresence mode="popLayout">
+        <Wrap>
           {filteredRepairs.map((repair) => (
             <RepairCard
               key={`repair-${repair.repairId}`}
@@ -313,7 +396,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
             />
           ))}
-        </AnimatePresence>
+        </Wrap>
       ),
     },
     {
@@ -322,11 +405,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       headerColor: 'orange' as const,
       count: filteredReceivingItems.length,
       render: () => (
-        <AnimatePresence mode="popLayout">
+        <Wrap>
           {filteredReceivingItems.map((item) => (
             <ReceivingAssignmentCard key={item.assignment_id} item={item} />
           ))}
-        </AnimatePresence>
+        </Wrap>
       ),
     },
   ].filter((section) => section.count > 0);
@@ -350,6 +433,18 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           variant="upNext"
           stationChromeOutlineClassName={stationTabChromeOutline}
         />
+
+        {/* ── Filter bar ── */}
+        {tabCounts[effectiveTab] > 0 && (
+          <UpNextFilterBar
+            searchText={searchText}
+            onSearchChange={setSearchText}
+            quickFilter={quickFilter}
+            onQuickFilterChange={setQuickFilter}
+            quickFilterItems={QUICK_FILTER_ITEMS[effectiveTab]}
+            placeholder={`Search ${visibleTabs.find((t) => t.id === effectiveTab)?.label ?? ''}...`}
+          />
+        )}
 
         {/* ── Urgency summary bar ── */}
         <AnimatePresence initial={false}>
@@ -401,20 +496,22 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           >
             {effectiveTab === 'stock' ? (
               filteredStockOrders.length === 0 ? (
-                <EmptySlate label="No out-of-stock orders" color="red" />
+                <EmptySlate label={isFiltering ? "No results" : "No out-of-stock orders"} color="red" />
               ) : (
                 <div className="flex flex-col">
-                  <AnimatePresence mode="popLayout">
+                  <Wrap>
                     {filteredStockOrders.map((order) => (
                       renderOrderCard(order, `stock-${order.id}`, 'stock')
                     ))}
-                  </AnimatePresence>
+                  </Wrap>
                 </div>
               )
 
             ) : effectiveTab === 'all' ? (
               allSections.length === 0 ? (
-                showNoCurrentOrdersBanner ? (
+                isFiltering ? (
+                  <EmptySlate label="No results" color="gray" />
+                ) : showNoCurrentOrdersBanner ? (
                   <EmptySlate label="No current orders" color="green" />
                 ) : (
                   <EmptySlate label="No current work" color="green" />
@@ -441,7 +538,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
             ) : effectiveTab === 'repair' ? (
               filteredRepairs.length === 0 ? (
-                <EmptySlate label="No repairs in queue" />
+                <EmptySlate label={isFiltering ? "No results" : "No repairs in queue"} />
               ) : (
                 <div className="flex flex-col">
                   {filteredRepairs.some((r) => r.assignedTechId === null) && (
@@ -453,7 +550,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                       <div className="h-px flex-1 bg-red-100" />
                     </div>
                   )}
-                  <AnimatePresence mode="popLayout">
+                  <Wrap>
                     {filteredRepairs.map((repair) => (
                       <RepairCard
                         key={repair.repairId}
@@ -463,16 +560,16 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                         onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
                       />
                     ))}
-                  </AnimatePresence>
+                  </Wrap>
                 </div>
               )
 
             ) : effectiveTab === 'fba' ? (
               filteredFbaItems.length === 0 ? (
-                <EmptySlate label="No active FBA items" color="purple" />
+                <EmptySlate label={isFiltering ? "No results" : "No active FBA items"} color={isFiltering ? "gray" : "purple"} />
               ) : (
                 <div className="flex flex-col">
-                  <AnimatePresence mode="popLayout">
+                  <Wrap>
                     {filteredFbaItems.map((item) => (
                       <FbaItemCard
                         key={item.item_id}
@@ -481,31 +578,31 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                         onToggleExpand={() => toggleExpandedItem(`fba-${item.item_id}`)}
                       />
                     ))}
-                  </AnimatePresence>
+                  </Wrap>
                 </div>
               )
 
             ) : effectiveTab === 'receiving' ? (
               filteredReceivingItems.length === 0 ? (
-                <EmptySlate label="No receiving items assigned" color="teal" />
+                <EmptySlate label={isFiltering ? "No results" : "No receiving items assigned"} color={isFiltering ? "gray" : "teal"} />
               ) : (
                 <div className="flex flex-col">
-                  <AnimatePresence mode="popLayout">
+                  <Wrap>
                     {filteredReceivingItems.map((item) => (
                       <ReceivingAssignmentCard key={item.assignment_id} item={item} />
                     ))}
-                  </AnimatePresence>
+                  </Wrap>
                 </div>
               )
 
-            ) : orders.length === 0 ? (
+            ) : filteredOrders.length === 0 ? (
               <div className="flex flex-col">
-                <EmptySlate label="No current orders" color="green" />
-                {filteredRepairs.length > 0 && (
+                <EmptySlate label={isFiltering ? "No results" : "No current orders"} color={isFiltering ? "gray" : "green"} />
+                {!isFiltering && filteredRepairs.length > 0 && (
                   <div className="mt-3">
                     <SectionHeader label="Repair Service" />
                     <div className="flex flex-col">
-                      <AnimatePresence mode="popLayout">
+                      <Wrap>
                         {filteredRepairs.map((repair) => (
                           <RepairCard
                             key={`orders-repair-${repair.repairId}`}
@@ -515,7 +612,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                             onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
                           />
                         ))}
-                      </AnimatePresence>
+                      </Wrap>
                     </div>
                   </div>
                 )}
@@ -523,11 +620,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
             ) : (
               <div className="flex flex-col">
-                <AnimatePresence mode="popLayout">
-                  {orders.map((order) => (
+                <Wrap>
+                  {filteredOrders.map((order) => (
                     renderOrderCard(order)
                   ))}
-                </AnimatePresence>
+                </Wrap>
               </div>
             )}
           </motion.div>
@@ -544,11 +641,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               <div className="h-px flex-1 bg-orange-200" />
             </div>
             <div className="flex flex-col">
-              <AnimatePresence mode="popLayout">
+              <Wrap>
                 {filteredStockOrders.map((order) => (
                   renderOrderCard(order, `stock-${order.id}`, 'stock')
                 ))}
-              </AnimatePresence>
+              </Wrap>
             </div>
           </div>
         )}

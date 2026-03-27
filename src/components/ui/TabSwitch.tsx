@@ -41,15 +41,15 @@ const colorTextMap: Record<string, { active: string; shadow: string }> = {
 
 /** Semantic tab label text for `variant="upNext"` (rail/pill outline stays station-themed). */
 const upNextLabelTextClass: Record<string, { active: string; inactive: string }> = {
-  blue:    { active: 'text-blue-600',    inactive: 'text-blue-600/55 hover:text-blue-700' },
-  emerald: { active: 'text-emerald-600', inactive: 'text-emerald-600/55 hover:text-emerald-700' },
-  green:   { active: 'text-emerald-600', inactive: 'text-emerald-600/55 hover:text-emerald-700' },
-  orange:  { active: 'text-orange-600',  inactive: 'text-orange-600/55 hover:text-orange-700' },
-  purple:  { active: 'text-purple-600',  inactive: 'text-purple-600/55 hover:text-purple-700' },
-  yellow:  { active: 'text-amber-600',   inactive: 'text-amber-600/55 hover:text-amber-700' },
-  gray:    { active: 'text-slate-600',   inactive: 'text-slate-600/55 hover:text-slate-800' },
-  red:     { active: 'text-red-600',     inactive: 'text-red-600/55 hover:text-red-700' },
-  teal:    { active: 'text-teal-600',    inactive: 'text-teal-600/55 hover:text-teal-700' },
+  blue:    { active: 'text-blue-600',    inactive: 'text-blue-500 hover:text-blue-600' },
+  emerald: { active: 'text-emerald-600', inactive: 'text-emerald-500 hover:text-emerald-600' },
+  green:   { active: 'text-emerald-600', inactive: 'text-emerald-500 hover:text-emerald-600' },
+  orange:  { active: 'text-orange-600',  inactive: 'text-orange-500 hover:text-orange-600' },
+  purple:  { active: 'text-purple-600',  inactive: 'text-purple-500 hover:text-purple-600' },
+  yellow:  { active: 'text-amber-600',   inactive: 'text-amber-500 hover:text-amber-600' },
+  gray:    { active: 'text-slate-600',   inactive: 'text-slate-500 hover:text-slate-700' },
+  red:     { active: 'text-red-600',     inactive: 'text-red-500 hover:text-red-600' },
+  teal:    { active: 'text-teal-600',    inactive: 'text-teal-500 hover:text-teal-600' },
 };
 
 const upNextRailBaseClass =

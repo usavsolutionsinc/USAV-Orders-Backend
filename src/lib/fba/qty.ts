@@ -1,7 +1,7 @@
 /**
  * Shared qty resolution utilities for FBA components.
  * Eliminates duplicate inline expressions across SelectionFloatingBar,
- * FbaWorkspaceScanField, FbaPlanCard, and FbaSidebar.
+ * FbaWorkspaceScanField, FbaShipmentCard, and FbaSidebar.
  */
 
 export interface FbaItemQtySource {

@@ -78,139 +78,137 @@ export function CustomerInfoForm({
     };
 
     return (
-        <div className="space-y-6">
-            <div className="space-y-4">
-                {/* Name Field */}
-                <div className="space-y-2">
-                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
-                        Customer Name <span className="text-red-500">*</span>
+        <div className="space-y-5">
+            {/* Name Field */}
+            <div className="space-y-1.5">
+                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
+                    Customer Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                    type="text"
+                    value={customer.name}
+                    onChange={(e) => onCustomerChange('name', e.target.value)}
+                    placeholder="Enter customer name"
+                    className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold focus:outline-none focus:border-blue-600 transition-colors"
+                    required
+                />
+            </div>
+
+            {/* Phone Field */}
+            <div className="space-y-1.5">
+                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
+                    Phone Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                    type="tel"
+                    value={customer.phone}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
+                    placeholder="000-000-0000"
+                    maxLength={12}
+                    className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold focus:outline-none focus:border-blue-600 transition-colors"
+                    required
+                />
+            </div>
+
+            {/* Email Field */}
+            <div className="space-y-1.5">
+                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
+                    Email <span className="text-gray-400 font-normal normal-case tracking-normal">— Optional</span>
+                </label>
+                <input
+                    type="email"
+                    value={customer.email}
+                    onChange={(e) => onCustomerChange('email', e.target.value)}
+                    placeholder="customer@example.com"
+                    className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold lowercase focus:outline-none focus:border-blue-600 transition-colors"
+                />
+            </div>
+
+            {/* Serial Numbers Field */}
+            <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                    <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
+                        Serial Numbers <span className="text-red-500">*</span>
                     </label>
-                    <input
-                        type="text"
-                        value={customer.name}
-                        onChange={(e) => onCustomerChange('name', e.target.value)}
-                        placeholder="Enter customer name"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                        required
-                    />
+                    <button
+                        type="button"
+                        onClick={addSerialNumber}
+                        className="flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                        <Plus className="w-3 h-3" />
+                        Add
+                    </button>
                 </div>
-
-                {/* Phone Field */}
                 <div className="space-y-2">
-                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
-                        Phone Number <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                        type="tel"
-                        value={customer.phone}
-                        onChange={(e) => handlePhoneChange(e.target.value)}
-                        placeholder="000-000-0000"
-                        maxLength={12}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                        required
-                    />
-                </div>
-
-                {/* Email Field */}
-                <div className="space-y-2">
-                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
-                        Email <span className="text-gray-400 text-[10px] font-normal">(Optional)</span>
-                    </label>
-                    <input
-                        type="email"
-                        value={customer.email}
-                        onChange={(e) => onCustomerChange('email', e.target.value)}
-                        placeholder="customer@example.com"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold lowercase focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    />
-                </div>
-
-                {/* Serial Numbers Field */}
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
-                            Serial Numbers <span className="text-red-500">*</span>
-                        </label>
-                        <button
-                            type="button"
-                            onClick={addSerialNumber}
-                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all"
-                        >
-                            <Plus className="w-3 h-3" />
-                            Add More
-                        </button>
-                    </div>
-                    <div className="space-y-2">
-                        {serialNumbers.map((sn, index) => (
-                            <div key={index} className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={sn}
-                                    onChange={(e) => updateSerialNumber(index, e.target.value)}
-                                    placeholder={`Serial Number ${index + 1}`}
-                                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                    required={index === 0}
-                                />
-                                {serialNumbers.length > 1 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => removeSerialNumber(index)}
-                                        className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                                        aria-label="Remove serial number"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Price Field */}
-                <div className="space-y-2">
-                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
-                        Price <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex items-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
-                        <span className="text-lg font-bold text-gray-400">$</span>
-                        <input
-                            type="text"
-                            value={price}
-                            onChange={(e) => onPriceChange(e.target.value)}
-                            placeholder="130"
-                            className="flex-1 text-sm font-black text-emerald-600 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
-                            required
-                        />
-                    </div>
-                </div>
-
-                {/* Notes Field */}
-                <div className="space-y-2">
-                    <label className="block text-xs font-black uppercase tracking-widest text-gray-700">
-                        Notes <span className="text-gray-400 text-[10px] font-normal">(Optional)</span>
-                    </label>
-                    <textarea
-                        value={notes}
-                        onChange={(e) => onNotesChange(e.target.value)}
-                        placeholder="Add any additional notes here..."
-                        rows={3}
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
-                    />
-                </div>
-
-                {/* Info Box */}
-                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                    <p className="text-[10px] leading-relaxed text-gray-600 font-bold">
-                        Your Bose product has been received into our repair center. Under normal circumstances it will be repaired within the next 3-10 working days.
-                    </p>
-                    <p className="text-[10px] leading-relaxed text-blue-600 font-black uppercase tracking-widest mt-2">
-                        30 Day Warranty on all repair services.
-                    </p>
+                    {serialNumbers.map((sn, index) => (
+                        <div key={index} className="flex gap-0">
+                            <input
+                                type="text"
+                                value={sn}
+                                onChange={(e) => updateSerialNumber(index, e.target.value)}
+                                placeholder={`Serial Number ${index + 1}`}
+                                className="flex-1 px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-mono font-bold focus:outline-none focus:border-blue-600 transition-colors"
+                                required={index === 0}
+                            />
+                            {serialNumbers.length > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => removeSerialNumber(index)}
+                                    className="flex items-center justify-center w-12 border-2 border-l-0 border-gray-300 text-red-500 hover:bg-red-50 transition-colors"
+                                    aria-label="Remove serial number"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    ))}
                 </div>
             </div>
-            
-            <p className="text-[9px] text-center font-bold text-gray-400 uppercase tracking-[0.2em]">
-                Fields marked with <span className="text-red-500">*</span> are required
+
+            {/* Price Field */}
+            <div className="space-y-1.5">
+                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
+                    Price <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center border-2 border-gray-300 bg-white focus-within:border-blue-600 transition-colors">
+                    <span className="px-4 text-lg font-black text-gray-400 border-r-2 border-gray-300 py-3.5 leading-none">$</span>
+                    <input
+                        type="text"
+                        value={price}
+                        onChange={(e) => onPriceChange(e.target.value)}
+                        placeholder="130"
+                        className="flex-1 px-4 py-3.5 text-sm font-black text-emerald-600 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
+                        required
+                    />
+                </div>
+            </div>
+
+            {/* Notes Field */}
+            <div className="space-y-1.5">
+                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
+                    Notes <span className="text-gray-400 font-normal normal-case tracking-normal">— Optional</span>
+                </label>
+                <textarea
+                    value={notes}
+                    onChange={(e) => onNotesChange(e.target.value)}
+                    placeholder="Additional notes..."
+                    rows={3}
+                    className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold focus:outline-none focus:border-blue-600 transition-colors resize-none"
+                />
+            </div>
+
+            {/* Info strip */}
+            <div className="p-4 bg-blue-600 text-white">
+                <p className="text-[10px] leading-relaxed font-bold">
+                    Product received into repair center — typically repaired within <span className="font-black">3–10 working days</span>.
+                </p>
+                <p className="text-[9px] font-black uppercase tracking-[0.15em] mt-1.5 text-blue-200">
+                    30-Day Warranty on all repairs
+                </p>
+            </div>
+
+            <p className="text-[9px] text-center font-bold text-gray-400 uppercase tracking-[0.15em]">
+                <span className="text-red-500">*</span> Required fields
             </p>
         </div>
     );

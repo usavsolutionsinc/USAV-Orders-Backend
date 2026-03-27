@@ -9,8 +9,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(() => new QueryClient({
         defaultOptions: {
             queries: {
-                staleTime: 5 * 60 * 1000,  // 5 min — safe; server-side tag invalidation fires on mutations
-                gcTime: 30 * 60 * 1000,    // keep unused cache in memory for 30 min (was 10)
+                staleTime: 3 * 60 * 1000,  // 3 min — safe; server-side tag invalidation fires on mutations
+                gcTime: 5 * 60 * 1000,     // 5 min (default) — was 30 min, causing massive memory retention
                 retry: 1,                  // one retry is enough; 2 doubles perceived lag on errors
                 refetchOnWindowFocus: false,
                 refetchOnReconnect: false,  // don't blast the API on every network blip

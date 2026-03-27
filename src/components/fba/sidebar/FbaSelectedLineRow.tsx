@@ -8,6 +8,7 @@ export interface FbaSelectedLineRowProps {
   fnsku: string;
   /** Shown above the title (e.g. line already on today’s FBA plan). */
   microcopyAboveTitle?: string;
+  microcopyTone?: 'default' | 'success';
   /** Typically qty steppers — rendered in the right column, vertically centered with the title block. */
   rightSlot: ReactNode;
 }
@@ -17,13 +18,19 @@ export function FbaSelectedLineRow({
   displayTitle,
   fnsku,
   microcopyAboveTitle,
+  microcopyTone = 'default',
   rightSlot,
 }: FbaSelectedLineRowProps) {
+  const microcopyClass =
+    microcopyTone === 'success'
+      ? 'w-full text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700'
+      : 'w-full text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500';
+
   return (
     <div className="flex items-center gap-2 px-3 py-3">
       <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 self-center">
         {microcopyAboveTitle ? (
-          <p className="w-full text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+          <p className={microcopyClass}>
             {microcopyAboveTitle}
           </p>
         ) : null}

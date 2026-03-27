@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 interface TodayPlanRecord {
   date: string;
@@ -38,10 +38,6 @@ function writeTodayPlan(fnskus: string[]) {
 export function useTodayPlan() {
   const [todayFnskus, setTodayFnskus] = useState<string[]>(() => readTodayPlan());
 
-  useEffect(() => {
-    setTodayFnskus(readTodayPlan());
-  }, []);
-
   const addFnskus = useCallback((next: string[]) => {
     if (!next.length) return;
     setTodayFnskus((prev) => {
@@ -64,10 +60,5 @@ export function useTodayPlan() {
     setTodayFnskus(fresh);
   }, []);
 
-  const value = useMemo(
-    () => ({ todayFnskus, addFnskus, replaceToday, resetIfStale }),
-    [todayFnskus, addFnskus, replaceToday, resetIfStale]
-  );
-
-  return value;
+  return { todayFnskus, addFnskus, replaceToday, resetIfStale };
 }

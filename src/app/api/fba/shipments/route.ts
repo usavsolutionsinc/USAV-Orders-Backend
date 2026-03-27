@@ -58,7 +58,29 @@ export async function GET(request: NextRequest) {
       idx++;
     }
     if (q) {
-      conditions.push(`(fs.shipment_ref ILIKE $${idx} OR fs.notes ILIKE $${idx})`);
+      conditions.push(`(
+        fs.shipment_ref ILIKE $${idx}
+        OR fs.notes ILIKE $${idx}
+        OR COALESCE(fs.amazon_shipment_id, '') ILIKE $${idx}
+        OR EXISTS (
+          SELECT 1
+          FROM fba_shipment_items fsi_q
+          WHERE fsi_q.shipment_id = fs.id
+            AND (
+              fsi_q.fnsku ILIKE $${idx}
+              OR COALESCE(fsi_q.product_title, '') ILIKE $${idx}
+              OR COALESCE(fsi_q.asin, '') ILIKE $${idx}
+              OR COALESCE(fsi_q.sku, '') ILIKE $${idx}
+            )
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM fba_shipment_tracking fst_q
+          JOIN shipping_tracking_numbers stn_q ON stn_q.id = fst_q.tracking_id
+          WHERE fst_q.shipment_id = fs.id
+            AND COALESCE(stn_q.tracking_number_raw, '') ILIKE $${idx}
+        )
+      )`);
       params.push(`%${q}%`);
       idx++;
     }
@@ -72,6 +94,7 @@ export async function GET(request: NextRequest) {
       SELECT
         fs.id,
         fs.shipment_ref,
+        fs.amazon_shipment_id,
         fs.destination_fc,
         fs.due_date,
         fs.status,

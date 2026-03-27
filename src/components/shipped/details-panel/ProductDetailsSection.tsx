@@ -5,6 +5,7 @@ import { AlertTriangle } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useOrderAssignment } from '@/hooks';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
+import { ContextualManualLinkRow } from '@/components/shipped/details-panel/blocks/ContextualManualLinkRow';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 
@@ -86,6 +87,12 @@ export function ProductDetailsSection({
             optionClassName="text-xs font-bold tracking-wide text-gray-800"
           />
         </DetailsPanelRow>
+
+        <ContextualManualLinkRow
+          sku={shipped.sku}
+          itemNumber={shipped.item_number}
+          allowEmbeddedItemNumberInput={false}
+        />
 
         <CopyableValueFieldBlock
           label="SKU"

@@ -79,7 +79,7 @@ export async function GET(
 
 // â”€â”€ PATCH /api/fba/shipments/[id]/items/[itemId] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Update mutable item fields.
-// Body (all optional): { expected_qty, status, product_title, asin, sku,
+// Body (all optional): { fnsku, expected_qty, status, product_title, asin, sku,
 //                        notes, staff_id }
 // Guards against backward status transitions.
 export async function PATCH(
@@ -145,6 +145,31 @@ export async function PATCH(
       fields.push(`${col} = $${idx++}`);
       values.push(val);
     };
+
+    if ('fnsku' in body) {
+      const normalizedFnsku = String(body.fnsku || '').trim().toUpperCase();
+      if (!normalizedFnsku) {
+        await client.query('ROLLBACK');
+        return NextResponse.json({ success: false, error: 'fnsku cannot be empty' }, { status: 400 });
+      }
+      const conflict = await client.query(
+        `SELECT id
+         FROM fba_shipment_items
+         WHERE shipment_id = $1
+           AND fnsku = $2
+           AND id <> $3
+         LIMIT 1`,
+        [shipmentId, normalizedFnsku, itemIdNum]
+      );
+      if (conflict.rows[0]) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, error: `FNSKU ${normalizedFnsku} already exists in this shipment` },
+          { status: 409 }
+        );
+      }
+      setField('fnsku', normalizedFnsku);
+    }
 
     if ('expected_qty' in body) setField('expected_qty', Math.max(0, Number(body.expected_qty) || 0));
     if ('product_title' in body) setField('product_title', body.product_title || null);
@@ -281,4 +306,3 @@ export async function DELETE(
     );
   }
 }
-

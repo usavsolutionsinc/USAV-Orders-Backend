@@ -192,25 +192,26 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
 
       {/* Header */}
       <div>
-        <h3 className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1">Select Products</h3>
-        <p className="text-[10px] text-gray-500 font-semibold">Browse {rootName}</p>
+        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-600 mb-0.5">Step 1</p>
+        <h3 className="text-xs font-black text-gray-900 uppercase tracking-tight">Select Products</h3>
+        <p className="text-[10px] text-gray-500 font-semibold mt-0.5">Browse {rootName}</p>
       </div>
 
       {/* Search + Back */}
-      <div className="flex gap-2">
+      <div className="flex gap-0">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={isAtRoot ? 'Search categories...' : 'Search...'}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder={isAtRoot ? 'Search categories...' : 'Search products...'}
+          className="flex-1 px-4 py-3 border-2 border-gray-300 text-xs font-bold focus:outline-none focus:border-blue-600 transition-colors bg-white"
         />
         <button
           onClick={() => void fetchCategoryLevel(
             breadcrumbs.length <= 1 ? null : breadcrumbs[breadcrumbs.length - 2].id
           )}
           disabled={loading || isAtRoot}
-          className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+          className="flex items-center justify-center w-12 border-2 border-l-0 border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 active:bg-gray-100 transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -218,7 +219,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
 
       {/* Breadcrumbs */}
       {breadcrumbs.length > 0 && (
-        <div className="flex items-center gap-1 flex-wrap text-[10px] font-semibold text-gray-500">
+        <div className="flex items-center gap-1 flex-wrap text-[9px] font-black text-gray-500 uppercase tracking-wide">
           <button
             onClick={() => void fetchCategoryLevel(null)}
             className="hover:text-blue-600 transition-colors"
@@ -230,7 +231,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
               <ChevronRight className="w-3 h-3 text-gray-300 flex-shrink-0" />
               <button
                 onClick={() => void fetchCategoryLevel(b.id)}
-                className={`hover:text-blue-600 transition-colors ${i === breadcrumbs.length - 1 ? 'text-gray-900 font-black' : ''}`}
+                className={`hover:text-blue-600 transition-colors ${i === breadcrumbs.length - 1 ? 'text-gray-900' : ''}`}
               >
                 {b.name}
               </button>
@@ -241,14 +242,14 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
 
       {/* Loading */}
       {loading && (
-        <div className="w-full p-4 rounded-xl border border-gray-200 bg-gray-50 text-xs font-bold text-gray-500">
+        <div className="w-full p-4 border-2 border-gray-200 bg-gray-50 text-xs font-black text-gray-400 uppercase tracking-wide">
           Loading...
         </div>
       )}
 
       {/* Error */}
       {!loading && error && (
-        <div className="w-full p-4 rounded-xl border border-red-200 bg-red-50 text-xs font-bold text-red-700">
+        <div className="w-full p-4 border-2 border-red-300 bg-red-50 text-xs font-black text-red-700">
           {error}
         </div>
       )}
@@ -260,7 +261,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
           {/* Sub-categories */}
           {filteredCategories.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-0.5">
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.15em]">
                 {isAtRoot ? 'Categories' : 'Sub-categories'}
               </p>
               <div className="space-y-1">
@@ -268,7 +269,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
                   <button
                     key={cat.id}
                     onClick={() => void fetchCategoryLevel(cat.id)}
-                    className="w-full p-3 rounded-xl border-2 border-gray-200 bg-white hover:border-blue-400 hover:bg-blue-50 transition-all text-left flex items-center justify-between gap-3"
+                    className="w-full p-3.5 border-2 border-gray-300 bg-white hover:border-blue-600 hover:bg-blue-50 active:bg-blue-100 transition-colors text-left flex items-center justify-between gap-3"
                   >
                     <span className="text-xs font-black uppercase tracking-wide text-gray-900 truncate">
                       {cat.name}
@@ -283,15 +284,13 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
           {/* Products grid */}
           {(loadingProducts || filteredProducts.length > 0) && (
             <div className="space-y-2">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-0.5">
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.15em]">
                 {loadingProducts ? 'Loading products...' : 'Products'}
               </p>
               {!loadingProducts && (
                 <div
-                  className="grid gap-3"
-                  style={{
-                    gridTemplateColumns: `repeat(auto-fill, minmax(150px, 1fr))`,
-                  }}
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: `repeat(auto-fill, minmax(148px, 1fr))` }}
                 >
                   {filteredProducts.map((product) => {
                     const selected = isSelected(product.id);
@@ -299,10 +298,10 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
                       <button
                         key={product.id}
                         onClick={() => toggleProduct(product)}
-                        className={`relative rounded-xl border-2 overflow-hidden text-left transition-all flex flex-col ${
+                        className={`relative border-2 overflow-hidden text-left transition-colors flex flex-col ${
                           selected
-                            ? 'border-blue-500 shadow-md shadow-blue-100'
-                            : 'border-gray-200 hover:border-blue-300'
+                            ? 'border-blue-600'
+                            : 'border-gray-300 hover:border-blue-400 active:border-blue-600'
                         }`}
                       >
                         {/* Square image */}
@@ -319,10 +318,10 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
                             </div>
                           )}
 
-                          {/* Selected checkmark overlay */}
+                          {/* Selected checkmark */}
                           {selected && (
-                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow">
-                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <div className="absolute top-0 right-0 w-7 h-7 bg-blue-600 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                               </svg>
                             </div>
@@ -330,16 +329,18 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
                         </div>
 
                         {/* Info */}
-                        <div className={`p-2 flex-1 flex flex-col justify-between gap-1.5 ${selected ? 'bg-blue-50' : 'bg-white'}`}>
-                          <p className="text-sm font-black text-gray-900 leading-tight">
+                        <div className={`p-2.5 flex-1 flex flex-col justify-between gap-1.5 ${selected ? 'bg-blue-600' : 'bg-white'}`}>
+                          <p className={`text-xs font-black leading-tight ${selected ? 'text-white' : 'text-gray-900'}`}>
                             {product.name}
                           </p>
                           <div className="flex items-end justify-between gap-1">
-                            <span className={`text-sm font-black ${product.price !== null ? 'text-emerald-600' : 'text-gray-300'}`}>
+                            <span className={`text-sm font-black ${
+                              selected ? 'text-blue-100' : product.price !== null ? 'text-emerald-600' : 'text-gray-300'
+                            }`}>
                               {product.price !== null ? `$${product.price.toFixed(2)}` : '—'}
                             </span>
                             {product.sku && (
-                              <span className="text-xs font-bold text-gray-400 truncate max-w-[55%] text-right">
+                              <span className={`text-[9px] font-bold truncate max-w-[55%] text-right ${selected ? 'text-blue-200' : 'text-gray-400'}`}>
                                 {product.sku}
                               </span>
                             )}
@@ -355,7 +356,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
 
           {/* Empty state */}
           {!loadingProducts && filteredCategories.length === 0 && filteredProducts.length === 0 && (
-            <div className="w-full p-4 rounded-xl border border-amber-200 bg-amber-50 text-xs font-bold text-amber-700">
+            <div className="w-full p-4 border-2 border-amber-300 bg-amber-50 text-xs font-black text-amber-700 uppercase tracking-wide">
               {search.trim() ? 'No results match your search.' : 'No items found at this level.'}
             </div>
           )}
@@ -364,18 +365,18 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
 
       {/* Selected items tray */}
       {selectedItems.length > 0 && (
-        <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-3 space-y-2">
+        <div className="border-2 border-blue-600 bg-blue-600 p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest">
+            <p className="text-[9px] font-black text-blue-100 uppercase tracking-[0.15em]">
               Selected ({selectedItems.length})
             </p>
-            <p className="text-xs font-black text-emerald-600">
-              Total: ${totalPriceOf(selectedItems).toFixed(2)}
+            <p className="text-xs font-black text-white">
+              ${totalPriceOf(selectedItems).toFixed(2)}
             </p>
           </div>
           <div className="space-y-1">
             {selectedItems.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-2 bg-white rounded-lg px-2 py-1.5">
+              <div key={item.id} className="flex items-center justify-between gap-2 bg-white px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-black text-gray-900 truncate">{item.name}</p>
                   {item.sku && <p className="text-[9px] font-semibold text-gray-400">{item.sku}</p>}
@@ -386,9 +387,9 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
                   )}
                   <button
                     onClick={() => removeItem(item.id)}
-                    className="w-4 h-4 rounded-full bg-gray-200 hover:bg-red-200 flex items-center justify-center transition-colors"
+                    className="w-5 h-5 bg-gray-100 hover:bg-red-100 flex items-center justify-center transition-colors"
                   >
-                    <svg className="w-2.5 h-2.5 text-gray-500 hover:text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <svg className="w-3 h-3 text-gray-500 hover:text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
@@ -403,32 +404,32 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
       <div className="space-y-2">
         <button
           onClick={() => setShowOther((prev) => !prev)}
-          className={`w-full p-3 rounded-xl border-2 transition-all text-left ${
+          className={`w-full p-3.5 border-2 transition-colors text-left ${
             selectedProduct?.type === 'Other'
               ? 'bg-blue-600 border-blue-600 text-white'
-              : 'bg-gray-50 border-gray-200 text-gray-900 hover:border-blue-500'
+              : 'bg-white border-gray-300 text-gray-900 hover:border-blue-600 active:bg-blue-50'
           }`}
         >
-          <div className="text-xs font-black uppercase tracking-wide">Other (Manual Entry)</div>
+          <div className="text-xs font-black uppercase tracking-wide">Other — Manual Entry</div>
           {selectedProduct?.type === 'Other' && (
             <div className="text-[10px] font-semibold mt-1 opacity-90 truncate">{selectedProduct.model}</div>
           )}
         </button>
 
         {showOther && (
-          <div className="flex gap-2">
+          <div className="flex gap-0">
             <input
               type="text"
               value={otherModelText}
               onChange={(e) => setOtherModelText(e.target.value)}
               placeholder="Enter product name..."
-              className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-4 py-3 bg-white border-2 border-gray-300 text-xs font-bold text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-600 transition-colors"
               onKeyDown={(e) => { if (e.key === 'Enter') handleOtherSubmit(); }}
             />
             <button
               onClick={handleOtherSubmit}
               disabled={!otherModelText.trim()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-lg text-xs font-bold uppercase tracking-wide transition-all disabled:cursor-not-allowed"
+              className="px-5 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-black uppercase tracking-wide transition-colors disabled:cursor-not-allowed border-2 border-l-0 border-blue-600 disabled:border-gray-200"
             >
               Add
             </button>

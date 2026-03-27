@@ -4,4 +4,6 @@ export { ReasonSelector } from './ReasonSelector';
 export { CustomerInfoForm } from './CustomerInfoForm';
 export { RepairTable } from './RepairTable';
 export { RepairDetailsPanel } from './RepairDetailsPanel';
+export { SignaturePad } from './SignaturePad';
+export { RepairAgreement } from './RepairAgreement';
 export type { RepairFormData } from './RepairIntakeForm';

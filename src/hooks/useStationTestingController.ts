@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { useQueryClient } from '@tanstack/react-query';
-import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { classifyInput, findSerialInCatalog, looksLikeFnsku } from '@/lib/scan-resolver';
 import { detectStationScanType, type StationInputMode, type StationScanType } from '@/lib/station-scan-routing';
 import { stationThemeColors } from '@/utils/staff-colors';
@@ -16,6 +15,10 @@ export interface ActiveStationOrder {
   id: number | null;
   orderId: string;
   fnsku?: string | null;
+  /** `fba_fnsku_logs.id` — links serials to the FNSKU log row in the TSN table. */
+  fnskuLogId?: number | null;
+  /** SAL row id — the single source of truth anchor for this scan session. */
+  salId?: number | null;
   productTitle: string;
   itemNumber: string | null;
   sku: string;
@@ -32,6 +35,8 @@ export interface ActiveStationOrder {
   sourceType?: 'order' | 'fba' | 'repair';
   /** Server-issued anchor for serial/SKU scans (tracking / exception / FNSKU / repair session). */
   scanSessionId?: string | null;
+  /** Friendly inline UX copy rendered inside the active order card. */
+  inlineMicrocopy?: string | null;
 }
 
 export interface ResolvedProductManual {
@@ -142,12 +147,6 @@ export function useStationTestingController({
   const manualRequestIdRef = useRef(0);
   const completedOrderHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const { normalizeTrackingQuery } = useLast8TrackingSearch();
-
   const activeColor = stationThemeColors[themeColor];
 
   const clearCompletedOrderHideTimer = () => {
@@ -174,8 +173,11 @@ export function useStationTestingController({
     }
 
     lastScannedOrderRef.current = nextOrder;
-    if (nextOrder.scanSessionId) {
-      scanSessionIdRef.current = nextOrder.scanSessionId;
+    // Always sync the session ref — including null — so an FNSKU scan that
+    // explicitly clears scanSessionId doesn't leave a stale tracking session
+    // that would cause add-serial validation to reject subsequent serial scans.
+    if (nextOrder.scanSessionId !== undefined) {
+      scanSessionIdRef.current = nextOrder.scanSessionId ?? null;
     }
     const shouldShow = options?.preserveHidden ? isActiveOrderVisible : true;
     setIsActiveOrderVisible(shouldShow);
@@ -347,11 +349,37 @@ export function useStationTestingController({
     return () => window.removeEventListener('tech-undo-applied' as any, handleUndoApplied as any);
   }, [activeOrder]);
 
+  useEffect(() => {
+    const handleTechLogRemoved = (e: any) => {
+      if (!activeOrder) return;
+      const { tracking, fnsku } = e?.detail ?? {};
+      const activeTracking = String(activeOrder.tracking || '').trim().toUpperCase();
+      const activeFnsku = String(activeOrder.fnsku || '').trim().toUpperCase();
+      const eventTracking = String(tracking || '').trim().toUpperCase();
+      const eventFnsku = String(fnsku || '').trim().toUpperCase();
+      const matchesByTracking = eventTracking && activeTracking === eventTracking;
+      // Match by FNSKU regardless of sourceKind — tech_serial rows that
+      // belong to an FNSKU log still carry the fnsku field.
+      const matchesByFnsku =
+        activeFnsku &&
+        eventFnsku &&
+        (activeFnsku === eventFnsku || activeTracking === eventFnsku);
+      if (!matchesByTracking && !matchesByFnsku) return;
+      syncActiveOrderState(null);
+    };
+    window.addEventListener('tech-log-removed' as any, handleTechLogRemoved as any);
+    return () => window.removeEventListener('tech-log-removed' as any, handleTechLogRemoved as any);
+  }, [activeOrder]);
+
   const handleFnskuScan = async (fnskuInput: string) => {
     setIsLoading(true);
     try {
       const fnsku = fnskuInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const res = await fetch(`/api/tech/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&techId=${userId}`);
+      const res = await fetch('/api/tech/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'FNSKU', value: fnsku, techId: userId }),
+      });
       const data = await res.json();
 
       if (!data.found) {
@@ -365,6 +393,8 @@ export function useStationTestingController({
         id: data.order.id ?? null,
         orderId: data.order.orderId ?? 'FNSKU',
         fnsku,
+        fnskuLogId: data.fnskuLogId ?? null,
+        salId: data.salId ?? null,
         productTitle: data.order.productTitle ?? data.order.tracking ?? fnsku,
         itemNumber: data.order.itemNumber ?? null,
         sku: data.order.sku ?? 'N/A',
@@ -379,6 +409,8 @@ export function useStationTestingController({
         createdAt: data.order.createdAt || null,
         orderFound: data.orderFound !== false,
         sourceType: 'fba',
+        scanSessionId: data.scanSessionId ?? null,
+        inlineMicrocopy: data.catalogMessage ?? null,
       });
 
       const serialCount = data.order.serialNumbers?.length || 0;
@@ -399,11 +431,12 @@ export function useStationTestingController({
 
       onFnskuOrderLoadedRef.current?.();
 
-      if (data.fnskuSalId) {
+      if (data.salId || data.fnskuSalId) {
+        const eventSalId = data.salId ?? data.fnskuSalId;
         window.dispatchEvent(new CustomEvent('tech-log-added', {
           detail: {
-            id: -1 * Number(data.fnskuSalId),
-            source_row_id: Number(data.fnskuSalId),
+            id: -1 * Number(eventSalId),
+            source_row_id: Number(eventSalId),
             source_kind: 'fba_scan',
             tech_serial_id: null,
             created_at: data.order.testDateTime ?? data.order.createdAt ?? null,
@@ -541,11 +574,12 @@ export function useStationTestingController({
       if (onTrackingScan) onTrackingScan();
       setIsLoading(true);
       try {
-        const res = await fetch('/api/tech/scan-tracking', {
+        const res = await fetch('/api/tech/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            tracking: input,
+            type: 'TRACKING',
+            value: input,
             techId: userId,
             idempotencyKey: newStationIdempotencyKey(),
           }),
@@ -557,22 +591,23 @@ export function useStationTestingController({
           const msg = data?.error
             ? `Scan error: ${data.error}`
             : 'Tracking number not found — logged to exceptions queue.';
-          setTrackingNotFoundAlert(msg);
+          setErrorMessage(msg);
           syncActiveOrderState(null);
           setResolvedManuals([]);
           return;
         }
 
-        // Tracking scan was processed but the order isn't in the system yet
-        if (data.orderFound === false) {
-          setTrackingNotFoundAlert(
-            data.warning || 'Order not in system — tracking logged for reconciliation.'
-          );
-        }
+        // Tracking scan was processed but the order isn't in the system yet.
+        // Keep the message inside the active order card instead of a separate alert bubble.
+        const trackingMicrocopy =
+          data.orderFound === false && !data.fnskuLogId
+            ? (data.warning || 'Order not in system — tracking logged for reconciliation.')
+            : null;
 
         syncActiveOrderState({
           id: data.order.id,
           orderId: data.order.orderId,
+          salId: data.salId ?? null,
           productTitle: data.order.productTitle,
           itemNumber: data.order.itemNumber ?? null,
           sku: data.order.sku,
@@ -587,6 +622,7 @@ export function useStationTestingController({
           createdAt: data.order.createdAt || null,
           orderFound: data.orderFound !== false,
           scanSessionId: typeof data.scanSessionId === 'string' ? data.scanSessionId : null,
+          inlineMicrocopy: trackingMicrocopy,
         });
 
         const serialCount = data.order.serialNumbers?.length || 0;
@@ -859,8 +895,13 @@ export function useStationTestingController({
               ? data.scanSessionId
               : contextOrder.scanSessionId ?? scanSessionIdRef.current,
         };
+        // FBA/FNSKU orders always have orderFound=false (they don't map to an orders row),
+        // so we must exclude them from the exception-card auto-clear logic. Without this,
+        // the card disappears after the very first serial and subsequent serials lose context.
         const completedExceptionOrder =
-          nextOrder.orderFound === false && isOrderComplete(nextOrder);
+          nextOrder.orderFound === false &&
+          nextOrder.sourceType !== 'fba' &&
+          isOrderComplete(nextOrder);
 
         if (completedExceptionOrder) {
           syncActiveOrderState(null);
@@ -921,46 +962,6 @@ export function useStationTestingController({
     inputRef.current?.focus();
   };
 
-  const handleSearch = async () => {
-    const raw = searchQuery.trim();
-    if (!raw) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      // Only apply last-8-digit normalization when the query looks like a
-      // pure tracking number (all digits/alphanumeric, no spaces).
-      // Product-title and SKU searches should be passed as-is so that letters
-      // are not stripped.
-      const digitsOnly = raw.replace(/\D/g, '');
-      const looksLikeTracking = digitsOnly.length >= 8 && digitsOnly.length === raw.replace(/\s/g, '').length;
-      const searchValue = looksLikeTracking ? normalizeTrackingQuery(raw) : raw;
-
-      const res = await fetch(`/api/shipped/search?q=${encodeURIComponent(searchValue)}`);
-      if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-      const data = await res.json();
-
-      if (Array.isArray(data.results)) {
-        setSearchResults(data.results);
-        setShowSearchResults(true);
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  };
-
   return {
     inputValue,
     setInputValue,
@@ -974,20 +975,10 @@ export function useStationTestingController({
     trackingNotFoundAlert,
     resolvedManuals,
     isManualLoading,
-    searchQuery,
-    setSearchQuery,
-    searchResults,
-    isSearching,
-    showSearchResults,
-    setShowSearchResults,
     activeColor,
     handleSubmit,
-    handleSearch,
-    handleSearchKeyPress,
     triggerGlobalRefresh,
     clearFeedback,
-    resolveManual,
-    saveManual,
     reopenLastActiveOrderCard,
   };
 }

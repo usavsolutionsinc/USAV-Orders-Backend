@@ -155,7 +155,9 @@ export async function GET(req: NextRequest) {
                 test_data.tested_by,
                 test_data.test_date_time,
                 tested_staff.name AS tested_by_name,
-                tester_staff.name AS tester_name
+                tester_staff.name AS tester_name,
+                sal.fnsku,
+                (NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), ''))::bigint AS fnsku_log_id
             FROM station_activity_logs sal
             LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id

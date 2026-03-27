@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, X } from '@/components/Icons';
+import { Check, Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, X } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
 import { formatDateTimePST, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -175,12 +175,16 @@ function ShippingSerialNumberRow({
   trackingNumber,
   serialNumber,
   techId,
+  fnskuLogId,
+  salId,
   onUpdate,
 }: {
   rowId: number;
   trackingNumber: string | null | undefined;
   serialNumber: string | null | undefined;
   techId?: number | null;
+  fnskuLogId?: number | null;
+  salId?: number | null;
   onUpdate?: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -303,8 +307,8 @@ function ShippingSerialNumberRow({
   const normalizedSerialNumber = normalizedRows.join(', ');
 
   const saveSerialRows = async (rowsToSave: string[]): Promise<boolean> => {
-    if (!trackingNumber) {
-      setError('Tracking number is required to update serials.');
+    if (!trackingNumber && !fnskuLogId && !salId) {
+      setError('Tracking number or scan session is required to update serials.');
       setSaveState('error');
       return false;
     }
@@ -324,15 +328,28 @@ function ShippingSerialNumberRow({
     setSaveState('saving');
 
     try {
-      const response = await fetch('/api/tech/update-serials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tracking: trackingNumber,
-          serialNumbers: rowsToSave,
-          techId: techId ?? null,
-        }),
-      });
+      // Prefer new SAL-based API when salId is available
+      const response = salId
+        ? await fetch('/api/tech/serial', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update',
+              salId,
+              serials: rowsToSave,
+              techId: techId ?? null,
+            }),
+          })
+        : await fetch('/api/tech/update-serials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tracking: trackingNumber || null,
+              serialNumbers: rowsToSave,
+              techId: techId ?? null,
+              fnskuLogId: fnskuLogId ?? null,
+            }),
+          });
 
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.success) {
@@ -407,6 +424,8 @@ function ShippingSerialNumberRow({
   return (
     <DetailsPanelRow
       label="Serial Number"
+      dividerClassName="border-b border-gray-100"
+      className="!border-b !border-gray-100"
       actions={(
         <div className="flex items-center gap-1.5 text-gray-400">
           <InlineSaveIndicator state={saveState} />
@@ -480,8 +499,6 @@ function ShippingSerialNumberRow({
           </button>
         </div>
       )}
-      dividerClassName="border-b border-gray-100"
-      className="!border-b !border-gray-100"
     >
       {isEditing ? (
         <div>
@@ -502,8 +519,34 @@ function ShippingSerialNumberRow({
                   scheduleSkuColonExpand(index, nextValue);
                 }}
                 placeholder={`Serial ${index + 1} · or SKU:tag`}
-                className="flex-1 border-0 bg-transparent px-0 py-2 text-sm font-mono font-bold text-gray-900 outline-none focus:ring-0"
+                className="flex-1 border-0 bg-transparent px-0 py-1.5 text-sm font-mono font-bold text-gray-900 outline-none focus:ring-0 placeholder:font-dm-sans placeholder:font-normal placeholder:text-gray-400"
               />
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const text = await navigator.clipboard.readText();
+                    if (text.trim()) {
+                      const nextValue = text.trim().toUpperCase();
+                      setSerialRows((current) => {
+                        const next = current.map((row, rowIndex) => (rowIndex === index ? nextValue : row));
+                        serialRowsRef.current = next;
+                        return next;
+                      });
+                      setError(null);
+                      setSaveState('idle');
+                      scheduleSkuColonExpand(index, nextValue);
+                    }
+                  } catch {
+                    // noop
+                  }
+                }}
+                className="shrink-0 text-gray-400 transition-colors hover:text-blue-600"
+                aria-label={`Paste serial ${index + 1} from clipboard`}
+                title="Paste from clipboard"
+              >
+                <Clipboard className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))}
         </div>
@@ -511,8 +554,10 @@ function ShippingSerialNumberRow({
         <button
           type="button"
           onClick={() => {
-            setSerialRows(parseSerialRows(lastSavedSerialNumberRef.current));
-            serialRowsRef.current = parseSerialRows(lastSavedSerialNumberRef.current);
+            const rows = parseSerialRows(lastSavedSerialNumberRef.current);
+            const initial = rows.length > 0 ? rows : [''];
+            setSerialRows(initial);
+            serialRowsRef.current = initial;
             setIsEditing(true);
             setError(null);
           }}
@@ -521,11 +566,38 @@ function ShippingSerialNumberRow({
           {normalizedRows.length > 0 ? (
             <div className="divide-y divide-gray-100">
               {normalizedRows.map((serial, idx) => (
-                <p key={idx} className="truncate py-1.5 last:pb-0 font-mono text-sm font-bold text-gray-900">{serial}</p>
+                <p key={idx} className="truncate py-1 last:pb-0 font-mono text-sm font-bold text-gray-900">{serial}</p>
               ))}
             </div>
           ) : (
-            <p className="py-2 text-sm font-mono text-gray-400">No serials — click to add</p>
+            <div className="flex items-center justify-between gap-2 py-1">
+              <p className="text-sm font-dm-sans font-normal text-gray-400">No serials — click to add</p>
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    const text = await navigator.clipboard.readText();
+                    const pasted = text.trim().toUpperCase();
+                    const initial = pasted ? [pasted] : [''];
+                    setSerialRows(initial);
+                    serialRowsRef.current = initial;
+                    setIsEditing(true);
+                    setError(null);
+                  } catch {
+                    setSerialRows(['']);
+                    serialRowsRef.current = [''];
+                    setIsEditing(true);
+                    setError(null);
+                  }
+                }}
+                className="shrink-0 text-gray-400 transition-colors hover:text-blue-600"
+                aria-label="Paste serial from clipboard"
+                title="Paste from clipboard"
+              >
+                <Clipboard className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
         </button>
       )}
@@ -551,8 +623,6 @@ function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
   return (
     <DetailsPanelRow
       label="From Prepacked SKU"
-      dividerClassName="border-b border-gray-100"
-      className="!border-b !border-gray-100"
       actions={
         hasPhotos ? (
           <span className="flex items-center gap-1 text-indigo-500 pointer-events-none">
@@ -647,7 +717,7 @@ export function ShippingInformationSection({
               {serialNumberRows.length > 0 ? (
                 <div className="divide-y divide-gray-100">
                   {serialNumberRows.map((serial, idx) => (
-                    <p key={idx} className="break-all py-1 last:pb-0 font-mono text-sm font-bold text-gray-900">{serial}</p>
+                    <p key={idx} className="truncate py-1 last:pb-0 font-mono text-sm font-bold text-gray-900">{serial}</p>
                   ))}
                 </div>
               ) : (
@@ -771,6 +841,8 @@ export function ShippingInformationSection({
               trackingNumber={shipped.shipping_tracking_number}
               serialNumber={shipped.serial_number}
               techId={shipped.tested_by ?? shipped.tester_id ?? null}
+              fnskuLogId={shipped.fnsku_log_id ?? null}
+              salId={shipped.sal_id ?? null}
               onUpdate={onUpdate}
             />
           ) : null}

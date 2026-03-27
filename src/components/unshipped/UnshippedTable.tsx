@@ -43,6 +43,7 @@ function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
   if (notes !== undefined) patched.notes = notes;
   if (itemNumber !== undefined) patched.item_number = itemNumber;
   if (condition !== undefined) patched.condition = condition;
+  if (detail.shippingTrackingNumber !== undefined) patched.shipping_tracking_number = detail.shippingTrackingNumber;
 
   return patched;
 }
@@ -53,8 +54,8 @@ export function UnshippedTable({
   strictSearchScope = false,
   bannerTitle,
   bannerSubtitle,
-  searchEmptyTitle = 'No awaiting orders found',
-  searchResultLabel = 'awaiting orders',
+  searchEmptyTitle = 'No orders found',
+  searchResultLabel = 'orders needing tracking',
   clearSearchLabel = 'Show All Awaiting Orders',
 }: UnshippedTableProps = {}) {
   const pathname = usePathname();
@@ -89,12 +90,14 @@ export function UnshippedTable({
         testerName: d.testerName,
         packerName: d.packerName,
         deadlineAt: d.deadlineAt,
+        shippingTrackingNumber: d.shippingTrackingNumber,
       };
 
       const hasAnyChange =
         detail.testerId !== undefined ||
         detail.packerId !== undefined ||
-        detail.deadlineAt !== undefined;
+        detail.deadlineAt !== undefined ||
+        detail.shippingTrackingNumber !== undefined;
       if (!hasAnyChange) return;
 
       queryClient.setQueriesData(
@@ -130,7 +133,8 @@ export function UnshippedTable({
         detail.outOfStock !== undefined ||
         detail.notes !== undefined ||
         detail.itemNumber !== undefined ||
-        detail.condition !== undefined;
+        detail.condition !== undefined ||
+        detail.shippingTrackingNumber !== undefined;
       if (!hasAnyChange) return;
 
       const idSet = new Set<number>(orderIds.map(Number));
@@ -175,7 +179,7 @@ export function UnshippedTable({
       isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}
       onClearSearch={clearSearch}
-      emptyMessage="No unshipped order records found"
+      emptyMessage="No orders needing tracking"
       searchEmptyTitle={searchEmptyTitle}
       searchResultLabel={searchResultLabel}
       clearSearchLabel={clearSearchLabel}

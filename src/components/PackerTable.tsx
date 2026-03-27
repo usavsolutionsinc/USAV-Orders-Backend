@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Loader2, Search } from './Icons';
-import { FnskuChip, OrderIdChip, TrackingChip, getLast4 } from './ui/CopyChip';
+import { FnskuChip, OrderIdChip, TrackingChip, PlatformChip, getLast4 } from './ui/CopyChip';
+import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
+import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { OverlaySearchBar } from './ui/OverlaySearchBar';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -403,18 +405,32 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                             <div className="flex items-center gap-3 shrink-0">
                               {showFnskuChip ? (
                                 <FnskuChip value={fnskuValue} />
-                              ) : (
-                                <>
-                                  <OrderIdChip
-                                    value={record.order_id || ''}
-                                    display={getLast4(record.order_id)}
-                                  />
-                                  <TrackingChip
-                                    value={record.shipping_tracking_number || ''}
-                                    display={getLast4(record.shipping_tracking_number)}
-                                  />
-                                </>
-                              )}
+                              ) : (() => {
+                                const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
+                                return (
+                                  <>
+                                    {plat ? (
+                                      <PlatformChip
+                                        label={plat}
+                                        underlineClass={getOrderPlatformBorderColor(plat)}
+                                        iconClass={record.item_number ? getOrderPlatformColor(plat) : 'text-gray-300'}
+                                        onClick={() => {
+                                          const url = getExternalUrlByItemNumber(record.item_number);
+                                          if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                        }}
+                                      />
+                                    ) : null}
+                                    <OrderIdChip
+                                      value={record.order_id || ''}
+                                      display={getLast4(record.order_id)}
+                                    />
+                                    <TrackingChip
+                                      value={record.shipping_tracking_number || ''}
+                                      display={getLast4(record.shipping_tracking_number)}
+                                    />
+                                  </>
+                                );
+                              })()}
                             </div>
                           </motion.div>
                         );

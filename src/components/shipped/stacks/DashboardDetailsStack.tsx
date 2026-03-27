@@ -291,11 +291,9 @@ export function DashboardDetailsStack({
             onBlur: () => { void saveInlineFields(); },
             onShipByDateBlur: () => { void fieldSave.saveShipByDate(shipByDate); },
           }}
-          productDetailsFirst={false}
           showPackingPhotos={false}
           showPackingInformation={false}
           showTestingInformation={false}
-          showSerialNumber
           showReturnInformation={showReturnInformation}
         />
       </motion.div>

@@ -7,6 +7,7 @@ import { ConnectionsSidebarPanel } from '@/components/sidebar/ConnectionsSidebar
 import { GoalsSidebarPanel } from '@/components/sidebar/GoalsSidebarPanel';
 import { StaffAdminSidebarPanel } from '@/components/sidebar/StaffAdminSidebarPanel';
 import { AdminFbaSidebarPanel } from '@/components/fba/sidebar';
+import { FeaturesSidebarPanel } from '@/components/sidebar/FeaturesSidebarPanel';
 
 interface AdminSidebarProps {
   activeSection: AdminSection;
@@ -26,6 +27,8 @@ export function AdminSidebar({
       <StaffAdminSidebarPanel />
     ) : activeSection === 'fba' ? (
       <AdminFbaSidebarPanel />
+    ) : activeSection === 'features' ? (
+      <FeaturesSidebarPanel />
     ) : activeSection === 'connections' ? (
       <ConnectionsSidebarPanel />
     ) : null;

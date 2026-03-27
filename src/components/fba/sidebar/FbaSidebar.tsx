@@ -4,23 +4,21 @@ import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
-import { resolveFbaPlanQtyBase } from '@/lib/fba/qty';
 import { FbaFnskuScanToast } from '@/components/fba/sidebar/FbaFnskuScanToast';
-import { FBA_OPEN_CREATE_PLAN_EVENT } from '@/components/fba/FbaCreatePlanModal';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { TabSwitch } from '@/components/ui/TabSwitch';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
-import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
+import { sidebarHeaderBandClass, sidebarHeaderControlClass } from '@/components/layout/header-shell';
 import StaffSelector from '@/components/StaffSelector';
+import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
-import { FbaPlansUpNext } from '@/components/station/upnext/FbaPlansUpNext';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
 import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScanField';
 import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { getStaffThemeById } from '@/utils/staff-colors';
-import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
+import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
+import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
 const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
@@ -28,8 +26,12 @@ const FBA_SHIPMENTS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipments'
 const FBA_SHIPMENT_ITEMS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_items');
 const FBA_SHIPMENT_TRACKING_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_tracking');
 
-type FbaTab = 'summary' | 'shipped' | 'awaiting' | 'packed' | 'paired';
+type FbaTab = 'combine' | 'shipped';
 type PendingPlan = FbaPlanQueueItem;
+const FBA_VIEW_OPTIONS = [
+  { value: 'combine', label: 'Combine' },
+  { value: 'shipped', label: 'Shipped' },
+] as const;
 
 function emitOpenAddFba() {
   window.dispatchEvent(new CustomEvent('admin-fba-open-add'));
@@ -182,12 +184,7 @@ function FbaWorkspaceSidebarInner() {
   const staffDirectory = useActiveStaffDirectory();
 
   const rawTab = searchParams.get('tab');
-  const activeTab: FbaTab =
-    rawTab === 'shipped' ? 'shipped' :
-    rawTab === 'packed' ? 'packed' :
-    rawTab === 'paired' ? 'paired' :
-    rawTab === 'awaiting' ? 'awaiting' : 'summary';
-  const activePlanId = searchParams.get('plan') ? Number(searchParams.get('plan')) : null;
+  const activeTab: FbaTab = rawTab === 'shipped' ? 'shipped' : 'combine';
 
   // Board selection: listen for selection events from FbaBoardTable
   const [boardSelection, setBoardSelection] = useState<FbaBoardItem[]>([]);
@@ -252,10 +249,7 @@ function FbaWorkspaceSidebarInner() {
   const urlHydratedRef = useRef(false);
 
   const [pendingPlans, setPendingPlans] = useState<PendingPlan[]>([]);
-  const [plansLoading, setPlansLoading] = useState(false);
   const [plansError, setPlansError] = useState<string | null>(null);
-
-  const [qtySavingPlanId, setQtySavingPlanId] = useState<number | null>(null);
 
   const refreshToken = Number(searchParams.get('r') || 0);
 
@@ -275,7 +269,7 @@ function FbaWorkspaceSidebarInner() {
         else params.delete('q');
       }
       if (patch.tab !== undefined) {
-        if (patch.tab === 'summary') params.delete('tab');
+        if (patch.tab === 'combine') params.delete('tab');
         else params.set('tab', patch.tab);
       }
       if (patch.r !== undefined) params.set('r', patch.r);
@@ -306,36 +300,6 @@ function FbaWorkspaceSidebarInner() {
     [router, searchParams]
   );
 
-  const handleTabChange = useCallback(
-    (tabId: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (tabId === 'board') {
-        params.delete('tab');
-      } else {
-        params.set('tab', tabId);
-      }
-      params.delete('details');
-      params.delete('main');
-      params.delete('mode');
-      const q = params.toString();
-      router.replace(q ? `/fba?${q}` : '/fba');
-    },
-    [router, searchParams],
-  );
-
-  const boardTabs = useMemo(
-    () => [
-      { id: 'board', label: 'Combine', color: 'purple' as const },
-      { id: 'paired', label: 'Review', color: 'green' as const },
-      { id: 'shipped', label: 'Shipped', color: 'gray' as const },
-    ],
-    [],
-  );
-
-  const tabSwitchActiveId =
-    activeTab === 'summary' || activeTab === 'awaiting' || activeTab === 'packed'
-      ? 'board' : activeTab;
-
   const handleSelectAll = useCallback(() => {
     const action = boardSelectionCount.selected === boardSelectionCount.total && boardSelectionCount.total > 0
       ? 'none' : 'all';
@@ -361,7 +325,6 @@ function FbaWorkspaceSidebarInner() {
   }, [localSearch, activeTab]);
 
   const loadPendingPlans = useCallback(async () => {
-    setPlansLoading(true);
     setPlansError(null);
     try {
       const res = await fetch('/api/fba/shipments?status=PLANNED&limit=50', { cache: 'no-store' });
@@ -385,64 +348,39 @@ function FbaWorkspaceSidebarInner() {
           shipped_item_count: Number(s.shipped_item_count ?? s.shipped_items) || 0,
           created_by_name: s.created_by_name || null,
           created_at: s.created_at,
+          amazon_shipment_id: s.amazon_shipment_id ?? null,
+          tracking_numbers: Array.isArray(s.tracking_numbers) ? s.tracking_numbers : [],
         }))
       );
     } catch (err: any) {
       setPlansError(err?.message || 'Could not load plans');
-    } finally {
-      setPlansLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (activeTab !== 'shipped' && activeTab !== 'paired') loadPendingPlans();
+    if (activeTab !== 'shipped') loadPendingPlans();
   }, [activeTab, refreshToken, loadPendingPlans]);
 
   useAblyChannel(FBA_SHIPMENT_ITEMS_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab === 'shipped' || activeTab === 'paired') return;
+    if (activeTab === 'shipped') return;
     void loadPendingPlans();
   });
 
   useAblyChannel(FBA_SHIPMENTS_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab === 'shipped' || activeTab === 'paired') return;
+    if (activeTab === 'shipped') return;
     void loadPendingPlans();
   });
 
   useAblyChannel(FBA_SHIPMENT_TRACKING_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab === 'shipped' || activeTab === 'paired') return;
+    if (activeTab === 'shipped') return;
     void loadPendingPlans();
   });
 
   useEffect(() => {
-    if (activeTab === 'shipped' || activeTab === 'paired') return;
+    if (activeTab === 'shipped') return;
     const interval = setInterval(() => loadPendingPlans(), 60_000);
     return () => clearInterval(interval);
   }, [activeTab, loadPendingPlans]);
-
-  const handleCommitPlanQty = useCallback(
-    async (plan: PendingPlan, nextQty: number) => {
-      if (plan.total_items !== 1 || plan.ready_item_count > 0) return;
-      setQtySavingPlanId(plan.id);
-      try {
-        const itemsRes = await fetch(`/api/fba/shipments/${plan.id}/items`, { cache: 'no-store' });
-        const itemsJson = await itemsRes.json();
-        const items = Array.isArray(itemsJson?.items) ? itemsJson.items : [];
-        if (items.length !== 1) return;
-        const itemId = items[0].id;
-        const patchRes = await fetch(`/api/fba/shipments/${plan.id}/items/${itemId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expected_qty: nextQty }),
-        });
-        if (patchRes.ok) loadPendingPlans();
-      } catch (err: any) {
-        setPlansError(err?.message || 'Could not save qty');
-      } finally {
-        setQtySavingPlanId(null);
-      }
-    },
-    [loadPendingPlans]
-  );
 
   useEffect(() => {
     const h = () => loadPendingPlans();
@@ -458,30 +396,7 @@ function FbaWorkspaceSidebarInner() {
     };
   }, [loadPendingPlans]);
 
-  const plansByDay = useMemo(() => {
-    const map = new Map<string, PendingPlan[]>();
-    for (const p of pendingPlans) {
-      const key = p.due_date ? String(p.due_date).slice(0, 10) : '__nodate__';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(p);
-    }
-    const keys = Array.from(map.keys()).sort((a, b) => {
-      if (a === '__nodate__') return 1;
-      if (b === '__nodate__') return -1;
-      return a.localeCompare(b);
-    });
-    return keys.map((dayKey) => ({ dayKey, plans: map.get(dayKey)! }));
-  }, [pendingPlans]);
-
-  const summaryPlansListProps = {
-    plansLoading,
-    pendingPlans,
-    plansByDay,
-    activePlanId,
-    stationTheme,
-  };
-
-  const isBoard = activeTab !== 'shipped';
+  const isBoard = activeTab === 'combine';
   const allBoardSelected =
     boardSelectionCount.total > 0 && boardSelectionCount.selected === boardSelectionCount.total;
   const someBoardSelected = boardSelectionCount.selected > 0;
@@ -490,17 +405,31 @@ function FbaWorkspaceSidebarInner() {
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
       {/* Staff selector header */}
       <div className={sidebarHeaderBandClass}>
-        <StaffSelector
-          role="all"
-          variant="boxy"
-          selectedStaffId={staffIdNum}
-          onSelect={(id) => {
-            const params = new URLSearchParams(searchParams.toString());
-            params.set('staffId', String(id));
-            const q = params.toString();
-            router.replace(q ? `/fba?${q}` : '/fba');
-          }}
-        />
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-400">
+          <div className="min-w-0">
+            <StaffSelector
+              role="all"
+              variant="boxy"
+              selectedStaffId={staffIdNum}
+              onSelect={(id) => {
+                const params = new URLSearchParams(searchParams.toString());
+                params.set('staffId', String(id));
+                const q = params.toString();
+                router.replace(q ? `/fba?${q}` : '/fba');
+              }}
+            />
+          </div>
+          <div className="relative min-w-0">
+            <ViewDropdown
+              options={FBA_VIEW_OPTIONS}
+              value={activeTab}
+              onChange={(nextView) => updateFbaParams({ tab: nextView as FbaTab })}
+              variant="boxy"
+              buttonClassName={sidebarHeaderControlClass}
+              optionClassName="text-[10px] font-black tracking-wider"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Single scroll container */}
@@ -512,6 +441,7 @@ function FbaWorkspaceSidebarInner() {
               staffName={staffName}
               staffId={staffIdFromUrl ?? undefined}
               staffRole={staffRoleForTheme}
+              showTrackingCard={false}
             />
           </div>
         )}
@@ -533,19 +463,9 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Tab switch — below scan/search bar */}
-        <div className={`${sidebarSubBandClass} px-3 py-2`}>
-          <TabSwitch
-            tabs={boardTabs}
-            activeTab={tabSwitchActiveId}
-            onTabChange={handleTabChange}
-            highContrast
-          />
-        </div>
-
-        {/* Select all row — board tabs only */}
+        {/* Select all row — fixed under scan bar */}
         {isBoard && boardSelectionCount.total > 0 && (
-          <div className="flex items-center gap-2.5 border-b border-gray-100 px-3 py-2">
+          <div className="sticky top-0 z-20 flex items-center gap-2.5 border-b border-gray-100 bg-white px-3 py-2">
             <PrintTableCheckbox
               checked={allBoardSelected}
               indeterminate={someBoardSelected && !allBoardSelected}
@@ -568,13 +488,21 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Pairing panel — shows when items selected on board or paired */}
+        {/* Selection review card below select-all */}
         {isBoard && boardSelection.length > 0 && (
           <FbaPairedReviewPanel
             selectedItems={boardSelection}
             stationTheme={stationTheme}
           />
         )}
+
+        {activeTab === 'shipped' ? (
+          <FbaShippedTable
+            stationTheme={stationTheme}
+            searchQuery={localSearch}
+            embedded
+          />
+        ) : null}
 
         {/* Station FNSKU scan toast */}
         {isBoard && (
@@ -588,18 +516,7 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Tab-specific content */}
-        {activeTab !== 'shipped' && activeTab !== 'paired' ? (
-          <div
-            aria-label="Open plans"
-            className="w-full shrink-0 border-t border-gray-100"
-          >
-            <FbaPlansUpNext
-              {...summaryPlansListProps}
-              onCreatePlan={() => window.dispatchEvent(new CustomEvent(FBA_OPEN_CREATE_PLAN_EVENT))}
-            />
-          </div>
-        ) : null}
+        {/* Pending shipment cards removed: combine flow is table-first only */}
       </div>
     </div>
   );

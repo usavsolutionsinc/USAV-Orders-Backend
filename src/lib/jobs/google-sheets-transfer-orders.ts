@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { sheets as googleSheets } from '@googleapis/sheets';
 import { db } from '@/lib/drizzle/db';
 import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
@@ -141,7 +141,7 @@ export async function runGoogleSheetsTransferOrders(
 
   try {
     const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const sheets = googleSheets({ version: 'v4', auth });
 
     const sourceSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SOURCE_SPREADSHEET_ID });
 

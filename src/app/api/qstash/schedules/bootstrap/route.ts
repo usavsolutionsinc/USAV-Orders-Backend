@@ -93,6 +93,13 @@ const HEAVY_JOB_SCHEDULES = [
     body: {},
     label: 'replenishment-sync',
   },
+  {
+    scheduleId: 'idempotency-cleanup-daily-3am-utc',
+    cron: '0 3 * * *',
+    path: '/api/qstash/cleanup/idempotency',
+    body: {},
+    label: 'idempotency-cleanup',
+  },
 ] as Array<{
   scheduleId: string;
   cron: string;

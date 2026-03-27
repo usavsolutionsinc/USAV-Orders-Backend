@@ -38,7 +38,8 @@ function getAsinUrl(value: string | null | undefined) {
 
 function getConditionLabel(value: string | null | undefined) {
   const raw = String(value || '').trim();
-  if (!raw) return 'No Condition';
+  const normalized = raw.toUpperCase().replace(/\s+/g, ' ');
+  if (!raw || normalized === 'FBA SCAN') return 'N/A';
   return raw.replaceAll('_', ' ');
 }
 
@@ -71,7 +72,7 @@ function buildWorkOrderRow(item: FBAQueueItem): WorkOrderRow {
     entityId: item.shipment_id,
     queueKey: 'fba_shipments',
     queueLabel: 'FBA Shipments',
-    title: String(item.plan_title || item.shipment_ref || `Shipment row #${item.shipment_id}`),
+    title: String(item.plan_title || item.shipment_ref || `Pending shipment #${item.shipment_id}`),
     subtitle: [item.fnsku, item.asin, item.sku].filter(Boolean).join(' • '),
     recordLabel: String(item.shipment_ref || `Row #${item.shipment_id}`),
     sourcePath: '/fba',
@@ -106,7 +107,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
   const asin = String(item.asin || '').trim();
   const asinUrl = getAsinUrl(asin);
   const conditionLabel = getConditionLabel(item.condition);
-  const planTitle = String(item.plan_title || item.shipment_ref || '').trim();
+  const pendingTitle = String(item.plan_title || item.shipment_ref || '').trim();
 
   const handleCopyAsin = async (e: MouseEvent) => {
     e.stopPropagation();
@@ -238,9 +239,9 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
               <div className="mt-3 border-t border-purple-100 px-3 pt-3" onClick={(e) => e.stopPropagation()}>
                 <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Plan ID</div>
+                    <div className="mb-1 text-gray-400">Pending Group</div>
                     <div className="text-[11px] font-mono text-gray-900 normal-case tracking-normal break-words">
-                      {planTitle || '—'}
+                      {pendingTitle || '—'}
                     </div>
                   </div>
 

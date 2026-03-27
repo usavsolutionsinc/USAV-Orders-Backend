@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
-import { OrderIdChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { OrderIdChip, TrackingChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
+import { PasteTrackingButton } from '@/components/ui/PasteTrackingButton';
+import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -80,6 +83,9 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
     (record.tracking_number as string | undefined) ||
     record.shipping_tracking_number ||
     '';
+  const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
+  const isFba = isFbaOrder(record.order_id, record.account_source);
+  const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
 
   return (
     <motion.div
@@ -142,8 +148,22 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
+        {platformLabel && !isFba ? (
+          <PlatformChip
+            label={platformLabel}
+            underlineClass={platformLabel ? getOrderPlatformBorderColor(platformLabel) : ''}
+            iconClass={record.item_number ? platformColor : 'text-gray-300'}
+            onClick={() => {
+              const url = getExternalUrlByItemNumber(record.item_number);
+              if (url) window.open(url, '_blank', 'noopener,noreferrer');
+            }}
+          />
+        ) : null}
         <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
-        <TrackingChip value={trackingRaw} display={getLast4(trackingRaw)} />
+        {trackingRaw
+          ? <TrackingChip value={trackingRaw} display={getLast4(trackingRaw)} />
+          : <PasteTrackingButton orderId={Number(record.id)} />
+        }
       </div>
     </motion.div>
   );
@@ -162,6 +182,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.record.condition !== next.record.condition) return false;
   if (prev.record.order_id !== next.record.order_id) return false;
   if (prev.record.quantity !== next.record.quantity) return false;
+  if (prev.record.account_source !== next.record.account_source) return false;
+  if (prev.record.item_number !== next.record.item_number) return false;
   const prevTr =
     (prev.record.tracking_number as string | undefined) || prev.record.shipping_tracking_number || '';
   const nextTr =

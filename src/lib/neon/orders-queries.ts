@@ -56,6 +56,10 @@ export interface ShippedOrder {
   row_source?: 'order' | 'exception';
   exception_reason?: string | null;
   exception_status?: string | null;
+  fnsku?: string | null;
+  fnsku_log_id?: number | null;
+  /** SAL row id — single source of truth anchor for this scan session. */
+  sal_id?: number | null;
 }
 
 export interface ActiveOrder {

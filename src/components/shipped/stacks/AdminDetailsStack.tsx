@@ -192,7 +192,6 @@ export function AdminDetailsStack({
           onCopyAll={handleCopyAll}
           onUpdate={onOrderUpdated}
           mode="dashboard"
-          showAssignmentButton={false}
         />
       ) : selectedCount <= 1 ? (
         <div className="px-6 pb-8">

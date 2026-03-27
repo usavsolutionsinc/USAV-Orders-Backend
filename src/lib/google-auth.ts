@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { JWT } from 'google-auth-library';
 import { normalizeEnvValue, normalizeMultilineEnvValue } from '@/lib/env-utils';
 
 export function getGoogleAuth() {
@@ -12,7 +12,7 @@ export function getGoogleAuth() {
     const clientEmail = normalizeEnvValue(rawClientEmail);
     const normalizedPrivateKey = normalizeMultilineEnvValue(rawPrivateKey);
 
-    return new google.auth.JWT({
+    return new JWT({
         email: clientEmail,
         key: normalizedPrivateKey,
         scopes: [

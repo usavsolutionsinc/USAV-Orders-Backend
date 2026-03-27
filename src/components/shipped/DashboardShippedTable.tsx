@@ -175,6 +175,8 @@ export function DashboardShippedTable({
     tester_name: record.tester_name || null,
     packer_log_id: record.packer_log_id ?? null,
     station_activity_log_id: record.id,
+    fnsku: record.fnsku || null,
+    fnsku_log_id: record.fnsku_log_id ?? null,
   } as ShippedOrder), []);
 
   const toSearchResultRecord = useCallback((record: ShippedOrder): PackerRecord => ({

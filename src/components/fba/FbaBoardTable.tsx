@@ -25,6 +25,7 @@ export interface FbaBoardItem {
   destination_fc: string | null;
   tracking_numbers: { tracking_number: string; carrier: string; label: string }[];
   condition: string | null;
+  shipment_ids?: number[];
 }
 
 interface FbaBoardTableProps {
@@ -45,16 +46,13 @@ const STATUS_SORT_ORDER: Record<string, number> = {
 };
 
 function sortBoardItems(a: FbaBoardItem, b: FbaBoardItem) {
-  const fa = a.fnsku.toUpperCase();
-  const fb = b.fnsku.toUpperCase();
-  if (fa !== fb) return fa.localeCompare(fb);
-
   const aOrder = STATUS_SORT_ORDER[a.item_status.toUpperCase()] ?? 99;
   const bOrder = STATUS_SORT_ORDER[b.item_status.toUpperCase()] ?? 99;
   if (aOrder !== bOrder) return aOrder - bOrder;
 
-  const refCmp = (a.shipment_ref || '').localeCompare(b.shipment_ref || '');
-  if (refCmp !== 0) return refCmp;
+  const fa = a.fnsku.toUpperCase();
+  const fb = b.fnsku.toUpperCase();
+  if (fa !== fb) return fa.localeCompare(fb);
 
   return a.item_id - b.item_id;
 }
@@ -145,6 +143,20 @@ export function FbaBoardTable({
     };
     window.addEventListener('fba-board-select-by-day', selectByDayHandler);
 
+    const deselectByDayHandler = (e: Event) => {
+      const dueDate = (e as CustomEvent<string>).detail;
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const i of sortedItems) {
+          const itemDay = i.due_date ? String(i.due_date).slice(0, 10) : '';
+          if (itemDay === dueDate) next.delete(i.item_id);
+        }
+        emitSelection(next);
+        return next;
+      });
+    };
+    window.addEventListener('fba-board-deselect-by-day', deselectByDayHandler);
+
     const deselectHandler = (e: Event) => {
       const itemId = (e as CustomEvent<number>).detail;
       setSelectedIds((prev) => {
@@ -186,6 +198,7 @@ export function FbaBoardTable({
       window.removeEventListener('fba-board-toggle-all', handler);
       window.removeEventListener('fba-board-deselect-item', deselectHandler);
       window.removeEventListener('fba-board-select-by-day', selectByDayHandler);
+      window.removeEventListener('fba-board-deselect-by-day', deselectByDayHandler);
       window.removeEventListener('fba-board-select-by-fnsku', selectByFnskuHandler);
     };
   }, [sortedItems, emitSelection]);

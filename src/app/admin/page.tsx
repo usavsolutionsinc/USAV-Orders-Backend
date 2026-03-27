@@ -2,6 +2,7 @@ import { StaffManagementTab } from '@/components/admin/StaffManagementTab';
 import { ConnectionsManagementTab } from '@/components/admin/ConnectionsManagementTab';
 import { GoalsAnalyticsTab } from '@/components/admin/GoalsAnalyticsTab';
 import { FBAManagementTab } from '@/components/admin/FBAManagementTab';
+import { FeaturesManagementTab } from '@/components/admin/FeaturesManagementTab';
 import { ManualAssignmentTab } from '@/components/admin/ManualAssignmentTab';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 
@@ -38,6 +39,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             orderId={orderId}
             searchValue={sidebarSearch}
           />
+        ) : activeTab === 'features' ? (
+          <div className="h-full min-h-0 w-full">
+            <FeaturesManagementTab />
+          </div>
         ) : activeTab === 'connections' || activeTab === 'goals' || activeTab === 'staff' || activeTab === 'fba' ? (
           <div className="h-full min-h-0 w-full">
             {activeTab === 'connections' ? (

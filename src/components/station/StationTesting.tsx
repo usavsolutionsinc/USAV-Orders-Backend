@@ -50,7 +50,6 @@ export default function StationTesting({
     setActiveOrder,
     isActiveOrderVisible,
     errorMessage,
-    trackingNotFoundAlert,
     resolvedManuals,
     isManualLoading,
     handleSubmit,
@@ -131,15 +130,29 @@ export default function StationTesting({
       if (!activeOrder) return;
       const nextSerials = activeOrder.serialNumbers.filter((_, idx) => idx !== serialIndex);
 
-      const response = await fetch('/api/tech/update-serials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tracking: activeOrder.tracking,
-          serialNumbers: nextSerials,
-          techId: userId,
-        }),
-      });
+      // Use new unified serial endpoint with salId when available, fall back to old API
+      const useSalPath = activeOrder.salId != null;
+      const response = useSalPath
+        ? await fetch('/api/tech/serial', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'update',
+              salId: activeOrder.salId,
+              serials: nextSerials,
+              techId: userId,
+            }),
+          })
+        : await fetch('/api/tech/update-serials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tracking: activeOrder.tracking || null,
+              serialNumbers: nextSerials,
+              techId: userId,
+              fnskuLogId: activeOrder.fnskuLogId ?? null,
+            }),
+          });
 
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.success) {
@@ -265,7 +278,7 @@ export default function StationTesting({
             count={todayCount}
             goal={goal}
             label="- TODAY'S GOAL"
-            colorClass={activeColor.text}
+            theme={themeColor}
           />
 
           {/* ── ORDERS mode scan input ── */}
@@ -378,28 +391,15 @@ export default function StationTesting({
               )}
             />
 
-            <AnimatePresence>
-              {trackingNotFoundAlert && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={stationTween}
-                  role="status"
-                  aria-live="polite"
-                  className="mt-2 p-3 bg-red-50 text-red-700 rounded-xl border border-red-200 flex items-center gap-2"
-                >
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <p className="text-xs font-bold">{trackingNotFoundAlert}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.div>
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6 space-y-3">
           <AnimatePresence mode="wait">
-            {errorMessage && (
+            {/* Suppress stale errors while any scan is in-flight so they never
+                flash above a freshly-loaded FBA/order card. Errors set after
+                loading ends (e.g. serial add failure) still surface correctly. */}
+            {errorMessage && !isLoading && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}

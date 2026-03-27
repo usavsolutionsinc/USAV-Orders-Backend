@@ -11,19 +11,14 @@ import { Loader2, Package } from '@/components/Icons';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import type { FbaPlanQueueItem } from './upnext-types';
-import { FbaPlanCard } from './FbaPlanCard';
+import { FbaShipmentCard } from './FbaShipmentCard';
 
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
 const stationLayoutTween = { layout: { duration: 0.32, ease: STATION_EASE_HEIGHT } };
 
-type FbaTab = 'summary' | 'shipped';
-
-
-
 export interface FbaPlansUpNextProps {
   plansLoading: boolean;
   pendingPlans: FbaPlanQueueItem[];
-  plansByDay: { dayKey: string; plans: FbaPlanQueueItem[] }[];
   activePlanId: number | null;
   stationTheme: StationTheme;
   onCreatePlan?: () => void;
@@ -66,12 +61,20 @@ function EmptyPlansSlate({
 export function FbaPlansUpNext({
   plansLoading,
   pendingPlans,
-  plansByDay,
   activePlanId,
   stationTheme,
   onCreatePlan,
 }: FbaPlansUpNextProps) {
   const chrome = fbaSidebarThemeChrome[stationTheme];
+  const groupedShipments = pendingPlans.reduce((acc, row) => {
+    const trackingRows = Array.isArray(row.tracking_numbers) ? row.tracking_numbers : [];
+    const ups = trackingRows.find((t) => String(t.carrier || '').toUpperCase() === 'UPS');
+    const primary = String(ups?.tracking_number || trackingRows[0]?.tracking_number || '').toUpperCase();
+    const key = `${row.id}::${primary}`;
+    if (!acc.has(key)) acc.set(key, []);
+    acc.get(key)!.push(row);
+    return acc;
+  }, new Map<string, FbaPlanQueueItem[]>());
 
   return (
     <div className="space-y-3 px-1 pb-2">
@@ -84,8 +87,8 @@ export function FbaPlansUpNext({
       ) : (
         <LayoutGroup id="fba-open-plans-upnext">
           <motion.div layout transition={stationLayoutTween} className="space-y-2">
-            {plansByDay.map(({ dayKey, plans }) => (
-              <div key={dayKey}>
+            {Array.from(groupedShipments.entries()).map(([key, plans]) => (
+              <div key={key}>
                 <div className="flex flex-col">
                   <AnimatePresence mode="popLayout" initial={false}>
                     {plans.map((plan) => {
@@ -100,8 +103,8 @@ export function FbaPlansUpNext({
                           exit={{ opacity: 0 }}
                           className="min-w-0"
                         >
-                          <FbaPlanCard
-                            plan={plan}
+                          <FbaShipmentCard
+                            shipment={plan}
                             stationTheme={stationTheme}
                             isActive={isActive}
                           />

@@ -30,6 +30,28 @@ export function isFbaOrder(orderId: string | null | undefined, accountSource: st
   return normalizedOrderId.includes('FBA') || normalizedAccountSource === 'fba';
 }
 
+const PLATFORM_COLORS: Record<string, { text: string; border: string }> = {
+  amazon: { text: 'text-orange-600', border: 'border-orange-600' },
+  fba: { text: 'text-orange-600', border: 'border-orange-600' },
+  ebay: { text: 'text-yellow-400', border: 'border-yellow-400' },
+  ecwid: { text: 'text-blue-600', border: 'border-blue-600' },
+  walmart: { text: 'text-amber-800', border: 'border-amber-800' },
+  mercari: { text: 'text-purple-600', border: 'border-purple-600' },
+  shopify: { text: 'text-black', border: 'border-black' },
+};
+
+const DEFAULT_PLATFORM_COLOR = { text: 'text-gray-400', border: 'border-gray-400' };
+
+export function getOrderPlatformColor(label: string): string {
+  const key = label.toLowerCase().split(/\s*-\s*/)[0].trim();
+  return (PLATFORM_COLORS[key] || DEFAULT_PLATFORM_COLOR).text;
+}
+
+export function getOrderPlatformBorderColor(label: string): string {
+  const key = label.toLowerCase().split(/\s*-\s*/)[0].trim();
+  return (PLATFORM_COLORS[key] || DEFAULT_PLATFORM_COLOR).border;
+}
+
 export function getOrderSourceTag(
   orderId: string | null | undefined,
   accountSource: string | null | undefined,

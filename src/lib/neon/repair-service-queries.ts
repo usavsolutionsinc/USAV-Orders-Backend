@@ -35,6 +35,7 @@ export interface RSRecord {
   received_at?: string | null;
   intake_confirmed_at?: string | null;
   received_by_staff_id?: number | null;
+  customer_id?: number | null;
 }
 
 export const REPAIR_STATUS_OPTIONS = [
@@ -90,6 +91,7 @@ function mapRepairRow(row: any): RSRecord {
     received_at: normalizePSTTimestamp(row.received_at) || null,
     intake_confirmed_at: normalizePSTTimestamp(row.intake_confirmed_at) || null,
     received_by_staff_id: row.received_by_staff_id == null ? null : Number(row.received_by_staff_id),
+    customer_id: row.customer_id == null ? null : Number(row.customer_id),
   };
 }
 
@@ -149,7 +151,8 @@ export async function getAllRepairs(limit = 100, offset = 0, options?: { tab?: R
          delivered_at,
          received_at,
          intake_confirmed_at,
-         received_by_staff_id
+         received_by_staff_id,
+         customer_id
        FROM repair_service
        ${where}
        ORDER BY created_at DESC NULLS LAST, id DESC
@@ -189,7 +192,8 @@ export async function getRepairById(id: number): Promise<RSRecord | null> {
          delivered_at,
          received_at,
          intake_confirmed_at,
-         received_by_staff_id
+         received_by_staff_id,
+         customer_id
        FROM repair_service
        WHERE id = $1`,
       [id],
@@ -292,6 +296,7 @@ export async function updateRepairField(id: number, field: string, value: any): 
       'received_at',
       'intake_confirmed_at',
       'received_by_staff_id',
+      'customer_id',
     ];
 
     if (!validFields.includes(field)) throw new Error(`Invalid field: ${field}`);
@@ -326,6 +331,7 @@ export interface CreateRepairParams {
   receivedAt?: string | null;
   intakeConfirmedAt?: string | null;
   receivedByStaffId?: number | null;
+  customerId?: number | null;
 }
 
 export async function createRepair(params: CreateRepairParams): Promise<RSRecord> {
@@ -340,9 +346,9 @@ export async function createRepair(params: CreateRepairParams): Promise<RSRecord
        (
          created_at, updated_at, ticket_number, contact_info, product_title, price, issue, serial_number, notes, status,
          source_system, source_order_id, source_tracking_number, source_sku, intake_channel, incoming_status,
-         delivered_at, received_at, intake_confirmed_at, received_by_staff_id
+         delivered_at, received_at, intake_confirmed_at, received_by_staff_id, customer_id
        )
-     VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+     VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
      RETURNING id, ticket_number`,
     [
       createdAt,
@@ -364,6 +370,7 @@ export async function createRepair(params: CreateRepairParams): Promise<RSRecord
       receivedAt,
       intakeConfirmedAt,
       params.receivedByStaffId ?? null,
+      params.customerId ?? null,
     ],
   );
 
@@ -410,7 +417,8 @@ export async function searchRepairs(query: string, options?: { tab?: RepairTab }
          delivered_at,
          received_at,
          intake_confirmed_at,
-         received_by_staff_id
+         received_by_staff_id,
+         customer_id
        FROM repair_service
        ${where}
        ORDER BY created_at DESC NULLS LAST, id DESC

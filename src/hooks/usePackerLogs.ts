@@ -34,6 +34,8 @@ export interface PackerRecord {
   tester_name?: string | null;
   packed_by_name?: string | null;
   packer_photos_url: any[];
+  fnsku?: string | null;
+  fnsku_log_id?: number | null;
 }
 
 export interface UsePackerLogsOptions {

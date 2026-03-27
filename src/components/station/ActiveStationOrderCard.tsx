@@ -167,7 +167,9 @@ export default function ActiveStationOrderCard({
   const itemNumberValue = isEmptyDisplayValue(activeOrder.itemNumber)
     ? ''
     : String(activeOrder.itemNumber || '').trim();
-  const displayIdentifier = activeOrder.fnsku ? getLast4(activeOrder.fnsku) : getOrderIdLast4(activeOrder.orderId);
+  const displayIdentifier = orderVariant === 'fba'
+    ? getLast4(activeOrder.fnsku || activeOrder.tracking)
+    : getOrderIdLast4(activeOrder.orderId);
   const trackingUrl = getTrackingUrl(trackingNumber);
 
   const handleCopyValue = async (e: React.MouseEvent, key: CopyFieldKey, value: string) => {
@@ -265,6 +267,11 @@ export default function ActiveStationOrderCard({
             </span>
           </div>
           <h3 className="text-base font-black text-gray-900 leading-tight">{activeOrder.productTitle}</h3>
+          {activeOrder.inlineMicrocopy ? (
+            <p className="mt-2 text-[11px] font-semibold leading-snug text-emerald-700">
+              {activeOrder.inlineMicrocopy}
+            </p>
+          ) : null}
         </div>
       </button>
 

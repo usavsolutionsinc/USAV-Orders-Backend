@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
 import { orders, packerLogs } from '@/lib/drizzle/schema';
 import { eq, inArray } from 'drizzle-orm';
-import { google } from 'googleapis';
+import { sheets as googleSheets } from '@googleapis/sheets';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
@@ -73,7 +73,7 @@ async function executeUpdateNonshippedOrders() {
 
 async function executeSyncTechSerialNumbers() {
     const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const sheets = googleSheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
 
     const techSheets = [
@@ -241,7 +241,7 @@ async function executeSyncTechSerialNumbers() {
 
 async function executeSyncPackerLogs() {
     const auth = getGoogleAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const sheets = googleSheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
 
     const packerSheets = [

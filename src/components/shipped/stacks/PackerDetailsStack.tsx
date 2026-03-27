@@ -287,11 +287,7 @@ export function PackerDetailsStack({
         copiedAll={copiedAll}
         onCopyAll={onCopyAll}
         onUpdate={onUpdate}
-        productDetailsFirst={false}
-        showPackingPhotos
-        showPackingInformation
         showTestingInformation={false}
-        showSerialNumber
       />
 
       <section className="mx-8 pt-2">

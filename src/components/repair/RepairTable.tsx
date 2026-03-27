@@ -355,8 +355,8 @@ export function RepairTable({ filter }: RepairTableProps) {
                           </div>
                           <button
                             onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank', 'noopener,noreferrer')}
-                            className="p-1.5 bg-gray-50 hover:bg-orange-50 text-gray-400 hover:text-orange-600 rounded-lg transition-all"
-                            title="Print Repair Form"
+                            className="p-1.5 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
+                            title="View Repair Document"
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>

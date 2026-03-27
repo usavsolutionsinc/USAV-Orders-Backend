@@ -38,6 +38,7 @@ export interface FbaWorkspaceScanFieldProps {
   staffId?: number | string | null;
   staffRole?: 'technician' | 'packer';
   scanEnabled?: boolean;
+  showTrackingCard?: boolean;
 }
 
 /** Sidebar: Welcome + FBA goal + scan, plus guarded plan pairing for the active print selection. */
@@ -46,6 +47,7 @@ export function FbaWorkspaceScanField({
   staffId = null,
   staffRole = 'technician',
   scanEnabled = true,
+  showTrackingCard = true,
 }: FbaWorkspaceScanFieldProps) {
   const { clearSelection, patchTracking, selection, trackingByPlan } = useFbaWorkspace();
   const staffDirectory = useActiveStaffDirectory();
@@ -194,7 +196,7 @@ export function FbaWorkspaceScanField({
   ]);
 
   const selectedCount = selectedItems.length;
-  const showTrackingCard = scanEnabled && selectedCount > 0;
+  const shouldShowTrackingCard = showTrackingCard && scanEnabled && selectedCount > 0;
 
   return (
     <div className="min-h-0 space-y-2">
@@ -204,7 +206,7 @@ export function FbaWorkspaceScanField({
             <h2 className="text-xl font-black tracking-tighter text-gray-900">Welcome, {staffName}</h2>
           </div>
         </div>
-        <StationGoalBar count={0} goal={50} label="- FBA GOAL" colorClass={themeColors.text} />
+        <StationGoalBar count={0} goal={50} label="- FBA GOAL" theme={stationTheme} />
       </div>
 
       {scanEnabled ? (
@@ -220,7 +222,7 @@ export function FbaWorkspaceScanField({
       ) : null}
 
       <AnimatePresence initial={false} mode="wait">
-        {showTrackingCard ? (
+        {shouldShowTrackingCard ? (
           <motion.div
             key={`fba-tracking-${selectedPlanIds.join('-') || 'empty'}`}
             layout={false}

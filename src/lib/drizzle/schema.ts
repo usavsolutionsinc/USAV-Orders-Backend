@@ -64,6 +64,54 @@ export const favoriteSkuWorkspaces = pgTable('favorite_sku_workspaces', {
   pk: primaryKey({ columns: [table.favoriteId, table.workspaceKey] }),
 }));
 
+export const repairIssueTemplates = pgTable('repair_issue_templates', {
+  id: serial('id').primaryKey(),
+  favoriteSkuId: integer('favorite_sku_id').references(() => favoriteSkus.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  category: text('category'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const adminFeatureTypeEnum = pgEnum('admin_feature_type_enum', [
+  'feature',
+  'bug_fix',
+]);
+
+export const adminFeatureStatusEnum = pgEnum('admin_feature_status_enum', [
+  'backlog',
+  'in_progress',
+  'done',
+]);
+
+export const adminFeaturePriorityEnum = pgEnum('admin_feature_priority_enum', [
+  'low',
+  'medium',
+  'high',
+]);
+
+export const adminFeatures = pgTable('admin_features', {
+  id: serial('id').primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  type: adminFeatureTypeEnum('type').notNull().default('feature'),
+  status: adminFeatureStatusEnum('status').notNull().default('backlog'),
+  priority: adminFeaturePriorityEnum('priority').notNull().default('medium'),
+  pageArea: varchar('page_area', { length: 100 }),
+  sortOrder: integer('sort_order').notNull().default(100),
+  isActive: boolean('is_active').notNull().default(true),
+  assignedToStaffId: integer('assigned_to_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  updatedByStaffId: integer('updated_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  typeIdx: index('admin_features_type_idx').on(table.type),
+  statusOrderIdx: index('admin_features_status_order_idx').on(table.status, table.isActive, table.sortOrder),
+  updatedAtIdx: index('admin_features_updated_at_idx').on(table.updatedAt),
+}));
+
 export const qaStatusEnum = pgEnum('qa_status_enum', [
   'PENDING',
   'PASSED',
@@ -217,6 +265,8 @@ export const customers = pgTable('customers', {
   internalNotes: text('internal_notes'),
   zohoLastModified: timestamp('zoho_last_modified', { withTimezone: true }),
   syncedAt: timestamp('synced_at', { withTimezone: true }),
+  entityType: text('entity_type'),
+  entityId: integer('entity_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
@@ -740,9 +790,27 @@ export const repairService = pgTable('repair_service', {
   receivedAt: timestamp('received_at', { withTimezone: true }),
   intakeConfirmedAt: timestamp('intake_confirmed_at', { withTimezone: true }),
   receivedByStaffId: integer('received_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  customerId: integer('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Generic documents table for storing signed agreements, forms, etc.
+export const documents = pgTable('documents', {
+  id: serial('id').primaryKey(),
+  entityType: text('entity_type').notNull(),
+  entityId: integer('entity_id').notNull(),
+  documentType: text('document_type').notNull().default('intake_agreement'),
+  signatureUrl: text('signature_url'),
+  signerName: text('signer_name'),
+  signedAt: timestamp('signed_at', { withTimezone: true }),
+  documentData: jsonb('document_data').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
 
 // Packing data audit trail lives in packer_logs; photos in the unified photos table.
 
@@ -819,6 +887,8 @@ export const fbaFnskuLogs = pgTable('fba_fnsku_logs', {
   techSerialNumberId: bigint('tech_serial_number_id', { mode: 'number' }),
   fbaShipmentId: integer('fba_shipment_id').references(() => fbaShipments.id, { onDelete: 'set null' }),
   fbaShipmentItemId: integer('fba_shipment_item_id').references(() => fbaShipmentItems.id, { onDelete: 'set null' }),
+  /** FK to the SAL row that triggered this log entry (Phase 1 SAL-SoT). */
+  stationActivityLogId: integer('station_activity_log_id').references(() => stationActivityLogs.id, { onDelete: 'set null' }),
   quantity: integer('quantity').notNull().default(1),
   station: text('station'),
   notes: text('notes'),

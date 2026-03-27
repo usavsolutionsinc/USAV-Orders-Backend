@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check } from './Icons';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
@@ -19,9 +19,10 @@ interface StaffSelectorProps {
     onSelect: (staffId: number, staffName: string) => void;
     variant?: 'default' | 'boxy';
     labelOverrides?: Record<number, string>;
+    rightSlot?: ReactNode;
 }
 
-export default function StaffSelector({ role = 'all', selectedStaffId, onSelect, variant = 'default', labelOverrides }: StaffSelectorProps) {
+export default function StaffSelector({ role = 'all', selectedStaffId, onSelect, variant = 'default', labelOverrides, rightSlot }: StaffSelectorProps) {
     const [isOpen, setIsOpen] = useState(false);
 
     const { data: staff = [], isLoading } = useQuery<Staff[]>({
@@ -82,6 +83,11 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
                 </svg>
             </button>
+            {rightSlot ? (
+                <div className={`absolute right-2 top-1/2 -translate-y-1/2 z-[71] ${isBoxy ? '' : ''}`}>
+                    {rightSlot}
+                </div>
+            ) : null}
 
             {isOpen && (
                 <>

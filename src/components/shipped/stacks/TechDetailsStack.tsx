@@ -5,7 +5,6 @@ import { X } from '@/components/Icons';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
-import { ContextualManualLinkRow } from '@/components/shipped/details-panel/blocks/ContextualManualLinkRow';
 import { toPSTDateKey } from '@/utils/date';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
@@ -143,6 +142,8 @@ export function TechDetailsStack({
           sourceRowId,
           techSerialId: rowId,
           orderDbId: shipped.id,
+          tracking: shipped.shipping_tracking_number || '',
+          fnsku: shipped.fnsku || '',
         },
       }));
       onUpdate?.();
@@ -159,12 +160,6 @@ export function TechDetailsStack({
   return (
     <div className="pb-8 pt-4 space-y-4">
       {actionBar ? <PanelActionBar {...actionBar} /> : null}
-
-      <ContextualManualLinkRow
-        sku={shipped.sku}
-        itemNumber={itemNumber}
-        allowEmbeddedItemNumberInput={false}
-      />
 
       <ShippedDetailsPanelContent
         shipped={{
@@ -191,11 +186,9 @@ export function TechDetailsStack({
           onBlur: () => { void saveInlineFields(); },
           onShipByDateBlur: () => { void fieldSave.saveShipByDate(shipByDate); },
         }}
-        productDetailsFirst={false}
         showPackingPhotos={false}
         showPackingInformation={false}
         showTestingInformation={false}
-        showSerialNumber
       />
 
       <section className="mx-8 pt-2">

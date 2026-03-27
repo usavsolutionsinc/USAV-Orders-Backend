@@ -6,7 +6,6 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Loader2, Search } from '@/components/Icons';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
 import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
-import { FbaShippedHistory } from '@/components/fba/FbaShippedHistory';
 import { FbaQuickAddFnskuModal } from '@/components/fba/FbaQuickAddFnskuModal';
 import { FbaCreatePlanModal } from '@/components/fba/FbaCreatePlanModal';
 import { FbaLoadingState, FbaErrorState } from '@/components/fba/FbaStateShells';
@@ -16,7 +15,7 @@ import StationFba from '@/components/station/StationFba';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
-type Tab = 'combine' | 'review' | 'shipped';
+type Tab = 'combine' | 'shipped';
 
 /** Compute Monday–Sunday YYYY-MM-DD range for the week containing today shifted by `weekOffset`. */
 function getWeekRange(todayKey: string, weekOffset: number): { startStr: string; endStr: string } {
@@ -40,7 +39,6 @@ function isItemInWeek(item: FbaBoardItem, start: string, end: string): boolean {
 }
 
 function resolveActiveTab(rawTab: string | null): Tab {
-  if (rawTab === 'review' || rawTab === 'paired') return 'review';
   if (rawTab === 'shipped') return 'shipped';
   return 'combine';
 }
@@ -52,14 +50,11 @@ function buildFbaHref(params: URLSearchParams) {
 
 const TAB_LABELS: Record<Tab, string> = {
   combine: 'Combine',
-  review: 'Review',
   shipped: 'Shipped',
 };
 
 interface CombineData {
-  awaiting: FbaBoardItem[];
-  packed: FbaBoardItem[];
-  review: FbaBoardItem[];
+  pending: FbaBoardItem[];
 }
 
 function FbaPageContent() {
@@ -86,7 +81,7 @@ function FbaPageContent() {
   );
 
   // ── Combine data ─────────────────────────────────────────────────────
-  const [board, setBoard] = useState<CombineData>({ awaiting: [], packed: [], review: [] });
+  const [board, setBoard] = useState<CombineData>({ pending: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,9 +93,7 @@ function FbaPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to fetch board');
       setBoard({
-        awaiting: data.awaiting ?? [],
-        packed: data.packed ?? [],
-        review: data.paired ?? [],
+        pending: data.pending ?? [...(data.packed ?? []), ...(data.awaiting ?? [])],
       });
     } catch (err: any) {
       setError(err?.message || 'Failed to load');
@@ -136,34 +129,17 @@ function FbaPageContent() {
     router.replace(buildFbaHref(params));
   }, [searchParams, router]);
 
-  // ── Review selection → sidebar ─────────────────────────────────────────
-  const handleReviewSelectionChange = useCallback((selected: FbaBoardItem[]) => {
-    window.dispatchEvent(
-      new CustomEvent('fba-paired-selection', { detail: selected }),
-    );
-  }, []);
-
   // ── Week pagination ──────────────────────────────────────────────────
   const todayKey = getCurrentPSTDateKey();
   const [weekOffset, setWeekOffset] = useState(0);
   const weekRange = useMemo(() => getWeekRange(todayKey, weekOffset), [todayKey, weekOffset]);
 
-  // ── Merged combine: packed on top, then awaiting ───────────────────────
-  const combineItems = useMemo(
-    () => [...board.packed, ...board.awaiting],
-    [board.packed, board.awaiting],
-  );
-
   const combineItemsForWeek = useMemo(
-    () => combineItems.filter((i) => isItemInWeek(i, weekRange.startStr, weekRange.endStr)),
-    [combineItems, weekRange],
-  );
-  const reviewItemsForWeek = useMemo(
-    () => board.review.filter((i) => isItemInWeek(i, weekRange.startStr, weekRange.endStr)),
-    [board.review, weekRange],
+    () => board.pending.filter((i) => isItemInWeek(i, weekRange.startStr, weekRange.endStr)),
+    [board.pending, weekRange],
   );
 
-  const activeItems = activeTab === 'combine' ? combineItemsForWeek : activeTab === 'review' ? reviewItemsForWeek : [];
+  const activeItems = activeTab === 'combine' ? combineItemsForWeek : [];
 
   // ── FNSKU search ────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
@@ -200,7 +176,7 @@ function FbaPageContent() {
     setSearchQuery('');
   }, []);
 
-  const filteredCombineItems = useMemo(() => {
+  const filteredPendingItems = useMemo(() => {
     if (!searchQuery.trim()) return combineItemsForWeek;
     const q = searchQuery.trim().toUpperCase();
     return combineItemsForWeek.filter(
@@ -210,21 +186,8 @@ function FbaPageContent() {
     );
   }, [combineItemsForWeek, searchQuery]);
 
-  const filteredReviewItems = useMemo(() => {
-    if (!searchQuery.trim()) return reviewItemsForWeek;
-    const q = searchQuery.trim().toUpperCase();
-    return reviewItemsForWeek.filter(
-      (item) =>
-        item.fnsku.toUpperCase().includes(q) ||
-        (item.display_title || '').toUpperCase().includes(q),
-    );
-  }, [reviewItemsForWeek, searchQuery]);
-
-  const showSearch = activeTab === 'combine' || activeTab === 'review';
-  const visibleCount =
-    activeTab === 'combine' ? filteredCombineItems.length :
-    activeTab === 'review' ? filteredReviewItems.length :
-    activeItems.length;
+  const showSearch = activeTab === 'combine';
+  const visibleCount = activeTab === 'combine' ? filteredPendingItems.length : activeItems.length;
 
   const searchTransition = prefersReducedMotion
     ? { duration: 0.01 }
@@ -255,30 +218,26 @@ function FbaPageContent() {
             />
 
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
-              {loading && !combineItems.length && !board.review.length ? (
+              {loading && !board.pending.length ? (
                 <FbaLoadingState theme={stationTheme} label="Loading…" />
               ) : error ? (
                 <FbaErrorState message={error} onRetry={fetchBoard} theme={stationTheme} />
               ) : activeTab === 'shipped' ? (
-                <FbaShippedHistory refreshTrigger={refreshTrigger} stationTheme={stationTheme} />
-              ) : activeTab === 'review' ? (
-                <FbaBoardTable
-                  items={filteredReviewItems}
-                  variant="paired"
-                  stationTheme={stationTheme}
-                  emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No review items with tracking'}
-                  onSelectionChange={handleReviewSelectionChange}
-                />
+                <div className="flex h-full items-center justify-center px-5 text-center">
+                  <p className="max-w-sm text-[11px] font-black uppercase tracking-widest text-gray-400">
+                    Shipped mode is managed from the sidebar table.
+                  </p>
+                </div>
               ) : (
                 <FbaBoardTable
-                  items={filteredCombineItems}
+                  items={filteredPendingItems}
                   variant="board"
                   stationTheme={stationTheme}
-                  emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No FBA items'}
+                  emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No pending FBA items'}
                 />
               )}
 
-              {/* Floating FNSKU search — combine + review tabs only */}
+              {/* Floating FNSKU search — pending combine table */}
               {showSearch ? (
                 <>
                   <AnimatePresence initial={false} mode="wait">

@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Loader2 } from './Icons';
-import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from './ui/CopyChip';
+import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, PlatformChip, getLast4, getLast6Serial } from './ui/CopyChip';
+import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
+import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { dispatchCloseShippedDetails } from '@/utils/events';
@@ -151,6 +153,9 @@ export function TechTable({ testedBy }: TechTableProps) {
       tech_serial_id: record.tech_serial_id ?? (record.source_kind === 'tech_serial' ? record.id : undefined),
       source_row_id: record.source_row_id ?? null,
       source_kind: record.source_kind ?? null,
+      fnsku: record.fnsku || null,
+      fnsku_log_id: record.fnsku_log_id ?? null,
+      sal_id: record.source_row_id ?? record.id,
     };
   };
 
@@ -485,19 +490,33 @@ export function TechTable({ testedBy }: TechTableProps) {
                                   <FnskuChip value={fnskuValue} />
                                   <SerialChip value={record.serial_number || ''} display={serialChipDisplay} />
                                 </>
-                              ) : (
-                                <>
-                                  <OrderIdChip
-                                    value={record.order_id || ''}
-                                    display={getLast4(record.order_id)}
-                                  />
-                                  <TrackingChip
-                                    value={record.shipping_tracking_number || ''}
-                                    display={getLast4(record.shipping_tracking_number)}
-                                  />
-                                  <SerialChip value={record.serial_number || ''} display={serialChipDisplay} />
-                                </>
-                              )}
+                              ) : (() => {
+                                const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
+                                return (
+                                  <>
+                                    {plat ? (
+                                      <PlatformChip
+                                        label={plat}
+                                        underlineClass={getOrderPlatformBorderColor(plat)}
+                                        iconClass={record.item_number ? getOrderPlatformColor(plat) : 'text-gray-300'}
+                                        onClick={() => {
+                                          const url = getExternalUrlByItemNumber(record.item_number);
+                                          if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                        }}
+                                      />
+                                    ) : null}
+                                    <OrderIdChip
+                                      value={record.order_id || ''}
+                                      display={getLast4(record.order_id)}
+                                    />
+                                    <TrackingChip
+                                      value={record.shipping_tracking_number || ''}
+                                      display={getLast4(record.shipping_tracking_number)}
+                                    />
+                                    <SerialChip value={record.serial_number || ''} display={serialChipDisplay} />
+                                  </>
+                                );
+                              })()}
                             </div>
                           </motion.div>
                         );

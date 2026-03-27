@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clipboard, ExternalLink } from '@/components/Icons';
-import { DetailLineRow, InlineSaveIndicator } from '@/design-system/components';
+import { DetailsPanelRow, InlineSaveIndicator } from '@/design-system/components';
 
 function extractGoogleFileId(input: string): string {
   const raw = String(input || '').trim();
@@ -115,67 +115,48 @@ export function ContextualManualLinkRow({
   }, [savedFileId]);
 
   return (
-    <section className="mx-8">
-      <DetailLineRow
-        label="Product Manual"
-        headerAccessory={(
+    <DetailsPanelRow
+      label="Product Manual"
+      headerAccessory={
+        (effectiveItemNumber || normalizedSku) ? (
           <span className="truncate text-[10px] font-black uppercase tracking-wide text-gray-500">
-            {effectiveItemNumber || normalizedSku || 'Needs item number'}
+            {effectiveItemNumber || normalizedSku}
           </span>
-        )}
-        actions={(
-          <div className="flex items-center gap-2">
-            <InlineSaveIndicator state={saveState} />
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  const text = await navigator.clipboard.readText();
-                  if (text.trim()) {
-                    setGoogleInput(text.trim());
-                    setSaveState('idle');
-                  }
-                } catch {
-                  // noop
-                }
-                googleInputRef.current?.focus();
-              }}
+        ) : null
+      }
+      actions={(
+        <div className="flex items-center gap-2">
+          <InlineSaveIndicator state={saveState} />
+          {openUrl ? (
+            <a
+              href={openUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-gray-400 transition-colors hover:text-blue-600"
-              aria-label={`Paste manual link for ${contextualKey}`}
-              title="Paste manual link"
+              aria-label={`Open manual for ${contextualKey}`}
+              title="Open manual"
             >
-              <Clipboard className="h-3.5 w-3.5" />
-            </button>
-            {openUrl ? (
-              <a
-                href={openUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-400 transition-colors hover:text-blue-600"
-                aria-label={`Open manual for ${contextualKey}`}
-                title="Open manual"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            ) : null}
-          </div>
-        )}
-        dividerClassName="border-b border-gray-100"
-      >
-        <div className="space-y-2">
-          {allowEmbeddedItemNumberInput && !normalizedItemNumber ? (
-            <input
-              ref={itemInputRef}
-              type="text"
-              value={localItemNumber}
-              onChange={(e) => {
-                setLocalItemNumber(e.target.value);
-                setSaveState('idle');
-              }}
-              placeholder="Item number"
-              className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold uppercase tracking-wide text-gray-900 outline-none"
-            />
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
           ) : null}
+        </div>
+      )}
+    >
+      <div className="w-full space-y-2">
+        {allowEmbeddedItemNumberInput && !normalizedItemNumber ? (
+          <input
+            ref={itemInputRef}
+            type="text"
+            value={localItemNumber}
+            onChange={(e) => {
+              setLocalItemNumber(e.target.value);
+              setSaveState('idle');
+            }}
+            placeholder="Item number"
+            className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold uppercase tracking-wide text-gray-900 outline-none"
+          />
+        ) : null}
+        <div className="flex items-center gap-2">
           <input
             ref={googleInputRef}
             type="text"
@@ -191,10 +172,30 @@ export function ContextualManualLinkRow({
                 : 'Enter item number'
             }
             disabled={!effectiveItemNumber}
-            className="h-8 w-full border-0 bg-transparent px-0 text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400 disabled:text-gray-400"
+            className="h-8 flex-1 border-0 bg-transparent px-0 text-sm font-medium text-gray-900 outline-none placeholder:text-gray-400 disabled:text-gray-400"
           />
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text.trim()) {
+                  setGoogleInput(text.trim());
+                  setSaveState('idle');
+                }
+              } catch {
+                // noop
+              }
+              googleInputRef.current?.focus();
+            }}
+            className="shrink-0 text-gray-400 transition-colors hover:text-blue-600"
+            aria-label={`Paste manual link for ${contextualKey}`}
+            title="Paste manual link"
+          >
+            <Clipboard className="h-3.5 w-3.5" />
+          </button>
         </div>
-      </DetailLineRow>
-    </section>
+      </div>
+    </DetailsPanelRow>
   );
 }

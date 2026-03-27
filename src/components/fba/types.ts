@@ -22,6 +22,7 @@ export interface FbaSummaryRow {
   workflow_mode?: FbaWorkflowMode;
   last_event_at?: string | null;
   shipment_id?: number | null;
+  amazon_shipment_id?: string | null;
   shipment_item_id?: number | null;
   shipment_ref: string | null;
   shipment_item_status: string | null;

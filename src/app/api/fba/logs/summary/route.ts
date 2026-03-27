@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
           OR COALESCE(sr.product_title, '') ILIKE $${idx}
           OR COALESCE(sr.asin, '') ILIKE $${idx}
           OR COALESCE(sr.sku, '') ILIKE $${idx}
+          OR COALESCE(sr.amazon_shipment_id, '') ILIKE $${idx}
           OR COALESCE(sr.shipment_ref, '') ILIKE $${idx})`
       );
       params.push(`%${q}%`);
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
           SELECT DISTINCT ON (fsi.fnsku)
             fsi.fnsku,
             fs.id AS shipment_id,
+            fs.amazon_shipment_id,
             fs.shipment_ref,
             fsi.id AS shipment_item_id,
             fsi.status,
@@ -108,6 +110,7 @@ export async function GET(request: NextRequest) {
             END AS workflow_mode,
             lt.last_event_at,
             oi.shipment_id,
+            oi.amazon_shipment_id,
             oi.shipment_ref,
             oi.shipment_item_id,
             oi.status AS shipment_item_status,
@@ -134,6 +137,7 @@ export async function GET(request: NextRequest) {
           sr.workflow_mode,
           sr.last_event_at,
           sr.shipment_id,
+          sr.amazon_shipment_id,
           sr.shipment_ref,
           sr.shipment_item_id,
           sr.shipment_item_status,

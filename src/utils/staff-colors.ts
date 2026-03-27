@@ -121,6 +121,17 @@ export const stationThemeColors: Record<StationTheme, StationThemeColors> = {
   },
 };
 
+export function getStationGoalBarThemeClasses(theme: StationTheme): {
+  textClass: string;
+  fillClass: string;
+} {
+  const colors = stationThemeColors[theme];
+  return {
+    textClass: colors.text,
+    fillClass: colors.bg,
+  };
+}
+
 export const stationThemeClasses: Record<
   StationTheme,
   {

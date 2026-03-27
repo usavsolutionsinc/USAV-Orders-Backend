@@ -3,7 +3,7 @@
 import React, { MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { isEmptyDisplayValue } from '@/utils/empty-display-value';
-import { Check, Copy, MapPin, Barcode, Settings, Package } from '../Icons';
+import { Check, Copy, MapPin, Barcode, Settings, Package, ExternalLink } from '../Icons';
 
 // --- Helpers ---
 
@@ -263,4 +263,32 @@ export const SourceOrderChip = ({
     width={width}
     disableCopy={disableCopy}
   />
+);
+
+/** Platform chip — opens product page via item number on click, does NOT copy. */
+export const PlatformChip = ({
+  label,
+  underlineClass,
+  iconClass,
+  onClick,
+}: {
+  label: string;
+  underlineClass: string;
+  iconClass: string;
+  onClick: (e: MouseEvent<HTMLButtonElement>) => void;
+}) => (
+  <div className="relative w-fit max-w-full">
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(e); }}
+      className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95"
+    >
+      <span className={`shrink-0 ${iconClass}`}>
+        <ExternalLink className="w-4 h-4 shrink-0" />
+      </span>
+      <span style={{ fontFamily: "'DM Sans', sans-serif" }} className={`text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 min-w-[60px] text-center whitespace-nowrap lowercase text-black ${underlineClass}`}>
+        {label}
+      </span>
+    </button>
+  </div>
 );

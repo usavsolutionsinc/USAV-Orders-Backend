@@ -29,6 +29,7 @@ interface EcwidSearchProduct {
 function buildDraftFromFavorite(
   favorite: FavoriteSkuRecord,
   ecwidProduct?: EcwidSearchProduct | null,
+  preSelectedReasons?: string[],
 ): Partial<RepairFormData> {
   return {
     product: {
@@ -36,7 +37,7 @@ function buildDraftFromFavorite(
       model: ecwidProduct?.name || favorite.productTitle || favorite.label || favorite.sku,
       sourceSku: ecwidProduct?.sku || favorite.sku,
     },
-    repairReasons: [],
+    repairReasons: preSelectedReasons?.length ? preSelectedReasons : [],
     repairNotes: favorite.issueTemplate || '',
     price:
       ecwidProduct?.price != null
@@ -59,6 +60,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const [isMounted, setIsMounted] = useState(false);
   const [searchValue, setSearchValue] = useState(searchParams.get('search') || '');
   const [intakeDraft, setIntakeDraft] = useState<Partial<RepairFormData> | undefined>(undefined);
+  const [selectedFavoriteId, setSelectedFavoriteId] = useState<number | null>(null);
 
   const rawTab = searchParams.get('tab');
   const activeTab: RepairTab = rawTab === 'incoming' ? 'incoming' : rawTab === 'done' ? 'done' : 'active';
@@ -104,28 +106,41 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const handleCloseForm = () => {
     setShowIntakeForm(false);
     setIntakeDraft(undefined);
+    setSelectedFavoriteId(null);
   };
 
   const handleSubmitForm = async (data: RepairFormData) => {
     setIsSubmitting(true);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await fetch('/api/repair/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       const result = await response.json();
 
       if (result.success) {
         setShowIntakeForm(false);
         setIntakeDraft(undefined);
-        window.open(`/api/repair-service/print/${result.id}`, '_blank');
+        setSelectedFavoriteId(null);
+        if (result.signatureWarning) {
+          window.alert(`Repair submitted, but: ${result.signatureWarning}`);
+        }
       } else {
         window.alert('Failed to submit repair form. Please try again.');
       }
-    } catch (_error) {
-      window.alert('Error submitting repair form. Please try again.');
+    } catch (error: unknown) {
+      clearTimeout(timeout);
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        window.alert('Submission timed out. Please check your connection and try again.');
+      } else {
+        window.alert('Error submitting repair form. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -134,22 +149,33 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const handleUseFavorite = async (favorite: FavoriteSkuRecord) => {
     setIsFetchingFavorite(true);
     let ecwidProduct: EcwidSearchProduct | null = null;
+    let skuReasons: string[] = [];
     try {
-      const res = await fetch(
-        `/api/ecwid/products/search?q=${encodeURIComponent(favorite.sku)}`,
-      );
-      const data = await res.json();
-      const products: EcwidSearchProduct[] = Array.isArray(data?.products) ? data.products : [];
+      const [ecwidRes, issuesRes] = await Promise.all([
+        fetch(`/api/ecwid/products/search?q=${encodeURIComponent(favorite.sku)}`),
+        fetch(`/api/repair/issues?favoriteSkuId=${favorite.id}`),
+      ]);
+      const ecwidData = await ecwidRes.json();
+      const products: EcwidSearchProduct[] = Array.isArray(ecwidData?.products) ? ecwidData.products : [];
       ecwidProduct =
         products.find((p) => p.sku.trim().toLowerCase() === favorite.sku.trim().toLowerCase()) ??
         products[0] ??
         null;
+
+      const issuesData = await issuesRes.json();
+      if (Array.isArray(issuesData?.issues)) {
+        // Pre-select only SKU-specific issues (not globals) as "same as template"
+        skuReasons = issuesData.issues
+          .filter((i: { favorite_sku_id: number | null }) => i.favorite_sku_id !== null)
+          .map((i: { label: string }) => i.label);
+      }
     } catch {
       // fall through — will use cached favorite data
     } finally {
       setIsFetchingFavorite(false);
     }
-    setIntakeDraft(buildDraftFromFavorite(favorite, ecwidProduct));
+    setSelectedFavoriteId(favorite.id);
+    setIntakeDraft(buildDraftFromFavorite(favorite, ecwidProduct, skuReasons));
     setShowIntakeForm(true);
   };
 
@@ -244,6 +270,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
                 type="button"
                 onClick={() => {
                   setIntakeDraft(undefined);
+                  setSelectedFavoriteId(null);
                   setShowIntakeForm(true);
                 }}
                 disabled={isSubmitting}
@@ -350,6 +377,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
               onClose={handleCloseForm}
               onSubmit={handleSubmitForm}
               initialData={intakeDraft}
+              favoriteSkuId={selectedFavoriteId}
             />
           </div>,
           document.body,

@@ -86,7 +86,7 @@ function EmptyState({ searchQuery, summaryMode }: { searchQuery: string; summary
       </p>
       <p className="mt-1 text-xs font-bold text-gray-400">
         {searchQuery
-          ? 'Try another FNSKU, ASIN, SKU, or shipment reference.'
+          ? 'Try another FNSKU, ASIN, SKU, or shipment ID.'
           : 'Rows appear after FNSKU scans from tech and packing stations.'}
       </p>
     </div>
@@ -149,7 +149,9 @@ function InlineRowDetails({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-gray-500">
-        <span>Shipment: {row.shipment_ref || '---'}</span>
+        <span>
+          Shipment ID: {String(row.amazon_shipment_id || '').trim().toUpperCase() || (row.shipment_id ? `#${row.shipment_id}` : '---')}
+        </span>
         <span>Serial: {getLast6Serial(row.latest_serial_number || '')}</span>
         <span>ASIN: {row.asin || '---'}</span>
       </div>
@@ -225,8 +227,8 @@ export function FbaShipmentBoard({ summaryMode, refreshTrigger, searchQuery }: F
       e.stopPropagation();
       const params = new URLSearchParams(searchParams.toString());
       params.set('tab', 'labels');
-      const ref = String(row.shipment_ref || '').trim();
-      if (ref) params.set('q', ref);
+      const shipmentIdLabel = String(row.amazon_shipment_id || '').trim().toUpperCase();
+      if (shipmentIdLabel) params.set('q', shipmentIdLabel);
       else if (row.fnsku) params.set('q', row.fnsku);
       router.replace(`/fba?${params.toString()}`);
     },

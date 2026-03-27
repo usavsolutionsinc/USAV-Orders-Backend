@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -67,6 +67,9 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
   const queryClient = useQueryClient();
   const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
   const [selectedContext, setSelectedContext] = useState<ShippedDetailsContext>('queue');
+  // Tracks the ID we've already applied locally but whose URL update may still be in flight.
+  // Prevents the openOrderId-sync effect from reverting to the stale URL value.
+  const pendingOrderIdRef = useRef<number | null>(null);
 
   const openOrderId = useMemo(() => {
     return parseDashboardOpenOrderId(searchParams.get('openOrderId'));
@@ -86,17 +89,20 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
 
   const applySelectedOrder = useCallback((order: ShippedOrder, context?: ShippedDetailsContext) => {
     const nextContext = normalizeDashboardDetailsContext(order, context);
+    const orderId = Number(order.id);
     setSelectedShipped(order);
     setSelectedContext(nextContext);
     writeStoredSelection(order, nextContext);
 
-    if (Number(order.id) !== openOrderId) {
-      replaceOpenOrderId(Number(order.id));
+    if (orderId !== openOrderId) {
+      pendingOrderIdRef.current = orderId;
+      replaceOpenOrderId(orderId);
     }
   }, [openOrderId, replaceOpenOrderId]);
 
   const clearSelectedOrder = useCallback((syncUrl = true) => {
     setSelectedShipped(null);
+    pendingOrderIdRef.current = null;
     clearStoredSelection();
     if (syncUrl && openOrderId != null) {
       replaceOpenOrderId(null);
@@ -109,7 +115,9 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
       if (!payload?.order) return;
       applySelectedOrder(payload.order, payload.context);
     };
-    const handleClose = () => clearSelectedOrder(false);
+    // Sync URL so openOrderId does not immediately re-resolve and re-open the panel
+    // (e.g. hamburger in DashboardSidebar only dispatches close-shipped-details).
+    const handleClose = () => clearSelectedOrder(true);
     const handleAssignmentUpdate = (e: any) => {
       const detail = e?.detail || {};
       const hasMatchingIds = Array.isArray(detail.orderIds) && detail.orderIds.some((id: any) => Number.isFinite(Number(id)));
@@ -145,8 +153,18 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
       if (selectedShipped) {
         clearSelectedOrder(false);
       }
+      pendingOrderIdRef.current = null;
       return;
     }
+
+    // Clear the pending flag once the URL catches up to the value we set.
+    if (pendingOrderIdRef.current === openOrderId) {
+      pendingOrderIdRef.current = null;
+    }
+
+    // If a navigation is in-flight (selectedShipped already updated, URL hasn't
+    // caught up yet), skip resolution — it would revert to the stale URL value.
+    if (pendingOrderIdRef.current != null) return;
 
     if (Number(selectedShipped?.id) === openOrderId) return;
 
@@ -193,8 +211,7 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
 
   const requestCloseSelectedOrder = useCallback(() => {
     dispatchCloseShippedDetails();
-    clearSelectedOrder();
-  }, [clearSelectedOrder]);
+  }, []);
 
   return {
     selectedShipped,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { google } from 'googleapis';
+import { sheets as googleSheets } from '@googleapis/sheets';
 import { getGoogleAuth } from '@/lib/google-auth';
 import pool from '@/lib/db';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
         const targetSpreadsheetId = body.spreadsheetId || process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
 
         const auth = getGoogleAuth();
-        const sheets = google.sheets({ version: 'v4', auth });
+        const sheets = googleSheets({ version: 'v4', auth });
 
         const techSheets = ['tech_1', 'tech_2', 'tech_3', 'tech_4'];
         

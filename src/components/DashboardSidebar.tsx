@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, LayoutDashboard, Menu, X, Zap } from '@/components/Icons';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
@@ -29,6 +29,7 @@ import {
 } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails } from '@/utils/events';
+import { parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
@@ -384,8 +385,13 @@ function NavSection({
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const routeKey = getSidebarRouteKey(pathname);
+  const [stationDetailsOpen, setStationDetailsOpen] = useState(false);
+  const dashboardOpenOrderId =
+    routeKey === 'dashboard' ? parseDashboardOpenOrderId(searchParams.get('openOrderId')) : null;
+  const collapseDesktopSidebar =
+    routeKey === 'dashboard' ? dashboardOpenOrderId != null : stationDetailsOpen;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(false);
   const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
   const [showHomeNavigation, setShowHomeNavigation] = useState(false);
   const [lastTechHref, setLastTechHref] = useState('/tech?staffId=1');
@@ -418,6 +424,8 @@ export default function DashboardSidebar() {
     }
   }, []);
 
+  const prevPathnameRef = useRef(pathname);
+
   useEffect(() => {
     if (!pathname) return;
     if (pathname.startsWith('/tech')) {
@@ -440,12 +448,20 @@ export default function DashboardSidebar() {
     }
     setShowHomeNavigation(false);
     setIsMobileOpen(false);
-    setIsDetailsPanelOpen(false);
+    // Only close the details panel on actual route changes, not search param
+    // updates (e.g. openOrderId changing during up/down navigation).
+    if (prevPathnameRef.current !== pathname) {
+      setStationDetailsOpen(false);
+      prevPathnameRef.current = pathname;
+    }
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    const handleOpenDetails = () => { setIsDetailsPanelOpen(true); setIsMobileOpen(false); };
-    const handleCloseDetails = () => { setIsDetailsPanelOpen(false); };
+    const handleOpenDetails = () => {
+      setStationDetailsOpen(true);
+      setIsMobileOpen(false);
+    };
+    const handleCloseDetails = () => setStationDetailsOpen(false);
     window.addEventListener('open-shipped-details' as any, handleOpenDetails as any);
     window.addEventListener('close-shipped-details' as any, handleCloseDetails as any);
     return () => {
@@ -460,7 +476,6 @@ export default function DashboardSidebar() {
     return item.href;
   };
 
-  const routeKey = getSidebarRouteKey(pathname);
   const sidebarTitle = getSidebarTitle(pathname);
 
   const groupedNav = {
@@ -529,16 +544,16 @@ export default function DashboardSidebar() {
     <>
       <div
         className={`hidden md:block h-full flex-shrink-0 overflow-hidden transition-[width] duration-300 ${
-          isDetailsPanelOpen ? 'w-0' : 'w-[360px]'
+          collapseDesktopSidebar ? 'w-0' : 'w-[360px]'
         }`}
       >
         {shell}
       </div>
 
-      {isDetailsPanelOpen && (
+      {collapseDesktopSidebar && (
         <button
           type="button"
-          onClick={() => { dispatchCloseShippedDetails(); setIsDetailsPanelOpen(false); }}
+          onClick={() => dispatchCloseShippedDetails()}
           className="hidden md:flex fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-slate-900/10 items-center justify-center"
           aria-label="Open station navigation"
         >

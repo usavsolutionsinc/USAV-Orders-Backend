@@ -14,6 +14,10 @@ const config: Config = {
                 background: "var(--background)",
                 foreground: "var(--foreground)",
             },
+            fontFamily: {
+                sans: ['var(--ds-font-sans)', 'DM Sans', 'Inter', 'system-ui', 'sans-serif'],
+                mono: ['var(--ds-font-mono)', 'SFMono-Regular', 'SF Mono', 'Consolas', 'monospace'],
+            },
         },
     },
     plugins: [],

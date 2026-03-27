@@ -4,7 +4,11 @@ import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import { getLast4 } from '../ui/CopyChip';
-import { getPackerInputTheme } from '@/utils/staff-colors';
+import {
+  getPackerInputTheme,
+  stationScanInputBorderClass,
+  stationThemeColors,
+} from '@/utils/staff-colors';
 import { formatPSTTimestamp } from '@/utils/date';
 import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
@@ -54,6 +58,7 @@ export default function StationPacking({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeColor = getPackerInputTheme(themeColor);
+  const themeColors = stationThemeColors[themeColor];
 
   const handleSubmit = async (event?: React.FormEvent) => {
     if (event) event.preventDefault();
@@ -140,7 +145,7 @@ export default function StationPacking({
           <div className="space-y-0.5">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
-              <div className="p-3 bg-gray-900 text-white rounded-2xl shadow-lg shadow-gray-900/10">
+              <div className={`p-3 ${themeColors.bg} text-white rounded-2xl shadow-lg ${themeColors.shadow}`}>
                 <Package className="w-4 h-4" />
               </div>
             </div>
@@ -150,7 +155,7 @@ export default function StationPacking({
             count={todayCount}
             goal={goal}
             label="PACKED"
-            colorClass={activeColor.text}
+            theme={themeColor}
           />
 
           <StationScanBar
@@ -161,7 +166,8 @@ export default function StationPacking({
             placeholder="Scan Tracking, FNSKU, FBA, or SKU..."
             icon={<Barcode className="w-4 h-4" />}
             iconClassName={activeColor.text}
-            inputClassName={`${activeColor.ring} ${activeColor.border}`}
+            inputBorderClassName={stationScanInputBorderClass[themeColor]}
+            inputClassName={activeColor.ring}
             autoFocus
             rightContent={(
               <>
