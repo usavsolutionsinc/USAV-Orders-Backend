@@ -34,7 +34,7 @@ const colorTextMap: Record<string, { active: string; shadow: string }> = {
   purple:  { active: 'text-purple-600',  shadow: '0 1px 4px 0 rgb(147 51 234 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
   green:   { active: 'text-emerald-600', shadow: '0 1px 4px 0 rgb(16 185 129 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
   yellow:  { active: 'text-amber-600',   shadow: '0 1px 4px 0 rgb(217 119 6 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
-  gray:    { active: 'text-slate-600',   shadow: '0 1px 4px 0 rgb(0 0 0 / 0.08), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.05)' },
+  gray:    { active: 'text-gray-600',    shadow: '0 1px 4px 0 rgb(0 0 0 / 0.08), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.05)' },
   red:     { active: 'text-red-600',     shadow: '0 1px 4px 0 rgb(220 38 38 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
   teal:    { active: 'text-teal-600',    shadow: '0 1px 4px 0 rgb(20 184 166 / 0.12), 0 0.5px 1.5px 0 rgb(0 0 0 / 0.06)' },
 };
@@ -47,7 +47,7 @@ const upNextLabelTextClass: Record<string, { active: string; inactive: string }>
   orange:  { active: 'text-orange-600',  inactive: 'text-orange-500 hover:text-orange-600' },
   purple:  { active: 'text-purple-600',  inactive: 'text-purple-500 hover:text-purple-600' },
   yellow:  { active: 'text-amber-600',   inactive: 'text-amber-500 hover:text-amber-600' },
-  gray:    { active: 'text-slate-600',   inactive: 'text-slate-500 hover:text-slate-700' },
+  gray:    { active: 'text-gray-600',    inactive: 'text-gray-500 hover:text-gray-700' },
   red:     { active: 'text-red-600',     inactive: 'text-red-500 hover:text-red-600' },
   teal:    { active: 'text-teal-600',    inactive: 'text-teal-500 hover:text-teal-600' },
 };

@@ -8,7 +8,6 @@ import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
 import StationTesting from '@/components/station/StationTesting';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { getTechThemeById } from '@/utils/staff-colors';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
 import { useActiveStaffDirectory } from './hooks';
@@ -66,9 +65,8 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
   const [dailyGoal, setDailyGoal] = useState(50);
   const staffDirectory = useActiveStaffDirectory();
 
-  const techName = staffDirectory.find((m) => String(m.id) === String(techId))?.name || 'Technician';
-  const techTheme = getTechThemeById(techId);
-
+  const techMember = staffDirectory.find((m) => String(m.id) === String(techId));
+  const techName = techMember?.name || 'Technician';
   const rawView = searchParams.get('view');
   const viewMode: TechViewMode =
     rawView === 'pending'
@@ -147,7 +145,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
           embedded
           userId={techId}
           userName={techName}
-          themeColor={techTheme}
+          staffId={techId}
           onTrackingScan={() => updateViewMode('history')}
           onViewManual={() => updateViewMode('manual')}
           todayCount={todayCount}

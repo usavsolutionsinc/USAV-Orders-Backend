@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 interface ProgressBarProps {
     current: number;
@@ -36,17 +38,17 @@ export function ProgressBar({
             {(showPercentage || showRemaining || label) && (
                 <div className="flex items-center justify-between mb-2">
                     {label && (
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                        <p className={sectionLabel}>
                             {label}
                         </p>
                     )}
                     {showPercentage && (
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                        <p className={sectionLabel}>
                             {Math.round(percentage)}%
                         </p>
                     )}
                     {showRemaining && (
-                        <p className="text-[10px] font-black text-gray-400 tabular-nums">
+                        <p className={`${sectionLabel} tabular-nums`}>
                             {remaining} remaining
                         </p>
                     )}
@@ -56,7 +58,7 @@ export function ProgressBar({
                 <motion.div 
                     initial={{ width: 0 }} 
                     animate={{ width: `${percentage}%` }} 
-                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    transition={{ duration: 0.5, ease: motionBezier.easeOut }}
                     className={`h-full rounded-full ${barColor}`}
                 />
             </div>

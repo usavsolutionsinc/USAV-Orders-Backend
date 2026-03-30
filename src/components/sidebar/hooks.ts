@@ -1,49 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
 
-export type StaffMember = {
-  id: number;
-  name: string;
-  role: string;
-};
+export type { StaffMember };
 
-/** Case-insensitive match on trimmed `name` (e.g. default FBA workspace staff "Lien"). */
-export function findStaffIdByNormalizedName(
-  directory: StaffMember[],
-  normalizedName: string
-): number | null {
-  const key = normalizedName.trim().toLowerCase();
-  const row = directory.find((m) => String(m.name || '').trim().toLowerCase() === key);
-  return row?.id ?? null;
-}
-
+/**
+ * Returns the cached active-staff directory.
+ * Uses the singleton cache in staffCache.ts so the fetch happens at most once
+ * per page load and the result is shared across all consumers.
+ */
 export function useActiveStaffDirectory(): StaffMember[] {
   const [staff, setStaff] = useState<StaffMember[]>([]);
 
   useEffect(() => {
     let isMounted = true;
-    const fetchStaff = async () => {
-      try {
-        const res = await fetch('/api/staff?active=true');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!isMounted || !Array.isArray(data)) return;
-        setStaff(
-          data
-            .filter((member: any) => Number.isFinite(Number(member?.id)))
-            .map((member: any) => ({
-              id: Number(member.id),
-              name: String(member.name || '').trim() || `Staff ${member.id}`,
-              role: String(member.role || ''),
-            })),
-        );
-      } catch {
-        // no-op
-      }
-    };
-
-    fetchStaff();
+    getActiveStaff().then((data) => {
+      if (isMounted) setStaff(data);
+    });
     return () => {
       isMounted = false;
     };

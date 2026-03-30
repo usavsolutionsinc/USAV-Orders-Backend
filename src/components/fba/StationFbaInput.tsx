@@ -8,6 +8,7 @@ import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow'
 import { StationScanBar } from '@/components/station/StationScanBar';
 import { DeferredQtyInput } from '@/design-system/primitives';
 import { usePendingCatalog } from '@/components/fba/hooks/usePendingCatalog';
+import { normalizeFnsku } from '@/lib/tracking-format';
 import { useTodayPlan } from '@/components/fba/hooks/useTodayPlan';
 import { useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku, looksLikeFnskuPrefix } from '@/lib/scan-resolver';
@@ -58,9 +59,6 @@ interface FnskuSelectResult {
 
 const PLAN_QTY_MAX = 9999;
 
-function normalizeFnsku(raw: string): string {
-  return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
 
 /** Build fnsku → expected_qty from GET /api/fba/shipments/today */
 function todayShipmentQtyByFnskuFromJson(data: unknown): Record<string, number> {
@@ -201,7 +199,7 @@ export default function StationFbaInput({
   }, [techStaffIdOverride, staffIdRaw]);
   const stationTheme = useMemo((): StationTheme => {
     if (workspaceThemeProp) return workspaceThemeProp;
-    return getStaffThemeById(staffIdRaw || null, 'technician');
+    return getStaffThemeById(staffIdRaw || null);
   }, [workspaceThemeProp, staffIdRaw]);
   const workspaceChrome = fbaWorkspaceScanChrome[stationTheme];
   const scanOutlineClass =
@@ -606,6 +604,19 @@ export default function StationFbaInput({
         const needsDetails = !row?.found;
         if (needsDetails) addPending([fnsku]);
 
+        // B0-prefixed FNSKUs are ASINs — always populate the asin field
+        const isAsin = /^B0[A-Z0-9]{8}$/i.test(fnsku);
+        const resolvedAsin = row?.asin ?? (isAsin ? fnsku : null);
+
+        // If B0 scanned and catalog has no ASIN yet, patch it now
+        if (isAsin && !row?.asin && row?.catalog_exists) {
+          void fetch(`/api/fba/fnskus/${encodeURIComponent(fnsku)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ asin: fnsku }),
+          });
+        }
+
         // FBA sidebar scan should always queue for qty review before updating today's plan.
         if (fbaScanOnly) {
           const map = await fetchTodayQtyMap();
@@ -618,7 +629,7 @@ export default function StationFbaInput({
             needs_details: row?.needs_details,
             upserted_stub: row?.upserted_stub,
             product_title: row?.product_title ?? null,
-            asin: row?.asin ?? null,
+            asin: resolvedAsin,
             sku: row?.sku ?? null,
           };
           setPendingTodayPlanRows((prev) => mergeIntoPendingToday(prev, newRow, map));
@@ -634,7 +645,7 @@ export default function StationFbaInput({
               fnsku,
               expected_qty: 1,
               product_title: row?.product_title ?? null,
-              asin: row?.asin ?? null,
+              asin: resolvedAsin,
               sku: row?.sku ?? null,
             }),
           });
@@ -690,7 +701,7 @@ export default function StationFbaInput({
             needs_details: row?.needs_details,
             upserted_stub: row?.upserted_stub,
             product_title: row?.product_title ?? null,
-            asin: row?.asin ?? null,
+            asin: resolvedAsin,
             sku: row?.sku ?? null,
           };
           await submitPendingTodayPlan([newRow], needsDetails ? [fnsku] : []);

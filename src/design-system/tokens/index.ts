@@ -6,3 +6,4 @@ export * from './shadows';
 export * from './borders';
 export * from './z-index';
 export * from './css-variables';
+export * from './touch';

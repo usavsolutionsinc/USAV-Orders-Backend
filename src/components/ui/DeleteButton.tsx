@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDeleteOrderRow } from '@/hooks';
 
-interface DeleteOrdersButtonProps {
+interface DeleteButtonProps {
   orderId?: number;
   orderIds?: number[];
   label?: string;
@@ -13,7 +13,7 @@ interface DeleteOrdersButtonProps {
   onDeleted?: () => void;
 }
 
-export default function DeleteOrdersButton({
+export default function DeleteButton({
   orderId,
   orderIds,
   label = 'Delete',
@@ -21,7 +21,7 @@ export default function DeleteOrdersButton({
   confirmMessage: _confirmMessage = 'Delete order(s)? This cannot be undone.',
   disabled = false,
   onDeleted,
-}: DeleteOrdersButtonProps) {
+}: DeleteButtonProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const armTimeoutRef = useRef<number | null>(null);

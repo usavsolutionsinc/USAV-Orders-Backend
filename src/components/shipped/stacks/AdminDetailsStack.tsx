@@ -59,13 +59,6 @@ export function AdminDetailsStack({
   onOrderUpdated,
 }: AdminDetailsStackProps) {
   const [copiedAll, setCopiedAll] = useState(false);
-  const resolveTechnicianTheme = (staffId: number) => {
-    if (staffId === 1) return 'green' as const;
-    if (staffId === 2) return 'blue' as const;
-    if (staffId === 3) return 'purple' as const;
-    if (staffId === 4 || staffId === 6) return 'yellow' as const;
-    return getStaffThemeById(staffId, 'technician');
-  };
 
   const handleCopyAll = () => {
     if (!order) return;
@@ -120,9 +113,8 @@ export function AdminDetailsStack({
                 No Change
               </button>
               {testerOptions.map((member) => {
-                const theme = resolveTechnicianTheme(member.id);
+                const theme = getStaffThemeById(member.id);
                 const themeClasses = stationThemeClasses[theme];
-                const isTech3PurpleFallback = member.id === 3 && bulkTesterId !== member.id;
                 return (
                   <button
                     key={member.id}
@@ -130,7 +122,7 @@ export function AdminDetailsStack({
                     onClick={() => onBulkTesterChange(member.id)}
                     className={`px-2.5 h-8 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
                       bulkTesterId === member.id ? themeClasses.active : themeClasses.inactive
-                    } ${isTech3PurpleFallback ? '!text-purple-700 !border-purple-300 !bg-white hover:!bg-purple-50' : ''}`}
+                    }`}
                   >
                     {member.name}
                   </button>
@@ -154,7 +146,7 @@ export function AdminDetailsStack({
                 No Change
               </button>
               {packerOptions.map((member) => {
-                const theme = getStaffThemeById(member.id, 'packer');
+                const theme = getStaffThemeById(member.id);
                 const themeClasses = stationThemeClasses[theme];
                 return (
                   <button

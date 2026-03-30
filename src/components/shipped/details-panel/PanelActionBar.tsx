@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { ChevronRight, ChevronUp } from '@/components/Icons';
+import type { PanelAction } from '@/hooks/usePanelActions';
 
 interface PanelActionBarProps {
   onClose: () => void;
@@ -9,12 +10,7 @@ interface PanelActionBarProps {
   onMoveDown: () => void;
   disableMoveUp?: boolean;
   disableMoveDown?: boolean;
-  rightActions?: Array<{
-    label: string;
-    onClick: () => void;
-    icon: ReactNode;
-    toneClassName?: string;
-  }>;
+  actions?: PanelAction[];
 }
 
 export type PanelActionBarConfig = PanelActionBarProps;
@@ -50,10 +46,10 @@ export function PanelActionBar({
   onMoveDown,
   disableMoveUp = false,
   disableMoveDown = false,
-  rightActions = [],
+  actions = [],
 }: PanelActionBarProps) {
   return (
-    <div className="px-8 pt-1 pb-0">
+    <div className="px-6 pt-1 pb-0">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
           <ActionButton onClick={onClose} label="Close panel">
@@ -72,15 +68,19 @@ export function PanelActionBar({
           </ActionButton>
         </div>
 
-        {rightActions.length > 0 ? (
+        {actions.length > 0 && (
           <div className="flex items-center gap-2">
-            {rightActions.map((action) => (
-              <ActionButton key={action.label} onClick={action.onClick} label={action.label}>
+            {actions.map((action) => (
+              <ActionButton
+                key={action.key}
+                onClick={action.onAction}
+                label={action.label}
+              >
                 <span className={action.toneClassName}>{action.icon}</span>
               </ActionButton>
             ))}
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   );

@@ -27,9 +27,13 @@ export function useAblyChannel(
 
     getClient().then((client) => {
       if (disposed || !client) return;
-      channel = client.channels.get(channelName);
-      channel.subscribe(eventName, stableHandler);
-    });
+      try {
+        channel = client.channels.get(channelName);
+        channel.subscribe(eventName, stableHandler);
+      } catch {
+        // Connection may have closed between getClient() and subscribe()
+      }
+    }).catch(() => {});
 
     return () => {
       disposed = true;

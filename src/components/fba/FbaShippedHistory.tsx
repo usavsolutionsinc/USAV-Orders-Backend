@@ -243,7 +243,7 @@ export function FbaShippedHistory({ refreshTrigger = 0, stationTheme: theme = 'g
             <p className="text-sm font-black text-gray-900">
               {searchQuery ? 'No closed shipments match this search' : 'No shipped FBA closures yet'}
             </p>
-            <p className="mt-1 max-w-sm text-xs font-bold text-gray-400">
+            <p className="mt-1 max-w-sm text-xs font-bold text-gray-500">
               This list only includes shipments closed via ship workflow (<span className="font-mono">status=SHIPPED</span>),
               not pack-station scans.
             </p>
@@ -270,20 +270,20 @@ export function FbaShippedHistory({ refreshTrigger = 0, stationTheme: theme = 'g
                           <button
                             type="button"
                             onClick={() => toggleItems(row.id)}
-                            className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-slate-50 ${
+                            className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-gray-50 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'
                             }`}
                           >
                             <div className="min-w-0">
                               <div className="truncate text-[12px] font-bold text-gray-900">{row.shipment_ref}</div>
-                              <div className="mt-0.5 truncate text-[9px] font-black uppercase tracking-widest text-gray-400">
+                              <div className="mt-0.5 truncate text-[9px] font-black uppercase tracking-widest text-gray-500">
                                 {row.destination_fc ? `FC ${row.destination_fc} · ` : ''}
                                 {shippedItems}/{totalItems} items shipped
                                 {row.created_by_name ? ` · ${row.created_by_name}` : ''}
                               </div>
                             </div>
                             <ChevronDown
-                              className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                              className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
                             />
                           </button>
                           <AnimatePresence initial={false}>
@@ -312,7 +312,7 @@ export function FbaShippedHistory({ refreshTrigger = 0, stationTheme: theme = 'g
                                               <p className="font-mono text-[11px] font-bold text-zinc-900">
                                                 {tn.tracking_number}
                                               </p>
-                                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] font-semibold text-zinc-400">
+                                              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] font-semibold text-zinc-500">
                                                 <span>{tn.carrier}</span>
                                                 {tn.status_description ? <span>{tn.status_description}</span> : null}
                                                 {tn.is_delivered ? (
@@ -337,7 +337,7 @@ export function FbaShippedHistory({ refreshTrigger = 0, stationTheme: theme = 'g
                                         ))}
                                       </div>
                                     ) : (
-                                      <p className="mb-2 text-[10px] font-semibold text-zinc-400">No tracking linked</p>
+                                      <p className="mb-2 text-[10px] font-semibold text-zinc-500">No tracking linked</p>
                                     )}
                                     {/* Inline add tracking */}
                                     <div className="flex items-center gap-1.5">
@@ -396,7 +396,7 @@ export function FbaShippedHistory({ refreshTrigger = 0, stationTheme: theme = 'g
                                             <span className="min-w-0 flex-1 truncate text-gray-600">
                                               {it.product_title || '—'}
                                             </span>
-                                            <span className="shrink-0 text-[9px] font-black uppercase text-gray-400">
+                                            <span className="shrink-0 text-[9px] font-black uppercase text-gray-500">
                                               {it.status} · {it.actual_qty ?? 0}/{it.expected_qty}
                                             </span>
                                           </li>

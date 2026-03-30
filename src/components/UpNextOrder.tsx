@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { framerPresence, framerTransition, tabPagerVariants } from '@/design-system';
 import confetti from 'canvas-confetti';
 import { Package } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
@@ -13,7 +15,7 @@ import { ReceivingAssignmentCard } from './station/upnext/ReceivingAssignmentCar
 import { UpNextFilterBar } from './station/upnext/UpNextFilterBar';
 import { getTechStationLightChromeOutlineClass } from '@/utils/staff-colors';
 import { getOrderPlatformLabel } from '@/utils/order-platform';
-import type { HorizontalSliderItem } from './ui/HorizontalButtonSlider';
+import { SLIDER_PRESETS, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
 
 type TabId = 'all' | 'orders' | 'repair' | 'fba' | 'stock' | 'receiving';
 
@@ -22,6 +24,7 @@ interface UpNextOrderProps {
   onStart: (tracking: string) => void;
   onMissingParts: (orderId: number, reason: string) => void;
   onAllCompleted?: () => void;
+  filterBarPortalRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 function isOutOfStock(order: { out_of_stock: string | null }): boolean {
@@ -51,28 +54,18 @@ function matchesSearch(needle: string, fields: (string | null | undefined)[]): b
   return tokens.every((t) => haystack.includes(t));
 }
 
+const SORT_FILTER_IDS = new Set(['must_go', 'newest', 'oldest']);
+
 const QUICK_FILTER_ITEMS: Record<TabId, HorizontalSliderItem[]> = {
-  all:       [{ id: 'all', label: 'All' }],
-  orders:    [
-    { id: 'all', label: 'All' },
-    { id: 'amazon', label: 'Amazon' },
-    { id: 'ebay', label: 'eBay' },
-    { id: 'ecwid', label: 'Website' },
-  ],
-  fba:       [
-    { id: 'all', label: 'All' },
-    { id: 'PLANNED', label: 'Planned' },
-    { id: 'READY_TO_GO', label: 'Ready' },
-  ],
-  repair:    [
-    { id: 'all', label: 'All' },
-    { id: 'unassigned', label: 'Unassigned' },
-  ],
-  stock:     [{ id: 'all', label: 'All' }],
-  receiving: [{ id: 'all', label: 'All' }],
+  all:       [SLIDER_PRESETS.mustGo, SLIDER_PRESETS.newest, SLIDER_PRESETS.oldest],
+  orders:    [SLIDER_PRESETS.all, SLIDER_PRESETS.amazon, SLIDER_PRESETS.ebay, SLIDER_PRESETS.ecwid],
+  fba:       [SLIDER_PRESETS.pending],
+  repair:    [SLIDER_PRESETS.repair],
+  stock:     [SLIDER_PRESETS.stock],
+  receiving: [SLIDER_PRESETS.receiving],
 };
 
-export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: UpNextOrderProps) {
+export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted, filterBarPortalRef }: UpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
   /** +1 = animate like swiping to a tab to the right, -1 = to the left (visible tab bar order). */
   const [tabSlideDir, setTabSlideDir] = useState(1);
@@ -81,7 +74,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
   const [searchText, setSearchText] = useState('');
-  const [quickFilter, setQuickFilter] = useState('all');
+  const [quickFilter, setQuickFilter] = useState('must_go');
   const hasCelebratedRef = useRef(false);
 
   const { allOrders, allRepairs, fbaItems, receivingItems, loading, allCompletedToday, fetchOrders } =
@@ -108,7 +101,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   };
   const filteredOrders = useMemo(() => {
     let list = nonStockOrders;
-    if (quickFilter !== 'all') {
+    if (quickFilter !== 'all' && !SORT_FILTER_IDS.has(quickFilter)) {
       list = list.filter((o) => {
         const plat = getOrderPlatformLabel(o.order_id || '', o.account_source).toLowerCase();
         if (quickFilter === 'ecwid') return plat === 'ecwid' || (!plat.includes('amazon') && !plat.includes('ebay') && !plat.includes('walmart'));
@@ -128,14 +121,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   const filteredRepairs = useMemo(() => {
     let list = sortedRepairs;
-    if (quickFilter === 'unassigned') {
-      list = list.filter((r) => r.assignedTechId === null);
-    }
     if (searchText.trim()) {
       list = list.filter((r) => matchesSearch(searchText, [r.productTitle, r.ticketNumber, r.serialNumber, r.sku, r.issue]));
     }
     return list;
-  }, [sortedRepairs, quickFilter, searchText]);
+  }, [sortedRepairs, searchText]);
 
   const filteredFbaItems = useMemo(() => {
     let list = activeFbaItems;
@@ -152,6 +142,31 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     if (!searchText.trim()) return receivingItems;
     return receivingItems.filter((i) => matchesSearch(searchText, [i.tracking_number, i.notes, ...(i.line_skus || [])]));
   }, [receivingItems, searchText]);
+
+  const sortedOrders = useMemo(() => {
+    if (quickFilter === 'must_go') {
+      return [...filteredOrders].sort((a, b) => {
+        const da = a.ship_by_date ? new Date(a.ship_by_date).getTime() : Number.POSITIVE_INFINITY;
+        const db = b.ship_by_date ? new Date(b.ship_by_date).getTime() : Number.POSITIVE_INFINITY;
+        return da - db;
+      });
+    }
+    if (quickFilter === 'newest') {
+      return [...filteredOrders].sort((a, b) => {
+        const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return db - da;
+      });
+    }
+    if (quickFilter === 'oldest') {
+      return [...filteredOrders].sort((a, b) => {
+        const da = a.created_at ? new Date(a.created_at).getTime() : Number.POSITIVE_INFINITY;
+        const db = b.created_at ? new Date(b.created_at).getTime() : Number.POSITIVE_INFINITY;
+        return da - db;
+      });
+    }
+    return filteredOrders;
+  }, [filteredOrders, quickFilter]);
 
   const tabCounts = rawTabCounts;
   const stationTabChromeOutline = useMemo(() => getTechStationLightChromeOutlineClass(techId), [techId]);
@@ -215,18 +230,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     d.setHours(0, 0, 0, 0);
     return d.getTime() === today.getTime();
   }).length;
-  // Full-width horizontal pager (mobile-style): both panels move on X; no vertical slide.
-  const tabContentVariants = {
-    enter: (dir: number) => ({
-      x: prefersReducedMotion ? 0 : dir > 0 ? '100%' : '-100%',
-      opacity: prefersReducedMotion ? 1 : 0,
-    }),
-    center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({
-      x: prefersReducedMotion ? 0 : dir > 0 ? '-100%' : '100%',
-      opacity: prefersReducedMotion ? 1 : 0,
-    }),
-  };
+  const tabTransition = prefersReducedMotion ? framerTransition.tabPagerReduced : framerTransition.tabPager;
 
   const selectTab = useCallback(
     (next: TabId, fromTab?: TabId) => {
@@ -250,7 +254,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     setShowMissingPartsInput(null);
     setMissingPartsReason('');
     setSearchText('');
-    setQuickFilter('all');
+    setQuickFilter(QUICK_FILTER_ITEMS[effectiveTab]?.[0]?.id ?? 'all');
   }, [effectiveTab]);
 
   useEffect(() => {
@@ -345,7 +349,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     />
   );
 
-  const isFiltering = Boolean(searchText.trim() || quickFilter !== 'all');
+  const isFiltering = Boolean(searchText.trim() || (quickFilter !== 'all' && !SORT_FILTER_IDS.has(quickFilter)));
   const Wrap = isFiltering
     ? ({ children }: { children: React.ReactNode }) => <>{children}</>
     : ({ children }: { children: React.ReactNode }) => <AnimatePresence mode="popLayout">{children}</AnimatePresence>;
@@ -355,10 +359,10 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       id: 'orders',
       label: 'Pending Orders',
       headerColor: 'orange' as const,
-      count: filteredOrders.length,
+      count: sortedOrders.length,
       render: () => (
         <Wrap>
-          {filteredOrders.map((order) => renderOrderCard(order))}
+          {sortedOrders.map((order) => renderOrderCard(order))}
         </Wrap>
       ),
     },
@@ -434,26 +438,12 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           stationChromeOutlineClassName={stationTabChromeOutline}
         />
 
-        {/* ── Filter bar ── */}
-        {tabCounts[effectiveTab] > 0 && (
-          <UpNextFilterBar
-            searchText={searchText}
-            onSearchChange={setSearchText}
-            quickFilter={quickFilter}
-            onQuickFilterChange={setQuickFilter}
-            quickFilterItems={QUICK_FILTER_ITEMS[effectiveTab]}
-            placeholder={`Search ${visibleTabs.find((t) => t.id === effectiveTab)?.label ?? ''}...`}
-          />
-        )}
-
         {/* ── Urgency summary bar ── */}
         <AnimatePresence initial={false}>
           {tabCounts.all > 0 && (lateCount > 0 || dueTodayCount > 0) && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              {...framerPresence.collapseHeight}
+              transition={framerTransition.upNextCollapse}
               className="overflow-hidden"
             >
               <div className="flex items-center gap-2 px-1 pt-0.5">
@@ -464,7 +454,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                   </span>
                 )}
                 {lateCount > 0 && dueTodayCount > 0 && (
-                  <span className="text-gray-200 text-[9px]">·</span>
+                  <span className="text-gray-500 text-[9px]">·</span>
                 )}
                 {dueTodayCount > 0 && (
                   <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-500">
@@ -478,21 +468,19 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </AnimatePresence>
 
         {/* ── Primary tab content ── */}
-        {/* Grid stacks entering + exiting panes in one cell so sync horizontal swipe does not double layout height */}
-        <div className="grid overflow-x-hidden">
+        {/* Grid stacks entering + exiting panes in one cell; mode="sync" keeps both in flow so height doesn't jump */}
+        <div className="grid overflow-hidden">
         <AnimatePresence mode="sync" initial={false} custom={tabSlideDir}>
           <motion.div
             key={effectiveTab}
             custom={tabSlideDir}
-            variants={tabContentVariants}
-            initial="enter"
+            variants={tabPagerVariants}
+            initial={prefersReducedMotion ? false : 'enter'}
             animate="center"
             exit="exit"
-            transition={{
-              x: { type: 'tween', duration: prefersReducedMotion ? 0.01 : 0.32, ease: [0.32, 0.72, 0, 1] },
-              opacity: { duration: prefersReducedMotion ? 0.01 : 0.2, ease: 'easeOut' },
-            }}
-            className="col-start-1 row-start-1 min-w-0 w-full"
+            transition={tabTransition}
+            className="col-start-1 row-start-1 min-w-0 w-full will-change-transform"
+            style={{ backfaceVisibility: 'hidden' }}
           >
             {effectiveTab === 'stock' ? (
               filteredStockOrders.length === 0 ? (
@@ -541,15 +529,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                 <EmptySlate label={isFiltering ? "No results" : "No repairs in queue"} />
               ) : (
                 <div className="flex flex-col">
-                  {filteredRepairs.some((r) => r.assignedTechId === null) && (
-                    <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
-                      <div className="h-px flex-1 bg-red-100" />
-                      <span className="text-[9px] font-black uppercase tracking-widest text-red-400">
-                        {filteredRepairs.filter((r) => r.assignedTechId === null).length} unassigned
-                      </span>
-                      <div className="h-px flex-1 bg-red-100" />
-                    </div>
-                  )}
                   <Wrap>
                     {filteredRepairs.map((repair) => (
                       <RepairCard
@@ -650,19 +629,37 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
           </div>
         )}
 
+        {/* ── Filter bar ── */}
+        {tabCounts[effectiveTab] > 0 && (() => {
+          const filterBar = (
+            <div className="bg-white/90 backdrop-blur-sm border-t border-gray-100 px-1 py-1.5">
+              <UpNextFilterBar
+                searchText={searchText}
+                onSearchChange={setSearchText}
+                quickFilter={quickFilter}
+                onQuickFilterChange={setQuickFilter}
+                quickFilterItems={QUICK_FILTER_ITEMS[effectiveTab]}
+                quickFilterVariant={QUICK_FILTER_ITEMS[effectiveTab].some((i) => i.tone) ? 'fba' : 'slate'}
+                placeholder={`Search ${visibleTabs.find((t) => t.id === effectiveTab)?.label ?? ''}...`}
+              />
+            </div>
+          );
+          if (filterBarPortalRef?.current) return createPortal(filterBar, filterBarPortalRef.current);
+          return <div className="sticky bottom-0 left-0 right-0 z-10">{filterBar}</div>;
+        })()}
+
     </div>
   );
 }
 
 function EmptySlate({ label, color = 'gray' }: { label: string; color?: 'gray' | 'green' | 'purple' | 'teal' | 'red' }) {
   const bg   = color === 'green' ? 'bg-emerald-50 border-emerald-100' : color === 'purple' ? 'bg-purple-50 border-purple-100' : color === 'teal' ? 'bg-teal-50 border-teal-100' : color === 'red' ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-200';
-  const text = color === 'green' ? 'text-emerald-500' : color === 'purple' ? 'text-purple-400' : color === 'teal' ? 'text-teal-400' : color === 'red' ? 'text-red-400' : 'text-gray-400';
-  const icon = color === 'green' ? 'text-emerald-300' : color === 'purple' ? 'text-purple-200' : color === 'teal' ? 'text-teal-200' : color === 'red' ? 'text-red-200' : 'text-gray-300';
+  const text = color === 'green' ? 'text-emerald-500' : color === 'purple' ? 'text-purple-500' : color === 'teal' ? 'text-teal-500' : color === 'red' ? 'text-red-500' : 'text-gray-500';
+  const icon = color === 'green' ? 'text-emerald-300' : color === 'purple' ? 'text-purple-200' : color === 'teal' ? 'text-teal-200' : color === 'red' ? 'text-red-200' : 'text-gray-500';
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+      {...framerPresence.upNextRow}
+      transition={framerTransition.upNextRowMount}
       className={`rounded-2xl px-4 py-3 border ${bg}`}
     >
       <div className="flex items-center justify-between gap-3">
@@ -673,9 +670,9 @@ function EmptySlate({ label, color = 'gray' }: { label: string; color?: 'gray' |
   );
 }
 
-function SectionHeader({ label, color = 'orange' }: { label: string; color?: 'orange' | 'purple' }) {
-  const lineClass = color === 'purple' ? 'bg-purple-200' : 'bg-orange-200';
-  const textClass = color === 'purple' ? 'text-purple-600' : 'text-orange-600';
+function SectionHeader({ label, color = 'orange' }: { label: string; color?: 'orange' | 'purple' | 'red' }) {
+  const lineClass = color === 'purple' ? 'bg-purple-200' : color === 'red' ? 'bg-red-200' : 'bg-orange-200';
+  const textClass = color === 'purple' ? 'text-purple-600' : color === 'red' ? 'text-red-600' : 'text-orange-600';
   return (
     <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
       <div className={`h-px flex-1 ${lineClass}`} />

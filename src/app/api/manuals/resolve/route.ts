@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-
-function normalizeIdentifier(rawValue: string): string {
-  const cleaned = String(rawValue || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
-  return cleaned.replace(/^0+/, '') || '';
-}
+import { normalizeIdentifier } from '@/lib/product-manuals';
 
 function buildDriveUrls(googleFileId: string) {
   return {

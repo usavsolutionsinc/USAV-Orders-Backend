@@ -181,7 +181,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               >
                 <div className="flex gap-1.5 w-max pb-1">
                   {form.techs.map((tech) => {
-                    const theme = getStaffThemeById(tech.id, 'technician');
+                    const theme = getStaffThemeById(tech.id);
                     const colors = stationThemeColors[theme];
                     const isActive = form.assignedTechId === String(tech.id);
                     return (

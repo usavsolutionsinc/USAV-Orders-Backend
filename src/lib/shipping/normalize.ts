@@ -1,12 +1,19 @@
 import type { CarrierCode, NormalizedShipmentStatus } from './types';
+import {
+  normalizeTrackingNumber,
+  detectCarrier as _detectCarrier,
+} from '@/lib/tracking-format';
 
-// ─── Tracking number normalization ──────────────────────────────────────────
+// Re-export canonical implementations from tracking-format.ts
+export { normalizeTrackingNumber };
 
-export function normalizeTrackingNumber(raw: string): string {
-  return String(raw || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
+/** Carrier detection re-exported with CarrierCode return type for shipping layer. */
+export function detectCarrier(normalized: string): CarrierCode | null {
+  const c = _detectCarrier(normalized);
+  if (c === 'UPS') return 'UPS';
+  if (c === 'FedEx' || c === 'FEDEX') return 'FEDEX';
+  if (c === 'USPS') return 'USPS';
+  return null;
 }
 
 // ─── UPS status mapping ──────────────────────────────────────────────────────
@@ -182,21 +189,6 @@ function normalizeFedExByText(description: string): NormalizedShipmentStatus {
   return 'UNKNOWN';
 }
 
-// ─── Carrier auto-detection ──────────────────────────────────────────────────
-
-export function detectCarrier(normalized: string): CarrierCode | null {
-  // UPS: starts with 1Z, 18 characters
-  if (/^1Z[A-Z0-9]{16}$/.test(normalized)) return 'UPS';
-  // FedEx: 12, 15, or 20 digits
-  if (/^\d{12}$/.test(normalized)) return 'FEDEX';
-  if (/^\d{15}$/.test(normalized)) return 'FEDEX';
-  if (/^\d{20}$/.test(normalized)) return 'FEDEX';
-  if (/^9621\d{29}$/.test(normalized)) return 'FEDEX';
-  // USPS: 20-22 digits, or starts with 9
-  if (/^9\d{15,21}$/.test(normalized)) return 'USPS';
-  if (/^\d{20,22}$/.test(normalized)) return 'USPS';
-  return null;
-}
 
 // ─── Polling cadence ─────────────────────────────────────────────────────────
 

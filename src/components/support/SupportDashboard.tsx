@@ -4,6 +4,8 @@ import { useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, ExternalLink, RefreshCw } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
+import { formatMediumDateTime } from '@/utils/_date';
+import { sectionLabel, cardTitle, dataValue, microBadge, chipText } from '@/design-system/tokens/typography/presets';
 
 interface QueueItem {
   [key: string]: any;
@@ -45,19 +47,6 @@ interface SupportOverviewResponse {
   zendesk: ZendeskSummary;
 }
 
-function formatDateTime(value: string) {
-  if (!value) return 'Just now';
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  return parsed.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 function SummaryCard({
   label,
@@ -76,8 +65,8 @@ function SummaryCard({
   };
 
   return (
-    <div className={`rounded-3xl border p-4 ${toneClasses[tone]}`}>
-      <p className="text-[9px] font-black uppercase tracking-[0.25em] opacity-80">{label}</p>
+    <div className={`rounded-xl border p-4 ${toneClasses[tone]}`}>
+      <p className={sectionLabel}>{label}</p>
       <p className="mt-3 text-3xl font-black tracking-tight">{value}</p>
     </div>
   );
@@ -111,7 +100,7 @@ export function SupportDashboard() {
   }, [handleRefresh]);
 
   const generatedLabel = data?.generatedAt
-    ? `${isFetching ? 'Refreshing' : 'Updated'} ${formatDateTime(data.generatedAt)}`
+    ? `${isFetching ? 'Refreshing' : 'Updated'} ${formatMediumDateTime(data.generatedAt)}`
     : isLoading
       ? 'Loading support data'
       : 'Awaiting support data';
@@ -126,16 +115,16 @@ export function SupportDashboard() {
   } else if (isError || !data) {
     content = (
       <div className="flex h-full w-full items-center justify-center p-6">
-        <div className="max-w-md rounded-3xl border border-rose-200 bg-white p-6 text-center shadow-sm">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+        <div className="max-w-md rounded-xl border border-rose-200 bg-white p-6 text-center shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
             <AlertCircle className="h-6 w-6" />
           </div>
-          <p className="mt-4 text-sm font-black uppercase tracking-[0.2em] text-gray-900">Support data unavailable</p>
+          <p className={`mt-4 ${sectionLabel} text-gray-900`}>Support data unavailable</p>
           <p className="mt-2 text-sm text-gray-600">{error instanceof Error ? error.message : 'Unknown error'}</p>
           <button
             type="button"
             onClick={handleRefresh}
-            className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-gray-900 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white"
+            className={`mt-4 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 ${sectionLabel} text-white`}
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Retry
@@ -157,27 +146,27 @@ export function SupportDashboard() {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           <div className="space-y-4">
             {ebayAccounts.length === 0 ? (
-              <div className="rounded-[28px] border border-dashed border-gray-200 bg-white p-6 text-center">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">No eBay accounts connected</p>
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-6 text-center">
+                <p className={sectionLabel}>No eBay accounts connected</p>
                 <p className="mt-2 text-sm text-gray-500">Connect an account to surface unread messages and return requests here.</p>
               </div>
             ) : (
               ebayAccounts.map((account) => (
-                <div key={account.accountName} className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
+                <div key={account.accountName} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">eBay account</p>
-                      <h2 className="text-lg font-black tracking-tight text-gray-900">{account.accountName}</h2>
+                      <p className={sectionLabel}>eBay account</p>
+                      <h2 className={`mt-1 ${cardTitle}`}>{account.accountName}</h2>
                     </div>
-                    <div className="flex gap-2 text-[9px] font-black uppercase tracking-[0.18em]">
-                      <span className="rounded-xl bg-blue-50 px-3 py-2 text-blue-700">{account.unreadMessages.count} unread</span>
-                      <span className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700">{account.returnRequests.count} returns</span>
+                    <div className="flex gap-2">
+                      <span className={`rounded-xl bg-blue-50 px-3 py-2 ${microBadge} text-blue-700`}>{account.unreadMessages.count} unread</span>
+                      <span className={`rounded-xl bg-amber-50 px-3 py-2 ${microBadge} text-amber-700`}>{account.returnRequests.count} returns</span>
                     </div>
                   </div>
 
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                    <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
-                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-700">Unread messages</p>
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                      <p className={`${sectionLabel} text-blue-700`}>Unread messages</p>
                       {account.unreadMessages.error ? (
                         <p className="mt-3 text-sm text-rose-600">{account.unreadMessages.error}</p>
                       ) : account.unreadMessages.items.length === 0 ? (
@@ -185,27 +174,27 @@ export function SupportDashboard() {
                       ) : (
                         <div className="mt-3 space-y-3">
                           {account.unreadMessages.items.map((item, index) => (
-                            <div key={`${item.conversationId || item.referenceId || item.subject || 'message'}-${index}`} className="rounded-2xl border border-white bg-white p-3">
+                            <div key={`${item.conversationId || item.referenceId || item.subject || 'message'}-${index}`} className="rounded-xl border border-white bg-white p-3">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="truncate text-sm font-bold text-gray-900">{item.subject}</p>
-                                  <p className="mt-1 text-[11px] font-medium text-gray-500">
+                                  <p className={`truncate ${dataValue}`}>{item.subject}</p>
+                                  <p className="mt-1 text-[11px] font-semibold text-gray-500">
                                     {item.otherPartyUsername} • {item.referenceType || 'MESSAGE'} {item.referenceId || ''}
                                   </p>
                                 </div>
-                                <span className="rounded-lg bg-blue-50 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-blue-700">
+                                <span className={`rounded-lg bg-blue-50 px-2 py-1 ${microBadge} text-blue-700`}>
                                   {item.unreadCount} unread
                                 </span>
                               </div>
-                              <p className="mt-2 text-[11px] font-medium text-gray-500">{formatDateTime(item.createdDate)}</p>
+                              <p className="mt-2 text-[11px] font-semibold text-gray-500">{formatMediumDateTime(item.createdDate)}</p>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    <div className="rounded-3xl border border-gray-200 bg-gray-50 p-4">
-                      <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">Return requests</p>
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                      <p className={`${sectionLabel} text-amber-700`}>Return requests</p>
                       {account.returnRequests.error ? (
                         <p className="mt-3 text-sm text-rose-600">{account.returnRequests.error}</p>
                       ) : account.returnRequests.items.length === 0 ? (
@@ -213,19 +202,19 @@ export function SupportDashboard() {
                       ) : (
                         <div className="mt-3 space-y-3">
                           {account.returnRequests.items.map((item, index) => (
-                            <div key={`${item.returnId || item.orderId || item.itemId || 'return'}-${index}`} className="rounded-2xl border border-white bg-white p-3">
+                            <div key={`${item.returnId || item.orderId || item.itemId || 'return'}-${index}`} className="rounded-xl border border-white bg-white p-3">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                  <p className="text-sm font-bold text-gray-900">Return #{item.returnId || 'Pending'}</p>
-                                  <p className="mt-1 text-[11px] font-medium text-gray-500">
+                                  <p className={dataValue}>Return #{item.returnId || 'Pending'}</p>
+                                  <p className="mt-1 text-[11px] font-semibold text-gray-500">
                                     Order {item.orderId || 'N/A'} • Item {item.itemId || 'N/A'}
                                   </p>
                                 </div>
-                                <span className="rounded-lg bg-amber-50 px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-amber-700">
+                                <span className={`rounded-lg bg-amber-50 px-2 py-1 ${microBadge} text-amber-700`}>
                                   {item.state}
                                 </span>
                               </div>
-                              <p className="mt-2 text-[11px] font-medium text-gray-500">{formatDateTime(item.lastModifiedDate || item.creationDate)}</p>
+                              <p className="mt-2 text-[11px] font-semibold text-gray-500">{formatMediumDateTime(item.lastModifiedDate || item.creationDate)}</p>
                             </div>
                           ))}
                         </div>
@@ -238,18 +227,18 @@ export function SupportDashboard() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-[0.22em] text-emerald-700">Zendesk</p>
-                  <h2 className="mt-1 text-lg font-black tracking-tight text-gray-900">Open ticket queue</h2>
+                  <p className={`${sectionLabel} text-emerald-700`}>Zendesk</p>
+                  <h2 className={`mt-1 ${cardTitle}`}>Open ticket queue</h2>
                 </div>
                 {zendesk.agentUrl ? (
                   <a
                     href={zendesk.agentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 text-[9px] font-black uppercase tracking-[0.16em] text-gray-600"
+                    className={`inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-2 ${microBadge} text-gray-600`}
                   >
                     Open
                     <ExternalLink className="h-3 w-3" />
@@ -258,12 +247,12 @@ export function SupportDashboard() {
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-emerald-50 p-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700">Open tickets</p>
+                <div className="rounded-xl bg-emerald-50 p-3">
+                  <p className={`${sectionLabel} text-emerald-700`}>Open tickets</p>
                   <p className="mt-2 text-2xl font-black tracking-tight text-emerald-700">{zendesk.count}</p>
                 </div>
-                <div className="rounded-2xl bg-rose-50 p-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-rose-700">High priority</p>
+                <div className="rounded-xl bg-rose-50 p-3">
+                  <p className={`${sectionLabel} text-rose-700`}>High priority</p>
                   <p className="mt-2 text-2xl font-black tracking-tight text-rose-700">{zendesk.urgentCount}</p>
                 </div>
               </div>
@@ -280,20 +269,20 @@ export function SupportDashboard() {
                       href={ticket.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="block rounded-2xl border border-gray-200 bg-gray-50 p-3 transition-colors hover:bg-gray-100"
+                      className="block rounded-xl border border-gray-200 bg-gray-50 p-3 transition-colors hover:bg-gray-100"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-gray-900">{ticket.subject}</p>
-                          <p className="mt-1 text-[11px] font-medium text-gray-500">
+                          <p className={`truncate ${dataValue}`}>{ticket.subject}</p>
+                          <p className="mt-1 text-[11px] font-semibold text-gray-500">
                             #{ticket.id} • {ticket.requesterName}
                           </p>
                         </div>
-                        <span className="rounded-lg bg-white px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] text-gray-700">
+                        <span className={`rounded-lg bg-white px-2 py-1 ${microBadge} text-gray-700`}>
                           {ticket.status}
                         </span>
                       </div>
-                      <p className="mt-2 text-[11px] font-medium text-gray-500">{formatDateTime(ticket.updatedAt)}</p>
+                      <p className="mt-2 text-[11px] font-semibold text-gray-500">{formatMediumDateTime(ticket.updatedAt)}</p>
                     </a>
                   ))}
                 </div>
@@ -309,16 +298,16 @@ export function SupportDashboard() {
     <div className="flex h-full min-h-0 w-full flex-col bg-gray-50">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Unified Support Queue</p>
+          <p className={`truncate ${sectionLabel} text-gray-900`}>Unified Support Queue</p>
           <div className="flex items-center gap-3">
-            <div className="hidden rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500 md:block">
+            <div className={`hidden rounded-xl border border-gray-200 bg-gray-50 px-3 py-1.5 ${microBadge} text-gray-500 md:block`}>
               {generatedLabel}
             </div>
             <button
               type="button"
               onClick={handleRefresh}
               disabled={isFetching}
-              className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:opacity-50"
+              className={`inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 ${microBadge} text-gray-900 transition-colors hover:bg-gray-900 hover:text-white disabled:opacity-50`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
               Refresh

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import { RefreshCw, X } from '@/components/Icons';
+import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 
 const GOAL_VIEW_OPTIONS = [
   { value: 'all', label: 'All Staff' },
@@ -60,8 +61,8 @@ export function GoalsSidebarPanel() {
           value={goalView}
           onChange={(nextValue) => updateParams({ goalView: nextValue as GoalViewMode })}
           variant="boxy"
-          buttonClassName="h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left text-[10px] font-black uppercase tracking-wider text-gray-700 outline-none transition-all hover:bg-gray-50"
-          optionClassName="text-[10px] font-black tracking-wider"
+          buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
+          optionClassName={fieldLabel}
         />
       </div>
 
@@ -77,7 +78,7 @@ export function GoalsSidebarPanel() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="border-b border-gray-200 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">Goal Tools</p>
+          <p className={sectionLabel}>Goal Tools</p>
         </div>
 
         <button
@@ -86,8 +87,8 @@ export function GoalsSidebarPanel() {
           className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
         >
           <div>
-            <p className="text-[11px] font-black tracking-widest text-gray-900">Refresh Goal Data</p>
-            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Reload counts and saved daily goals</p>
+            <p className={dataValue}>Refresh Goal Data</p>
+            <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Reload counts and saved daily goals</p>
           </div>
           <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
             <RefreshCw className="h-3.5 w-3.5" />
@@ -100,8 +101,8 @@ export function GoalsSidebarPanel() {
           className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
         >
           <div>
-            <p className="text-[11px] font-black tracking-widest text-gray-900">Clear Filters</p>
-            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Reset search and goal view</p>
+            <p className={dataValue}>Clear Filters</p>
+            <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Reset search and goal view</p>
           </div>
           <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
             <X className="h-3.5 w-3.5" />

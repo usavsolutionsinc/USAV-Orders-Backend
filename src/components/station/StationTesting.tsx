@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { LayoutGroup, motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
 import { Barcode, AlertCircle, Loader2, Package, MapPin, Settings } from '../Icons';
@@ -9,7 +9,8 @@ import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
-import { techStationScanInputBorderClass, type TechStationTheme } from '@/utils/staff-colors';
+import { useStationTheme } from '@/hooks/useStationTheme';
+import { useIsMobile } from '@/hooks';
 
 const STATION_EASE_OUT = [0.22, 1, 0.36, 1] as const;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
@@ -19,7 +20,7 @@ const stationLayoutTween = { layout: { duration: 0.32, ease: STATION_EASE_HEIGHT
 interface StationTestingProps {
   userId: string;
   userName: string;
-  themeColor?: 'green' | 'blue' | 'purple' | 'yellow';
+  staffId: number | string;
   onTrackingScan?: () => void;
   todayCount: number;
   goal?: number;
@@ -31,7 +32,7 @@ interface StationTestingProps {
 export default function StationTesting({
   userId,
   userName,
-  themeColor = 'purple',
+  staffId,
   onTrackingScan,
   todayCount = 0,
   goal = 50,
@@ -39,7 +40,10 @@ export default function StationTesting({
   embedded = false,
   onViewManual,
 }: StationTestingProps) {
+  const { theme: themeColor, inputBorder } = useStationTheme({ staffId });
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
+  const filterBarPortalRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   const {
     inputValue,
@@ -264,13 +268,127 @@ export default function StationTesting({
     ],
   );
 
+  /* ── Scan bar block (shared between desktop-top and mobile-bottom) ── */
+  const scanBarBlock = (
+    <motion.div
+      initial={{ opacity: 0, y: isMobile ? 4 : -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={stationTween}
+      className="space-y-2"
+    >
+      <StationScanBar
+        value={inputValue}
+        onChange={setInputValue}
+        onSubmit={handleFormSubmit}
+        inputRef={inputRef}
+        inputBorderClassName={inputBorder}
+        placeholder="ORDERS, FNSKU, RS, SN"
+        autoFocus
+        icon={(
+          <span
+            className="-ml-1 flex items-center justify-center"
+            role="status"
+            aria-label={`Current input mode: ${modeBadge.label}`}
+            title={`Current mode: ${modeBadge.label}`}
+          >
+            <ActiveModeIcon className={`h-[17px] w-[17px] transition-colors ${modeBadge.leftDisplayClassName}`} />
+          </span>
+        )}
+        inputClassName={`pl-[2.2rem] focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 pr-32`}
+        rightContentClassName="right-1.5 gap-0.5"
+        rightContent={(
+          <>
+            {isLoading && (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-700" />
+            )}
+            <div className="flex items-center gap-0">
+              <button
+                type="button"
+                onClick={() => toggleMode('tracking')}
+                aria-pressed={isTrackingArmed}
+                aria-label={
+                  isTrackingArmed
+                    ? 'Tracking armed for next Enter or scan. Click again to cancel.'
+                    : 'Arm tracking: next Enter or scan uses tracking. If the field already has text, send now.'
+                }
+                title={
+                  isTrackingArmed
+                    ? 'Tracking armed — next Enter/scan. Click again to cancel.'
+                    : 'Arm tracking (next Enter/scan; or send now if field has text)'
+                }
+                className={`${modeButtonBaseClass} ${isTrackingArmed ? 'text-blue-700 bg-blue-50' : inactiveModeButtonClass}`}
+              >
+                <MapPin className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleMode('fba')}
+                aria-pressed={isFbaArmed}
+                aria-label={
+                  isFbaArmed
+                    ? 'FBA armed for next Enter or scan. Click again to cancel.'
+                    : 'Arm FBA: next Enter or scan uses FNSKU. If the field already has text, send now.'
+                }
+                title={
+                  isFbaArmed
+                    ? 'FBA armed — next Enter/scan. Click again to cancel.'
+                    : 'Arm FBA (next Enter/scan; or send now if field has text)'
+                }
+                className={`${modeButtonBaseClass} ${isFbaArmed ? 'text-violet-700 bg-violet-50' : inactiveModeButtonClass}`}
+              >
+                <Package className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleMode('repair')}
+                aria-pressed={isRepairArmed}
+                aria-label={
+                  isRepairArmed
+                    ? 'Repair armed for next Enter or scan. Click again to cancel.'
+                    : 'Arm repair: next Enter or scan uses RS- ID. If the field already has text, send now.'
+                }
+                title={
+                  isRepairArmed
+                    ? 'Repair armed — next Enter/scan. Click again to cancel.'
+                    : 'Arm repair (next Enter/scan; or send now if field has text)'
+                }
+                className={`${modeButtonBaseClass} ${isRepairArmed ? 'text-amber-700 bg-amber-50' : inactiveModeButtonClass}`}
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleMode('serial')}
+                aria-pressed={isSerialArmed}
+                aria-label={
+                  isSerialArmed
+                    ? 'Serial armed for next Enter or scan. Click again to cancel.'
+                    : 'Arm serial: next Enter or scan adds a serial. If the field already has text, send now.'
+                }
+                title={
+                  isSerialArmed
+                    ? 'Serial armed — next Enter/scan. Click again to cancel.'
+                    : 'Arm serial (next Enter/scan; or send now if field has text)'
+                }
+                className={`${modeButtonBaseClass} ${isSerialArmed ? 'text-emerald-700 bg-emerald-50' : inactiveModeButtonClass}`}
+              >
+                <Barcode className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </>
+        )}
+      />
+    </motion.div>
+  );
+
   return (
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 pb-1 space-y-2">
+        {/* ── Header (always top) ── */}
+        <div className={`p-4 pb-1 space-y-2 ${isMobile ? 'pt-3 pb-0' : ''}`}>
           <div className="space-y-0.5">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
+              <h2 className={`font-black text-gray-900 tracking-tighter ${isMobile ? 'text-lg' : 'text-xl'}`}>Welcome, {userName}</h2>
             </div>
           </div>
 
@@ -281,124 +399,13 @@ export default function StationTesting({
             theme={themeColor}
           />
 
-          {/* ── ORDERS mode scan input ── */}
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={stationTween}
-            className="space-y-2"
-          >
-            <StationScanBar
-              value={inputValue}
-              onChange={setInputValue}
-              onSubmit={handleFormSubmit}
-              inputRef={inputRef}
-              inputBorderClassName={techStationScanInputBorderClass[themeColor as TechStationTheme]}
-              placeholder="ORDERS, FNSKU, RS, SN"
-              autoFocus
-              icon={(
-                <span
-                  className="-ml-1 flex items-center justify-center"
-                  role="status"
-                  aria-label={`Current input mode: ${modeBadge.label}`}
-                  title={`Current mode: ${modeBadge.label}`}
-                >
-                  <ActiveModeIcon className={`h-[17px] w-[17px] transition-colors ${modeBadge.leftDisplayClassName}`} />
-                </span>
-              )}
-              inputClassName={`pl-[2.2rem] focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 pr-32`}
-              rightContentClassName="right-1.5 gap-0.5"
-              rightContent={(
-                <>
-                  {isLoading && (
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-700" />
-                  )}
-                  <div className="flex items-center gap-0">
-                    <button
-                      type="button"
-                      onClick={() => toggleMode('tracking')}
-                      aria-pressed={isTrackingArmed}
-                      aria-label={
-                        isTrackingArmed
-                          ? 'Tracking armed for next Enter or scan. Click again to cancel.'
-                          : 'Arm tracking: next Enter or scan uses tracking. If the field already has text, send now.'
-                      }
-                      title={
-                        isTrackingArmed
-                          ? 'Tracking armed — next Enter/scan. Click again to cancel.'
-                          : 'Arm tracking (next Enter/scan; or send now if field has text)'
-                      }
-                      className={`${modeButtonBaseClass} ${isTrackingArmed ? 'text-blue-700 bg-blue-50' : inactiveModeButtonClass}`}
-                    >
-                      <MapPin className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleMode('fba')}
-                      aria-pressed={isFbaArmed}
-                      aria-label={
-                        isFbaArmed
-                          ? 'FBA armed for next Enter or scan. Click again to cancel.'
-                          : 'Arm FBA: next Enter or scan uses FNSKU. If the field already has text, send now.'
-                      }
-                      title={
-                        isFbaArmed
-                          ? 'FBA armed — next Enter/scan. Click again to cancel.'
-                          : 'Arm FBA (next Enter/scan; or send now if field has text)'
-                      }
-                      className={`${modeButtonBaseClass} ${isFbaArmed ? 'text-violet-700 bg-violet-50' : inactiveModeButtonClass}`}
-                    >
-                      <Package className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleMode('repair')}
-                      aria-pressed={isRepairArmed}
-                      aria-label={
-                        isRepairArmed
-                          ? 'Repair armed for next Enter or scan. Click again to cancel.'
-                          : 'Arm repair: next Enter or scan uses RS- ID. If the field already has text, send now.'
-                      }
-                      title={
-                        isRepairArmed
-                          ? 'Repair armed — next Enter/scan. Click again to cancel.'
-                          : 'Arm repair (next Enter/scan; or send now if field has text)'
-                      }
-                      className={`${modeButtonBaseClass} ${isRepairArmed ? 'text-amber-700 bg-amber-50' : inactiveModeButtonClass}`}
-                    >
-                      <Settings className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleMode('serial')}
-                      aria-pressed={isSerialArmed}
-                      aria-label={
-                        isSerialArmed
-                          ? 'Serial armed for next Enter or scan. Click again to cancel.'
-                          : 'Arm serial: next Enter or scan adds a serial. If the field already has text, send now.'
-                      }
-                      title={
-                        isSerialArmed
-                          ? 'Serial armed — next Enter/scan. Click again to cancel.'
-                          : 'Arm serial (next Enter/scan; or send now if field has text)'
-                      }
-                      className={`${modeButtonBaseClass} ${isSerialArmed ? 'text-emerald-700 bg-emerald-50' : inactiveModeButtonClass}`}
-                    >
-                      <Barcode className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </>
-              )}
-            />
-
-          </motion.div>
+          {/* Desktop: scan bar at top */}
+          {!isMobile && scanBarBlock}
         </div>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pb-6 space-y-3">
+        {/* ── Scrollable content ── */}
+        <div className={`flex-1 overflow-y-auto no-scrollbar px-4 space-y-3 ${isMobile ? 'pb-2' : 'pb-4'}`}>
           <AnimatePresence mode="wait">
-            {/* Suppress stale errors while any scan is in-flight so they never
-                flash above a freshly-loaded FBA/order card. Errors set after
-                loading ends (e.g. serial add failure) still surface correctly. */}
             {errorMessage && !isLoading && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
@@ -414,7 +421,6 @@ export default function StationTesting({
           </AnimatePresence>
 
           <LayoutGroup id="station-active-upnext">
-            {/* popLayout: exiting card leaves document flow so Up Next reflows up instead of a dead gap */}
             <AnimatePresence mode="popLayout" initial={false}>
               {activeOrder && isActiveOrderVisible ? (
                 <ActiveStationOrderCard
@@ -440,6 +446,7 @@ export default function StationTesting({
                 onMissingParts={() => {
                   triggerGlobalRefresh();
                 }}
+                filterBarPortalRef={filterBarPortalRef}
               />
             </motion.div>
           </LayoutGroup>
@@ -448,6 +455,16 @@ export default function StationTesting({
             <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">USAV TECH v2.6</p>
           </div>
         </div>
+
+        {/* Portal target for UpNextOrder filter bar */}
+        <div ref={filterBarPortalRef} className="flex-shrink-0" />
+
+        {/* Mobile: scan bar docked at bottom, above safe area */}
+        {isMobile && (
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {scanBarBlock}
+          </div>
+        )}
       </div>
     </div>
   );

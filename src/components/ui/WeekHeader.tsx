@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from '../Icons';
 import { mainStickyHeaderClass } from '@/components/layout/header-shell';
 import { getCurrentPSTDateKey } from '@/utils/date';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 interface WeekRange {
   startStr: string;
@@ -68,14 +69,14 @@ export default function WeekHeader({
     formattedTodayPST && dateLineDisplay === formattedTodayPST ? 'Today' : dateLineDisplay;
 
   const dateTextClass = highContrast
-    ? 'text-sm font-black uppercase tracking-widest text-gray-900'
-    : 'text-[11px] font-black uppercase tracking-widest text-gray-900';
+    ? `text-sm font-black uppercase tracking-widest text-gray-900`
+    : `${sectionLabel} text-gray-900`;
 
   const countTextClass = highContrast
     ? `font-dm-sans text-sm font-semibold tabular-nums ${countClassName}`
     : `font-dm-sans text-[11px] font-semibold tabular-nums ${countClassName}`;
 
-  const dashClass = highContrast ? 'shrink-0 text-sm text-neutral-500' : 'shrink-0 text-[11px] text-gray-400';
+  const dashClass = highContrast ? 'shrink-0 text-sm text-neutral-500' : 'shrink-0 text-[11px] text-gray-500';
 
   return (
     <div className={mainStickyHeaderClass}>
@@ -91,9 +92,10 @@ export default function WeekHeader({
           ) : showWeekControls && weekRange && onPrevWeek && onNextWeek ? (
             <div className={`flex items-center ${highContrast ? 'gap-1.5' : 'gap-1'}`}>
               <span
-                className={`font-black uppercase tracking-widest ${
-                  highContrast ? 'text-[11px] text-neutral-900' : 'text-[11px] text-gray-500'
-                }`}
+                className={highContrast
+                  ? 'text-[11px] font-black uppercase tracking-widest text-neutral-900'
+                  : `${sectionLabel}`
+                }
               >
                 {formatDate(weekRange.startStr)} - {formatDate(weekRange.endStr)}
               </span>

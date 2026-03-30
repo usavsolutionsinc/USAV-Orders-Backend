@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { Loader2 } from './Icons';
 import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, PlatformChip, getLast4, getLast6Serial } from './ui/CopyChip';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
@@ -98,7 +99,7 @@ export function TechTable({ testedBy }: TechTableProps) {
   const { data: records = [], isLoading, isFetching } = useTechLogs(testedBy, { weekOffset, weekRange });
   const loading = isLoading && records.length === 0;
   const isRefreshing = isFetching && !isLoading;
-  const weekHeaderCountClass = stationThemeColors[getStaffThemeById(testedBy, 'technician')].text;
+  const weekHeaderCountClass = stationThemeColors[getStaffThemeById(testedBy)].text;
 
   useEffect(() => {
     const handleOpenDetails = (e: any) => {
@@ -458,8 +459,8 @@ export function TechTable({ testedBy }: TechTableProps) {
                         });
                         return (
                           <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
+                            {...framerPresence.tableRow}
+                            transition={framerTransition.tableRowMount}
                             key={getRowKey(record)}
                             onClick={() => openDetails(record)}
                             className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${
@@ -478,13 +479,13 @@ export function TechTable({ testedBy }: TechTableProps) {
                                     : 'Unknown Product'}
                                 </div>
                               </div>
-                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5 pl-4">
+                              <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest truncate mt-0.5 pl-4">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                   {parseInt(String(record.quantity || '1'), 10) || 1}
                                 </span> • {conditionLabel}
                               </div>
                             </div>
-                            <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center shrink-0">
                               {isFnskuRow ? (
                                 <>
                                   <FnskuChip value={fnskuValue} />
@@ -498,7 +499,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                                       <PlatformChip
                                         label={plat}
                                         underlineClass={getOrderPlatformBorderColor(plat)}
-                                        iconClass={record.item_number ? getOrderPlatformColor(plat) : 'text-gray-300'}
+                                        iconClass={record.item_number ? getOrderPlatformColor(plat) : 'text-gray-500'}
                                         onClick={() => {
                                           const url = getExternalUrlByItemNumber(record.item_number);
                                           if (url) window.open(url, '_blank', 'noopener,noreferrer');

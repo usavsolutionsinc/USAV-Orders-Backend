@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2 } from '@/components/Icons';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 function extractGoogleFileId(input: string): string {
   const raw = String(input || '').trim();
@@ -115,7 +116,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
     return (
       <section className="mx-8 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">
+          <p className={`${sectionLabel} text-emerald-700`}>
             Manual Linked
           </p>
           <div className="flex items-center gap-1.5">
@@ -123,7 +124,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
               href={viewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-white hover:bg-emerald-700 transition-colors"
+              className={`${sectionLabel} inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-white hover:bg-emerald-700 transition-colors`}
             >
               <ExternalLink className="w-3 h-3" />
               Open
@@ -131,7 +132,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
             <button
               type="button"
               onClick={() => { setSavedFileId(null); setGoogleInput(''); }}
-              className="rounded-lg px-2 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-600 hover:bg-emerald-100 transition-colors"
+              className={`${sectionLabel} rounded-lg px-2 py-1 text-emerald-600 hover:bg-emerald-100 transition-colors`}
             >
               Replace
             </button>
@@ -145,11 +146,11 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
     <section className="mx-8 mt-4 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
-        <p className="text-[10px] font-black uppercase tracking-wider text-blue-800">
+        <p className={`${sectionLabel} text-blue-800`}>
           Add Product Manual
         </p>
         {effectiveItemNumber && (
-          <span className="text-[9px] font-black uppercase tracking-wider text-blue-400">
+          <span className={`${sectionLabel} text-blue-500`}>
             {effectiveItemNumber}
           </span>
         )}
@@ -159,7 +160,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
         {/* Step 1 — item number input (only when not provided by props) */}
         {!normalizedItemNumber && (
           <div className="flex flex-col gap-1">
-            <label className="text-[9px] font-black uppercase tracking-wider text-blue-600">
+            <label className={`${sectionLabel} text-blue-600`}>
               Item Number
             </label>
             <input
@@ -178,7 +179,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
         {/* Step 2 — Google Doc input + Paste + Save */}
         <div className="flex flex-col gap-1">
           {!normalizedItemNumber && (
-            <label className={`text-[9px] font-black uppercase tracking-wider ${itemNumberReady ? 'text-blue-600' : 'text-gray-400'}`}>
+            <label className={`${sectionLabel} ${itemNumberReady ? 'text-blue-600' : 'text-gray-500'}`}>
               Google Drive Link or File ID
             </label>
           )}
@@ -192,7 +193,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
               placeholder={itemNumberReady ? 'Paste Drive link or File ID' : 'Enter item number first…'}
               disabled={!itemNumberReady}
               autoComplete="off"
-              className="h-8 flex-1 rounded-lg border border-blue-200 bg-white px-2.5 text-[11px] font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-100 disabled:text-gray-400 transition"
+              className="h-8 flex-1 rounded-lg border border-blue-200 bg-white px-2.5 text-[11px] font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-gray-100 disabled:text-gray-500 transition"
             />
             {/* Paste button */}
             <button
@@ -211,7 +212,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
               type="button"
               onClick={() => void handleSave()}
               disabled={isSaving || !googleInput.trim() || !itemNumberReady}
-              className="h-8 flex-shrink-0 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50 transition-colors inline-flex items-center gap-1"
+              className={`${sectionLabel} h-8 flex-shrink-0 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors inline-flex items-center gap-1`}
             >
               {isSaving ? (
                 <><Loader2 className="w-3 h-3 animate-spin" /> Saving</>
@@ -224,7 +225,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
 
         {/* Error */}
         {error && (
-          <p className="text-[9px] font-black uppercase tracking-wider text-red-600">{error}</p>
+          <p className={`${sectionLabel} text-red-600`}>{error}</p>
         )}
       </div>
     </section>

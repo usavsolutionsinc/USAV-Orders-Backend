@@ -1,6 +1,7 @@
 'use client';
 
 import type { AiStructuredAnswer } from '@/lib/ai/types';
+import { sectionLabel, tableHeader, tableCell, dataValue } from '@/design-system/tokens/typography/presets';
 
 function confidenceClasses(confidence: AiStructuredAnswer['confidence']) {
   if (confidence === 'high') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
@@ -26,10 +27,10 @@ export default function AiAnswerCard({
       <div className="border border-gray-200 bg-white px-4 py-3 text-gray-800">
         <p className="text-[12px] leading-6 whitespace-pre-wrap">{content}</p>
         <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+          <span className={sectionLabel}>
             {modeLabel || 'Assistant'}
           </span>
-          <span className="text-[10px] text-gray-400">{timestampLabel}</span>
+          <span className="text-[10px] text-gray-500">{timestampLabel}</span>
         </div>
       </div>
     );
@@ -39,7 +40,7 @@ export default function AiAnswerCard({
     <div className="border border-gray-200 bg-white">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+          <p className={sectionLabel}>
             {analysis.modeLabel}
           </p>
           <h3 className="mt-1 text-[14px] font-semibold tracking-tight text-gray-900">{analysis.title}</h3>
@@ -48,10 +49,10 @@ export default function AiAnswerCard({
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <span className={`border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${confidenceClasses(analysis.confidence)}`}>
+          <span className={`border px-2 py-1 ${sectionLabel} ${confidenceClasses(analysis.confidence)}`}>
             {analysis.confidence} confidence
           </span>
-          <span className="text-[10px] text-gray-400">{timestampLabel}</span>
+          <span className="text-[10px] text-gray-500">{timestampLabel}</span>
         </div>
       </div>
 
@@ -67,7 +68,7 @@ export default function AiAnswerCard({
           <div className="grid gap-2 sm:grid-cols-3">
             {analysis.metrics.map((metric) => (
               <div key={metric.label} className="border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">{metric.label}</p>
+                <p className={sectionLabel}>{metric.label}</p>
                 <p className="mt-1 text-[18px] font-semibold tracking-tight text-gray-900">{metric.value}</p>
                 {metric.detail ? (
                   <p className="mt-1 text-[11px] leading-5 text-gray-500">{metric.detail}</p>
@@ -79,7 +80,7 @@ export default function AiAnswerCard({
 
         {analysis.breakdown?.length ? (
           <div className="border border-gray-200">
-            <div className="border-b border-gray-100 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+            <div className={`border-b border-gray-100 px-3 py-2 ${sectionLabel}`}>
               {analysis.breakdownTitle || 'Breakdown'}
             </div>
             <div className="divide-y divide-gray-100">
@@ -95,7 +96,7 @@ export default function AiAnswerCard({
                     )}
                     {row.detail ? <p className="text-[11px] text-gray-500">{row.detail}</p> : null}
                   </div>
-                  <span className="text-[13px] font-semibold text-gray-900">{row.value}</span>
+                  <span className={tableCell}>{row.value}</span>
                 </div>
               ))}
             </div>
@@ -104,7 +105,7 @@ export default function AiAnswerCard({
 
         {analysis.sampleRecords?.length ? (
           <details className="border border-gray-200">
-            <summary className="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+            <summary className={`cursor-pointer px-3 py-2 ${sectionLabel}`}>
               {analysis.sampleTitle || 'Sample records'}
             </summary>
             <div className="divide-y divide-gray-100 border-t border-gray-100">

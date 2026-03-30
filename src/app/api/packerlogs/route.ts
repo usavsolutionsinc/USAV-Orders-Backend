@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` };
 
     try {
-        const cached = await getCachedJson<any[]>('api:packerlogs', cacheLookup);
+        const cached = await getCachedJson<any[]>('api:packing-logs', cacheLookup);
         if (cached) {
             return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
         }
@@ -233,7 +233,7 @@ export async function GET(req: NextRequest) {
             { retries: 3, delayMs: 1000 }
         );
 
-        await setCachedJson('api:packerlogs', cacheLookup, result.rows, cacheTTL, ['packerlogs']);
+        await setCachedJson('api:packing-logs', cacheLookup, result.rows, cacheTTL, ['packing-logs']);
         return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     } catch (error: any) {
         console.error('Error fetching packer logs:', error);
@@ -280,7 +280,7 @@ export async function POST(req: NextRequest) {
 
         // Bust both packerlogs and orders caches: is_packed is computed in /api/orders,
         // so creating a new packer log must clear the orders cache too.
-        await invalidateCacheTags(['packerlogs', 'orders']);
+        await invalidateCacheTags(['packing-logs', 'orders']);
         return NextResponse.json(newLog[0]);
     } catch (error: any) {
         console.error('Error creating packer log:', error);
@@ -307,7 +307,7 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'Log not found' }, { status: 404 });
         }
 
-        await invalidateCacheTags(['packerlogs']);
+        await invalidateCacheTags(['packing-logs']);
         return NextResponse.json(updatedLog[0]);
     } catch (error: any) {
         console.error('Error updating packer log:', error);
@@ -344,7 +344,7 @@ export async function DELETE(req: NextRequest) {
                 await client.query('DELETE FROM packer_logs WHERE id = $1', [plId]);
             }
             await client.query('COMMIT');
-            await invalidateCacheTags(['packerlogs', 'orders']);
+            await invalidateCacheTags(['packing-logs', 'orders']);
             return NextResponse.json({ success: true });
         }
 
@@ -368,7 +368,7 @@ export async function DELETE(req: NextRequest) {
         await client.query('DELETE FROM station_activity_logs WHERE packer_log_id = $1', [plId]);
         await client.query('DELETE FROM packer_logs WHERE id = $1', [plId]);
         await client.query('COMMIT');
-        await invalidateCacheTags(['packerlogs', 'orders']);
+        await invalidateCacheTags(['packing-logs', 'orders']);
         return NextResponse.json({ success: true, deletedLog: { id: plId } });
     } catch (error: any) {
         try {

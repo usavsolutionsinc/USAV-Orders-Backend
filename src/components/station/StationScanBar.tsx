@@ -75,7 +75,7 @@ export function StationScanBar({
       <div className="relative">
         {leadingIcon ? (
           <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${iconClassName}`}>
-            {icon ?? <Barcode className="w-4 h-4" />}
+            {icon ?? <Barcode className="h-4 w-4" />}
           </div>
         ) : null}
         <input
@@ -108,7 +108,7 @@ export function StationScanBar({
                   className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60 ${
                     activeMode === 'plan'
                       ? 'bg-purple-50 text-purple-700 hover:bg-purple-100'
-                      : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700'
+                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                   }`}
                 >
                   <ClipboardList className="h-3.5 w-3.5" />
@@ -122,7 +122,7 @@ export function StationScanBar({
                   className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60 ${
                     activeMode === 'select'
                       ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                      : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700'
+                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                   }`}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -134,7 +134,7 @@ export function StationScanBar({
               <button
                 type="button"
                 onClick={() => void handlePasteClick()}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60"
                 title="Paste from clipboard"
                 aria-label="Paste from clipboard"
               >

@@ -3,12 +3,11 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
+import { getOrdersChannelName, getStationChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
 
-const ORDERS_CHANNEL =
-  process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
-const STATION_CHANNEL =
-  process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES || 'station:changes';
+const ORDERS_CHANNEL = getOrdersChannelName();
+const STATION_CHANNEL = getStationChannelName();
 
 interface UseShippedTableDataOptions {
   search?: string;

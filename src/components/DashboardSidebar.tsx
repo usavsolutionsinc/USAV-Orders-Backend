@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft, LayoutDashboard, Menu, X, Zap } from '@/components/Icons';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 import BarcodeSidebar from '@/components/BarcodeSidebar';
@@ -31,6 +32,7 @@ import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
+import { DeviceModeToggle } from '@/components/sidebar/DeviceModeToggle';
 
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
@@ -99,14 +101,14 @@ function AiSidebarPanel() {
   return (
     <div className="h-full overflow-y-auto px-4 py-4 space-y-3">
       {/* Connection status card */}
-      <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-3 mb-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700">
             <Zap className="h-4 w-4 text-white" />
           </div>
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">AI Assistant</p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-gray-400">Ollama via Tunnel</p>
+            <p className={`${sectionLabel} text-gray-900`}>AI Assistant</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-gray-500">Ollama via Tunnel</p>
           </div>
         </div>
 
@@ -126,7 +128,7 @@ function AiSidebarPanel() {
           )}
           <span className={`text-[9px] font-black uppercase tracking-[0.25em] ${
             connectionOk === true ? 'text-emerald-600' :
-            connectionOk === false ? 'text-red-500' : 'text-gray-400'
+            connectionOk === false ? 'text-red-500' : 'text-gray-500'
           }`}>
             {connectionOk === null ? 'Checking…' :
              connectionOk ? 'Backend online' : 'Backend offline'}
@@ -134,7 +136,7 @@ function AiSidebarPanel() {
         </div>
 
         {tunnelUrl && (
-          <p className="mt-2 text-[9px] font-medium text-gray-400 truncate" title={tunnelUrl}>
+          <p className="mt-2 text-[9px] font-semibold text-gray-500 truncate" title={tunnelUrl}>
             {tunnelUrl}
           </p>
         )}
@@ -145,14 +147,14 @@ function AiSidebarPanel() {
         <button
           type="button"
           onClick={handleNewChat}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-white transition-colors hover:bg-black"
+          className={`w-full flex items-center justify-center gap-2 rounded-2xl bg-gray-900 px-4 py-2.5 ${sectionLabel} text-white transition-colors hover:bg-black`}
         >
           New Chat
         </button>
         <button
           type="button"
           onClick={checkHealth}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-600 transition-colors hover:bg-gray-50"
+          className={`w-full flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 ${sectionLabel} text-gray-600 transition-colors hover:bg-gray-50`}
         >
           Refresh Status
         </button>
@@ -160,8 +162,8 @@ function AiSidebarPanel() {
 
       {/* Info */}
       <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
-        <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1.5">How it works</p>
-        <p className="text-[10px] font-medium leading-relaxed text-gray-500">
+        <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-1.5">How it works</p>
+        <p className="text-[10px] font-semibold leading-relaxed text-gray-500">
           Messages are proxied through this server to the home computer running
           Ollama over a Cloudflare tunnel. The tunnel URL is read from the database.
         </p>
@@ -327,7 +329,7 @@ function SidebarContextPanel() {
 
   return (
     <div className="h-full flex flex-col px-6 py-6">
-      <div className="rounded-3xl border border-gray-200 bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-5 text-white">
+      <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-900 via-gray-800 to-blue-900 p-5 text-white">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">
             <LayoutDashboard className="h-5 w-5" />
@@ -337,7 +339,7 @@ function SidebarContextPanel() {
             <p className="text-[9px] font-bold uppercase tracking-[0.35em] text-blue-200">Unified Sidebar</p>
           </div>
         </div>
-        <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-200">
+        <p className="mt-4 text-[11px] font-semibold leading-relaxed text-gray-200">
           Navigation and contextual controls now live in one persistent sidebar. Pick a route to load its tools here.
         </p>
       </div>
@@ -373,7 +375,7 @@ function NavSection({
                 : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
-            <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
+            <Icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-blue-500'}`} />
             <span className="text-[11px] font-black uppercase tracking-wider">{item.label}</span>
           </Link>
         );
@@ -494,21 +496,24 @@ export default function DashboardSidebar() {
   };
 
   const homePanel = (
-    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full overflow-y-auto bg-white">
-      <div className="px-3 py-3 space-y-6">
+    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col bg-white">
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-6">
         <motion.div variants={itemVariants}>
           <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
           <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
         </motion.div>
         <motion.div variants={itemVariants}>
-          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">Stations</p>
+          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
           <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
         </motion.div>
         <motion.div variants={itemVariants}>
-          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">More</p>
+          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">More</p>
           <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
         </motion.div>
       </div>
+      <motion.div variants={itemVariants} className="flex-shrink-0">
+        <DeviceModeToggle />
+      </motion.div>
     </motion.div>
   );
 
@@ -522,7 +527,7 @@ export default function DashboardSidebar() {
         aria-label="Back to navigation"
       >
         <div className="h-9 w-7 flex items-center justify-start text-gray-500">
-          <ChevronLeft className="w-5 h-5" />
+          <ChevronLeft className="h-5 w-5" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-black tracking-tight text-gray-900 truncate">{sidebarTitle}</p>
@@ -535,8 +540,10 @@ export default function DashboardSidebar() {
   );
 
   const shell = (
-    <aside className="h-full w-full bg-white border-r border-gray-400 overflow-hidden shadow-xl shadow-slate-900/5">
-      {showHomeNavigation || routeKey === 'unknown' ? homePanel : contextPanel}
+    <aside className="h-full w-full bg-white border-r border-gray-400 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
+      <div className="flex-1 overflow-hidden">
+        {showHomeNavigation || routeKey === 'unknown' ? homePanel : contextPanel}
+      </div>
     </aside>
   );
 
@@ -554,10 +561,10 @@ export default function DashboardSidebar() {
         <button
           type="button"
           onClick={() => dispatchCloseShippedDetails()}
-          className="hidden md:flex fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-slate-900/10 items-center justify-center"
+          className="hidden md:flex fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-gray-900/10 items-center justify-center"
           aria-label="Open station navigation"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="h-5 w-5" />
         </button>
       )}
 
@@ -565,24 +572,24 @@ export default function DashboardSidebar() {
         <button
           type="button"
           onClick={() => setIsMobileOpen(true)}
-          className="md:hidden fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-slate-900/10 flex items-center justify-center"
+          className="md:hidden fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-200 text-gray-700 shadow-lg shadow-gray-900/10 flex items-center justify-center"
           aria-label="Open sidebar"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="h-5 w-5" />
         </button>
       )}
 
       {canShowMobileSidebar && isMobileOpen && (
         <div className="md:hidden fixed inset-0 z-[100]">
-          <button type="button" className="absolute inset-0 bg-slate-900/35" onClick={() => setIsMobileOpen(false)} aria-label="Close sidebar overlay" />
+          <button type="button" className="absolute inset-0 bg-gray-900/35" onClick={() => setIsMobileOpen(false)} aria-label="Close sidebar overlay" />
           <div className="relative h-full max-w-[94vw]">{shell}</div>
           <button
             type="button"
             onClick={() => setIsMobileOpen(false)}
-            className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-slate-900/10 flex items-center justify-center"
+            className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-gray-900/10 flex items-center justify-center"
             aria-label="Close sidebar"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
       )}

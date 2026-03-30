@@ -9,6 +9,7 @@ import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson
 import { formatPSTTimestamp, normalizePSTTimestamp, getCurrentPSTDateKey } from '@/utils/date';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { publishOrderChanged, publishPackerLogChanged } from '@/lib/realtime/publish';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -57,14 +58,14 @@ async function prependToPackerLogsCache(staffId: number, newRecord: Record<strin
         weekStart: startStr,
         weekEnd: endStr,
     });
-    const existing = await getCachedJson<any[]>('api:packerlogs', cacheKey);
+    const existing = await getCachedJson<any[]>('api:packing-logs', cacheKey);
     if (Array.isArray(existing)) {
         await setCachedJson(
-            'api:packerlogs',
+            'api:packing-logs',
             cacheKey,
             [newRecord, ...existing].slice(0, 1000),
             120,
-            ['packerlogs'],
+            ['packing-logs'],
         );
     }
 }
@@ -113,7 +114,7 @@ export async function GET(req: NextRequest) {
             trackingType: log.tracking_type || '',
         }));
 
-        await setCachedJson('api:packing-logs', cacheLookup, formattedLogs, 300, ['packing-logs', 'packerlogs']);
+        await setCachedJson('api:packing-logs', cacheLookup, formattedLogs, 300, ['packing-logs', 'packing-logs']);
         return NextResponse.json(formattedLogs, { headers: { 'x-cache': 'MISS' } });
     } catch (error: any) {
         console.error('Error fetching packing logs:', error);
@@ -184,22 +185,7 @@ export async function POST(req: NextRequest) {
                 [normalizedInput]
             );
 
-            // Fallback 1: last-8 digit suffix match (handles barcode with 420-zip prefix, etc.)
-            if (orderLookup.rows.length === 0) {
-                orderLookup = await pool.query(
-                    `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number, o.shipment_id,
-                            o.product_title, o.condition, o.quantity, o.sku
-                     FROM   orders o
-                     JOIN   shipping_tracking_numbers stn ON stn.id = o.shipment_id
-                     WHERE  RIGHT(regexp_replace(stn.tracking_number_normalized, '[^0-9]', '', 'g'), 8) = $1
-                     ORDER BY o.id DESC
-                     LIMIT 1`,
-                    [trackingLast8]
-                );
-            }
-
-            // Fallback 2: independent stn lookup so orders with shipment_id=NULL are
-            // also found when their tracking exists in shipping_tracking_numbers
+            // Fallback 1: key18 suffix match (more specific than last8)
             if (orderLookup.rows.length === 0) {
                 orderLookup = await pool.query(
                     `SELECT o.id, o.order_id, s.tracking_number_raw AS tracking_number, o.shipment_id,
@@ -210,6 +196,20 @@ export async function POST(req: NextRequest) {
                      ORDER BY o.id DESC
                      LIMIT 1`,
                     [normalizeTrackingKey18(scanInput)]
+                );
+            }
+
+            // Fallback 2: last-8 digit suffix match (handles barcode with 420-zip prefix, etc.)
+            if (orderLookup.rows.length === 0) {
+                orderLookup = await pool.query(
+                    `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number, o.shipment_id,
+                            o.product_title, o.condition, o.quantity, o.sku
+                     FROM   orders o
+                     JOIN   shipping_tracking_numbers stn ON stn.id = o.shipment_id
+                     WHERE  RIGHT(regexp_replace(stn.tracking_number_normalized, '[^0-9]', '', 'g'), 8) = $1
+                     ORDER BY o.id DESC
+                     LIMIT 1`,
+                    [trackingLast8]
                 );
             }
 
@@ -299,7 +299,7 @@ export async function POST(req: NextRequest) {
                     createdAt: notFoundCreatedAt,
                 });
 
-                await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
+                await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
                 if (notFoundRecord.id) await prependToPackerLogsCache(staffId, notFoundRecord);
 
                 return NextResponse.json({
@@ -413,8 +413,19 @@ export async function POST(req: NextRequest) {
                 createdAt: foundCreatedAt,
             });
 
-            await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
+            await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
             if (foundRecord.id) await prependToPackerLogsCache(staffId, foundRecord);
+
+            // Broadcast to all devices so UpNext + PendingOrdersTable update instantly
+            await Promise.allSettled([
+                publishOrderChanged({ orderIds: [order.id], source: 'packing-logs' }),
+                publishPackerLogChanged({
+                    packerId: staffId,
+                    action: 'insert',
+                    packerLogId: foundPackerLogId ?? undefined,
+                    source: 'packing-logs',
+                }),
+            ]);
 
             return NextResponse.json({
                 success: true,
@@ -512,7 +523,7 @@ export async function POST(req: NextRequest) {
             skuUpdated = true;
         }
 
-        await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
+        await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
         if (nonOrderRecord.id) await prependToPackerLogsCache(staffId, nonOrderRecord);
 
         return NextResponse.json({

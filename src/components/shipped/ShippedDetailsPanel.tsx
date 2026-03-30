@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, FileText, Flag, Package, PackageCheck, Settings, Trash2, X } from '../Icons';
+import { Package, Trash2, X } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { DashboardDetailsStack } from './stacks/DashboardDetailsStack';
@@ -13,12 +13,14 @@ import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
 import { QtyBadge } from '@/components/ui/QtyBadge';
 import { useDeleteOrderRow } from '@/hooks';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
+import { TECH_IDS } from '@/utils/staff';
 import { getStaffName } from '@/utils/staff';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { toPSTDateKey } from '@/utils/date';
 import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
+import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
 
 interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
@@ -140,7 +142,6 @@ export function ShippedDetailsPanel({
     await persistInlineFields(orderNumber, itemNumber, shippingTrackingNumber);
   }, [itemNumber, orderNumber, persistInlineFields, shippingTrackingNumber]);
 
-  const TECH_IDS = [1, 2, 3, 6];
   const technicianOptions = staff
     .filter((member) => member.role === 'technician' && TECH_IDS.includes(Number(member.id)))
     .map((member) => ({ id: Number(member.id), name: member.name }))
@@ -199,39 +200,6 @@ export function ShippedDetailsPanel({
     }
   }, [_onUpdate]);
 
-  const panelActions = [
-    ...(canEditAssignment ? [{
-      label: 'Assignment',
-      onClick: () => { void openAssignmentCard(); },
-      icon: <Settings className="h-3.5 w-3.5" />,
-      toneClassName: 'text-slate-600',
-    }] : []),
-    {
-      label: 'Goals',
-      onClick: () => { window.location.href = `/admin?orderId=${shipped.id}`; },
-      icon: <Flag className="h-3.5 w-3.5" />,
-      toneClassName: 'text-blue-600',
-    },
-    {
-      label: 'Status',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'status' } })); },
-      icon: <PackageCheck className="h-3.5 w-3.5" />,
-      toneClassName: 'text-emerald-600',
-    },
-    {
-      label: 'Out of stock',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'out_of_stock' } })); },
-      icon: <AlertTriangle className="h-3.5 w-3.5" />,
-      toneClassName: 'text-orange-600',
-    },
-    {
-      label: 'Notes',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'notes' } })); },
-      icon: <FileText className="h-3.5 w-3.5" />,
-      toneClassName: 'text-gray-600',
-    },
-  ];
-
   const handleCopyAll = () => {
     const allInfo = buildShippedCopyInfo(shipped);
     navigator.clipboard.writeText(allInfo);
@@ -243,7 +211,6 @@ export function ShippedDetailsPanel({
     onClose,
     onMoveUp: () => dispatchNavigateShippedDetails('up'),
     onMoveDown: () => dispatchNavigateShippedDetails('down'),
-    rightActions: panelActions,
   };
 
   const handleCopyOrderId = () => {
@@ -307,11 +274,11 @@ export function ShippedDetailsPanel({
                   {shipped.order_id}
                 </button>
                 {copiedOrderId && (
-                  <p className="text-[9px] font-black uppercase tracking-wider text-emerald-600 mt-0.5">Copied</p>
+                  <p className={`${microBadge} tracking-wider text-emerald-600 mt-0.5`}>Copied</p>
                 )}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <QtyBadge quantity={(shipped as any).quantity} />
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[9px] font-black tracking-[0.04em] ${statusToneClass}`}>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 ${microBadge} tracking-[0.04em] ${statusToneClass}`}>
                     <span className={`h-2 w-2 rounded-full ${statusDotClass}`} />
                     {statusLabel}
                   </span>
@@ -324,7 +291,7 @@ export function ShippedDetailsPanel({
             className="p-3 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100"
             aria-label="Close details"
           >
-            <X className="w-6 h-6 text-gray-400" />
+            <X className="w-6 h-6 text-gray-500" />
           </button>
         </div>
       </div>
@@ -398,7 +365,7 @@ export function ShippedDetailsPanel({
                 type="button"
                 onClick={handleDeleteOrder}
                 disabled={isDeletingOrder}
-                className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+                className={`w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 ${sectionLabel} text-white tracking-wider disabled:opacity-50`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 {isDeletingOrder

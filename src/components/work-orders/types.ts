@@ -103,16 +103,8 @@ export function normalizeQueue(raw: string | null): QueueKey {
   return (QUEUE_ITEMS.find((item) => item.key === value)?.key || 'all') as QueueKey;
 }
 
-export function formatDate(value: string | null) {
-  if (!value) return 'No deadline';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'No deadline';
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date);
-}
+export { formatMediumDate as formatDate } from '@/utils/_date';
+// Note: callers that need 'No deadline' fallback should pass it: formatDate(value, 'No deadline')
 
 export function toDateInputValue(value: string | null) {
   if (!value) return '';

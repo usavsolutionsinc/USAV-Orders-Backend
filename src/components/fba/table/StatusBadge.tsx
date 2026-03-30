@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { AlertTriangle, Check, Printer, X } from '@/components/Icons';
 import type { ItemStatus } from './types';
 
@@ -115,7 +116,7 @@ export function StatusBadge({
             initial={reduced ? false : { rotateY: 90, opacity: 0 }}
             animate={reduced ? undefined : { rotateY: 0, opacity: 1 }}
             exit={reduced ? undefined : { rotateY: -90, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={framerTransition.dropdownOpen}
             className="relative inline-block"
             style={{ transformStyle: 'preserve-3d' }}
           >
@@ -133,7 +134,7 @@ export function StatusBadge({
         initial={reduced ? false : { rotateY: 90, opacity: 0 }}
         animate={reduced ? undefined : { rotateY: 0, opacity: 1 }}
         exit={reduced ? undefined : { rotateY: -90, opacity: 0 }}
-        transition={{ duration: 0.2 }}
+        transition={framerTransition.dropdownOpen}
         className="relative inline-block"
         style={{ transformStyle: 'preserve-3d' }}
       >

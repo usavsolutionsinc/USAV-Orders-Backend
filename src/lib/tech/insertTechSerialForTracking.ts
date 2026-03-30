@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { formatPSTTimestamp } from '@/utils/date';
+import { TECH_EMPLOYEE_IDS } from '@/utils/staff';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 import { createStationActivityLog } from '@/lib/station-activity';
@@ -55,13 +56,7 @@ export async function insertTechSerialForTracking(
   }
 
   if (staffResult.rows.length === 0) {
-    const techEmployeeIds: { [key: string]: string } = {
-      '1': 'TECH001',
-      '2': 'TECH002',
-      '3': 'TECH003',
-      '4': 'TECH004',
-    };
-    const employeeId = techEmployeeIds[String(techId)] || String(techId);
+    const employeeId = TECH_EMPLOYEE_IDS[String(techId)] || String(techId);
     const byEmployeeId = await db.query('SELECT id, name FROM staff WHERE employee_id = $1 LIMIT 1', [employeeId]);
     staffResult = byEmployeeId;
   }

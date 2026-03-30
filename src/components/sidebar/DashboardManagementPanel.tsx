@@ -20,6 +20,8 @@ import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/compon
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { getPresentStaffForToday } from '@/lib/staffCache';
 import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimaryButtons';
+import { TECH_IDS } from '@/utils/staff';
+import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
 
@@ -83,8 +85,6 @@ export function DashboardManagementPanel({
   const [packerOptions, setPackerOptions] = useState<{ id: number; name: string }[]>([]);
 
   useEffect(() => { setIsMounted(true); }, []);
-
-  const TECH_IDS = [1, 2, 3, 6];
 
   const handleOpenNextUnassigned = useCallback(async () => {
     setIsLoadingAssignment(true);
@@ -355,20 +355,20 @@ export function DashboardManagementPanel({
               />
             </motion.div>
             <motion.div variants={itemVariants} className="-mt-1 text-left">
-              <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">Click an order for more details</p>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Orders are sorted by ship-by date</p>
+              <p className={sectionLabel}>Click an order for more details</p>
+              <p className={`${fieldLabel} text-gray-500 mt-1`}>Orders are sorted by ship-by date</p>
               <div className="flex flex-col gap-1 mt-1">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Out of stock</span>
+                  <span className={`${fieldLabel} text-gray-500`}>Out of stock</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Pending pick/test</span>
+                  <span className={`${fieldLabel} text-gray-500`}>Pending pick/test</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Tested by tech</span>
+                  <span className={`${fieldLabel} text-gray-500`}>Tested by tech</span>
                 </div>
               </div>
             </motion.div>
@@ -376,7 +376,7 @@ export function DashboardManagementPanel({
             <motion.div variants={itemVariants} className="space-y-4 px-4 pb-4 pt-0 bg-gray-50 rounded-2xl border border-gray-100">
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-gray-500 uppercase px-1 tracking-widest">Manual Sheet Name</label>
+                  <label className={`${microBadge} text-gray-500 px-1`}>Manual Sheet Name</label>
                   <input
                     type="text"
                     value={manualSheetName}
@@ -390,7 +390,7 @@ export function DashboardManagementPanel({
                 <button
                   onClick={handleTransfer}
                   disabled={isTransferring}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  className={`w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl ${sectionLabel} shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2`}
                 >
                   {isTransferring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
                   Import Latest Orders
@@ -420,7 +420,7 @@ export function DashboardManagementPanel({
               >
                 {status.type === 'success' ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <X className="w-4 h-4 mt-0.5 shrink-0" />}
                 <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest">{status.type === 'success' ? 'Success' : 'Error'}</p>
+                  <p className={sectionLabel}>{status.type === 'success' ? 'Success' : 'Error'}</p>
                   <p className="text-[9px] font-medium leading-relaxed">{status.message}</p>
                 </div>
               </motion.div>

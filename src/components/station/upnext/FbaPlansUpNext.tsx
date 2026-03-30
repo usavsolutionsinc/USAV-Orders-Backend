@@ -3,25 +3,28 @@
 /**
  * Open FBA plans list for the /fba workspace only (sidebar).
  * Embeds the same LayoutGroup + motion stack pattern as {@link StationTesting} → Up Next.
- * Do not mount on station/testing routes.
+ *
+ * NOTE: This component is currently unused — the combine flow uses
+ * FbaActiveShipments (DnD-enabled) in the sidebar instead.
+ * Kept for potential future re-use.
  */
 
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { Loader2, Package } from '@/components/Icons';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
-import type { FbaPlanQueueItem } from './upnext-types';
-import { FbaShipmentCard } from './FbaShipmentCard';
+import { FbaShipmentCard, type ActiveShipment } from './FbaShipmentCard';
 
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
 const stationLayoutTween = { layout: { duration: 0.32, ease: STATION_EASE_HEIGHT } };
 
 export interface FbaPlansUpNextProps {
   plansLoading: boolean;
-  pendingPlans: FbaPlanQueueItem[];
+  pendingPlans: ActiveShipment[];
   activePlanId: number | null;
   stationTheme: StationTheme;
   onCreatePlan?: () => void;
+  onRefresh?: () => void;
 }
 
 function EmptyPlansSlate({
@@ -64,17 +67,10 @@ export function FbaPlansUpNext({
   activePlanId,
   stationTheme,
   onCreatePlan,
+  onRefresh,
 }: FbaPlansUpNextProps) {
   const chrome = fbaSidebarThemeChrome[stationTheme];
-  const groupedShipments = pendingPlans.reduce((acc, row) => {
-    const trackingRows = Array.isArray(row.tracking_numbers) ? row.tracking_numbers : [];
-    const ups = trackingRows.find((t) => String(t.carrier || '').toUpperCase() === 'UPS');
-    const primary = String(ups?.tracking_number || trackingRows[0]?.tracking_number || '').toUpperCase();
-    const key = `${row.id}::${primary}`;
-    if (!acc.has(key)) acc.set(key, []);
-    acc.get(key)!.push(row);
-    return acc;
-  }, new Map<string, FbaPlanQueueItem[]>());
+  const noop = () => {};
 
   return (
     <div className="space-y-3 px-1 pb-2">
@@ -87,34 +83,23 @@ export function FbaPlansUpNext({
       ) : (
         <LayoutGroup id="fba-open-plans-upnext">
           <motion.div layout transition={stationLayoutTween} className="space-y-2">
-            {Array.from(groupedShipments.entries()).map(([key, plans]) => (
-              <div key={key}>
-                <div className="flex flex-col">
-                  <AnimatePresence mode="popLayout" initial={false}>
-                    {plans.map((plan) => {
-                      const isActive = activePlanId === plan.id;
-
-                      return (
-                        <motion.div
-                          key={plan.id}
-                          layout
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="min-w-0"
-                        >
-                          <FbaShipmentCard
-                            shipment={plan}
-                            stationTheme={stationTheme}
-                            isActive={isActive}
-                          />
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
-              </div>
-            ))}
+            <AnimatePresence mode="popLayout" initial={false}>
+              {pendingPlans.map((plan) => (
+                <motion.div
+                  key={plan.id}
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="min-w-0"
+                >
+                  <FbaShipmentCard
+                    shipment={plan}
+                    onRefresh={onRefresh || noop}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </motion.div>
         </LayoutGroup>
       )}

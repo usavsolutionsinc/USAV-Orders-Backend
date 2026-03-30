@@ -14,11 +14,12 @@ import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
 import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScanField';
-import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
-import { getStaffThemeById } from '@/utils/staff-colors';
+import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
+import { useStationTheme } from '@/hooks/useStationTheme';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
 import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
+import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
 const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
@@ -222,28 +223,10 @@ function FbaWorkspaceSidebarInner() {
 
   const staffIdRaw = String(searchParams.get('staffId') || '').trim();
   const staffIdFromUrl = /^\d+$/.test(staffIdRaw) ? parseInt(staffIdRaw, 10) : null;
-  const lienStaffId = useMemo(
-    () => findStaffIdByNormalizedName(staffDirectory, 'lien'),
-    [staffDirectory]
-  );
-  const staffIdNum = staffIdFromUrl ?? lienStaffId ?? 1;
+  const staffIdNum = staffIdFromUrl ?? staffDirectory[0]?.id ?? null;
   const selectedStaffMember = staffDirectory.find((m) => m.id === staffIdNum);
-  const staffName =
-    selectedStaffMember?.name || (staffDirectory.length === 0 ? '…' : `Staff ${staffIdNum}`);
-  const staffRoleForTheme: 'technician' | 'packer' =
-    selectedStaffMember?.role === 'packer' ? 'packer' : 'technician';
-  const stationTheme = useMemo(
-    () => getStaffThemeById(staffIdNum, staffRoleForTheme),
-    [staffIdNum, staffRoleForTheme]
-  );
-
-  useEffect(() => {
-    if (staffIdFromUrl != null || lienStaffId == null) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('staffId', String(lienStaffId));
-    const q = params.toString();
-    router.replace(q ? `/fba?${q}` : '/fba');
-  }, [staffIdFromUrl, lienStaffId, router, searchParams]);
+  const staffName = selectedStaffMember?.name || (staffDirectory.length === 0 ? '…' : `Staff ${staffIdNum}`);
+  const { theme: stationTheme } = useStationTheme({ staffId: staffIdNum });
 
   const [localSearch, setLocalSearch] = useState('');
   const urlHydratedRef = useRef(false);
@@ -439,8 +422,7 @@ function FbaWorkspaceSidebarInner() {
           <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
             <FbaWorkspaceScanField
               staffName={staffName}
-              staffId={staffIdFromUrl ?? undefined}
-              staffRole={staffRoleForTheme}
+              staffId={staffIdNum}
               showTrackingCard={false}
             />
           </div>
@@ -488,7 +470,10 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Selection review card below select-all */}
+        {/* Active shipments — right under station + select-all for quick viewing */}
+        {isBoard && <FbaActiveShipments />}
+
+        {/* Selection review card */}
         {isBoard && boardSelection.length > 0 && (
           <FbaPairedReviewPanel
             selectedItems={boardSelection}

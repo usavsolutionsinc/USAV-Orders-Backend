@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Image as ImageIcon, AlertCircle } from '../Icons';
 
 interface PhotoGalleryProps {
@@ -192,8 +193,8 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
   if (photoItems.length === 0) {
     return (
       <div className={`w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 ${className}`}>
-        <div className="flex items-center justify-center gap-2 text-gray-400">
-          <ImageIcon className="w-4 h-4" />
+        <div className="flex items-center justify-center gap-2 text-gray-500">
+          <ImageIcon className="h-4 w-4" />
           <span className="text-xs font-semibold">No photos available</span>
         </div>
       </div>
@@ -250,7 +251,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
             aria-label="Download photo"
             title="Download photo"
           >
-            <Download className="w-5 h-5" />
+            <Download className="h-5 w-5" />
           </button>
 
           {/* Close Button */}
@@ -263,7 +264,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
             aria-label="Close photo viewer"
             title="Close (Esc)"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
       </div>
@@ -274,7 +275,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.2 }}
+        transition={framerTransition.dropdownOpen}
         className="relative w-full h-full flex items-center justify-center pl-16 pr-16 py-16"
         onClick={(e) => e.stopPropagation()}
         onMouseDown={handleMouseDown}
@@ -301,12 +302,12 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
           />
         ) : photoItems[currentIndex]?.status === 'error' ? (
           <div className="w-full max-w-2xl h-96 flex flex-col items-center justify-center bg-red-900/20 rounded-2xl border-2 border-red-500/30">
-            <AlertCircle className="w-16 h-16 text-red-400 mb-4" />
+            <AlertCircle className="h-16 w-16 text-red-400 mb-4" />
             <p className="text-red-300 text-lg font-bold">Failed to load image</p>
           </div>
         ) : (
           <div className="w-full max-w-2xl h-96 flex items-center justify-center bg-gray-800/50 rounded-2xl">
-            <div className="w-12 h-12 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+            <div className="h-12 w-12 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
           </div>
         )}
       </motion.div>
@@ -323,7 +324,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
           aria-label="Zoom out"
           title="Zoom out (-)"
         >
-          <ZoomOut className="w-5 h-5" />
+          <ZoomOut className="h-5 w-5" />
         </button>
         
         <div className="px-3 py-1 min-w-[60px] text-center">
@@ -340,7 +341,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
           aria-label="Zoom in"
           title="Zoom in (+)"
         >
-          <ZoomIn className="w-5 h-5" />
+          <ZoomIn className="h-5 w-5" />
         </button>
 
         {zoomLevel > 1 && (
@@ -370,7 +371,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
             aria-label="Previous photo"
             title="Previous (←)"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronLeft className="h-6 w-6" />
           </button>
           <button
             onClick={(e) => {
@@ -381,7 +382,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
             aria-label="Next photo"
             title="Next (→)"
           >
-            <ChevronRight className="w-6 h-6" />
+            <ChevronRight className="h-6 w-6" />
           </button>
         </>
       )}
@@ -398,7 +399,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
                   setCurrentIndex(index);
                   resetZoom();
                 }}
-                className={`relative flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden transition-all ${
+                className={`relative flex-shrink-0 h-16 w-16 rounded-xl overflow-hidden transition-all ${
                   index === currentIndex
                     ? 'ring-3 ring-white shadow-xl scale-110'
                     : 'opacity-60 hover:opacity-100 hover:scale-105'
@@ -412,7 +413,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
                   />
                 ) : photo.status === 'error' ? (
                   <div className="w-full h-full bg-red-900/50 flex items-center justify-center">
-                    <AlertCircle className="w-6 h-6 text-red-400" />
+                    <AlertCircle className="h-6 w-6 text-red-400" />
                   </div>
                 ) : (
                   <div className="w-full h-full bg-gray-700 animate-pulse" />
@@ -452,8 +453,8 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center shadow-sm">
-              <ImageIcon className="w-5 h-5 text-white" />
+            <div className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center shadow-sm">
+              <ImageIcon className="h-5 w-5 text-white" />
             </div>
             <div className="flex flex-col items-start">
               <span className="text-sm font-bold text-gray-900">
@@ -476,7 +477,7 @@ export function PhotoGallery({ photos, orderId, className = '', compact = false 
               </div>
             </div>
           </div>
-          <ChevronRight className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform" />
+          <ChevronRight className="h-5 w-5 text-blue-600 group-hover:translate-x-1 transition-transform" />
         </div>
       </button>
 

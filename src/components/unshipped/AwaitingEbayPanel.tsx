@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, ShieldCheck } from '@/components/Icons';
+import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 
 interface EbayAccount {
   id: number;
@@ -151,7 +152,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
 
   return (
     <div className="mt-4 space-y-0">
-      <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-2">
+      <p className={`${sectionLabel} mb-2`}>
         Sync & Backfill
       </p>
 
@@ -163,7 +164,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
             key={account.id}
             className="flex items-center justify-between border-b border-gray-100 py-2.5"
           >
-            <span className="text-[10px] font-bold text-gray-700 truncate pr-2">
+            <span className={`${fieldLabel} truncate pr-2`}>
               {account.account_name} (expired)
             </span>
             <button
@@ -180,7 +181,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
       })}
 
       <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
-        <span className="text-[10px] font-bold text-gray-700 truncate pr-2">Sync eBay orders</span>
+        <span className={`${fieldLabel} truncate pr-2`}>Sync eBay orders</span>
         <button
           type="button"
           onClick={() => ebayBackfillMutation.mutate()}
@@ -193,7 +194,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
       </div>
 
       <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
-        <span className="text-[10px] font-bold text-gray-700 truncate pr-2">Sync Ecwid orders</span>
+        <span className={`${fieldLabel} truncate pr-2`}>Sync Ecwid orders</span>
         <button
           type="button"
           onClick={() => ecwidBackfillMutation.mutate()}
@@ -206,12 +207,12 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
       </div>
 
       <div className="flex items-center justify-between border-b border-gray-100 py-2.5">
-        <span className="text-[10px] font-bold text-gray-700 truncate pr-2">Check Integrity</span>
+        <span className={`${fieldLabel} truncate pr-2`}>Check Integrity</span>
         <button
           type="button"
           onClick={() => integrityCheckMutation.mutate(false)}
           disabled={integrityCheckMutation.isPending}
-          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-slate-600 px-2 py-1 text-[9px] font-black uppercase text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-gray-600 px-2 py-1 text-[9px] font-black uppercase text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           title="Deduplicate orders by unique (order_id, tracking). Keeps most complete row per group."
         >
           <ShieldCheck className={`w-3 h-3 ${integrityCheckMutation.isPending ? 'animate-pulse' : ''}`} />
@@ -221,7 +222,7 @@ export function AwaitingEbayPanel({ onRefresh }: { onRefresh?: () => void }) {
 
       {logs.length > 0 && (
         <div className="mt-3 pt-3 border-t border-gray-200">
-          <p className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5">
+          <p className={`${sectionLabel} mb-1.5`}>
             Recent
           </p>
           <div className="space-y-1 max-h-24 overflow-y-auto">

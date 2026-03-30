@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Pencil, Plus, X } from '@/components/Icons';
 import { CopyableValueFieldBlock } from './CopyableValueFieldBlock';
+import { parseSerialRows, patchSerialNumberInData } from '../serial-helpers';
 
 interface SerialNumberFieldBlockProps {
   rowId: number;
@@ -13,46 +14,6 @@ interface SerialNumberFieldBlockProps {
   onUpdate?: () => void;
   onSerialNumberChange?: (nextSerialNumber: string) => void;
   variant?: 'card' | 'flat';
-}
-
-function parseSerialRows(value: string | null | undefined): string[] {
-  const rows = String(value || '')
-    .split(',')
-    .map((serial) => serial.trim())
-    .filter(Boolean);
-
-  return rows.length > 0 ? rows : [''];
-}
-
-function patchSerialNumberInData(current: any, rowId: number, serialNumber: string): any {
-  if (!current) return current;
-
-  const patchRow = (row: any) => {
-    if (!row || Number(row.id) !== rowId) return row;
-    return {
-      ...row,
-      serial_number: serialNumber,
-      serialNumber: serialNumber,
-    };
-  };
-
-  if (Array.isArray(current)) {
-    return current.map(patchRow);
-  }
-
-  if (Array.isArray(current?.orders)) {
-    return { ...current, orders: current.orders.map(patchRow) };
-  }
-
-  if (Array.isArray(current?.results)) {
-    return { ...current, results: current.results.map(patchRow) };
-  }
-
-  if (Array.isArray(current?.shipped)) {
-    return { ...current, shipped: current.shipped.map(patchRow) };
-  }
-
-  return patchRow(current);
 }
 
 export function SerialNumberFieldBlock({
@@ -207,7 +168,7 @@ export function SerialNumberFieldBlock({
       />
 
       {isEditing && (
-        <div className="space-y-3">
+        <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
           <div className="space-y-2">
             {serialRows.map((serial, index) => (
               <div key={index} className="flex items-center gap-2">

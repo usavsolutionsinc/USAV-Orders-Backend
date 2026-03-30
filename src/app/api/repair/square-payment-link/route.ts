@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { formatPSTTimestamp } from '@/utils/date';
+import { formatSku } from '@/utils/sku';
 
 const SQUARE_PRODUCTION_BASE_URL = 'https://connect.squareup.com/v2';
 const SQUARE_SANDBOX_BASE_URL = 'https://connect.squareupsandbox.com/v2';
@@ -69,10 +70,6 @@ function parsePriceToMinorUnits(value: string | null | undefined): number | null
 
   const amount = Math.round(parsed * 100);
   return amount > 0 ? amount : null;
-}
-
-function normalizeSku(value: unknown): string {
-  return String(value || '').trim().toUpperCase();
 }
 
 function parseSkuCandidate(value: string | null | undefined): string | null {
@@ -178,7 +175,7 @@ async function buildSquareVariationSkuIndex(
     const objects = Array.isArray(payload.objects) ? payload.objects : [];
     for (const object of objects) {
       if (object.type !== 'ITEM_VARIATION') continue;
-      const normalizedSku = normalizeSku(object.item_variation_data?.sku);
+      const normalizedSku = formatSku(String(object.item_variation_data?.sku || ''));
       if (!normalizedSku) continue;
       if (!bySku.has(normalizedSku)) {
         bySku.set(normalizedSku, object.id);
@@ -198,7 +195,7 @@ async function getSquareVariationIdBySku(
   squareVersion: string,
   sku: string
 ): Promise<string | null> {
-  const normalizedSku = normalizeSku(sku);
+  const normalizedSku = formatSku(String(sku || ''));
   if (!normalizedSku) return null;
 
   const cacheTtlMs = resolveSquareSkuCacheTtlMs();

@@ -8,6 +8,7 @@ import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useFbaWorkspace } from '@/contexts/FbaWorkspaceContext';
 import { getDbTableChannelName } from '@/lib/realtime/channels';
 import WeekHeader from '@/components/ui/WeekHeader';
+import { sectionLabel, dataValue } from '@/design-system/tokens/typography/presets';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from './Checkbox';
 import { enrichFromApi, getPlanId, getPlanLabel } from './utils';
@@ -108,7 +109,7 @@ function PrintReadyRow({
 
       <div className="flex min-w-0 flex-col">
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-bold text-gray-900">{item.display_title || 'Untitled FNSKU'}</p>
+          <p className={`truncate ${dataValue}`}>{item.display_title || 'Untitled FNSKU'}</p>
         </div>
         <div className="mt-1 flex w-full min-w-0 flex-wrap items-center gap-2 text-[10px]">
           {showExpectedQty ? (
@@ -685,7 +686,7 @@ export function FbaPrintReadyTable({
         highContrast
         rightSlot={
           selectedCount > 0 ? (
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-700">
+            <div className={`flex items-center gap-2 ${sectionLabel} text-gray-700`}>
               <span className="text-[10px] font-bold tabular-nums tracking-[0.08em] text-gray-500">{selectedCount} selected</span>
             </div>
           ) : null

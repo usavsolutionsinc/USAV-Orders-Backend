@@ -2,6 +2,8 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { FileText } from '@/components/Icons';
+import { sectionLabel, tableHeader } from '@/design-system/tokens/typography/presets';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
 
 export interface ManualAssignmentRow {
   /** orders.item_number — may be empty for orders imported without one */
@@ -41,7 +43,7 @@ export function ManualAssignmentTable({
   if (loading) {
     return (
       <div className="flex h-48 items-center justify-center">
-        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading Manual Records...</p>
+        <p className={sectionLabel}>Loading Manual Records...</p>
       </div>
     );
   }
@@ -49,8 +51,8 @@ export function ManualAssignmentTable({
   if (rows.length === 0) {
     return (
       <div className="flex h-48 flex-col items-center justify-center gap-2">
-        <FileText className="w-8 h-8 text-gray-300" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{emptyMessage}</p>
+        <FileText className="w-8 h-8 text-gray-500" />
+        <p className={sectionLabel}>{emptyMessage}</p>
       </div>
     );
   }
@@ -59,9 +61,9 @@ export function ManualAssignmentTable({
     <div className="w-full">
       {/* Header */}
       <div className="sticky top-0 z-10 grid min-h-[44px] grid-cols-[1fr_2fr_auto] items-end gap-3 border-b border-gray-200 bg-gray-50/90 px-5 pb-2.5 pt-3 backdrop-blur-sm">
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Item Number</p>
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Product</p>
-        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Manual Status</p>
+        <p className={tableHeader}>Item Number</p>
+        <p className={tableHeader}>Product</p>
+        <p className={tableHeader}>Manual Status</p>
       </div>
 
       {/* Rows with inline expansion */}
@@ -79,7 +81,7 @@ export function ManualAssignmentTable({
                 type="button"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.15, delay: Math.min(idx * 0.02, 0.3) }}
+                transition={{ ...framerTransition.tableRowMount, delay: Math.min(idx * 0.02, 0.3) }}
                 onClick={() => onRowClick(row)}
                 className={`w-full text-left grid grid-cols-[1fr_2fr_auto] items-center gap-3 px-5 py-3.5 border-b border-gray-100 transition-all ${
                   isSelected
@@ -93,7 +95,7 @@ export function ManualAssignmentTable({
                     {row.itemNumber || '—'}
                   </p>
                   {row.orderId && (
-                    <p className="text-[10px] font-semibold text-gray-400 truncate mt-0.5">
+                    <p className="text-[10px] font-semibold text-gray-500 truncate mt-0.5">
                       {row.orderId}
                     </p>
                   )}
@@ -106,7 +108,7 @@ export function ManualAssignmentTable({
 
                 {/* Manual status badge */}
                 <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-wider border whitespace-nowrap ${
+                  className={`${sectionLabel} inline-flex items-center rounded-full px-2.5 py-1 border whitespace-nowrap ${
                     hasManual
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : 'bg-amber-50 text-amber-700 border-amber-200'
@@ -124,7 +126,7 @@ export function ManualAssignmentTable({
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    transition={{ type: 'spring', damping: 28, stiffness: 300, mass: 0.6 }}
+                    transition={framerTransition.workOrderSlideSpring}
                     className="overflow-hidden border-b border-blue-100"
                   >
                     {renderExpanded(row)}

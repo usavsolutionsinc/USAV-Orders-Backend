@@ -188,39 +188,16 @@ export const packerInputThemeClasses: Record<PackerStationTheme, StationInputThe
   },
 };
 
-const STAFF_THEME_BY_ID: Partial<Record<number, StationTheme>> = {
-  7: 'lightblue',
-  8: 'pink',
-};
-
-const TECH_THEME_BY_STATION_ID: Record<number, TechStationTheme> = {
-  1: 'green',
-  2: 'blue',
-  3: 'purple',
-  4: 'yellow',
-  6: 'yellow',
-};
-
-const PACKER_THEME_BY_STATION_ID: Record<number, PackerStationTheme> = {
-  1: 'black',
-  2: 'red',
-};
-
-const PACKER_THEME_BY_STAFF_ID: Record<number, PackerStationTheme> = {
-  4: 'black',
-  5: 'red',
-};
-
-const TECH_THEME_BY_NAME: Record<string, StationTheme> = {
-  michael: 'green',
-  sang: 'purple',
-  thuc: 'blue',
-  cuong: 'yellow',
-};
-
-const PACKER_THEME_BY_NAME: Record<string, StationTheme> = {
-  tuan: 'black',
-  thuy: 'red',
+/** Single source of truth: staff ID → theme. */
+const STAFF_THEME_BY_ID: Record<number, StationTheme> = {
+  1: 'green',     // Michael  — technician
+  2: 'blue',      // Thuc     — technician
+  3: 'purple',    // Sang     — technician
+  4: 'black',     // Tuan     — packer
+  5: 'red',       // Thuy     — packer
+  6: 'yellow',    // Cuong    — technician
+  7: 'lightblue', // Kai      — receiving
+  8: 'pink',      // Lien     — sales
 };
 
 function parseStaffId(staffId: number | string | null | undefined): number | null {
@@ -228,16 +205,21 @@ function parseStaffId(staffId: number | string | null | undefined): number | nul
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function getTechThemeById(techId: number | string | null | undefined): TechStationTheme {
-  const id = parseStaffId(techId);
-  if (!id) return 'green';
-  return TECH_THEME_BY_STATION_ID[id] || 'green';
+export function getStaffThemeById(
+  staffId: number | string | null | undefined,
+): StationTheme {
+  const id = parseStaffId(staffId);
+  return (id && STAFF_THEME_BY_ID[id]) || 'green';
 }
 
-export function getPackerThemeById(packerId: number | string | null | undefined): PackerStationTheme {
-  const id = parseStaffId(packerId);
-  if (!id) return 'black';
-  return PACKER_THEME_BY_STATION_ID[id] || PACKER_THEME_BY_STAFF_ID[id] || 'black';
+function getTechThemeById(techId: number | string | null | undefined): TechStationTheme {
+  const theme = getStaffThemeById(techId);
+  return (theme === 'green' || theme === 'blue' || theme === 'purple' || theme === 'yellow') ? theme : 'green';
+}
+
+function getPackerThemeById(packerId: number | string | null | undefined): PackerStationTheme {
+  const theme = getStaffThemeById(packerId);
+  return (theme === 'black' || theme === 'red') ? theme : 'black';
 }
 
 export function getPackerInputTheme(
@@ -248,22 +230,6 @@ export function getPackerInputTheme(
       ? packerIdOrTheme
       : getPackerThemeById(packerIdOrTheme);
   return packerInputThemeClasses[theme];
-}
-
-export function getStaffThemeById(
-  staffId: number | string | null | undefined,
-  role: 'technician' | 'packer'
-): StationTheme {
-  const id = parseStaffId(staffId);
-  if (id && STAFF_THEME_BY_ID[id]) return STAFF_THEME_BY_ID[id]!;
-  return role === 'technician' ? getTechThemeById(staffId) : getPackerThemeById(staffId);
-}
-
-export function getStaffThemeByName(name: string, role?: string): StationTheme {
-  const key = String(name || '').trim().toLowerCase();
-  if (role === 'packer') return PACKER_THEME_BY_NAME[key] || 'black';
-  if (role === 'technician') return TECH_THEME_BY_NAME[key] || 'green';
-  return TECH_THEME_BY_NAME[key] || PACKER_THEME_BY_NAME[key] || 'blue';
 }
 
 /** FBA print queue: checkbox + selected row — Tailwind literals for purge. */
@@ -407,14 +373,14 @@ export const printQueueTableUi: Record<
 };
 
 export function getPrintQueueTableUi(staffId: number | string | null | undefined) {
-  const theme = getStaffThemeById(staffId, 'technician');
+  const theme = getStaffThemeById(staffId);
   return printQueueTableUi[theme];
 }
 
 export function getPrintQueueStationTheme(
   staffId: number | string | null | undefined
 ): StationTheme {
-  return getStaffThemeById(staffId, 'technician');
+  return getStaffThemeById(staffId);
 }
 
 /**
@@ -931,6 +897,6 @@ export const fbaSidebarThemeChrome: Record<StationTheme, FbaSidebarThemeChrome> 
 };
 
 export function getFbaWorkspaceScanChrome(staffId: number | string | null | undefined) {
-  const theme = getStaffThemeById(staffId, 'technician');
+  const theme = getStaffThemeById(staffId);
   return fbaWorkspaceScanChrome[theme];
 }

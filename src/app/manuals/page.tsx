@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, type KeyboardEvent } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FileText, ExternalLink } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
+import { formatMediumDate } from '@/utils/_date';
 
 interface ProductManual {
   id: number;
@@ -13,19 +14,6 @@ interface ProductManual {
   google_file_id: string;
   type: string | null;
   updated_at: string | null;
-}
-
-function formatDate(raw: string | null): string {
-  if (!raw) return '—';
-  try {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }).format(new Date(raw));
-  } catch {
-    return raw;
-  }
 }
 
 function buildManualsHref(pathname: string, params: URLSearchParams) {
@@ -97,11 +85,11 @@ function ManualDetailPanel({ manual, onClose }: { manual: ProductManual; onClose
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
-            <div className="w-16 h-16 rounded-3xl bg-gray-100 flex items-center justify-center mb-4">
-              <FileText className="w-8 h-8 text-gray-400" />
+            <div className="h-16 w-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+              <FileText className="h-8 w-8 text-gray-500" />
             </div>
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400">No document linked</p>
-            <p className="mt-1 text-[10px] font-medium text-gray-300">This manual has no Google Doc attached yet.</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">No document linked</p>
+            <p className="mt-1 text-[10px] font-semibold text-gray-500">This manual has no Google Doc attached yet.</p>
           </div>
         )}
       </div>
@@ -117,10 +105,10 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
   if (manuals.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-center">
-        <div className="w-14 h-14 rounded-3xl bg-gray-100 flex items-center justify-center mb-3">
-          <FileText className="w-6 h-6 text-gray-400" />
+        <div className="h-14 w-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
+          <FileText className="h-6 w-6 text-gray-500" />
         </div>
-        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">No manuals found</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">No manuals found</p>
       </div>
     );
   }
@@ -130,12 +118,12 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-gray-100">
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">Product Title</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">SKU</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">Item #</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">Type</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">Updated</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-400">Doc</th>
+            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Product Title</th>
+            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">SKU</th>
+            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Item #</th>
+            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Type</th>
+            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Updated</th>
+            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Doc</th>
           </tr>
         </thead>
         <tbody>
@@ -161,17 +149,17 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
               >
                 <td className="px-4 py-3">
                   <span className={`text-[11px] font-black tracking-tight ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
-                    {manual.product_title || <span className="text-gray-400 font-medium">—</span>}
+                    {manual.product_title || <span className="text-gray-500 font-semibold">—</span>}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <span className="text-[10px] font-bold text-gray-500 font-mono">
-                    {manual.sku || <span className="text-gray-300">—</span>}
+                    {manual.sku || <span className="text-gray-500">—</span>}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <span className="text-[10px] font-bold text-gray-500 font-mono">
-                    {manual.item_number || <span className="text-gray-300">—</span>}
+                    {manual.item_number || <span className="text-gray-500">—</span>}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -180,11 +168,11 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
                       {manual.type}
                     </span>
                   ) : (
-                    <span className="text-gray-300 text-[10px]">—</span>
+                    <span className="text-gray-500 text-[10px]">—</span>
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <span className="text-[10px] font-medium text-gray-400">{formatDate(manual.updated_at)}</span>
+                  <span className="text-[10px] font-semibold text-gray-500">{formatMediumDate(manual.updated_at)}</span>
                 </td>
                 <td className="px-4 py-3">
                   {manual.google_file_id ? (
@@ -195,11 +183,11 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
                       onClick={(e) => e.stopPropagation()}
                       className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors"
                     >
-                      <ExternalLink className="w-3 h-3" />
+                      <ExternalLink className="h-3 w-3" />
                       Open
                     </a>
                   ) : (
-                    <span className="text-gray-300 text-[10px]">—</span>
+                    <span className="text-gray-500 text-[10px]">—</span>
                   )}
                 </td>
               </tr>
@@ -314,8 +302,8 @@ function ManualsPageContent() {
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="text-center space-y-3">
-                <div className="w-10 h-10 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Loading manuals…</p>
+                <div className="h-10 w-10 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Loading manuals…</p>
               </div>
             </div>
           ) : loadError ? (

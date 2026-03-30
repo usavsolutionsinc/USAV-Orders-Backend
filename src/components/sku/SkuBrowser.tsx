@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Search } from '@/components/Icons';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 export type SkuView = 'sku_stock' | 'sku_history';
 
@@ -138,9 +139,9 @@ export default function SkuBrowser() {
               {view === 'sku_stock' ? (
                 <>
                   <div className="grid grid-cols-[64px_140px_minmax(220px,1fr)] items-center gap-1 border-b border-gray-200 bg-gray-50 px-2 py-1">
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Stock</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Stock SKU</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Product Title</div>
+                    <div className={sectionLabel}>Stock</div>
+                    <div className={sectionLabel}>Stock SKU</div>
+                    <div className={sectionLabel}>Product Title</div>
                   </div>
                   {skuStockRows.map((row, index) => (
                     <div
@@ -171,13 +172,13 @@ export default function SkuBrowser() {
               ) : (
                 <>
                   <div className="grid grid-cols-[156px_140px_minmax(180px,1fr)_180px_88px_150px_200px] items-center gap-1 border-b border-gray-200 bg-gray-50 px-2 py-1">
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Updated</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">SKU</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Product Title</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Serial Number</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Location</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Tracking</div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Notes</div>
+                    <div className={sectionLabel}>Updated</div>
+                    <div className={sectionLabel}>SKU</div>
+                    <div className={sectionLabel}>Product Title</div>
+                    <div className={sectionLabel}>Serial Number</div>
+                    <div className={sectionLabel}>Location</div>
+                    <div className={sectionLabel}>Tracking</div>
+                    <div className={sectionLabel}>Notes</div>
                   </div>
                   {skuHistoryRows.map((row, index) => (
                     <div

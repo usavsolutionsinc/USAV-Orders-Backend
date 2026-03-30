@@ -14,12 +14,8 @@ import {
   persistAmazonShipmentId,
   persistUpsTracking,
 } from '@/components/fba/sidebar/fbaShipmentTracking';
-import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
-import {
-  fbaWorkspaceScanChrome,
-  getStaffThemeById,
-  stationThemeColors,
-} from '@/utils/staff-colors';
+import { fbaWorkspaceScanChrome, stationThemeColors } from '@/utils/staff-colors';
+import { useStationTheme } from '@/hooks/useStationTheme';
 import { SIDEBAR_INTAKE_LABEL_CLASS } from '@/design-system/components/sidebar-intake/intakeFormClasses';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 
@@ -36,7 +32,6 @@ const PRINT_SIDEBAR_READY_EVENT = 'fba-print-sidebar-ready';
 export interface FbaWorkspaceScanFieldProps {
   staffName: string;
   staffId?: number | string | null;
-  staffRole?: 'technician' | 'packer';
   scanEnabled?: boolean;
   showTrackingCard?: boolean;
 }
@@ -45,23 +40,20 @@ export interface FbaWorkspaceScanFieldProps {
 export function FbaWorkspaceScanField({
   staffName,
   staffId = null,
-  staffRole = 'technician',
   scanEnabled = true,
   showTrackingCard = true,
 }: FbaWorkspaceScanFieldProps) {
   const { clearSelection, patchTracking, selection, trackingByPlan } = useFbaWorkspace();
-  const staffDirectory = useActiveStaffDirectory();
-  const lienStaffId = useMemo(
-    () => findStaffIdByNormalizedName(staffDirectory, 'lien'),
-    [staffDirectory]
-  );
-  const effectiveStaffId = useMemo(() => {
+
+  const effectiveStaffId = (() => {
     if (staffId != null && staffId !== '') {
       const n = Number(staffId);
       if (Number.isFinite(n) && n > 0) return n;
     }
-    return lienStaffId;
-  }, [staffId, lienStaffId]);
+    return null;
+  })();
+
+  const { theme: stationTheme, colors: themeColors } = useStationTheme({ staffId: effectiveStaffId });
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -71,12 +63,6 @@ export function FbaWorkspaceScanField({
     () => (reduceMotion ? { duration: 0 } : framerTransition.stationSerialRow),
     [reduceMotion]
   );
-
-  const stationTheme = useMemo(
-    () => getStaffThemeById(effectiveStaffId, staffRole),
-    [effectiveStaffId, staffRole]
-  );
-  const themeColors = stationThemeColors[stationTheme];
   const scanChrome = fbaWorkspaceScanChrome[stationTheme];
   const fieldClass = `${fieldBaseClass} ${scanChrome.fieldFocusRing}`;
   const selectedItems = selection.selectedItems;

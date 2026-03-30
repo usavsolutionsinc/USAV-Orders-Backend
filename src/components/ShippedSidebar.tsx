@@ -13,7 +13,9 @@ import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { formatDateTimePST } from '@/utils/date';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
+import { getStaffName } from '@/utils/staff';
 import { isFbaOrder } from '@/utils/order-platform';
+import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
 
 interface SearchHistory {
     query: string;
@@ -37,20 +39,6 @@ interface ShippedSidebarProps {
     onShippedFilterChange?: (value: ShippedTypeFilter) => void;
 }
 
-// Hard-coded staff ID to name mapping
-const STAFF_NAMES: { [key: number]: string } = {
-    1: 'Michael',
-    2: 'Thuc',
-    3: 'Sang',
-    4: 'Tuan',
-    5: 'Thuy',
-    6: 'Cuong'
-};
-
-function getStaffName(staffId: number | null | undefined): string {
-    if (!staffId) return 'N/A';
-    return STAFF_NAMES[staffId] || `Staff #${staffId}`;
-}
 
 function toShippedOrder(order: any): ShippedOrder {
     return {
@@ -299,7 +287,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
                                 Shipped Orders
                             </h2>
-                            <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">
+                            <p className={`${microBadge} text-blue-600 mt-1`}>
                                 Search Database
                             </p>
                         </motion.header>
@@ -341,7 +329,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             />
                         )}
 
-                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-1">
+                        <p className={`${microBadge} text-gray-500 px-1`}>
                             Click a Shipped Row for More Details
                         </p>
 
@@ -349,15 +337,15 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                         {results.length > 0 && (
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
+                                    <p className={`${microBadge} text-gray-500`}>
                                         {results.length} Result{results.length !== 1 ? 's' : ''}
                                     </p>
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setResults([]);
                                             setHasSearched(false);
                                         }}
-                                        className="text-[9px] font-bold text-blue-600 uppercase hover:underline"
+                                        className={`${microBadge} text-blue-600 hover:underline`}
                                     >
                                         Clear
                                     </button>
@@ -372,15 +360,15 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                             >
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] font-black text-gray-900 group-hover:text-blue-600 truncate pr-8">
+                                                        <span className={`${sectionLabel} text-gray-900 group-hover:text-blue-600 truncate pr-8`}>
                                                             {result.order_id}
                                                         </span>
-                                                        <span className={`text-[7px] font-black px-1.5 py-0.5 rounded uppercase ${result.is_shipped ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        <span className={`${microBadge} px-1.5 py-0.5 rounded ${result.is_shipped ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                                             {result.is_shipped ? 'Shipped' : 'Pending'}
                                                         </span>
                                                     </div>
-                                                    <p className="text-[9px] text-gray-500 font-medium truncate">{result.product_title}</p>
-                                                    <p className="text-[8px] font-mono text-gray-400 truncate">{result.shipping_tracking_number}</p>
+                                                    <p className="text-[9px] text-gray-500 font-semibold truncate">{result.product_title}</p>
+                                                    <p className={`${microBadge} font-mono text-gray-500 truncate`}>{result.shipping_tracking_number}</p>
                                                 </div>
                                             </button>
                                             
@@ -412,7 +400,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                     <Search className="w-6 h-6 text-red-600" />
                                 </div>
                                 <h3 className="text-sm font-black text-red-900 uppercase tracking-tight mb-1">Order not found</h3>
-                                <p className="text-[10px] text-red-600 font-bold uppercase tracking-widest leading-relaxed">
+                                <p className={`${sectionLabel} text-red-600 leading-relaxed`}>
                                     We couldn't find any records matching "{searchQuery}"
                                 </p>
                                 <button 
@@ -420,7 +408,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                         setSearchQuery('');
                                         setHasSearched(false);
                                     }}
-                                    className="mt-4 text-[10px] font-black text-red-700 uppercase tracking-widest hover:underline"
+                                    className={`mt-4 ${sectionLabel} text-red-700 hover:underline`}
                                 >
                                     Clear search
                                 </button>

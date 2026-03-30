@@ -1,34 +1,49 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getAllProductManuals, upsertProductManual } from '@/lib/neon/product-manuals-queries';
+import { z } from 'zod';
+import { createCrudHandler, ApiError } from '@/lib/api';
+import {
+  getAllProductManuals,
+  getProductManualById,
+  searchProductManuals,
+  upsertProductManual,
+  deactivateProductManual,
+  type ProductManual,
+} from '@/lib/neon/product-manuals-queries';
 
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '5000', 10), 10000);
-    const manuals = await getAllProductManuals({ limit });
-    return NextResponse.json(manuals);
-  } catch (error: any) {
-    console.error('Error fetching product manuals:', error);
-    return NextResponse.json({ error: 'Failed to fetch product manuals', details: error.message }, { status: 500 });
-  }
-}
+const createManualSchema = z.object({
+  sku: z.string().nullish(),
+  itemNumber: z.string().nullish(),
+  productTitle: z.string().nullish(),
+  googleDocIdOrUrl: z.string().min(1, 'googleDocIdOrUrl is required'),
+  type: z.string().nullish(),
+}).refine(
+  (d) => d.sku || d.itemNumber,
+  { message: 'Either sku or itemNumber is required' },
+);
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { sku, itemNumber, productTitle, googleDocIdOrUrl, type } = body;
+const handler = createCrudHandler<ProductManual>({
+  name: 'product-manuals',
+  cacheNamespace: 'api:product-manuals',
+  cacheTTL: 300,
+  cacheTags: ['product-manuals'],
 
-    if (!googleDocIdOrUrl) {
-      return NextResponse.json({ error: 'googleDocIdOrUrl is required' }, { status: 400 });
-    }
-    if (!sku && !itemNumber) {
-      return NextResponse.json({ error: 'Either sku or itemNumber is required' }, { status: 400 });
-    }
+  createSchema: createManualSchema,
 
-    const manual = await upsertProductManual({ sku, itemNumber, productTitle, googleDocIdOrUrl, type });
-    return NextResponse.json({ success: true, manual }, { status: 201 });
-  } catch (error: any) {
-    console.error('Error upserting product manual:', error);
-    return NextResponse.json({ error: 'Failed to save product manual', details: error.message }, { status: 500 });
-  }
-}
+  list: async (params) => {
+    const manuals = await getAllProductManuals({ limit: params.limit, offset: params.offset });
+    return { rows: manuals };
+  },
+
+  getById: async (id) => getProductManualById(Number(id)),
+
+  search: async (query, params) => searchProductManuals(query, params.limit),
+
+  create: async (body) => upsertProductManual(body),
+
+  remove: async (id) => {
+    const ok = await deactivateProductManual(Number(id));
+    if (!ok) throw ApiError.notFound('product-manual', id);
+    return { success: true as const };
+  },
+});
+
+export const { GET, POST, DELETE } = handler;

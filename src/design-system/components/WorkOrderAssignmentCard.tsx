@@ -9,6 +9,7 @@ import { WorkOrderInfoChips } from '@/components/work-orders/WorkOrderInfoStrip'
 import { toDateInputValue, type WorkOrderRow, type WorkStatus } from '@/components/work-orders/types';
 import { AssignmentOverlayCard } from './AssignmentOverlayCard';
 import { framerGesture } from '../foundations/motion-framer';
+import { fieldLabel } from '@/design-system/tokens/typography/presets';
 
 interface StaffOption {
   id: number;
@@ -41,11 +42,7 @@ export interface WorkOrderAssignmentCardProps {
 }
 
 function resolveTechTheme(staffId: number) {
-  if (staffId === 1) return 'green';
-  if (staffId === 2) return 'blue';
-  if (staffId === 3) return 'purple';
-  if (staffId === 6) return 'yellow';
-  return getStaffThemeById(staffId, 'technician');
+  return getStaffThemeById(staffId);
 }
 
 /** Plain text only (no chips): e.g. “Orders · Amazon”, “FBA”, or queue label. */
@@ -452,17 +449,17 @@ export function WorkOrderAssignmentCard({
         type="button"
         disabled={!hasPrev}
         onClick={() => navigate('prev')}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-20"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-20"
         aria-label="Previous"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
 
       <div className="min-w-0 text-center leading-tight">
-        <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">
+        <p className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">
           {remaining} remaining
         </p>
-        <p className="mt-0.5 text-[8px] font-black uppercase tracking-[0.16em] text-slate-500">
+        <p className="mt-0.5 text-[8px] font-black uppercase tracking-[0.16em] text-gray-500">
           {todayUnassignedCount} unassigned · {todayTotalCount} total today
         </p>
       </div>
@@ -471,7 +468,7 @@ export function WorkOrderAssignmentCard({
         type="button"
         disabled={!hasNext}
         onClick={() => navigate('next')}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-20"
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-20"
         aria-label="Next"
       >
         <ChevronRight className="h-4 w-4" />
@@ -482,7 +479,7 @@ export function WorkOrderAssignmentCard({
   const headerEyebrow = (
     <div className="flex w-full min-w-0 items-center justify-between gap-3">
       <div className="flex min-h-[26px] min-w-0 flex-1 items-center">
-        <span className="truncate text-[13px] font-black uppercase tracking-[0.08em] leading-none text-slate-500">
+        <span className="truncate text-[13px] font-black uppercase tracking-[0.08em] leading-none text-gray-500">
           {assignmentHeaderContextText(row)}
         </span>
       </div>
@@ -517,7 +514,7 @@ export function WorkOrderAssignmentCard({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="break-words text-[22px] font-black leading-tight tracking-tight text-slate-950 [overflow-wrap:anywhere]"
+              className="break-words text-[22px] font-black leading-tight tracking-tight text-gray-950 [overflow-wrap:anywhere]"
               style={{
                 height: '100%',
                 overflowY: 'auto',
@@ -530,9 +527,9 @@ export function WorkOrderAssignmentCard({
           </AnimatePresence>
         </div>
 
-        <div className="shrink-0 space-y-4 border-t border-slate-100 px-5 pb-5 pt-2.5">
+        <div className="shrink-0 space-y-4 border-t border-gray-100 px-5 pb-5 pt-2.5">
           <div>
-            <p className="mb-2 text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Technician</p>
+            <p className="mb-2 text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">Technician</p>
             {technicianOptions.length > 0 ? (
               <div
                 className="grid w-full gap-2"
@@ -560,19 +557,19 @@ export function WorkOrderAssignmentCard({
                 })}
               </div>
             ) : (
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              <p className={`${fieldLabel} text-gray-500`}>
                 No technicians
               </p>
             )}
           </div>
 
           <div>
-            <p className="mb-2.5 text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Packer</p>
+            <p className="mb-2.5 text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">Packer</p>
             {packerOptions.length > 0 ? (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {packerOptions.map((m) => {
                   const active = packerId === m.id;
-                  const cls = stationThemeClasses[getStaffThemeById(m.id, 'packer')];
+                  const cls = stationThemeClasses[getStaffThemeById(m.id)];
                   return (
                     <motion.button
                       key={m.id}
@@ -592,14 +589,14 @@ export function WorkOrderAssignmentCard({
                 })}
               </div>
             ) : (
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              <p className={`${fieldLabel} text-gray-500`}>
                 No packers
               </p>
             )}
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
-            <span className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">
+            <span className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">
               Deadline
             </span>
             <input
@@ -610,7 +607,7 @@ export function WorkOrderAssignmentCard({
                 setDeadline(next);
                 updateCurrentDraft({ deadline: next });
               }}
-              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-800 outline-none transition-colors focus:border-slate-400 tabular-nums"
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-800 outline-none transition-colors focus:border-gray-400 tabular-nums"
             />
           </div>
 
@@ -618,7 +615,7 @@ export function WorkOrderAssignmentCard({
             <button
               type="button"
               onClick={handleMarkDone}
-              className="h-8 rounded-lg border border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-[0.18em] text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100"
+              className="h-8 rounded-lg border border-gray-200 bg-gray-50 text-[9px] font-black uppercase tracking-[0.18em] text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-100"
             >
               Mark as Done
             </button>

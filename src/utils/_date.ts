@@ -16,6 +16,43 @@ export function formatDate(
 }
 
 /**
+ * Formats a date as "Jan 18, 2026" (short month, numeric day, numeric year).
+ * Returns the fallback string for null/invalid input.
+ */
+export function formatMediumDate(
+  value: string | null | undefined,
+  fallback = '—',
+): string {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+/**
+ * Formats a date as "Jan 18, 1:45 PM" (short month, numeric day, time).
+ * Returns the fallback string for null/invalid input.
+ */
+export function formatMediumDateTime(
+  value: string | null | undefined,
+  fallback = '—',
+): string {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+/**
  * Returns a relative time string.
  * @example timeAgo(Date.now() - 60000) → '1 minute ago'
  */

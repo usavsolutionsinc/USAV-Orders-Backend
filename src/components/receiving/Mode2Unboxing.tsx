@@ -5,6 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Check, ChevronRight, Loader2, Package, RefreshCw, X } from '@/components/Icons';
 import { formatTimePST, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { getActiveStaff } from '@/lib/staffCache';
+import { FormField } from '@/design-system/components';
+import { ExpandableSection } from '@/design-system/primitives';
+import { sectionLabel, fieldLabel, cardTitle, chipText, monoValue, microBadge } from '@/design-system/tokens/typography/presets';
+import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,14 +117,13 @@ function usePhotos(receivingId: string | null, enabled: boolean) {
 function useStaff() {
     const [staff, setStaff] = useState<StaffOption[]>([]);
     useEffect(() => {
-        fetch('/api/staff?active=true')
-            .then((r) => r.json())
+        let active = true;
+        getActiveStaff()
             .then((data) => {
-                if (Array.isArray(data)) {
-                    setStaff(data.map((m: any) => ({ id: Number(m.id), name: String(m.name || ''), role: String(m.role || '') })));
-                }
+                if (active) setStaff(data);
             })
             .catch(() => {});
+        return () => { active = false; };
     }, []);
     return staff;
 }
@@ -139,20 +143,20 @@ function PhotoGrid({ receivingId }: { receivingId: string }) {
         <div>
             <div className="mb-3 flex items-center gap-2">
                 <Camera className="h-4 w-4 text-gray-500" />
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-600">
+                <p className={sectionLabel}>
                     Photos ({photos.length})
                 </p>
                 {isFetching && <Loader2 className="h-3 w-3 animate-spin text-gray-400" />}
             </div>
 
             {photos.length === 0 ? (
-                <div className="flex h-28 items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50">
+                <div className="flex h-28 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50">
                     <div className="text-center">
-                        <Camera className="mx-auto mb-1 h-6 w-6 text-gray-300" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">
+                        <Camera className="mx-auto mb-1 h-6 w-6 text-gray-400" />
+                        <p className={`${sectionLabel} text-gray-400`}>
                             Waiting for mobile photos
                         </p>
-                        <p className="mt-0.5 text-[9px] font-medium text-gray-300">
+                        <p className={`mt-0.5 ${microBadge} text-gray-500`}>
                             Entry ID: <span className="font-mono font-bold">{receivingId}</span>
                         </p>
                     </div>
@@ -298,11 +302,11 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
             <div className={`flex flex-col border-r border-gray-200 bg-white transition-[width] duration-300 ${selectedEntry ? 'w-72 flex-shrink-0' : 'flex-1'}`}>
                 <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Mode 2</p>
-                        <h2 className="text-base font-black uppercase tracking-tight text-gray-900 leading-none">Unboxing Queue</h2>
+                        <p className={sectionLabel}>Mode 2</p>
+                        <h2 className={`${cardTitle} uppercase tracking-tight leading-none`}>Unboxing Queue</h2>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-black text-amber-700">
+                        <span className={`rounded-full bg-amber-100 px-2.5 py-0.5 ${chipText} text-amber-700`}>
                             {pendingEntries.length}
                         </span>
                         <button
@@ -322,8 +326,8 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                 ) : pendingEntries.length === 0 ? (
                     <div className="flex flex-1 flex-col items-center justify-center text-center px-6">
                         <Check className="mb-3 h-10 w-10 text-emerald-400" />
-                        <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">All Clear</p>
-                        <p className="mt-1 text-[10px] font-medium text-gray-400">No pending packages to unbox</p>
+                        <p className={sectionLabel}>All Clear</p>
+                        <p className="mt-1 text-[10px] font-semibold text-gray-500">No pending packages to unbox</p>
                     </div>
                 ) : (
                     <ul className="flex-1 overflow-y-auto divide-y divide-gray-50">
@@ -340,10 +344,10 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                         <Package className="h-4 w-4 text-amber-600" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="truncate font-mono text-[11px] font-bold text-gray-900">
+                                        <p className={`truncate ${chipText} text-gray-900`}>
                                             {entry.tracking ? `...${entry.tracking.slice(-8)}` : `#${entry.id}`}
                                         </p>
-                                        <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                                        <p className={`${microBadge} tracking-wider text-gray-500`}>
                                             {entry.status || 'Unknown'} · {formatTimePST(entry.timestamp)}
                                         </p>
                                     </div>
@@ -365,7 +369,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                         initial={{ opacity: 0, x: 24 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: 24 }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                        transition={framerTransition.stationCardMount}
                         className="flex flex-1 flex-col overflow-hidden bg-white"
                     >
                         {/* Panel header */}
@@ -378,10 +382,10 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                 <X className="h-4 w-4 text-gray-500" />
                             </button>
                             <div className="min-w-0 flex-1">
-                                <p className="font-mono text-xs font-bold text-gray-900 truncate">
+                                <p className={`${monoValue} truncate`}>
                                     {selectedEntry.tracking || `Entry #${selectedEntry.id}`}
                                 </p>
-                                <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                <p className={`${microBadge} tracking-wider text-gray-500`}>
                                     {selectedEntry.status} · {formatTimePST(selectedEntry.timestamp)}
                                     {selectedEntry.zoho_purchase_receive_id && (
                                         <span className="ml-2 text-emerald-600">· Zoho PO</span>
@@ -397,8 +401,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
 
                             <div className="border-t border-gray-100 pt-4 space-y-4">
                                 {/* Package type */}
-                                <div>
-                                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Package Type</p>
+                                <FormField label="Package Type">
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
                                             type="button"
@@ -423,39 +426,37 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                             Return
                                         </button>
                                     </div>
-                                </div>
+                                </FormField>
 
                                 {/* Return fields */}
-                                {isReturn && (
-                                    <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        className="space-y-2 overflow-hidden"
-                                    >
-                                        <select
-                                            value={returnPlatform}
-                                            onChange={(e) => setReturnPlatform(e.target.value)}
-                                            className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-amber-800 outline-none focus:border-amber-400"
-                                        >
-                                            <option value="">Return Platform</option>
-                                            {RETURN_PLATFORM_OPTIONS.map((opt) => (
-                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                            ))}
-                                        </select>
-                                        <textarea
-                                            value={returnReason}
-                                            onChange={(e) => setReturnReason(e.target.value)}
-                                            placeholder="Return reason (optional)"
-                                            rows={2}
-                                            className="w-full resize-none rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-medium text-gray-800 outline-none focus:border-amber-400 placeholder:text-amber-300"
-                                        />
-                                    </motion.div>
-                                )}
+                                <ExpandableSection isOpen={isReturn}>
+                                    <div className="space-y-2 pt-1">
+                                        <FormField label="Return Platform">
+                                            <select
+                                                value={returnPlatform}
+                                                onChange={(e) => setReturnPlatform(e.target.value)}
+                                                className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-amber-800 outline-none focus:border-amber-400"
+                                            >
+                                                <option value="">Select platform</option>
+                                                {RETURN_PLATFORM_OPTIONS.map((opt) => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                        </FormField>
+                                        <FormField label="Return Reason" optionalHint="optional">
+                                            <textarea
+                                                value={returnReason}
+                                                onChange={(e) => setReturnReason(e.target.value)}
+                                                placeholder="Return reason"
+                                                rows={2}
+                                                className="w-full resize-none rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-medium text-gray-800 outline-none focus:border-amber-400 placeholder:text-amber-400"
+                                            />
+                                        </FormField>
+                                    </div>
+                                </ExpandableSection>
 
                                 {/* Condition */}
-                                <div>
-                                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Condition</p>
+                                <FormField label="Condition">
                                     <div className="flex flex-wrap gap-1.5">
                                         {CONDITION_OPTIONS.map((opt) => (
                                             <button
@@ -465,18 +466,17 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                                 className={`rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all ${
                                                     conditionGrade === opt.value
                                                         ? 'bg-gray-900 text-white'
-                                                        : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                                                        : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                                                 }`}
                                             >
                                                 {opt.label}
                                             </button>
                                         ))}
                                     </div>
-                                </div>
+                                </FormField>
 
                                 {/* QA Status */}
-                                <div>
-                                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">QA Status</p>
+                                <FormField label="QA Status">
                                     <div className="flex flex-wrap gap-1.5">
                                         {QA_STATUS_OPTIONS.map((opt) => (
                                             <button
@@ -490,32 +490,31 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                                             : opt.color === 'red'
                                                             ? 'bg-red-600 text-white'
                                                             : 'bg-amber-500 text-white'
-                                                        : 'border border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                                                        : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                                                 }`}
                                             >
                                                 {opt.label}
                                             </button>
                                         ))}
                                     </div>
-                                </div>
+                                </FormField>
 
                                 {/* Disposition */}
-                                <div>
-                                    <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Disposition</p>
+                                <FormField label="Disposition">
                                     <select
                                         value={dispositionCode}
                                         onChange={(e) => setDispositionCode(e.target.value)}
-                                        className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-gray-900 outline-none focus:border-blue-500"
                                     >
                                         {DISPOSITION_OPTIONS.map((opt) => (
                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                                         ))}
                                     </select>
-                                </div>
+                                </FormField>
 
                                 {/* Needs Test + Tech */}
-                                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 space-y-2">
-                                    <label className="flex cursor-pointer items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-700">
+                                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+                                    <label className={`flex cursor-pointer items-center gap-2 ${fieldLabel}`}>
                                         <input
                                             type="checkbox"
                                             checked={needsTest}
@@ -524,32 +523,36 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                         />
                                         Needs Testing
                                     </label>
-                                    {needsTest && (
+                                    <ExpandableSection isOpen={needsTest}>
+                                        <FormField label="Assign Technician">
+                                            <select
+                                                value={assignedTechId}
+                                                onChange={(e) => setAssignedTechId(e.target.value)}
+                                                className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 ${fieldLabel} text-gray-900 outline-none focus:border-purple-500`}
+                                            >
+                                                <option value="">Select technician</option>
+                                                {technicians.map((t) => (
+                                                    <option key={t.id} value={String(t.id)}>{t.name}</option>
+                                                ))}
+                                            </select>
+                                        </FormField>
+                                    </ExpandableSection>
+                                    <FormField label="Target Channel" optionalHint="optional">
                                         <select
-                                            value={assignedTechId}
-                                            onChange={(e) => setAssignedTechId(e.target.value)}
-                                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-900 outline-none focus:border-purple-500"
+                                            value={targetChannel}
+                                            onChange={(e) => setTargetChannel(e.target.value)}
+                                            className={`w-full rounded-xl border border-gray-200 bg-white px-3 py-2 ${fieldLabel} text-gray-900 outline-none`}
                                         >
-                                            <option value="">Assign Technician</option>
-                                            {technicians.map((t) => (
-                                                <option key={t.id} value={String(t.id)}>{t.name}</option>
-                                            ))}
+                                            <option value="">No Target Channel</option>
+                                            <option value="ORDERS">Orders</option>
+                                            <option value="FBA">FBA</option>
                                         </select>
-                                    )}
-                                    <select
-                                        value={targetChannel}
-                                        onChange={(e) => setTargetChannel(e.target.value)}
-                                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-gray-900 outline-none"
-                                    >
-                                        <option value="">No Target Channel</option>
-                                        <option value="ORDERS">Orders</option>
-                                        <option value="FBA">FBA</option>
-                                    </select>
+                                    </FormField>
                                 </div>
 
                                 {/* Zoho confirmation */}
                                 {selectedEntry.zoho_purchase_receive_id && (
-                                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                                    <label className={`flex cursor-pointer items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 ${fieldLabel} text-emerald-700`}>
                                         <input
                                             type="checkbox"
                                             checked={zohoConfirm}
@@ -568,7 +571,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                                 type="button"
                                 onClick={handleConfirm}
                                 disabled={isSaving || saveSuccess}
-                                className={`w-full rounded-2xl py-3.5 text-[11px] font-black uppercase tracking-widest shadow-lg transition-all ${
+                                className={`w-full rounded-xl py-3.5 ${chipText} uppercase tracking-widest shadow-lg transition-all ${
                                     saveSuccess
                                         ? 'bg-emerald-500 text-white shadow-emerald-500/20'
                                         : 'bg-gray-900 text-white hover:bg-black shadow-gray-900/20 disabled:bg-gray-300 disabled:cursor-not-allowed'
@@ -594,9 +597,9 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
             {/* Empty state when no entry selected */}
             {!selectedEntry && pendingEntries.length > 0 && (
                 <div className="flex flex-1 flex-col items-center justify-center text-center">
-                    <Package className="mb-3 h-10 w-10 text-gray-200" />
-                    <p className="text-[11px] font-black uppercase tracking-widest text-gray-300">Select a package</p>
-                    <p className="mt-1 text-[10px] font-medium text-gray-300">Pick an entry from the queue to begin unboxing</p>
+                    <Package className="mb-3 h-10 w-10 text-gray-300" />
+                    <p className={sectionLabel}>Select a package</p>
+                    <p className="mt-1 text-[10px] font-semibold text-gray-500">Pick an entry from the queue to begin unboxing</p>
                 </div>
             )}
         </div>

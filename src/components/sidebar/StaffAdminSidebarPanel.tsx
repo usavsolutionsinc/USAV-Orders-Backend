@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 
 const STAFF_VIEW_OPTIONS = [
   { value: 'all', label: 'All Staff' },
@@ -61,8 +62,8 @@ export function StaffAdminSidebarPanel() {
           value={staffView}
           onChange={(nextValue) => updateParams({ staffView: nextValue as StaffViewMode })}
           variant="boxy"
-          buttonClassName="h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left text-[10px] font-black uppercase tracking-wider text-gray-700 outline-none transition-all hover:bg-gray-50"
-          optionClassName="text-[10px] font-black tracking-wider"
+          buttonClassName={`h-full w-full appearance-none bg-white px-4 py-3 pr-8 text-left ${fieldLabel} outline-none transition-all hover:bg-gray-50`}
+          optionClassName={fieldLabel}
         />
       </div>
 
@@ -83,8 +84,8 @@ export function StaffAdminSidebarPanel() {
           className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
         >
           <div>
-            <p className="text-[11px] font-black tracking-widest text-gray-900">Add Team Member</p>
-            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Open the form to create a new staff record</p>
+            <p className={dataValue}>Add Team Member</p>
+            <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Open the form to create a new staff record</p>
           </div>
           <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
             <Plus className="h-3.5 w-3.5" />
@@ -97,8 +98,8 @@ export function StaffAdminSidebarPanel() {
           className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
         >
           <div>
-            <p className="text-[11px] font-black tracking-widest text-gray-900">Clear Filters</p>
-            <p className="mt-0.5 text-[10px] font-bold text-gray-500">Reset search and staff view</p>
+            <p className={dataValue}>Clear Filters</p>
+            <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Reset search and staff view</p>
           </div>
           <span className="inline-flex h-10 w-12 items-center justify-center border-l border-gray-200 text-gray-600">
             <X className="h-3.5 w-3.5" />

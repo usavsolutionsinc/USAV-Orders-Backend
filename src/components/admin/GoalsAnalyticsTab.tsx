@@ -153,8 +153,8 @@ export function GoalsAnalyticsTab() {
     <section className="flex h-full min-h-0 w-full flex-col bg-white">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} flex-wrap gap-y-2 px-6`}>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-900">Daily Goals</p>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-900">Daily Goals</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
             <span>{summary.total} staff shown</span>
             <span>{summary.today} done today</span>
             <span>{summary.week} this week</span>
@@ -166,11 +166,11 @@ export function GoalsAnalyticsTab() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden border border-slate-200">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden border border-gray-200">
           <div className="min-h-0 flex-1 overflow-auto">
             <div className="min-w-[920px]">
               <div
-                className={`${tableGridClass} border-b border-slate-200 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500`}
+                className={`${tableGridClass} border-b border-gray-200 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500`}
               >
                 <p>Staff</p>
                 <p>Daily Goal</p>
@@ -181,11 +181,11 @@ export function GoalsAnalyticsTab() {
               </div>
 
               {loading ? (
-                <div className="flex h-full items-center justify-center px-6 py-10 text-xs text-slate-500">
+                <div className="flex h-full items-center justify-center px-6 py-10 text-xs text-gray-500">
                   Loading goal progress...
                 </div>
               ) : filteredRows.length === 0 ? (
-                <div className="flex h-full items-center justify-center px-6 py-10 text-center text-xs text-slate-500">
+                <div className="flex h-full items-center justify-center px-6 py-10 text-center text-xs text-gray-500">
                   No staff match this search or goal view.
                 </div>
               ) : (
@@ -196,11 +196,11 @@ export function GoalsAnalyticsTab() {
                   return (
                     <div
                       key={row.staff_id}
-                      className={`${tableGridClass} items-center border-b border-slate-200 px-4 py-3 text-sm last:border-b-0`}
+                      className={`${tableGridClass} items-center border-b border-gray-200 px-4 py-3 text-sm last:border-b-0`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-slate-900">{row.name}</p>
-                        <p className="truncate text-xs text-slate-500">{row.role}</p>
+                        <p className="truncate font-semibold text-gray-900">{row.name}</p>
+                        <p className="truncate text-xs text-gray-500">{row.role}</p>
                       </div>
 
                       <div className="min-w-0 flex items-center gap-2">
@@ -210,30 +210,30 @@ export function GoalsAnalyticsTab() {
                           value={goalInputs[row.staff_id] ?? String(row.daily_goal)}
                           onChange={(e) => setGoalInputs((current) => ({ ...current, [row.staff_id]: e.target.value }))}
                           aria-label={`Daily goal for ${row.name}`}
-                          className="w-14 border border-slate-300 px-2 py-1 text-xs font-medium text-slate-900 outline-none focus:border-slate-500"
+                          className="w-14 border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-900 outline-none focus:border-gray-500"
                         />
                         <button
                           type="button"
                           onClick={() => saveGoal(row.staff_id)}
                           disabled={savingId === row.staff_id}
-                          className="shrink-0 border border-slate-300 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-700 disabled:opacity-50"
+                          className="shrink-0 border border-gray-300 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-700 disabled:opacity-50"
                         >
                           {savingId === row.staff_id ? 'Saving' : 'Save'}
                         </button>
                       </div>
 
-                      <p className="text-right font-medium text-slate-900">{row.today_count}</p>
-                      <p className="text-right font-medium text-slate-900">{row.week_count}</p>
-                      <p className="text-right font-medium text-slate-900">{row.avg_daily_last_7d}</p>
+                      <p className="text-right font-semibold text-gray-900">{row.today_count}</p>
+                      <p className="text-right font-semibold text-gray-900">{row.week_count}</p>
+                      <p className="text-right font-semibold text-gray-900">{row.avg_daily_last_7d}</p>
 
                       <div className="min-w-0">
                         <div className="flex items-center justify-between gap-3 text-xs">
                           <span className={`font-semibold ${tone.textClass}`}>{tone.label}</span>
-                          <span className="text-slate-500">
+                          <span className="text-gray-500">
                             {row.today_count}/{goal}
                           </span>
                         </div>
-                        <div className="mt-2 h-1.5 overflow-hidden bg-slate-100">
+                        <div className="mt-2 h-1.5 overflow-hidden bg-gray-100">
                           <div className={`h-full ${tone.barClass}`} style={{ width: `${percent}%` }} />
                         </div>
                       </div>

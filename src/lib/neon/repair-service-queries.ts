@@ -36,6 +36,9 @@ export interface RSRecord {
   intake_confirmed_at?: string | null;
   received_by_staff_id?: number | null;
   customer_id?: number | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  customer_email?: string | null;
 }
 
 export const REPAIR_STATUS_OPTIONS = [
@@ -92,36 +95,76 @@ function mapRepairRow(row: any): RSRecord {
     intake_confirmed_at: normalizePSTTimestamp(row.intake_confirmed_at) || null,
     received_by_staff_id: row.received_by_staff_id == null ? null : Number(row.received_by_staff_id),
     customer_id: row.customer_id == null ? null : Number(row.customer_id),
+    customer_name: row.customer_name ?? null,
+    customer_phone: row.customer_phone ?? null,
+    customer_email: row.customer_email ?? null,
   };
 }
 
+const REPAIR_SELECT_COLUMNS = `
+  rs.id,
+  rs.created_at,
+  rs.updated_at,
+  rs.ticket_number,
+  rs.contact_info,
+  rs.product_title,
+  rs.price,
+  rs.issue,
+  rs.serial_number,
+  rs.status,
+  rs.notes,
+  rs.status_history,
+  rs.source_system,
+  rs.source_order_id,
+  rs.source_tracking_number,
+  rs.source_sku,
+  rs.intake_channel,
+  rs.incoming_status,
+  rs.delivered_at,
+  rs.received_at,
+  rs.intake_confirmed_at,
+  rs.received_by_staff_id,
+  rs.customer_id,
+  COALESCE(c.display_name, c.customer_name, CONCAT_WS(' ', c.first_name, c.last_name)) AS customer_name,
+  COALESCE(c.phone, c.mobile) AS customer_phone,
+  c.email AS customer_email
+`;
+
+const REPAIR_FROM = `
+  FROM repair_service rs
+  LEFT JOIN customers c ON c.id = rs.customer_id
+`;
+
 function buildRepairTabWhere(tab: RepairTab) {
   if (tab === 'incoming') {
-    return `WHERE COALESCE(incoming_status, '') = 'incoming'`;
+    return `WHERE COALESCE(rs.incoming_status, '') = 'incoming'`;
   }
   if (tab === 'done') {
-    return `WHERE status IN ('Done', 'Picked Up', 'Shipped')`;
+    return `WHERE rs.status IN ('Done', 'Picked Up', 'Shipped')`;
   }
-  return `WHERE COALESCE(incoming_status, '') != 'incoming'
-          AND status NOT IN ('Done', 'Picked Up', 'Shipped')`;
+  return `WHERE COALESCE(rs.incoming_status, '') != 'incoming'
+          AND rs.status NOT IN ('Done', 'Picked Up', 'Shipped')`;
 }
 
 function buildRepairSearchWhere(idx: number, tab?: RepairTab) {
   const base = `(
-      ticket_number ILIKE $${idx}
-      OR contact_info ILIKE $${idx}
-      OR product_title ILIKE $${idx}
-      OR serial_number ILIKE $${idx}
-      OR COALESCE(source_order_id, '') ILIKE $${idx}
-      OR COALESCE(source_tracking_number, '') ILIKE $${idx}
-      OR COALESCE(source_sku, '') ILIKE $${idx}
+      rs.ticket_number ILIKE $${idx}
+      OR rs.contact_info ILIKE $${idx}
+      OR rs.product_title ILIKE $${idx}
+      OR rs.serial_number ILIKE $${idx}
+      OR COALESCE(rs.source_order_id, '') ILIKE $${idx}
+      OR COALESCE(rs.source_tracking_number, '') ILIKE $${idx}
+      OR COALESCE(rs.source_sku, '') ILIKE $${idx}
+      OR COALESCE(c.display_name, c.customer_name, '') ILIKE $${idx}
+      OR COALESCE(c.phone, c.mobile, '') ILIKE $${idx}
+      OR COALESCE(c.email, '') ILIKE $${idx}
     )`;
 
   if (!tab) return `WHERE ${base}`;
-  if (tab === 'incoming') return `WHERE COALESCE(incoming_status, '') = 'incoming' AND ${base}`;
-  if (tab === 'done') return `WHERE status IN ('Done', 'Picked Up', 'Shipped') AND ${base}`;
-  return `WHERE COALESCE(incoming_status, '') != 'incoming'
-          AND status NOT IN ('Done', 'Picked Up', 'Shipped')
+  if (tab === 'incoming') return `WHERE COALESCE(rs.incoming_status, '') = 'incoming' AND ${base}`;
+  if (tab === 'done') return `WHERE rs.status IN ('Done', 'Picked Up', 'Shipped') AND ${base}`;
+  return `WHERE COALESCE(rs.incoming_status, '') != 'incoming'
+          AND rs.status NOT IN ('Done', 'Picked Up', 'Shipped')
           AND ${base}`;
 }
 
@@ -129,33 +172,10 @@ export async function getAllRepairs(limit = 100, offset = 0, options?: { tab?: R
   try {
     const where = buildRepairTabWhere(options?.tab || 'active');
     const result = await pool.query(
-      `SELECT
-         id,
-         created_at,
-         updated_at,
-         ticket_number,
-         contact_info,
-         product_title,
-         price,
-         issue,
-         serial_number,
-         status,
-         notes,
-         status_history,
-         source_system,
-         source_order_id,
-         source_tracking_number,
-         source_sku,
-         intake_channel,
-         incoming_status,
-         delivered_at,
-         received_at,
-         intake_confirmed_at,
-         received_by_staff_id,
-         customer_id
-       FROM repair_service
+      `SELECT ${REPAIR_SELECT_COLUMNS}
+       ${REPAIR_FROM}
        ${where}
-       ORDER BY created_at DESC NULLS LAST, id DESC
+       ORDER BY rs.created_at DESC NULLS LAST, rs.id DESC
        LIMIT $1 OFFSET $2`,
       [limit, offset],
     );
@@ -170,32 +190,9 @@ export async function getAllRepairs(limit = 100, offset = 0, options?: { tab?: R
 export async function getRepairById(id: number): Promise<RSRecord | null> {
   try {
     const result = await pool.query(
-      `SELECT
-         id,
-         created_at,
-         updated_at,
-         ticket_number,
-         contact_info,
-         product_title,
-         price,
-         issue,
-         serial_number,
-         status,
-         notes,
-         status_history,
-         source_system,
-         source_order_id,
-         source_tracking_number,
-         source_sku,
-         intake_channel,
-         incoming_status,
-         delivered_at,
-         received_at,
-         intake_confirmed_at,
-         received_by_staff_id,
-         customer_id
-       FROM repair_service
-       WHERE id = $1`,
+      `SELECT ${REPAIR_SELECT_COLUMNS}
+       ${REPAIR_FROM}
+       WHERE rs.id = $1`,
       [id],
     );
 
@@ -395,33 +392,10 @@ export async function searchRepairs(query: string, options?: { tab?: RepairTab }
     const searchTerm = `%${query}%`;
     const where = buildRepairSearchWhere(1, options?.tab);
     const result = await pool.query(
-      `SELECT
-         id,
-         created_at,
-         updated_at,
-         ticket_number,
-         contact_info,
-         product_title,
-         price,
-         issue,
-         serial_number,
-         status,
-         notes,
-         status_history,
-         source_system,
-         source_order_id,
-         source_tracking_number,
-         source_sku,
-         intake_channel,
-         incoming_status,
-         delivered_at,
-         received_at,
-         intake_confirmed_at,
-         received_by_staff_id,
-         customer_id
-       FROM repair_service
+      `SELECT ${REPAIR_SELECT_COLUMNS}
+       ${REPAIR_FROM}
        ${where}
-       ORDER BY created_at DESC NULLS LAST, id DESC
+       ORDER BY rs.created_at DESC NULLS LAST, rs.id DESC
        LIMIT 20`,
       [searchTerm],
     );

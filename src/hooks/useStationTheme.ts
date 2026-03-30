@@ -1,24 +1,56 @@
 import { useMemo } from 'react';
-import { stationThemeColors, type StationTheme } from '@/utils/staff-colors';
+import {
+  getStaffThemeById,
+  getPackerInputTheme,
+  stationThemeColors,
+  stationScanInputBorderClass,
+  type StationTheme,
+  type StationThemeColors,
+  type StationInputThemeClasses,
+} from '@/utils/staff-colors';
 
-export type ThemeColor = StationTheme;
+export type { StationTheme, StationThemeColors, StationInputThemeClasses };
 
-export interface ThemeColors {
-    bg: string;
-    hover: string;
-    light: string;
-    border: string;
-    text: string;
-    shadow: string;
+export interface ResolvedTheme {
+  /** The resolved theme key (e.g. 'purple', 'green', 'black'). */
+  theme: StationTheme;
+  /** Core color classes: bg, hover, light, border, text, shadow. */
+  colors: StationThemeColors;
+  /** Scan input border class for this theme. */
+  inputBorder: string;
+  /** Packer-style input classes (text, bg, ring, border). Always populated. */
+  inputTheme: StationInputThemeClasses;
+}
+
+interface StaffInput {
+  staffId: number | string | null | undefined;
 }
 
 /**
- * Hook to get consistent theme colors for station components
- * @param color - The theme color variant
- * @returns Theme color classes for Tailwind CSS
+ * Single entry point for station theme resolution.
+ *
+ * @example
+ *   // From a known theme string
+ *   const { theme, colors } = useStationTheme('purple');
+ *
+ * @example
+ *   // From a staff ID — resolves dynamically via staff-colors lookup tables
+ *   const { theme, colors, inputBorder } = useStationTheme({ staffId: 3 });
  */
-export function useStationTheme(color: ThemeColor = 'purple'): ThemeColors {
-    return useMemo(() => {
-        return stationThemeColors[color];
-    }, [color]);
+export function useStationTheme(input: StationTheme | StaffInput): ResolvedTheme {
+  return useMemo(() => {
+    const theme: StationTheme =
+      typeof input === 'string'
+        ? input
+        : getStaffThemeById(input.staffId);
+
+    return {
+      theme,
+      colors: stationThemeColors[theme],
+      inputBorder: stationScanInputBorderClass[theme],
+      inputTheme: getPackerInputTheme(theme),
+    };
+  }, [
+    typeof input === 'string' ? input : input.staffId,
+  ]);
 }

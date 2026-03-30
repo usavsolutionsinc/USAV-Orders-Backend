@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { getOrdersChannelName } from '@/lib/realtime/channels';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import StockZohoOrdersTable from '@/components/dashboard/StockZohoOrdersTable';
@@ -92,7 +93,7 @@ export default function PendingOrdersTable({
     refetchOnWindowFocus: false,
   });
 
-  const ordersChannelName = process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
+  const ordersChannelName = getOrdersChannelName();
 
   useAblyChannel(
     ordersChannelName,

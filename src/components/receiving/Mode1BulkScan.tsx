@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, Check, Loader2, Package, X } from '@/components/Icons';
 import { formatTimePST } from '@/utils/date';
 import { invalidateReceivingCache } from '@/lib/receivingCache';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 interface ScanEntry {
     id: string;
@@ -159,12 +160,12 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
                             <Barcode className="h-5 w-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400">Mode 1</p>
+                            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">Mode 1</p>
                             <h2 className="text-lg font-black uppercase tracking-tight text-gray-900 leading-none">Bulk Scan</h2>
                         </div>
                     </div>
                     <div className="text-right">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Session</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Session</p>
                         <motion.p
                             key={sessionCount}
                             initial={{ scale: 1.4, color: '#2563eb' }}
@@ -208,7 +209,7 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
                                 <Check className="h-4 w-4" />
                             </button>
                         ) : (
-                            <Package className="h-5 w-5 text-gray-300" />
+                            <Package className="h-5 w-5 text-gray-500" />
                         )}
                     </div>
                 </div>
@@ -224,7 +225,7 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
                     </motion.p>
                 )}
 
-                <p className="mt-2 text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                <p className="mt-2 text-center text-[10px] font-bold uppercase tracking-widest text-gray-500">
                     Press Enter or scan to log — classification happens in Unboxing
                 </p>
             </div>
@@ -232,12 +233,12 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
             {/* Recent scans */}
             <div className="flex-1 overflow-y-auto">
                 <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white/90 px-4 py-2 backdrop-blur-sm">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Recent Scans</p>
+                    <p className={sectionLabel}>Recent Scans</p>
                     {recentScans.length > 0 && (
                         <button
                             type="button"
                             onClick={() => setRecentScans([])}
-                            className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-600"
+                            className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-600"
                         >
                             Clear
                         </button>
@@ -247,8 +248,8 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
                 {recentScans.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
                         <Package className="mb-3 h-10 w-10 text-gray-200" />
-                        <p className="text-[11px] font-black uppercase tracking-widest text-gray-300">No scans yet</p>
-                        <p className="mt-1 text-[10px] font-medium text-gray-300">Scan a tracking number to begin</p>
+                        <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">No scans yet</p>
+                        <p className="mt-1 text-[10px] font-semibold text-gray-500">Scan a tracking number to begin</p>
                     </div>
                 ) : (
                     <ul className="divide-y divide-gray-50">
@@ -274,7 +275,7 @@ export default function Mode1BulkScan({ staffId, onEntryAdded }: Mode1BulkScanPr
                                         <p className="truncate font-mono text-[11px] font-bold text-gray-900">
                                             {entry.tracking}
                                         </p>
-                                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
                                             {entry.carrier} · {formatTimePST(entry.timestamp)}
                                         </p>
                                     </div>

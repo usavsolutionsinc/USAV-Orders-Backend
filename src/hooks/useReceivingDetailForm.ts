@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReceivingDetailsLog } from '@/components/station/ReceivingDetailsStack';
+import { getActiveStaff } from '@/lib/staffCache';
 
 type StaffOption = {
   id: number;
@@ -101,22 +102,18 @@ export function useReceivingDetailForm({
 
   // Load technicians once
   useEffect(() => {
-    const loadTechs = async () => {
-      try {
-        const res = await fetch('/api/staff?role=technician&active=true');
-        if (!res.ok) return;
-        const rows = await res.json();
-        if (!Array.isArray(rows)) return;
+    let active = true;
+    getActiveStaff()
+      .then((data) => {
+        if (!active) return;
         setTechs(
-          rows
-            .map((row: any) => ({ id: Number(row.id), name: String(row.name || '') }))
-            .filter((row: StaffOption) => Number.isFinite(row.id) && row.id > 0 && row.name),
+          data
+            .filter((m) => m.role === 'technician')
+            .map((m) => ({ id: m.id, name: m.name })),
         );
-      } catch {
-        // no-op
-      }
-    };
-    loadTechs();
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, []);
 
   // Sync fields when the log prop changes

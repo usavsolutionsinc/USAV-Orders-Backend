@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import { Clock, Pencil } from '../Icons';
 import { RSRecord } from '@/lib/neon/repair-service-queries';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
+import { usePanelActions } from '@/hooks/usePanelActions';
+import { formatPhoneNumber } from '@/utils/phone';
 
 interface RepairDetailsPanelProps {
   repair: RSRecord;
@@ -91,6 +93,10 @@ export function RepairDetailsPanel({
       setIsEditingTicket(false);
     }
   };
+
+  const panelActions = usePanelActions(
+    { entityType: 'repair', entityId: repair.id },
+  );
 
   const zendeskTicketUrl = ticketNumber.trim()
     && !/^RS-\d+$/i.test(ticketNumber.trim())
@@ -209,6 +215,7 @@ export function RepairDetailsPanel({
         onMoveDown={onMoveDown}
         disableMoveUp={disableMoveUp}
         disableMoveDown={disableMoveDown}
+        actions={panelActions}
       />
 
       {/* Content sections */}
@@ -261,15 +268,6 @@ export function RepairDetailsPanel({
                   const parts = repair.contact_info.split(',').map(p => p.trim());
                   const phone = parts[1] || '';
                   const email = parts[2] || '';
-                  
-                  const formatPhoneNumber = (phone: string): string => {
-                    if (!phone) return '';
-                    const cleaned = phone.replace(/\D/g, '');
-                    if (cleaned.length === 10) {
-                      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-                    }
-                    return phone;
-                  };
                   
                   return (
                     <>

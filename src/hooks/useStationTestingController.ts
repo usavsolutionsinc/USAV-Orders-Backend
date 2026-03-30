@@ -5,11 +5,13 @@ import confetti from 'canvas-confetti';
 import { useQueryClient } from '@tanstack/react-query';
 import { classifyInput, findSerialInCatalog, looksLikeFnsku } from '@/lib/scan-resolver';
 import { detectStationScanType, type StationInputMode, type StationScanType } from '@/lib/station-scan-routing';
-import { stationThemeColors } from '@/utils/staff-colors';
+import { normalizeTrackingNumber } from '@/lib/tracking-format';
+import { stationThemeColors, type StationTheme } from '@/utils/staff-colors';
 
 export { getStationInputMode } from '@/lib/station-scan-routing';
 export type { StationInputMode, StationScanType };
-export type StationThemeColor = 'green' | 'blue' | 'purple' | 'yellow';
+/** @deprecated Use StationTheme from '@/utils/staff-colors' instead. */
+export type StationThemeColor = StationTheme;
 
 export interface ActiveStationOrder {
   id: number | null;
@@ -574,12 +576,14 @@ export function useStationTestingController({
       if (onTrackingScan) onTrackingScan();
       setIsLoading(true);
       try {
+        // Pre-normalize: strip USPS IMpb routing prefix (420+ZIP) so exact match succeeds on first lookup
+        const normalizedInput = normalizeTrackingNumber(input);
         const res = await fetch('/api/tech/scan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: 'TRACKING',
-            value: input,
+            value: normalizedInput,
             techId: userId,
             idempotencyKey: newStationIdempotencyKey(),
           }),

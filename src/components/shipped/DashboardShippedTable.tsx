@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
+import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
@@ -414,7 +415,7 @@ export function DashboardShippedTable({
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-3" />
           <p className="text-sm font-semibold text-gray-600">
             {isResolvingSearch ? 'Resolving order search...' : 'Loading shipped records...'}
           </p>
@@ -431,13 +432,13 @@ export function DashboardShippedTable({
             <div className={mainStickyHeaderClass}>
               <div className={mainStickyHeaderRowClass}>
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">{bannerTitle}</p>
+                  <p className={`${sectionLabel} text-blue-700`}>{bannerTitle}</p>
                   {bannerSubtitle ? (
-                    <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">{bannerSubtitle}</p>
+                    <p className={`mt-0.5 ${fieldLabel}`}>{bannerSubtitle}</p>
                   ) : null}
                 </div>
                 <div className="min-w-[18px] flex items-center justify-end">
-                  {query.isFetching && !query.isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}
+                  {query.isFetching && !query.isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
                 </div>
               </div>
             </div>
@@ -470,7 +471,7 @@ export function DashboardShippedTable({
                   />
                 ) : (
                   <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                    <p className="text-gray-500 font-medium italic opacity-20">No shipped records for this week</p>
+                    <p className="text-gray-500 font-semibold italic opacity-20">No shipped records for this week</p>
                   </div>
                 )}
               </div>
@@ -553,7 +554,7 @@ export function DashboardShippedTable({
                                   </div>
                                 </div>
                                 <div className="mt-0.5 flex items-center gap-2">
-                                  <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
+                                  <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
                                     <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                       {parseInt(String(record.quantity || '1'), 10) || 1}
                                     </span>
@@ -569,7 +570,7 @@ export function DashboardShippedTable({
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex items-center shrink-0">
                                 {rowIsFba ? (
                                   <>
                                     <FnskuChip value={fnskuValue} />

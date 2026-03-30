@@ -3,6 +3,7 @@
 import { MouseEvent, useState } from 'react';
 import { Clipboard, Check, Loader2 } from '@/components/Icons';
 import { useOrderAssignment } from '@/hooks/useOrderAssignment';
+import { monoValue } from '@/design-system/tokens/typography/presets';
 
 type Status = 'idle' | 'saving' | 'success' | 'error';
 
@@ -47,7 +48,7 @@ export function PasteTrackingButton({ orderId }: { orderId: number }) {
         className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95"
       >
         <span className="shrink-0">{icon}</span>
-        <span className={`font-mono text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 min-w-0 text-left whitespace-nowrap ${underline}`}>
+        <span className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 min-w-0 text-left whitespace-nowrap ${underline}`}>
           ----
         </span>
       </button>

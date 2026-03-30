@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
-// Shipped state is now derived from shipping_tracking_numbers carrier status.
-// This endpoint now only updates status = 'shipped' for orders that have a packer log
-// linked via shipment_id — no longer writes is_shipped.
+// Shipped state is now derived from station_activity_logs (SAL).
+// This endpoint updates status = 'shipped' for orders that have any SAL row
+// linked via shipment_id — SAL is the source of truth for station scans.
 export async function POST() {
   try {
     const result = await pool.query(`
@@ -13,14 +13,14 @@ export async function POST() {
       WHERE o.shipment_id IS NOT NULL
         AND (o.status IS NULL OR o.status != 'shipped')
         AND EXISTS (
-          SELECT 1 FROM packer_logs pl
-          WHERE pl.shipment_id = o.shipment_id
-            AND pl.tracking_type = 'ORDERS'
+          SELECT 1 FROM station_activity_logs sal
+          WHERE sal.shipment_id IS NOT NULL
+            AND sal.shipment_id = o.shipment_id
         )
       RETURNING o.id
     `);
 
-    await invalidateCacheTags(['orders', 'shipped', 'packing-logs', 'packerlogs']);
+    await invalidateCacheTags(['orders', 'orders-next', 'shipped', 'packing-logs']);
 
     return NextResponse.json({
       success: true,

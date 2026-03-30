@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { detectCarrier } from '@/lib/tracking-format';
 
 /**
  * POST /api/fba/shipments/mark-shipped
@@ -157,9 +158,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function detectCarrier(tn: string): string {
-  if (/^1Z[A-Z0-9]{16}$/.test(tn)) return 'UPS';
-  if (/^\d{20,22}$/.test(tn)) return 'FEDEX';
-  if (/^(94|93|92|94|95)\d{20}$/.test(tn)) return 'USPS';
-  return 'UNKNOWN';
-}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pencil, X } from '@/components/Icons';
 import { dmSans } from '@/lib/fonts';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 export interface OutOfStockFieldProps {
   value: string;
@@ -52,7 +53,7 @@ export function OutOfStockField({
     return (
       <div className={`border-b border-red-100 pb-2 ${className}`}>
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[10px] font-black uppercase tracking-widest text-red-500 leading-none">
+          <span className={`${sectionLabel} text-red-500 leading-none`}>
             What needs to be ordered?
           </span>
           <div className="flex items-center gap-2">
@@ -80,7 +81,7 @@ export function OutOfStockField({
           onChange={(e) => onChange?.(e.target.value)}
           placeholder="Describe missing parts..."
           autoFocus={autoFocus}
-          className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-400 ${dmSans.className}`}
+          className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-500 ${dmSans.className}`}
         />
       </div>
     );
@@ -89,14 +90,14 @@ export function OutOfStockField({
   return (
     <div className={`border-b border-red-100 pb-2 ${className}`}>
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[10px] font-black uppercase tracking-widest text-red-500 leading-none">
+        <span className={`${sectionLabel} text-red-500 leading-none`}>
           What needs to be ordered?
         </span>
         {onEdit ? (
           <button
             type="button"
             onClick={onEdit}
-            className="flex h-5 w-5 items-center justify-center text-gray-400 transition-colors hover:text-red-600"
+            className="flex h-5 w-5 items-center justify-center text-gray-500 transition-colors hover:text-red-600"
             aria-label="Edit need-to-order note"
           >
             <Pencil className="h-3.5 w-3.5" />

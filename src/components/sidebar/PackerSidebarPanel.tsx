@@ -6,7 +6,6 @@ import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import StaffSelector from '@/components/StaffSelector';
 import StationPacking from '@/components/station/StationPacking';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { getPackerThemeById } from '@/utils/staff-colors';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useActiveStaffDirectory } from './hooks';
 
@@ -16,9 +15,8 @@ export function PackerSidebarPanel({ packerId }: { packerId: string }) {
   const [dailyGoal, setDailyGoal] = useState(50);
   const staffDirectory = useActiveStaffDirectory();
 
-  const packerName = staffDirectory.find((m) => String(m.id) === String(packerId))?.name || 'Packer';
-  const packerTheme = getPackerThemeById(packerId);
-
+  const packerMember = staffDirectory.find((m) => String(m.id) === String(packerId));
+  const packerName = packerMember?.name || 'Packer';
   useEffect(() => {
     const fetchHistory = async () => {
       try {
@@ -71,7 +69,7 @@ export function PackerSidebarPanel({ packerId }: { packerId: string }) {
           embedded
           userId={packerId}
           userName={packerName}
-          themeColor={packerTheme}
+          staffId={packerId}
           todayCount={todayCount}
           goal={dailyGoal}
           onComplete={refreshHistory}

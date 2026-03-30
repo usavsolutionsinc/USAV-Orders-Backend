@@ -6,7 +6,7 @@ import { Pencil } from '@/components/Icons';
 type InlineTone = 'neutral' | 'blue' | 'orange' | 'red' | 'green' | 'purple' | 'yellow';
 
 const focusToneClassName: Record<InlineTone, string> = {
-  neutral: 'border-slate-400',
+  neutral: 'border-gray-400',
   blue: 'border-blue-500',
   orange: 'border-orange-500',
   red: 'border-red-500',
@@ -61,7 +61,7 @@ export function InlineEditableValue({
 
   if (!editable) {
     return (
-      <p className={`text-[13px] font-bold text-slate-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}>
+      <p className={`text-[13px] font-bold text-gray-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}>
         {displayValue || placeholder}
       </p>
     );
@@ -90,7 +90,7 @@ export function InlineEditableValue({
               }
             }}
             className={[
-              'h-7 w-full border-0 border-b-2 bg-transparent px-0 pb-0.5 pt-0 text-[13px] font-bold text-slate-900 outline-none',
+              'h-7 w-full border-0 border-b-2 bg-transparent px-0 pb-0.5 pt-0 text-[13px] font-bold text-gray-900 outline-none',
               monospace ? 'font-mono' : '',
               focusToneClassName[tone],
               inputClassName,
@@ -100,7 +100,7 @@ export function InlineEditableValue({
         ) : (
           <button type="button" onClick={() => setIsEditing(true)} className="block w-full py-0 text-left">
             <span
-              className={`block truncate text-[13px] font-bold text-slate-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}
+              className={`block truncate text-[13px] font-bold text-gray-900 ${monospace ? 'font-mono' : ''} ${valueClassName}`.trim()}
             >
               {displayValue || placeholder}
             </span>
@@ -112,7 +112,7 @@ export function InlineEditableValue({
         <button
           type="button"
           onClick={() => setIsEditing((prev) => !prev)}
-          className="text-slate-400 transition-colors duration-100 ease-out hover:text-slate-900 active:scale-95"
+          className="text-gray-500 transition-colors duration-100 ease-out hover:text-gray-900 active:scale-95"
           aria-label="Edit value"
           title="Edit"
         >

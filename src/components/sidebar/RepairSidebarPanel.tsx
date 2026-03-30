@@ -13,6 +13,7 @@ import {
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 import type { RepairTab } from '@/lib/neon/repair-service-queries';
+import { sectionLabel, cardTitle, microBadge } from '@/design-system/tokens/typography/presets';
 
 interface RepairSidebarPanelProps {
   embedded?: boolean;
@@ -228,8 +229,8 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
       <div className="shrink-0">
         {!hideSectionHeader ? (
           <div className="border-b border-gray-100 px-4 pt-4 pb-3">
-            <p className="text-[9px] font-black uppercase tracking-[0.3em] text-orange-500">Repair Service</p>
-            <h2 className="mt-1 text-xl font-black tracking-tight text-gray-900">Repairs</h2>
+            <p className={`${sectionLabel} text-orange-500`}>Repair Service</p>
+            <h2 className={`mt-1 ${cardTitle}`}>Repairs</h2>
           </div>
         ) : null}
 
@@ -274,7 +275,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
                   setShowIntakeForm(true);
                 }}
                 disabled={isSubmitting}
-                className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-300"
+                className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-400"
                 title="New repair"
                 aria-label="Open new repair order form"
               >
@@ -290,7 +291,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-orange-500">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span className="text-[10px] font-black uppercase tracking-[0.18em]">Loading…</span>
+              <span className={sectionLabel}>Loading…</span>
             </div>
           </div>
         )}
@@ -305,14 +306,14 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             <div className="mb-1.5 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Barcode className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 leading-none">
+                <span className={`${sectionLabel} text-emerald-600 leading-none`}>
                   Scan RS-ID Pickup
                 </span>
               </div>
               <button
                 type="submit"
                 disabled={pickupScanSubmitting || !pickupScanValue.trim()}
-                className="flex h-5 w-5 items-center justify-center text-emerald-500 transition-colors hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-gray-300"
+                className="flex h-5 w-5 items-center justify-center text-emerald-500 transition-colors hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-gray-400"
                 aria-label="Mark repair picked up"
                 title="Mark repair picked up"
               >
@@ -341,7 +342,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
           {pickupScanFeedback && (
             <p
-              className={`mt-1.5 text-[9px] font-bold uppercase tracking-wide ${
+              className={`mt-1.5 ${microBadge} ${
                 pickupScanFeedback.tone === 'success' ? 'text-emerald-600' : 'text-red-500'
               }`}
             >

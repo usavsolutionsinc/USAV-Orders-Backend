@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { motion } from 'framer-motion';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { OrderIdChip, TrackingChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
@@ -29,7 +31,7 @@ function getDaysLateNumber(deadlineAt: string | null | undefined): number | null
 }
 
 function getDaysLateTone(daysLate: number | null) {
-  if (daysLate === null) return 'text-gray-300';
+  if (daysLate === null) return 'text-gray-500';
   if (daysLate > 1) return 'text-red-600';
   if (daysLate === 1) return 'text-yellow-600';
   return 'text-emerald-600';
@@ -78,7 +80,7 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   onRowClick: (record: ShippedOrder) => void;
 }) {
   const qty = parseInt(String(record.quantity || '1'), 10) || 1;
-  const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-400';
+  const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-500';
   const trackingRaw =
     (record.tracking_number as string | undefined) ||
     record.shipping_tracking_number ||
@@ -89,8 +91,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      {...framerPresence.tableRow}
+      transition={framerTransition.tableRowMount}
       onClick={() => onRowClick(record)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -110,18 +112,18 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       <div className="flex flex-col min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           {hasTechScan ? (
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
+            <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" title="Scanned by tech" />
           ) : hasOutOfStock ? (
-            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
+            <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" title="Out of stock" />
           ) : (
-            <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
+            <span className="h-2 w-2 rounded-full bg-yellow-400 shrink-0" title="Pending order" />
           )}
           <div className="text-[12px] font-bold text-gray-900 truncate">
             {record.product_title || 'Unknown Product'}
           </div>
         </div>
         <div className="mt-0.5 flex items-center gap-2">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate min-w-0 flex-1">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1">
             <span className={qtyClass}>{qty}</span>
             {' • '}
             <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>
@@ -147,12 +149,12 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center shrink-0">
         {platformLabel && !isFba ? (
           <PlatformChip
             label={platformLabel}
             underlineClass={platformLabel ? getOrderPlatformBorderColor(platformLabel) : ''}
-            iconClass={record.item_number ? platformColor : 'text-gray-300'}
+            iconClass={record.item_number ? platformColor : 'text-gray-500'}
             onClick={() => {
               const url = getExternalUrlByItemNumber(record.item_number);
               if (url) window.open(url, '_blank', 'noopener,noreferrer');
@@ -386,7 +388,7 @@ export function OrdersQueueTable({
     return Math.max(0, todayIndex - deadlineIndex);
   };
   const getDaysLateTone = (daysLate: number | null) => {
-    if (daysLate === null) return 'text-gray-300';
+    if (daysLate === null) return 'text-gray-500';
     if (daysLate > 1) return 'text-red-600';
     if (daysLate === 1) return 'text-yellow-600';
     return 'text-emerald-600';
@@ -406,7 +408,7 @@ export function OrdersQueueTable({
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-3" />
           <p className="text-sm font-semibold text-gray-600">Loading order records...</p>
         </div>
       </div>
@@ -420,13 +422,13 @@ export function OrdersQueueTable({
           <div className={mainStickyHeaderClass}>
             <div className={mainStickyHeaderRowClass}>
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">{bannerTitle}</p>
+                <p className={`${sectionLabel} text-blue-700`}>{bannerTitle}</p>
                 {bannerSubtitle ? (
-                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">{bannerSubtitle}</p>
+                  <p className={`${fieldLabel} mt-0.5 text-gray-500`}>{bannerSubtitle}</p>
                 ) : null}
               </div>
               <div className="min-w-[18px] flex items-center justify-end">
-                {isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}
+                {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
               </div>
             </div>
           </div>
@@ -446,7 +448,7 @@ export function OrdersQueueTable({
             rightSlot={
               showWeekControls
                 ? undefined
-                : <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" /> : null}</div>
+                : <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
             }
           />
         )}
@@ -464,12 +466,12 @@ export function OrdersQueueTable({
                 />
               ) : (
                 <div className="max-w-xs mx-auto animate-in fade-in zoom-in duration-300">
-                  <p className="text-gray-500 font-medium italic opacity-20">{emptyMessage}</p>
+                  <p className="text-gray-500 font-semibold italic opacity-20">{emptyMessage}</p>
                   {showWeekControls && weekOffset > 0 && onResetWeek ? (
                     <button
                       type="button"
                       onClick={onResetWeek}
-                      className="mt-4 px-6 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-gray-800 transition-all active:scale-95"
+                      className={`mt-4 px-6 py-2 bg-gray-900 text-white ${sectionLabel} rounded-xl hover:bg-gray-800 transition-all active:scale-95`}
                     >
                       Go to Current Week
                     </button>

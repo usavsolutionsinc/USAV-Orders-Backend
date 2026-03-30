@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toPSTDateKey } from '@/utils/date';
+import { getStationChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
 
 export interface TechRecord {
@@ -84,8 +85,7 @@ function prependTechRecordToMatchingWeekCaches(
   }
 }
 
-const STATION_CHANNEL =
-  process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES || 'station:changes';
+const STATION_CHANNEL = getStationChannelName();
 
 export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
   const { weekOffset = 0, weekRange } = options;

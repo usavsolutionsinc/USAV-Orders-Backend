@@ -1000,3 +1000,128 @@ export type TechSerialNumber = typeof techSerialNumbers.$inferSelect;
 export type NewTechSerialNumber = typeof techSerialNumbers.$inferInsert;
 export type OrdersException = typeof ordersExceptions.$inferSelect;
 export type NewOrdersException = typeof ordersExceptions.$inferInsert;
+
+// ============================================================
+// AI Training Pipeline
+// ============================================================
+
+export const trainingSampleStatusEnum = pgEnum('training_sample_status', [
+  'raw',
+  'rated',
+  'queued',
+  'trained',
+  'rejected',
+]);
+
+export const pipelineTaskSourceEnum = pgEnum('pipeline_task_source', [
+  'typecheck',
+  'lint',
+  'test_failure',
+  'todo_comment',
+  'manual',
+]);
+
+export const trainingRunStatusEnum = pgEnum('training_run_status', [
+  'pending',
+  'running',
+  'completed',
+  'failed',
+]);
+
+export const trainingSamples = pgTable('training_samples', {
+  id: serial('id').primaryKey(),
+  instruction: text('instruction').notNull(),
+  inputContext: text('input_context'),
+  output: text('output').notNull(),
+  source: varchar('source', { length: 50 }).notNull(),
+  repo: varchar('repo', { length: 200 }),
+  filePaths: jsonb('file_paths').$type<string[]>(),
+  commitSha: varchar('commit_sha', { length: 40 }),
+  status: trainingSampleStatusEnum('status').default('raw').notNull(),
+  rating: integer('rating'),
+  autoScore: numeric('auto_score'),
+  testsPass: boolean('tests_pass'),
+  trainingRunId: integer('training_run_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  ratedAt: timestamp('rated_at', { withTimezone: true }),
+}, (table) => ({
+  statusIdx: index('training_samples_status_idx').on(table.status),
+  ratingIdx: index('training_samples_rating_idx').on(table.rating),
+}));
+
+export const trainingRuns = pgTable('training_runs', {
+  id: serial('id').primaryKey(),
+  baseModel: varchar('base_model', { length: 200 }).notNull(),
+  adapterName: varchar('adapter_name', { length: 200 }),
+  loraRank: integer('lora_rank').default(16),
+  learningRate: numeric('learning_rate').default('0.0002'),
+  epochs: integer('epochs').default(3),
+  sampleCount: integer('sample_count'),
+  status: trainingRunStatusEnum('status').default('pending').notNull(),
+  trainLoss: numeric('train_loss'),
+  evalLoss: numeric('eval_loss'),
+  durationSeconds: integer('duration_seconds'),
+  adapterPath: text('adapter_path'),
+  deviceId: varchar('device_id', { length: 50 }),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  errorLog: text('error_log'),
+});
+
+export const modelVersions = pgTable('model_versions', {
+  id: serial('id').primaryKey(),
+  runId: integer('run_id').references(() => trainingRuns.id),
+  version: varchar('version', { length: 50 }).notNull(),
+  baseModel: varchar('base_model', { length: 200 }).notNull(),
+  adapterPath: text('adapter_path').notNull(),
+  evalScore: numeric('eval_score'),
+  promoted: boolean('promoted').default(false).notNull(),
+  promotedAt: timestamp('promoted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const pipelineTasks = pgTable('pipeline_tasks', {
+  id: serial('id').primaryKey(),
+  taskHash: varchar('task_hash', { length: 16 }).notNull().unique(),
+  title: varchar('title', { length: 300 }).notNull(),
+  source: pipelineTaskSourceEnum('source').notNull(),
+  description: text('description').notNull(),
+  filePaths: jsonb('file_paths').$type<string[]>().notNull(),
+  context: text('context'),
+  priority: integer('priority').default(3).notNull(),
+  status: varchar('status', { length: 20 }).default('pending').notNull(),
+  attempts: integer('attempts').default(0).notNull(),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resultBranch: varchar('result_branch', { length: 200 }),
+  resultRating: integer('result_rating'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  statusIdx: index('pipeline_tasks_status_idx').on(table.status),
+  priorityIdx: index('pipeline_tasks_priority_idx').on(table.priority),
+}));
+
+export const pipelineCycles = pgTable('pipeline_cycles', {
+  id: serial('id').primaryKey(),
+  tasksDiscovered: integer('tasks_discovered').default(0).notNull(),
+  tasksAttempted: integer('tasks_attempted').default(0).notNull(),
+  tasksPassed: integer('tasks_passed').default(0).notNull(),
+  tasksFailed: integer('tasks_failed').default(0).notNull(),
+  samplesCollected: integer('samples_collected').default(0).notNull(),
+  durationSeconds: integer('duration_seconds'),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+});
+
+// Type exports
+export type TrainingSample = typeof trainingSamples.$inferSelect;
+export type NewTrainingSample = typeof trainingSamples.$inferInsert;
+export type TrainingRun = typeof trainingRuns.$inferSelect;
+export type NewTrainingRun = typeof trainingRuns.$inferInsert;
+export type ModelVersion = typeof modelVersions.$inferSelect;
+export type NewModelVersion = typeof modelVersions.$inferInsert;
+export type PipelineTask = typeof pipelineTasks.$inferSelect;
+export type NewPipelineTask = typeof pipelineTasks.$inferInsert;
+export type PipelineCycle = typeof pipelineCycles.$inferSelect;
+export type NewPipelineCycle = typeof pipelineCycles.$inferInsert;

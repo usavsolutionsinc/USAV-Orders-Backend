@@ -24,7 +24,7 @@ const toneClassName: Record<SearchFieldTone, string> = {
   emerald: 'border-emerald-200 hover:border-emerald-300 focus-within:border-emerald-500 focus-within:hover:border-emerald-500',
   purple:  'border-purple-200 hover:border-purple-300 focus-within:border-purple-500 focus-within:hover:border-purple-500',
   yellow:  'border-amber-200 hover:border-amber-300 focus-within:border-amber-500 focus-within:hover:border-amber-500',
-  neutral: 'border-slate-300 hover:border-slate-400 focus-within:border-slate-500 focus-within:hover:border-slate-500',
+  neutral: 'border-gray-300 hover:border-gray-400 focus-within:border-gray-500 focus-within:hover:border-gray-500',
   gray:    'border-gray-300 hover:border-gray-400 focus-within:border-gray-700 focus-within:hover:border-gray-700',
 };
 
@@ -36,7 +36,7 @@ const loaderToneClass: Record<SearchFieldTone, string> = {
   emerald: 'text-emerald-500',
   purple:  'text-purple-500',
   yellow:  'text-amber-500',
-  neutral: 'text-slate-500',
+  neutral: 'text-gray-500',
   gray:    'text-gray-700',
 };
 
@@ -158,7 +158,7 @@ export function SearchField({
         onSubmit={handleSubmit}
         className={`group flex min-w-0 flex-1 items-center gap-2 transition-colors duration-150 ease-out ${sizeClasses.field} ${toneClassName[tone]}`.trim()}
       >
-        <span className="shrink-0 text-slate-400 transition-colors duration-100 ease-out group-focus-within:text-slate-900">
+        <span className="shrink-0 text-gray-400 transition-colors duration-100 ease-out group-focus-within:text-gray-900">
           {icon}
         </span>
 
@@ -169,7 +169,7 @@ export function SearchField({
           onChange={(e) => setDraft(e.target.value)}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className={`w-full border-0 bg-transparent px-0 font-bold text-slate-900 outline-none placeholder:font-medium placeholder:text-slate-400 ${sizeClasses.input}`.trim()}
+          className={`w-full border-0 bg-transparent px-0 font-bold text-gray-900 outline-none placeholder:font-medium placeholder:text-gray-400 ${sizeClasses.input}`.trim()}
         />
 
         {/* Right-slot: spinner > pending dot > clear > paste — never shifts layout */}
@@ -183,7 +183,7 @@ export function SearchField({
             <button
               type="button"
               onClick={handleClear}
-              className="text-slate-400 transition-colors duration-100 ease-out hover:text-slate-900 active:scale-95"
+              className="text-gray-400 transition-colors duration-100 ease-out hover:text-gray-900 active:scale-95"
               aria-label="Clear search"
               title="Clear"
             >
@@ -193,7 +193,7 @@ export function SearchField({
             <button
               type="button"
               onClick={handlePaste}
-              className="text-slate-400 transition-colors duration-100 ease-out hover:text-blue-600 active:scale-95"
+              className="text-gray-400 transition-colors duration-100 ease-out hover:text-blue-600 active:scale-95"
               aria-label="Paste from clipboard"
               title="Paste"
             >

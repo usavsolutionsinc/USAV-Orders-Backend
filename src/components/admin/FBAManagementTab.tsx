@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { FbaFnskuDirectoryPanel } from '@/components/fba/FbaFnskuDirectoryPanel';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 interface FBAManagementTabProps {
   searchTerm?: string;
@@ -91,7 +92,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
             aria-label="Close FNSKU upload instructions"
           />
           <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Upload FNSKU CSV</h3>
+            <h3 className={`${sectionLabel} text-gray-900`}>Upload FNSKU CSV</h3>
             <p className="text-[11px] font-bold text-gray-700 leading-relaxed">
               Include <span className="font-black">fnsku</span>, <span className="font-black">product_title</span>,{' '}
               <span className="font-black">asin</span>, and <span className="font-black">sku</span> columns. Rows with
@@ -101,7 +102,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
               <button
                 type="button"
                 onClick={() => setIsUploadInfoOpen(false)}
-                className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-700"
+                className={`${sectionLabel} px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700`}
               >
                 Cancel
               </button>
@@ -111,7 +112,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
                   setIsUploadInfoOpen(false);
                   fileInputRef.current?.click();
                 }}
-                className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-[10px] font-black uppercase tracking-widest text-white"
+                className={`${sectionLabel} px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white`}
               >
                 Choose File
               </button>
@@ -130,14 +131,14 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
           />
           <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
             <div>
-              <h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Add FNSKU Mapping</h3>
+              <h3 className={`${sectionLabel} text-gray-900`}>Add FNSKU Mapping</h3>
               <p className="mt-1 text-[11px] font-bold text-gray-600">
                 Create one catalog row manually when you do not want to use a CSV upload.
               </p>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="space-y-1">
-                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-500">Product Title</span>
+                <span className={`block ${sectionLabel}`}>Product Title</span>
                 <input
                   type="text"
                   value={productTitle}
@@ -147,7 +148,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
                 />
               </label>
               <label className="space-y-1">
-                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-500">ASIN</span>
+                <span className={`block ${sectionLabel}`}>ASIN</span>
                 <input
                   type="text"
                   value={asin}
@@ -157,7 +158,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
                 />
               </label>
               <label className="space-y-1">
-                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-500">SKU</span>
+                <span className={`block ${sectionLabel}`}>SKU</span>
                 <input
                   type="text"
                   value={sku}
@@ -167,7 +168,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
                 />
               </label>
               <label className="space-y-1">
-                <span className="block text-[10px] font-black uppercase tracking-widest text-gray-500">FNSKU</span>
+                <span className={`block ${sectionLabel}`}>FNSKU</span>
                 <input
                   type="text"
                   value={fnsku}
@@ -181,7 +182,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
               <button
                 type="button"
                 onClick={() => setIsAddOpen(false)}
-                className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-700"
+                className={`${sectionLabel} px-3 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700`}
               >
                 Cancel
               </button>
@@ -196,7 +197,7 @@ export function FBAManagementTab({ searchTerm = '' }: FBAManagementTabProps) {
                     fnsku,
                   })
                 }
-                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-50"
+                className={`${sectionLabel} px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50`}
               >
                 {createMutation.isPending ? 'Saving...' : 'Save Row'}
               </button>

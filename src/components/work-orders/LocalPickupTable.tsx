@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { Check, Loader2, RefreshCw } from '@/components/Icons';
 import { StatusBadge } from '@/design-system';
+import { formatMediumDateTime } from '@/utils/_date';
 
 type LocalPickupRow = {
   receiving_id: number;
@@ -62,17 +63,6 @@ function formatPickupDate(value: string) {
   }).format(date);
 }
 
-function formatTimestamp(value: string | null) {
-  if (!value) return 'No intake stamp';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-}
 
 export function LocalPickupTable() {
   const searchParams = useSearchParams();
@@ -214,11 +204,11 @@ export function LocalPickupTable() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+            <Loader2 className="h-7 w-7 animate-spin text-gray-500" />
           </div>
         ) : !data?.rows?.length ? (
           <div className="flex h-full items-center justify-center px-8 text-center">
-            <p className="text-sm font-medium italic text-gray-400 opacity-60">
+            <p className="text-sm font-semibold italic text-gray-500 opacity-60">
               No local pickups found for this date
             </p>
           </div>
@@ -248,14 +238,14 @@ export function LocalPickupTable() {
                     {row.work_order_status ? <StatusBadge status={row.work_order_status} className="text-[9px]" /> : null}
                   </div>
                   <p className="mt-2 text-[11px] text-[var(--color-neutral-700)]">
-                    Intake {formatTimestamp(row.received_at)}
+                    Intake {formatMediumDateTime(row.received_at)}
                   </p>
                   {isMissing ? (
                     <textarea
                       value={draft.missingPartsNote}
                       onChange={(e) => updateDraft(row.receiving_id, { missingPartsNote: e.target.value })}
                       placeholder="List the missing parts here..."
-                      className="mt-3 min-h-[70px] w-full border-b border-[var(--color-warning)] bg-transparent pb-2 text-[12px] text-[var(--color-neutral-900)] placeholder:text-gray-300 focus:outline-none"
+                      className="mt-3 min-h-[70px] w-full border-b border-[var(--color-warning)] bg-transparent pb-2 text-[12px] text-[var(--color-neutral-900)] placeholder:text-gray-500 focus:outline-none"
                     />
                   ) : null}
                 </div>
@@ -293,7 +283,7 @@ export function LocalPickupTable() {
                     value={draft.conditionNote}
                     onChange={(e) => updateDraft(row.receiving_id, { conditionNote: e.target.value })}
                     placeholder="Condition note"
-                    className="min-h-[70px] w-full border-b border-[var(--color-neutral-200)] bg-transparent pb-2 text-[12px] text-[var(--color-neutral-900)] placeholder:text-gray-300 focus:outline-none"
+                    className="min-h-[70px] w-full border-b border-[var(--color-neutral-200)] bg-transparent pb-2 text-[12px] text-[var(--color-neutral-900)] placeholder:text-gray-500 focus:outline-none"
                   />
                 </div>
 

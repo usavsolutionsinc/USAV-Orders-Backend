@@ -4,13 +4,12 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { useAblyChannel } from './useAblyChannel';
-import { getDbTableChannelName } from '@/lib/realtime/channels';
+import { getDbTableChannelName, getRepairsChannelName } from '@/lib/realtime/channels';
 
-const REPAIRS_CHANNEL =
-  process.env.NEXT_PUBLIC_ABLY_CHANNEL_REPAIR_CHANGES || 'repair:changes';
+const REPAIRS_CHANNEL = getRepairsChannelName();
 const REPAIR_DB_CHANNEL = getDbTableChannelName('public', 'repair_service');
 
-export function useRepairs(search?: string | null, tab: RepairTab = 'active') {
+export function useRepairsTable(search?: string | null, tab: RepairTab = 'active') {
   const queryClient = useQueryClient();
   const queryKey = ['repairs', search || '', tab] as const;
 
@@ -23,7 +22,7 @@ export function useRepairs(search?: string | null, tab: RepairTab = 'active') {
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch repairs');
       const data = await res.json();
-      return data.repairs || [];
+      return data.rows || data.repairs || [];
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,

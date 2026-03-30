@@ -17,7 +17,7 @@ export default function WorkOrdersPage() {
     <Suspense
       fallback={
         <div className="flex h-full w-full items-center justify-center bg-white">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+          <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
         </div>
       }
     >

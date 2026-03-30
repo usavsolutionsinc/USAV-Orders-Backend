@@ -1,4 +1,117 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+
+/** Mobile breakpoint – matches Tailwind's `md` (768px). */
+export const MOBILE_BREAKPOINT = '(max-width: 767px)';
+
+/** True on phones / narrow viewports (< 768px). SSR-safe. */
+export function useIsMobile(): boolean {
+  return useMediaQuery(MOBILE_BREAKPOINT);
+}
+
+// ─── Device detection ────────────────────────────────────────────────────────
+
+export interface DeviceInfo {
+  /** True if the hardware is a phone/tablet (UA Client Hints → UA string fallback). */
+  isMobileDevice: boolean;
+  /** True if the viewport is currently narrow (< 768px). */
+  isNarrowViewport: boolean;
+  /** True if the primary input is touch (no hover). */
+  isTouchPrimary: boolean;
+  /** True if the device has a camera (async — false until checked). */
+  hasCamera: boolean;
+  /**
+   * The resolved mode. Uses the manual override from localStorage when set,
+   * otherwise falls back to auto-detection (device + viewport + touch).
+   *
+   * `'mobile'` → render mobile UX (bottom bars, camera flows, larger targets)
+   * `'desktop'` → render desktop UX (sidebars, tables, keyboard-first)
+   */
+  mode: 'mobile' | 'desktop';
+  /** Set a manual override that persists across sessions, or `null` to return to auto. */
+  setModeOverride: (override: 'mobile' | 'desktop' | null) => void;
+  /** The current manual override value (`null` = auto). */
+  modeOverride: 'mobile' | 'desktop' | null;
+}
+
+const OVERRIDE_KEY = 'usav-device-mode';
+
+/** Detect actual mobile hardware via Client Hints API → UA string fallback. */
+function detectMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  // Modern: User-Agent Client Hints (Chrome, Edge, Opera — 2026 standard)
+  const uaData = (navigator as any).userAgentData;
+  if (uaData && typeof uaData.mobile === 'boolean') return uaData.mobile;
+  // Fallback: classic UA string sniff for Safari / Firefox
+  return /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent,
+  );
+}
+
+/** Check whether a camera exists on this device. */
+async function detectCamera(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return false;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.some((d) => d.kind === 'videoinput');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Layered device detection hook.
+ *
+ * Priority: manual override (localStorage) → device detection → viewport + touch.
+ *
+ * Use `mode` to branch between mobile/desktop UX.
+ * Use `hasCamera` to gate camera-dependent flows (packer photos).
+ * Use `setModeOverride('desktop')` to let users force desktop mode on a tablet, etc.
+ */
+export function useDeviceMode(): DeviceInfo {
+  const isNarrowViewport = useMediaQuery(MOBILE_BREAKPOINT);
+  const isTouchPrimary = useMediaQuery('(hover: none) and (pointer: coarse)');
+
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [hasCamera, setHasCamera] = useState(false);
+
+  // Manual override persisted in localStorage
+  const [modeOverride, setModeOverride] = useState<'mobile' | 'desktop' | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const stored = localStorage.getItem(OVERRIDE_KEY);
+    if (stored === 'mobile' || stored === 'desktop') return stored;
+    return null;
+  });
+
+  // Detect device type + camera on mount (client-only)
+  useEffect(() => {
+    setIsMobileDevice(detectMobileDevice());
+    detectCamera().then(setHasCamera);
+  }, []);
+
+  const setOverride = useCallback((next: 'mobile' | 'desktop' | null) => {
+    setModeOverride(next);
+    if (typeof window !== 'undefined') {
+      if (next) localStorage.setItem(OVERRIDE_KEY, next);
+      else localStorage.removeItem(OVERRIDE_KEY);
+    }
+  }, []);
+
+  // Auto mode: mobile if device reports mobile OR viewport is narrow + touch
+  const autoMode: 'mobile' | 'desktop' =
+    isMobileDevice || (isNarrowViewport && isTouchPrimary) ? 'mobile' : 'desktop';
+
+  const mode = modeOverride ?? autoMode;
+
+  return {
+    isMobileDevice,
+    isNarrowViewport,
+    isTouchPrimary,
+    hasCamera,
+    mode,
+    setModeOverride: setOverride,
+    modeOverride,
+  };
+}
 
 /**
  * Tracks the current window scroll position.

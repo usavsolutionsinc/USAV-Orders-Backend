@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
 
       await client.query('COMMIT');
 
-      await invalidateCacheTags(['packing-logs', 'packerlogs', 'orders', 'shipped']);
+      await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
 
       // Build packer-log row for live surgical insert on all subscribed web sessions.
       const shippedOrderId = updateResult.rows[0]?.id ?? null;  // may be null for unlinked rows

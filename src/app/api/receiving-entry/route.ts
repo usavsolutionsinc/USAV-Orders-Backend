@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { getCarrier } from '@/utils/tracking';
+import { getCarrier } from '@/lib/tracking-format';
 import { formatPSTTimestamp } from '@/utils/date';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
+import { formatPhoneNumber } from '@/utils/phone';
 
 /**
  * GET /api/repair-service/print/[id] - Render printable repair service form
@@ -63,16 +64,6 @@ export async function GET(
     const issue = repair.issue || '';
     const serialNumber = repair.serial_number || '';
     const price = repair.price || '';
-    
-    // Format phone number helper
-    const formatPhoneNumber = (phone: string): string => {
-      if (!phone) return '';
-      const cleaned = phone.replace(/\D/g, '');
-      if (cleaned.length === 10) {
-        return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-      }
-      return phone;
-    };
     
     // Parse contact_info to extract name, phone and email (format: "name, phone, email")
     let name = '';

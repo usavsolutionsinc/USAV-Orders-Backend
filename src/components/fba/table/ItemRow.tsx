@@ -2,6 +2,7 @@
 
 import { useState, type Dispatch, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { Check, Clock, Minus, Plus } from '@/components/Icons';
 import type { StationTheme } from '@/utils/staff-colors';
 import { printQueueTableUi } from '@/utils/staff-colors';
@@ -79,7 +80,7 @@ export function ItemRow({
     <>
       <motion.tr
         layout={!reducedMotion}
-        transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
+        transition={framerTransition.tableRowMount}
         onClick={() => dispatch({ type: 'TOGGLE_EXPAND', id: item.item_id })}
         onKeyDown={(event: KeyboardEvent<HTMLTableRowElement>) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -118,7 +119,7 @@ export function ItemRow({
                 <p className={T.itemTitle}>{item.display_title}</p>
               </div>
               <div className="mt-0.5 flex items-center gap-2">
-                <div className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                <div className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-widest text-gray-500">
                   <span
                     className={`tabular-nums ${item.expected_qty > 1 ? 'text-yellow-600' : ''}`}
                     title="Planned quantity"
@@ -201,7 +202,7 @@ export function ItemRow({
                 ? undefined
                 : { opacity: 0, height: 0, transition: { duration: 0.18 } }
             }
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            transition={framerTransition.tableRowMount}
           >
             <td colSpan={3} className="p-0">
               <ItemExpandPanel item={item} dispatch={dispatch} onRequestRemove={onRequestRemove} />

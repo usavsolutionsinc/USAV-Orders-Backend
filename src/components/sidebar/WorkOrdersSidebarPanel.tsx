@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { TabSwitch } from '@/design-system/components';
+import { sectionLabel, dataValue, chipText, fieldLabel } from '@/design-system/tokens/typography/presets';
 import {
   type QueueKey,
   type QueueCounts,
@@ -106,39 +108,16 @@ export function WorkOrdersSidebarPanel() {
   return (
     <div className="font-dm-sans flex h-full flex-col overflow-hidden bg-white">
       <div className={`${sidebarHeaderBandClass} px-3 py-2`}>
-        <div className="rounded-xl bg-slate-100/90 p-1">
-          <div className="grid grid-cols-2 gap-1">
-            {ASSIGNMENT_FOCUS_TABS.map((tab) => {
-              const active = queue === tab.id;
-              const count = counts[tab.id as QueueKey] ?? 0;
-              const activeClass =
-                tab.id === 'all_unassigned'
-                  ? 'bg-white text-orange-600 shadow-[0_1px_4px_rgba(194,65,12,0.12)]'
-                  : 'bg-white text-emerald-700 shadow-[0_1px_4px_rgba(5,150,105,0.14)]';
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => updateQueue(tab.id as QueueKey)}
-                  className={`flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors ${
-                    active ? activeClass : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  {count > 0 && (
-                    <span
-                      className={`inline-flex min-w-[14px] items-center justify-center rounded-full px-1 text-[8px] font-black ${
-                        active ? 'bg-current/15 text-current' : 'bg-slate-300/70 text-slate-600'
-                      }`}
-                    >
-                      {count > 99 ? '99+' : count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <TabSwitch
+          tabs={ASSIGNMENT_FOCUS_TABS.map((tab) => ({
+            id: tab.id,
+            label: tab.label,
+            count: counts[tab.id as QueueKey] ?? 0,
+            color: tab.color,
+          }))}
+          activeTab={queue}
+          onTabChange={(id) => updateQueue(id as QueueKey)}
+        />
       </div>
 
       <div className={sidebarHeaderRowClass}>
@@ -157,10 +136,10 @@ export function WorkOrdersSidebarPanel() {
           type="button"
           onClick={() => window.dispatchEvent(new CustomEvent('work-orders-open-assign-session'))}
           disabled={!canStartAssignSession}
-          className={`h-11 w-full rounded-xl text-[10px] font-black uppercase tracking-[0.18em] transition-colors ${
+          className={`h-11 w-full rounded-xl ${sectionLabel} transition-colors ${
             canStartAssignSession
-              ? 'bg-slate-900 text-white hover:bg-black'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              ? 'bg-gray-900 text-white hover:bg-black'
+              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
           }`}
         >
           Start Assign Session
@@ -169,8 +148,8 @@ export function WorkOrdersSidebarPanel() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {queue === 'local_pickups' && pickupDates.length > 0 && (
-          <div className="mb-3 border-b border-[var(--color-neutral-200)] pb-2">
-            <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-700)]">
+          <div className="mb-3 border-b border-gray-200 pb-2">
+            <p className={`px-3 pb-2 ${sectionLabel}`}>
               Pickup Dates
             </p>
             {pickupDates.map((item) => {
@@ -189,16 +168,16 @@ export function WorkOrdersSidebarPanel() {
                   type="button"
                   onClick={() => updatePickupDate(item.pickup_date)}
                   className={`group relative flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors ${
-                    active ? 'text-slate-950' : 'text-slate-500 hover:text-slate-900'
+                    active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'
                   }`}
                 >
                   <div className="min-w-0">
-                    <div className="text-[12px] font-semibold tracking-tight">{label}</div>
-                    <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+                    <div className={dataValue}>{label}</div>
+                    <div className={`mt-1 ${fieldLabel} text-gray-500`}>
                       {item.item_count} items · ${Number(item.total_value || 0).toFixed(2)}
                     </div>
                   </div>
-                  {active && <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-slate-950 rounded-full" />}
+                  {active && <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gray-900 rounded-full" />}
                 </button>
               );
             })}
@@ -214,24 +193,22 @@ export function WorkOrdersSidebarPanel() {
               type="button"
               onClick={() => updateQueue(item.key)}
               className={`group relative flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors ${
-                active ? 'text-slate-950' : 'text-slate-500 hover:text-slate-900'
+                active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'
               }`}
             >
-              <span className="text-[12px] font-semibold tracking-tight">{item.label}</span>
+              <span className={dataValue}>{item.label}</span>
               <span
-                className={`min-w-[1.75rem] text-right text-[11px] font-bold tabular-nums ${
-                  active ? 'text-slate-900' : count > 0 ? 'text-slate-500' : 'text-slate-300'
+                className={`min-w-[1.75rem] text-right ${chipText} tabular-nums ${
+                  active ? 'text-gray-900' : count > 0 ? 'text-gray-600' : 'text-gray-300'
                 }`}
               >
                 {count}
               </span>
-              {/* Active: solid black bottom line */}
               {active && (
-                <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-slate-950 rounded-full" />
+                <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gray-900 rounded-full" />
               )}
-              {/* Hover: black bottom line (only when not active) */}
               {!active && (
-                <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-slate-900 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                <span className="absolute bottom-0 left-3 right-3 h-[2px] bg-gray-900 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
               )}
             </button>
           );

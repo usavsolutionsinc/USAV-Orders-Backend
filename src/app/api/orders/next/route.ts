@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { parsePositiveInt } from '@/utils/number';
+import { TECH_EMPLOYEE_IDS } from '@/utils/staff';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 
 /**
@@ -40,13 +41,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Resolve station number (1–4) to actual staff.id if applicable
-    const techEmployeeIds: Record<string, string> = {
-      '1': 'TECH001',
-      '2': 'TECH002',
-      '3': 'TECH003',
-      '4': 'TECH004',
-    };
-    const employeeId = techEmployeeIds[techId];
+    const employeeId = TECH_EMPLOYEE_IDS[techId];
     let resolvedStaffId: number | null = null;
     if (employeeId) {
       const staffResult = await queryWithRetry(

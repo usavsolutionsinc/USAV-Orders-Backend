@@ -19,4 +19,15 @@ export const spacing = {
   ledgerComfort: '0.6rem',
 } as const;
 
+/** Density presets — standard px/py/gap combos used across components */
+export const density = {
+  /** Table rows, compact data */
+  compact: { px: '0.5rem', py: '0.375rem', gap: '0.375rem' },
+  /** Sidebar rows, cards */
+  standard: { px: '0.75rem', py: '0.5rem', gap: '0.5rem' },
+  /** Form fields, panels */
+  spacious: { px: '1rem', py: '0.75rem', gap: '0.75rem' },
+} as const;
+
 export type Spacing = typeof spacing;
+export type Density = typeof density;

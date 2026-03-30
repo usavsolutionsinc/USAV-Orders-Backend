@@ -59,7 +59,7 @@ function assertWorkspaceKey(value: string): asserts value is FavoriteWorkspaceKe
   }
 }
 
-function normalizeSku(value: string): string {
+function normalizeSkuForLookup(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
@@ -124,7 +124,7 @@ export async function createFavoriteSku(input: CreateFavoriteSkuInput): Promise<
   assertWorkspaceKey(input.workspaceKey);
   const sku = String(input.sku || '').trim();
   const label = String(input.label || '').trim();
-  const skuNormalized = normalizeSku(sku);
+  const skuNormalized = normalizeSkuForLookup(sku);
 
   if (!sku || !skuNormalized) throw new Error('SKU is required');
   if (!label) throw new Error('Label is required');
@@ -260,7 +260,7 @@ export async function updateFavoriteSku(input: UpdateFavoriteSkuInput): Promise<
     const current = currentResult.rows[0];
     const nextSku = input.sku != null ? String(input.sku).trim() : String(current.sku || '');
     const nextLabel = input.label != null ? String(input.label).trim() : String(current.label || '');
-    const nextSkuNormalized = normalizeSku(nextSku);
+    const nextSkuNormalized = normalizeSkuForLookup(nextSku);
 
     if (!nextSku || !nextSkuNormalized) throw new Error('SKU is required');
     if (!nextLabel) throw new Error('Label is required');

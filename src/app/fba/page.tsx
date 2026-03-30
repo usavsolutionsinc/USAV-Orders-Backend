@@ -5,14 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Loader2, Search } from '@/components/Icons';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
-import { findStaffIdByNormalizedName, useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { FbaQuickAddFnskuModal } from '@/components/fba/FbaQuickAddFnskuModal';
 import { FbaCreatePlanModal } from '@/components/fba/FbaCreatePlanModal';
 import { FbaLoadingState, FbaErrorState } from '@/components/fba/FbaStateShells';
 import { FbaBoardTable, type FbaBoardItem } from '@/components/fba/FbaBoardTable';
+import { FbaBoardDetailPanel } from '@/components/fba/FbaBoardDetailPanel';
 import WeekHeader from '@/components/ui/WeekHeader';
 import StationFba from '@/components/station/StationFba';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { stationThemeColors } from '@/utils/staff-colors';
+import { useStationTheme } from '@/hooks/useStationTheme';
+import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
 type Tab = 'combine' | 'shipped';
@@ -65,20 +67,10 @@ function FbaPageContent() {
   const activeTab = resolveActiveTab(searchParams.get('tab'));
 
   const staffDirectory = useActiveStaffDirectory();
-  const staffIdParam = String(searchParams.get('staffId') || '').trim();
-  const staffIdFromUrl = /^\d+$/.test(staffIdParam) ? parseInt(staffIdParam, 10) : null;
-  const lienStaffId = useMemo(
-    () => findStaffIdByNormalizedName(staffDirectory, 'lien'),
-    [staffDirectory],
-  );
-  const effectiveStaffIdForTheme = staffIdFromUrl ?? lienStaffId ?? 1;
-  const selectedStaff = staffDirectory.find((member) => member.id === effectiveStaffIdForTheme);
-  const staffRoleForTheme: 'technician' | 'packer' =
-    selectedStaff?.role === 'packer' ? 'packer' : 'technician';
-  const stationTheme = useMemo(
-    () => getStaffThemeById(effectiveStaffIdForTheme, staffRoleForTheme),
-    [effectiveStaffIdForTheme, staffRoleForTheme],
-  );
+  const staffIdRaw = String(searchParams.get('staffId') || '').trim();
+  const staffIdFromUrl = /^\d+$/.test(staffIdRaw) ? parseInt(staffIdRaw, 10) : null;
+  const staffId = staffIdFromUrl ?? staffDirectory[0]?.id ?? null;
+  const { theme: stationTheme } = useStationTheme({ staffId });
 
   // ── Combine data ─────────────────────────────────────────────────────
   const [board, setBoard] = useState<CombineData>({ pending: [] });
@@ -186,6 +178,20 @@ function FbaPageContent() {
     );
   }, [combineItemsForWeek, searchQuery]);
 
+  // ── Detail panel ────────────────────────────────────────────────────────
+  const [detailItem, setDetailItem] = useState<FbaBoardItem | null>(null);
+
+  const handleDetailNavigate = useCallback(
+    (direction: 'up' | 'down') => {
+      if (!detailItem) return;
+      const list = filteredPendingItems;
+      const idx = list.findIndex((i) => i.fnsku === detailItem.fnsku);
+      const next = direction === 'up' ? idx - 1 : idx + 1;
+      if (next >= 0 && next < list.length) setDetailItem(list[next]);
+    },
+    [detailItem, filteredPendingItems],
+  );
+
   const showSearch = activeTab === 'combine';
   const visibleCount = activeTab === 'combine' ? filteredPendingItems.length : activeItems.length;
 
@@ -193,6 +199,15 @@ function FbaPageContent() {
     ? { duration: 0.01 }
     : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
   const themeColors = stationThemeColors[stationTheme];
+
+  // Wait for staff directory to resolve before rendering themed content
+  if (staffId === null) {
+    return (
+      <div className="flex h-full w-full min-w-0 flex-1 flex-col items-center justify-center bg-stone-50">
+        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-stone-50">
@@ -234,6 +249,7 @@ function FbaPageContent() {
                   variant="board"
                   stationTheme={stationTheme}
                   emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No pending FBA items'}
+                  onDetailOpen={setDetailItem}
                 />
               )}
 
@@ -282,6 +298,24 @@ function FbaPageContent() {
           </div>
           <FbaQuickAddFnskuModal stationTheme={stationTheme} />
           <FbaCreatePlanModal stationTheme={stationTheme} />
+
+          {/* FNSKU detail panel */}
+          <AnimatePresence>
+            {detailItem && (
+              <FbaBoardDetailPanel
+                key="fba-detail-panel"
+                item={detailItem}
+                onClose={() => setDetailItem(null)}
+                onNavigate={handleDetailNavigate}
+                onSaved={fetchBoard}
+                disableMoveUp={filteredPendingItems.findIndex((i) => i.fnsku === detailItem.fnsku) <= 0}
+                disableMoveDown={
+                  filteredPendingItems.findIndex((i) => i.fnsku === detailItem.fnsku) >=
+                  filteredPendingItems.length - 1
+                }
+              />
+            )}
+          </AnimatePresence>
         </StationFba>
       </div>
     </div>

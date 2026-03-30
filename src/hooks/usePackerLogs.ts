@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getStationChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
 
 export interface PackerRecord {
@@ -57,8 +58,7 @@ function computeCurrentPSTWeek(): { startStr: string; endStr: string } {
   return { startStr: fmt(mon), endStr: fmt(fri) };
 }
 
-const STATION_CHANNEL =
-  process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES || 'station:changes';
+const STATION_CHANNEL = getStationChannelName();
 
 export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = {}) {
   const { weekOffset = 0, weekRange } = options;

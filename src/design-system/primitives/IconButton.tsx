@@ -5,8 +5,8 @@ import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from 'react';
 type IconButtonTone = 'neutral' | 'accent';
 
 const toneClassName: Record<IconButtonTone, string> = {
-  neutral: 'text-slate-400 hover:text-slate-900',
-  accent: 'text-slate-400 hover:text-blue-600',
+  neutral: 'text-gray-500 hover:text-gray-900',
+  accent: 'text-gray-500 hover:text-blue-600',
 };
 
 export interface IconButtonProps

@@ -424,7 +424,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      await invalidateCacheTags(['orders', 'shipped', 'orders-next', 'tech-logs', 'packerlogs', 'packing-logs', 'need-to-order']);
+      await invalidateCacheTags(['orders', 'shipped', 'orders-next', 'tech-logs', 'packing-logs', 'need-to-order']);
     } catch (cacheErr) {
       console.warn('[orders/assign] cache invalidation failed (non-critical):', cacheErr);
     }

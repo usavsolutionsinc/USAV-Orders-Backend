@@ -10,10 +10,12 @@ import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getActiveStaff } from '@/lib/staffCache';
+import { PACKER_IDS } from '@/utils/staff';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
 import { DeleteOrderControl } from './DeleteOrderControl';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
+import { usePanelActions } from '@/hooks/usePanelActions';
 
 export function DashboardDetailsStack({
   shipped,
@@ -36,7 +38,7 @@ export function DashboardDetailsStack({
   const [isMarkAsShippedOpen, setIsMarkAsShippedOpen] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
   const hasOutOfStockValue = outOfStock.trim().length > 0;
-  const packerIdOrder = [4, 5];
+  const packerIdOrder = PACKER_IDS;
 
   const fieldSave = useOrderFieldSave({
     orderId: shipped.id,
@@ -96,28 +98,14 @@ export function DashboardDetailsStack({
     return () => { active = false; };
   }, []);
 
-  useEffect(() => {
-    const handlePanelAction = (e: CustomEvent<{ action?: string }>) => {
-      switch (e.detail?.action) {
-        case 'status':
-          setIsMarkAsShippedOpen((prev) => !prev);
-          break;
-        case 'out_of_stock':
-          setActiveInput((prev) => prev === 'out_of_stock' ? 'none' : 'out_of_stock');
-          break;
-        case 'notes':
-          setActiveInput((prev) => prev === 'notes' ? 'none' : 'notes');
-          break;
-        default:
-          break;
-      }
-    };
-
-    window.addEventListener('shipped-panel-action' as any, handlePanelAction as any);
-    return () => {
-      window.removeEventListener('shipped-panel-action' as any, handlePanelAction as any);
-    };
-  }, []);
+  const panelActions = usePanelActions(
+    { entityType: 'order', entityId: shipped.id, orderId: shipped.order_id },
+    {
+      status: () => setIsMarkAsShippedOpen((prev) => !prev),
+      out_of_stock: () => setActiveInput((prev) => prev === 'out_of_stock' ? 'none' : 'out_of_stock'),
+      notes: () => setActiveInput((prev) => prev === 'notes' ? 'none' : 'notes'),
+    },
+  );
 
   const saveInlineFields = useCallback(async () => {
     await fieldSave.saveInlineFields(orderNumber, itemNumber, shippingTrackingNumber);
@@ -191,7 +179,7 @@ export function DashboardDetailsStack({
       variants={containerVariants}
       className="pb-8 pt-4 space-y-4"
     >
-      {actionBar ? <PanelActionBar {...actionBar} /> : null}
+      {actionBar ? <PanelActionBar {...actionBar} actions={panelActions} /> : null}
 
       <motion.section variants={itemVariants} className="mx-8 space-y-2">
         {mode === 'tech' ? (

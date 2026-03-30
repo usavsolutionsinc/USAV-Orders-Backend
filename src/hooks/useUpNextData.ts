@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Order, RepairQueueItem, FBAQueueItem, ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
 import { parsePositiveInt } from '@/utils/number';
+import { getOrdersChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 interface UseUpNextDataOptions {
@@ -149,6 +150,7 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
       } else if (parsedTechId === null) {
         setAllRepairs([]);
       }
+
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
@@ -174,7 +176,7 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techId]);
 
-  const ordersChannelName = process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
+  const ordersChannelName = getOrdersChannelName();
 
   useAblyChannel(
     ordersChannelName,

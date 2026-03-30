@@ -2,26 +2,22 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { getActiveStaff } from '@/lib/staffCache';
-
-const STAFF_NAME_OVERRIDES: Record<number, string> = {
-  7: 'Kai',
-};
+import { STAFF_NAMES } from '@/utils/staff';
 
 export function useStaffNameMap() {
-  const [staffNameMap, setStaffNameMap] = useState<Record<number, string>>({});
+  const [staffNameMap, setStaffNameMap] = useState<Record<number, string>>(STAFF_NAMES);
 
   useEffect(() => {
     let active = true;
     getActiveStaff()
       .then((data) => {
         if (!active) return;
-        const nextMap: Record<number, string> = {};
+        const nextMap: Record<number, string> = { ...STAFF_NAMES };
         data.forEach((member) => {
           if (member?.id && member?.name) {
-            nextMap[member.id] = STAFF_NAME_OVERRIDES[member.id] ?? member.name;
+            nextMap[member.id] = STAFF_NAMES[member.id] ?? member.name;
           }
         });
-        Object.assign(nextMap, STAFF_NAME_OVERRIDES);
         setStaffNameMap(nextMap);
       })
       .catch((error) => console.error('Failed to fetch staff name map:', error));
@@ -32,7 +28,7 @@ export function useStaffNameMap() {
 
   const getStaffName = useCallback((staffId: number | null | undefined): string => {
     if (!staffId) return '---';
-    return STAFF_NAME_OVERRIDES[staffId] ?? staffNameMap[staffId] ?? `#${staffId}`;
+    return staffNameMap[staffId] ?? `#${staffId}`;
   }, [staffNameMap]);
 
   return {

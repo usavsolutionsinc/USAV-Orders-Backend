@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Minus } from '@/components/Icons';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { formatDateTimePST } from '@/utils/date';
 
 // Lifecycle row shape (post-migration)
@@ -122,7 +123,7 @@ function QtyCellWithRemove({ row }: { row: FBAShipmentLifecycleRow }) {
         >
           {row.total_actual_qty}
         </span>
-        <span className="text-gray-400">/{row.total_expected_qty}</span>
+        <span className="text-gray-500">/{row.total_expected_qty}</span>
       </span>
       {canRemove ? (
         <button
@@ -178,7 +179,7 @@ export default function FBAShipmentsTable() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-[18px] font-black uppercase tracking-tight text-purple-900">FBA Shipments</h2>
-            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-500">
+            <p className={`mt-1 ${sectionLabel} text-purple-500`}>
               {isLegacy ? 'Receiving Queue (legacy)' : 'Shipment Lifecycle Board'} — {rows.length} shipments
             </p>
           </div>
@@ -193,7 +194,7 @@ export default function FBAShipmentsTable() {
       <div className="flex-1 overflow-auto">
         {rows.length === 0 ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">No FBA shipments</p>
+            <p className="text-[11px] font-black uppercase tracking-widest text-gray-500">No FBA shipments</p>
           </div>
         ) : isLegacy ? (
           /* ── Legacy table (pre-migration) ── */
@@ -252,7 +253,7 @@ export default function FBAShipmentsTable() {
                     <td className="px-3 py-2">
                       <span className="font-mono text-purple-700 font-black">{row.shipment_ref}</span>
                       {row.notes && (
-                        <p className="text-[9px] text-gray-400 font-normal truncate max-w-[140px]">{row.notes}</p>
+                        <p className="text-[9px] text-gray-500 font-normal truncate max-w-[140px]">{row.notes}</p>
                       )}
                     </td>
                     <td className="px-3 py-2">
@@ -268,7 +269,7 @@ export default function FBAShipmentsTable() {
                     <td className="px-3 py-2">{row.due_date ? new Date(row.due_date).toLocaleDateString() : '-'}</td>
                     <td className="px-3 py-2">{row.assigned_tech_name || '-'}</td>
                     <td className="px-3 py-2">{row.assigned_packer_name || '-'}</td>
-                    <td className="px-3 py-2 text-gray-400">{formatDateTimePST(row.created_at)}</td>
+                    <td className="px-3 py-2 text-gray-500">{formatDateTimePST(row.created_at)}</td>
                   </tr>
                 );
               })}

@@ -3,15 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import {
-  AlertTriangle,
   ExternalLink,
-  FileText,
-  Flag,
   Loader2,
   Calendar,
   ClipboardList,
-  PackageCheck,
   User,
 } from '@/components/Icons';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
@@ -19,6 +16,7 @@ import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmen
 import { WorkOrderInfoStrip } from '@/components/work-orders/WorkOrderInfoStrip';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
+import { usePanelActions } from '@/hooks/usePanelActions';
 import { ShippingInformationSection } from '@/components/shipped/details-panel/ShippingInformationSection';
 import { ProductDetailsSection } from '@/components/shipped/details-panel/ProductDetailsSection';
 import { MarkAsShippedForm } from '@/components/shipped/stacks/MarkAsShippedForm';
@@ -26,6 +24,7 @@ import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
+import { TECH_IDS } from '@/utils/staff';
 import {
   type WorkOrderRow,
   type WorkStatus,
@@ -165,31 +164,17 @@ export function WorkOrderDetailsPanel({
     return () => window.clearTimeout(timer);
   }, [copiedAll]);
 
-  useEffect(() => {
-    const handlePanelAction = (e: CustomEvent<{ action?: string }>) => {
-      if (!orderDetailsRecord) return;
-      switch (e.detail?.action) {
-        case 'status':
-          setIsMarkAsShippedOpen((prev) => !prev);
-          break;
-        case 'out_of_stock':
-          setActiveInput((prev) => prev === 'out_of_stock' ? 'none' : 'out_of_stock');
-          break;
-        case 'notes':
-          setActiveInput((prev) => prev === 'notes' ? 'none' : 'notes');
-          break;
-        default:
-          break;
-      }
-    };
+  const panelActions = usePanelActions(
+    { entityType: 'work_order', entityId: row.entityId, orderId: row.orderId },
+    orderDetailsRecord
+      ? {
+          status: () => setIsMarkAsShippedOpen((prev) => !prev),
+          out_of_stock: () => setActiveInput((prev) => prev === 'out_of_stock' ? 'none' : 'out_of_stock'),
+          notes: () => setActiveInput((prev) => prev === 'notes' ? 'none' : 'notes'),
+        }
+      : {},
+  );
 
-    window.addEventListener('shipped-panel-action' as any, handlePanelAction as any);
-    return () => {
-      window.removeEventListener('shipped-panel-action' as any, handlePanelAction as any);
-    };
-  }, [orderDetailsRecord]);
-
-  const TECH_IDS = [1, 2, 3, 6];
   const technicianOptions = staff
     .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
     .map((m) => ({ id: Number(m.id), name: m.name }))
@@ -243,34 +228,7 @@ export function WorkOrderDetailsPanel({
     setCopiedAll(true);
   };
 
-  const statusBadgeClass = STATUS_COLOR[form.status] || 'text-slate-600 bg-slate-100';
-  const panelActions = [
-    {
-      label: 'Goals',
-      onClick: () => { window.location.href = `/admin?orderId=${row.entityId}`; },
-      icon: <Flag className="h-3.5 w-3.5" />,
-      toneClassName: 'text-blue-600',
-    },
-    {
-      label: 'Mark as shipped',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'status' } })); },
-      icon: <PackageCheck className="h-3.5 w-3.5" />,
-      toneClassName: 'text-emerald-600',
-    },
-    {
-      label: 'Out of stock',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'out_of_stock' } })); },
-      icon: <AlertTriangle className="h-3.5 w-3.5" />,
-      toneClassName: 'text-orange-600',
-    },
-    {
-      label: 'Notes',
-      onClick: () => { window.dispatchEvent(new CustomEvent('shipped-panel-action', { detail: { action: 'notes' } })); },
-      icon: <FileText className="h-3.5 w-3.5" />,
-      toneClassName: 'text-gray-600',
-    },
-  ];
-
+  const statusBadgeClass = STATUS_COLOR[form.status] || 'text-gray-600 bg-gray-100';
   const statusSliderItems = useMemo(
     () => STATUS_OPTIONS.map((status) => ({ id: status, label: status.replace('_', ' ') })),
     []
@@ -295,17 +253,17 @@ export function WorkOrderDetailsPanel({
                 {form.status.replace('_', ' ')}
               </span>
             </div>
-            <h2 className="truncate text-[17px] font-black uppercase tracking-tight text-slate-950">
+            <h2 className="truncate text-[17px] font-black uppercase tracking-tight text-gray-950">
               {row.recordLabel}
             </h2>
-            <p className="mt-1 line-clamp-1 text-[12px] font-medium text-slate-500">{row.title}</p>
+            <p className="mt-1 line-clamp-1 text-[12px] font-semibold text-gray-500">{row.title}</p>
             <WorkOrderInfoStrip row={row} className="mt-2 flex min-w-0 items-center justify-between gap-2" />
           </div>
           <Link
             href={buildSourceHref(row)}
             target="_blank"
             rel="noopener"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
             aria-label="Open source record"
           >
             <ExternalLink className="h-3.5 w-3.5" />
@@ -319,7 +277,7 @@ export function WorkOrderDetailsPanel({
         onMoveDown={() => dispatchNavigateShippedDetails('down')}
         disableMoveUp={disableMoveUp}
         disableMoveDown={disableMoveDown}
-        rightActions={panelActions}
+        actions={panelActions}
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -385,8 +343,8 @@ export function WorkOrderDetailsPanel({
 
           <section>
             <div className="mb-3 flex items-center gap-2">
-              <User className="h-3.5 w-3.5 text-slate-400" />
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Assignment</p>
+              <User className="h-3.5 w-3.5 text-gray-500" />
+              <p className={sectionLabel}>Assignment</p>
             </div>
             {staff.length > 0 ? (
               <OrderStaffAssignmentButtons
@@ -409,7 +367,7 @@ export function WorkOrderDetailsPanel({
                 layout="rows"
               />
             ) : (
-              <div className="flex items-center gap-2 text-slate-400">
+              <div className="flex items-center gap-2 text-gray-500">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 <span className="text-[11px]">Loading staff…</span>
               </div>
@@ -420,13 +378,13 @@ export function WorkOrderDetailsPanel({
 
           <section>
             <div className="mb-3 flex items-center gap-2">
-              <ClipboardList className="h-3.5 w-3.5 text-slate-400" />
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Workflow</p>
+              <ClipboardList className="h-3.5 w-3.5 text-gray-500" />
+              <p className={sectionLabel}>Workflow</p>
             </div>
 
             <div className="space-y-4">
               <div>
-                <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</p>
+                <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500">Status</p>
                 <HorizontalButtonSlider
                   variant="slate"
                   size="md"
@@ -445,13 +403,13 @@ export function WorkOrderDetailsPanel({
           <section>
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
               <label className="block">
-                <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-gray-500">
                   P
                 </span>
                 <select
                   value={form.priority}
                   onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value as PriorityPreset }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-0"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-gray-400 focus:ring-0"
                 >
                   {PRIORITY_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -461,7 +419,7 @@ export function WorkOrderDetailsPanel({
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500">
                   <Calendar className="h-3 w-3" />
                   D
                 </span>
@@ -469,7 +427,7 @@ export function WorkOrderDetailsPanel({
                   type="date"
                   value={form.deadlineAt}
                   onChange={(e) => setForm((prev) => ({ ...prev, deadlineAt: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-0"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-gray-400 focus:ring-0"
                 />
               </label>
             </div>
@@ -478,7 +436,7 @@ export function WorkOrderDetailsPanel({
           <div className="h-px bg-gray-100" />
 
           <section>
-            <p className="mb-2.5 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Current State</p>
+            <p className={`mb-2.5 ${sectionLabel}`}>Current State</p>
             <dl className="space-y-1.5 text-[12px]">
               {[
                 { label: 'Queue', value: row.queueLabel },
@@ -489,8 +447,8 @@ export function WorkOrderDetailsPanel({
                 ...(row.updatedAt ? [{ label: 'Updated', value: formatDate(row.updatedAt) }] : []),
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between gap-4">
-                  <dt className="font-medium text-slate-400">{label}</dt>
-                  <dd className="max-w-[220px] text-right font-black text-slate-800">{value}</dd>
+                  <dt className="font-semibold text-gray-500">{label}</dt>
+                  <dd className="max-w-[220px] text-right font-black text-gray-800">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -517,7 +475,7 @@ export function WorkOrderDetailsPanel({
           type="button"
           onClick={() => void handleSave()}
           disabled={saving}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white transition-colors hover:bg-slate-800 disabled:opacity-60"
+          className={`inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 ${sectionLabel} text-white transition-colors hover:bg-gray-800 disabled:opacity-60`}
         >
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {saving ? 'Saving…' : 'Save Work Order'}

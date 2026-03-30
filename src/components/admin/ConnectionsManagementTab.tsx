@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { ConnectionLogEntryInput } from '@/components/sidebar/ConnectionsSidebarPanel';
 import { ZohoManagementPage } from '@/components/admin/connections/ZohoManagementPage';
@@ -83,7 +84,7 @@ export function ConnectionsManagementTab() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="mb-4 border border-gray-200 bg-gray-50 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-900">Recent Activity</p>
+          <p className={`${sectionLabel} text-gray-900`}>Recent Activity</p>
           <p className="mt-1 text-[11px] font-bold text-gray-500">
             Every sync, import, and upload run from the sidebar writes a result here so you can confirm what happened.
           </p>
@@ -108,7 +109,7 @@ export function ConnectionsManagementTab() {
             {logs.map((log) => (
               <div key={log.id} className="grid gap-3 px-4 py-4 md:grid-cols-[120px_minmax(0,1fr)_140px] md:items-start">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-400">{log.group}</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">{log.group}</p>
                   <p
                     className={`mt-1 text-[10px] font-black uppercase tracking-widest ${
                       log.status === 'success'
@@ -125,7 +126,7 @@ export function ConnectionsManagementTab() {
                   <p className="text-[11px] font-black uppercase tracking-widest text-gray-900">{log.title}</p>
                   <p className="mt-1 text-[11px] font-bold leading-relaxed text-gray-600">{log.detail}</p>
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-wide text-gray-400 md:text-right">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 md:text-right">
                   {log.createdAt}
                 </div>
               </div>

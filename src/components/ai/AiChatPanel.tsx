@@ -14,6 +14,7 @@ import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/la
 import AiAnswerCard from '@/components/ai/AiAnswerCard';
 import AiPromptChips from '@/components/ai/AiPromptChips';
 import type { AiChatMode, AiChatRouteResponse, AiStructuredAnswer } from '@/lib/ai/types';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 type MessageRole = 'user' | 'assistant';
 
@@ -234,7 +235,7 @@ export default function AiChatPanel() {
               <BotIcon className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">USAV Ops Assistant</p>
+              <p className={sectionLabel}>USAV Ops Assistant</p>
               <p className="truncate text-[13px] font-medium text-gray-700">
                 Deterministic shipped-order summaries plus general AI responses
               </p>
@@ -248,7 +249,7 @@ export default function AiChatPanel() {
             <button
               type="button"
               onClick={startNewChat}
-              className="flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900"
+              className={`flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 ${sectionLabel} text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900`}
             >
               <RefreshIcon className="h-3 w-3" />
               New Chat
@@ -287,7 +288,7 @@ export default function AiChatPanel() {
           <div className="mx-auto flex h-full w-full max-w-4xl flex-col justify-center">
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
               <section className="space-y-4 border border-gray-200 bg-white p-5">
-                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                <div className={`flex items-center gap-2 ${sectionLabel}`}>
                   <PackageCheck className="h-4 w-4 text-gray-500" />
                   Reliable Ops Questions
                 </div>
@@ -303,7 +304,7 @@ export default function AiChatPanel() {
               </section>
 
               <section className="space-y-3 border border-gray-200 bg-white p-5">
-                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                <div className={`flex items-center gap-2 ${sectionLabel}`}>
                   <Database className="h-4 w-4 text-gray-500" />
                   What The Panel Uses
                 </div>
@@ -333,8 +334,8 @@ export default function AiChatPanel() {
                 return (
                   <div key={msg.id} className="ml-auto w-full max-w-2xl border border-gray-200 bg-white px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">Question</span>
-                      <span className="text-[10px] text-gray-400">{timestampLabel}</span>
+                      <span className={sectionLabel}>Question</span>
+                      <span className="text-[10px] text-gray-500">{timestampLabel}</span>
                     </div>
                     <p className="mt-2 text-[13px] leading-6 text-gray-900">{msg.content}</p>
                   </div>
@@ -345,8 +346,8 @@ export default function AiChatPanel() {
                 return (
                   <div key={msg.id} className="w-full max-w-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-500">Error</span>
-                      <span className="text-[10px] text-red-400">{timestampLabel}</span>
+                      <span className={`${sectionLabel} text-red-500`}>Error</span>
+                      <span className="text-[10px] text-red-500">{timestampLabel}</span>
                     </div>
                     <p className="mt-2 text-[12px] leading-6 whitespace-pre-wrap">{msg.content}</p>
                   </div>
@@ -371,7 +372,7 @@ export default function AiChatPanel() {
                 <div className="flex items-center gap-3">
                   <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Working</p>
+                    <p className={sectionLabel}>Working</p>
                     <p className="mt-1 text-[12px] text-gray-600">
                       {connectionStatus === 'offline'
                         ? 'Running local ops query or waiting for model backend'
@@ -418,7 +419,7 @@ export default function AiChatPanel() {
             </button>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-400">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
             <span>Shift+Enter for new line. Deterministic shipped summaries use PST date ranges and local app data.</span>
             <span>{connectionStatus === 'offline' ? 'Model backend offline' : 'Model backend online'}</span>
           </div>

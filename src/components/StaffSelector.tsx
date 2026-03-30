@@ -4,6 +4,8 @@ import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check } from './Icons';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { TECH_NAME_ORDER } from '@/utils/staff';
+import { useStationTheme } from '@/hooks/useStationTheme';
 
 interface Staff {
     id: number;
@@ -36,8 +38,7 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
     });
 
     const selectedStaff = staff.find(s => s.id === selectedStaffId);
-    const techOrder = ['michael', 'thuc', 'sang', 'cuong'];
-    const orderMap = new Map(techOrder.map((name, index) => [name, index]));
+    const orderMap = new Map(TECH_NAME_ORDER.map((name, index) => [name, index]));
     const sortedStaff = [...staff].sort((a, b) => {
         if (role === 'all' && a.role !== b.role) {
             return a.role.localeCompare(b.role);
@@ -53,8 +54,8 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
         return a.name.localeCompare(b.name);
     });
     const otherStaff = sortedStaff.filter(s => s.id !== selectedStaffId);
-    const selectedRole = selectedStaff?.role === 'packer' ? 'packer' : 'technician';
-    const selectedTheme = selectedStaff ? getStaffThemeById(selectedStaff.id, selectedRole) : null;
+    const resolved = useStationTheme({ staffId: selectedStaffId ?? 0 });
+    const selectedTheme = selectedStaff ? resolved.theme : null;
     const isBoxy = variant === 'boxy';
 
     if (isLoading) {
@@ -71,11 +72,11 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                     isBoxy ? 'min-h-[44px] px-3 py-1 rounded-none h-full w-full justify-between border-0 shadow-none' : 'px-3 py-1.5 rounded-xl w-full justify-between'
                 }`}
             >
-                <span className={`text-xs font-black tracking-tight ${selectedTheme ? stationThemeColors[selectedTheme].text : 'text-gray-900'}`}>
+                <span className={`text-xs font-black tracking-tight ${selectedTheme ? resolved.colors.text : 'text-gray-900'}`}>
                     {selectedStaff ? (labelOverrides?.[selectedStaff.id] ?? selectedStaff.name) : 'Select Staff'}
                 </span>
                 <svg 
-                    className={`w-3 h-3 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                    className={`h-3 w-3 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
                     fill="none" 
                     viewBox="0 0 24 24" 
                     stroke="currentColor"
@@ -100,8 +101,7 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                     }`}>
                         <div className={`${isBoxy ? '' : 'p-1 space-y-1'}`}>
                             {otherStaff.map((member) => {
-                                const memberRole = member.role === 'packer' ? 'packer' : 'technician';
-                                const theme = getStaffThemeById(member.id, memberRole);
+                                const theme = getStaffThemeById(member.id);
                                 const textClass = stationThemeColors[theme].text;
                                 return (
                                     <button
@@ -118,7 +118,7 @@ export default function StaffSelector({ role = 'all', selectedStaffId, onSelect,
                                             {labelOverrides?.[member.id] ?? member.name}
                                         </span>
                                         {role === 'all' ? (
-                                            <span className="ml-2 text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                            <span className="ml-2 text-[9px] font-black uppercase tracking-wider text-gray-500">
                                                 {member.role}
                                             </span>
                                         ) : null}

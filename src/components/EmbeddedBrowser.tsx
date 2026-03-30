@@ -88,7 +88,7 @@ export default function EmbeddedBrowser({ url, onNavigate, className = '' }: Emb
 
   if (!isElectronEnv) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-slate-400 bg-slate-900 rounded-lg">
+      <div className="flex items-center justify-center h-full text-sm text-gray-500 bg-gray-900 rounded-lg">
         Embedded browser is only available in the desktop app.
       </div>
     );
@@ -97,25 +97,25 @@ export default function EmbeddedBrowser({ url, onNavigate, className = '' }: Emb
   return (
     <div className={`flex flex-col h-full ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-800 border-b border-slate-700 shrink-0">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-gray-800 border-b border-gray-700 shrink-0">
         <button
           onClick={() => webviewRef.current?.goBack()}
           title="Back"
-          className="p-1.5 rounded hover:bg-slate-700 text-slate-300 text-sm font-mono"
+          className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm font-mono"
         >
           ←
         </button>
         <button
           onClick={() => webviewRef.current?.goForward()}
           title="Forward"
-          className="p-1.5 rounded hover:bg-slate-700 text-slate-300 text-sm font-mono"
+          className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm font-mono"
         >
           →
         </button>
         <button
           onClick={() => webviewRef.current?.reload()}
           title="Reload"
-          className="p-1.5 rounded hover:bg-slate-700 text-slate-300 text-sm"
+          className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm"
         >
           ↺
         </button>
@@ -125,12 +125,12 @@ export default function EmbeddedBrowser({ url, onNavigate, className = '' }: Emb
           onChange={(e) => setCurrentUrl(e.target.value)}
           onKeyDown={handleAddressKeyDown}
           placeholder="Enter URL…"
-          className="flex-1 px-2 py-1 text-xs bg-slate-900 border border-slate-600 rounded text-slate-200 focus:outline-none focus:border-blue-500"
+          className="flex-1 px-2 py-1 text-xs bg-gray-900 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
           spellCheck={false}
         />
 
         {loading && (
-          <span className="text-xs text-slate-400 animate-pulse pr-1">Loading…</span>
+          <span className="text-xs text-gray-500 animate-pulse pr-1">Loading…</span>
         )}
       </div>
 

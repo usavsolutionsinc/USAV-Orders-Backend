@@ -1,12 +1,11 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import { getOrdersChannelName, getRepairsChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
 
-const ORDERS_CHANNEL =
-  process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES || 'orders:changes';
-const REPAIRS_CHANNEL =
-  process.env.NEXT_PUBLIC_ABLY_CHANNEL_REPAIR_CHANGES || 'repair:changes';
+const ORDERS_CHANNEL = getOrdersChannelName();
+const REPAIRS_CHANNEL = getRepairsChannelName();
 
 interface UseRealtimeInvalidationOptions {
   dashboard?: boolean;

@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ClipboardList } from '@/components/Icons';
+import { Check, ChevronRight, ClipboardList } from '@/components/Icons';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import type { StationTheme } from '@/utils/staff-colors';
 import { printQueueTableUi } from '@/utils/staff-colors';
 
@@ -34,6 +35,7 @@ interface FbaBoardTableProps {
   stationTheme?: StationTheme;
   emptyMessage?: string;
   onSelectionChange?: (selected: FbaBoardItem[]) => void;
+  onDetailOpen?: (item: FbaBoardItem) => void;
 }
 
 const STATUS_SORT_ORDER: Record<string, number> = {
@@ -63,6 +65,7 @@ export function FbaBoardTable({
   stationTheme = 'green',
   emptyMessage,
   onSelectionChange,
+  onDetailOpen,
 }: FbaBoardTableProps) {
   const ui = printQueueTableUi[stationTheme];
 
@@ -206,7 +209,7 @@ export function FbaBoardTable({
   if (sortedItems.length === 0) {
     return (
       <div className="flex items-center justify-center px-4 py-12 text-center">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">
+        <p className={sectionLabel}>
           {emptyMessage || 'No items'}
         </p>
       </div>
@@ -236,12 +239,13 @@ export function FbaBoardTable({
                 isSelected ? ui.rowSelected : 'bg-white hover:bg-gray-50',
               ].join(' ')}
             >
-              {/* Left: checkbox */}
-              <div className="flex items-center justify-center">
+              {/* Left: theme-aware checkbox — design system PrintTableCheckbox */}
+              <div className="flex items-center justify-center pl-0.5">
                 <PrintTableCheckbox
                   checked={isSelected}
                   onChange={() => toggleItem(item.item_id)}
                   stationTheme={stationTheme}
+                  label={`${isSelected ? 'Deselect' : 'Select'} ${item.fnsku}`}
                 />
               </div>
 
@@ -266,12 +270,22 @@ export function FbaBoardTable({
                 </div>
               </div>
 
-              {/* Right: plan ref + fnsku (single row) */}
-              <div className="flex max-w-[min(100%,14rem)] shrink-0 flex-row flex-wrap items-center justify-end gap-x-2 gap-y-0.5">
-                <span className="whitespace-nowrap font-mono text-[10px] font-bold text-gray-500">
-                  {item.shipment_ref || '—'}
-                </span>
+              {/* Right: fnsku chip + details button */}
+              <div className="flex shrink-0 items-center gap-1.5">
                 <FnskuChip value={item.fnsku} />
+                {onDetailOpen && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDetailOpen(item);
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                    aria-label={`Details for ${item.fnsku}`}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -281,14 +295,17 @@ export function FbaBoardTable({
   );
 }
 
+const STATUS_PILL_COLOR: Record<string, string> = {
+  PLANNED: 'bg-amber-100 text-amber-700',
+  PACKING: 'bg-blue-100 text-blue-700',
+  READY_TO_GO: 'bg-emerald-100 text-emerald-700',
+  OUT_OF_STOCK: 'bg-red-100 text-red-700',
+  LABEL_ASSIGNED: 'bg-green-100 text-green-700',
+};
+
 function StatusPill({ status }: { status: string }) {
   const s = status.toUpperCase();
-  let color = 'bg-gray-100 text-gray-600';
-  if (s === 'PLANNED') color = 'bg-amber-100 text-amber-700';
-  if (s === 'PACKING') color = 'bg-blue-100 text-blue-700';
-  if (s === 'READY_TO_GO') color = 'bg-emerald-100 text-emerald-700';
-  if (s === 'OUT_OF_STOCK') color = 'bg-red-100 text-red-700';
-  if (s === 'LABEL_ASSIGNED') color = 'bg-green-100 text-green-700';
+  const color = STATUS_PILL_COLOR[s] ?? 'bg-gray-100 text-gray-600';
 
   return (
     <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${color}`}>

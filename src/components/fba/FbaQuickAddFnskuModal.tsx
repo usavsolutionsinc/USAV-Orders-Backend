@@ -5,6 +5,7 @@ import { Loader2, Plus, X } from '@/components/Icons';
 import { SidebarIntakeFormField } from '@/design-system/components';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
+import { normalizeFnsku } from '@/lib/tracking-format';
 
 export const FBA_OPEN_QUICK_ADD_FNSKU_EVENT = 'fba-open-quick-add-fnsku';
 export const FBA_FNSKU_SAVED_EVENT = 'fba-fnsku-saved';
@@ -21,9 +22,6 @@ interface SavedQuickAddFnskuDetail {
   sku: string | null;
 }
 
-function normalizeFnsku(value: string) {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
 
 export function emitOpenQuickAddFnsku(detail: OpenQuickAddFnskuDetail) {
   if (typeof window === 'undefined') return;

@@ -90,17 +90,17 @@ export default function DocxUploader() {
         ? 'text-red-400'
         : status.type === 'loading'
           ? 'text-blue-400 animate-pulse'
-          : 'text-slate-400';
+          : 'text-gray-500';
 
   return (
-    <div className="flex flex-col gap-3 p-4 bg-slate-800 rounded-xl border border-slate-700">
-      <p className="text-sm font-medium text-slate-200">Document Upload &amp; Print</p>
+    <div className="flex flex-col gap-3 p-4 bg-gray-800 rounded-xl border border-gray-700">
+      <p className="text-sm font-semibold text-gray-200">Document Upload &amp; Print</p>
 
       <label className="flex items-center gap-2 cursor-pointer">
-        <span className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors">
+        <span className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors">
           Choose file…
         </span>
-        <span className="text-xs text-slate-400">.docx, .doc, .pdf (max 20 MB)</span>
+        <span className="text-xs text-gray-500">.docx, .doc, .pdf (max 20 MB)</span>
         <input
           ref={inputRef}
           type="file"
@@ -114,7 +114,7 @@ export default function DocxUploader() {
         <button
           onClick={handlePrint}
           disabled={status.type === 'loading'}
-          className="flex items-center gap-1.5 w-fit px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
+          className="flex items-center gap-1.5 w-fit px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
         >
           Print {uploaded.fileName}
         </button>

@@ -5,12 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
+import { DateGroupHeader } from '@/design-system/components';
+import { dataValue, chipText, sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
+import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
 import { getActiveStaff, getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
 import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
 import { WorkOrderInfoStrip } from './WorkOrderInfoStrip';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { TECH_IDS } from '@/utils/staff';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from './WorkOrderAssignmentCard';
 import { SkuStockAssignPanel } from './SkuStockAssignPanel';
 import { LocalPickupTable } from './LocalPickupTable';
@@ -157,7 +161,6 @@ export function WorkOrdersDashboard() {
     };
   }, [isPanelOpen, rows, selectedId, searchParams, router]);
 
-  const TECH_IDS = [1, 2, 3, 6];
   const technicianOptions = assignmentStaff
     .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
     .map((m) => ({ id: Number(m.id), name: m.name }))
@@ -381,11 +384,11 @@ export function WorkOrdersDashboard() {
       <div className={mainStickyHeaderClass}>
         <div className={mainStickyHeaderRowClass}>
           <div className="flex min-w-0 items-center gap-3">
-            <h1 className="text-[13px] font-black uppercase tracking-tight text-slate-900">
+            <h1 className={`${dataValue} uppercase tracking-tight`}>
               {queue === 'stock_replenish' ? 'Stock Replenish' : 'Work Orders'}
             </h1>
             {queue !== 'stock_replenish' && (
-              <span className="text-[11px] font-medium text-slate-400">
+              <span className={`${chipText} text-gray-500`}>
                 {counts[queue] ?? rows.length}
                 {query ? ` · "${query}"` : ''}
               </span>
@@ -394,12 +397,12 @@ export function WorkOrdersDashboard() {
           {queue !== 'stock_replenish' && (
             <div className="flex shrink-0 items-center gap-4">
               {queue !== 'local_pickups' && unassignedRows.length > 0 && (
-                <span className="text-[10px] font-black uppercase tracking-wider text-orange-500">
+                <span className={`${sectionLabel} text-orange-500`}>
                   {unassignedRows.length} unassigned
                 </span>
               )}
               {queue !== 'local_pickups' && assignedRows.length > 0 && (
-                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600">
+                <span className={`${sectionLabel} text-emerald-600`}>
                   {assignedRows.length} assigned
                 </span>
               )}
@@ -418,11 +421,11 @@ export function WorkOrdersDashboard() {
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
           {loading ? (
             <div className="flex h-full items-center justify-center">
-              <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+              <Loader2 className="h-7 w-7 animate-spin text-gray-400" />
             </div>
           ) : rows.length === 0 ? (
             <div className="flex h-full items-center justify-center px-8 text-center">
-              <p className="text-sm font-medium italic text-gray-400 opacity-40">
+              <p className={`${sectionLabel} italic opacity-60`}>
                 No work orders in this queue
               </p>
             </div>
@@ -432,19 +435,11 @@ export function WorkOrdersDashboard() {
               {/* ── Unassigned section ── */}
               {unassignedRows.length > 0 && (
                 <>
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25, ease: 'easeOut' }}
-                    className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5"
-                  >
-                    <span className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-600">
-                      Unassigned Focus
-                    </span>
-                    <span className="text-[9px] font-black uppercase tracking-wider text-orange-700">
-                      {unassignedRows.length}
-                    </span>
-                  </motion.div>
+                  <DateGroupHeader
+                    date="Unassigned Focus"
+                    count={unassignedRows.length}
+                    variant="orange"
+                  />
 
                   {unassignedRows.map((row, i) => (
                     <WorkOrderTableRow
@@ -462,19 +457,11 @@ export function WorkOrdersDashboard() {
               {/* ── Assigned section ── */}
               {assignedRows.length > 0 && (
                 <>
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25, ease: 'easeOut' }}
-                    className="flex items-center justify-between gap-3 border-y border-slate-100 px-4 py-2.5"
-                  >
-                    <span className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
-                      Assigned Focus
-                    </span>
-                    <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700">
-                      {assignedRows.length}
-                    </span>
-                  </motion.div>
+                  <DateGroupHeader
+                    date="Assigned Focus"
+                    count={assignedRows.length}
+                    variant="emerald"
+                  />
                   {assignedRows.map((row) => (
                     <WorkOrderTableRow
                       key={row.id}
@@ -547,7 +534,7 @@ function WorkOrderTableRow({
   onClick,
   onOpenAssign,
 }: WorkOrderTableRowProps) {
-  const statusClass = STATUS_COLOR[row.status] || 'text-slate-600 bg-slate-100';
+  const statusClass = STATUS_COLOR[row.status] || 'text-gray-600 bg-gray-100';
   // SKU_STOCK only needs a tech; all other types need both tech + packer
   const isUnassigned =
     row.entityType === 'SKU_STOCK' ? !row.techId : !row.techId || !row.packerId;
@@ -555,11 +542,11 @@ function WorkOrderTableRow({
   const techName = row.techName || (row.techId ? getStaffName(row.techId) : null);
   const packerName = row.packerName || (row.packerId ? getStaffName(row.packerId) : null);
   const techTextClass = row.techId
-    ? stationThemeColors[getStaffThemeById(row.techId, 'technician')].text
-    : 'text-slate-400';
+    ? stationThemeColors[getStaffThemeById(row.techId)].text
+    : 'text-gray-400';
   const packerTextClass = row.packerId
-    ? stationThemeColors[getStaffThemeById(row.packerId, 'packer')].text
-    : 'text-slate-400';
+    ? stationThemeColors[getStaffThemeById(row.packerId)].text
+    : 'text-gray-400';
 
   // Contextual subtitle: always show tech status; packer only for non-SKU entity types
   const techLabel = techName ?? (row.techId ? `Tech #${row.techId}` : 'Tech unassigned');
@@ -572,11 +559,11 @@ function WorkOrderTableRow({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      {...framerPresence.tableRow}
+      transition={framerTransition.tableRowMount}
       data-work-order-row-id={row.id}
-      className={`border-b border-slate-100 cursor-pointer transition-colors ${
-        isSelected ? 'bg-blue-50/70' : 'hover:bg-blue-50/30'
+      className={`border-b border-gray-100 cursor-pointer transition-colors ${
+        isSelected ? 'bg-blue-50' : 'hover:bg-blue-50/50'
       }`}
     >
       {/* Main row — clickable to open panel */}
@@ -601,23 +588,23 @@ function WorkOrderTableRow({
             {/* Status badge — hide OPEN when no tech assigned (implied) */}
             {(row.techId || row.status !== 'OPEN') && (
               <span
-                className={`inline-block text-[8px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-sm ${statusClass}`}
+                className={`inline-block ${microBadge} tracking-wide px-1.5 py-0.5 rounded-sm ${statusClass}`}
               >
                 {row.status.replace('_', ' ')}
               </span>
             )}
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">
+            <span className={`${microBadge} text-gray-500 tracking-wide`}>
               {row.queueLabel}
             </span>
             {row.stockLevel != null && (
-              <span className="text-[8px] font-black text-red-500 uppercase tracking-wide">
+              <span className={`${microBadge} text-red-500 tracking-wide`}>
                 · Stock {row.stockLevel}
               </span>
             )}
           </div>
 
           {/* Title */}
-          <p className="text-[12px] font-bold text-gray-900 truncate leading-snug">
+          <p className={`${dataValue} truncate leading-snug`}>
             {row.title}
           </p>
 
@@ -625,12 +612,12 @@ function WorkOrderTableRow({
 
           {row.priority < 100 && (
             <div className="mt-0.5 flex items-center gap-2">
-              <span className="text-[8px] font-black text-red-500">P{row.priority}</span>
+              <span className={`${microBadge} text-red-500`}>P{row.priority}</span>
             </div>
           )}
 
           {/* Subtitle — tech · packer names from work_assignments + deadline */}
-          <p className="text-[10px] font-bold uppercase tracking-widest truncate text-gray-400">
+          <p className={`${sectionLabel} truncate`}>
             <span className={techTextClass}>{techLabel}</span>
             {packerLabel ? (
               <>
@@ -650,10 +637,10 @@ function WorkOrderTableRow({
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenAssign(); }}
             className={[
-              'h-8 min-w-[86px] px-3 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-all',
+              `h-8 min-w-[86px] px-3 rounded-lg ${microBadge} tracking-wider border transition-all`,
               isUnassigned
                 ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
-                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100',
+                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100',
             ].join(' ')}
           >
             {isUnassigned ? 'Assign' : 'Reassign'}

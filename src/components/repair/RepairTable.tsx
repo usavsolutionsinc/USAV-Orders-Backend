@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, X, Printer, DollarSign } from '../Icons';
 import { SourceOrderChip, TicketChip } from '../ui/CopyChip';
@@ -9,17 +10,8 @@ import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
-import { useRepairs } from '@/hooks/useRepairs';
-
-// Format phone number to 000-000-0000
-const formatPhoneNumber = (phone: string): string => {
-  if (!phone) return '';
-  const cleaned = phone.replace(/\D/g, '');
-  if (cleaned.length === 10) {
-    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-  }
-  return phone;
-};
+import { useRepairsTable } from '@/hooks/useRepairs';
+import { formatPhoneNumber } from '@/utils/phone';
 
 interface RepairTableProps {
   filter: RepairTab;
@@ -36,7 +28,7 @@ export function RepairTable({ filter }: RepairTableProps) {
   const [payingRepairId, setPayingRepairId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: repairs = [], isLoading: loading } = useRepairs(search, filter);
+  const { data: repairs = [], isLoading: loading } = useRepairsTable(search, filter);
 
   const getOrdinal = (n: number) => {
     const s = ["th", "st", "nd", "rd"];
@@ -249,7 +241,7 @@ export function RepairTable({ filter }: RepairTableProps) {
         {/* Table Content */}
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-400">
+            <div className="flex flex-col items-center justify-center py-40 gap-3 text-gray-500">
               <LoadingSpinner size="lg" className="text-blue-600" />
               <p className="text-[10px] font-black uppercase tracking-widest">Loading Repairs...</p>
             </div>
@@ -282,12 +274,12 @@ export function RepairTable({ filter }: RepairTableProps) {
                       className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
                     >
                       <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                      <p className="text-[11px] font-black text-gray-400 uppercase">Total: {records.length} Units</p>
+                      <p className="text-[11px] font-black text-gray-500 uppercase">Total: {records.length} Units</p>
                     </div>
                     {records.map((repair, index) => (
                       <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
+                        {...framerPresence.tableRow}
+                        transition={framerTransition.tableRowMount}
                         key={repair.id}
                         onClick={() => handleRowClick(repair)}
                         onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
@@ -317,21 +309,21 @@ export function RepairTable({ filter }: RepairTableProps) {
                               {repair.price ? `$${repair.price}` : '---'}
                             </div>
                             <div className="text-[10px] font-black text-gray-700 truncate uppercase tracking-tight">
-                              {(() => {
+                              {repair.customer_name || (() => {
                                 if (!repair.contact_info) return 'No Name';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[0] || 'No Name';
                               })()}
                             </div>
                             <div className="text-[9px] font-bold text-gray-500 truncate">
-                              {(() => {
+                              {formatPhoneNumber(repair.customer_phone || (() => {
                                 if (!repair.contact_info) return '';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
-                                return formatPhoneNumber(parts[1] || '');
-                              })()}
+                                return parts[1] || '';
+                              })())}
                             </div>
                             <div className="text-[8px] font-bold text-gray-900 lowercase truncate">
-                              {repair.source_tracking_number || (() => {
+                              {repair.source_tracking_number || repair.customer_email || (() => {
                                 if (!repair.contact_info) return '';
                                 const parts = repair.contact_info.split(',').map((p: string) => p.trim());
                                 return parts[2] || '';

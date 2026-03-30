@@ -1,4 +1,5 @@
-import { getCarrier, type Carrier } from '@/utils/tracking';
+import { detectCarrier, type Carrier } from '@/lib/tracking-format';
+import { classifyInput, looksLikeFnsku } from '@/lib/scan-resolver';
 import { normalizeSku } from '@/utils/sku';
 
 export type TrackingType = 'FNSKU' | 'SKU' | 'CLEAN' | 'FBA' | 'ORDERS';
@@ -15,14 +16,12 @@ export interface ScanClassification {
 
 const SKU_COLON_RE = /:/;
 const CLEAN_RE = /clean\s*(big|medium|small)/i;
-const FNSKU_RE = /^X00-/i;
 const FBA_RE = /^FBA-/i;
-const FBA_ALT_RE = /^(X0|B0)/i;
 
 export function classifyScan(input: string): ScanClassification {
   const raw = String(input || '').trim();
   const normalizedInput = raw.replace(/\s+/g, ' ').trim();
-  const carrier = getCarrier(normalizedInput);
+  const carrier = detectCarrier(normalizedInput);
 
   if (SKU_COLON_RE.test(normalizedInput)) {
     const [leftPart, ...restParts] = normalizedInput.split(':');
@@ -45,15 +44,18 @@ export function classifyScan(input: string): ScanClassification {
     return { trackingType: 'CLEAN', carrier, normalizedInput, cleanSize: size };
   }
 
-  if (FNSKU_RE.test(normalizedInput)) {
+  // Use the canonical FNSKU detector from scan-resolver
+  if (looksLikeFnsku(normalizedInput)) {
     return { trackingType: 'FNSKU', carrier, normalizedInput };
   }
 
-  if (FBA_RE.test(normalizedInput) || FBA_ALT_RE.test(normalizedInput)) {
+  if (FBA_RE.test(normalizedInput)) {
     return { trackingType: 'FBA', carrier, normalizedInput };
   }
 
-  if (carrier === 'UPS' || carrier === 'USPS' || carrier === 'FedEx') {
+  // Use classifyInput for tracking detection instead of manual carrier checks
+  const { type } = classifyInput(normalizedInput);
+  if (type === 'tracking') {
     return { trackingType: 'ORDERS', carrier, normalizedInput };
   }
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { Loader2, Search } from './Icons';
 import { FnskuChip, OrderIdChip, TrackingChip, PlatformChip, getLast4 } from './ui/CopyChip';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
@@ -61,7 +62,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
   const [searchInput, setSearchInput] = useState(String(searchParams.get('search') || ''));
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const counterColorClass = stationThemeColors[getStaffThemeById(packedBy, 'packer')].text;
+  const counterColorClass = stationThemeColors[getStaffThemeById(packedBy)].text;
   const currentSearch = String(searchParams.get('search') || '');
   const searchOpen = searchParams.get('searchOpen') === '1';
   const showSearch = searchOpen || Boolean(currentSearch);
@@ -378,8 +379,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                         });
                         return (
                           <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
+                            {...framerPresence.tableRow}
+                            transition={framerTransition.tableRowMount}
                             key={record.id}
                             onClick={() => openDetails(record)}
                             className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${
@@ -396,13 +397,13 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                                   {record.product_title || 'Unknown Product'}
                                 </div>
                               </div>
-                              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate mt-0.5 pl-4">
+                              <div className="text-[9px] font-black text-gray-500 uppercase tracking-widest truncate mt-0.5 pl-4">
                                 <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
                                   {parseInt(String(record.quantity || '1'), 10) || 1}
                                 </span> • {displayValues.condition || 'No Condition'}
                               </div>
                             </div>
-                            <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center shrink-0">
                               {showFnskuChip ? (
                                 <FnskuChip value={fnskuValue} />
                               ) : (() => {
@@ -413,7 +414,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                                       <PlatformChip
                                         label={plat}
                                         underlineClass={getOrderPlatformBorderColor(plat)}
-                                        iconClass={record.item_number ? getOrderPlatformColor(plat) : 'text-gray-300'}
+                                        iconClass={record.item_number ? getOrderPlatformColor(plat) : 'text-gray-500'}
                                         onClick={() => {
                                           const url = getExternalUrlByItemNumber(record.item_number);
                                           if (url) window.open(url, '_blank', 'noopener,noreferrer');

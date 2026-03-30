@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import TechDashboard from '@/components/TechDashboard';
+import { TechPageContent } from '@/components/tech/TechPageContent';
 
 export default async function TechPage({
   searchParams,
@@ -12,7 +12,7 @@ export default async function TechPage({
 
   return (
     <Suspense fallback={null}>
-      <TechDashboard techId={techId} />
+      <TechPageContent techId={techId} />
     </Suspense>
   );
 }

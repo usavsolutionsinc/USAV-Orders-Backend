@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Minus, Plus } from '@/components/Icons';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
 import { DeferredQtyInput } from '@/design-system/primitives';
+import { FormField } from '@/design-system/components';
+import { fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 
@@ -37,23 +39,29 @@ export function FbaPairedReviewPanel({
     ),
   );
 
-  const defaultQty = useCallback((item: FbaBoardItem) => {
-    const expected = Math.max(0, Number(item.expected_qty || 0));
-    if (expected > 0) return expected;
-    return Math.max(1, Number(item.actual_qty || 0));
-  }, []);
+  // Clean up overrides for items that left the selection
+  useEffect(() => {
+    const currentIds = new Set(selectedItems.map((i) => i.item_id));
+    setQtyOverrides((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const id of Object.keys(next)) {
+        if (!currentIds.has(Number(id))) { delete next[Number(id)]; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedItems]);
 
   const getQty = useCallback(
     (item: FbaBoardItem) => {
-      const next = Number(qtyOverrides[item.item_id]);
-      if (Number.isFinite(next)) return Math.max(0, Math.min(defaultQty(item), next));
-      return defaultQty(item);
+      const override = qtyOverrides[item.item_id];
+      if (override !== undefined) return Math.max(0, Number(override));
+      return Math.max(1, Number(item.actual_qty || 0));
     },
-    [defaultQty, qtyOverrides],
+    [qtyOverrides],
   );
 
   const adjustQty = useCallback((item: FbaBoardItem, delta: number) => {
-    const max = Math.max(1, Number(item.expected_qty || 0));
     const cur = getQty(item);
     const next = cur + delta;
     if (next <= 0) {
@@ -65,7 +73,7 @@ export function FbaPairedReviewPanel({
       });
       return;
     }
-    setQtyOverrides((prev) => ({ ...prev, [item.item_id]: Math.min(max, next) }));
+    setQtyOverrides((prev) => ({ ...prev, [item.item_id]: next }));
   }, [getQty]);
 
   const handleAttach = useCallback(async () => {
@@ -94,12 +102,12 @@ export function FbaPairedReviewPanel({
 
       // Persist selected qty for the selected board rows so combine+save is one action.
       for (const { item, selectedQty } of selectedLines) {
-        const clamped = Math.max(1, Math.min(Math.max(1, Number(item.expected_qty || 0)), selectedQty));
-        if (clamped === Number(item.expected_qty || 0)) continue;
+        const qty = Math.max(1, selectedQty);
+        if (qty === Number(item.expected_qty || 0)) continue;
         await fetch(`/api/fba/shipments/${item.shipment_id}/items/${item.item_id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expected_qty: clamped }),
+          body: JSON.stringify({ expected_qty: qty }),
         });
       }
 
@@ -132,6 +140,7 @@ export function FbaPairedReviewPanel({
       setQtyOverrides({});
       setSuccess(`Tracking attached to ${shipmentIds.length} shipment${shipmentIds.length > 1 ? 's' : ''}`);
       window.dispatchEvent(new CustomEvent('fba-print-shipped'));
+      window.dispatchEvent(new CustomEvent('fba-active-shipments-refresh'));
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (err: any) {
       setError(err?.message || 'Failed to attach tracking');
@@ -144,8 +153,7 @@ export function FbaPairedReviewPanel({
 
   return (
     <div className="space-y-2 border-b border-gray-100 px-3 py-3">
-      <label className="block">
-        <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-600">FBA Shipment ID</span>
+      <FormField label="FBA Shipment ID">
         <input
           value={amazonShipmentId}
           onChange={(e) => setAmazonShipmentId(e.target.value.toUpperCase())}
@@ -153,10 +161,9 @@ export function FbaPairedReviewPanel({
           disabled={saving}
           className={chrome.monoInput}
         />
-      </label>
+      </FormField>
 
-      <label className="block">
-        <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-600">UPS Tracking</span>
+      <FormField label="UPS Tracking">
         <input
           value={upsTracking}
           onChange={(e) => setUpsTracking(e.target.value.toUpperCase())}
@@ -164,10 +171,10 @@ export function FbaPairedReviewPanel({
           disabled={saving}
           className={chrome.monoInput}
         />
-      </label>
+      </FormField>
 
-      {error && <p className="text-[10px] font-semibold text-red-600">{error}</p>}
-      {success && <p className="text-[10px] font-semibold text-emerald-600">{success}</p>}
+      {error && <p className={`${microBadge} tracking-wider text-red-600`}>{error}</p>}
+      {success && <p className={`${microBadge} tracking-wider text-emerald-600`}>{success}</p>}
 
       <button
         type="button"
@@ -179,10 +186,11 @@ export function FbaPairedReviewPanel({
         Save Shipment + UPS
       </button>
 
-      <div className="divide-y divide-gray-200 border-t border-gray-200">
+      <div className="divide-y divide-gray-100 border-t border-gray-200">
         {selectedItems.map((item) => {
           const qty = getQty(item);
-          const max = Math.max(1, Number(item.expected_qty || 0));
+          const baseline = Math.max(1, Number(item.actual_qty || 0));
+          const overPlanned = qty > baseline;
           return (
             <FbaSelectedLineRow
               key={item.item_id}
@@ -204,7 +212,6 @@ export function FbaPairedReviewPanel({
                   <DeferredQtyInput
                     value={qty}
                     min={0}
-                    max={max}
                     onChange={(v) => {
                       if (v <= 0) {
                         window.dispatchEvent(new CustomEvent('fba-board-deselect-item', { detail: item.item_id }));
@@ -215,10 +222,14 @@ export function FbaPairedReviewPanel({
                         });
                         return;
                       }
-                      setQtyOverrides((prev) => ({ ...prev, [item.item_id]: Math.min(max, v) }));
+                      setQtyOverrides((prev) => ({ ...prev, [item.item_id]: v }));
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="h-7 w-10 border-x border-gray-200 bg-white text-center text-[13px] font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className={`h-7 w-10 border-x bg-white text-center text-[13px] font-black tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                      overPlanned
+                        ? 'border-amber-300 text-amber-700'
+                        : 'border-gray-200 text-gray-900'
+                    }`}
                   />
                   <button
                     type="button"

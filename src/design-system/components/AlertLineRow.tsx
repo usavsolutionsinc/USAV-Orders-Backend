@@ -34,7 +34,7 @@ export function AlertLineRow({
       <div className="flex items-start gap-1.5">
         <AlertTriangle className="mt-[2px] h-[14px] w-[14px] shrink-0 text-red-500" />
         <p
-          className={`whitespace-pre-wrap break-words border-b-2 border-red-500/70 pb-0.5 text-[13px] font-bold leading-[1.35] text-slate-900 ${valueClassName}`.trim()}
+          className={`whitespace-pre-wrap break-words border-b-2 border-red-500/70 pb-0.5 text-[13px] font-bold leading-[1.35] text-gray-900 ${valueClassName}`.trim()}
         >
           {value || 'N/A'}
         </p>

@@ -2,7 +2,7 @@ import pool from '../db';
 
 export type WorkType = 'TEST' | 'PACK' | 'REPAIR' | 'QA' | 'RECEIVE' | 'STOCK_REPLENISH';
 export type EntityType = 'ORDER' | 'REPAIR' | 'FBA_SHIPMENT' | 'RECEIVING' | 'SKU_STOCK';
-export type AssignmentStatus = 'ASSIGNED' | 'IN_PROGRESS' | 'DONE' | 'CANCELED';
+export type AssignmentStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'DONE' | 'CANCELED';
 
 export interface WorkAssignment {
   id: number;
@@ -35,6 +35,7 @@ export interface UpdateAssignmentParams {
   assignedPackerId?: number | null;
   completedByTechId?: number | null;
   completedByPackerId?: number | null;
+  priority?: number;
   notes?: string | null;
 }
 
@@ -69,6 +70,59 @@ export async function getAssignments(filters?: {
 
   const result = await pool.query(
     `SELECT * FROM work_assignments ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx}`,
+    params,
+  );
+  return result.rows;
+}
+
+export interface WorkAssignmentWithStaff extends WorkAssignment {
+  assigned_tech_name: string | null;
+  assigned_packer_name: string | null;
+}
+
+/**
+ * Get assignments with staff names joined.
+ */
+export async function getAssignmentsWithStaff(filters?: {
+  entityType?: EntityType;
+  entityId?: number;
+  workType?: WorkType;
+  status?: AssignmentStatus;
+  assignedTechId?: number;
+  assignedPackerId?: number;
+  includeClosed?: boolean;
+  limit?: number;
+}): Promise<WorkAssignmentWithStaff[]> {
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let idx = 1;
+
+  if (filters?.entityType) { conditions.push(`wa.entity_type = $${idx++}`); params.push(filters.entityType); }
+  if (filters?.entityId != null) { conditions.push(`wa.entity_id = $${idx++}`); params.push(filters.entityId); }
+  if (filters?.workType) { conditions.push(`wa.work_type = $${idx++}`); params.push(filters.workType); }
+  if (filters?.status) {
+    conditions.push(`wa.status = $${idx++}`); params.push(filters.status);
+  } else if (!filters?.includeClosed) {
+    conditions.push(`wa.status IN ('ASSIGNED', 'IN_PROGRESS')`);
+  }
+  if (filters?.assignedTechId != null) { conditions.push(`wa.assigned_tech_id = $${idx++}`); params.push(filters.assignedTechId); }
+  if (filters?.assignedPackerId != null) { conditions.push(`wa.assigned_packer_id = $${idx++}`); params.push(filters.assignedPackerId); }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const limit = filters?.limit ?? 100;
+  params.push(limit);
+
+  const result = await pool.query(
+    `SELECT
+       wa.*,
+       st.name AS assigned_tech_name,
+       sp.name AS assigned_packer_name
+     FROM work_assignments wa
+     LEFT JOIN staff st ON st.id = wa.assigned_tech_id
+     LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
+     ${where}
+     ORDER BY wa.priority ASC, wa.assigned_at ASC
+     LIMIT $${idx}`,
     params,
   );
   return result.rows;
@@ -183,11 +237,16 @@ export async function updateAssignment(id: number, updates: UpdateAssignmentPara
   const params: any[] = [];
   let idx = 1;
 
-  if (updates.status !== undefined) { setClauses.push(`status = $${idx++}`); params.push(updates.status); }
+  if (updates.status !== undefined) {
+    setClauses.push(`status = $${idx++}`); params.push(updates.status);
+    if (updates.status === 'IN_PROGRESS') setClauses.push(`started_at = COALESCE(started_at, NOW())`);
+    if (updates.status === 'DONE' || updates.status === 'CANCELED') setClauses.push(`completed_at = COALESCE(completed_at, NOW())`);
+  }
   if (updates.assignedTechId !== undefined) { setClauses.push(`assigned_tech_id = $${idx++}`); params.push(updates.assignedTechId); }
   if (updates.assignedPackerId !== undefined) { setClauses.push(`assigned_packer_id = $${idx++}`); params.push(updates.assignedPackerId); }
   if (updates.completedByTechId !== undefined) { setClauses.push(`completed_by_tech_id = $${idx++}`); params.push(updates.completedByTechId); }
   if (updates.completedByPackerId !== undefined) { setClauses.push(`completed_by_packer_id = $${idx++}`); params.push(updates.completedByPackerId); }
+  if (updates.priority !== undefined) { setClauses.push(`priority = $${idx++}`); params.push(updates.priority); }
   if (updates.notes !== undefined) { setClauses.push(`notes = $${idx++}`); params.push(updates.notes); }
 
   params.push(id);

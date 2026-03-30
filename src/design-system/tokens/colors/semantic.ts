@@ -89,6 +89,17 @@ export const semanticColors = {
     warning: baseColors.orange[500],
     danger: baseColors.red[500],
   },
+  /** Item condition color mapping — OrderCard, FbaItemCard, RepairCard */
+  condition: {
+    /** Default / used condition */
+    used: baseColors.gray[900],
+    /** New items */
+    new: baseColors.yellow[500],
+    /** Parts only */
+    parts: '#92400E',
+    /** Qty highlight when >= 2 */
+    quantity: baseColors.yellow[500],
+  },
 } as const;
 
 export type SemanticColors = typeof semanticColors;

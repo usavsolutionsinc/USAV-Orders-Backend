@@ -145,8 +145,8 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
       <div className={sidebarHeaderBandClass}>
         <div className="flex min-h-[44px] items-center justify-between gap-3 px-3">
           <div className="min-w-0 flex items-baseline gap-2">
-            <p className="text-[12px] font-semibold tracking-tight text-slate-950">{missingCount}</p>
-            <p className="truncate text-[11px] font-medium tracking-tight text-slate-500">
+            <p className="text-[12px] font-semibold tracking-tight text-gray-950">{missingCount}</p>
+            <p className="truncate text-[11px] font-semibold tracking-tight text-gray-500">
               {missingCount === 1 ? 'order' : 'orders'} without a manual
             </p>
           </div>
@@ -154,7 +154,7 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
             type="button"
             onClick={() => setLastRefresh((n) => n + 1)}
             disabled={loading}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 disabled:opacity-40"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-40"
             title="Refresh"
           >
             <motion.div

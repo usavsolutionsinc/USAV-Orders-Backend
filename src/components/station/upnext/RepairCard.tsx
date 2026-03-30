@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { framerPresence, framerTransition, cardTitle, fieldLabel, dataValue, chipText } from '@/design-system';
 import { Check, ChevronDown, Settings } from '@/components/Icons';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
@@ -14,8 +15,7 @@ import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/compon
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { RepairQueueItem } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';
-
-const TECH_IDS = [1, 2, 3, 6];
+import { TECH_IDS } from '@/utils/staff';
 
 function buildWorkOrderRow(repair: RepairQueueItem): WorkOrderRow {
   return {
@@ -219,10 +219,8 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
       <motion.div
         layout
         key={`repair-${repair.repairId}`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        {...framerPresence.upNextRow}
+        transition={framerTransition.upNextRowMount}
         onClick={onToggleExpand}
         className={`cursor-pointer border-b-2 px-0 py-2.5 transition-colors ${
           isUnassigned
@@ -247,6 +245,9 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <span className={`${chipText} text-gray-900 px-1.5 py-0.5 rounded border border-gray-300`}>
+              #{ticketShort}
+            </span>
             <PlatformExternalChip
               orderId={skuValue}
               accountSource={null}
@@ -255,7 +256,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
             />
             <motion.span
               animate={{ rotate: isExpanded ? 180 : 0 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              transition={framerTransition.upNextChevron}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(251,146,60,0.16)]"
             >
               <ChevronDown className="w-4 h-4" />
@@ -265,15 +266,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
 
         {/* ── Body ── */}
         <div className="px-3">
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[13px] font-black text-gray-900">1</span>
-            </div>
-            <span className="text-[13px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
-              #{ticketShort}
-            </span>
-          </div>
-          <h4 className="text-base font-black text-gray-900 leading-tight">
+          <h4 className={cardTitle}>
             {repair.productTitle || 'Unknown Product'}
           </h4>
         </div>
@@ -328,10 +321,8 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
           <AnimatePresence initial={false}>
             {showOosInput && (
               <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                {...framerPresence.collapseHeight}
+                transition={framerTransition.upNextCollapse}
                 className="overflow-hidden"
               >
                 <OutOfStockField
@@ -350,10 +341,8 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
           <AnimatePresence initial={false}>
             {showRepairedInput && (
               <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                {...framerPresence.upNextRow}
+                transition={framerTransition.upNextRowMount}
                 className="overflow-hidden pt-0.5"
               >
                 <div className="flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50/40 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),inset_0_0_0_1px_rgba(16,185,129,0.06)]">
@@ -394,30 +383,28 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
           {isExpanded && (
             <motion.div
               key="expanded-repair"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              {...framerPresence.collapseHeight}
+              transition={framerTransition.upNextCollapse}
               className="overflow-hidden"
             >
               <div className="mt-2.5 border-t border-orange-200 px-3 pt-2.5">
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                <div className={`grid grid-cols-2 gap-2 ${fieldLabel}`}>
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Customer</div>
-                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                    <div className="mb-1 text-gray-500">Customer</div>
+                    <div className={`${dataValue} text-[11px] normal-case tracking-normal break-words`}>
                       {customerName || 'Unknown'}
                     </div>
                   </div>
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Phone / Serial</div>
-                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                    <div className="mb-1 text-gray-500">Phone / Serial</div>
+                    <div className={`${dataValue} text-[11px] normal-case tracking-normal break-words`}>
                       {customerPhone || repair.serialNumber || 'None'}
                     </div>
                   </div>
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Assigned Tech</div>
+                    <div className="mb-1 text-gray-500">Assigned Tech</div>
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                      <span className={`${dataValue} text-[11px] normal-case tracking-normal break-words`}>
                         {repair.techName || (isUnassigned ? 'Unassigned' : 'Unknown')}
                       </span>
                       <button
@@ -430,8 +417,8 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
                     </div>
                   </div>
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Repair ID</div>
-                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                    <div className="mb-1 text-gray-500">Repair ID</div>
+                    <div className={`${dataValue} text-[11px] normal-case tracking-normal break-words`}>
                       {repair.repairId != null ? String(repair.repairId) : 'Unknown'}
                     </div>
                   </div>

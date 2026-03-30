@@ -53,7 +53,7 @@ export function AssignmentOverlayCard({
     : 'max-h-[min(92vh,860px)]';
 
   const sectionShell = [
-    'flex min-h-0 flex-col overflow-hidden rounded-[28px] border border-slate-300/70 bg-white shadow-[0_28px_72px_rgba(15,23,42,0.22)]',
+    'flex min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-300/70 bg-white shadow-[0_28px_72px_rgba(15,23,42,0.22)]',
     maxHeightClass,
     widthClassName,
     className,
@@ -63,11 +63,11 @@ export function AssignmentOverlayCard({
 
   const headerBlock = (
     <header
-      className={`shrink-0 border-b border-slate-400/20 px-4 py-3 ${showHeaderGradient ? 'bg-[linear-gradient(180deg,#2563EB,#3B82F6)] text-white' : ''} ${headerClassName}`.trim()}
+      className={`shrink-0 border-b border-gray-400/20 px-4 py-3 ${showHeaderGradient ? 'bg-[linear-gradient(180deg,#2563EB,#3B82F6)] text-white' : ''} ${headerClassName}`.trim()}
     >
       {headerEyebrow ? (
         <div
-          className={`mb-1.5 w-full min-w-0 ${showHeaderGradient ? 'text-blue-100' : 'text-slate-600'}`.trim()}
+          className={`mb-1.5 w-full min-w-0 ${showHeaderGradient ? 'text-blue-100' : 'text-gray-600'}`.trim()}
         >
           {headerEyebrow}
         </div>
@@ -77,15 +77,15 @@ export function AssignmentOverlayCard({
       >
         <div className="min-w-0 flex-1">
           {!headerEyebrow ? (
-            <div className={`${showHeaderGradient ? 'text-blue-100' : 'text-slate-600'}`.trim()}>
-              <p className={`truncate text-[9px] font-black uppercase tracking-[0.10rem] ${showHeaderGradient ? 'text-blue-100' : 'text-slate-500'}`.trim()}>
+            <div className={`${showHeaderGradient ? 'text-blue-100' : 'text-gray-600'}`.trim()}>
+              <p className={`truncate text-[9px] font-black uppercase tracking-[0.10rem] ${showHeaderGradient ? 'text-blue-100' : 'text-gray-500'}`.trim()}>
                 Assignment
               </p>
             </div>
           ) : null}
           {title != null ? (
             <h3
-              className={`text-[22px] font-black leading-[1.1] tracking-tight ${showHeaderGradient ? 'text-white' : 'text-slate-950'} ${!headerEyebrow ? 'mt-1' : ''}`.trim()}
+              className={`text-[22px] font-black leading-[1.1] tracking-tight ${showHeaderGradient ? 'text-white' : 'text-gray-950'} ${!headerEyebrow ? 'mt-1' : ''}`.trim()}
             >
               {title}
             </h3>
@@ -102,7 +102,7 @@ export function AssignmentOverlayCard({
           <button
             type="button"
             onClick={onClose}
-            className={`mt-0.5 shrink-0 transition-colors duration-100 ease-out hover:opacity-100 active:scale-95 ${showHeaderGradient ? 'text-white/80 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`.trim()}
+            className={`mt-0.5 shrink-0 transition-colors duration-100 ease-out hover:opacity-100 active:scale-95 ${showHeaderGradient ? 'text-white/80 hover:text-white' : 'text-gray-500 hover:text-gray-900'}`.trim()}
             aria-label="Close"
             title="Close"
           >
@@ -111,7 +111,7 @@ export function AssignmentOverlayCard({
         ) : null}
       </div>
       {meta ? (
-        <div className={`text-[9px] font-black uppercase tracking-[0.08em] ${showHeaderGradient ? 'text-blue-100' : 'text-slate-500'}`.trim()}>
+        <div className={`text-[9px] font-black uppercase tracking-[0.08em] ${showHeaderGradient ? 'text-blue-100' : 'text-gray-500'}`.trim()}>
           {meta}
         </div>
       ) : null}
@@ -128,7 +128,7 @@ export function AssignmentOverlayCard({
       <div className={bodyClasses}>{children}</div>
 
       {footer ? (
-        <footer className="shrink-0 border-t border-slate-400/20 px-4 py-3">
+        <footer className="shrink-0 border-t border-gray-400/20 px-4 py-3">
           {footer}
         </footer>
       ) : null}
@@ -141,7 +141,7 @@ export function AssignmentOverlayCard({
         type="button"
         aria-label="Close overlay"
         onClick={onClose}
-        className="fixed inset-0 z-[1200] bg-slate-950/55 backdrop-blur-[4px]"
+        className="fixed inset-0 z-[1200] bg-gray-950/55 backdrop-blur-[4px]"
       />
       {isBottom ? (
         <div className="pointer-events-none fixed inset-0 z-[1201] flex items-end justify-center p-3 pb-[max(1rem,5vh)] sm:p-4 sm:pb-[max(1rem,5vh)]">

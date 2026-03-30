@@ -6,7 +6,8 @@
  * Category files (internal):
  *   _lifecycle.ts  useMount, useUnmount, usePrevious, useDebounce, useThrottle, useIsMounted
  *   _storage.ts    useLocalStorage, useSessionStorage
- *   _ui.ts         useScrollPosition, useWindowSize, useToggle, useInView, useClickOutside, useMediaQuery
+ *   _ui.ts         useScrollPosition, useWindowSize, useToggle, useInView, useClickOutside, useMediaQuery, useIsMobile, useDeviceMode
+ *   useKeyboard.ts useKeyboard (mobile virtual keyboard detection via Visual Viewport API)
  *   _data.ts       useFetch, useMutation
  *   _auth.ts       useAuthToken, usePermissions
  *   _cache.ts      useCache
@@ -30,7 +31,8 @@ export { useInfiniteScroll } from './useInfiniteScroll';
 export type { InfiniteScrollOptions, InfiniteScrollResult } from './useInfiniteScroll';
 
 export { useStationTheme } from './useStationTheme';
-export type { ThemeColor, ThemeColors } from './useStationTheme';
+export type { StationTheme, StationThemeColors, StationInputThemeClasses, ResolvedTheme } from './useStationTheme';
+
 
 export { useStationHistory } from './useStationHistory';
 export type {
@@ -67,6 +69,15 @@ export type {
 export { useUnifiedKeyboard } from './useUnifiedKeyboard';
 export type { UnifiedKeyboardTarget } from './useUnifiedKeyboard';
 
+export { useKeyboard } from './useKeyboard';
+export type { KeyboardState } from './useKeyboard';
+
+export { useBarcodeScanner } from './useBarcodeScanner';
+export type { BarcodeScanStatus } from './useBarcodeScanner';
+
+export { usePanelActions } from './usePanelActions';
+export type { PanelAction, PanelActionContext, PanelEntityType } from './usePanelActions';
+
 export { useAblyChannel } from './useAblyChannel';
 export { useExternalItemUrl } from './useExternalItemUrl';
 export { useLast8TrackingSearch } from './useLast8TrackingSearch';
@@ -76,7 +87,7 @@ export type { PackerRecord, UsePackerLogsOptions } from './usePackerLogs';
 export { useRealtimeInvalidation } from './useRealtimeInvalidation';
 export { useReceivingDetailForm } from './useReceivingDetailForm';
 export {
-  useRepairs as useRepairsTable,
+  useRepairsTable,
 } from './useRepairs';
 export { useShippedTableData } from './useShippedTableData';
 export { useTechLogs } from './useTechLogs';

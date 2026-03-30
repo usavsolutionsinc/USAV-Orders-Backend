@@ -3,7 +3,7 @@
 import { useCallback, useRef, type RefObject, type WheelEvent } from 'react';
 import { motion } from 'framer-motion';
 
-export type HorizontalSliderTone = 'zinc' | 'yellow' | 'emerald' | 'red' | 'blue';
+export type HorizontalSliderTone = 'zinc' | 'yellow' | 'emerald' | 'red' | 'blue' | 'orange' | 'purple';
 
 export type HorizontalSliderItem = {
   id: string;
@@ -18,11 +18,29 @@ const FBA_TONE: Record<
   { activeBg: string; activeText: string; ring: string }
 > = {
   zinc: { activeBg: 'bg-zinc-100', activeText: 'text-zinc-900', ring: 'ring-zinc-300' },
-  yellow: { activeBg: 'bg-yellow-50', activeText: 'text-yellow-700', ring: 'ring-yellow-300' },
-  emerald: { activeBg: 'bg-emerald-50', activeText: 'text-emerald-700', ring: 'ring-emerald-300' },
-  red: { activeBg: 'bg-red-50', activeText: 'text-red-700', ring: 'ring-red-300' },
-  blue: { activeBg: 'bg-blue-50', activeText: 'text-blue-700', ring: 'ring-blue-300' },
+  yellow: { activeBg: 'bg-yellow-100', activeText: 'text-black', ring: 'ring-yellow-300' },
+  emerald: { activeBg: 'bg-emerald-100', activeText: 'text-black', ring: 'ring-emerald-300' },
+  red: { activeBg: 'bg-red-100', activeText: 'text-black', ring: 'ring-red-300' },
+  blue: { activeBg: 'bg-blue-100', activeText: 'text-black', ring: 'ring-blue-300' },
+  orange: { activeBg: 'bg-orange-100', activeText: 'text-black', ring: 'ring-orange-300' },
+  purple: { activeBg: 'bg-purple-100', activeText: 'text-black', ring: 'ring-purple-300' },
 };
+
+/* ── Preset filter items (single source of truth for tones) ── */
+
+export const SLIDER_PRESETS = {
+  all:        { id: 'all',      label: 'All',       tone: 'blue'    } as HorizontalSliderItem,
+  mustGo:     { id: 'must_go',  label: 'Must Go',   tone: 'red'     } as HorizontalSliderItem,
+  newest:     { id: 'newest',   label: 'Newest',    tone: 'emerald' } as HorizontalSliderItem,
+  oldest:     { id: 'oldest',   label: 'Oldest',    tone: 'zinc'    } as HorizontalSliderItem,
+  amazon:     { id: 'amazon',   label: 'Amazon',    tone: 'orange'  } as HorizontalSliderItem,
+  ebay:       { id: 'ebay',     label: 'eBay',      tone: 'yellow'  } as HorizontalSliderItem,
+  ecwid:      { id: 'ecwid',    label: 'Ecwid',     tone: 'blue'    } as HorizontalSliderItem,
+  pending:    { id: 'all',      label: 'Pending',   tone: 'purple'  } as HorizontalSliderItem,
+  repair:     { id: 'all',      label: 'All',       tone: 'orange'  } as HorizontalSliderItem,
+  stock:      { id: 'all',      label: 'All',       tone: 'red'     } as HorizontalSliderItem,
+  receiving:  { id: 'all',      label: 'All',       tone: 'emerald' } as HorizontalSliderItem,
+} as const;
 
 function useHorizontalWheelScroll(ref: RefObject<HTMLDivElement | null>) {
   return useCallback(
@@ -94,8 +112,8 @@ export function HorizontalButtonSlider({
                   onClick={() => onChange(item.id)}
                   className={`snap-start whitespace-nowrap rounded-full border font-black uppercase transition-all ${sizeCls} ${
                     isActive
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                      ? 'border-gray-900 bg-gray-900 text-white'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
                   {item.label}

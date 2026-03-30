@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Plus } from '@/components/Icons';
 import { motion } from 'framer-motion';
+import { microBadge } from '@/design-system/tokens/typography/presets';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 
@@ -111,7 +112,7 @@ export function FbaAddToShipmentPanel({
           >
             <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">Add FNSKU</h2>
             {open ? (
-              <p className={`text-[8px] font-bold uppercase tracking-widest ${chrome.sectionLabel}`}>Manual entry ready</p>
+              <p className={`${microBadge} tracking-widest ${chrome.sectionLabel}`}>Manual entry ready</p>
             ) : null}
           </button>
           <motion.span

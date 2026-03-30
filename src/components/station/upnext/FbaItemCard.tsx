@@ -3,6 +3,7 @@
 import { createPortal } from 'react-dom';
 import { useEffect, useState, type MouseEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { framerPresence, framerTransition, cardTitle, fieldLabel, chipText, dataValue, monoValue } from '@/design-system';
 import { Check, ChevronDown, Copy, ExternalLink, Package, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { getPresentStaffForToday } from '@/lib/staffCache';
@@ -10,8 +11,8 @@ import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/compon
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { type FBAQueueItem } from './upnext-types';
-
-const TECH_IDS = [1, 2, 3, 6];
+import { TECH_IDS } from '@/utils/staff';
+import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
 
 interface StaffOption {
   id: number;
@@ -34,6 +35,13 @@ function getAsinUrl(value: string | null | undefined) {
   const asin = String(value || '').trim();
   if (!asin) return null;
   return `https://www.amazon.com/dp/${encodeURIComponent(asin)}`;
+}
+
+function getFbaConditionColor(condition: string | null | undefined) {
+  const c = (condition || '').toLowerCase().trim();
+  if (c.includes('new')) return 'text-yellow-500';
+  if (c.includes('part')) return 'text-amber-800';
+  return 'text-black';
 }
 
 function getConditionLabel(value: string | null | undefined) {
@@ -176,9 +184,8 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
     <>
       <motion.div
         key={`fba-item-${item.item_id}`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+        {...framerPresence.upNextRow}
+        transition={framerTransition.upNextRowMount}
         onClick={onToggleExpand}
         className={`border-b-2 px-0 py-3 transition-colors relative cursor-pointer ${
           isExpanded
@@ -200,9 +207,12 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
             <span className="text-[14px] font-black tabular-nums text-blue-700">{daysLate}</span>
           </div>
           <div className="flex items-center gap-2">
+            <span className={`${chipText} text-gray-900 px-1.5 py-0.5 rounded border border-gray-300`}>
+              #{getLast4(fnsku)}
+            </span>
             <motion.span
               animate={{ rotate: isExpanded ? 180 : 0 }}
-              transition={{ duration: 0.18 }}
+              transition={framerTransition.upNextChevron}
               className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-pink-200 text-pink-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(236,72,153,0.16)]"
             >
               <ChevronDown className="w-4 h-4" />
@@ -211,51 +221,41 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
         </div>
 
         <div className="px-3">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[13px] font-black text-gray-900">{qtyLabel}</span>
-              <span className="text-[13px] font-black uppercase tracking-wider text-gray-500">-</span>
-              <span className="text-[13px] font-black uppercase truncate text-gray-900">
-                {conditionLabel}
-              </span>
-            </div>
-            <span className="text-[13px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
-              #{getLast4(fnsku)}
-            </span>
-          </div>
-          <h4 className="text-base font-black text-gray-900 leading-tight">{item.product_title || `FNSKU • ${getLast4(fnsku)}`}</h4>
+          <h4 className={cardTitle}>
+            <InlineQtyPrefix quantity={qtyLabel} />
+            <span className={getFbaConditionColor(item.condition)}>{conditionLabel}</span>
+            {' '}{item.product_title || `FNSKU • ${getLast4(fnsku)}`}
+          </h4>
         </div>
 
         <AnimatePresence initial={false}>
           {isExpanded && (
             <motion.div
               key="expanded-fba-item"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
+              {...framerPresence.collapseHeight}
+              transition={framerTransition.upNextCollapse}
               className="overflow-hidden"
             >
               <div className="mt-3 border-t border-purple-100 px-3 pt-3" onClick={(e) => e.stopPropagation()}>
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                <div className={`grid grid-cols-2 gap-2 ${fieldLabel}`}>
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Pending Group</div>
-                    <div className="text-[11px] font-mono text-gray-900 normal-case tracking-normal break-words">
+                    <div className="mb-1 text-gray-500">Pending Group</div>
+                    <div className={`${monoValue} text-[11px] normal-case tracking-normal break-words`}>
                       {pendingTitle || '—'}
                     </div>
                   </div>
 
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Shipment row ID</div>
-                    <div className="text-[11px] tabular-nums text-gray-900 normal-case tracking-normal">
+                    <div className="mb-1 text-gray-500">Shipment row ID</div>
+                    <div className={`${dataValue} text-[11px] tabular-nums normal-case tracking-normal`}>
                       {item.shipment_id}
                     </div>
                   </div>
 
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">ASIN</div>
+                    <div className="mb-1 text-gray-500">ASIN</div>
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                      <div className={`min-w-0 ${dataValue} text-[11px] normal-case tracking-normal break-words`}>
                         {asin || 'Not available'}
                       </div>
                       <div className="flex items-center gap-1">
@@ -285,9 +285,9 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
                   </div>
 
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Tech</div>
+                    <div className="mb-1 text-gray-500">Tech</div>
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] text-gray-900 normal-case tracking-normal">
+                      <span className={`${dataValue} text-[11px] normal-case tracking-normal`}>
                         {item.assigned_tech_name || 'Unassigned'}
                       </span>
                       <button
@@ -301,8 +301,8 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
                   </div>
 
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">FNSKU</div>
-                    <div className="text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                    <div className="mb-1 text-gray-500">FNSKU</div>
+                    <div className={`${dataValue} text-[11px] normal-case tracking-normal break-words`}>
                       {fnsku || 'Not available'}
                     </div>
                   </div>

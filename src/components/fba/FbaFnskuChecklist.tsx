@@ -9,11 +9,13 @@ import { emitOpenQuickAddFnsku, FBA_FNSKU_SAVED_EVENT } from '@/components/fba/F
 import {
   fbaSidebarThemeChrome,
   getStaffThemeById,
-  getStaffThemeByName,
   stationThemeColors,
   fbaFnskuChecklistChrome,
   printQueueTableUi,
 } from '@/utils/staff-colors';
+import { sectionLabel, tableHeader, microBadge } from '@/design-system/tokens/typography/presets';
+import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
+import { getStaffIdByName } from '@/utils/staff';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { enrichFromApi } from '@/components/fba/table/utils';
 import type { EnrichedItem, PrintSelectionPayload, ShipmentTrackingEntry } from '@/components/fba/table/types';
@@ -202,7 +204,7 @@ const STATUS_CFG: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_CFG[status] ?? 'bg-zinc-100 text-zinc-500';
   return (
-    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide ${cls}`}>
+    <span className={`shrink-0 rounded px-1.5 py-0.5 ${microBadge} ${cls}`}>
       {status.replace(/_/g, ' ')}
     </span>
   );
@@ -272,13 +274,11 @@ function todayLabel() {
 function staffRolePillClass(
   staffId: number | null | undefined,
   displayName: string | null | undefined,
-  role: 'technician' | 'packer'
 ): string {
-  const id = staffId != null ? Number(staffId) : NaN;
-  const hasValidId = Number.isFinite(id) && id > 0;
-  const theme = hasValidId
-    ? getStaffThemeById(id, role)
-    : getStaffThemeByName(String(displayName || '').trim(), role);
+  const resolvedId = (staffId != null && Number.isFinite(Number(staffId)) && Number(staffId) > 0)
+    ? Number(staffId)
+    : getStaffIdByName(String(displayName || ''));
+  const theme = getStaffThemeById(resolvedId);
   const c = stationThemeColors[theme];
   return `${c.light} ${c.text} border ${c.border}`;
 }
@@ -299,7 +299,7 @@ export function FbaFnskuChecklist({
   const isTodayMode = !planId && fnskus.length === 0;
   const selectionOwnerRef = useRef(`fba-plan-checklist-${Math.random().toString(36).slice(2)}`);
 
-  const stationTheme = useMemo(() => getStaffThemeById(staffId, staffRole), [staffId, staffRole]);
+  const stationTheme = useMemo(() => getStaffThemeById(staffId), [staffId]);
   const themeColors = stationThemeColors[stationTheme];
   const checklistChrome = fbaFnskuChecklistChrome[stationTheme];
   const sidebarChrome = fbaSidebarThemeChrome[stationTheme];
@@ -551,26 +551,6 @@ export function FbaFnskuChecklist({
     [planItems]
   );
 
-  // ── Bulk-assign event (fired by sidebar) ─────────────────────────────────
-  useEffect(() => {
-    const h = (e: Event) => {
-      const staffId = (e as CustomEvent).detail?.staffId;
-      if (!staffId || !activePlanId) return;
-      const planned = planItems.filter((i) => i.status === 'PLANNED' || i.status === 'PACKING');
-      Promise.all(
-        planned.map((item) =>
-          fetch(`/api/fba/shipments/${activePlanId}/items/${item.id}`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ staff_id: staffId }),
-          })
-        )
-      ).then(() => {
-        if (isTodayMode) loadTodayPlan(); else loadPlanItems();
-      }).catch(() => {});
-    };
-    window.addEventListener('fba-bulk-assign', h);
-    return () => window.removeEventListener('fba-bulk-assign', h);
-  }, [activePlanId, planItems, isTodayMode, loadTodayPlan, loadPlanItems]);
 
   // ── Move item to print queue (with undo toast) ───────────────────────────
   const handleMoveToPrint = useCallback((itemId: number) => {
@@ -865,7 +845,7 @@ export function FbaFnskuChecklist({
           className={`flex items-start justify-between gap-3 bg-white/90 px-4 py-4 backdrop-blur-sm ${checklistChrome.headerBarDivider}`}
         >
           <div className="min-w-0">
-            <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${themeColors.text}`}>{headerEyebrow}</p>
+            <p className={`${tableHeader} ${themeColors.text}`}>{headerEyebrow}</p>
             <h2 className="mt-2 text-[15px] font-black tracking-tight text-zinc-900">{headerTitle}</h2>
             <p className="mt-1 max-w-md text-[11px] leading-5 text-zinc-500">{headerSubtitle}</p>
           </div>
@@ -949,11 +929,11 @@ export function FbaFnskuChecklist({
               />
             ) : null}
           </div>
-          <p className="min-w-0 flex-1 text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">Item</p>
+          <p className={`min-w-0 flex-1 ${tableHeader}`}>Item</p>
           <div className="flex items-center gap-2 pr-0.5">
-            <p className="w-16 text-right text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">FNSKU</p>
-            <p className="w-24 text-center text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">Units</p>
-            {isViewMode && <p className="w-[7.5rem] text-center text-[9px] font-black uppercase tracking-[0.16em] text-zinc-400">Print queue</p>}
+            <p className={`w-16 text-right ${tableHeader}`}>FNSKU</p>
+            <p className={`w-24 text-center ${tableHeader}`}>Units</p>
+            {isViewMode && <p className={`w-[7.5rem] text-center ${tableHeader}`}>Print queue</p>}
           </div>
           {isViewMode && sidebarSelectionIds.size > 0 ? (
             <p className={`ml-auto shrink-0 ${sidebarChrome.selectedCountText}`}>
@@ -971,7 +951,7 @@ export function FbaFnskuChecklist({
           ) : (isDraftMode ? draftItems.length === 0 : filteredPlanItems.length === 0) ? (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
               <div
-                className={`flex h-14 w-14 items-center justify-center rounded-3xl border-2 ${themeColors.border} ${themeColors.light}`}
+                className={`flex h-14 w-14 items-center justify-center rounded-2xl border-2 ${themeColors.border} ${themeColors.light}`}
               >
                 <Package className={`h-6 w-6 ${printUi.toolbarAccent}`} />
               </div>
@@ -1019,18 +999,18 @@ export function FbaFnskuChecklist({
                       </p>
                       {item.alreadyInPlan && (
                         <span
-                          className={`shrink-0 rounded-full border-2 px-2 py-1 text-[8px] font-black uppercase tracking-[0.14em] ${themeColors.border} ${themeColors.light} ${themeColors.text}`}
+                          className={`shrink-0 rounded-full border-2 px-2 py-1 ${microBadge} tracking-[0.14em] ${themeColors.border} ${themeColors.light} ${themeColors.text}`}
                         >
                           In today&apos;s plan
                         </span>
                       )}
                       {!item.found && !item.alreadyInPlan && (
-                        <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[8px] font-black uppercase tracking-[0.14em] text-amber-700">
+                        <span className={`shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 ${microBadge} tracking-[0.14em] text-amber-700`}>
                           Needs details
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 truncate text-[10px] font-medium text-zinc-500">
+                    <div className="mt-1 truncate text-[10px] font-semibold text-zinc-500">
                       {item.found
                         ? [item.asin].filter(Boolean).join(' · ') || 'No metadata'
                         : 'You can still add this now and complete product details later.'}
@@ -1120,7 +1100,7 @@ export function FbaFnskuChecklist({
                           </p>
                           <StatusBadge status={item.status} />
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] font-medium text-zinc-500">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] font-semibold text-zinc-500">
                           {item.asin && <span className="truncate">{item.asin}</span>}
                           {(item.ready_by_name || item.verified_by_name) && <span className="shrink-0 opacity-40">·</span>}
                           {item.ready_by_name && (
@@ -1128,7 +1108,6 @@ export function FbaFnskuChecklist({
                               className={`shrink-0 truncate rounded-full px-2 py-0.5 ${staffRolePillClass(
                                 item.ready_by_staff_id,
                                 item.ready_by_name,
-                                'technician'
                               )}`}
                               title="Tech"
                             >
@@ -1141,7 +1120,6 @@ export function FbaFnskuChecklist({
                               className={`shrink-0 truncate rounded-full px-2 py-0.5 ${staffRolePillClass(
                                 item.verified_by_staff_id,
                                 item.verified_by_name,
-                                'packer'
                               )}`}
                               title="Packer"
                             >
@@ -1191,7 +1169,7 @@ export function FbaFnskuChecklist({
                           disabled={isCompleted}
                           onClick={() => handleMoveToPrint(item.id)}
                           title="Move to print queue"
-                          className={`flex h-7 w-[7.5rem] items-center justify-center gap-1 rounded-full border text-[8px] font-black uppercase tracking-[0.14em] transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                          className={`flex h-7 w-[7.5rem] items-center justify-center gap-1 rounded-full border ${microBadge} tracking-[0.14em] transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
                             isCompleted
                               ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
                               : 'border-zinc-200 bg-white text-zinc-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700'
@@ -1210,7 +1188,7 @@ export function FbaFnskuChecklist({
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                          transition={framerTransition.tableRowMount}
                           className="overflow-hidden"
                         >
                           <div className="mx-4 mb-3 flex items-end gap-2 rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2">
@@ -1220,7 +1198,7 @@ export function FbaFnskuChecklist({
                               placeholder="Add a note for this item…"
                               rows={2}
                               autoFocus
-                              className="flex-1 resize-none bg-transparent text-[10px] font-medium leading-5 text-zinc-700 outline-none placeholder:text-zinc-400"
+                              className="flex-1 resize-none bg-transparent text-[10px] font-semibold leading-5 text-zinc-700 outline-none placeholder:text-zinc-400"
                             />
                             <button
                               type="button"

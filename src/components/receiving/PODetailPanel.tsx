@@ -80,8 +80,8 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
   if (successId) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
-        <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
-          <Check className="w-7 h-7 text-green-600" />
+        <div className="h-14 w-14 rounded-full bg-green-100 flex items-center justify-center">
+          <Check className="h-7 w-7 text-green-600" />
         </div>
         <p className="text-[13px] font-black text-gray-800 uppercase tracking-wide">Items Received</p>
         <p className="text-[11px] text-gray-500">
@@ -119,9 +119,9 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-600 transition-colors"
         >
-          <X className="w-4 h-4" />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
@@ -129,14 +129,14 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
       <div className="flex-1 overflow-y-auto">
         {lines.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center opacity-30">
-            <Package className="w-10 h-10 mb-3" />
+            <Package className="h-10 w-10 mb-3" />
             <p className="text-[10px] font-black uppercase tracking-widest">No line items</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
             <div className="grid grid-cols-[1fr_80px_90px_110px] gap-2 px-4 py-1.5 bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
               {['Item', 'Expected', 'Receive', 'Condition'].map((h) => (
-                <span key={h} className="text-[8px] font-black uppercase tracking-widest text-gray-400">{h}</span>
+                <span key={h} className="text-[8px] font-black uppercase tracking-widest text-gray-500">{h}</span>
               ))}
             </div>
 
@@ -152,7 +152,7 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
                     <p className="text-[11px] font-semibold text-gray-800 truncate leading-tight">
                       {line.name || line.item_id}
                     </p>
-                    {line.sku && <p className="text-[9px] font-mono text-gray-400 mt-0.5">{line.sku}</p>}
+                    {line.sku && <p className="text-[9px] font-mono text-gray-500 mt-0.5">{line.sku}</p>}
                   </div>
 
                   <div className="text-center">
@@ -192,7 +192,7 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
       <div className="border-t border-gray-100 px-4 py-3 bg-white">
         <div className="flex items-center gap-4 mb-3">
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Channel</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Channel</span>
             <select
               value={targetChannel}
               onChange={(e) => setTargetChannel(e.target.value)}
@@ -207,10 +207,10 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
           <label className="flex items-center gap-1.5 cursor-pointer select-none">
             <div
               onClick={() => setNeedsTest((v) => !v)}
-              className={`w-8 h-4 rounded-full transition-colors relative ${needsTest ? 'bg-blue-500' : 'bg-gray-200'}`}
+              className={`h-4 w-8 rounded-full transition-colors relative ${needsTest ? 'bg-blue-500' : 'bg-gray-200'}`}
             >
               <div
-                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
                   needsTest ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
@@ -226,7 +226,7 @@ export function PODetailPanel({ po, onClose, onReceived }: PODetailPanelProps) {
           disabled={submitting || lines.length === 0}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-black uppercase tracking-widest transition-colors"
         >
-          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           {submitting ? 'Receiving…' : 'Receive Items'}
         </button>
       </div>

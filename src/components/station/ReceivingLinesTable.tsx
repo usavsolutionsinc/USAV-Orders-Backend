@@ -82,7 +82,7 @@ function getStatusTone(status: string | null | undefined) {
   if (value === 'UNBOXED') return 'bg-indigo-50 text-indigo-900 ring-indigo-200';
   if (value === 'PASSED') return 'bg-emerald-50 text-emerald-900 ring-emerald-200';
   if (value.startsWith('FAILED') || value === 'SCRAP') return 'bg-rose-50 text-rose-900 ring-rose-200';
-  return 'bg-slate-100 text-slate-800 ring-slate-200';
+  return 'bg-gray-100 text-gray-800 ring-gray-200';
 }
 
 function RowStatusPill({ status }: { status: string | null | undefined }) {
@@ -100,8 +100,8 @@ function RowStatusPill({ status }: { status: string | null | undefined }) {
 function MetaChip({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      <p className={`mt-1 truncate text-[13px] font-semibold text-slate-900 ${mono ? 'font-mono' : ''}`}>{value}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">{label}</p>
+      <p className={`mt-1 truncate text-[13px] font-semibold text-gray-900 ${mono ? 'font-mono' : ''}`}>{value}</p>
     </div>
   );
 }
@@ -123,8 +123,8 @@ function OrderRow({
     <>
       <tr
         data-line-row-id={row.id}
-        className={`border-b border-slate-200 bg-white transition-colors ${
-          isExpanded ? 'bg-[color-mix(in_srgb,var(--color-brand-light)_38%,white)]' : 'hover:bg-slate-50'
+        className={`border-b border-gray-200 bg-white transition-colors ${
+          isExpanded ? 'bg-[color-mix(in_srgb,var(--color-brand-light)_38%,white)]' : 'hover:bg-gray-50'
         }`}
       >
         <td className="w-14 px-3 py-4 align-top">
@@ -133,7 +133,7 @@ function OrderRow({
             onClick={onToggle}
             aria-expanded={isExpanded}
             aria-controls={panelId}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-gray-300 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
           >
             <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
           </button>
@@ -147,9 +147,9 @@ function OrderRow({
             aria-controls={panelId}
             className="w-full text-left"
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Inbound</p>
-            <p className="mt-1 text-[16px] font-semibold leading-none text-slate-950">#{row.id}</p>
-            <p className="mt-2 inline-flex items-center gap-2 text-[12px] font-medium text-slate-600">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Inbound</p>
+            <p className="mt-1 text-[16px] font-semibold leading-none text-gray-950">#{row.id}</p>
+            <p className="mt-2 inline-flex items-center gap-2 text-[12px] font-semibold text-gray-600">
               <Calendar className="h-3.5 w-3.5" />
               {formatCompactDate(row.created_at)}
             </p>
@@ -172,30 +172,30 @@ function OrderRow({
                 </span>
               ) : null}
             </div>
-            <p className="mt-3 text-[15px] font-semibold leading-6 text-slate-950 md:text-[16px]">
+            <p className="mt-3 text-[15px] font-semibold leading-6 text-gray-950 md:text-[16px]">
               {productTitle}
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-slate-600">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-gray-600">
               <span className="font-mono font-semibold text-blue-700">{row.sku || 'No SKU'}</span>
               <span className="font-mono">{row.zoho_purchaseorder_id ? `PO ${row.zoho_purchaseorder_id}` : 'No PO'}</span>
             </div>
-            <div className="mt-3 grid gap-2 text-[12px] text-slate-600 sm:hidden">
+            <div className="mt-3 grid gap-2 text-[12px] text-gray-600 sm:hidden">
               <div className="flex items-center justify-between">
-                <span className="uppercase tracking-[0.14em] text-slate-400">Qty</span>
-                <span className="font-mono font-semibold text-slate-900">{quantityText}</span>
+                <span className="uppercase tracking-[0.14em] text-gray-500">Qty</span>
+                <span className="font-mono font-semibold text-gray-900">{quantityText}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="uppercase tracking-[0.14em] text-slate-400">PO</span>
-                <span className="font-mono text-slate-900">{row.zoho_purchaseorder_id || '—'}</span>
+                <span className="uppercase tracking-[0.14em] text-gray-500">PO</span>
+                <span className="font-mono text-gray-900">{row.zoho_purchaseorder_id || '—'}</span>
               </div>
             </div>
           </button>
         </td>
 
         <td className="hidden w-[9rem] px-3 py-4 align-top sm:table-cell">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Qty</p>
-          <p className="mt-1 text-[18px] font-semibold tabular-nums text-slate-950">{quantityText}</p>
-          <p className="mt-2 text-[12px] text-slate-500">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Qty</p>
+          <p className="mt-1 text-[18px] font-semibold tabular-nums text-gray-950">{quantityText}</p>
+          <p className="mt-2 text-[12px] text-gray-500">
             {row.quantity_expected && row.quantity_expected > 0
               ? `${Math.round((row.quantity_received / row.quantity_expected) * 100)}% received`
               : 'Expected qty pending'}
@@ -203,12 +203,12 @@ function OrderRow({
         </td>
 
         <td className="hidden w-[13rem] px-3 py-4 align-top lg:table-cell">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Purchase Order</p>
-          <p className="mt-1 font-mono text-[14px] font-semibold text-slate-950">{row.zoho_purchaseorder_id || '—'}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Purchase Order</p>
+          <p className="mt-1 font-mono text-[14px] font-semibold text-gray-950">{row.zoho_purchaseorder_id || '—'}</p>
         </td>
       </tr>
 
-      <tr aria-hidden={!isExpanded} className="border-b border-slate-200 bg-[color-mix(in_srgb,var(--color-brand-light)_20%,white)]">
+      <tr aria-hidden={!isExpanded} className="border-b border-gray-200 bg-[color-mix(in_srgb,var(--color-brand-light)_20%,white)]">
         <td colSpan={5} className="p-0">
           <div
             id={panelId}
@@ -231,10 +231,10 @@ function OrderRow({
                 <MetaChip label="Testing" value={row.needs_test ? `Required${row.assigned_tech_id ? ` · Tech #${row.assigned_tech_id}` : ''}` : 'Tech cleared'} />
               </div>
 
-              <div className="border-t border-slate-200 px-5 py-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Notes & Sync</p>
+              <div className="border-t border-gray-200 px-5 py-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Notes & Sync</p>
                 <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-                  <p className="min-h-[3rem] text-[13px] leading-6 text-slate-700">
+                  <p className="min-h-[3rem] text-[13px] leading-6 text-gray-700">
                     {row.notes || 'No operator notes yet.'}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -265,12 +265,12 @@ function OrdersTable({
   return (
     <table className="w-full min-w-[760px] border-collapse text-left">
       <thead className="sticky top-0 z-10 bg-white">
-        <tr className="border-b border-slate-200">
+        <tr className="border-b border-gray-200">
           <th className="w-14 px-3 py-3" />
-          <th className="w-[11rem] px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Inbound</th>
-          <th className="px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Product</th>
-          <th className="hidden w-[9rem] px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:table-cell">Quantity</th>
-          <th className="hidden w-[13rem] px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 lg:table-cell">Purchase Order</th>
+          <th className="w-[11rem] px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Inbound</th>
+          <th className="px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Product</th>
+          <th className="hidden w-[9rem] px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:table-cell">Quantity</th>
+          <th className="hidden w-[13rem] px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 lg:table-cell">Purchase Order</th>
         </tr>
       </thead>
       <tbody>
@@ -396,7 +396,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
   return (
     <div className="flex h-full min-w-0 overflow-hidden bg-white">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {searchExpanded ? (
               <SearchBar
@@ -420,7 +420,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                   setSearchExpanded(true);
                   requestAnimationFrame(() => searchInputRef.current?.focus());
                 }}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-gray-300 hover:text-gray-950 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 aria-label="Expand search"
               >
                 <ChevronRight className="h-4 w-4 -rotate-45" />
@@ -435,7 +435,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                 setQaFilter(e.target.value);
                 setOffset(0);
               }}
-              className="border-b border-slate-200 bg-transparent px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 focus:outline-none"
+              className="border-b border-gray-200 bg-transparent px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-700 focus:outline-none"
             >
               {qaOptions.map((option) => (
                 <option key={option} value={option}>{option || 'All QA'}</option>
@@ -448,7 +448,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                 setDispFilter(e.target.value);
                 setOffset(0);
               }}
-              className="border-b border-slate-200 bg-transparent px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 focus:outline-none"
+              className="border-b border-gray-200 bg-transparent px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-700 focus:outline-none"
             >
               {dispOptions.map((option) => (
                 <option key={option} value={option}>{option || 'All Disp.'}</option>
@@ -456,13 +456,13 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
             </select>
 
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
                 {total.toLocaleString()} rows
               </span>
               <button
                 type="button"
                 onClick={() => refetch()}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition hover:border-gray-300 hover:text-gray-950"
                 title="Refresh"
               >
                 <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
@@ -474,11 +474,11 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
           {isLoading && localRows.length === 0 ? (
             <div className="flex h-full items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
             </div>
           ) : localRows.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <p className="text-[14px] font-semibold text-slate-500">No inbound lines found.</p>
+              <p className="text-[14px] font-semibold text-gray-500">No inbound lines found.</p>
               {(search || qaFilter || dispFilter) && (
                 <button
                   type="button"
@@ -491,7 +491,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                     setExpandedId(null);
                     dispatchSelectLine(null);
                   }}
-                  className="border-b border-slate-900 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-900"
+                  className="border-b border-gray-900 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-900"
                 >
                   Clear filters
                 </button>
@@ -503,7 +503,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+          <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
             <button
               type="button"
               disabled={offset === 0}
@@ -512,11 +512,11 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                 dispatchSelectLine(null);
                 setOffset(Math.max(0, offset - LIMIT));
               }}
-              className="border-b border-transparent py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-900 hover:text-slate-950 disabled:opacity-30"
+              className="border-b border-transparent py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-700 transition hover:border-gray-900 hover:text-gray-950 disabled:opacity-30"
             >
               Prev
             </button>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
               Page {currentPage} of {totalPages}
             </span>
             <button
@@ -527,7 +527,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                 dispatchSelectLine(null);
                 setOffset(offset + LIMIT);
               }}
-              className="border-b border-transparent py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700 transition hover:border-slate-900 hover:text-slate-950 disabled:opacity-30"
+              className="border-b border-transparent py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-700 transition hover:border-gray-900 hover:text-gray-950 disabled:opacity-30"
             >
               Next
             </button>

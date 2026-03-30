@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Check, ChevronRight, Loader2, Pencil, Plus, Trash2, X } from '@/components/Icons';
 import type { FavoriteSkuRecord, FavoriteWorkspaceKey } from '@/lib/favorites/sku-favorites';
+import { sectionLabel, fieldLabel, tableHeader } from '@/design-system/tokens/typography/presets';
 
 interface EcwidSearchProduct {
   id: string;
@@ -409,12 +410,12 @@ export function FavoritesWorkspaceSection({
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
           placeholder="Search Ecwid product by name or SKU"
-          className="w-full rounded-xl border-0 bg-transparent px-3 py-2.5 text-[11px] font-semibold text-gray-900 outline-none placeholder:text-gray-400"
+          className="w-full rounded-xl border-0 bg-transparent px-3 py-2.5 text-[11px] font-semibold text-gray-900 outline-none placeholder:text-gray-500"
         />
         {searchingProducts ? (
-          <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2.5 text-gray-400">
+          <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-2.5 text-gray-500">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <p className="text-[10px] font-black uppercase tracking-[0.16em]">Searching…</p>
+            <p className={tableHeader}>Searching…</p>
           </div>
         ) : searchResults.length > 0 ? (
           <div className={`${searchResultsMaxHeightClass} divide-y divide-gray-100 overflow-y-auto border-t border-gray-100`}>
@@ -439,7 +440,7 @@ export function FavoritesWorkspaceSection({
                       {product.name}
                     </p>
                     {/* Row 2 — SKU · price */}
-                    <p className={`mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${isSelected ? 'text-blue-400' : 'text-gray-400'}`}>
+                    <p className={`mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${isSelected ? 'text-blue-500' : 'text-gray-500'}`}>
                       {product.sku || 'No SKU'}
                       {product.price != null ? <span className={`ml-1.5 ${isSelected ? 'text-blue-600' : 'text-emerald-600'}`}> · ${product.price.toFixed(2)}</span> : null}
                     </p>
@@ -449,7 +450,7 @@ export function FavoritesWorkspaceSection({
             })}
           </div>
         ) : searchValue.trim() ? (
-          <div className="border-t border-gray-100 px-3 py-2.5 text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">
+          <div className={`border-t border-gray-100 px-3 py-2.5 ${tableHeader}`}>
             {searchSkuSuffixFilter ? `No ${searchSkuSuffixFilter.toUpperCase()} SKUs found` : 'No products found'}
           </div>
         ) : null}
@@ -459,7 +460,7 @@ export function FavoritesWorkspaceSection({
       {selectedProduct && (
         <div className="rounded-xl border border-blue-200 bg-white px-3 py-2">
           <p className="text-[11px] font-black leading-snug text-blue-900">{selectedProduct.name}</p>
-          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-blue-400">
+          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-blue-500">
             {selectedProduct.sku || 'No SKU'}
             {selectedProduct.price != null ? <span className="ml-1.5 text-emerald-600"> · ${selectedProduct.price.toFixed(2)}</span> : null}
           </p>
@@ -496,7 +497,7 @@ export function FavoritesWorkspaceSection({
         <button
           type="button"
           onClick={resetDraft}
-          className="inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500 transition-colors hover:bg-gray-100"
+          className={`inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 ${sectionLabel} transition-colors hover:bg-gray-100`}
         >
           Cancel
         </button>
@@ -522,7 +523,7 @@ export function FavoritesWorkspaceSection({
               || !draft.label.trim()
               || (searchSkuSuffixFilter ? !matchesSkuSuffix(selectedProduct.sku, searchSkuSuffixFilter) : false)
             }
-            className="inline-flex items-center justify-center gap-1.5 rounded-2xl bg-blue-600 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-400"
+            className={`inline-flex items-center justify-center gap-1.5 rounded-2xl bg-blue-600 px-3 py-2 ${sectionLabel} text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500`}
           >
             <Check className="h-4 w-4" />
             {isSaving ? 'Saving…' : editingFavoriteId !== null ? 'Update' : 'Save Favorite'}
@@ -547,7 +548,7 @@ export function FavoritesWorkspaceSection({
             <motion.span
               animate={{ rotate: isListOpen ? 90 : 0 }}
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className="shrink-0 text-gray-400 group-hover:text-gray-600"
+              className="shrink-0 text-gray-500 group-hover:text-gray-600"
             >
               <ChevronRight className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} />
             </motion.span>
@@ -555,13 +556,13 @@ export function FavoritesWorkspaceSection({
               <h3 className={`${inlineRows ? 'text-base' : 'text-sm'} font-black tracking-tight text-gray-900`}>
                 {title}
                 {favorites.length > 0 && (
-                  <span className="ml-1.5 text-[10px] font-semibold tabular-nums text-gray-400">
+                  <span className="ml-1.5 text-[10px] font-semibold tabular-nums text-gray-500">
                     {favorites.length}
                   </span>
                 )}
               </h3>
               {description && isListOpen ? (
-                <p className="mt-0.5 text-[11px] font-medium leading-relaxed text-gray-500">{description}</p>
+                <p className="mt-0.5 text-[11px] font-semibold leading-relaxed text-gray-500">{description}</p>
               ) : null}
             </div>
           </button>
@@ -574,7 +575,7 @@ export function FavoritesWorkspaceSection({
             className={`inline-flex ${inlineRows ? 'h-7 w-7 rounded-lg' : 'h-10 w-10 rounded-2xl'} items-center justify-center border transition-colors ${
               isManageMode
                 ? 'border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200'
-                : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-600'
             }`}
             aria-label={isManageMode ? 'Done managing' : 'Manage favorites'}
             title={isManageMode ? 'Done managing' : 'Manage favorites'}
@@ -621,17 +622,17 @@ export function FavoritesWorkspaceSection({
       {error && (
         <div className="flex items-start gap-2 rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-red-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em]">{error}</p>
+          <p className={fieldLabel}>{error}</p>
         </div>
       )}
 
       {isLoading ? (
-        <div className="flex items-center justify-center rounded-2xl border border-dashed border-gray-200 px-3 py-8 text-gray-400">
+        <div className="flex items-center justify-center rounded-2xl border border-dashed border-gray-200 px-3 py-8 text-gray-500">
           <Loader2 className="h-4 w-4 animate-spin" />
         </div>
       ) : favorites.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-8 text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">{emptyLabel}</p>
+          <p className={sectionLabel}>{emptyLabel}</p>
         </div>
       ) : (
         <div className={inlineRows ? 'divide-y divide-gray-200 border-t border-gray-200' : 'space-y-2'}>
@@ -661,7 +662,7 @@ export function FavoritesWorkspaceSection({
                         {favorite.defaultPrice ? ` · $${favorite.defaultPrice}` : ''}
                       </p>
                       {favorite.issueTemplate ? (
-                        <p className={`${inlineRows ? 'mt-0 text-[8px]' : 'mt-0.5 text-[10px]'} font-semibold uppercase tracking-[0.14em] text-gray-400`}>
+                        <p className={`${inlineRows ? 'mt-0 text-[8px]' : 'mt-0.5 text-[10px]'} font-semibold uppercase tracking-[0.14em] text-gray-500`}>
                           {favorite.issueTemplate}
                         </p>
                       ) : null}
@@ -682,7 +683,7 @@ export function FavoritesWorkspaceSection({
                         className={`inline-flex ${subButtonSizeClass} shrink-0 items-center justify-center border transition-colors ${
                           editingFavoriteId === favorite.id && showForm
                             ? 'border-blue-200 bg-blue-50 text-blue-600'
-                            : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600'
+                            : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600'
                         }`}
                         aria-label={`Edit ${favorite.label}`}
                         title="Edit favorite"

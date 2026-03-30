@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { getActiveStaff } from '@/lib/staffCache';
 import { X, ChevronLeft, ChevronRight } from '../Icons';
 import { ProductSelector } from './ProductSelector';
 import { ReasonSelector } from './ReasonSelector';
@@ -87,23 +88,30 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     const [skuIssues, setSkuIssues] = useState<string[]>([]);
 
     useEffect(() => {
-        fetch('/api/staff?role=technician&active=true')
-            .then(r => r.json())
-            .then((data: TechStaff[]) => setTechs(Array.isArray(data) ? data : []))
+        let active = true;
+        getActiveStaff()
+            .then((data) => {
+                if (active) setTechs(data.filter((m) => m.role === 'technician'));
+            })
             .catch(() => setTechs([]))
             .finally(() => setLoadingTechs(false));
+        return () => { active = false; };
     }, []);
 
     useEffect(() => {
+        let active = true;
         const url = favoriteSkuId
             ? `/api/repair/issues?favoriteSkuId=${favoriteSkuId}`
             : '/api/repair/issues';
         fetch(url)
             .then(r => r.json())
-            .then(data => setSkuIssues(
-                Array.isArray(data?.issues) ? data.issues.map((i: { label: string }) => i.label) : [],
-            ))
-            .catch(() => setSkuIssues([]));
+            .then(data => {
+                if (active) setSkuIssues(
+                    Array.isArray(data?.issues) ? data.issues.map((i: { label: string }) => i.label) : [],
+                );
+            })
+            .catch(() => { if (active) setSkuIssues([]); });
+        return () => { active = false; };
     }, [favoriteSkuId]);
 
     useEffect(() => {
@@ -175,7 +183,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                         className="flex items-center justify-center w-14 border-r-2 border-gray-900 hover:bg-gray-100 active:bg-gray-200 transition-colors"
                         aria-label="Close"
                     >
-                        <X className="w-5 h-5 text-gray-900" />
+                        <X className="h-5 w-5 text-gray-900" />
                     </button>
 
                     {/* Title */}
@@ -192,9 +200,9 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
 
                     {/* Step counter */}
                     <div className="flex items-center px-4 border-l-2 border-gray-900">
-                        <span className="text-xs font-black text-gray-400 tabular-nums">
+                        <span className="text-xs font-black text-gray-500 tabular-nums">
                             {currentStepIndex + 1}
-                            <span className="text-gray-300 mx-0.5">/</span>
+                            <span className="text-gray-500 mx-0.5">/</span>
                             {STEPS.length}
                         </span>
                     </div>
@@ -213,16 +221,16 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 }`}
                             >
                                 {isDone ? (
-                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
+                                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
                                 ) : (
-                                    <span className={`text-[9px] font-black tabular-nums ${isActive ? 'text-white' : 'text-gray-400'}`}>
+                                    <span className={`text-[9px] font-black tabular-nums ${isActive ? 'text-white' : 'text-gray-500'}`}>
                                         {i + 1}
                                     </span>
                                 )}
                                 <span className={`text-[9px] font-black uppercase tracking-wide ${
-                                    isActive ? 'text-white' : isDone ? 'text-white' : 'text-gray-400'
+                                    isActive ? 'text-white' : isDone ? 'text-white' : 'text-gray-500'
                                 }`}>
                                     {step.shortLabel}
                                 </span>
@@ -278,7 +286,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                                 </p>
                                                 <label className="block text-xs font-black uppercase tracking-tight text-gray-900">
                                                     Assign Technician
-                                                    <span className="ml-2 text-[9px] font-bold text-gray-400 normal-case tracking-normal">Optional</span>
+                                                    <span className="ml-2 text-[9px] font-bold text-gray-500 normal-case tracking-normal">Optional</span>
                                                 </label>
                                             </div>
                                             <select
@@ -378,7 +386,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             className="flex-1 flex items-center justify-center gap-2 px-6 py-5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-black uppercase tracking-wide transition-colors disabled:cursor-not-allowed"
                         >
                             Continue
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="h-4 w-4" />
                         </button>
                     </div>
                 )}
@@ -390,7 +398,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             onClick={handleBack}
                             className="flex items-center justify-center gap-2 px-6 py-5 border-r-2 border-gray-900 text-xs font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                         >
-                            <ChevronLeft className="w-4 h-4" />
+                            <ChevronLeft className="h-4 w-4" />
                             Back
                         </button>
                         <button
@@ -399,7 +407,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             className="flex-1 flex items-center justify-center gap-2 px-6 py-5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-black uppercase tracking-wide transition-colors disabled:cursor-not-allowed"
                         >
                             Continue
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="h-4 w-4" />
                         </button>
                     </div>
                 )}
@@ -411,7 +419,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             onClick={handleBack}
                             className="flex items-center justify-center gap-2 px-6 py-5 border-r-2 border-gray-900 text-xs font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                         >
-                            <ChevronLeft className="w-4 h-4" />
+                            <ChevronLeft className="h-4 w-4" />
                             Back
                         </button>
                         <button
@@ -421,7 +429,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                         >
                             {isSubmitting ? (
                                 <>
-                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                     </svg>
@@ -430,7 +438,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             ) : (
                                 <>
                                     Submit Repair
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
                                 </>

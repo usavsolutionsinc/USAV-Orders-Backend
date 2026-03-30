@@ -3,6 +3,8 @@
 import type { ReactNode, Ref } from 'react';
 import { motion } from 'framer-motion';
 import { Search, X } from '@/components/Icons';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { dataValue } from '@/design-system/tokens/typography/presets';
 
 interface OverlaySearchBarProps {
   value: string;
@@ -57,7 +59,7 @@ export function OverlaySearchBar({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -30 }}
       transition={{
-        x: { duration: 0.22, ease: [0.22, 1, 0.36, 1] },
+        x: framerTransition.overlaySearchIn,
         opacity: { duration: 0.14, ease: 'easeOut' },
       }}
       onSubmit={(event) => {
@@ -70,7 +72,7 @@ export function OverlaySearchBar({
       <div
         className={`group relative h-12 w-full overflow-hidden rounded-lg border border-white bg-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-colors duration-150 ease-out ${frameTone} [backdrop-filter:blur(42px)_saturate(125%)]`}
       >
-        <div className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors duration-150 ${iconTone}`}>
+        <div className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors duration-150 ${iconTone}`}>
           {iconNode}
         </div>
         <input
@@ -80,7 +82,7 @@ export function OverlaySearchBar({
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="h-full w-full border-0 bg-transparent pl-10 pr-9 text-[13px] font-bold text-gray-900 outline-none placeholder:font-semibold placeholder:text-gray-400"
+          className={`h-full w-full border-0 bg-transparent pl-10 pr-9 ${dataValue} outline-none placeholder:font-semibold placeholder:text-gray-500`}
         />
         <button
           type="button"

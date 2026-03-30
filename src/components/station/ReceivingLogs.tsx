@@ -11,9 +11,9 @@ import WeekHeader from '@/components/ui/WeekHeader';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { getStationChannelName } from '@/lib/realtime/channels';
 
-const STATION_CHANNEL =
-  process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES || 'station:changes';
+const STATION_CHANNEL = getStationChannelName();
 
 interface ReceivingLog {
     id: string;

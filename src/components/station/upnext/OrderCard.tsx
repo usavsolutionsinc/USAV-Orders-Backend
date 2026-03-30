@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { framerPresence, framerTransition } from '@/design-system';
+import { framerPresence, framerTransition, cardTitle, fieldLabel, chipText, dataValue } from '@/design-system';
 import { Check, ChevronDown, Copy, ExternalLink, Play, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
@@ -18,8 +18,8 @@ import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/compon
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { Order } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';
-
-const TECH_IDS = [1, 2, 3, 6];
+import { TECH_IDS } from '@/utils/staff';
+import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
 
 interface StaffOption { id: number; name: string; }
 
@@ -86,20 +86,17 @@ function getDaysLateNumber(shipByDate: string | null | undefined, fallbackDate?:
   return Math.max(0, todayIndex - shipByIndex);
 }
 
+function getConditionColor(condition: string | null | undefined) {
+  const c = (condition || '').toLowerCase().trim();
+  if (c.includes('new')) return 'text-yellow-500';
+  if (c.includes('part')) return 'text-amber-800';
+  return 'text-black';
+}
+
 function getDaysLateTone(daysLate: number) {
   if (daysLate > 1) return 'text-red-600';
   if (daysLate === 1) return 'text-yellow-600';
   return 'text-emerald-600';
-}
-
-function AssignmentChip({ tester_id }: { tester_id?: number | null }) {
-  if (tester_id != null) return null;
-  return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-amber-50 border border-amber-200 text-amber-600 leading-none">
-      <span className="w-1 h-1 rounded-full bg-amber-400 inline-block" />
-      Open
-    </span>
-  );
 }
 
 interface OrderCardProps {
@@ -232,6 +229,7 @@ export function OrderCard({
   return (
     <>
       <motion.div
+        layout
         key={order.id}
         initial={framerPresence.upNextRow.initial}
         animate={framerPresence.upNextRow.animate}
@@ -258,9 +256,11 @@ export function OrderCard({
             <span className={`text-[14px] font-black ${getDaysLateTone(daysLate)}`}>
               {daysLate}
             </span>
-            <AssignmentChip tester_id={order.tester_id} />
           </div>
           <div className="flex items-center gap-2">
+            <span className={`${chipText} text-gray-900 px-1.5 py-0.5 rounded border border-gray-300`}>
+              #{getOrderIdLast4(order.order_id)}
+            </span>
             <PlatformExternalChip
               orderId={order.order_id}
               accountSource={order.account_source}
@@ -279,19 +279,11 @@ export function OrderCard({
 
         {/* ── Body ── */}
         <div className="px-3">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[13px] font-black text-gray-900">{quantity}</span>
-              <span className="text-[13px] font-black uppercase tracking-wider text-gray-500">-</span>
-              <span className="text-[13px] font-black uppercase truncate text-gray-900">
-                {order.condition || 'No Condition'}
-              </span>
-            </div>
-            <span className="text-[13px] font-mono font-black text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
-              #{getOrderIdLast4(order.order_id)}
-            </span>
-          </div>
-          <h4 className="text-base font-black text-gray-900 leading-tight">{order.product_title}</h4>
+          <h4 className={cardTitle}>
+            <InlineQtyPrefix quantity={quantity} />
+            <span className={getConditionColor(order.condition)}>{order.condition || 'No Condition'}</span>
+            {' '}{order.product_title}
+          </h4>
         </div>
 
         {hasOutOfStock && (
@@ -366,19 +358,19 @@ export function OrderCard({
               className="overflow-hidden"
             >
               <div className="mt-3 border-t border-emerald-100 px-3 pt-3" onClick={(e) => e.stopPropagation()}>
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                <div className={`grid grid-cols-2 gap-2 ${fieldLabel}`}>
 
                   {/* Row 1: Source | Item # */}
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Source</div>
-                    <div className="break-words text-[11px] text-gray-900 normal-case tracking-normal">
+                    <div className="mb-1 text-gray-500">Source</div>
+                    <div className={`break-words ${dataValue} text-[11px] normal-case tracking-normal`}>
                       {order.account_source || 'Unknown'}
                     </div>
                   </div>
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Item #</div>
+                    <div className="mb-1 text-gray-500">Item #</div>
                     <div className="flex items-center justify-between gap-1">
-                      <div className="min-w-0 text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                      <div className={`min-w-0 ${dataValue} text-[11px] normal-case tracking-normal break-words`}>
                         {itemNumberValue
                           ? getLast4(itemNumberValue)
                           : missingItemNumberLabel(order.order_id, order.account_source)}
@@ -412,9 +404,9 @@ export function OrderCard({
 
                   {/* Row 2: Tech (+ edit) | Tracking */}
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Tech</div>
+                    <div className="mb-1 text-gray-500">Tech</div>
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] text-gray-900 normal-case tracking-normal">
+                      <span className={`${dataValue} text-[11px] normal-case tracking-normal`}>
                         {order.tester_name || 'Unassigned'}
                       </span>
                       <button
@@ -427,9 +419,9 @@ export function OrderCard({
                     </div>
                   </div>
                   <div className="rounded-xl bg-gray-50 px-3 py-2">
-                    <div className="mb-1 text-gray-400">Tracking</div>
+                    <div className="mb-1 text-gray-500">Tracking</div>
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 text-[11px] text-gray-900 normal-case tracking-normal break-words">
+                      <div className={`min-w-0 ${dataValue} text-[11px] normal-case tracking-normal break-words`}>
                         {trackingNumber ? getTrackingLast4(trackingNumber) : 'N/A'}
                       </div>
                       <div className="flex items-center gap-1">

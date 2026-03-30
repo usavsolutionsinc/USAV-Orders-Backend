@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from '@/components/Icons';
 import { dmSans } from '@/lib/fonts';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
 interface OutOfStockEditorBlockProps {
   value: string;
@@ -47,7 +48,7 @@ export function OutOfStockEditorBlock({
     <div className={`border-b border-red-100 pb-2 ${className}`}>
       {/* Row 1 — label + saved feedback + X */}
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-black uppercase tracking-widest text-red-500 leading-none">
+        <span className={`${sectionLabel} text-red-500 leading-none`}>
           What needs to be ordered?
         </span>
         <div className="flex items-center gap-2">
@@ -76,7 +77,7 @@ export function OutOfStockEditorBlock({
         onChange={(e) => onChange(e.target.value)}
         placeholder="Describe missing parts…"
         autoFocus={autoFocus}
-        className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-400 ${dmSans.className}`}
+        className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-500 ${dmSans.className}`}
       />
     </div>
   );

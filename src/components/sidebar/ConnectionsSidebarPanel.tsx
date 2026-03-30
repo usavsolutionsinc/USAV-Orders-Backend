@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from '@/components/Icons';
+import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 
 type LogStatus = 'success' | 'error' | 'info';
 
@@ -44,14 +46,14 @@ function SidebarSection({
         onClick={onToggle}
         className="flex w-full items-center justify-between border-b border-gray-200 px-0 py-0 text-left hover:bg-gray-50"
       >
-        <span className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">{title}</span>
+        <span className={`px-4 py-3 ${sectionLabel}`}>{title}</span>
         <span className="inline-flex h-full w-12 items-center justify-center border-l border-gray-200 text-gray-600">
           <span className="relative h-3.5 w-3.5">
             <span className="absolute left-0 top-1/2 h-px w-3.5 -translate-y-1/2 bg-current" />
             <motion.span
               initial={false}
               animate={{ scaleY: expanded ? 0 : 1, opacity: expanded ? 0 : 1 }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
+              transition={framerTransition.overlayScrim}
               className="absolute left-1/2 top-0 h-3.5 w-px -translate-x-1/2 bg-current origin-center"
             />
           </span>
@@ -74,8 +76,8 @@ function LineItem({
   return (
     <div className="flex items-stretch justify-between gap-3 border-b border-gray-200 bg-white">
       <div className="min-w-0 px-4 py-3">
-        <p className="text-[11px] font-black tracking-widest text-gray-900">{label}</p>
-        {detail ? <p className="mt-0.5 text-[10px] font-bold leading-relaxed text-gray-500">{detail}</p> : null}
+        <p className={dataValue}>{label}</p>
+        {detail ? <p className={`mt-0.5 ${fieldLabel} leading-relaxed text-gray-500`}>{detail}</p> : null}
       </div>
       <div className="flex shrink-0 items-stretch gap-0">{right}</div>
     </div>
@@ -348,7 +350,7 @@ export function ConnectionsSidebarPanel() {
           <LineItem label="Sync eBay Orders" detail="Pull eBay changes and reconcile order exceptions" right={<ActionButton onClick={() => ebaySyncMutation.mutate()} loading={ebaySyncMutation.isPending} title="Sync eBay orders" tone="blue" />} />
           <LineItem label="Sync Ecwid Exceptions" detail="Copy tracking updates onto open Ecwid exceptions" right={<ActionButton onClick={() => ecwidExceptionTrackingMutation.mutate()} loading={ecwidExceptionTrackingMutation.isPending} title="Sync Ecwid exceptions" tone="blue" />} />
           <LineItem label="Clear Resolved Exceptions" detail="Remove exception rows that no longer need attention" right={<ActionButton onClick={() => exceptionsSyncMutation.mutate()} loading={exceptionsSyncMutation.isPending} title="Clear resolved exceptions" tone="green" />} />
-          <LineItem label="Upload ShipStation CSV" detail="Import a local ShipStation export" right={<button type="button" onClick={() => shipStationFileInputRef.current?.click()} className="h-full w-12 border-l border-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-700 hover:bg-gray-100">Up</button>} />
+          <LineItem label="Upload ShipStation CSV" detail="Import a local ShipStation export" right={<button type="button" onClick={() => shipStationFileInputRef.current?.click()} className={`h-full w-12 border-l border-gray-200 ${sectionLabel} text-gray-700 hover:bg-gray-100`}>Up</button>} />
           {tokenAccounts.map((account) => {
             const minutesLeft = Math.floor((new Date(account.token_expires_at).getTime() - now.getTime()) / 60000);
             const isRefreshing = refreshTokenMutation.isPending && refreshTokenMutation.variables === account.account_name;
@@ -367,7 +369,7 @@ export function ConnectionsSidebarPanel() {
           <div className="border-b border-gray-200 bg-white px-4 py-3">
             <Link
               href="/admin?section=connections&page=zoho-management"
-              className="inline-flex border-b border-gray-900 py-1 text-[10px] font-black uppercase tracking-widest text-gray-900"
+              className={`inline-flex border-b border-gray-900 py-1 ${sectionLabel} text-gray-900`}
             >
               Open Zoho Tools
             </Link>
@@ -375,19 +377,19 @@ export function ConnectionsSidebarPanel() {
           <LineItem label="Refresh Token" detail="Refresh the Zoho auth token before syncing" right={<ActionButton onClick={() => zohoRefreshMutation.mutate()} loading={zohoRefreshMutation.isPending} title="Refresh Zoho token" />} />
           <LineItem label="Sync Expected POs" detail="Load expected inbound lines before receiving starts" right={<ActionButton onClick={() => zohoSyncMutation.mutate()} loading={zohoSyncMutation.isPending} title="Sync Zoho purchase orders" tone="green" />} />
           <div className="border-b border-gray-200 bg-white px-4 py-3">
-            <p className="text-[11px] font-black tracking-widest text-gray-900">Import One Purchase Receive</p>
+            <p className={dataValue}>Import One Purchase Receive</p>
             <div className="mt-2 flex items-stretch gap-0 border border-gray-200">
               <input
                 value={purchaseReceiveId}
                 onChange={(e) => setPurchaseReceiveId(e.target.value)}
                 placeholder="Paste purchase receive ID"
-                className="flex-1 bg-gray-50 px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-900 outline-none"
+                className={`flex-1 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
               />
               <button
                 type="button"
                 onClick={() => zohoImportOneMutation.mutate(purchaseReceiveId.trim())}
                 disabled={!purchaseReceiveId.trim() || zohoImportOneMutation.isPending}
-                className="w-12 border-l border-blue-300 bg-blue-50 text-[10px] font-black uppercase tracking-widest text-blue-700 disabled:opacity-50"
+                className={`w-12 border-l border-blue-300 bg-blue-50 ${sectionLabel} text-blue-700 disabled:opacity-50`}
               >
                 {zohoImportOneMutation.isPending ? '...' : 'Run'}
               </button>

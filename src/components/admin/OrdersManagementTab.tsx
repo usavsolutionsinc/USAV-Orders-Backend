@@ -13,7 +13,10 @@ import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { DaysLateBadge } from '@/components/ui/DaysLateBadge';
 import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
 import { useOrderAssignment } from '@/hooks';
-import type { Order, Staff } from './types';
+import { TECH_NAME_ORDER, PACKER_NAME_ORDER, DEFAULT_TECH_ID, DEFAULT_PACKER_ID, getStaffName } from '@/utils/staff';
+import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
+import { sectionLabel, cardTitle, microBadge } from '@/design-system/tokens/typography/presets';
+import type { Order } from './types';
 
 export function OrdersManagementTab() {
   const queryClient = useQueryClient();
@@ -38,13 +41,9 @@ export function OrdersManagementTab() {
 
   const allOrders = ordersData?.orders || [];
 
-  const { data: activeStaff = [] } = useQuery<Staff[]>({
+  const { data: activeStaff = [] } = useQuery<StaffMember[]>({
     queryKey: ['staff', 'admin-orders-active'],
-    queryFn: async () => {
-      const res = await fetch('/api/staff?active=true');
-      if (!res.ok) throw new Error('Failed to fetch staff');
-      return res.json();
-    },
+    queryFn: () => getActiveStaff(),
   });
 
   const orders = allOrders.filter((order) => {
@@ -69,21 +68,17 @@ export function OrdersManagementTab() {
     return matchesTab && matchesSearch;
   });
 
-  const technicianNameOrder = ['michael', 'sang', 'thuc', 'cuong'];
-  const packerNameOrder = ['tuan', 'thuy'];
-  const testerOptions = technicianNameOrder
+  const testerOptions = TECH_NAME_ORDER
     .map((name) => activeStaff.find((member) => member.role === 'technician' && member.name.trim().toLowerCase() === name))
-    .filter((member): member is Staff => Boolean(member))
+    .filter((member): member is StaffMember => Boolean(member))
     .map((member) => ({ id: member.id, name: member.name }));
-  const packerOptions = packerNameOrder
+  const packerOptions = PACKER_NAME_ORDER
     .map((name) => activeStaff.find((member) => member.role === 'packer' && member.name.trim().toLowerCase() === name))
-    .filter((member): member is Staff => Boolean(member))
+    .filter((member): member is StaffMember => Boolean(member))
     .map((member) => ({ id: member.id, name: member.name }));
 
-  const cuongTesterId =
-    activeStaff.find((member) => member.role === 'technician' && member.name.trim().toLowerCase() === 'cuong')?.id ?? null;
-  const thuyPackerId =
-    activeStaff.find((member) => member.role === 'packer' && member.name.trim().toLowerCase() === 'thuy')?.id ?? null;
+  const defaultTechExists = activeStaff.some((m) => m.id === DEFAULT_TECH_ID);
+  const defaultPackerExists = activeStaff.some((m) => m.id === DEFAULT_PACKER_ID);
 
   const unassignedRemainingOrderIds = allOrders
     .filter((order) => !order.is_shipped && order.tester_id == null && order.packer_id == null)
@@ -154,13 +149,13 @@ export function OrdersManagementTab() {
     setIsDetailsPanelOpen(false);
   };
 
-  const handleAssignLeftUnassignedToCuongThuy = async () => {
-    if (!cuongTesterId || !thuyPackerId) return;
+  const handleAssignLeftUnassigned = async () => {
+    if (!defaultTechExists || !defaultPackerExists) return;
     if (unassignedRemainingOrderIds.length === 0) return;
     await bulkAssignMutation.mutateAsync({
       orderIds: unassignedRemainingOrderIds,
-      testerId: cuongTesterId,
-      packerId: thuyPackerId,
+      testerId: DEFAULT_TECH_ID,
+      packerId: DEFAULT_PACKER_ID,
     });
   };
 
@@ -208,7 +203,7 @@ export function OrdersManagementTab() {
                         : tab === 'assigned'
                           ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/20'
                           : 'bg-blue-600 text-white shadow-md'
-                    : 'text-gray-400 hover:text-gray-900 hover:bg-gray-50'
+                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
                 {tab}
@@ -217,24 +212,24 @@ export function OrdersManagementTab() {
           </div>
         </div>
 
-        <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-3xl border border-gray-200 shadow-sm">
-          <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Order Management</h2>
+        <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-2xl border border-gray-200 shadow-sm">
+          <h2 className={`${sectionLabel} text-gray-900`}>Order Management</h2>
           <div className="ml-auto flex items-center justify-end gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-600">
+            <span className={`${sectionLabel} text-gray-600`}>
               {orders.length} shown • {selectedOrderIds.length} selected
             </span>
             <button
               type="button"
-              onClick={handleAssignLeftUnassignedToCuongThuy}
+              onClick={handleAssignLeftUnassigned}
               disabled={
                 bulkAssignMutation.isPending ||
-                !cuongTesterId ||
-                !thuyPackerId ||
+                !defaultTechExists ||
+                !defaultPackerExists ||
                 unassignedRemainingOrderIds.length === 0
               }
               className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-[9px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
             >
-              Assign Left Unassigned: Cuong + Thuy
+              Assign Left Unassigned: {getStaffName(DEFAULT_TECH_ID)} + {getStaffName(DEFAULT_PACKER_ID)}
             </button>
             <button
               type="button"
@@ -257,8 +252,8 @@ export function OrdersManagementTab() {
 
         <div className="grid gap-3">
           {orders.length === 0 ? (
-            <div className="p-8 text-center bg-white rounded-3xl border border-gray-200">
-              <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No orders found</p>
+            <div className="p-8 text-center bg-white rounded-2xl border border-gray-200">
+              <p className={`${sectionLabel} text-gray-500`}>No orders found</p>
             </div>
           ) : (
             orders.map((order) => {
@@ -272,7 +267,7 @@ export function OrdersManagementTab() {
               return (
                 <div
                   key={order.id}
-                  className={`text-left bg-white border hover:shadow-sm p-5 rounded-3xl transition-all ${
+                  className={`text-left bg-white border hover:shadow-sm p-5 rounded-2xl transition-all ${
                     isSelected ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-200'
                   } ${isFocused ? 'shadow-sm' : ''}`}
                 >
@@ -315,7 +310,7 @@ export function OrdersManagementTab() {
                           className="inline-flex items-center h-9 gap-1.5 px-3 rounded-lg bg-blue-50 border border-blue-100 text-[10px] font-black text-blue-700"
                           title="Click to copy tracking number"
                         >
-                          <span className="text-[8px] text-blue-400 uppercase">Tracking</span>
+                          <span className={`${microBadge} text-blue-500`}>Tracking</span>
                           <span className="font-mono">{getTrackingLast4(order.shipping_tracking_number)}</span>
                           {getTrackingUrl(order.shipping_tracking_number || '') && (
                             <span
@@ -328,7 +323,7 @@ export function OrdersManagementTab() {
                               title="Open tracking in external page"
                               aria-label="Open tracking in external page"
                             >
-                              <ExternalLink className="w-3 h-3 text-blue-600" />
+                              <ExternalLink className="h-3 w-3 text-blue-600" />
                             </span>
                           )}
                         </button>
@@ -342,7 +337,7 @@ export function OrdersManagementTab() {
                           className="inline-flex items-center h-9 gap-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 text-[10px] font-black text-gray-800"
                           title="Click to copy order ID"
                         >
-                          <span className="text-[8px] text-gray-400 uppercase">Order</span>
+                          <span className={`${microBadge} text-gray-500`}>Order</span>
                           <span className="font-mono">#{getOrderIdLast4(order.order_id)}</span>
                           <button
                             type="button"
@@ -369,7 +364,7 @@ export function OrdersManagementTab() {
                               }}
                               className="inline-flex items-center justify-center"
                             >
-                              <ExternalLink className="w-3 h-3" />
+                              <ExternalLink className="h-3 w-3" />
                             </span>
                           </button>
                         </button>
@@ -378,12 +373,12 @@ export function OrdersManagementTab() {
 
                     {(order.out_of_stock || order.replenishment_request_id) && filterTab === 'need to order' && (
                       <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-500 text-white rounded shadow-sm w-fit">
-                        <AlertCircle className="w-3 h-3" />
-                        <span className="text-[8px] font-black uppercase tracking-wider">Out of Stock</span>
+                        <AlertCircle className="h-3 w-3" />
+                        <span className={microBadge}>Out of Stock</span>
                       </div>
                     )}
 
-                    <h3 className="text-base font-black text-gray-900 leading-tight">{order.product_title}</h3>
+                    <h3 className={cardTitle}>{order.product_title}</h3>
 
                     <OrderStaffAssignmentButtons
                       testerOptions={testerOptions}

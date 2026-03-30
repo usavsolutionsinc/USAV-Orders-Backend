@@ -71,9 +71,9 @@ export async function GET(req: NextRequest) {
     const testedBy           = searchParams.get('testedBy');
     const includeShipped     = searchParams.get('includeShipped') === 'true';
     const shippedOnly        = searchParams.get('shippedOnly') === 'true';
-    /** packedOnly=true  → only orders with a matching packer_logs row (packed & shipped view) */
+    /** packedOnly=true  → only orders with a matching station_activity_logs row (packed & shipped view) */
     const packedOnly         = searchParams.get('packedOnly') === 'true';
-    /** excludePacked=true → exclude orders that have a matching packer_logs row (pending view) */
+    /** excludePacked=true → exclude orders with any station_activity_logs row (pending view) */
     const excludePacked      = searchParams.get('excludePacked') === 'true';
     /** awaitingOnly=true → only orders without shipment_id (Awaiting tab: no tracking yet) */
     const awaitingOnly       = searchParams.get('awaitingOnly') === 'true';
@@ -413,13 +413,13 @@ export async function GET(req: NextRequest) {
 
     if (packedOnly) {
       sql += ` AND EXISTS (
-        SELECT 1 FROM packer_logs pl
-        WHERE pl.shipment_id IS NOT NULL AND pl.shipment_id = o.shipment_id
+        SELECT 1 FROM station_activity_logs sal
+        WHERE sal.shipment_id IS NOT NULL AND sal.shipment_id = o.shipment_id
       )`;
     } else if (excludePacked) {
       sql += ` AND NOT EXISTS (
-        SELECT 1 FROM packer_logs pl
-        WHERE pl.shipment_id IS NOT NULL AND pl.shipment_id = o.shipment_id
+        SELECT 1 FROM station_activity_logs sal
+        WHERE sal.shipment_id IS NOT NULL AND sal.shipment_id = o.shipment_id
       )`;
     }
 

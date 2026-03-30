@@ -28,7 +28,7 @@ export function PanelRow({
       className={[
         dividerClassName,
         'py-3 transition-colors duration-150 ease-out',
-        interactive ? 'hover:bg-slate-50/70' : '',
+        interactive ? 'hover:bg-gray-50/70' : '',
         className,
       ].join(' ').trim()}
     >

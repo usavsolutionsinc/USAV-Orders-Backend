@@ -4,11 +4,8 @@ import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import { getLast4 } from '../ui/CopyChip';
-import {
-  getPackerInputTheme,
-  stationScanInputBorderClass,
-  stationThemeColors,
-} from '@/utils/staff-colors';
+import { useStationTheme } from '@/hooks/useStationTheme';
+import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { formatPSTTimestamp } from '@/utils/date';
 import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
@@ -34,7 +31,7 @@ interface ActiveFbaScan {
 interface StationPackingProps {
   userId: string;
   userName: string;
-  themeColor?: 'black' | 'red';
+  staffId: number | string;
   todayCount: number;
   goal?: number;
   onComplete?: () => void;
@@ -44,7 +41,7 @@ interface StationPackingProps {
 export default function StationPacking({
   userId,
   userName,
-  themeColor = 'black',
+  staffId,
   todayCount = 0,
   goal = 50,
   onComplete,
@@ -57,8 +54,8 @@ export default function StationPacking({
   const [activeFba, setActiveFba] = useState<ActiveFbaScan | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const activeColor = getPackerInputTheme(themeColor);
-  const themeColors = stationThemeColors[themeColor];
+  const { theme: themeColor, colors: themeColors, inputBorder, inputTheme: activeColor } = useStationTheme({ staffId });
+  const { normalizeTrackingQuery, normalizeTracking } = useLast8TrackingSearch();
 
   const handleSubmit = async (event?: React.FormEvent) => {
     if (event) event.preventDefault();
@@ -98,11 +95,15 @@ export default function StationPacking({
         }
       } else {
         // ── Regular packing path ───────────────────────────────────────────
+        // Pre-normalize: strip USPS IMpb routing prefix (420+ZIP) for tracking inputs.
+        // SKU (has `:`) and special commands (clean/FBA-) pass through raw.
+        const isTrackingInput = !scan.includes(':') && !/^(clean|fba-)/i.test(scan);
+        const normalizedScan = isTrackingInput ? normalizeTracking(scan) : scan;
         const res = await fetch('/api/packing-logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            trackingNumber: scan,
+            trackingNumber: normalizedScan,
             photos: [],
             packerId: String(userId),
             packerName: userName,
@@ -166,7 +167,7 @@ export default function StationPacking({
             placeholder="Scan Tracking, FNSKU, FBA, or SKU..."
             icon={<Barcode className="w-4 h-4" />}
             iconClassName={activeColor.text}
-            inputBorderClassName={stationScanInputBorderClass[themeColor]}
+            inputBorderClassName={inputBorder}
             inputClassName={activeColor.ring}
             autoFocus
             rightContent={(
@@ -276,7 +277,7 @@ export default function StationPacking({
                   </div>
                   <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">TRK #</p>
-                    <p className="text-xs font-mono font-bold text-gray-800">{activeOrder.tracking.slice(-4) || '—'}</p>
+                    <p className="text-xs font-mono font-bold text-gray-800">{normalizeTrackingQuery(activeOrder.tracking) || '—'}</p>
                   </div>
                 </div>
               </motion.div>
