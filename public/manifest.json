@@ -1,0 +1,50 @@
+{
+  "name": "USAV Solutions",
+  "short_name": "USAV",
+  "description": "USAV Solutions — Station Operations",
+  "theme_color": "#0f1f3d",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/stations",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Packer Station",
+      "short_name": "Packer",
+      "url": "/packer",
+      "description": "Pack and ship orders"
+    },
+    {
+      "name": "Tech Station",
+      "short_name": "Tech",
+      "url": "/tech",
+      "description": "Test and process items"
+    },
+    {
+      "name": "Receiving",
+      "short_name": "Receiving",
+      "url": "/receiving",
+      "description": "Receive inbound items"
+    }
+  ]
+}

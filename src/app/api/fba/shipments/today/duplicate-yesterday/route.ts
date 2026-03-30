@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
+import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * POST /api/fba/shipments/today/duplicate-yesterday
@@ -100,6 +102,9 @@ export async function POST() {
 
     await client.query(`UPDATE fba_shipments SET updated_at = NOW() WHERE id = $1`, [todayId]);
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
+    await publishFbaShipmentChanged({ action: 'duplicated', shipmentId: Number(todayId || 0), source: 'fba.shipments.duplicate' });
 
     return NextResponse.json({
       success: true,

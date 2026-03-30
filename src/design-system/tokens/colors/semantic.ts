@@ -6,7 +6,7 @@ export const semanticColors = {
     secondary: baseColors.gray[700],
     muted: baseColors.gray[500],
     inverse: baseColors.white,
-    accent: baseColors.blue[500],
+    accent: baseColors.navy[700],
     success: baseColors.green[600],
     warning: baseColors.orange[600],
     danger: baseColors.red[600],
@@ -18,8 +18,8 @@ export const semanticColors = {
     canvas: baseColors.gray[50],
     surface: baseColors.white,
     subtle: baseColors.gray[100],
-    inverse: baseColors.gray[950],
-    accent: baseColors.blue[500],
+    inverse: baseColors.navy[900],
+    accent: baseColors.navy[700],
     success: baseColors.green[500],
     warning: baseColors.orange[500],
     danger: baseColors.red[500],
@@ -36,7 +36,7 @@ export const semanticColors = {
   border: {
     subtle: baseColors.gray[200],
     strong: baseColors.gray[300],
-    accent: baseColors.blue[400],
+    accent: baseColors.navy[600],
     success: baseColors.green[400],
     warning: baseColors.orange[400],
     danger: baseColors.red[400],
@@ -71,8 +71,8 @@ export const semanticColors = {
     lowStock: '#F59E0B',
   },
   gradient: {
-    primary: baseColors.blue[600],
-    primaryDim: baseColors.blue[500],
+    primary: baseColors.navy[700],
+    primaryDim: baseColors.navy[600],
   },
   overlay: {
     scrim: 'rgba(2, 6, 23, 0.38)',
@@ -84,7 +84,7 @@ export const semanticColors = {
     lifted: baseColors.white,
   },
   focus: {
-    ring: baseColors.blue[500],
+    ring: baseColors.navy[700],
     success: baseColors.green[500],
     warning: baseColors.orange[500],
     danger: baseColors.red[500],

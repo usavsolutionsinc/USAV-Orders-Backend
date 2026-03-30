@@ -79,6 +79,7 @@ export { usePanelActions } from './usePanelActions';
 export type { PanelAction, PanelActionContext, PanelEntityType } from './usePanelActions';
 
 export { useAblyChannel } from './useAblyChannel';
+export { usePersistedStaffId } from './usePersistedStaffId';
 export { useExternalItemUrl } from './useExternalItemUrl';
 export { useLast8TrackingSearch } from './useLast8TrackingSearch';
 export { useOrderFieldSave } from './useOrderFieldSave';

@@ -75,7 +75,7 @@ export function SearchBar({
 
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-    <div onFocus={handleFocus}>
+    <div onFocus={handleFocus} className="w-full">
       <SearchField
         value={value}
         onChange={onChange}

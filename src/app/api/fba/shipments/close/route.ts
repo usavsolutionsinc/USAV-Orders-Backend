@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 // ── POST /api/fba/shipments/close ─────────────────────────────────────────────
 // Ship Close: transitions all LABEL_ASSIGNED items (and any remaining
@@ -127,6 +129,9 @@ export async function POST(request: NextRequest) {
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
+    await publishFbaShipmentChanged({ action: 'closed', shipmentId: Number(shipment_id || 0), source: 'fba.shipments.close' });
 
     return NextResponse.json({
       success: true,

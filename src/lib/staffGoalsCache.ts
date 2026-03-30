@@ -21,30 +21,36 @@ interface PerStaffEntry {
   expiresAt: number;
 }
 
+/** Cache key = "staffId:station" */
 const _perStaffCache = new Map<string, PerStaffEntry>();
 const _perStaffPromises = new Map<string, Promise<number>>();
 
-/** Returns the daily_goal for a single staff member (defaults to 50 on error). */
-export function getStaffGoalById(staffId: string): Promise<number> {
-  const cached = _perStaffCache.get(staffId);
+function perStaffKey(staffId: string, station: string = 'TECH'): string {
+  return `${staffId}:${station}`;
+}
+
+/** Returns the daily_goal for a single staff member + station (defaults to 50 on error). */
+export function getStaffGoalById(staffId: string, station: string = 'TECH'): Promise<number> {
+  const key = perStaffKey(staffId, station);
+  const cached = _perStaffCache.get(key);
   if (cached && Date.now() < cached.expiresAt) return Promise.resolve(cached.value);
 
-  let promise = _perStaffPromises.get(staffId);
+  let promise = _perStaffPromises.get(key);
   if (!promise) {
-    promise = fetch(`/api/staff-goals?staffId=${encodeURIComponent(staffId)}`)
+    promise = fetch(`/api/staff-goals?staffId=${encodeURIComponent(staffId)}&station=${encodeURIComponent(station)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { daily_goal?: number } | null) => {
         const goal = Number(data?.daily_goal);
         const value = Number.isFinite(goal) && goal > 0 ? goal : 50;
-        _perStaffCache.set(staffId, { value, expiresAt: Date.now() + PER_STAFF_TTL_MS });
-        _perStaffPromises.delete(staffId);
+        _perStaffCache.set(key, { value, expiresAt: Date.now() + PER_STAFF_TTL_MS });
+        _perStaffPromises.delete(key);
         return value;
       })
       .catch(() => {
-        _perStaffPromises.delete(staffId);
+        _perStaffPromises.delete(key);
         return 50;
       });
-    _perStaffPromises.set(staffId, promise);
+    _perStaffPromises.set(key, promise);
   }
   return promise;
 }
@@ -55,6 +61,8 @@ export interface GoalRow {
   staff_id: number;
   name: string;
   role: string;
+  employee_id: string | null;
+  station: string;
   daily_goal: number;
   today_count: number;
   week_count: number;
@@ -66,30 +74,38 @@ interface AllGoalsEntry {
   expiresAt: number;
 }
 
-let _allGoalsCache: AllGoalsEntry | null = null;
-let _allGoalsPromise: Promise<GoalRow[]> | null = null;
+/** Cache key = station filter or 'ALL' */
+const _allGoalsCache = new Map<string, AllGoalsEntry>();
+const _allGoalsPromises = new Map<string, Promise<GoalRow[]>>();
 
-/** Returns the full goals list (includes live today/week counts). */
-export function getAllStaffGoals(): Promise<GoalRow[]> {
-  if (_allGoalsCache && Date.now() < _allGoalsCache.expiresAt) {
-    return Promise.resolve(_allGoalsCache.data);
+/** Returns the full goals list (includes live today/week counts). Optionally filter by station. */
+export function getAllStaffGoals(station?: string): Promise<GoalRow[]> {
+  const cacheKey = station || 'ALL';
+  const cached = _allGoalsCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return Promise.resolve(cached.data);
   }
 
-  if (!_allGoalsPromise) {
-    _allGoalsPromise = fetch('/api/staff-goals')
+  let promise = _allGoalsPromises.get(cacheKey);
+  if (!promise) {
+    const url = station
+      ? `/api/staff-goals?station=${encodeURIComponent(station)}`
+      : '/api/staff-goals';
+    promise = fetch(url)
       .then((res) => (res.ok ? res.json() : []))
       .then((data: GoalRow[]) => {
         const result = Array.isArray(data) ? data : [];
-        _allGoalsCache = { data: result, expiresAt: Date.now() + ALL_GOALS_TTL_MS };
-        _allGoalsPromise = null;
+        _allGoalsCache.set(cacheKey, { data: result, expiresAt: Date.now() + ALL_GOALS_TTL_MS });
+        _allGoalsPromises.delete(cacheKey);
         return result;
       })
       .catch(() => {
-        _allGoalsPromise = null;
+        _allGoalsPromises.delete(cacheKey);
         return [];
       });
+    _allGoalsPromises.set(cacheKey, promise);
   }
-  return _allGoalsPromise;
+  return promise;
 }
 
 // ── Invalidation ──────────────────────────────────────────────────────────────
@@ -99,12 +115,18 @@ export function getAllStaffGoals(): Promise<GoalRow[]> {
  * Pass staffId to invalidate only that entry, or omit to clear everything.
  */
 export function invalidateStaffGoalsCache(staffId?: string): void {
-  _allGoalsCache = null;
-  _allGoalsPromise = null;
+  // Always clear the full list caches
+  _allGoalsCache.clear();
+  _allGoalsPromises.clear();
 
   if (staffId) {
-    _perStaffCache.delete(staffId);
-    _perStaffPromises.delete(staffId);
+    // Clear all station variants for this staff
+    for (const key of _perStaffCache.keys()) {
+      if (key.startsWith(`${staffId}:`)) {
+        _perStaffCache.delete(key);
+        _perStaffPromises.delete(key);
+      }
+    }
   } else {
     _perStaffCache.clear();
     _perStaffPromises.clear();

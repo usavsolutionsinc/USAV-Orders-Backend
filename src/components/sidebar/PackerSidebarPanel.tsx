@@ -7,15 +7,18 @@ import StaffSelector from '@/components/StaffSelector';
 import StationPacking from '@/components/station/StationPacking';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
+import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
 import { useActiveStaffDirectory } from './hooks';
 
-export function PackerSidebarPanel({ packerId }: { packerId: string }) {
+export function PackerSidebarPanel() {
   const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
   const [dailyGoal, setDailyGoal] = useState(50);
+  const [staffIdNum] = usePersistedStaffId({ storageKey: 'packer-staff-id' });
+  const packerId = String(staffIdNum);
   const staffDirectory = useActiveStaffDirectory();
 
-  const packerMember = staffDirectory.find((m) => String(m.id) === String(packerId));
+  const packerMember = staffDirectory.find((m) => String(m.id) === packerId);
   const packerName = packerMember?.name || 'Packer';
   useEffect(() => {
     const fetchHistory = async () => {

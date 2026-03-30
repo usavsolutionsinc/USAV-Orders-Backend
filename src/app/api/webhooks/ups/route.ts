@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseUPSTrackingPayload } from '@/lib/shipping/providers/ups';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
+import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
 
 function isAuthorized(req: NextRequest): boolean {
   const secret =
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest) {
       result.events
     );
     await updateShipmentSummary(shipment.id, result);
+    await publishShipmentStatusChange(shipment.id, 'ups-webhook');
 
     processed += 1;
     trackingNumbers.push(result.trackingNumberNormalized);

@@ -37,6 +37,20 @@ function getAsinUrl(value: string | null | undefined) {
   return `https://www.amazon.com/dp/${encodeURIComponent(asin)}`;
 }
 
+/** Strip leading condition word from the product title to avoid "NEW NEW …" duplication. */
+function stripConditionPrefix(title: string | null | undefined, condition: string | null | undefined) {
+  const t = (title || '').trimStart();
+  const c = (condition || '').trim();
+  if (!t || !c) return t;
+  // Use the display-ready label (e.g. "Used Like New") rather than raw DB value
+  const cNorm = c.replaceAll('_', ' ').trim();
+  if (!cNorm || cNorm.toUpperCase() === 'FBA SCAN') return t;
+  if (t.toLowerCase().startsWith(cNorm.toLowerCase())) {
+    return t.slice(cNorm.length).trimStart();
+  }
+  return t;
+}
+
 function getFbaConditionColor(condition: string | null | undefined) {
   const c = (condition || '').toLowerCase().trim();
   if (c.includes('new')) return 'text-yellow-500';
@@ -207,9 +221,18 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
             <span className="text-[14px] font-black tabular-nums text-blue-700">{daysLate}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`${chipText} text-gray-900 px-1.5 py-0.5 rounded border border-gray-300`}>
-              #{getLast4(fnsku)}
-            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (asinUrl) window.open(asinUrl, '_blank', 'noopener,noreferrer');
+              }}
+              disabled={!asinUrl}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-2 text-gray-900 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-900 transition-colors"
+            >
+              <span className={`${chipText} leading-none translate-y-px`}>#{getLast4(fnsku)}</span>
+              <ExternalLink className="w-3.5 h-3.5 text-blue-300" />
+            </button>
             <motion.span
               animate={{ rotate: isExpanded ? 180 : 0 }}
               transition={framerTransition.upNextChevron}
@@ -224,7 +247,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
           <h4 className={cardTitle}>
             <InlineQtyPrefix quantity={qtyLabel} />
             <span className={getFbaConditionColor(item.condition)}>{conditionLabel}</span>
-            {' '}{item.product_title || `FNSKU • ${getLast4(fnsku)}`}
+            {' '}{stripConditionPrefix(item.product_title, item.condition) || `FNSKU • ${getLast4(fnsku)}`}
           </h4>
         </div>
 

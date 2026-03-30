@@ -2,6 +2,7 @@ import Ably from 'ably';
 import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import {
   getAiAssistSessionChannelName,
+  getFbaChannelName,
   getOrdersChannelName,
   getRepairsChannelName,
   getStationChannelName,
@@ -209,6 +210,90 @@ export async function publishReceivingLogChanged(payload: ReceivingLogChangedPay
     action: payload.action,
     rowId: payload.rowId,
     row: payload.row,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+// ─── FBA Events ──────────────────────────────────────────────────────────────
+
+type FbaItemChangedPayload = {
+  action: 'scan' | 'ready' | 'verify' | 'label-bind' | 'shipped' | 'reassign' | 'update' | 'delete';
+  shipmentId: number;
+  itemId?: number;
+  fnsku?: string;
+  source: string;
+};
+
+type FbaShipmentChangedPayload = {
+  action: 'created' | 'updated' | 'closed' | 'deleted' | 'mark-shipped' | 'tracking-linked' | 'tracking-unlinked' | 'duplicated' | 'items-added';
+  shipmentId: number;
+  source: string;
+};
+
+type FbaCatalogChangedPayload = {
+  action: 'created' | 'updated' | 'bulk-uploaded';
+  fnsku?: string;
+  count?: number;
+  source: string;
+};
+
+export async function publishFbaItemChanged(payload: FbaItemChangedPayload) {
+  await publishEvent(getFbaChannelName(), 'fba.item.changed', {
+    type: 'fba.item.changed',
+    action: payload.action,
+    shipmentId: payload.shipmentId,
+    itemId: payload.itemId,
+    fnsku: payload.fnsku,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+export async function publishFbaShipmentChanged(payload: FbaShipmentChangedPayload) {
+  await publishEvent(getFbaChannelName(), 'fba.shipment.changed', {
+    type: 'fba.shipment.changed',
+    action: payload.action,
+    shipmentId: payload.shipmentId,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+export async function publishFbaCatalogChanged(payload: FbaCatalogChangedPayload) {
+  await publishEvent(getFbaChannelName(), 'fba.catalog.changed', {
+    type: 'fba.catalog.changed',
+    action: payload.action,
+    fnsku: payload.fnsku,
+    count: payload.count,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+// ─── Activity Stream ─────────────────────────────────────────────────────────
+
+type ActivityLoggedPayload = {
+  id: number;
+  station: string;
+  activityType: string;
+  staffId: number | null;
+  staffName?: string | null;
+  scanRef?: string | null;
+  fnsku?: string | null;
+  source: string;
+};
+
+export async function publishActivityLogged(payload: ActivityLoggedPayload) {
+  await publishEvent(getStationChannelName(), 'activity.logged', {
+    type: 'activity.logged',
+    id: payload.id,
+    station: payload.station,
+    activityType: payload.activityType,
+    staffId: payload.staffId,
+    staffName: payload.staffName,
+    scanRef: payload.scanRef,
+    fnsku: payload.fnsku,
     source: payload.source,
     timestamp: formatPSTTimestamp(),
   });

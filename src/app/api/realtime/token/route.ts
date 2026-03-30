@@ -4,6 +4,7 @@ import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import {
   getAiAssistChannelName,
   getDbChannelPrefix,
+  getFbaChannelName,
   getOrdersChannelName,
   getRepairsChannelName,
   getStationChannelName,
@@ -49,6 +50,7 @@ async function createTokenRequest(req: NextRequest) {
     [getRepairsChannelName()]: ['subscribe'],
     [getAiAssistChannelName()]: ['subscribe'],
     [getStationChannelName()]: ['subscribe'],
+    [getFbaChannelName()]: ['subscribe'],
     [`${getDbChannelPrefix()}:*`]: ['subscribe'],
   };
 

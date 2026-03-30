@@ -60,7 +60,49 @@ body {
   }
   html {
     -webkit-tap-highlight-color: transparent;
+    /* Prevent iOS font size inflation on orientation change */
+    -webkit-text-size-adjust: 100%;
   }
+  /* iOS PWA: respect the notch on all sides */
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Station-specific iOS touch optimizations */
+.touch-manipulation {
+  /* Prevent double-tap zoom on interactive elements */
+  touch-action: manipulation;
+}
+
+/* iOS PWA: smooth momentum scrolling in overflow containers */
+.overflow-y-auto,
+.overflow-y-scroll,
+.overflow-auto,
+.overflow-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent iOS callout on long-press (images, links) */
+.station-no-callout {
+  -webkit-touch-callout: none;
+}
+
+/* Safe area bottom padding utility */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Hardware-accelerated scan input focus — prevents iOS zoom */
+input[type='text'],
+input[type='search'],
+textarea {
+  font-size: max(16px, 1rem);
 }
 
 /* Glassmorphism utilities */

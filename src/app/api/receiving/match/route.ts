@@ -42,6 +42,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 
 const WORKFLOW_STATUS_PRIORITY = [
   'DONE',
@@ -235,7 +236,8 @@ export async function POST(request: NextRequest) {
     }
 
     await client.query('COMMIT');
-    await invalidateCacheTags(['receiving-logs']);
+    await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
+    await publishReceivingLogChanged({ action: 'update', rowId: String(receivingId), source: 'receiving.match' });
 
     return NextResponse.json({
       success: true,

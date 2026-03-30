@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 // ── POST /api/fba/items/ready ─────────────────────────────────────────────────
 // Tech marks an FNSKU item as READY_TO_GO after testing/validation.
@@ -128,6 +130,9 @@ export async function POST(request: NextRequest) {
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await publishFbaItemChanged({ action: 'ready', shipmentId: Number(shipment_id || 0), itemId: Number(item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.ready' });
 
     return NextResponse.json({
       success: true,

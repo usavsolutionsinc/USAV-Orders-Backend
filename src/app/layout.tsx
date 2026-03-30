@@ -6,6 +6,8 @@ import { ResponsiveLayout } from "../components/layout/ResponsiveLayout";
 import { HeaderProvider } from "../contexts/HeaderContext";
 import { FbaWorkspaceProvider } from "../contexts/FbaWorkspaceContext";
 import { designTokenStyleText } from '@/styles/tokens';
+import { OfflineBanner } from "../components/station/OfflineBanner";
+import { InstallPrompt } from "../components/station/InstallPrompt";
 
 export default function RootLayout({
     children,
@@ -16,12 +18,23 @@ export default function RootLayout({
     return (
         <html lang="en">
             <head>
-                <title>USAV Orders Backend</title>
-                <meta name="description" content="USAV Orders Management System" />
+                <title>USAV Solutions</title>
+                <meta name="description" content="USAV Solutions — Station Operations" />
                 <link rel="icon" type="image/png" href="/favicon.png" />
+                {/* PWA */}
+                <link rel="manifest" href="/manifest.json" />
+                <meta name="application-name" content="USAV Solutions" />
+                <meta name="apple-mobile-web-app-capable" content="yes" />
+                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+                <meta name="apple-mobile-web-app-title" content="USAV" />
+                <meta name="theme-color" content="#0f1f3d" />
+                <meta name="mobile-web-app-capable" content="yes" />
+                {/* Viewport — cover notch, prevent zoom on input focus */}
+                <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
                 <style id="app-design-tokens">{designTokenStyleText}</style>
             </head>
             <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100vh' }}>
+                <OfflineBanner />
                 <Providers>
                     <HeaderProvider>
                         <FbaWorkspaceProvider>
@@ -31,6 +44,7 @@ export default function RootLayout({
                         </FbaWorkspaceProvider>
                     </HeaderProvider>
                 </Providers>
+                <InstallPrompt />
             </body>
         </html>
     );

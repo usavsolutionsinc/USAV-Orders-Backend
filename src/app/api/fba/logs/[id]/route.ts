@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 type Params = Promise<{ id: string }>;
 
@@ -146,6 +148,9 @@ export async function DELETE(
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-logs']);
+    await publishFbaItemChanged({ action: 'delete', shipmentId: 0, source: 'fba.logs.void' });
 
     return NextResponse.json({
       success: true,

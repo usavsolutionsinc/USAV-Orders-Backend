@@ -4,6 +4,7 @@ import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
 import { getCurrentPSTDateKey } from '@/utils/date';
+import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 
 export async function GET(request: NextRequest) {
     try {
@@ -159,6 +160,7 @@ export async function DELETE(request: NextRequest) {
         }
 
         await invalidateCacheTags(['receiving-logs']);
+        await publishReceivingLogChanged({ action: 'delete', rowId: String(id), source: 'receiving-logs.delete' });
         return NextResponse.json({ success: true, id });
     } catch (error: any) {
         console.error('Error deleting receiving log:', error);
@@ -371,6 +373,7 @@ export async function PATCH(request: NextRequest) {
         }
 
         await invalidateCacheTags(['receiving-logs']);
+        await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-logs.patch' });
         return NextResponse.json({ success: true, id });
     } catch (error: any) {
         console.error('Error updating receiving log:', error);

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishOrderChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * POST /api/orders/set-item-number
@@ -32,6 +34,9 @@ export async function POST(req: NextRequest) {
       // Row not found or item_number already set — treat as success
       return NextResponse.json({ success: true, updated: false, message: 'item_number already set or row not found' });
     }
+
+    await invalidateCacheTags(['orders']);
+    await publishOrderChanged({ orderIds: [id], source: 'orders.set-item-number' });
 
     return NextResponse.json({ success: true, updated: true, row: result.rows[0] });
   } catch (error: any) {

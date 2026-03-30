@@ -3,6 +3,8 @@ import { db } from '@/lib/drizzle/db';
 import { receivingTasks } from '@/lib/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { ApiError, errorResponse } from '@/lib/api';
+import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,6 +38,9 @@ export async function POST(req: NextRequest) {
       status: 'pending',
     }).returning();
 
+    await invalidateCacheTags(['receiving-logs']);
+    await publishReceivingLogChanged({ action: 'insert', rowId: String(result.id), source: 'receiving-tasks.create' });
+
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     return errorResponse(error, 'POST /api/receiving-tasks');
@@ -65,6 +70,9 @@ export async function PUT(req: NextRequest) {
 
     if (!result) throw ApiError.notFound('receiving-task', id);
 
+    await invalidateCacheTags(['receiving-logs']);
+    await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-tasks.update' });
+
     return NextResponse.json(result);
   } catch (error) {
     return errorResponse(error, 'PUT /api/receiving-tasks');
@@ -82,6 +90,9 @@ export async function DELETE(req: NextRequest) {
       .returning({ id: receivingTasks.id });
 
     if (!deleted) throw ApiError.notFound('receiving-task', id);
+
+    await invalidateCacheTags(['receiving-logs']);
+    await publishReceivingLogChanged({ action: 'delete', rowId: String(deleted.id), source: 'receiving-tasks.delete' });
 
     return NextResponse.json({ success: true, id: deleted.id });
   } catch (error) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 type Row = {
   fnsku: string;
@@ -111,6 +113,9 @@ export async function POST(request: NextRequest) {
       `,
       values
     );
+
+    await invalidateCacheTags(['fba-fnskus']);
+    await publishFbaCatalogChanged({ action: 'bulk-uploaded', count: unique.length, source: 'fba.fnskus.bulk' });
 
     return NextResponse.json({ success: true, inserted: unique.length });
   } catch (error: any) {

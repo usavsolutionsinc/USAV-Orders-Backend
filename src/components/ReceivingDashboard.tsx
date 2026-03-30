@@ -7,10 +7,14 @@ import ReceivingLinesTable from './station/ReceivingLinesTable';
 import { AnimatePresence } from 'framer-motion';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
+import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 
 export default function ReceivingDashboard() {
     const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);
     const queryClient = useQueryClient();
+    useRealtimeInvalidation({ receiving: true });
+    useRealtimeToasts('receiving');
     const searchParams = useSearchParams();
     const mode = searchParams.get('mode') ?? 'bulk';
     const isUnboxingMode = mode === 'unboxing';

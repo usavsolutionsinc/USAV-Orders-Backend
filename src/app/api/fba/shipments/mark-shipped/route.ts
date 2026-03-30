@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { detectCarrier } from '@/lib/tracking-format';
+import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * POST /api/fba/shipments/mark-shipped
@@ -133,6 +135,9 @@ export async function POST(request: NextRequest) {
     }
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
+    await publishFbaShipmentChanged({ action: 'mark-shipped', shipmentId: 0, source: 'fba.shipments.mark-shipped' });
 
     return NextResponse.json(
       {

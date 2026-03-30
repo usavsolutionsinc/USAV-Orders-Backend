@@ -5,6 +5,8 @@ import { customers as customersTable, orders as ordersTable } from '@/lib/drizzl
 import { getGoogleAuth } from '@/lib/google-auth';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishOrderChanged } from '@/lib/realtime/publish';
 import { desc, eq, inArray } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
@@ -639,12 +641,14 @@ export async function runGoogleSheetsTransferOrders(
       }
     }
 
+    let insertedOrderIds: number[] = [];
     if (ordersToInsert.length > 0) {
       const insertedOrders = await db
         .insert(ordersTable)
         .values(ordersToInsert.map((entry) => entry.values))
         .returning({ id: ordersTable.id });
 
+      insertedOrderIds = insertedOrders.map((o) => o.id);
       insertedOrders.forEach((order, index) => {
         const shipByDate = ordersToInsert[index]?.shipByDate ?? null;
         if (shipByDate) {
@@ -657,6 +661,21 @@ export async function runGoogleSheetsTransferOrders(
       for (const entry of orderDeadlinesToUpsert) {
         await upsertOrderDeadline(entry.id, entry.shipByDate);
       }
+    }
+
+    // Bust the /api/orders Upstash cache and notify all connected clients
+    // so the pending-orders dashboard picks up changes immediately.
+    const affectedOrderIds = [
+      ...insertedOrderIds,
+      ...ordersToBackfill.map((e) => e.id),
+      ...ordersToDelete,
+    ];
+    if (affectedOrderIds.length > 0) {
+      await invalidateCacheTags(['orders']);
+      await publishOrderChanged({
+        orderIds: affectedOrderIds,
+        source: 'google-sheets-transfer-orders',
+      });
     }
 
     return {

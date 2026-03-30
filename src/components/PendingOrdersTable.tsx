@@ -166,6 +166,17 @@ export default function PendingOrdersTable({
     true,
   );
 
+  // When orders are created/updated/deleted (e.g. Google Sheets transfer),
+  // refetch the full pending list so all clients stay in sync.
+  useAblyChannel(
+    ordersChannelName,
+    'order.changed',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
+    },
+    true,
+  );
+
   useEffect(() => {
     const handleRefresh = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });

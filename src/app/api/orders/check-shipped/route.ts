@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishOrderChanged } from '@/lib/realtime/publish';
 
 // Shipped state is now derived from station_activity_logs (SAL).
 // This endpoint updates status = 'shipped' for orders that have any SAL row
@@ -21,6 +22,11 @@ export async function POST() {
     `);
 
     await invalidateCacheTags(['orders', 'orders-next', 'shipped', 'packing-logs']);
+
+    const updatedIds = (result.rows || []).map((r: any) => Number(r.id)).filter(Number.isFinite);
+    if (updatedIds.length > 0) {
+      await publishOrderChanged({ orderIds: updatedIds, source: 'orders.check-shipped' });
+    }
 
     return NextResponse.json({
       success: true,

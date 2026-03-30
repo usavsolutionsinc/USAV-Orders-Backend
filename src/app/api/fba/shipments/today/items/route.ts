@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
+import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * POST /api/fba/shipments/today/items
@@ -241,6 +243,9 @@ export async function POST(request: NextRequest) {
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await publishFbaShipmentChanged({ action: 'items-added', shipmentId: Number(shipmentId || 0), source: 'fba.shipments.today-items' });
 
     return NextResponse.json({
       success: true,

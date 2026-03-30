@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 // ── POST /api/fba/items/verify ────────────────────────────────────────────────
 // Packer confirms a READY_TO_GO item is physically present (PACKER_VERIFIED).
@@ -90,6 +92,9 @@ export async function POST(request: NextRequest) {
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board']);
+    await publishFbaItemChanged({ action: 'verify', shipmentId: Number(shipment_id || 0), itemId: Number(item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.verify' });
 
     return NextResponse.json({
       success: true,

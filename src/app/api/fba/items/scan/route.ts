@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 // Pack-station FNSKU scan.
 // Writes into the shared fba_fnsku_logs ledger and, when an open shipment item
@@ -183,6 +185,9 @@ export async function POST(request: NextRequest) {
     const plannedQty = Number(updatedItem?.expected_qty ?? 0);
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await publishFbaItemChanged({ action: 'scan', shipmentId: Number(updatedItem?.shipment_id || 0), itemId: Number(updatedItem?.id || 0), fnsku: normalizedFnsku, source: 'fba.items.scan' });
 
     return NextResponse.json({
       success: true,

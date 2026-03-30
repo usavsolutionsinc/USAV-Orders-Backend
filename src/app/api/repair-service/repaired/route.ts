@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
+import { publishRepairChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 /**
  * POST /api/repair-service/repaired
@@ -98,6 +100,9 @@ export async function POST(req: NextRequest) {
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['repair-service']);
+    await publishRepairChanged({ repairIds: [Number(repairId)], source: 'repair-service.repaired' });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

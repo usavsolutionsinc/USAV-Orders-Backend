@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 // ── POST /api/fba/fnskus ──────────────────────────────────────────────────────
 // Add a new FNSKU to the fba_fnskus catalog.
@@ -28,6 +30,9 @@ export async function POST(request: NextRequest) {
        RETURNING fnsku, product_title, asin, sku, is_active, created_at`,
       [fnsku, product_title, asin, sku]
     );
+
+    await invalidateCacheTags(['fba-fnskus']);
+    await publishFbaCatalogChanged({ action: 'created', fnsku: fnsku || '', source: 'fba.fnskus.create' });
 
     return NextResponse.json({ success: true, fnsku: result.rows[0] });
   } catch (error: any) {

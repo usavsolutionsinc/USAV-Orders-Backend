@@ -16,6 +16,7 @@ import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types'
 import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScanField';
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { useStationTheme } from '@/hooks/useStationTheme';
+import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
 import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
@@ -221,9 +222,7 @@ function FbaWorkspaceSidebarInner() {
     return () => window.removeEventListener('fba-board-selection-count', handler);
   }, []);
 
-  const staffIdRaw = String(searchParams.get('staffId') || '').trim();
-  const staffIdFromUrl = /^\d+$/.test(staffIdRaw) ? parseInt(staffIdRaw, 10) : null;
-  const staffIdNum = staffIdFromUrl ?? staffDirectory[0]?.id ?? null;
+  const [staffIdNum] = usePersistedStaffId();
   const selectedStaffMember = staffDirectory.find((m) => m.id === staffIdNum);
   const staffName = selectedStaffMember?.name || (staffDirectory.length === 0 ? '…' : `Staff ${staffIdNum}`);
   const { theme: stationTheme } = useStationTheme({ staffId: staffIdNum });

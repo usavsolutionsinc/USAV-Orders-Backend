@@ -89,12 +89,14 @@ function resolveScanType(val: string, contextOrder: ActiveStationOrder | null): 
   const incomplete = contextOrder.serialNumbers.length < qty;
   if (!incomplete || base !== 'TRACKING') return base;
 
-  // When an active order still needs serials, route ANY tracking-shaped input as
-  // SERIAL. Product serial numbers routinely match carrier patterns (e.g. a 12-digit
-  // serial triggers the FedEx heuristic). Routing those as TRACKING would hit the
-  // scan-tracking API, fail to find an order, clear the active card, and show the
-  // "not found" alert — exactly the bug. Techs who genuinely need to scan a new
-  // label while a card is open can use the tracking mode button to force it.
+  // Mirror the GAS Tech-sheet logic: known carrier prefixes (1Z, 9[2-5]…, JD, TBA,
+  // etc.) are *always* tracking — even when serials are still needed.  Only demote
+  // ambiguous inputs (carrier: null — the catch-all heuristics for ≥10 digit-ending
+  // or ≥20-char strings) to SERIAL, since those are almost always product serial
+  // numbers that happen to be long/numeric.
+  const { carrier } = classifyInput(val);
+  if (carrier) return 'TRACKING';
+
   return 'SERIAL';
 }
 

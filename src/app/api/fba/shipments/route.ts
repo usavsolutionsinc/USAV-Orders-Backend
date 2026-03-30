@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
+import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 function parseOptionalStaffId(value: unknown): number | null {
   const parsed = Number(value);
@@ -277,6 +279,9 @@ export async function POST(request: NextRequest) {
     }
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-shipments']);
+    await publishFbaShipmentChanged({ action: 'created', shipmentId: Number(shipment.id || 0), source: 'fba.shipments.create' });
 
     return NextResponse.json(
       {

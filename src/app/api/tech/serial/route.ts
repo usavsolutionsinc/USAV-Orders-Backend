@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp } from '@/utils/date';
-import { publishTechLogChanged } from '@/lib/realtime/publish';
+import { publishActivityLogged, publishTechLogChanged } from '@/lib/realtime/publish';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 
@@ -104,8 +104,9 @@ export async function POST(req: NextRequest) {
       const tsnId = insertResult.rows[0]?.id ? Number(insertResult.rows[0].id) : null;
 
       // Create SERIAL_ADDED SAL row
+      let serialSalId: number | null = null;
       if (tsnId) {
-        await createStationActivityLog(pool, {
+        serialSalId = await createStationActivityLog(pool, {
           station: 'TECH',
           activityType: 'SERIAL_ADDED',
           staffId,
@@ -119,11 +120,12 @@ export async function POST(req: NextRequest) {
           notes: `Serial added: ${serial}`,
           metadata: { serial, serial_type: serialType },
           createdAt: formatPSTTimestamp(),
-        });
+        }) ?? null;
       }
 
       await invalidateCacheTags(['tech-logs', 'orders-next']);
       await publishTechLogChanged({ techId: staffId, action: 'insert', source: 'tech.serial' });
+      if (serialSalId) publishActivityLogged({ id: serialSalId, station: 'TECH', activityType: 'SERIAL_ADDED', staffId, scanRef: sal.scan_ref ?? null, fnsku, source: 'tech.serial' }).catch(() => {});
 
       const serialNumbers = await getSerials(pool, salId);
       return NextResponse.json({ success: true, serialNumbers, tsnId });
@@ -186,7 +188,7 @@ export async function POST(req: NextRequest) {
           );
           const tsnId = ins.rows[0]?.id ? Number(ins.rows[0].id) : null;
           if (tsnId) {
-            await createStationActivityLog(pool, {
+            const updateSalId = await createStationActivityLog(pool, {
               station: 'TECH',
               activityType: 'SERIAL_ADDED',
               staffId,
@@ -196,6 +198,7 @@ export async function POST(req: NextRequest) {
               notes: `Serial added from update: ${serial}`,
               metadata: { serial, serial_type: serialType, source: 'tech.serial.update' },
             });
+            if (updateSalId) publishActivityLogged({ id: updateSalId, station: 'TECH', activityType: 'SERIAL_ADDED', staffId, scanRef: sal.scan_ref ?? null, fnsku, source: 'tech.serial.update' }).catch(() => {});
           }
         }
       }

@@ -1,20 +1,23 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { getOrdersChannelName, getRepairsChannelName } from '@/lib/realtime/channels';
+import { getOrdersChannelName, getRepairsChannelName, getStationChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
 
 const ORDERS_CHANNEL = getOrdersChannelName();
 const REPAIRS_CHANNEL = getRepairsChannelName();
+const STATION_CHANNEL = getStationChannelName();
 
 interface UseRealtimeInvalidationOptions {
   dashboard?: boolean;
   repair?: boolean;
+  receiving?: boolean;
 }
 
 export function useRealtimeInvalidation({
   dashboard = false,
   repair = false,
+  receiving = false,
 }: UseRealtimeInvalidationOptions = {}) {
   const queryClient = useQueryClient();
 
@@ -53,5 +56,16 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['repairs'] });
     },
     repair,
+  );
+
+  useAblyChannel(
+    STATION_CHANNEL,
+    'receiving-log.changed',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['receiving'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines'] });
+    },
+    receiving,
   );
 }

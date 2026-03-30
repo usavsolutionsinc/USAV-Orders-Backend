@@ -323,8 +323,7 @@ function SidebarContextPanel() {
   }
 
   if (routeKey === 'packer') {
-    const packerId = searchParams.get('staffId') || getPathStaffId(pathname, 'packer') || '4';
-    return <PackerSidebarPanel packerId={packerId} />;
+    return <PackerSidebarPanel />;
   }
 
   return (

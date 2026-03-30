@@ -9,7 +9,7 @@ import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson
 import { formatPSTTimestamp, normalizePSTTimestamp, getCurrentPSTDateKey } from '@/utils/date';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
-import { publishOrderChanged, publishPackerLogChanged } from '@/lib/realtime/publish';
+import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged } from '@/lib/realtime/publish';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -283,7 +283,7 @@ export async function POST(req: NextRequest) {
                     sku: null,
                 };
 
-                await createStationActivityLog(pool, {
+                const nfSalId = await createStationActivityLog(pool, {
                     station: 'PACK',
                     activityType: 'PACK_COMPLETED',
                     staffId,
@@ -300,6 +300,7 @@ export async function POST(req: NextRequest) {
                 });
 
                 await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
+                if (nfSalId) publishActivityLogged({ id: nfSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: nfScanRef ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
                 if (notFoundRecord.id) await prependToPackerLogsCache(staffId, notFoundRecord);
 
                 return NextResponse.json({
@@ -398,7 +399,7 @@ export async function POST(req: NextRequest) {
                 sku: order.sku ?? null,
             };
 
-            await createStationActivityLog(pool, {
+            const foundSalId = await createStationActivityLog(pool, {
                 station: 'PACK',
                 activityType: 'PACK_COMPLETED',
                 staffId,
@@ -414,6 +415,7 @@ export async function POST(req: NextRequest) {
             });
 
             await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
+            if (foundSalId) publishActivityLogged({ id: foundSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: order.tracking_number ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
             if (foundRecord.id) await prependToPackerLogsCache(staffId, foundRecord);
 
             // Broadcast to all devices so UpNext + PendingOrdersTable update instantly
@@ -478,7 +480,7 @@ export async function POST(req: NextRequest) {
             sku: null,
         };
 
-        await createStationActivityLog(pool, {
+        const nonOrderSalId = await createStationActivityLog(pool, {
             station: 'PACK',
             activityType: 'PACK_SCAN',
             staffId,
@@ -490,6 +492,7 @@ export async function POST(req: NextRequest) {
             },
             createdAt: nonOrderInsert.rows[0]?.created_at ?? packDateTime,
         });
+        if (nonOrderSalId) publishActivityLogged({ id: nonOrderSalId, station: 'PACK', activityType: 'PACK_SCAN', staffId, scanRef: classification.normalizedInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
 
         let skuUpdated = false;
         if (classification.trackingType === 'SKU' && classification.skuBase) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 // ── PATCH /api/fba/fnskus/[fnsku] ────────────────────────────────────────────
 // Update catalog fields for an existing FNSKU.
@@ -52,6 +54,9 @@ export async function PATCH(
     if (result.rowCount === 0) {
       return NextResponse.json({ success: false, error: 'FNSKU not found' }, { status: 404 });
     }
+
+    await invalidateCacheTags(['fba-fnskus']);
+    await publishFbaCatalogChanged({ action: 'updated', fnsku: fnsku || '', source: 'fba.fnskus.update' });
 
     return NextResponse.json({ success: true, fnsku: result.rows[0] });
   } catch (error: any) {

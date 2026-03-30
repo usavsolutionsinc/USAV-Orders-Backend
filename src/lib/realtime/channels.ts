@@ -44,6 +44,15 @@ export const getStationChannelName = () =>
     DEFAULT_STATION_CHANNEL
   );
 
+export const DEFAULT_FBA_CHANNEL = 'fba:changes';
+
+export const getFbaChannelName = () =>
+  normalizeChannelName(
+    process.env.ABLY_CHANNEL_FBA_CHANGES ||
+      process.env.NEXT_PUBLIC_ABLY_CHANNEL_FBA_CHANGES,
+    DEFAULT_FBA_CHANNEL
+  );
+
 export const getDbChannelPrefix = () =>
   normalizeChannelName(
     process.env.ABLY_CHANNEL_DB_PREFIX ||

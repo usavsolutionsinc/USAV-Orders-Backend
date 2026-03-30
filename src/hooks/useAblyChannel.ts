@@ -25,11 +25,20 @@ export function useAblyChannel(
     let channel: any = null;
     const stableHandler = (msg: any) => handlerRef.current(msg);
 
-    getClient().then((client) => {
+    getClient().then(async (client) => {
       if (disposed || !client) return;
       try {
         channel = client.channels.get(channelName);
-        channel.subscribe(eventName, stableHandler);
+
+        // If the channel previously entered a failed state (e.g. auth
+        // hiccup, transient network error), detach and re-attach so the
+        // subscribe call below doesn't throw.
+        if (channel.state === 'failed') {
+          try { await channel.detach(); } catch {}
+          channel = client.channels.get(channelName);
+        }
+
+        await channel.subscribe(eventName, stableHandler);
       } catch {
         // Connection may have closed between getClient() and subscribe()
       }

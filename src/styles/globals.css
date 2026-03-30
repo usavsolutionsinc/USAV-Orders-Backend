@@ -6,6 +6,8 @@
   --ds-color-border-subtle: #e2e8f0;
   --ds-font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
   --ds-font-mono: 'SFMono-Regular', 'SF Mono', Consolas, monospace;
+  --ds-radius-sm: 0.5rem;
+  --ds-radius-md: 0.625rem;
   --ds-radius-lg: 0.75rem;
   --ds-radius-xl: 1rem;
   --ds-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
@@ -13,6 +15,15 @@
   --ds-motion-fast: 150ms;
   --ds-motion-normal: 220ms;
   --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  /* USAV brand navy */
+  --color-navy-50:  #f0f4fb;
+  --color-navy-100: #dde6f5;
+  --color-navy-700: #1a3a6b;
+  --color-navy-800: #0f1f3d;
+  --color-navy-900: #0c1b33;
+  --color-brand:    #0f1f3d;
+  --color-brand-active: #1a3a6b;
+  --color-brand-tint:   #f0f4fb;
 }
 
 [data-theme='dark'] {

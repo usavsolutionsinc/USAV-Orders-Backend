@@ -2,6 +2,19 @@ export const baseColors = {
   white: '#ffffff',
   black: '#000000',
   transparent: 'transparent',
+  // USAV brand navy palette
+  navy: {
+    50:  '#f0f4fb',
+    100: '#dde6f5',
+    200: '#bacbeb',
+    300: '#8ca7db',
+    400: '#5b7fc8',
+    500: '#3a60b5',
+    600: '#2a4d9a',
+    700: '#1a3a6b',
+    800: '#0f1f3d',
+    900: '#0c1b33',
+  },
   gray: {
     50: '#f8fafc',
     100: '#f1f5f9',

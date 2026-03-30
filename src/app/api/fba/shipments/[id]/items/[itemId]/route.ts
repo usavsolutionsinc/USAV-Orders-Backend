@@ -2,6 +2,8 @@
 import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
+import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 type Params = Promise<{ id: string; itemId: string }>;
 
@@ -237,6 +239,9 @@ export async function PATCH(
 
     await client.query('COMMIT');
 
+    await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await publishFbaItemChanged({ action: 'update', shipmentId: Number(id), itemId: Number(itemId), source: 'fba.shipments.items.update' });
+
     return NextResponse.json({ success: true, item: result.rows[0] });
   } catch (error: any) {
     await client.query('ROLLBACK');
@@ -296,6 +301,9 @@ export async function DELETE(
       `DELETE FROM fba_shipment_items WHERE id = $1 AND shipment_id = $2`,
       [itemIdNum, shipmentId]
     );
+
+    await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await publishFbaItemChanged({ action: 'delete', shipmentId: Number(id), itemId: Number(itemId), source: 'fba.shipments.items.delete' });
 
     return NextResponse.json({ success: true, deleted_id: itemIdNum });
   } catch (error: any) {

@@ -8,6 +8,7 @@ import {
   updateShipmentSummary,
   updateShipmentError,
 } from './repository';
+import { publishShipmentStatusChange } from './publish-on-status-change';
 import * as ups from './providers/ups';
 import * as usps from './providers/usps';
 import * as fedex from './providers/fedex';
@@ -96,6 +97,7 @@ export async function syncShipment(input: SyncShipmentInput): Promise<SyncShipme
     );
 
     await updateShipmentSummary(shipment.id, result);
+    await publishShipmentStatusChange(shipment.id, 'shipping-sync');
 
     return {
       ok: true,

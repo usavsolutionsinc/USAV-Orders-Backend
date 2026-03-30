@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { parseFbaPlanId } from '@/lib/fba/plan-id';
+import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 type Params = Promise<{ id: string; itemId: string }>;
 
@@ -88,6 +90,9 @@ export async function PATCH(
     await client.query(refreshCounts, [targetShipmentId]);
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await publishFbaItemChanged({ action: 'reassign', shipmentId: Number(targetShipmentId || 0), itemId: Number(itemId), source: 'fba.shipments.items.reassign' });
 
     return NextResponse.json({ success: true, moved: { item_id: itemIdNum, from: sourceShipmentId, to: targetShipmentId } });
   } catch (error: any) {

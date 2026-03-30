@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Order, RepairQueueItem, FBAQueueItem, ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
 import { parsePositiveInt } from '@/utils/number';
-import { getOrdersChannelName } from '@/lib/realtime/channels';
+import { getOrdersChannelName, getRepairsChannelName, getStationChannelName, getFbaChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 
 interface UseUpNextDataOptions {
@@ -169,14 +169,27 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
 
+  // Debounced refresh to prevent rapid-fire when multiple Ably events arrive
+  // within a short window (e.g. bulk assignment updates).
+  const lastRefreshAtRef = useRef(0);
+  const debouncedRefresh = useCallback(() => {
+    const now = Date.now();
+    if (now - lastRefreshAtRef.current < 2000) return;
+    lastRefreshAtRef.current = now;
+    refreshRef.current();
+  }, []);
+
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 30000);
+    const interval = setInterval(refresh, 120000);
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techId]);
 
   const ordersChannelName = getOrdersChannelName();
+  const repairsChannelName = getRepairsChannelName();
+  const stationChannelName = getStationChannelName();
+  const fbaChannelName = getFbaChannelName();
 
   useAblyChannel(
     ordersChannelName,
@@ -212,11 +225,25 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   useAblyChannel(
     ordersChannelName,
     'queue.assignments',
-    () => {
-      refreshRef.current();
-    },
+    debouncedRefresh,
     true,
   );
+
+  // Refresh when orders are created/updated/deleted (e.g. Google Sheets transfer,
+  // shipping status changes, order adds/deletes).
+  useAblyChannel(ordersChannelName, 'order.changed', debouncedRefresh, true);
+
+  // Refresh when an order is tested (removes it from the tech queue).
+  useAblyChannel(ordersChannelName, 'order.tested', debouncedRefresh, true);
+
+  // Refresh when repairs change (new intake, status change, pickup).
+  useAblyChannel(repairsChannelName, 'repair.changed', debouncedRefresh, true);
+
+  // Refresh when receiving entries change (new scan, match, update).
+  useAblyChannel(stationChannelName, 'receiving-log.changed', debouncedRefresh, true);
+
+  // Refresh when FBA items change (scan, ready, shipped).
+  useAblyChannel(fbaChannelName, 'fba.item.changed', debouncedRefresh, true);
 
   // Mirror the real-time update strategy from PendingOrdersTable: respond to
   // broadcast refresh events so data stays in sync without waiting for the poll.

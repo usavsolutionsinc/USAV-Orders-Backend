@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { PackerTable } from './PackerTable';
 import { StationDetailsHandler } from './station/StationDetailsHandler';
+import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 
 interface PackerDashboardProps {
     packerId: string;
@@ -10,6 +11,7 @@ interface PackerDashboardProps {
 }
 
 export default function PackerDashboard({ packerId, showStaffSelector = true }: PackerDashboardProps) {
+    useRealtimeToasts('packer');
     const [refreshNonce, setRefreshNonce] = useState(0);
     useEffect(() => {
         void showStaffSelector;

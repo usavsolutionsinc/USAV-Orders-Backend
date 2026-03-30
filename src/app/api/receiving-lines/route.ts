@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 const QA_STATUSES  = new Set(['PENDING', 'PASSED', 'FAILED_DAMAGED', 'FAILED_INCOMPLETE', 'FAILED_FUNCTIONAL', 'HOLD']);
 const DISPOSITIONS = new Set(['ACCEPT', 'HOLD', 'RTV', 'SCRAP', 'REWORK']);
@@ -172,6 +174,10 @@ export async function POST(request: NextRequest) {
       ],
     );
 
+    const lineId = result.rows[0]?.id;
+    await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
+    await publishReceivingLogChanged({ action: 'insert', rowId: String(lineId), source: 'receiving-lines.create' });
+
     return NextResponse.json({ success: true, receiving_line: normalizeRow(result.rows[0]) }, { status: 201 });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to create receiving line';
@@ -305,6 +311,9 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
     }
 
+    await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
+    await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-lines.update' });
+
     return NextResponse.json({ success: true, receiving_line: normalizeRow(result.rows[0]) });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to update receiving line';
@@ -326,6 +335,9 @@ export async function DELETE(request: NextRequest) {
     if (result.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
     }
+
+    await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
+    await publishReceivingLogChanged({ action: 'delete', rowId: String(id), source: 'receiving-lines.delete' });
 
     return NextResponse.json({ success: true, id });
   } catch (error: unknown) {

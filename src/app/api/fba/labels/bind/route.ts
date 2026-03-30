@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 // ── POST /api/fba/labels/bind ─────────────────────────────────────────────────
 // Packer scans a shipping label barcode, then binds one or more FNSKUs to it.
@@ -152,6 +154,9 @@ export async function POST(request: NextRequest) {
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
+    await publishFbaItemChanged({ action: 'label-bind', shipmentId: Number(shipment_id || 0), source: 'fba.labels.bind' });
 
     return NextResponse.json({
       success: true,

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { detectCarrier } from '@/lib/tracking-format';
+import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 type Params = Promise<{ id: string }>;
 
@@ -109,6 +111,9 @@ export async function POST(
 
     await client.query('COMMIT');
 
+    await invalidateCacheTags(['fba-shipments']);
+    await publishFbaShipmentChanged({ action: 'tracking-linked', shipmentId: Number(id), source: 'fba.shipments.tracking.link' });
+
     return NextResponse.json(
       {
         success: true,
@@ -206,6 +211,10 @@ export async function PATCH(
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-shipments']);
+    await publishFbaShipmentChanged({ action: 'tracking-linked', shipmentId: Number(id), source: 'fba.shipments.tracking.update' });
+
     return NextResponse.json({
       success: true,
       link_id: Number(updated.rows[0].id),
@@ -248,6 +257,9 @@ export async function DELETE(
       'DELETE FROM fba_shipment_tracking WHERE id = $1 AND shipment_id = $2',
       [linkId, planId]
     );
+
+    await invalidateCacheTags(['fba-shipments']);
+    await publishFbaShipmentChanged({ action: 'tracking-unlinked', shipmentId: Number(id), source: 'fba.shipments.tracking.unlink' });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

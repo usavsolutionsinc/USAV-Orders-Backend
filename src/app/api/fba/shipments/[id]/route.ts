@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
+import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 type Params = Promise<{ id: string }>;
 
@@ -161,6 +163,9 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Shipment not found' }, { status: 404 });
     }
 
+    await invalidateCacheTags(['fba-board', 'fba-shipments']);
+    await publishFbaShipmentChanged({ action: 'updated', shipmentId: Number(id), source: 'fba.shipments.update' });
+
     return NextResponse.json({ success: true, shipment: result.rows[0] });
   } catch (error: any) {
     console.error('[PATCH /api/fba/shipments/[id]]', error);
@@ -200,6 +205,9 @@ export async function DELETE(
     }
 
     await pool.query(`DELETE FROM fba_shipments WHERE id = $1`, [planId]);
+
+    await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
+    await publishFbaShipmentChanged({ action: 'deleted', shipmentId: Number(id), source: 'fba.shipments.delete' });
 
     return NextResponse.json({ success: true, deleted_id: planId });
   } catch (error: any) {

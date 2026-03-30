@@ -7,7 +7,7 @@ import { upsertOpenOrderException } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { formatPSTTimestamp } from '@/utils/date';
-import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
+import { publishActivityLogged, publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
@@ -263,6 +263,7 @@ export async function POST(req: NextRequest) {
         await client.query('COMMIT');
         await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']);
         await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: fnskuLogId!, source: ROUTE });
+        if (salId) publishActivityLogged({ id: salId, station: 'TECH', activityType: 'FNSKU_SCANNED', staffId: testedBy, scanRef: null, fnsku, source: ROUTE }).catch(() => {});
 
         const scanSessionId = await createStationScanSession(pool, {
           staffId: testedBy,
@@ -348,6 +349,7 @@ export async function POST(req: NextRequest) {
         await client.query('COMMIT');
         await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']);
         if (salId) await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
+        if (salId) publishActivityLogged({ id: salId, station: 'TECH', activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: ROUTE }).catch(() => {});
 
         const scanSessionId = await createStationScanSession(pool, {
           staffId: testedBy,
@@ -399,6 +401,7 @@ export async function POST(req: NextRequest) {
       await client.query('COMMIT');
       await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']);
       if (salId) await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
+      if (salId) publishActivityLogged({ id: salId, station: 'TECH', activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: ROUTE }).catch(() => {});
       await publishOrderTested({ orderId: Number(order.id), testedBy, source: ROUTE });
 
       const scanSessionId = await createStationScanSession(pool, {

@@ -7,9 +7,13 @@ import {
   framerTransition,
 } from '@/design-system';
 import { ShipByDate } from '../ui/ShipByDate';
+import { cardTitle, chipText } from '@/design-system/tokens/typography/presets';
 import { Check, ClipboardList, Copy, ExternalLink, ChevronDown, Loader2, Package, X } from '@/components/Icons';
+import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
+import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
+import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { getTrackingUrl } from '@/utils/order-links';
 import { isEmptyDisplayValue, missingItemNumberLabelForStation } from '@/utils/empty-display-value';
@@ -103,6 +107,21 @@ function getDaysLateTone(daysLate: number) {
   return 'text-emerald-600';
 }
 
+function getConditionColor(condition: string | null | undefined) {
+  const c = (condition || '').toLowerCase().trim();
+  if (c.includes('new')) return 'text-yellow-500';
+  if (c.includes('part')) return 'text-amber-800';
+  return 'text-black';
+}
+
+function stripConditionPrefix(title: string | null | undefined, condition: string | null | undefined) {
+  const t = (title || '').trimStart();
+  const c = (condition || '').trim();
+  if (!t || !c) return t;
+  if (t.toLowerCase().startsWith(c.toLowerCase())) return t.slice(c.length).trimStart();
+  return t;
+}
+
 interface ActiveStationOrderCardProps {
   activeOrder: ActiveStationOrder;
   activeColorTextClass: string;
@@ -120,6 +139,7 @@ export default function ActiveStationOrderCard({
   onViewManual,
   onRemoveSerial,
 }: ActiveStationOrderCardProps) {
+  const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastAddedSerial, setLastAddedSerial] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<CopyFieldKey | null>(null);
@@ -218,8 +238,9 @@ export default function ActiveStationOrderCard({
         aria-expanded={isExpanded}
         className={`w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${variantStyles.focus}`}
       >
-        <div className="flex items-center justify-between px-3 pt-3 mb-2">
-          <div className="flex items-center gap-2 min-w-0">
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between px-3 pt-3 mb-4">
+          <div className="flex items-center gap-2">
             <ShipByDate
               date={getDisplayShipByDate(activeOrder) || ''}
               showPrefix={false}
@@ -239,34 +260,37 @@ export default function ActiveStationOrderCard({
               {daysLate}
             </span>
           </div>
-          <motion.span
-            animate={{ rotate: isExpanded ? 180 : 0 }}
-            transition={framerTransition.stationChevron}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-full border shrink-0 ${variantStyles.chevron}`}
-            aria-hidden
-          >
-            <ChevronDown className="w-4 h-4" />
-          </motion.span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openExternalByItemNumber(activeOrder.itemNumber);
+              }}
+              disabled={orderVariant !== 'order' || !getExternalUrlByItemNumber(activeOrder.itemNumber)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-2 text-gray-900 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-900 transition-colors"
+            >
+              <span className={`${chipText} leading-none translate-y-px`}>#{displayIdentifier}</span>
+              <ExternalLink className="w-3.5 h-3.5 text-blue-300" />
+            </button>
+            <motion.span
+              animate={{ rotate: isExpanded ? 180 : 0 }}
+              transition={framerTransition.stationChevron}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border shrink-0 ${variantStyles.chevron}`}
+              aria-hidden
+            >
+              <ChevronDown className="w-4 h-4" />
+            </motion.span>
+          </div>
         </div>
 
+        {/* ── Body ── */}
         <div className="px-3 pb-4">
-          <div className="flex items-center justify-between gap-2 mb-1.5">
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className={`text-[13px] font-black tabular-nums ${quantity > 1 ? 'text-amber-700' : 'text-gray-900'}`}
-              >
-                {quantity}
-              </span>
-              <span className="text-[13px] font-black uppercase tracking-wider text-gray-500">-</span>
-            <span className="text-[13px] font-black uppercase truncate text-gray-900">
-              {activeOrder.condition || 'No Condition'}
-            </span>
-          </div>
-            <span className="text-[13px] font-mono font-black tabular-nums text-gray-900 px-1.5 py-0.5 rounded border border-gray-300 shrink-0">
-              #{displayIdentifier}
-            </span>
-          </div>
-          <h3 className="text-base font-black text-gray-900 leading-tight">{activeOrder.productTitle}</h3>
+          <h3 className={cardTitle}>
+            <InlineQtyPrefix quantity={quantity} />
+            <span className={getConditionColor(activeOrder.condition)}>{activeOrder.condition || 'No Condition'}</span>
+            {' '}{stripConditionPrefix(activeOrder.productTitle, activeOrder.condition)}
+          </h3>
           {activeOrder.inlineMicrocopy ? (
             <p className="mt-2 text-[11px] font-semibold leading-snug text-emerald-700">
               {activeOrder.inlineMicrocopy}

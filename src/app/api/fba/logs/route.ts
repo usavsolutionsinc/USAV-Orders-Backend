@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
 const VALID_STAGES = ['TECH', 'PACK', 'SHIP', 'ADMIN'] as const;
 const VALID_EVENTS = ['SCANNED', 'READY', 'VERIFIED', 'BOXED', 'ASSIGNED', 'SHIPPED', 'UNASSIGNED', 'VOID'] as const;
@@ -193,6 +195,9 @@ export async function POST(request: NextRequest) {
     );
 
     await client.query('COMMIT');
+
+    await invalidateCacheTags(['fba-logs']);
+    await publishFbaItemChanged({ action: 'scan', shipmentId: 0, source: 'fba.logs.create' });
 
     return NextResponse.json(
       {

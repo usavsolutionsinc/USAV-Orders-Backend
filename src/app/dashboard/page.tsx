@@ -10,6 +10,8 @@ import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
 import FBAShipmentsTable from '@/components/dashboard/FBAShipmentsTable';
 import { Loader2 } from '@/components/Icons';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
+import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
+import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 import { useDashboardSelectedOrder } from '@/hooks/useDashboardSelectedOrder';
 import {
@@ -31,6 +33,8 @@ function DashboardPageContent() {
         requestCloseSelectedOrder,
     } = useDashboardSelectedOrder(detailsEnabled);
     useRealtimeInvalidation({ dashboard: true });
+    useFbaRealtimeInvalidation();
+    useRealtimeToasts('admin');
 
     useEffect(() => {
         const STALE = 5 * 60 * 1000;

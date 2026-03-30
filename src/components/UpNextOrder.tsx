@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { framerPresence, framerTransition, tabPagerVariants } from '@/design-system';
+import { motion, AnimatePresence } from 'framer-motion';
+import { framerPresence, framerTransition } from '@/design-system';
 import confetti from 'canvas-confetti';
 import { Package } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
@@ -67,10 +67,7 @@ const QUICK_FILTER_ITEMS: Record<TabId, HorizontalSliderItem[]> = {
 
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted, filterBarPortalRef }: UpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
-  /** +1 = animate like swiping to a tab to the right, -1 = to the left (visible tab bar order). */
-  const [tabSlideDir, setTabSlideDir] = useState(1);
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
-  const prefersReducedMotion = useReducedMotion();
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
   const [searchText, setSearchText] = useState('');
@@ -207,16 +204,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const activeTabVisible = visibleTabs.some((tab) => tab.id === activeTab);
   const effectiveTab     = activeTabVisible ? activeTab : visibleTabs[0]?.id || 'orders';
   const orders = nonStockOrders;
-  const visibleTabBarIndex = useCallback(
-    (id: TabId) => {
-      const v = visibleTabs.findIndex((t) => t.id === id);
-      if (v >= 0) return v;
-      const o = TAB_ORDER.indexOf(id);
-      return o >= 0 ? o : 0;
-    },
-    [visibleTabs],
-  );
-
   // Urgency breakdown for the summary bar (orders tab only)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -230,23 +217,18 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     d.setHours(0, 0, 0, 0);
     return d.getTime() === today.getTime();
   }).length;
-  const tabTransition = prefersReducedMotion ? framerTransition.tabPagerReduced : framerTransition.tabPager;
-
   const selectTab = useCallback(
-    (next: TabId, fromTab?: TabId) => {
-      const from = visibleTabBarIndex(fromTab ?? effectiveTab);
-      const to = visibleTabBarIndex(next);
-      setTabSlideDir(to >= from ? 1 : -1);
+    (next: TabId) => {
       setActiveTab(next);
     },
-    [effectiveTab, visibleTabBarIndex],
+    [],
   );
   const shouldShowStockSection = stockOrders.length > 0 && effectiveTab !== 'stock';
   const showNoCurrentOrdersBanner = allCompletedToday && filteredOrders.length === 0 && filteredStockOrders.length === 0;
 
   useEffect(() => {
     if (activeTabVisible || effectiveTab === activeTab) return;
-    selectTab(effectiveTab, activeTab);
+    selectTab(effectiveTab);
   }, [activeTabVisible, effectiveTab, activeTab, selectTab]);
 
   useEffect(() => {
@@ -263,7 +245,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     if (effectiveTab === 'all' || effectiveTab === 'orders') return;
     if (tabCounts[effectiveTab] > 0) return;
     const next = TAB_ORDER.find((id) => tabCounts[id] > 0);
-    if (next && next !== activeTab) selectTab(next, effectiveTab);
+    if (next && next !== activeTab) selectTab(next);
   }, [
     effectiveTab,
     activeTab,
@@ -468,20 +450,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         </AnimatePresence>
 
         {/* ── Primary tab content ── */}
-        {/* Grid stacks entering + exiting panes in one cell; mode="sync" keeps both in flow so height doesn't jump */}
-        <div className="grid overflow-hidden">
-        <AnimatePresence mode="sync" initial={false} custom={tabSlideDir}>
-          <motion.div
-            key={effectiveTab}
-            custom={tabSlideDir}
-            variants={tabPagerVariants}
-            initial={prefersReducedMotion ? false : 'enter'}
-            animate="center"
-            exit="exit"
-            transition={tabTransition}
-            className="col-start-1 row-start-1 min-w-0 w-full will-change-transform"
-            style={{ backfaceVisibility: 'hidden' }}
-          >
+        <div>
             {effectiveTab === 'stock' ? (
               filteredStockOrders.length === 0 ? (
                 <EmptySlate label={isFiltering ? "No results" : "No out-of-stock orders"} color="red" />
@@ -606,8 +575,6 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                 </Wrap>
               </div>
             )}
-          </motion.div>
-        </AnimatePresence>
         </div>
 
         {shouldShowStockSection && (

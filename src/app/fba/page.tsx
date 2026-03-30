@@ -14,7 +14,8 @@ import WeekHeader from '@/components/ui/WeekHeader';
 import StationFba from '@/components/station/StationFba';
 import { stationThemeColors } from '@/utils/staff-colors';
 import { useStationTheme } from '@/hooks/useStationTheme';
-import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
+import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
+import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
 type Tab = 'combine' | 'shipped';
@@ -62,14 +63,12 @@ interface CombineData {
 function FbaPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  useFbaRealtimeInvalidation();
 
   const refreshTrigger = Number(searchParams.get('r') || 0);
   const activeTab = resolveActiveTab(searchParams.get('tab'));
 
-  const staffDirectory = useActiveStaffDirectory();
-  const staffIdRaw = String(searchParams.get('staffId') || '').trim();
-  const staffIdFromUrl = /^\d+$/.test(staffIdRaw) ? parseInt(staffIdRaw, 10) : null;
-  const staffId = staffIdFromUrl ?? staffDirectory[0]?.id ?? null;
+  const [staffId] = usePersistedStaffId();
   const { theme: stationTheme } = useStationTheme({ staffId });
 
   // ── Combine data ─────────────────────────────────────────────────────
@@ -199,15 +198,6 @@ function FbaPageContent() {
     ? { duration: 0.01 }
     : { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const };
   const themeColors = stationThemeColors[stationTheme];
-
-  // Wait for staff directory to resolve before rendering themed content
-  if (staffId === null) {
-    return (
-      <div className="flex h-full w-full min-w-0 flex-1 flex-col items-center justify-center bg-stone-50">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-stone-50">
