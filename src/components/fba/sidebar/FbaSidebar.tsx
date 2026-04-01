@@ -17,10 +17,10 @@ import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScan
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
-import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
 import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
 import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
+import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
 const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
@@ -188,25 +188,12 @@ function FbaWorkspaceSidebarInner() {
   const rawTab = searchParams.get('tab');
   const activeTab: FbaTab = rawTab === 'shipped' ? 'shipped' : 'combine';
 
-  // Board selection: listen for selection events from FbaBoardTable
-  const [boardSelection, setBoardSelection] = useState<FbaBoardItem[]>([]);
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const items = (e as CustomEvent<FbaBoardItem[]>).detail;
-      setBoardSelection(items ?? []);
-    };
-    window.addEventListener('fba-board-selection', handler);
-    window.addEventListener('fba-paired-selection', handler);
-    return () => {
-      window.removeEventListener('fba-board-selection', handler);
-      window.removeEventListener('fba-paired-selection', handler);
-    };
-  }, []);
+  // Board selection from table/select-mode pairing events.
+  const boardSelection = useFbaBoardSelection({ includePairedSelection: true });
 
   // Clear selection when switching to shipped — also reset board checkboxes
   useEffect(() => {
     if (activeTab === 'shipped') {
-      setBoardSelection([]);
       window.dispatchEvent(new CustomEvent('fba-board-toggle-all', { detail: 'none' }));
     }
   }, [activeTab]);
@@ -307,6 +294,7 @@ function FbaWorkspaceSidebarInner() {
   }, [localSearch, activeTab]);
 
   const loadPendingPlans = useCallback(async () => {
+    if (activeTab === 'shipped') return;
     setPlansError(null);
     try {
       const res = await fetch('/api/fba/shipments?status=PLANNED&limit=50', { cache: 'no-store' });
@@ -337,24 +325,21 @@ function FbaWorkspaceSidebarInner() {
     } catch (err: any) {
       setPlansError(err?.message || 'Could not load plans');
     }
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab !== 'shipped') loadPendingPlans();
-  }, [activeTab, refreshToken, loadPendingPlans]);
+    void loadPendingPlans();
+  }, [refreshToken, loadPendingPlans]);
 
   useAblyChannel(FBA_SHIPMENT_ITEMS_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab === 'shipped') return;
     void loadPendingPlans();
   });
 
   useAblyChannel(FBA_SHIPMENTS_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab === 'shipped') return;
     void loadPendingPlans();
   });
 
   useAblyChannel(FBA_SHIPMENT_TRACKING_DB_CHANNEL, 'db.row.changed', () => {
-    if (activeTab === 'shipped') return;
     void loadPendingPlans();
   });
 
@@ -415,7 +400,11 @@ function FbaWorkspaceSidebarInner() {
       </div>
 
       {/* Single scroll container */}
-      <div data-testid="fba-sidebar-scroll" className="min-h-0 flex-1 overflow-y-auto scrollbar-hide bg-white">
+      <div
+        data-testid="fba-sidebar-scroll"
+        className="min-h-0 flex-1 overflow-y-auto scrollbar-hide bg-white"
+        style={{ ['--fba-sticky-top' as any]: '38px' }}
+      >
         {/* Welcome + goal + scan — hidden in shipped mode */}
         {isBoard && (
           <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
@@ -444,7 +433,7 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Select all row — fixed under scan bar */}
+        {/* Select all row */}
         {isBoard && boardSelectionCount.total > 0 && (
           <div className="sticky top-0 z-20 flex items-center gap-2.5 border-b border-gray-100 bg-white px-3 py-2">
             <PrintTableCheckbox
@@ -469,9 +458,6 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Active shipments — right under station + select-all for quick viewing */}
-        {isBoard && <FbaActiveShipments />}
-
         {/* Selection review card */}
         {isBoard && boardSelection.length > 0 && (
           <FbaPairedReviewPanel
@@ -479,6 +465,9 @@ function FbaWorkspaceSidebarInner() {
             stationTheme={stationTheme}
           />
         )}
+
+        {/* Active shipments */}
+        {isBoard && <FbaActiveShipments stationTheme={stationTheme} />}
 
         {activeTab === 'shipped' ? (
           <FbaShippedTable

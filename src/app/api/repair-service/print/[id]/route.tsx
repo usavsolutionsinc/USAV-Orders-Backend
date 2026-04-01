@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
 import { formatPhoneNumber } from '@/utils/phone';
+import pool from '@/lib/db';
 
 /**
  * GET /api/repair-service/print/[id] - Render printable repair service form
@@ -58,8 +59,11 @@ export async function GET(
 
     const repairServiceId = repair.id.toString();
     const repairServiceCode = `RS-${repairServiceId}`;
+    const canonicalRsCode = `RS-${String(repair.id).padStart(4, '0')}`;
+    const unpaddedRsCode = `RS-${repair.id}`;
     const ticketNumber = repair.ticket_number || '';
-    const externalTicketNumber = ticketNumber && ticketNumber !== repairServiceCode ? ticketNumber : '';
+    const isSameRsTicket = ticketNumber === repairServiceCode || ticketNumber === canonicalRsCode;
+    const externalTicketNumber = ticketNumber && !isSameRsTicket ? ticketNumber : '';
     const productTitle = repair.product_title || '';
     const issue = repair.issue || '';
     const serialNumber = repair.serial_number || '';
@@ -78,6 +82,43 @@ export async function GET(
     
     // Format contact as "Name, Phone, Email"
     const contactDisplay = [name, phoneNumber, email].filter(Boolean).join(', ');
+
+    // Resolve signature by RS code first (blob path + document_data ticketNumber),
+    // then fall back to direct repair entity linkage.
+    let signatureUrl = '';
+    try {
+      const signatureResult = await pool.query(
+        `SELECT d.signature_url
+         FROM documents d
+         WHERE d.entity_type = 'REPAIR'
+           AND d.signature_url IS NOT NULL
+           AND (
+             d.entity_id = $1
+             OR COALESCE(d.document_data->>'ticketNumber', '') = $2
+             OR d.signature_url ILIKE $3
+             OR d.signature_url ILIKE $4
+           )
+         ORDER BY
+           CASE
+             WHEN COALESCE(d.document_data->>'ticketNumber', '') = $2 THEN 0
+             WHEN d.signature_url ILIKE $3 THEN 1
+             WHEN d.signature_url ILIKE $4 THEN 2
+             WHEN d.entity_id = $1 THEN 3
+             ELSE 4
+           END,
+           d.created_at DESC
+         LIMIT 1`,
+        [
+          repair.id,
+          canonicalRsCode,
+          `%/${canonicalRsCode}_%`,
+          `%/${unpaddedRsCode}_%`,
+        ],
+      );
+      signatureUrl = String(signatureResult.rows[0]?.signature_url || '').trim();
+    } catch (signatureError) {
+      console.warn(`Failed to resolve repair signature for RS ${canonicalRsCode}:`, signatureError);
+    }
 
     // Generate HTML matching Repair Service Paper exactly
     const formHtml = `
@@ -142,10 +183,12 @@ export async function GET(
         </div>
 
         <!-- Drop Off Section -->
-        <div class="mb-10 mt-28">
+        <div class="mb-10 mt-12">
           <div class="flex items-end gap-4 mb-2">
             <span class="font-bold whitespace-nowrap">Drop Off X</span>
-            <div class="flex-1 border-b border-black" style="height: 24px;"></div>
+            <div class="flex-1 border-b border-black relative overflow-hidden" style="height: 56px;">
+              ${signatureUrl ? `<img src="${signatureUrl}" alt="Drop off signature for ${canonicalRsCode}" style="position:absolute;bottom:2px;left:0;max-height:50px;max-width:100%;width:auto;object-fit:contain;" />` : ''}
+            </div>
             <span class="font-bold whitespace-nowrap">Date: ${startDateTime}</span>
           </div>
           <p class="text-xs italic">

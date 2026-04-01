@@ -5,10 +5,19 @@ import { useDeleteOrderRow } from '@/hooks';
 
 interface DeleteOrderControlProps {
   orderId: number;
+  packerLogId?: number | null;
+  stationActivityLogId?: number | null;
+  trackingType?: string | null;
   onDeleted: () => void;
 }
 
-export function DeleteOrderControl({ orderId, onDeleted }: DeleteOrderControlProps) {
+export function DeleteOrderControl({
+  orderId,
+  packerLogId,
+  stationActivityLogId,
+  trackingType,
+  onDeleted,
+}: DeleteOrderControlProps) {
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
   const deleteArmTimeoutRef = useRef<number | null>(null);
   const deleteOrderMutation = useDeleteOrderRow();
@@ -32,7 +41,25 @@ export function DeleteOrderControl({ orderId, onDeleted }: DeleteOrderControlPro
     }
     setIsDeleteArmed(false);
     try {
-      await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderId });
+      const normalizedTrackingType = String(trackingType || '').toUpperCase();
+      const isLikelyActivityLogRow =
+        stationActivityLogId != null && Number(stationActivityLogId) === Number(orderId);
+      const shouldDeletePackingLog =
+        normalizedTrackingType === 'FBA' ||
+        normalizedTrackingType === 'FNSKU' ||
+        normalizedTrackingType === 'SKU' ||
+        normalizedTrackingType === 'SCAN' ||
+        isLikelyActivityLogRow;
+
+      if (shouldDeletePackingLog && (stationActivityLogId != null || packerLogId != null)) {
+        await deleteOrderMutation.mutateAsync({
+          rowSource: 'packing_log',
+          activityLogId: stationActivityLogId ?? undefined,
+          packerLogId: packerLogId ?? undefined,
+        });
+      } else {
+        await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderId });
+      }
       onDeleted();
     } catch (error) {
       console.error('Failed to permanently delete order:', error);

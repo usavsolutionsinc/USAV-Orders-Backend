@@ -5,6 +5,24 @@ import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { isFbaOrder } from '@/utils/order-platform';
 
 function toOrderRecord(order: any): ShippedOrder {
+  const primaryTracking = order.shipping_tracking_number || order.tracking_number || null;
+  const trackingNumbers = Array.isArray(order.tracking_numbers)
+    ? order.tracking_numbers.map((v: unknown) => String(v || '').trim()).filter(Boolean)
+    : primaryTracking
+      ? [String(primaryTracking).trim()]
+      : [];
+  const trackingNumberRows = Array.isArray(order.tracking_number_rows)
+    ? order.tracking_number_rows
+      .map((row: any) => ({
+        shipment_id: Number.isFinite(Number(row?.shipment_id)) ? Number(row.shipment_id) : null,
+        tracking: String(row?.tracking ?? row?.tracking_number_raw ?? '').trim(),
+        is_primary: Boolean(row?.is_primary),
+      }))
+      .filter((row: any) => row.tracking)
+    : [];
+  const mergedTrackingNumbers = trackingNumbers.length > 0
+    ? trackingNumbers
+    : trackingNumberRows.map((row: any) => row.tracking).filter(Boolean);
   return {
     ...order,
     deadline_at: order.deadline_at || null,
@@ -16,12 +34,26 @@ function toOrderRecord(order: any): ShippedOrder {
     condition: order.condition || '',
     // API returns tracking_number_raw aliased as tracking_number; map to the
     // canonical ShippedOrder field so details-panel and all consumers work.
-    shipping_tracking_number: order.shipping_tracking_number || order.tracking_number || null,
+    shipping_tracking_number: primaryTracking,
+    tracking_numbers: mergedTrackingNumbers,
+    tracking_number_rows: trackingNumberRows,
   };
 }
 
 function isNonFbaRecord(record: ShippedOrder) {
   return !isFbaOrder(record.order_id, record.account_source);
+}
+
+function dedupeByOrderId(records: ShippedOrder[]): ShippedOrder[] {
+  const seen = new Map<string, ShippedOrder>();
+  for (const record of records) {
+    const orderKey = String(record.order_id || '').trim();
+    const key = orderKey || `id:${record.id}`;
+    if (!seen.has(key)) {
+      seen.set(key, record);
+    }
+  }
+  return Array.from(seen.values());
 }
 
 export async function fetchPendingOrdersData({
@@ -52,7 +84,9 @@ export async function fetchPendingOrdersData({
   }
 
   const data = await res.json();
-  const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  const records = dedupeByOrderId(
+    ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord)
+  );
   // When searching, return all matches regardless of shipment_id so an order
   // with no label is still discoverable from the pending view search bar.
   // Without a search query the view is scoped to label-assigned orders only
@@ -78,7 +112,9 @@ export async function fetchPendingOrderRowById(
   const res = await fetch(`/api/orders?${params.toString()}`);
   if (!res.ok) return null;
   const data = await res.json();
-  const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  const records = dedupeByOrderId(
+    ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord)
+  );
   const visible = q ? records : records.filter((record) => record.shipment_id != null);
   return visible[0] ?? null;
 }
@@ -94,7 +130,9 @@ export async function fetchDashboardOrderRowById(orderId: number): Promise<Shipp
   if (!res.ok) return null;
 
   const data = await res.json();
-  const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
+  const records = dedupeByOrderId(
+    ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord)
+  );
   const orderRecord = records[0] ?? null;
   if (!orderRecord) return null;
 
@@ -183,7 +221,7 @@ export async function fetchDashboardShippedData({
       : Array.isArray(data.results)
         ? data.results
         : [];
-  const records = (shipped || []).map(toOrderRecord) as ShippedOrder[];
+  const records = dedupeByOrderId((shipped || []).map(toOrderRecord) as ShippedOrder[]);
   // When shippedFilter is provided the server already scopes the results;
   // fall back to client-side FBA exclusion only for backward-compat callers.
   return shippedFilter ? records : records.filter(isNonFbaRecord);

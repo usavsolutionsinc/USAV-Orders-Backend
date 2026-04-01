@@ -216,6 +216,18 @@ export async function PATCH(
       values
     );
 
+    // When manually marked READY_TO_GO (status cycle) with actual_qty=0,
+    // backfill actual_qty = expected_qty so it isn't shown as 0 scanned.
+    const row = result.rows[0];
+    if (row?.status === 'READY_TO_GO' && Number(row.actual_qty) === 0 && Number(row.expected_qty) > 0) {
+      const fixRes = await client.query(
+        `UPDATE fba_shipment_items SET actual_qty = expected_qty, updated_at = NOW()
+         WHERE id = $1 RETURNING *`,
+        [row.id]
+      );
+      if (fixRes.rows[0]) result.rows[0] = fixRes.rows[0];
+    }
+
     // Re-roll shipment item count cache
     await client.query(
       `UPDATE fba_shipments fs

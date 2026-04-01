@@ -53,16 +53,23 @@ const TRACKING_PATTERNS: ReadonlyArray<{ carrier: ScanCarrier; regex: RegExp }> 
   // UPS — 1Z + 16 alphanumeric chars (18 total)
   { carrier: 'UPS',           regex: /^1Z[A-Z0-9]{16}$/ },
 
+  // FedEx Express — 12 digits, commonly prefixed with 3 or 9
+  { carrier: 'FEDEX',         regex: /^[39]\d{11}$/ },
+
+  // FedEx Ground — 15 digits, frequently prefixed with 96 or 7
+  { carrier: 'FEDEX',         regex: /^(96\d{13}|7\d{14})$/ },
+
+  // FedEx Ground Economy (legacy SmartPost) — 20 digits, often prefixed with 92 or 61
+  { carrier: 'FEDEX',         regex: /^(92|61)\d{18}$/ },
+
+  // FedEx Freight — typically 15–25 digits, usually prefixed with 96
+  { carrier: 'FEDEX',         regex: /^96\d{13,23}$/ },
+
+  // FedEx Custom Critical — variable length, often prefixed with 00 or 01
+  { carrier: 'FEDEX',         regex: /^(00|01)\d{10,28}$/ },
+
   // Extended FedEx long labels seen in station scans (33–34 digits, 9621…)
   { carrier: 'FEDEX',         regex: /^9621\d{29,30}$/ },
-
-  // Explicit 12-digit short tracking example used at station (399…)
-  { carrier: 'FEDEX',         regex: /^399\d{9}$/ },
-
-  // FedEx — 12 / 15 / 20 pure digits OR 96XXXXXXXXXX (22) OR 1[456789]XXXXXXXXXXXXXX (16)
-  // Note: generic 22-digit matching was removed to avoid swallowing USPS IMpb
-  // labels such as 9300... which should classify as USPS.
-  { carrier: 'FEDEX',         regex: /^(96\d{20}|1[456789]\d{14}|\d{20}|\d{15}|\d{12})$/ },
 
   // USPS — IMpb starts 9XXXX (various lengths 16-22) or pure-digit 20-22
   { carrier: 'USPS',          regex: /^(9[2345][0-9]{18,20}|9[0-9]{15,21}|[0-9]{20,22})$/ },
@@ -101,13 +108,10 @@ export const SERIAL_FULL_REGEX    = /^[A-Z0-9]{15,17}([A-Z]{2})?$/i;
 export const SERIAL_PARTIAL_REGEX = /^[A-Z0-9]{1,10}$/i;
 
 /**
- * Amazon FNSKU (X0 + 8) or ASIN (B0 + 8). Exactly 10 A-Z/0-9 characters.
+ * Amazon FNSKU (X00 + 7) or ASIN (B0 + 8). Exactly 10 A-Z/0-9 characters.
  * Normalized before matching so scanner punctuation does not break detection.
- *
- * FNSKUs in this app are treated as the broader X0... family, not just X00...,
- * because live station scans include values like X004MW2DMB.
  */
-export const FNSKU_OR_ASIN_REGEX = /^(X0[A-Z0-9]{8}|B0[A-Z0-9]{8})$/;
+export const FNSKU_OR_ASIN_REGEX = /^(X00[A-Z0-9]{7}|B0[A-Z0-9]{8})$/;
 
 export function looksLikeFnsku(value: string): boolean {
   const v = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -115,14 +119,14 @@ export function looksLikeFnsku(value: string): boolean {
 }
 
 /**
- * True while input could still become a valid 10-char FNSKU (X0...) or ASIN (B0...).
+ * True while input could still become a valid 10-char FNSKU (X00...) or ASIN (B0...).
  * For station UI mode only — routing to `/api/tech/scan-fnsku` must use {@link looksLikeFnsku} (complete).
  */
 export function looksLikeFnskuPrefix(value: string): boolean {
   if (looksLikeFnsku(value)) return true;
   const v = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!v) return false;
-  if (/^X0[A-Z0-9]{0,8}$/.test(v) && v.length < 10) return true;
+  if (/^X00[A-Z0-9]{0,7}$/.test(v) && v.length < 10) return true;
   if (/^B0[A-Z0-9]{0,8}$/.test(v) && v.length < 10) return true;
   return false;
 }
@@ -149,17 +153,17 @@ export function classifyInput(raw: string): ClassifyResult {
     }
   }
 
-  // Anything ≥ 20 chars is definitively too long to be a serial number
-  // (serial_full max is 19 chars). Treat as an unrecognised-carrier tracking number.
+  // Anything ≥ 20 chars that doesn't match a carrier pattern is unknown.
+  // Station routing should then default this to SERIAL unless another
+  // explicit station regex handles it.
   if (norm.length >= 20) {
-    return { type: 'tracking', carrier: null, normalized: norm };
+    return { type: 'unknown', carrier: null, normalized: norm };
   }
 
-  // A scan that ends in a digit (no trailing letter suffix) and is ≥ 10 chars
-  // is characteristic of a carrier tracking barcode, not a product serial.
-  // Serial numbers in this system end with 0–2 uppercase letters.
+  // Do not auto-promote generic numeric values to tracking; unmatched values
+  // should fall through to serial/unknown handling.
   if (norm.length >= 10 && /\d$/.test(norm)) {
-    return { type: 'tracking', carrier: null, normalized: norm };
+    return { type: 'unknown', carrier: null, normalized: norm };
   }
 
   // Full serial (15-19 chars with optional 2-letter suffix)

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronLeft, LayoutDashboard, Menu, X, Zap } from '@/components/Icons';
+import { ChevronLeft, Menu, X, Zap } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
@@ -22,6 +22,7 @@ import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPane
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { WorkOrdersSidebarPanel } from '@/components/sidebar/WorkOrdersSidebarPanel';
+import { OperationsSidebarPanel } from '@/components/sidebar/OperationsSidebarPanel';
 import {
   APP_SIDEBAR_NAV,
   getSidebarRouteKey,
@@ -54,6 +55,7 @@ function getSidebarTitle(pathname: string | null) {
   const routeKey = getSidebarRouteKey(pathname);
   const titles: Record<string, string> = {
     dashboard: 'Dashboard',
+    operations: 'Operations',
     fba: 'FBA',
     receiving: 'Receiving',
     repair: 'Repair',
@@ -291,6 +293,10 @@ function SidebarContextPanel() {
     );
   }
 
+  if (routeKey === 'operations') {
+    return <OperationsSidebarPanel />;
+  }
+
   if (routeKey === 'admin') {
     const activeSection = (searchParams.get('section') as AdminSection) || 'goals';
     const validSection = ADMIN_SECTION_OPTIONS.some((item) => item.value === activeSection) ? activeSection : 'goals';
@@ -326,24 +332,7 @@ function SidebarContextPanel() {
     return <PackerSidebarPanel />;
   }
 
-  return (
-    <div className="h-full flex flex-col px-6 py-6">
-      <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-900 via-gray-800 to-blue-900 p-5 text-white">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">
-            <LayoutDashboard className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[18px] font-black uppercase tracking-tight">Workspace</p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.35em] text-blue-200">Unified Sidebar</p>
-          </div>
-        </div>
-        <p className="mt-4 text-[11px] font-semibold leading-relaxed text-gray-200">
-          Navigation and contextual controls now live in one persistent sidebar. Pick a route to load its tools here.
-        </p>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 function NavSection({
@@ -383,7 +372,7 @@ function NavSection({
   );
 }
 
-export default function DashboardSidebar() {
+export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inDrawer?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const routeKey = getSidebarRouteKey(pathname);
@@ -494,57 +483,68 @@ export default function DashboardSidebar() {
     visible: { opacity: 1, x: 0, filter: 'blur(0px)', transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 } },
   };
 
-  const homePanel = (
-    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col bg-white">
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-6">
-        <motion.div variants={itemVariants}>
-          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
-          <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
-          <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">More</p>
-          <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => setShowHomeNavigation(false)} />
-        </motion.div>
-      </div>
-      <motion.div variants={itemVariants} className="flex-shrink-0">
-        <DeviceModeToggle />
-      </motion.div>
-    </motion.div>
-  );
-
-  const contextPanel = (
-    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden bg-white">
-      <motion.button
-        variants={itemVariants}
-        type="button"
-        onClick={() => setShowHomeNavigation(true)}
-        className="w-full flex min-h-[44px] items-center gap-2 border-b border-gray-300 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
-        aria-label="Back to navigation"
-      >
-        <div className="h-9 w-7 flex items-center justify-start text-gray-500">
-          <ChevronLeft className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-black tracking-tight text-gray-900 truncate">{sidebarTitle}</p>
-        </div>
-      </motion.button>
-      <motion.div variants={itemVariants} className="flex-1 overflow-hidden">
-        <SidebarContextPanel />
-      </motion.div>
-    </motion.div>
-  );
-
   const shell = (
-    <aside className="h-full w-full bg-white border-r border-gray-400 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
+    <aside className="h-full w-full bg-white border-r border-gray-300 overflow-hidden shadow-xl shadow-gray-900/5 flex flex-col">
       <div className="flex-1 overflow-hidden">
-        {showHomeNavigation || routeKey === 'unknown' ? homePanel : contextPanel}
+        {inDrawer || showHomeNavigation || routeKey === 'unknown' ? (
+          <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col bg-white">
+            <div
+              className={`flex-1 overflow-y-auto px-3 space-y-6 ${
+                inDrawer
+                  ? 'pt-[max(3.5rem,calc(env(safe-area-inset-top)+2.75rem))]'
+                  : 'pt-3'
+              } pb-3`}
+            >
+              <motion.div variants={itemVariants}>
+                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-blue-600">Main</p>
+                <NavSection items={groupedNav.main} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
+              </motion.div>
+              <motion.div variants={itemVariants}>
+                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Stations</p>
+                <NavSection items={groupedNav.station} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
+              </motion.div>
+              <motion.div variants={itemVariants}>
+                <p className="px-1 pb-2 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">More</p>
+                <NavSection items={groupedNav.bottom} pathname={pathname} resolveHref={resolveHref} onNavigate={() => { setShowHomeNavigation(false); onNavigate?.(); }} />
+              </motion.div>
+            </div>
+            <motion.div
+              variants={itemVariants}
+              className={`flex-shrink-0 ${inDrawer ? 'pb-[max(1rem,env(safe-area-inset-bottom))]' : ''}`}
+            >
+              <DeviceModeToggle />
+            </motion.div>
+          </motion.div>
+        ) : (
+          <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden bg-white">
+            <motion.button
+              variants={itemVariants}
+              type="button"
+              onClick={() => setShowHomeNavigation(true)}
+              className="w-full flex min-h-[44px] items-center gap-2 border-b border-gray-200 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
+              aria-label="Back to navigation"
+            >
+              <div className="h-9 w-7 flex items-center justify-start text-gray-500">
+                <ChevronLeft className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black tracking-tight text-gray-900 truncate">{sidebarTitle}</p>
+              </div>
+            </motion.button>
+            <motion.div variants={itemVariants} className="flex-1 overflow-hidden">
+              <SidebarContextPanel />
+            </motion.div>
+          </motion.div>
+        )}
       </div>
     </aside>
   );
+
+  // When rendered inside ResponsiveLayout's mobile drawer, just render the
+  // shell directly — the drawer handles positioning, backdrop, and close.
+  if (inDrawer) {
+    return shell;
+  }
 
   return (
     <>

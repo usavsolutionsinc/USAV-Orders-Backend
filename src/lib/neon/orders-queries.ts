@@ -15,6 +15,12 @@ export interface ShippedOrder {
   condition: string;
   shipment_id?: number | string | null;
   shipping_tracking_number?: string | null;
+  tracking_numbers?: string[] | null;
+  tracking_number_rows?: Array<{
+    shipment_id: number | null;
+    tracking: string;
+    is_primary: boolean;
+  }> | null;
   serial_number: string; // Aggregated from tech_serial_numbers
   sku: string;
   /** Staff ID assigned to test — sourced from work_assignments.assigned_tech_id */
@@ -147,6 +153,8 @@ const ORDER_SERIALS_CTE = `
       o.item_number,
       o.condition,
       stn.tracking_number_raw AS tracking_number,
+      COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
+      COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
       o.sku,
       o.account_source,
       o.notes,
@@ -189,6 +197,56 @@ const ORDER_SERIALS_CTE = `
     ) wa_p ON true
     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
     LEFT JOIN LATERAL (
+      SELECT COALESCE(
+        json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
+          FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+        '[]'::json
+      ) AS tracking_numbers,
+      COALESCE(
+        json_agg(
+          json_build_object(
+            'shipment_id', t.shipment_id,
+            'tracking', t.tracking_number_raw,
+            'is_primary', t.is_primary
+          )
+          ORDER BY t.sort_key, t.tracking_number_raw
+        ) FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+        '[]'::json
+      ) AS tracking_number_rows
+      FROM (
+        SELECT DISTINCT
+          osl_link.shipment_id,
+          stn_link.tracking_number_raw,
+          COALESCE(osl_link.is_primary, false) AS is_primary,
+          CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
+        FROM order_shipment_links osl_link
+        LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
+        WHERE osl_link.order_row_id = o.id
+
+        UNION
+
+        SELECT DISTINCT
+          o_primary.shipment_id,
+          stn_primary.tracking_number_raw,
+          true AS is_primary,
+          0 AS sort_key
+        FROM orders o_primary
+        LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
+        WHERE o_primary.id = o.id
+
+        UNION
+
+        SELECT DISTINCT
+          o_sibling.shipment_id,
+          stn_sibling.tracking_number_raw,
+          false AS is_primary,
+          2 AS sort_key
+        FROM orders o_sibling
+        LEFT JOIN shipping_tracking_numbers stn_sibling ON stn_sibling.id = o_sibling.shipment_id
+        WHERE o_sibling.order_id = o.order_id
+      ) t
+    ) order_trackings ON TRUE
+    LEFT JOIN LATERAL (
       SELECT
         pl.packed_by,
         pl.created_at AS packed_at,
@@ -230,7 +288,7 @@ const ORDER_SERIALS_CTE = `
     WHERE COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
             OR stn.is_out_for_delivery OR stn.is_delivered, false)
     GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
-             o.condition, o.item_number, stn.tracking_number_raw, o.sku,
+             o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
              o.account_source, o.notes, o.status_history,
              stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
              stn.latest_status_category, stn.carrier,
@@ -350,6 +408,8 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.item_number,
           o.condition,
           stn.tracking_number_raw AS tracking_number,
+          COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
+          COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
           o.sku,
           o.account_source,
           o.notes,
@@ -392,6 +452,56 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         ) wa_p ON true
         LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
         LEFT JOIN LATERAL (
+          SELECT COALESCE(
+            json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
+              FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+            '[]'::json
+          ) AS tracking_numbers,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'shipment_id', t.shipment_id,
+                'tracking', t.tracking_number_raw,
+                'is_primary', t.is_primary
+              )
+              ORDER BY t.sort_key, t.tracking_number_raw
+            ) FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+            '[]'::json
+          ) AS tracking_number_rows
+          FROM (
+            SELECT DISTINCT
+              osl_link.shipment_id,
+              stn_link.tracking_number_raw,
+              COALESCE(osl_link.is_primary, false) AS is_primary,
+              CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
+            FROM order_shipment_links osl_link
+            LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
+            WHERE osl_link.order_row_id = o.id
+
+            UNION
+
+            SELECT DISTINCT
+              o_primary.shipment_id,
+              stn_primary.tracking_number_raw,
+              true AS is_primary,
+              0 AS sort_key
+            FROM orders o_primary
+            LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
+            WHERE o_primary.id = o.id
+
+            UNION
+
+            SELECT DISTINCT
+              o_sibling.shipment_id,
+              stn_sibling.tracking_number_raw,
+              false AS is_primary,
+              2 AS sort_key
+            FROM orders o_sibling
+            LEFT JOIN shipping_tracking_numbers stn_sibling ON stn_sibling.id = o_sibling.shipment_id
+            WHERE o_sibling.order_id = o.order_id
+          ) t
+        ) order_trackings ON TRUE
+        LEFT JOIN LATERAL (
           SELECT
             pl.packed_by,
             pl.created_at AS packed_at,
@@ -431,7 +541,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           AND COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
                 OR stn.is_out_for_delivery OR stn.is_delivered, false)
         GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
-                 o.condition, o.item_number, stn.tracking_number_raw, o.sku,
+                 o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
                  o.account_source, o.notes, o.status_history,
                  stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
                  stn.latest_status_category, stn.carrier,

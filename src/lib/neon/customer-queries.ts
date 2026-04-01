@@ -13,6 +13,14 @@ export interface CustomerRecord {
   entity_id: number | null;
 }
 
+export interface CustomerLookupRecord {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  updated_at: string | null;
+}
+
 /**
  * Find a customer by phone number.
  */
@@ -113,4 +121,54 @@ export async function findOrCreateRepairCustomer(params: {
 
   // Create new
   return createRepairCustomer(params);
+}
+
+/**
+ * Lookup customers for repair intake "add existing customer".
+ * If query is blank, returns most recently updated customers.
+ */
+export async function searchRepairCustomers(query: string, limit = 20): Promise<CustomerLookupRecord[]> {
+  const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(50, Number(limit))) : 20;
+  const normalized = String(query || '').trim();
+
+  const result = normalized
+    ? await pool.query(
+        `SELECT
+           id,
+           COALESCE(NULLIF(display_name, ''), NULLIF(customer_name, ''), CONCAT_WS(' ', NULLIF(first_name, ''), NULLIF(last_name, '')), 'Unknown') AS name,
+           NULLIF(phone, '') AS phone,
+           NULLIF(email, '') AS email,
+           updated_at::text AS updated_at
+         FROM customers
+         WHERE
+           COALESCE(display_name, '') ILIKE $1
+           OR COALESCE(customer_name, '') ILIKE $1
+           OR COALESCE(first_name, '') ILIKE $1
+           OR COALESCE(last_name, '') ILIKE $1
+           OR COALESCE(phone, '') ILIKE $1
+           OR COALESCE(email, '') ILIKE $1
+         ORDER BY updated_at DESC NULLS LAST, id DESC
+         LIMIT $2`,
+        [`%${normalized}%`, safeLimit],
+      )
+    : await pool.query(
+        `SELECT
+           id,
+           COALESCE(NULLIF(display_name, ''), NULLIF(customer_name, ''), CONCAT_WS(' ', NULLIF(first_name, ''), NULLIF(last_name, '')), 'Unknown') AS name,
+           NULLIF(phone, '') AS phone,
+           NULLIF(email, '') AS email,
+           updated_at::text AS updated_at
+         FROM customers
+         ORDER BY updated_at DESC NULLS LAST, id DESC
+         LIMIT $1`,
+        [safeLimit],
+      );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    name: String(row.name || 'Unknown'),
+    phone: row.phone ? String(row.phone) : null,
+    email: row.email ? String(row.email) : null,
+    updated_at: row.updated_at ? String(row.updated_at) : null,
+  }));
 }

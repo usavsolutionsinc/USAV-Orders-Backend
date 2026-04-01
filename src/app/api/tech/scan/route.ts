@@ -15,6 +15,11 @@ import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { createFbaLog } from '@/lib/fba/createFbaLog';
 
 const ROUTE = 'tech.scan';
+type ScanSourceStation = 'TECH' | 'FBA';
+
+function resolveScanSourceStation(value: unknown): ScanSourceStation {
+  return String(value || '').trim().toUpperCase() === 'FBA' ? 'FBA' : 'TECH';
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -199,6 +204,10 @@ export async function POST(req: NextRequest) {
 
   const value = String(body.value || body.tracking || '').trim();
   const techId = Number(body.techId);
+  const sourceStation = resolveScanSourceStation(body.sourceStation);
+  const stationSource = sourceStation === 'FBA' ? 'fba.scan' : ROUTE;
+  const salStation = sourceStation;
+  const isFbaSource = sourceStation === 'FBA';
   if (!value) return NextResponse.json({ success: false, found: false, error: 'Scan value is required' }, { status: 400 });
   if (!techId) return NextResponse.json({ success: false, found: false, error: 'Tech ID is required' }, { status: 400 });
 
@@ -232,28 +241,29 @@ export async function POST(req: NextRequest) {
 
         // 1. SAL row (SoT)
         const salId = await createStationActivityLog(client, {
-          station: 'TECH',
+          station: salStation,
           activityType: 'FNSKU_SCANNED',
           staffId: testedBy,
           fnsku,
           fbaShipmentId: fbaItem?.shipment_id ?? null,
           fbaShipmentItemId: fbaItem?.item_id ?? null,
-          notes: 'Tech FNSKU scan',
-          metadata: { product_title: catalog.product_title, sku: catalog.sku, asin: catalog.asin },
+          notes: isFbaSource ? 'FBA workspace FNSKU scan' : 'Tech FNSKU scan',
+          metadata: { source: stationSource, product_title: catalog.product_title, sku: catalog.sku, asin: catalog.asin },
           createdAt: testDateTime,
         });
 
         // 2. fba_fnsku_logs row (FK to SAL)
         const fnskuLogId = await createFbaLog(client, {
           fnsku,
-          sourceStage: 'TECH',
+          sourceStage: isFbaSource ? 'FBA' : 'TECH',
           eventType: 'SCANNED',
           staffId: testedBy,
           stationActivityLogId: salId!,
           fbaShipmentId: fbaItem?.shipment_id ?? null,
           fbaShipmentItemId: fbaItem?.item_id ?? null,
-          station: 'TECH_STATION',
-          metadata: { product_title: catalog.product_title, sku: catalog.sku, asin: catalog.asin },
+          station: isFbaSource ? 'FBA_WORKSPACE' : 'TECH_STATION',
+          notes: isFbaSource ? 'FBA workspace FNSKU scan' : undefined,
+          metadata: { source: stationSource, product_title: catalog.product_title, sku: catalog.sku, asin: catalog.asin },
         });
 
         // Get existing serials for this session
@@ -261,9 +271,11 @@ export async function POST(req: NextRequest) {
         const summary = await fnskuStageCounts(client as any, fnsku);
 
         await client.query('COMMIT');
-        await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']);
-        await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: fnskuLogId!, source: ROUTE });
-        if (salId) publishActivityLogged({ id: salId, station: 'TECH', activityType: 'FNSKU_SCANNED', staffId: testedBy, scanRef: null, fnsku, source: ROUTE }).catch(() => {});
+        await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+        if (!isFbaSource) {
+          await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: fnskuLogId!, source: ROUTE });
+        }
+        if (salId) publishActivityLogged({ id: salId, station: salStation, activityType: 'FNSKU_SCANNED', staffId: testedBy, scanRef: null, fnsku, source: stationSource }).catch(() => {});
 
         const scanSessionId = await createStationScanSession(pool, {
           staffId: testedBy,
@@ -325,31 +337,31 @@ export async function POST(req: NextRequest) {
         let ordersExceptionId: number | null = null;
         const upsertResult = await upsertOpenOrderException({
           shippingTrackingNumber: value,
-          sourceStation: 'tech',
+          sourceStation: isFbaSource ? 'fba' : 'tech',
           staffId: testedBy,
           staffName: staff.name,
           reason: 'not_found',
-          notes: 'Tech scan: tracking not found in orders',
+          notes: isFbaSource ? 'FBA scan: tracking not found in orders' : 'Tech scan: tracking not found in orders',
         }, client);
         ordersExceptionId = upsertResult.exception?.id ?? null;
 
         const testDateTime = formatPSTTimestamp();
         const salId = await createStationActivityLog(client, {
-          station: 'TECH',
+          station: salStation,
           activityType: 'TRACKING_SCANNED',
           staffId: testedBy,
           shipmentId: resolved.shipmentId ?? null,
           scanRef: resolved.scanRef ?? value,
           ordersExceptionId,
-          notes: 'Tracking scan without matched order',
-          metadata: { order_found: false, tracking: value },
+          notes: isFbaSource ? 'FBA tracking scan without matched order' : 'Tracking scan without matched order',
+          metadata: { source: stationSource, order_found: false, tracking: value },
           createdAt: testDateTime,
         });
 
         await client.query('COMMIT');
-        await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']);
-        if (salId) await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
-        if (salId) publishActivityLogged({ id: salId, station: 'TECH', activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: ROUTE }).catch(() => {});
+        await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+        if (salId && !isFbaSource) await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
+        if (salId) publishActivityLogged({ id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
 
         const scanSessionId = await createStationScanSession(pool, {
           staffId: testedBy,
@@ -386,12 +398,12 @@ export async function POST(req: NextRequest) {
       const testDateTime = formatPSTTimestamp();
 
       const salId = await createStationActivityLog(client, {
-        station: 'TECH',
+        station: salStation,
         activityType: 'TRACKING_SCANNED',
         staffId: testedBy,
         shipmentId: matchedShipmentId,
         scanRef: resolved.scanRef ?? value,
-        metadata: { order_found: true, order_id: order.order_id, tracking: trackingValue },
+        metadata: { source: stationSource, order_found: true, order_id: order.order_id, tracking: trackingValue },
         createdAt: testDateTime,
       });
 
@@ -399,10 +411,12 @@ export async function POST(req: NextRequest) {
       const existingSerials = salId ? await getSerialsBySalId(client as any, salId) : [];
 
       await client.query('COMMIT');
-      await invalidateCacheTags(['orders', 'orders-next', 'tech-logs']);
-      if (salId) await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
-      if (salId) publishActivityLogged({ id: salId, station: 'TECH', activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: ROUTE }).catch(() => {});
-      await publishOrderTested({ orderId: Number(order.id), testedBy, source: ROUTE });
+      await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
+      if (salId && !isFbaSource) await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
+      if (salId) publishActivityLogged({ id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
+      if (!isFbaSource) {
+        await publishOrderTested({ orderId: Number(order.id), testedBy, source: ROUTE });
+      }
 
       const scanSessionId = await createStationScanSession(pool, {
         staffId: testedBy,

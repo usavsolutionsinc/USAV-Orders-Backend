@@ -31,7 +31,6 @@ export interface FbaBoardItem {
 
 interface FbaBoardTableProps {
   items: FbaBoardItem[];
-  variant: 'board' | 'paired';
   stationTheme?: StationTheme;
   emptyMessage?: string;
   onSelectionChange?: (selected: FbaBoardItem[]) => void;
@@ -61,7 +60,6 @@ function sortBoardItems(a: FbaBoardItem, b: FbaBoardItem) {
 
 export function FbaBoardTable({
   items,
-  variant,
   stationTheme = 'green',
   emptyMessage,
   onSelectionChange,
@@ -86,6 +84,21 @@ export function FbaBoardTable({
   );
 
   useEffect(() => {
+    // Keep checkbox state aligned with the current table slice (filters/week changes).
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(sortedItems.map((item) => item.item_id));
+      const next = new Set<number>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+      }
+      if (next.size === prev.size) return prev;
+      emitSelection(next);
+      return next;
+    });
+  }, [sortedItems, emitSelection]);
+
+  useEffect(() => {
     // Defer dispatch to avoid setState-during-render in listening components (FbaSidebar)
     const id = requestAnimationFrame(() => {
       const qtyOrOne = (i: FbaBoardItem) => Math.max(1, Number(i.actual_qty || 0));
@@ -95,7 +108,12 @@ export function FbaBoardTable({
       const totalQty = sortedItems.reduce((sum, i) => sum + qtyOrOne(i), 0);
       window.dispatchEvent(
         new CustomEvent('fba-board-selection-count', {
-          detail: { selected: selectedIds.size, total: sortedItems.length, selectedQty, totalQty },
+          detail: {
+            selected: sortedItems.filter((i) => selectedIds.has(i.item_id)).length,
+            total: sortedItems.length,
+            selectedQty,
+            totalQty,
+          },
         }),
       );
     });

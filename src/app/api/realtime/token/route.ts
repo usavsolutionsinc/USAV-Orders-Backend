@@ -7,6 +7,7 @@ import {
   getFbaChannelName,
   getOrdersChannelName,
   getRepairsChannelName,
+  getStaffChannelName,
   getStationChannelName,
 } from '@/lib/realtime/channels';
 
@@ -50,6 +51,7 @@ async function createTokenRequest(req: NextRequest) {
     [getRepairsChannelName()]: ['subscribe'],
     [getAiAssistChannelName()]: ['subscribe'],
     [getStationChannelName()]: ['subscribe'],
+    [getStaffChannelName()]: ['subscribe'],
     [getFbaChannelName()]: ['subscribe'],
     [`${getDbChannelPrefix()}:*`]: ['subscribe'],
   };

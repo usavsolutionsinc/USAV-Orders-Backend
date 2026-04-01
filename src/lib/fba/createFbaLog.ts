@@ -2,7 +2,7 @@ type Queryable = {
   query: (text: string, params?: any[]) => Promise<{ rows: any[] }>;
 };
 
-export type FbaLogSourceStage = 'TECH' | 'PACK' | 'SHIP' | 'ADMIN';
+export type FbaLogSourceStage = 'TECH' | 'FBA' | 'PACK' | 'SHIP' | 'ADMIN';
 
 export type FbaLogEventType =
   | 'SCANNED'

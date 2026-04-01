@@ -2,12 +2,18 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { getActiveStaff } from '@/lib/staffCache';
-import { X, ChevronLeft, ChevronRight } from '../Icons';
+import { ChevronLeft, Loader2 } from '../Icons';
 import { ProductSelector } from './ProductSelector';
 import { ReasonSelector } from './ReasonSelector';
 import { CustomerInfoForm } from './CustomerInfoForm';
 import { RepairAgreement } from './RepairAgreement';
 import type { SignatureData } from './SignaturePad';
+import {
+    SidebarIntakeFormShell,
+    SidebarIntakeFormField,
+    getSidebarIntakeInputClass,
+    getSidebarIntakeSubmitButtonClass,
+} from '@/design-system/components';
 
 interface RepairIntakeFormProps {
     onClose: () => void;
@@ -43,12 +49,20 @@ interface TechStaff {
     name: string;
 }
 
+interface ExistingCustomer {
+    id: number;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    updated_at: string | null;
+}
+
 type FormStep = 'product' | 'customer' | 'agreement';
 
-const STEPS: { key: FormStep; label: string; shortLabel: string }[] = [
-    { key: 'product', label: 'Product & Issue', shortLabel: 'Product' },
-    { key: 'customer', label: 'Customer Info', shortLabel: 'Customer' },
-    { key: 'agreement', label: 'Agreement', shortLabel: 'Sign' },
+const STEPS: { key: FormStep; label: string }[] = [
+    { key: 'product', label: 'Product & Issue' },
+    { key: 'customer', label: 'Customer Info' },
+    { key: 'agreement', label: 'Review & Sign' },
 ];
 
 function buildInitialFormData(initialData?: Partial<RepairFormData>): RepairFormData {
@@ -86,6 +100,15 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     const [techs, setTechs] = useState<TechStaff[]>([]);
     const [loadingTechs, setLoadingTechs] = useState(true);
     const [skuIssues, setSkuIssues] = useState<string[]>([]);
+    const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('new');
+    const [customerQuery, setCustomerQuery] = useState('');
+    const [customerResults, setCustomerResults] = useState<ExistingCustomer[]>([]);
+    const [loadingCustomers, setLoadingCustomers] = useState(false);
+    const [customerSearchError, setCustomerSearchError] = useState('');
+    const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+
+    const orangeSubmitButtonClass = getSidebarIntakeSubmitButtonClass('orange');
+    const orangeInputClass = getSidebarIntakeInputClass('orange');
 
     useEffect(() => {
         let active = true;
@@ -117,6 +140,42 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     useEffect(() => {
         setFormData(buildInitialFormData(initialData));
     }, [initialData]);
+
+    useEffect(() => {
+        if (currentStep !== 'customer' || customerMode !== 'existing') return;
+
+        let active = true;
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            setLoadingCustomers(true);
+            setCustomerSearchError('');
+            try {
+                const q = customerQuery.trim();
+                const res = await fetch(`/api/repair/customers?q=${encodeURIComponent(q)}&limit=25`, {
+                    signal: controller.signal,
+                });
+                const payload = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(payload?.error || 'Failed to fetch customers');
+                }
+                if (!active) return;
+                const rows = Array.isArray(payload?.customers) ? payload.customers : [];
+                setCustomerResults(rows);
+            } catch (error: any) {
+                if (!active || controller.signal.aborted) return;
+                setCustomerResults([]);
+                setCustomerSearchError(String(error?.message || 'Failed to fetch customers'));
+            } finally {
+                if (active) setLoadingCustomers(false);
+            }
+        }, 220);
+
+        return () => {
+            active = false;
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [currentStep, customerMode, customerQuery]);
 
     const productSelected = !!(formData.product.type && formData.product.model);
 
@@ -169,293 +228,314 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         setFormData(prev => ({ ...prev, customer: { ...prev.customer, [field]: value } }));
     };
 
+    const applyExistingCustomer = (customer: ExistingCustomer) => {
+        setSelectedCustomerId(customer.id);
+        setCustomerMode('new');
+        setFormData((prev) => ({
+            ...prev,
+            customer: {
+                name: customer.name || prev.customer.name,
+                phone: customer.phone || '',
+                email: customer.email || '',
+            },
+        }));
+    };
+
+    const formatUpdatedAt = (value: string | null) => {
+        if (!value) return '—';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '—';
+        return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    };
+
     const currentStepIndex = STEPS.findIndex(s => s.key === currentStep);
+    const progress = ((currentStepIndex + 1) / STEPS.length) * 100;
+
+    const footerContent = (() => {
+        if (currentStep === 'product') {
+            return (
+                <div className="flex items-center gap-3">
+                    {productSelected && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const scrollEl = document.querySelector('.scrollbar-hide');
+                                scrollEl?.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
+                        >
+                            + Add More
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={handleNext}
+                        disabled={!canProceedFromProduct}
+                        className={orangeSubmitButtonClass}
+                    >
+                        Continue
+                    </button>
+                </div>
+            );
+        }
+        if (currentStep === 'customer') {
+            return (
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={handleBack}
+                        className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
+                    >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Back
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleNext}
+                        disabled={!canProceedFromCustomer}
+                        className={orangeSubmitButtonClass}
+                    >
+                        Continue
+                    </button>
+                </div>
+            );
+        }
+        return (
+            <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={handleBack}
+                        className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[10px] font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
+                    >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Back
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={!canSubmit || isSubmitting}
+                        className={orangeSubmitButtonClass}
+                    >
+                        {isSubmitting ? (
+                            <span className="flex items-center justify-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Submitting...
+                            </span>
+                        ) : (
+                            'Submit Repair'
+                        )}
+                    </button>
+                </div>
+                {!signatureData && (
+                    <p className="text-center text-[9px] font-bold uppercase tracking-wide text-amber-600">
+                        Signature required to submit
+                    </p>
+                )}
+            </div>
+        );
+    })();
 
     return (
-        <div className="flex flex-col h-full bg-white">
-
-            {/* ── Header ── */}
-            <div className="flex-shrink-0 bg-white border-b-2 border-gray-900">
-                <div className="flex items-stretch h-14">
-                    {/* Close */}
-                    <button
-                        onClick={onClose}
-                        className="flex items-center justify-center w-14 border-r-2 border-gray-900 hover:bg-gray-100 active:bg-gray-200 transition-colors"
-                        aria-label="Close"
-                    >
-                        <X className="h-5 w-5 text-gray-900" />
-                    </button>
-
-                    {/* Title */}
-                    <div className="flex-1 flex items-center px-4 gap-3">
-                        <div>
-                            <p className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-600">
-                                Repair Intake
-                            </p>
-                            <h2 className="text-sm font-black uppercase tracking-tight text-gray-900 leading-none mt-0.5">
-                                {STEPS[currentStepIndex].label}
-                            </h2>
-                        </div>
-                    </div>
-
-                    {/* Step counter */}
-                    <div className="flex items-center px-4 border-l-2 border-gray-900">
-                        <span className="text-xs font-black text-gray-500 tabular-nums">
-                            {currentStepIndex + 1}
-                            <span className="text-gray-500 mx-0.5">/</span>
-                            {STEPS.length}
-                        </span>
-                    </div>
-                </div>
-
-                {/* ── Step Indicator Rail ── */}
-                <div className="flex border-t border-gray-200">
-                    {STEPS.map((step, i) => {
-                        const isActive = step.key === currentStep;
-                        const isDone = i < currentStepIndex;
-                        return (
-                            <div
+        <SidebarIntakeFormShell
+            title="Repair Intake"
+            subtitle={STEPS[currentStepIndex].label}
+            subtitleAccent="blue"
+            onClose={onClose}
+            bandBelowHeader={
+                <div className="pb-4">
+                    {/* Step labels */}
+                    <div className="mb-2 flex items-center justify-between">
+                        {STEPS.map((step, i) => (
+                            <span
                                 key={step.key}
-                                className={`flex-1 flex items-center justify-center gap-1.5 py-2 border-r last:border-r-0 border-gray-200 ${
-                                    isActive ? 'bg-blue-600' : isDone ? 'bg-gray-900' : 'bg-white'
+                                className={`text-[9px] font-black uppercase tracking-wide ${
+                                    i <= currentStepIndex ? 'text-blue-600' : 'text-gray-400'
                                 }`}
                             >
-                                {isDone ? (
-                                    <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                ) : (
-                                    <span className={`text-[9px] font-black tabular-nums ${isActive ? 'text-white' : 'text-gray-500'}`}>
-                                        {i + 1}
-                                    </span>
-                                )}
-                                <span className={`text-[9px] font-black uppercase tracking-wide ${
-                                    isActive ? 'text-white' : isDone ? 'text-white' : 'text-gray-500'
-                                }`}>
-                                    {step.shortLabel}
-                                </span>
-                            </div>
-                        );
-                    })}
+                                {step.label}
+                            </span>
+                        ))}
+                    </div>
+                    {/* Progress bar */}
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div
+                            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500 ease-out"
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
                 </div>
-            </div>
+            }
+            footer={footerContent}
+        >
+            {/* STEP 1: Product + Reason + Tech */}
+            {currentStep === 'product' && (
+                <div className="space-y-5">
+                    <ProductSelector
+                        onSelect={(product) => setFormData(prev => ({ ...prev, product }))}
+                        selectedProduct={formData.product.type ? formData.product : null}
+                        onPriceChange={(price) => setFormData(prev => ({ ...prev, price }))}
+                    />
 
-            {/* ── Form Content ── */}
-            <div className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide">
-                <div className="p-5 space-y-0">
-
-                    {/* ── STEP 1: Product → Reason → Tech ── */}
-                    {currentStep === 'product' && (
-                        <div className="space-y-6">
-                            {/* Product Selector card */}
-                            <div className="bg-white border-2 border-gray-900 p-5">
-                                <ProductSelector
-                                    onSelect={(product) => setFormData(prev => ({ ...prev, product }))}
-                                    selectedProduct={formData.product.type ? formData.product : null}
-                                    onPriceChange={(price) => setFormData(prev => ({ ...prev, price }))}
-                                />
-                            </div>
-
-                            {/* Reason + Tech — slides in after product selected */}
-                            <div
-                                ref={reasonRef}
-                                className={`transition-all duration-300 origin-top ${
-                                    productSelected
-                                        ? 'opacity-100 translate-y-0 pointer-events-auto'
-                                        : 'opacity-0 -translate-y-2 pointer-events-none h-0 overflow-hidden'
-                                }`}
-                            >
-                                {productSelected && (
-                                    <div className="space-y-4">
-                                        {/* Reason card */}
-                                        <div className="bg-white border-2 border-gray-900 p-5">
-                                            <ReasonSelector
-                                                selectedReasons={formData.repairReasons}
-                                                notes={formData.repairNotes}
-                                                onReasonsChange={(reasons) => setFormData(prev => ({ ...prev, repairReasons: reasons }))}
-                                                onNotesChange={(notes) => setFormData(prev => ({ ...prev, repairNotes: notes }))}
-                                                skuIssues={skuIssues}
-                                            />
-                                        </div>
-
-                                        {/* Tech Assignment card */}
-                                        <div className="bg-white border-2 border-gray-900 p-5 space-y-3">
-                                            <div>
-                                                <p className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-600 mb-0.5">
-                                                    Assignment
-                                                </p>
-                                                <label className="block text-xs font-black uppercase tracking-tight text-gray-900">
-                                                    Assign Technician
-                                                    <span className="ml-2 text-[9px] font-bold text-gray-500 normal-case tracking-normal">Optional</span>
-                                                </label>
-                                            </div>
-                                            <select
-                                                value={formData.assignedTechId ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (!val) {
-                                                        setFormData(prev => ({ ...prev, assignedTechId: null, assignedTechName: '' }));
-                                                        return;
-                                                    }
-                                                    const tech = techs.find(t => t.id === Number(val));
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        assignedTechId: Number(val),
-                                                        assignedTechName: tech?.name ?? '',
-                                                    }));
-                                                }}
-                                                disabled={loadingTechs}
-                                                className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold focus:outline-none focus:border-blue-600 transition-colors disabled:opacity-50 disabled:bg-gray-50"
-                                            >
-                                                <option value="">— Unassigned —</option>
-                                                {techs.map(tech => (
-                                                    <option key={tech.id} value={tech.id}>{tech.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── STEP 2: Customer Info ── */}
-                    {currentStep === 'customer' && (
-                        <div className="bg-white border-2 border-gray-900 p-5">
-                            <div className="mb-5 pb-4 border-b-2 border-gray-100">
-                                <p className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-600 mb-0.5">
-                                    Step 2
-                                </p>
-                                <h3 className="text-sm font-black uppercase tracking-tight text-gray-900">
-                                    Customer Information
-                                </h3>
-                            </div>
-                            <CustomerInfoForm
-                                customer={formData.customer}
-                                serialNumber={formData.serialNumber}
-                                price={formData.price}
-                                notes={formData.notes}
-                                onCustomerChange={updateCustomer}
-                                onSerialNumberChange={(value) => setFormData(prev => ({ ...prev, serialNumber: value }))}
-                                onPriceChange={(value) => setFormData(prev => ({ ...prev, price: value }))}
-                                onNotesChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
-                            />
-                        </div>
-                    )}
-
-                    {/* ── STEP 3: Agreement + Signature ── */}
-                    {currentStep === 'agreement' && (
-                        <div className="bg-white border-2 border-gray-900 p-5">
-                            <div className="mb-5 pb-4 border-b-2 border-gray-100">
-                                <p className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-600 mb-0.5">
-                                    Step 3
-                                </p>
-                                <h3 className="text-sm font-black uppercase tracking-tight text-gray-900">
-                                    Review & Sign
-                                </h3>
-                            </div>
-                            <RepairAgreement
-                                formData={formData}
-                                signatureData={signatureData}
-                                onSignatureChange={setSignatureData}
-                            />
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* ── Footer Navigation ── */}
-            <div className="flex-shrink-0 bg-white border-t-2 border-gray-900">
-                {/* Product step: Add More + Continue */}
-                {currentStep === 'product' && (
-                    <div className="flex">
+                    {/* Reason + Tech — slides in after product selected */}
+                    <div
+                        ref={reasonRef}
+                        className={`transition-all duration-300 origin-top ${
+                            productSelected
+                                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                                : 'opacity-0 -translate-y-2 pointer-events-none h-0 overflow-hidden'
+                        }`}
+                    >
                         {productSelected && (
-                            <button
-                                onClick={() => {
-                                    const scrollEl = document.querySelector('.scrollbar-hide');
-                                    scrollEl?.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                                className="flex items-center justify-center gap-2 px-6 py-5 border-r-2 border-gray-900 text-xs font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-                            >
-                                + Add More
-                            </button>
+                            <div className="space-y-5">
+                                <ReasonSelector
+                                    selectedReasons={formData.repairReasons}
+                                    notes={formData.repairNotes}
+                                    onReasonsChange={(reasons) => setFormData(prev => ({ ...prev, repairReasons: reasons }))}
+                                    onNotesChange={(notes) => setFormData(prev => ({ ...prev, repairNotes: notes }))}
+                                    skuIssues={skuIssues}
+                                />
+
+                                <SidebarIntakeFormField label="Assign Technician" optionalHint="(Optional)">
+                                    <select
+                                        value={formData.assignedTechId ?? ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (!val) {
+                                                setFormData(prev => ({ ...prev, assignedTechId: null, assignedTechName: '' }));
+                                                return;
+                                            }
+                                            const tech = techs.find(t => t.id === Number(val));
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                assignedTechId: Number(val),
+                                                assignedTechName: tech?.name ?? '',
+                                            }));
+                                        }}
+                                        disabled={loadingTechs}
+                                        className={orangeInputClass}
+                                    >
+                                        <option value="">-- Unassigned --</option>
+                                        {techs.map(tech => (
+                                            <option key={tech.id} value={tech.id}>{tech.name}</option>
+                                        ))}
+                                    </select>
+                                </SidebarIntakeFormField>
+                            </div>
                         )}
-                        <button
-                            onClick={handleNext}
-                            disabled={!canProceedFromProduct}
-                            className="flex-1 flex items-center justify-center gap-2 px-6 py-5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-black uppercase tracking-wide transition-colors disabled:cursor-not-allowed"
-                        >
-                            Continue
-                            <ChevronRight className="h-4 w-4" />
-                        </button>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Customer step: Back + Continue */}
-                {currentStep === 'customer' && (
-                    <div className="flex">
-                        <button
-                            onClick={handleBack}
-                            className="flex items-center justify-center gap-2 px-6 py-5 border-r-2 border-gray-900 text-xs font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                            Back
-                        </button>
-                        <button
-                            onClick={handleNext}
-                            disabled={!canProceedFromCustomer}
-                            className="flex-1 flex items-center justify-center gap-2 px-6 py-5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-black uppercase tracking-wide transition-colors disabled:cursor-not-allowed"
-                        >
-                            Continue
-                            <ChevronRight className="h-4 w-4" />
-                        </button>
-                    </div>
-                )}
+            {/* STEP 2: Customer Info */}
+            {currentStep === 'customer' && (
+                <div className="space-y-4">
+                    <div className="rounded-xl border border-orange-200 bg-orange-50/60 p-3">
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setCustomerMode('existing')}
+                                className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                                    customerMode === 'existing'
+                                        ? 'bg-orange-600 text-white shadow-sm'
+                                        : 'bg-white text-orange-700 border border-orange-200 hover:bg-orange-100'
+                                }`}
+                            >
+                                Add From Existing
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCustomerMode('new')}
+                                className={`rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-wide transition-colors ${
+                                    customerMode === 'new'
+                                        ? 'bg-orange-600 text-white shadow-sm'
+                                        : 'bg-white text-orange-700 border border-orange-200 hover:bg-orange-100'
+                                }`}
+                            >
+                                Create New
+                            </button>
+                        </div>
 
-                {/* Agreement step: Back + Submit */}
-                {currentStep === 'agreement' && (
-                    <div className="flex">
-                        <button
-                            onClick={handleBack}
-                            className="flex items-center justify-center gap-2 px-6 py-5 border-r-2 border-gray-900 text-xs font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                            Back
-                        </button>
-                        <button
-                            onClick={handleSubmit}
-                            disabled={!canSubmit || isSubmitting}
-                            className="flex-1 flex items-center justify-center gap-2 px-6 py-5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-black uppercase tracking-wide transition-colors disabled:cursor-not-allowed"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                    Submitting...
-                                </>
-                            ) : (
-                                <>
-                                    Submit Repair
-                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                </>
-                            )}
-                        </button>
+                        {customerMode === 'existing' && (
+                            <div className="mt-3 space-y-2">
+                                <input
+                                    type="text"
+                                    value={customerQuery}
+                                    onChange={(e) => setCustomerQuery(e.target.value)}
+                                    placeholder="Search by name, phone, or email"
+                                    className={orangeInputClass}
+                                />
+                                <div className="overflow-hidden rounded-xl border border-orange-200 bg-white">
+                                    <div className="grid grid-cols-[1.2fr_1fr_1.2fr_0.9fr_0.8fr] gap-2 border-b border-orange-100 bg-orange-50 px-3 py-2 text-[9px] font-black uppercase tracking-wider text-orange-700">
+                                        <span>Name</span>
+                                        <span>Phone</span>
+                                        <span>Email</span>
+                                        <span>Updated</span>
+                                        <span className="text-right">Action</span>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto">
+                                        {loadingCustomers && (
+                                            <div className="px-3 py-3 text-[10px] font-bold text-gray-500">Loading customers...</div>
+                                        )}
+                                        {!loadingCustomers && customerSearchError && (
+                                            <div className="px-3 py-3 text-[10px] font-bold text-red-600">{customerSearchError}</div>
+                                        )}
+                                        {!loadingCustomers && !customerSearchError && customerResults.length === 0 && (
+                                            <div className="px-3 py-3 text-[10px] font-bold text-gray-500">No customers found.</div>
+                                        )}
+                                        {!loadingCustomers && !customerSearchError && customerResults.map((customer) => (
+                                            <div
+                                                key={customer.id}
+                                                className={`grid grid-cols-[1.2fr_1fr_1.2fr_0.9fr_0.8fr] gap-2 border-b border-gray-100 px-3 py-2 text-[10px] text-gray-700 ${
+                                                    selectedCustomerId === customer.id ? 'bg-orange-50' : 'bg-white'
+                                                }`}
+                                            >
+                                                <span className="truncate font-bold text-gray-900">{customer.name}</span>
+                                                <span className="truncate">{customer.phone || '—'}</span>
+                                                <span className="truncate">{customer.email || '—'}</span>
+                                                <span>{formatUpdatedAt(customer.updated_at)}</span>
+                                                <div className="text-right">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => applyExistingCustomer(customer)}
+                                                        className="rounded-md border border-orange-200 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-orange-700 hover:bg-orange-100"
+                                                    >
+                                                        Select
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <p className="text-[9px] font-bold uppercase tracking-wide text-orange-700">
+                                    Select a customer to prefill, then review/edit below.
+                                </p>
+                            </div>
+                        )}
                     </div>
-                )}
 
-                {/* Signature required hint on agreement step */}
-                {currentStep === 'agreement' && !signatureData && (
-                    <div className="px-5 py-2 bg-amber-50 border-t border-amber-200">
-                        <p className="text-[9px] font-black uppercase tracking-wide text-amber-700">
-                            Signature required to submit
-                        </p>
-                    </div>
-                )}
-            </div>
-        </div>
+                    <CustomerInfoForm
+                        customer={formData.customer}
+                        serialNumber={formData.serialNumber}
+                        price={formData.price}
+                        notes={formData.notes}
+                        onCustomerChange={updateCustomer}
+                        onSerialNumberChange={(value) => setFormData(prev => ({ ...prev, serialNumber: value }))}
+                        onPriceChange={(value) => setFormData(prev => ({ ...prev, price: value }))}
+                        onNotesChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
+                        tone="orange"
+                    />
+                </div>
+            )}
+
+            {/* STEP 3: Agreement + Signature */}
+            {currentStep === 'agreement' && (
+                <RepairAgreement
+                    formData={formData}
+                    signatureData={signatureData}
+                    onSignatureChange={setSignatureData}
+                />
+            )}
+        </SidebarIntakeFormShell>
     );
 }

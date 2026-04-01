@@ -5,7 +5,9 @@ import { staff, staffWeeklySchedule } from '@/lib/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
-import { getCurrentStaffDayOfWeek } from '@/lib/staff-schedule';
+import { getCurrentStaffDayOfWeek, isStaffBusinessDay } from '@/lib/staff-schedule';
+import { getWeekStartDateKeyForDateKey } from '@/lib/staff-availability';
+import { getCurrentPSTDateKey } from '@/utils/date';
 
 function isDatabaseUnavailable(error: unknown) {
     return isTransientDbError(error);
@@ -18,11 +20,18 @@ export async function GET(request: NextRequest) {
         const activeOnly = searchParams.get('active') !== 'false';
         const presentToday = searchParams.get('presentToday') === 'true';
         const todayDayOfWeek = presentToday ? getCurrentStaffDayOfWeek() : null;
+        const todayDateKey = presentToday ? getCurrentPSTDateKey() : '';
+        const todayWeekStartDate = presentToday ? getWeekStartDateKeyForDateKey(todayDateKey) : '';
+        if (presentToday && todayDayOfWeek != null && !isStaffBusinessDay(todayDayOfWeek)) {
+            return NextResponse.json([], { headers: { 'x-staff-present': 'off-day' } });
+        }
         const cacheLookup = createCacheLookupKey({
             role: role || '',
             activeOnly,
             presentToday,
             todayDayOfWeek: todayDayOfWeek != null ? String(todayDayOfWeek) : '',
+            todayDateKey,
+            todayWeekStartDate,
         });
 
         const cached = await getCachedJson<any[]>('api:staff', cacheLookup);
@@ -37,15 +46,49 @@ export async function GET(request: NextRequest) {
 
         if (presentToday) {
             params.push(todayDayOfWeek);
+            const dowParamIdx = params.length;
+            params.push(todayDateKey);
+            const dateParamIdx = params.length;
+            params.push(todayWeekStartDate);
+            const weekStartParamIdx = params.length;
             scheduleJoin = `
               LEFT JOIN staff_weekly_schedule sws
                 ON sws.staff_id = s.id
-               AND sws.day_of_week = $${params.length}
+               AND sws.day_of_week = $${dowParamIdx}
+              LEFT JOIN staff_week_plans swp
+                ON swp.staff_id = s.id
+               AND swp.week_start_date = $${weekStartParamIdx}::date
+               AND swp.day_of_week = $${dowParamIdx}
+              LEFT JOIN staff_schedule_overrides sso
+                ON sso.staff_id = s.id
+               AND sso.schedule_date = $${dateParamIdx}::date
+              LEFT JOIN LATERAL (
+                WITH applicable AS (
+                  SELECT sar.day_of_week, sar.is_allowed
+                  FROM staff_availability_rules sar
+                  WHERE sar.staff_id = s.id
+                    AND sar.deleted_at IS NULL
+                    AND sar.rule_type = 'weekday_allowed'
+                    AND (sar.effective_start_date IS NULL OR sar.effective_start_date <= $${dateParamIdx}::date)
+                    AND (sar.effective_end_date IS NULL OR sar.effective_end_date >= $${dateParamIdx}::date)
+                )
+                SELECT
+                  CASE
+                    WHEN EXISTS(SELECT 1 FROM applicable)
+                      THEN
+                        COALESCE((SELECT bool_or(a.is_allowed) FROM applicable a WHERE a.day_of_week = $${dowParamIdx}), false)
+                        AND NOT COALESCE((SELECT bool_or(NOT a.is_allowed) FROM applicable a WHERE a.day_of_week = $${dowParamIdx}), false)
+                    ELSE true
+                  END AS is_allowed
+              ) sar ON true
             `;
             scheduledTodaySelect = `,
-              COALESCE(sws.is_scheduled, true) AS is_scheduled_today
+              (
+                COALESCE(sso.is_scheduled, swp.is_scheduled, sws.is_scheduled, true)
+                AND COALESCE(sar.is_allowed, true)
+              ) AS is_scheduled_today
             `;
-            conditions.push('COALESCE(sws.is_scheduled, true) = true');
+            conditions.push('(COALESCE(sso.is_scheduled, swp.is_scheduled, sws.is_scheduled, true) AND COALESCE(sar.is_allowed, true)) = true');
         }
 
         if (role) {
@@ -77,7 +120,12 @@ export async function GET(request: NextRequest) {
             const missingScheduleTable =
                 presentToday &&
                 queryError?.code === '42P01' &&
-                String(queryError?.message || '').includes('staff_weekly_schedule');
+                (
+                  String(queryError?.message || '').includes('staff_weekly_schedule') ||
+                  String(queryError?.message || '').includes('staff_week_plans') ||
+                  String(queryError?.message || '').includes('staff_schedule_overrides') ||
+                  String(queryError?.message || '').includes('staff_availability_rules')
+                );
 
             if (!missingScheduleTable) {
                 throw queryError;

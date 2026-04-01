@@ -244,6 +244,8 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
 
   // Refresh when FBA items change (scan, ready, shipped).
   useAblyChannel(fbaChannelName, 'fba.item.changed', debouncedRefresh, true);
+  useAblyChannel(fbaChannelName, 'fba.shipment.changed', debouncedRefresh, true);
+  useAblyChannel(fbaChannelName, 'fba.catalog.changed', debouncedRefresh, true);
 
   // Mirror the real-time update strategy from PendingOrdersTable: respond to
   // broadcast refresh events so data stays in sync without waiting for the poll.

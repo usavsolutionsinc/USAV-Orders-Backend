@@ -5,9 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Minus, Package, Plus } from '@/components/Icons';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
+import { emitOpenQuickAddFnsku, FBA_FNSKU_SAVED_EVENT } from '@/components/fba/FbaQuickAddFnskuModal';
 import { StationScanBar } from '@/components/station/StationScanBar';
 import { DeferredQtyInput } from '@/design-system/primitives';
 import { usePendingCatalog } from '@/components/fba/hooks/usePendingCatalog';
+import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import { normalizeFnsku } from '@/lib/tracking-format';
 import { useTodayPlan } from '@/components/fba/hooks/useTodayPlan';
 import { useStationTestingController } from '@/hooks/useStationTestingController';
@@ -228,7 +230,7 @@ export default function StationFbaInput({
   const fetchTodayQtyMap = useCallback(async (): Promise<Record<string, number>> => {
     try {
       const res = await fetch('/api/fba/shipments/today');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       return todayShipmentQtyByFnskuFromJson(data);
     } catch {
       return {};
@@ -238,7 +240,7 @@ export default function StationFbaInput({
   const fetchTodayShipmentSnapshot = useCallback(async () => {
     try {
       const res = await fetch('/api/fba/shipments/today');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       return todayShipmentSnapshotFromJson(data);
     } catch {
       return { shipmentId: null as number | null, shipmentRef: '', itemByFnsku: {} as Record<string, TodayItemSnapshot> };
@@ -283,19 +285,62 @@ export default function StationFbaInput({
     }
   }, [fbaMode]);
 
-  const [boardSelection, setBoardSelection] = useState<FbaBoardItem[]>([]);
+  // Auto-clear planHint after 3s so microcopy reverts to default mode text.
+  useEffect(() => {
+    if (!planHint || !fbaScanOnly) return;
+    const id = window.setTimeout(() => setPlanHint(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [planHint, fbaScanOnly]);
+
+  // Listen for status messages from other FBA components (e.g. paired review save).
+  useEffect(() => {
+    if (!fbaScanOnly) return;
+    const handler = (e: Event) => {
+      const msg = (e as CustomEvent<string>).detail;
+      if (msg) setPlanHint(msg);
+    };
+    window.addEventListener('fba-scan-status', handler);
+    return () => window.removeEventListener('fba-scan-status', handler);
+  }, [fbaScanOnly]);
+
+  // When user saves FNSKU details via modal, update the pending row title in real-time.
   useEffect(() => {
     const handler = (e: Event) => {
-      const items = (e as CustomEvent<FbaBoardItem[]>).detail;
-      setBoardSelection(items ?? []);
+      const detail = (e as CustomEvent<{ fnsku: string; product_title: string | null; asin: string | null; sku: string | null }>).detail;
+      if (!detail?.fnsku) return;
+      const key = detail.fnsku.toUpperCase();
+      setPendingTodayPlanRows((prev) => {
+        if (!prev) return prev;
+        let changed = false;
+        const next = prev.map((r) => {
+          if (r.fnsku.toUpperCase() !== key) return r;
+          changed = true;
+          return {
+            ...r,
+            product_title: detail.product_title ?? r.product_title,
+            asin: detail.asin ?? r.asin,
+            sku: detail.sku ?? r.sku,
+            found: true,
+            needs_details: false,
+            upserted_stub: false,
+          };
+        });
+        return changed ? next : prev;
+      });
+      // Also update plan preview lines if visible
+      setPlanPreviewLines((prev) =>
+        prev.map((line) =>
+          line.fnsku.toUpperCase() === key && detail.product_title
+            ? { ...line, displayTitle: detail.product_title }
+            : line,
+        ),
+      );
     };
-    window.addEventListener('fba-board-selection', handler);
-    window.addEventListener('fba-paired-selection', handler);
-    return () => {
-      window.removeEventListener('fba-board-selection', handler);
-      window.removeEventListener('fba-paired-selection', handler);
-    };
+    window.addEventListener(FBA_FNSKU_SAVED_EVENT, handler as EventListener);
+    return () => window.removeEventListener(FBA_FNSKU_SAVED_EVENT, handler as EventListener);
   }, []);
+
+  const boardSelection = useFbaBoardSelection({ includePairedSelection: true });
 
   // Bubble select-mode fallback items to parent so its FbaPairedReviewPanel sees them.
   useEffect(() => {
@@ -367,9 +412,9 @@ export default function StationFbaInput({
     async (fnsku: string) => {
       try {
         const res = await fetch(
-          `/api/tech/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&techId=${encodeURIComponent(userId)}`
+          `/api/fba/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&staffId=${encodeURIComponent(userId)}`
         );
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.found) return;
 
         if (!fbaScanOnly) {
@@ -535,16 +580,11 @@ export default function StationFbaInput({
             expectedQty: Math.max(1, Number(h.expected_qty) || 1),
           })),
         );
-        if (!fbaScanOnly) {
-          setPlanHint(
-            shipmentRef
-              ? missingFnskus.length > 0
-                ? `Updated ${lineCount} line${lineCount !== 1 ? 's' : ''} on today's plan ${shipmentRef}. Some still need product details.`
-                : `Updated ${lineCount} line${lineCount !== 1 ? 's' : ''} on today's plan ${shipmentRef}.`
-              : missingFnskus.length > 0
-                ? `Updated ${lineCount} line${lineCount !== 1 ? 's' : ''} on today's plan. Some still need product details.`
-                : `Updated ${lineCount} line${lineCount !== 1 ? 's' : ''} on today's plan.`,
-          );
+        {
+          const hint = missingFnskus.length > 0
+            ? `Added ${lineCount} item${lineCount !== 1 ? 's' : ''} — some need details`
+            : `Added ${lineCount} item${lineCount !== 1 ? 's' : ''} to plan`;
+          setPlanHint(hint);
         }
         addFnskus(addableRows.map((row) => row.fnsku));
         if (!ignoreUrlPlan) {
@@ -587,19 +627,15 @@ export default function StationFbaInput({
       setPlanHint(null);
 
       try {
-        let validateRes = await fetch(
-          `/api/fba/fnskus/validate?fnskus=${encodeURIComponent(fnsku)}&persist_missing=0`
-        );
-        let validateJson = await validateRes.json();
-        let row = Array.isArray(validateJson?.results) ? (validateJson.results[0] as ValidatedFnskuRow) : null;
+        // Single validate call with persist_missing=1 — creates stub if not in catalog.
+        // For fbaScanOnly, fetch today's qty map in parallel to cut latency.
+        const validatePromise = fetch(
+          `/api/fba/fnskus/validate?fnskus=${encodeURIComponent(fnsku)}&persist_missing=1`
+        ).then((r) => r.json().catch(() => ({})));
+        const todayMapPromise = fbaScanOnly ? fetchTodayQtyMap() : Promise.resolve({} as Record<string, number>);
 
-        if (!row?.catalog_exists) {
-          validateRes = await fetch(
-            `/api/fba/fnskus/validate?fnskus=${encodeURIComponent(fnsku)}&persist_missing=1`
-          );
-          validateJson = await validateRes.json();
-          row = Array.isArray(validateJson?.results) ? (validateJson.results[0] as ValidatedFnskuRow) : null;
-        }
+        const [validateJson, todayMap] = await Promise.all([validatePromise, todayMapPromise]);
+        const row = Array.isArray(validateJson?.results) ? (validateJson.results[0] as ValidatedFnskuRow) : null;
 
         const needsDetails = !row?.found;
         if (needsDetails) addPending([fnsku]);
@@ -608,19 +644,9 @@ export default function StationFbaInput({
         const isAsin = /^B0[A-Z0-9]{8}$/i.test(fnsku);
         const resolvedAsin = row?.asin ?? (isAsin ? fnsku : null);
 
-        // If B0 scanned and catalog has no ASIN yet, patch it now
-        if (isAsin && !row?.asin && row?.catalog_exists) {
-          void fetch(`/api/fba/fnskus/${encodeURIComponent(fnsku)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ asin: fnsku }),
-          });
-        }
-
         // FBA sidebar scan should always queue for qty review before updating today's plan.
         if (fbaScanOnly) {
-          const map = await fetchTodayQtyMap();
-          setTodayPlanQtyByFnsku(map);
+          setTodayPlanQtyByFnsku(todayMap);
           const newRow: BulkScanCandidate = {
             fnsku,
             qty: 1,
@@ -632,7 +658,7 @@ export default function StationFbaInput({
             asin: resolvedAsin,
             sku: row?.sku ?? null,
           };
-          setPendingTodayPlanRows((prev) => mergeIntoPendingToday(prev, newRow, map));
+          setPendingTodayPlanRows((prev) => mergeIntoPendingToday(prev, newRow, todayMap));
           setPlanPreviewLines([]);
           return;
         }
@@ -660,13 +686,7 @@ export default function StationFbaInput({
             return;
           }
           addFnskus([fnsku]);
-          if (!fbaScanOnly) {
-            setPlanHint(
-              needsDetails
-                ? 'Line added. You can fill in product details later.'
-                : 'Line added.',
-            );
-          }
+          setPlanHint(needsDetails ? 'Added — details pending' : 'Added to plan');
           setPlanPreviewLines([{
             itemId: Number(item.id),
             shipmentId: openPlanId,
@@ -684,9 +704,7 @@ export default function StationFbaInput({
         } else {
           const map = await fetchTodayQtyMap();
           if ((map[fnsku] ?? 0) > 0) {
-            if (!fbaScanOnly) {
-              setPlanHint('Already on today\'s plan.');
-            }
+            setPlanHint('Already on today\u2019s plan');
             addFnskus([fnsku]);
             bumpFbaRefresh();
             window.dispatchEvent(new Event('fba-plan-created'));
@@ -761,7 +779,7 @@ export default function StationFbaInput({
           return;
         }
 
-        // Truly not on board/pending: fall back to add flow.
+        // Not on board — switch to plan mode and add it.
         setSelectResult(null);
         setFbaMode('plan');
         void handleFnskuPlanFlow(detail.fnsku);
@@ -825,12 +843,12 @@ export default function StationFbaInput({
           });
         }
         setPlanPreviewLines(previewAccum);
-        if (!fbaScanOnly) {
-          setPlanHint(
-            missingFnskus.length > 0
-              ? `Added ${addableRows.length} FNSKU row${addableRows.length === 1 ? '' : 's'}. Some still need product details.`
-              : `Added ${addableRows.length} FNSKU row${addableRows.length === 1 ? '' : 's'}.`,
-          );
+        {
+          const count = addableRows.length;
+          const hint = missingFnskus.length > 0
+            ? `Added ${count} item${count !== 1 ? 's' : ''} — some need details`
+            : `Added ${count} item${count !== 1 ? 's' : ''} to plan`;
+          setPlanHint(hint);
         }
         addFnskus(addableRows.map((row) => row.fnsku));
         window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
@@ -898,10 +916,26 @@ export default function StationFbaInput({
       setFbaError(null);
       setPlanHint(null);
       const counts = extractFnskuCounts(value);
+
+      // Single FNSKU pasted (no separators) — auto-submit immediately
+      if (counts.size === 1 && !/[\s,;|]/.test(value)) {
+        const fnsku = Array.from(counts.keys())[0];
+        if (looksLikeFnsku(fnsku) && value.trim().length >= 10) {
+          setInputValue('');
+          if (fbaMode === 'select') {
+            handleFnskuSelectFlow(fnsku);
+          } else {
+            void handleFnskuPlanFlow(fnsku);
+          }
+          return;
+        }
+      }
+
+      // Batch paste (multiple FNSKUs or separator-delimited)
       const hasBatch = counts.size > 1 || (counts.size === 1 && /[\s,;|]/.test(value));
       if (hasBatch && counts.size > 0) {
         setInputValue('');
-        if (fbaScanOnly && fbaMode === 'select') {
+        if (fbaMode === 'select') {
           for (const fnsku of Array.from(counts.keys())) {
             window.dispatchEvent(new CustomEvent('fba-board-select-by-fnsku', { detail: fnsku }));
           }
@@ -935,7 +969,7 @@ export default function StationFbaInput({
         return;
       }
     },
-    [fbaScanOnly, fbaMode, openPlanId, setInputValue, handleBulkFnskuPlanFlow, fetchTodayQtyMap]
+    [fbaScanOnly, fbaMode, openPlanId, setInputValue, handleBulkFnskuPlanFlow, handleFnskuPlanFlow, handleFnskuSelectFlow, fetchTodayQtyMap]
   );
 
   const patchPendingTodayQty = useCallback((fnsku: string, nextQty: number) => {
@@ -1038,6 +1072,33 @@ export default function StationFbaInput({
         }
       />
 
+      {fbaScanOnly ? (
+        <div className="flex items-center gap-1.5">
+          {isFbaLoading ? (
+            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-gray-400" />
+          ) : null}
+          <p className={`text-[10px] font-bold uppercase tracking-widest ${
+            planHint
+              ? 'text-emerald-600'
+              : fbaMode === 'select' && selectResult?.found
+                ? 'text-blue-600'
+                : isFbaLoading
+                  ? 'text-gray-500'
+                  : 'text-gray-400'
+          }`}>
+            {isFbaLoading
+              ? 'Updating plan\u2026'
+              : planHint
+                ? planHint
+                : fbaMode === 'select' && selectResult?.found
+                  ? `Selected ${selectResult.count} item${selectResult.count !== 1 ? 's' : ''} for combining`
+                  : fbaMode === 'plan'
+                    ? 'Scan FNSKU to add to today\u2019s plan'
+                    : 'Scan FNSKU to select items for combining shipment'}
+          </p>
+        </div>
+      ) : null}
+
       {fbaScanOnly && fbaMode === 'plan' && pendingTodayPlanRows && pendingTodayPlanRows.length > 0 ? (
         <>
           <div className="divide-y divide-gray-200 overflow-y-auto">
@@ -1048,14 +1109,21 @@ export default function StationFbaInput({
                   key={r.fnsku}
                   displayTitle={title}
                   fnsku={r.fnsku}
+                  stationTheme={stationTheme}
                   microcopyAboveTitle={
                     r.upserted_stub || r.needs_details
                       ? 'Added to catalog — details pending'
                       : (todayPlanQtyByFnsku[r.fnsku] ?? 0) > 0
                       ? 'Found in FBA plan — edit qty'
-                      : 'Currently not in plan'
+                      : undefined
                   }
                   microcopyTone={r.upserted_stub || r.needs_details ? 'success' : 'default'}
+                  onEditDetails={() => emitOpenQuickAddFnsku({
+                    fnsku: r.fnsku,
+                    product_title: r.product_title,
+                    asin: r.asin,
+                    sku: r.sku,
+                  })}
                   rightSlot={
                     <>
                       <button
@@ -1209,17 +1277,6 @@ export default function StationFbaInput({
         </p>
       ) : null}
 
-      {fbaScanOnly && fbaMode === 'select' && selectResult ? (
-        selectResult.found ? (
-          <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs font-semibold text-emerald-900">
-            Selected {selectResult.count} item{selectResult.count !== 1 ? 's' : ''}{selectResult.title ? ` — ${selectResult.title}` : ''} on the board
-          </p>
-        ) : (
-          <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] font-semibold text-amber-800">
-            <span className="font-mono">{selectResult.fnsku}</span> not on board
-          </p>
-        )
-      ) : null}
 
       {/* FbaPairedReviewPanel removed — the parent FbaSidebar renders it via boardSelection */}
     </div>

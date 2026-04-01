@@ -13,6 +13,9 @@ export const FBA_FNSKU_SAVED_EVENT = 'fba-fnsku-saved';
 interface OpenQuickAddFnskuDetail {
   fnsku?: string | null;
   product_title?: string | null;
+  asin?: string | null;
+  sku?: string | null;
+  condition?: string | null;
 }
 
 interface SavedQuickAddFnskuDetail {
@@ -20,6 +23,7 @@ interface SavedQuickAddFnskuDetail {
   product_title: string | null;
   asin: string | null;
   sku: string | null;
+  condition: string | null;
 }
 
 
@@ -46,6 +50,9 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
   const [open, setOpen] = useState(false);
   const [fnsku, setFnsku] = useState('');
   const [productTitle, setProductTitle] = useState('');
+  const [asin, setAsin] = useState('');
+  const [sku, setSku] = useState('');
+  const [condition, setCondition] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +61,9 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
       const detail = (event as CustomEvent<OpenQuickAddFnskuDetail>).detail || {};
       setFnsku(normalizeFnsku(String(detail.fnsku || '')));
       setProductTitle(String(detail.product_title || '').trim());
+      setAsin(String(detail.asin || '').trim());
+      setSku(String(detail.sku || '').trim());
+      setCondition(String(detail.condition || '').trim());
       setError(null);
       setOpen(true);
     };
@@ -94,6 +104,32 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
         </div>
 
         <div className="space-y-4 px-4 py-4">
+          <SidebarIntakeFormField label="Product title" optionalHint="(Optional)">
+            <input
+              type="text"
+              value={productTitle}
+              onChange={(event) => setProductTitle(event.target.value)}
+              placeholder="Product title"
+              className={chrome.input}
+            />
+          </SidebarIntakeFormField>
+
+          <SidebarIntakeFormField label="Condition" optionalHint="(Optional)">
+            <select
+              value={condition}
+              onChange={(event) => setCondition(event.target.value)}
+              className={chrome.input}
+            >
+              <option value="">Select condition</option>
+              <option value="New">New</option>
+              <option value="Used - Like New">Used - Like New</option>
+              <option value="Used - Very Good">Used - Very Good</option>
+              <option value="Used - Good">Used - Good</option>
+              <option value="Used - Acceptable">Used - Acceptable</option>
+              <option value="Refurbished">Refurbished</option>
+            </select>
+          </SidebarIntakeFormField>
+
           <SidebarIntakeFormField
             label="FNSKU"
             required
@@ -112,13 +148,23 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
             />
           </SidebarIntakeFormField>
 
-          <SidebarIntakeFormField label="Product title" optionalHint="(Optional)">
+          <SidebarIntakeFormField label="ASIN" optionalHint="(Optional)">
             <input
               type="text"
-              value={productTitle}
-              onChange={(event) => setProductTitle(event.target.value)}
-              placeholder="Product title"
-              className={chrome.input}
+              value={asin}
+              onChange={(event) => setAsin(event.target.value.toUpperCase())}
+              placeholder="B0XXXXXXXXXX"
+              className={chrome.monoInput}
+            />
+          </SidebarIntakeFormField>
+
+          <SidebarIntakeFormField label="SKU" optionalHint="(Optional)">
+            <input
+              type="text"
+              value={sku}
+              onChange={(event) => setSku(event.target.value)}
+              placeholder="SKU"
+              className={chrome.monoInput}
             />
           </SidebarIntakeFormField>
 
@@ -152,6 +198,9 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
                   body: JSON.stringify({
                     fnsku: normalizedFnsku,
                     product_title: productTitle.trim() || null,
+                    asin: asin.trim() || null,
+                    sku: sku.trim() || null,
+                    condition: condition.trim() || null,
                   }),
                 });
                 const json = await response.json().catch(() => ({}));
@@ -165,6 +214,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
                   product_title: saved.product_title ?? (productTitle.trim() || null),
                   asin: saved.asin ?? null,
                   sku: saved.sku ?? null,
+                  condition: saved.condition ?? (condition.trim() || null),
                 });
                 window.dispatchEvent(new Event('fba-plan-created'));
                 setOpen(false);

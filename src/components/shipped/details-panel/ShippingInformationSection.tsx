@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, X } from '@/components/Icons';
+import { Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, X } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
 import { formatDateTimePST, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -13,6 +13,7 @@ import { InlineSaveIndicator } from '@/design-system/components';
 import { getStaffName } from '@/utils/staff';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { parseSerialRows, patchSerialNumberInData } from './serial-helpers';
+import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 
 export interface EditableShippingFields {
   orderNumber: string;
@@ -48,6 +49,55 @@ function getDaysLateNumber(deadlineAt: string | null | undefined): number {
   return Math.max(0, todayIndex - deadlineIndex);
 }
 
+function normalizeTrackingKey(value: string | null | undefined): string {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeTrackingList(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((v) => String(v || '').trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v || '').trim()).filter(Boolean);
+      }
+    } catch {}
+    return [trimmed];
+  }
+  return [];
+}
+
+type TrackingRow = {
+  shipmentId: number | null;
+  tracking: string;
+  isPrimary: boolean;
+};
+
+function normalizeTrackingRows(raw: unknown): TrackingRow[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TrackingRow[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const item = row as any;
+    const tracking = String(item.tracking_number_raw || item.tracking || '').trim();
+    if (!tracking) continue;
+    const shipmentIdNum = Number(item.shipment_id);
+    out.push({
+      shipmentId: Number.isFinite(shipmentIdNum) && shipmentIdNum > 0 ? shipmentIdNum : null,
+      tracking,
+      isPrimary: Boolean(item.is_primary),
+    });
+  }
+  return out;
+}
+
 
 function ShippingEditableRow({
   label,
@@ -58,6 +108,7 @@ function ShippingEditableRow({
   externalUrl,
   headerAccessory,
   headerAccessoryClassName,
+  allowEdit = true,
 }: {
   label: string;
   value: string;
@@ -67,6 +118,7 @@ function ShippingEditableRow({
   externalUrl?: string | null;
   headerAccessory?: string;
   headerAccessoryClassName?: string;
+  allowEdit?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const displayValue = String(value || '').trim();
@@ -86,15 +138,17 @@ function ShippingEditableRow({
           <ExternalLink className={iconClassName} />
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={() => setIsEditing((prev) => !prev)}
-        className="transition-colors hover:text-gray-900"
-        aria-label={`Edit ${label}`}
-        title={`Edit ${label}`}
-      >
-        <Pencil className={iconClassName} />
-      </button>
+      {allowEdit ? (
+        <button
+          type="button"
+          onClick={() => setIsEditing((prev) => !prev)}
+          className="transition-colors hover:text-gray-900"
+          aria-label={`Edit ${label}`}
+          title={`Edit ${label}`}
+        >
+          <Pencil className={iconClassName} />
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={() => {
@@ -121,7 +175,7 @@ function ShippingEditableRow({
       actions={actions}
       className="last:border-b-0"
     >
-      {isEditing ? (
+      {allowEdit && isEditing ? (
         <input
           type="text"
           value={value}
@@ -135,9 +189,13 @@ function ShippingEditableRow({
           className="h-8 w-full border-0 bg-transparent px-0 text-sm font-bold text-gray-900 outline-none ring-0"
         />
       ) : (
-        <button type="button" onClick={() => setIsEditing(true)} className="block w-full py-0 text-left">
+        allowEdit ? (
+          <button type="button" onClick={() => setIsEditing(true)} className="block w-full py-0 text-left">
+            <p className="truncate text-sm font-bold text-gray-900">{displayValue || placeholder}</p>
+          </button>
+        ) : (
           <p className="truncate text-sm font-bold text-gray-900">{displayValue || placeholder}</p>
-        </button>
+        )
       )}
     </DetailsPanelRow>
   );
@@ -624,8 +682,8 @@ function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
 
 interface ShippingInformationSectionProps {
   shipped: ShippedOrder;
-  copiedAll: boolean;
-  onCopyAll: () => void;
+  copiedAll?: boolean;
+  onCopyAll?: () => void;
   onUpdate?: () => void;
   showSerialNumber?: boolean;
   showReturnInformation?: boolean;
@@ -637,8 +695,8 @@ interface ShippingInformationSectionProps {
 
 export function ShippingInformationSection({
   shipped,
-  copiedAll,
-  onCopyAll,
+  copiedAll: _copiedAll,
+  onCopyAll: _onCopyAll,
   onUpdate,
   showSerialNumber = true,
   showReturnInformation = true,
@@ -648,7 +706,49 @@ export function ShippingInformationSection({
   prepackedSku,
 }: ShippingInformationSectionProps) {
   const { getExternalUrlByItemNumber } = useExternalItemUrl();
+  const [linkedTrackingDrafts, setLinkedTrackingDrafts] = useState<Record<string, string>>({});
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
+
+  // Internal editable state — used when no editableShippingFields prop is provided
+  const orderId = typeof shipped.id === 'number' ? shipped.id : Number(shipped.id);
+  const [internalOrderNumber, setInternalOrderNumber] = useState(shipped.order_id || '');
+  const [internalItemNumber, setInternalItemNumber] = useState(shipped.item_number || '');
+  const [internalTrackingNumber, setInternalTrackingNumber] = useState(shipped.shipping_tracking_number || '');
+  const [internalShipByDate, setInternalShipByDate] = useState(String(shipped.ship_by_date || '').trim().split(/[T ]/)[0] || '');
+  const internalFieldSave = useOrderFieldSave({
+    orderId: Number.isFinite(orderId) && orderId > 0 ? orderId : -1,
+    initialOrderNumber: shipped.order_id || '',
+    initialItemNumber: shipped.item_number || '',
+    initialTrackingNumber: shipped.shipping_tracking_number || '',
+    onUpdate,
+  });
+  const internalOnBlur = useCallback(() => {
+    void internalFieldSave.saveInlineFields(internalOrderNumber, internalItemNumber, internalTrackingNumber);
+  }, [internalFieldSave, internalOrderNumber, internalItemNumber, internalTrackingNumber]);
+
+  // Sync internal state when shipped record changes
+  useEffect(() => {
+    setInternalOrderNumber(shipped.order_id || '');
+    setInternalItemNumber(shipped.item_number || '');
+    setInternalTrackingNumber(shipped.shipping_tracking_number || '');
+    setInternalShipByDate(String(shipped.ship_by_date || '').trim().split(/[T ]/)[0] || '');
+  }, [shipped.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Resolve effective editable fields — external prop or internal state
+  const ef: EditableShippingFields = editableShippingFields ?? {
+    orderNumber: internalOrderNumber,
+    itemNumber: internalItemNumber,
+    trackingNumber: internalTrackingNumber,
+    shipByDate: internalShipByDate,
+    isSaving: internalFieldSave.isSavingInlineFields,
+    isSavingShipByDate: internalFieldSave.isSavingShipByDate,
+    onOrderNumberChange: setInternalOrderNumber,
+    onItemNumberChange: setInternalItemNumber,
+    onTrackingNumberChange: setInternalTrackingNumber,
+    onShipByDateChange: setInternalShipByDate,
+    onBlur: internalOnBlur,
+    onShipByDateBlur: () => { void internalFieldSave.saveShipByDate(internalShipByDate); },
+  };
   const daysLate = getDaysLateNumber(shipped.ship_by_date || shipped.created_at || null);
   const daysLateClassName =
     daysLate > 1
@@ -660,10 +760,11 @@ export function ShippingInformationSection({
     shipped.packed_at && shipped.packed_at !== '1'
       ? formatDateTimePST(shipped.packed_at)
       : 'N/A';
+  // Packer from actual SAL/packer_logs scan data only — not from work_assignment packer_id
   const packerNameDisplay = String(
     (shipped as any).packed_by_name
     || (shipped as any).packer_name
-    || getStaffName((shipped as any).packed_by ?? (shipped as any).packer_id ?? null)
+    || getStaffName((shipped as any).packed_by ?? null)
   ).trim() || 'Not specified';
   const techNameDisplay = String(
     (shipped as any).tester_name
@@ -673,14 +774,78 @@ export function ShippingInformationSection({
   const serialNumberRows = parseSerialRows(shipped.serial_number)
     .map((row) => row.trim())
     .filter(Boolean);
+  const primaryTracking = String(
+    editableShippingFields?.trackingNumber ?? shipped.shipping_tracking_number ?? ''
+  ).trim();
+  const additionalTrackingRows = (() => {
+    const fromRows = normalizeTrackingRows((shipped as any).tracking_number_rows);
+    const fromPayload = fromRows.length > 0
+      ? fromRows.map((row) => row.tracking)
+      : normalizeTrackingList((shipped as any).tracking_numbers);
+    if (fromPayload.length === 0) return [] as Array<{ tracking: string; shipmentId: number | null }>;
+    const primaryKey = normalizeTrackingKey(primaryTracking);
+    const seen = new Set<string>();
+    const out: Array<{ tracking: string; shipmentId: number | null }> = [];
+    for (const tracking of fromPayload) {
+      const key = normalizeTrackingKey(tracking);
+      if (!key || key === primaryKey || seen.has(key)) continue;
+      seen.add(key);
+      const row = fromRows.find((r) => normalizeTrackingKey(r.tracking) === key);
+      out.push({
+        tracking,
+        shipmentId: row?.shipmentId ?? null,
+      });
+    }
+    return out;
+  })();
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    additionalTrackingRows.forEach((row, index) => {
+      const key = `${row.shipmentId ?? 'none'}:${index}`;
+      next[key] = row.tracking;
+    });
+    setLinkedTrackingDrafts(next);
+  }, [JSON.stringify(additionalTrackingRows.map((row) => [row.shipmentId, row.tracking]))]);
+
+  const saveLinkedTracking = async (shipmentId: number | null, nextTracking: string) => {
+    const orderId = Number((shipped as any).id);
+    if (!Number.isFinite(orderId) || orderId <= 0) return;
+    if (!Number.isFinite(Number(shipmentId)) || Number(shipmentId) <= 0) return;
+    const trimmed = String(nextTracking || '').trim();
+    if (!trimmed) return;
+    try {
+      const res = await fetch('/api/orders/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          trackingLinkEdits: [
+            {
+              shipmentId: Number(shipmentId),
+              shippingTrackingNumber: trimmed,
+            },
+          ],
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(String(payload?.details || payload?.error || 'Failed to update tracking'));
+      }
+      onUpdate?.();
+    } catch (error: any) {
+      console.error(error);
+      window.alert(error?.message || 'Failed to update tracking');
+    }
+  };
 
   return (
     <section className="space-y-6">
-      {showReturnInformation ? (
+      {showReturnInformation && shipped.packed_at && shipped.packed_at !== '1' ? (
         <div className="space-y-3">
           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Return Information</h3>
           <div className="space-y-0">
-            <DetailsPanelRow label="Shipment / Packer">
+            <DetailsPanelRow label="Packed">
               <div className="flex items-center justify-between gap-3">
                 <p className="truncate text-sm font-bold text-gray-900">{shippedAtDisplay}</p>
                 <p className="shrink-0 text-sm font-bold text-gray-900">{packerNameDisplay}</p>
@@ -697,7 +862,7 @@ export function ShippingInformationSection({
                 <p className="py-0.5 text-sm font-bold text-gray-400">N/A</p>
               )}
             </DetailsPanelRow>
-            <DetailsPanelRow label="Tech Name" className="last:border-b-0">
+            <DetailsPanelRow label="Tested By" className="last:border-b-0">
               <p className="text-sm font-bold text-gray-900">{techNameDisplay}</p>
             </DetailsPanelRow>
           </div>
@@ -705,26 +870,7 @@ export function ShippingInformationSection({
       ) : null}
 
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Shipping Information</h3>
-          <button
-            onClick={onCopyAll}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-white transition-all hover:bg-blue-700 hover:shadow-md active:scale-95"
-            aria-label="Copy all shipping information"
-          >
-            {copiedAll ? (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-wider">Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-wider">Copy</span>
-              </>
-            )}
-          </button>
-        </div>
+        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Shipping Information</h3>
 
         <div className="space-y-0">
           {showShippingTimestamp && (
@@ -737,76 +883,59 @@ export function ShippingInformationSection({
             </DetailsPanelRow>
           )}
 
-          {editableShippingFields ? (
-            <>
-              <ShippingEditableRow
-                label="Ship By Date"
-                headerAccessory={String(daysLate)}
-                headerAccessoryClassName={daysLateClassName}
-                value={editableShippingFields.shipByDate}
-                placeholder="MM-DD-YY"
-                onChange={editableShippingFields.onShipByDateChange}
-                onBlur={editableShippingFields.onShipByDateBlur}
-              />
-              <ShippingEditableRow
-                label="Tracking Number"
-                value={editableShippingFields.trackingNumber}
-                placeholder="Enter tracking number"
-                onChange={editableShippingFields.onTrackingNumberChange}
-                onBlur={editableShippingFields.onBlur}
-                externalUrl={getTrackingUrl(editableShippingFields.trackingNumber)}
-              />
-              <ShippingEditableRow
-                label="Order ID"
-                value={editableShippingFields.orderNumber}
-                placeholder="Enter order ID"
-                onChange={editableShippingFields.onOrderNumberChange}
-                onBlur={editableShippingFields.onBlur}
-                externalUrl={getOrderIdUrl(editableShippingFields.orderNumber)}
-                headerAccessory={accountSourceLabel || undefined}
-                headerAccessoryClassName="text-[10px] font-black tracking-wide text-blue-600"
-              />
-              <ShippingEditableRow
-                label="Item Number"
-                value={editableShippingFields.itemNumber}
-                placeholder="Enter item number"
-                onChange={editableShippingFields.onItemNumberChange}
-                onBlur={editableShippingFields.onBlur}
-                externalUrl={getExternalUrlByItemNumber(editableShippingFields.itemNumber)}
-              />
-            </>
-          ) : (
-            <>
-              <CopyableValueFieldBlock
-                label="Ship By Date"
-                value={String(shipped.ship_by_date || '').trim() || 'N/A'}
-                headerAccessory={<span className={daysLateClassName}>{daysLate}</span>}
-                variant="flat"
-              />
-              <CopyableValueFieldBlock
-                label="Tracking Number"
-                value={shipped.shipping_tracking_number || 'Not available'}
-                externalUrl={getTrackingUrl(shipped.shipping_tracking_number || '')}
-                externalLabel="Open shipment tracking in new tab"
-                variant="flat"
-              />
-              <CopyableValueFieldBlock
-                label="Order ID"
-                value={shipped.order_id || 'Not available'}
-                externalUrl={getOrderIdUrl(shipped.order_id)}
-                externalLabel={/^\d{3}-\d+-\d+$/.test(shipped.order_id) ? 'Open Amazon order in Seller Central in new tab' : 'Open Ecwid order in new tab'}
-                headerAccessory={accountSourceLabel ? <span className="text-[10px] font-black tracking-wide text-blue-600">{accountSourceLabel}</span> : null}
-                variant="flat"
-              />
-              <CopyableValueFieldBlock
-                label="Item Number"
-                value={shipped.item_number || 'N/A'}
-                externalUrl={getExternalUrlByItemNumber(shipped.item_number)}
-                externalLabel="Open product page in new tab"
-                variant="flat"
-              />
-            </>
-          )}
+          <ShippingEditableRow
+            label="Ship By Date"
+            headerAccessory={String(daysLate)}
+            headerAccessoryClassName={daysLateClassName}
+            value={ef.shipByDate}
+            placeholder="MM-DD-YY"
+            onChange={ef.onShipByDateChange}
+            onBlur={ef.onShipByDateBlur}
+          />
+          <ShippingEditableRow
+            label="Tracking Number"
+            value={ef.trackingNumber}
+            placeholder="Enter tracking number"
+            onChange={ef.onTrackingNumberChange}
+            onBlur={ef.onBlur}
+            externalUrl={getTrackingUrl(ef.trackingNumber)}
+          />
+          {additionalTrackingRows.map((row, index) => {
+            const draftKey = `${row.shipmentId ?? 'none'}:${index}`;
+            const draftValue = linkedTrackingDrafts[draftKey] ?? row.tracking;
+            return (
+            <ShippingEditableRow
+              key={`additional-tracking-${index}-${row.shipmentId ?? 'none'}`}
+              label={`Tracking Number ${index + 2}`}
+              value={draftValue}
+              placeholder="Not available"
+              onChange={(value) => {
+                setLinkedTrackingDrafts((prev) => ({ ...prev, [draftKey]: value }));
+              }}
+              onBlur={() => { void saveLinkedTracking(row.shipmentId, draftValue); }}
+              externalUrl={getTrackingUrl(draftValue)}
+              allowEdit
+            />
+            );
+          })}
+          <ShippingEditableRow
+            label="Order ID"
+            value={ef.orderNumber}
+            placeholder="Enter order ID"
+            onChange={ef.onOrderNumberChange}
+            onBlur={ef.onBlur}
+            externalUrl={getOrderIdUrl(ef.orderNumber)}
+            headerAccessory={accountSourceLabel || undefined}
+            headerAccessoryClassName="text-[10px] font-black tracking-wide text-blue-600"
+          />
+          <ShippingEditableRow
+            label="Item Number"
+            value={ef.itemNumber}
+            placeholder="Enter item number"
+            onChange={ef.onItemNumberChange}
+            onBlur={ef.onBlur}
+            externalUrl={getExternalUrlByItemNumber(ef.itemNumber)}
+          />
 
           {showSerialNumber ? (
             <ShippingSerialNumberRow
@@ -843,10 +972,10 @@ export function ShippingInformationSection({
             </>
           ) : null}
 
-          {editableShippingFields?.isSaving ? (
+          {ef.isSaving ? (
             <p className="pt-2 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving shipping updates...</p>
           ) : null}
-          {editableShippingFields?.isSavingShipByDate ? (
+          {ef.isSavingShipByDate ? (
             <p className="pt-1 text-[10px] font-bold uppercase tracking-wide text-blue-600">Saving ship by date...</p>
           ) : null}
         </div>

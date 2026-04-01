@@ -104,7 +104,7 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature' }
         </label>
         <div className="flex items-center gap-3">
           {signed && (
-            <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-600 uppercase tracking-wide bg-emerald-50 px-2 py-1 border border-emerald-200">
+            <span className="flex items-center gap-1.5 text-[9px] font-black text-orange-600 uppercase tracking-wide bg-orange-50 px-2 py-1 border border-orange-200">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>

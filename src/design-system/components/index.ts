@@ -5,6 +5,7 @@ export * from './InlineSaveIndicator';
 export * from './AlertLineRow';
 export * from './StatusBadge';
 export * from './MetricLineRow';
+export * from './StatCard';
 export * from './UnderlineValue';
 export * from './InlineEditableValue';
 export * from './CopyActionIcon';

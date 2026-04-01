@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import { formatPSTTimestamp } from '@/utils/date';
 import { publishActivityLogged, publishTechLogChanged } from '@/lib/realtime/publish';
-import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 
 type Action = 'add' | 'remove' | 'update' | 'undo';
@@ -103,29 +101,10 @@ export async function POST(req: NextRequest) {
       );
       const tsnId = insertResult.rows[0]?.id ? Number(insertResult.rows[0].id) : null;
 
-      // Create SERIAL_ADDED SAL row
-      let serialSalId: number | null = null;
-      if (tsnId) {
-        serialSalId = await createStationActivityLog(pool, {
-          station: 'TECH',
-          activityType: 'SERIAL_ADDED',
-          staffId,
-          shipmentId: sal.shipment_id ?? null,
-          scanRef: sal.scan_ref ?? null,
-          fnsku,
-          ordersExceptionId: sal.orders_exception_id ?? null,
-          fbaShipmentId: sal.fba_shipment_id ?? null,
-          fbaShipmentItemId: sal.fba_shipment_item_id ?? null,
-          techSerialNumberId: tsnId,
-          notes: `Serial added: ${serial}`,
-          metadata: { serial, serial_type: serialType },
-          createdAt: formatPSTTimestamp(),
-        }) ?? null;
-      }
-
       await invalidateCacheTags(['tech-logs', 'orders-next']);
       await publishTechLogChanged({ techId: staffId, action: 'insert', source: 'tech.serial' });
-      if (serialSalId) publishActivityLogged({ id: serialSalId, station: 'TECH', activityType: 'SERIAL_ADDED', staffId, scanRef: sal.scan_ref ?? null, fnsku, source: 'tech.serial' }).catch(() => {});
+      // Publish to live feed without creating a SAL row — TSN is the permanent record
+      if (tsnId) publishActivityLogged({ id: tsnId, station: 'TECH', activityType: 'SERIAL_ADDED', staffId, scanRef: serial, fnsku, source: 'tech.serial' }).catch(() => {});
 
       const serialNumbers = await getSerials(pool, salId);
       return NextResponse.json({ success: true, serialNumbers, tsnId });
@@ -188,17 +167,7 @@ export async function POST(req: NextRequest) {
           );
           const tsnId = ins.rows[0]?.id ? Number(ins.rows[0].id) : null;
           if (tsnId) {
-            const updateSalId = await createStationActivityLog(pool, {
-              station: 'TECH',
-              activityType: 'SERIAL_ADDED',
-              staffId,
-              shipmentId: sal.shipment_id ?? null,
-              fnsku,
-              techSerialNumberId: tsnId,
-              notes: `Serial added from update: ${serial}`,
-              metadata: { serial, serial_type: serialType, source: 'tech.serial.update' },
-            });
-            if (updateSalId) publishActivityLogged({ id: updateSalId, station: 'TECH', activityType: 'SERIAL_ADDED', staffId, scanRef: sal.scan_ref ?? null, fnsku, source: 'tech.serial.update' }).catch(() => {});
+            publishActivityLogged({ id: tsnId, station: 'TECH', activityType: 'SERIAL_ADDED', staffId, scanRef: serial, fnsku, source: 'tech.serial.update' }).catch(() => {});
           }
         }
       }

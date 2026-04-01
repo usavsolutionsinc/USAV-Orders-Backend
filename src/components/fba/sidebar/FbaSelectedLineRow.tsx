@@ -1,8 +1,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Pencil } from '@/components/Icons';
 import { FnskuChip } from '@/components/ui/CopyChip';
+import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
+import type { StationTheme } from '@/utils/staff-colors';
 
 export interface FbaSelectedLineRowProps {
   displayTitle: string;
@@ -10,6 +13,12 @@ export interface FbaSelectedLineRowProps {
   /** Shown above the title (e.g. line already on today's FBA plan). */
   microcopyAboveTitle?: string;
   microcopyTone?: 'default' | 'success';
+  stationTheme?: StationTheme;
+  checked?: boolean;
+  checkboxDisabled?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
+  /** When provided, renders an edit (pencil) button that calls this callback. */
+  onEditDetails?: () => void;
   /** Typically qty steppers — rendered in the right column, vertically centered with the title block. */
   rightSlot: ReactNode;
 }
@@ -20,13 +29,27 @@ export function FbaSelectedLineRow({
   fnsku,
   microcopyAboveTitle,
   microcopyTone = 'default',
+  stationTheme = 'green',
+  checked = true,
+  checkboxDisabled = false,
+  onCheckedChange,
+  onEditDetails,
   rightSlot,
 }: FbaSelectedLineRowProps) {
   const microcopyColor = microcopyTone === 'success' ? 'text-emerald-700' : 'text-gray-500';
 
   return (
-    <div className="flex items-center gap-2 px-3 py-3">
-      <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 self-center">
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 border-b border-gray-100 px-2 py-2 last:border-b-0">
+      <div className="row-span-2">
+        <PrintTableCheckbox
+          checked={checked}
+          stationTheme={stationTheme}
+          disabled={checkboxDisabled}
+          onChange={(next) => onCheckedChange?.(next)}
+          label={checked ? 'Unselect item' : 'Select item'}
+        />
+      </div>
+      <div className="col-start-2 row-start-1 flex min-w-0 flex-col items-start gap-0.5 self-start">
         {microcopyAboveTitle ? (
           <p className={`w-full ${fieldLabel} ${microcopyColor}`}>
             {microcopyAboveTitle}
@@ -35,11 +58,21 @@ export function FbaSelectedLineRow({
         <p className={`min-w-0 w-full whitespace-normal break-words leading-snug ${dataValue}`}>
           {displayTitle}
         </p>
-        <div className="self-start">
-          <FnskuChip value={fnsku} />
-        </div>
       </div>
-      <div className="flex shrink-0 flex-col items-center">{rightSlot}</div>
+      <div className="col-start-2 row-start-2 flex items-center justify-end gap-1.5 self-end pt-0.5">
+        {onEditDetails ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEditDetails(); }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label={`Edit details for ${fnsku}`}
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        ) : null}
+        <FnskuChip value={fnsku} />
+      </div>
+      <div className="col-start-3 row-span-2 flex shrink-0 flex-col items-start pt-0.5">{rightSlot}</div>
     </div>
   );
 }

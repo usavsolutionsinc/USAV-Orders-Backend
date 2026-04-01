@@ -162,6 +162,7 @@ export async function performTechFnskuScan(
     fbaShipmentItemId: lifecycleItem?.id ?? null,
     notes: 'Tech FNSKU scan',
     metadata: {
+      source: 'tech.perform-fnsku-scan',
       fnsku_log_id: fnskuLogId,
       product_title: meta.product_title ?? null,
       sku: meta.sku ?? null,

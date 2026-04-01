@@ -7,6 +7,7 @@ import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { createAuditLog } from '@/lib/audit-logs';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 
 export async function GET(req: NextRequest) {
@@ -121,6 +122,8 @@ export async function GET(req: NextRequest) {
                 o.shipment_id,
                 o.order_id,
                 COALESCE(o.account_source, CASE WHEN sal.fnsku IS NOT NULL THEN 'fba' ELSE null END) AS account_source,
+                COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
+                COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
                 COALESCE(
                     (
                         SELECT ss.product_title
@@ -166,10 +169,14 @@ export async function GET(req: NextRequest) {
             LEFT JOIN LATERAL (
                 SELECT ord.id
                 FROM orders ord
+                LEFT JOIN order_shipment_links osl ON osl.order_row_id = ord.id
                 LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
                 WHERE (
                     sal.shipment_id IS NOT NULL
-                    AND ord.shipment_id = sal.shipment_id
+                    AND (
+                      osl.shipment_id = sal.shipment_id
+                      OR ord.shipment_id = sal.shipment_id
+                    )
                 ) OR (
                     COALESCE(stn.tracking_number_raw, sal.scan_ref, '') <> ''
                     AND ord_stn.tracking_number_raw IS NOT NULL
@@ -178,12 +185,58 @@ export async function GET(req: NextRequest) {
                         RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, sal.scan_ref, '')), '[^A-Z0-9]', '', 'g'), 18)
                 )
                 ORDER BY
-                    CASE WHEN sal.shipment_id IS NOT NULL AND ord.shipment_id = sal.shipment_id THEN 0 ELSE 1 END,
+                    CASE
+                      WHEN sal.shipment_id IS NOT NULL AND osl.shipment_id = sal.shipment_id THEN 0
+                      WHEN sal.shipment_id IS NOT NULL AND ord.shipment_id = sal.shipment_id THEN 1
+                      ELSE 2
+                    END,
+                    CASE WHEN COALESCE(osl.is_primary, false) THEN 0 ELSE 1 END,
                     ord.created_at DESC NULLS LAST,
                     ord.id DESC
                 LIMIT 1
             ) order_match ON TRUE
             LEFT JOIN orders o ON o.id = order_match.id
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(
+                  json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
+                    FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+                  '[]'::json
+                ) AS tracking_numbers,
+                COALESCE(
+                  json_agg(
+                    json_build_object(
+                      'shipment_id', t.shipment_id,
+                      'tracking', t.tracking_number_raw,
+                      'is_primary', t.is_primary
+                    )
+                    ORDER BY t.sort_key, t.tracking_number_raw
+                  ) FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+                  '[]'::json
+                ) AS tracking_number_rows
+                FROM (
+                  SELECT DISTINCT
+                    osl_link.shipment_id,
+                    stn_link.tracking_number_raw,
+                    COALESCE(osl_link.is_primary, false) AS is_primary,
+                    CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
+                  FROM order_shipment_links osl_link
+                  LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
+                  WHERE o.id IS NOT NULL
+                    AND osl_link.order_row_id = o.id
+
+                  UNION
+
+                  SELECT DISTINCT
+                    o_primary.shipment_id,
+                    stn_primary.tracking_number_raw,
+                    true AS is_primary,
+                    0 AS sort_key
+                  FROM orders o_primary
+                  LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
+                  WHERE o.id IS NOT NULL
+                    AND o_primary.id = o.id
+                ) t
+            ) order_trackings ON TRUE
             LEFT JOIN LATERAL (
                 SELECT wa.deadline_at
                 FROM work_assignments wa
@@ -254,7 +307,7 @@ export async function POST(req: NextRequest) {
         }).returning();
 
         const packerLogId = newLog[0]?.id;
-        await createStationActivityLog(pool, {
+        const salId = await createStationActivityLog(pool, {
             station: 'PACK',
             activityType: body.trackingType === 'ORDERS' ? 'PACK_COMPLETED' : 'PACK_SCAN',
             staffId: body.packedBy ?? null,
@@ -262,9 +315,23 @@ export async function POST(req: NextRequest) {
             scanRef: scanRef ?? body.shippingTrackingNumber ?? null,
             packerLogId,
             metadata: {
+                source: 'packerlogs.post',
                 tracking_type: body.trackingType || 'ORDERS',
             },
         });
+        if ((body.trackingType || 'ORDERS') === 'ORDERS') {
+            await createAuditLog(pool, {
+                actorStaffId: body.packedBy ?? null,
+                source: 'api.packerlogs.post',
+                action: 'PACK_COMPLETED',
+                entityType: shipmentId ? 'SHIPMENT' : 'PACKER_LOG',
+                entityId: String(shipmentId ?? packerLogId ?? body.shippingTrackingNumber ?? 'unknown'),
+                stationActivityLogId: salId,
+                metadata: {
+                    tracking_type: body.trackingType || 'ORDERS',
+                },
+            });
+        }
         if (packerLogId && Array.isArray(body.packerPhotosUrl) && body.packerPhotosUrl.length > 0) {
             for (const url of body.packerPhotosUrl) {
                 if (typeof url === 'string' && url.trim()) {
@@ -344,7 +411,7 @@ export async function DELETE(req: NextRequest) {
                 await client.query('DELETE FROM packer_logs WHERE id = $1', [plId]);
             }
             await client.query('COMMIT');
-            await invalidateCacheTags(['packing-logs', 'orders']);
+            await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
             return NextResponse.json({ success: true });
         }
 
@@ -368,7 +435,7 @@ export async function DELETE(req: NextRequest) {
         await client.query('DELETE FROM station_activity_logs WHERE packer_log_id = $1', [plId]);
         await client.query('DELETE FROM packer_logs WHERE id = $1', [plId]);
         await client.query('COMMIT');
-        await invalidateCacheTags(['packing-logs', 'orders']);
+        await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
         return NextResponse.json({ success: true, deletedLog: { id: plId } });
     } catch (error: any) {
         try {

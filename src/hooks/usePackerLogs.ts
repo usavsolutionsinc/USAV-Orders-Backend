@@ -12,6 +12,12 @@ export interface PackerRecord {
   created_at: string;
   scan_ref: string | null;
   shipping_tracking_number: string;
+  tracking_numbers?: string[] | null;
+  tracking_number_rows?: Array<{
+    shipment_id: number | null;
+    tracking: string;
+    is_primary: boolean;
+  }> | null;
   packed_by: number;
   tracking_type: string | null;
   order_id: string | null;

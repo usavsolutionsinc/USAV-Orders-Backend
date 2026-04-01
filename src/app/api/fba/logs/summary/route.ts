@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         WITH log_totals AS (
           SELECT
             l.fnsku,
-            COALESCE(SUM(l.quantity) FILTER (WHERE l.source_stage = 'TECH' AND l.event_type = 'SCANNED'), 0)::int AS tech_scanned_qty,
+            COALESCE(SUM(l.quantity) FILTER (WHERE l.source_stage IN ('TECH', 'FBA') AND l.event_type = 'SCANNED'), 0)::int AS tech_scanned_qty,
             COALESCE(SUM(l.quantity) FILTER (WHERE l.source_stage = 'PACK' AND l.event_type IN ('READY', 'VERIFIED', 'BOXED')), 0)::int AS pack_ready_qty,
             COALESCE(SUM(l.quantity) FILTER (WHERE l.source_stage = 'SHIP' AND l.event_type = 'SHIPPED'), 0)::int AS shipped_qty,
             MAX(l.created_at) AS last_event_at

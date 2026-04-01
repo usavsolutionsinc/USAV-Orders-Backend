@@ -2,6 +2,7 @@ export const DEFAULT_ORDERS_CHANNEL = 'orders:changes';
 export const DEFAULT_REPAIRS_CHANNEL = 'repair:changes';
 export const DEFAULT_AI_ASSIST_CHANNEL = 'ai:assist';
 export const DEFAULT_STATION_CHANNEL = 'station:changes';
+export const DEFAULT_STAFF_CHANNEL = 'staff:changes';
 export const DEFAULT_DB_CHANNEL_PREFIX = 'db';
 
 function normalizeChannelName(value: string | undefined | null, fallback: string): string {
@@ -44,13 +45,28 @@ export const getStationChannelName = () =>
     DEFAULT_STATION_CHANNEL
   );
 
+export const getStaffChannelName = () =>
+  normalizeChannelName(
+    process.env.ABLY_CHANNEL_STAFF_CHANGES ||
+      process.env.NEXT_PUBLIC_ABLY_CHANNEL_STAFF_CHANGES,
+    DEFAULT_STAFF_CHANNEL
+  );
+
 export const DEFAULT_FBA_CHANNEL = 'fba:changes';
+export const DEFAULT_DASHBOARD_CHANNEL = 'dashboard:operations';
 
 export const getFbaChannelName = () =>
   normalizeChannelName(
     process.env.ABLY_CHANNEL_FBA_CHANGES ||
       process.env.NEXT_PUBLIC_ABLY_CHANNEL_FBA_CHANGES,
     DEFAULT_FBA_CHANNEL
+  );
+
+export const getDashboardChannelName = () =>
+  normalizeChannelName(
+    process.env.ABLY_CHANNEL_DASHBOARD ||
+      process.env.NEXT_PUBLIC_ABLY_CHANNEL_DASHBOARD,
+    DEFAULT_DASHBOARD_CHANNEL
   );
 
 export const getDbChannelPrefix = () =>

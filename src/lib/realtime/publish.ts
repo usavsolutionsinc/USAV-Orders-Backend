@@ -1,12 +1,16 @@
 import Ably from 'ably';
 import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
+import pool from '@/lib/db';
 import {
   getAiAssistSessionChannelName,
+  getDashboardChannelName,
   getFbaChannelName,
   getOrdersChannelName,
   getRepairsChannelName,
+  getStaffChannelName,
   getStationChannelName,
 } from '@/lib/realtime/channels';
+import { createStationActivityLog } from '@/lib/station-activity';
 import { formatPSTTimestamp } from '@/utils/date';
 
 type OrderChangedPayload = {
@@ -56,6 +60,24 @@ type ReceivingLogChangedPayload = {
   source: string;
 };
 
+type DashboardUpdatePayload = {
+  type: 'kpi_update' | 'activity_event' | 'distribution_update' | 'staff_progress_update';
+  category?: string;
+  update?: any;
+  data?: any;
+};
+
+type StaffScheduleChangedPayload = {
+  action: 'single' | 'bulk';
+  source: string;
+  changed: Array<{
+    staff_id: number;
+    day_of_week: number;
+    schedule_date?: string | null;
+    is_scheduled: boolean;
+  }>;
+};
+
 let ablyRestClient: Ably.Rest | null = null;
 
 function getAblyRestClient() {
@@ -76,8 +98,146 @@ async function publishEvent(channel: string, name: string, data: Record<string, 
 
   try {
     await client.channels.get(normalizedChannel).publish(name, data);
+    void logRealtimeEventToStationActivity(normalizedChannel, name, data);
   } catch (error) {
     console.error(`[realtime] Failed to publish "${name}" on "${normalizedChannel}":`, error);
+  }
+}
+
+export async function publishDashboardUpdate(payload: DashboardUpdatePayload) {
+  await publishEvent(getDashboardChannelName(), payload.type, {
+    ...payload,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+function parseFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function logRealtimeEventToStationActivity(
+  channel: string,
+  eventName: string,
+  payload: Record<string, unknown>,
+) {
+  // Skip self-published feed events and high-churn structural updates.
+  if (
+    eventName === 'activity.logged'
+    || eventName === 'order.changed'
+    || eventName === 'order.assignments'
+    || eventName === 'queue.assignments'
+    || eventName === 'tech-log.changed'
+    || eventName === 'packer-log.changed'
+    || eventName === 'fba.shipment.changed'
+    || eventName === 'fba.catalog.changed'
+    || eventName === 'ai.assistant.reply'
+    || eventName === 'kpi_update'
+    || eventName === 'activity_event'
+    || eventName === 'distribution_update'
+    || eventName === 'staff_progress_update'
+    || eventName === 'staff.schedule.changed'
+  ) {
+    return;
+  }
+
+  try {
+    if (eventName === 'order.tested') {
+      const orderId = parseFiniteNumber(payload.orderId);
+      const staffId = parseFiniteNumber(payload.testedBy);
+      const id = await createStationActivityLog(pool, {
+        station: 'TECH',
+        activityType: 'WS_ORDER_TESTED',
+        staffId,
+        scanRef: orderId != null ? String(orderId) : null,
+        notes: orderId != null ? `Realtime order.tested for order ${orderId}` : 'Realtime order.tested',
+        metadata: { channel, eventName, source: payload.source ?? null },
+      });
+      if (!id) return;
+      await publishActivityLogged({
+        id,
+        station: 'TECH',
+        activityType: 'WS_ORDER_TESTED',
+        staffId,
+        scanRef: orderId != null ? String(orderId) : null,
+        source: String(payload.source || 'realtime.order.tested'),
+      });
+      return;
+    }
+
+    if (eventName === 'repair.changed') {
+      const repairIds = Array.isArray(payload.repairIds)
+        ? payload.repairIds.map((value) => parseFiniteNumber(value)).filter((value): value is number => value != null)
+        : [];
+      const id = await createStationActivityLog(pool, {
+        station: 'ADMIN',
+        activityType: 'WS_REPAIR_CHANGED',
+        staffId: null,
+        notes: repairIds.length > 0
+          ? `Realtime repair.changed for repair ids: ${repairIds.join(', ')}`
+          : 'Realtime repair.changed',
+        metadata: { channel, eventName, source: payload.source ?? null, repairIds },
+      });
+      if (!id) return;
+      await publishActivityLogged({
+        id,
+        station: 'ADMIN',
+        activityType: 'WS_REPAIR_CHANGED',
+        staffId: null,
+        source: String(payload.source || 'realtime.repair.changed'),
+      });
+      return;
+    }
+
+    if (eventName === 'receiving-log.changed') {
+      const rowId = payload.rowId == null ? null : String(payload.rowId);
+      const action = payload.action == null ? null : String(payload.action);
+      const id = await createStationActivityLog(pool, {
+        station: 'RECEIVING',
+        activityType: 'WS_RECEIVING_CHANGED',
+        staffId: null,
+        scanRef: rowId,
+        notes: action ? `Realtime receiving-log.changed (${action})` : 'Realtime receiving-log.changed',
+        metadata: { channel, eventName, source: payload.source ?? null, action },
+      });
+      if (!id) return;
+      await publishActivityLogged({
+        id,
+        station: 'RECEIVING',
+        activityType: 'WS_RECEIVING_CHANGED',
+        staffId: null,
+        scanRef: rowId,
+        source: String(payload.source || 'realtime.receiving-log.changed'),
+      });
+      return;
+    }
+
+    if (eventName === 'fba.item.changed' && payload.action === 'scan') {
+      const shipmentId = parseFiniteNumber(payload.shipmentId);
+      const itemId = parseFiniteNumber(payload.itemId);
+      const fnsku = payload.fnsku == null ? null : String(payload.fnsku);
+      const id = await createStationActivityLog(pool, {
+        station: 'ADMIN',
+        activityType: 'WS_FBA_SCAN',
+        staffId: null,
+        fnsku,
+        fbaShipmentId: shipmentId,
+        fbaShipmentItemId: itemId,
+        notes: fnsku ? `Realtime FBA scan for ${fnsku}` : 'Realtime FBA scan',
+        metadata: { channel, eventName, source: payload.source ?? null },
+      });
+      if (!id) return;
+      await publishActivityLogged({
+        id,
+        station: 'ADMIN',
+        activityType: 'WS_FBA_SCAN',
+        staffId: null,
+        fnsku,
+        source: String(payload.source || 'realtime.fba.item.changed'),
+      });
+    }
+  } catch (error) {
+    console.error(`[realtime] Failed to log "${eventName}" into station_activity_logs:`, error);
   }
 }
 
@@ -176,6 +336,16 @@ export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
     prompt: payload.prompt,
     answer: payload.answer,
     model: payload.model,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+export async function publishStaffScheduleChanged(payload: StaffScheduleChangedPayload) {
+  await publishEvent(getStaffChannelName(), 'staff.schedule.changed', {
+    type: 'staff.schedule.changed',
+    action: payload.action,
+    source: payload.source,
+    changed: payload.changed,
     timestamp: formatPSTTimestamp(),
   });
 }
@@ -285,6 +455,7 @@ type ActivityLoggedPayload = {
 };
 
 export async function publishActivityLogged(payload: ActivityLoggedPayload) {
+  // Update station channel for legacy feed
   await publishEvent(getStationChannelName(), 'activity.logged', {
     type: 'activity.logged',
     id: payload.id,
@@ -296,5 +467,18 @@ export async function publishActivityLogged(payload: ActivityLoggedPayload) {
     fnsku: payload.fnsku,
     source: payload.source,
     timestamp: formatPSTTimestamp(),
+  });
+
+  // Update all-in-one dashboard feed
+  await publishDashboardUpdate({
+    type: 'activity_event',
+    data: {
+      id: String(payload.id),
+      timestamp: formatPSTTimestamp(),
+      type: payload.activityType,
+      source: payload.station,
+      summary: payload.scanRef || payload.fnsku || 'Activity logged',
+      staff_id: payload.staffId
+    }
   });
 }

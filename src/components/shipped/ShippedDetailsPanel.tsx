@@ -238,7 +238,29 @@ export function ShippedDetailsPanel({
       if (isExceptionRow) {
         await deleteOrderMutation.mutateAsync({ rowSource: 'exception', exceptionId: targetId });
       } else {
-        await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderId: targetId });
+        const normalizedTrackingType = String((shipped as any).tracking_type || '').toUpperCase();
+        const activityLogId = Number((shipped as any).station_activity_log_id || (shipped as any).sal_id) || undefined;
+        const packerLogId = Number((shipped as any).packer_log_id) || undefined;
+        const isLikelyActivityLogRow =
+          activityLogId != null && Number(activityLogId) === Number(shipped.id);
+        const shouldDeletePackingLog =
+          normalizedTrackingType === 'FBA' ||
+          normalizedTrackingType === 'FNSKU' ||
+          normalizedTrackingType === 'SKU' ||
+          normalizedTrackingType === 'SCAN' ||
+          isLikelyActivityLogRow ||
+          activityLogId != null ||
+          packerLogId != null;
+
+        if (shouldDeletePackingLog) {
+          await deleteOrderMutation.mutateAsync({
+            rowSource: 'packing_log',
+            activityLogId,
+            packerLogId,
+          });
+        } else {
+          await deleteOrderMutation.mutateAsync({ rowSource: 'order', orderId: targetId });
+        }
       }
 
       _onUpdate();

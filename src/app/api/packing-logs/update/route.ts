@@ -5,6 +5,7 @@ import { publishPackerLogChanged, publishOrderChanged } from '@/lib/realtime/pub
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { createAuditLog } from '@/lib/audit-logs';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
   '1': 4,
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
       const packerLogId = insertResult.rows[0]?.id;
       console.log('Inserted into packer_logs, ID:', packerLogId);
 
-      await createStationActivityLog(client, {
+      const salId = await createStationActivityLog(client, {
         station: 'PACK',
         activityType: 'PACK_COMPLETED',
         staffId,
@@ -108,10 +109,24 @@ export async function POST(req: NextRequest) {
         packerLogId,
         notes: 'Mobile pack scan',
         metadata: {
+          source: 'packing-logs.update',
           tracking_type: trackingType,
           photos_count: photoUrlList.length,
         },
         createdAt: canonicalPackDate,
+      });
+      await createAuditLog(client, {
+        actorStaffId: staffId,
+        source: 'api.packing-logs.update',
+        action: 'PACK_COMPLETED',
+        entityType: resolvedShipmentId ? 'SHIPMENT' : 'PACKER_LOG',
+        entityId: String(resolvedShipmentId ?? packerLogId ?? shippingTrackingNumber),
+        stationActivityLogId: salId,
+        metadata: {
+          tracking_type: trackingType,
+          photos_count: photoUrlList.length,
+          order_id: orderId ?? null,
+        },
       });
 
       // 2. Insert photo URLs into the unified photos table

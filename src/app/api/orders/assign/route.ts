@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderAssignmentsUpdated, publishOrderChanged } from '@/lib/realtime/publish';
+import { createAuditLog } from '@/lib/audit-logs';
 import {
   getOrderAssignmentSnapshotsByOrderIds,
   getStaffNameMap,
@@ -13,6 +14,11 @@ import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize
 type QueryClient = {
   query: PoolClient['query'];
 };
+
+function isMissingOrderShipmentLinksRelation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /order_shipment_links/i.test(message) && /does not exist|undefined table/i.test(message);
+}
 
 /**
  * Upsert a single work_assignment row for a given order + work_type.
@@ -131,6 +137,15 @@ async function upsertOrderTracking(
        WHERE id = ANY($1::int[])`,
       [orderIds]
     );
+    try {
+      await client.query(
+        `DELETE FROM order_shipment_links
+         WHERE order_row_id = ANY($1::int[])`,
+        [orderIds]
+      );
+    } catch (error) {
+      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+    }
     return;
   }
 
@@ -284,6 +299,116 @@ async function upsertOrderTracking(
      WHERE id = ANY($2::int[])`,
     [shipmentId, orderIds]
   );
+
+  // Keep link table in sync with canonical orders.shipment_id and preserve
+  // additional shipment links for future multi-tracking compatibility.
+  if (shipmentId) {
+    try {
+      await client.query(
+        `UPDATE order_shipment_links
+         SET is_primary = false
+         WHERE order_row_id = ANY($1::int[])`,
+        [orderIds]
+      );
+      await client.query(
+        `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
+         SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign'
+         ON CONFLICT (order_row_id, shipment_id) DO UPDATE
+           SET is_primary = true,
+               source = EXCLUDED.source,
+               updated_at = NOW()`,
+        [orderIds, shipmentId]
+      );
+    } catch (error) {
+      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+    }
+  }
+}
+
+async function updateShipmentTrackingById(
+  orderIds: number[],
+  shipmentId: number,
+  shippingTrackingNumber: string,
+  client: any,
+) {
+  const rawTracking = String(shippingTrackingNumber || '').trim();
+  if (!rawTracking) throw new Error('Tracking number is required');
+
+  const normalizedTracking = normalizeTrackingNumber(rawTracking);
+  if (!normalizedTracking) throw new Error('Tracking number is invalid');
+
+  const ownershipCheck = await client.query(
+    `SELECT 1
+     FROM orders o
+     LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
+     WHERE o.id = ANY($1::int[])
+       AND (o.shipment_id = $2 OR osl.shipment_id = $2)
+     LIMIT 1`,
+    [orderIds, shipmentId],
+  );
+  if ((ownershipCheck.rowCount ?? 0) === 0) {
+    throw new Error('Shipment is not linked to this order');
+  }
+
+  const duplicateShipment = await client.query(
+    `SELECT id
+     FROM shipping_tracking_numbers
+     WHERE tracking_number_normalized = $1
+       AND id <> $2
+     LIMIT 1`,
+    [normalizedTracking, shipmentId],
+  );
+  if ((duplicateShipment.rowCount ?? 0) > 0) {
+    throw new Error('Tracking number already exists on another shipment');
+  }
+
+  const detectedCarrier = detectCarrier(normalizedTracking);
+  const carrierForStorage = detectedCarrier ?? 'UNKNOWN';
+  const isUnknownCarrier = !detectedCarrier;
+  const unknownCarrierMessage =
+    'Carrier detection unavailable for this tracking format; manual tracking only.';
+
+  await client.query(
+    `UPDATE shipping_tracking_numbers
+     SET tracking_number_raw = $1,
+         tracking_number_normalized = $2,
+         carrier = $3,
+         latest_status_category = CASE
+           WHEN $4::boolean THEN 'UNKNOWN'
+           WHEN carrier = 'UNKNOWN' THEN NULL
+           ELSE latest_status_category
+         END,
+         is_terminal = CASE
+           WHEN $4::boolean THEN true
+           WHEN carrier = 'UNKNOWN' THEN false
+           ELSE is_terminal
+         END,
+         next_check_at = CASE
+           WHEN $4::boolean THEN NULL
+           WHEN carrier = 'UNKNOWN' THEN NOW()
+           ELSE next_check_at
+         END,
+         last_error_code = CASE
+           WHEN $4::boolean THEN 'UNKNOWN_CARRIER'
+           WHEN carrier = 'UNKNOWN' THEN NULL
+           ELSE last_error_code
+         END,
+         last_error_message = CASE
+           WHEN $4::boolean THEN $5
+           WHEN carrier = 'UNKNOWN' THEN NULL
+           ELSE last_error_message
+         END,
+         updated_at = NOW()
+     WHERE id = $6`,
+    [
+      rawTracking,
+      normalizedTracking,
+      carrierForStorage,
+      isUnknownCarrier,
+      unknownCarrierMessage,
+      shipmentId,
+    ],
+  );
 }
 
 /**
@@ -304,8 +429,14 @@ export async function POST(req: NextRequest) {
       outOfStock,
       notes,
       shippingTrackingNumber,
+      trackingLinkEdits,
       itemNumber,
       condition,
+      quantity,
+      sku,
+      performedByStaffId,
+      actorStaffId,
+      staffId,
     } = body;
 
     if (!orderId && (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0)) {
@@ -316,6 +447,11 @@ export async function POST(req: NextRequest) {
     }
 
     const idsToUpdate: number[] = (orderId ? [orderId] : orderIds).map(Number);
+    const actorIdRaw = Number(performedByStaffId ?? actorStaffId ?? staffId);
+    const actorId = Number.isFinite(actorIdRaw) && actorIdRaw > 0 ? actorIdRaw : null;
+    const requestId = req.headers.get('x-request-id');
+    const userAgent = req.headers.get('user-agent');
+    const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
 
     const client = await pool.connect();
     let outOfStockChanged = false;
@@ -345,6 +481,16 @@ export async function POST(req: NextRequest) {
       // ── 2b. Update carrier tracking through shipment backbone ──────────────
       if (shippingTrackingNumber !== undefined) {
         await upsertOrderTracking(idsToUpdate, shippingTrackingNumber, client);
+      }
+
+      if (Array.isArray(trackingLinkEdits) && trackingLinkEdits.length > 0) {
+        for (const edit of trackingLinkEdits) {
+          const shipmentId = Number(edit?.shipmentId);
+          const nextTracking = String(edit?.shippingTrackingNumber || '').trim();
+          if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
+          if (!nextTracking) continue;
+          await updateShipmentTrackingById(idsToUpdate, shipmentId, nextTracking, client);
+        }
       }
 
       // ── 2c. Update remaining fields directly on orders table ───────────────
@@ -389,6 +535,14 @@ export async function POST(req: NextRequest) {
         updates.push(`condition = $${paramCount++}`);
         values.push(condition || null);
       }
+      if (quantity !== undefined) {
+        updates.push(`quantity = $${paramCount++}`);
+        values.push(quantity || '1');
+      }
+      if (sku !== undefined) {
+        updates.push(`sku = $${paramCount++}`);
+        values.push(sku || null);
+      }
 
       if (updates.length > 0) {
         const idPlaceholders = idsToUpdate.map(() => `$${paramCount++}`).join(', ');
@@ -398,6 +552,40 @@ export async function POST(req: NextRequest) {
           values
         );
       }
+
+      const changedFields: Record<string, unknown> = {};
+      if (testerId !== undefined) changedFields.testerId = testerId;
+      if (packerId !== undefined) changedFields.packerId = packerId;
+      if (orderNumber !== undefined) changedFields.orderNumber = orderNumber;
+      if (shipByDate !== undefined) changedFields.shipByDate = shipByDate;
+      if (outOfStock !== undefined) changedFields.outOfStock = outOfStock;
+      if (notes !== undefined) changedFields.notes = notes;
+      if (shippingTrackingNumber !== undefined) changedFields.shippingTrackingNumber = shippingTrackingNumber;
+      if (Array.isArray(trackingLinkEdits) && trackingLinkEdits.length > 0) changedFields.trackingLinkEdits = trackingLinkEdits;
+      if (itemNumber !== undefined) changedFields.itemNumber = itemNumber;
+      if (condition !== undefined) changedFields.condition = condition;
+      if (quantity !== undefined) changedFields.quantity = quantity;
+      if (sku !== undefined) changedFields.sku = sku;
+
+      await Promise.all(
+        idsToUpdate.map((id) =>
+          createAuditLog(client, {
+            actorStaffId: actorId,
+            source: 'api.orders.assign',
+            action: 'ORDER_ASSIGNMENT_UPDATED',
+            entityType: 'ORDER',
+            entityId: String(id),
+            requestId,
+            ipAddress,
+            userAgent,
+            afterData: changedFields,
+            metadata: {
+              orderId: id,
+              changedFieldKeys: Object.keys(changedFields),
+            },
+          }),
+        ),
+      );
 
       await client.query('COMMIT');
     } catch (txError) {

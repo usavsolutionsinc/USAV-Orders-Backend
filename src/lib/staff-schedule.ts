@@ -1,6 +1,7 @@
 export const STAFF_SCHEDULE_TIMEZONE = 'America/Los_Angeles';
 
 export const STAFF_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+export const STAFF_BUSINESS_DAYS = [1, 2, 3, 4, 5] as const;
 
 export type StaffDayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -25,4 +26,8 @@ export function getCurrentStaffDayOfWeek(date: Date = new Date()): StaffDayOfWee
 export function getStaffWeekdayLabel(day: number): string {
   if (day < 0 || day > 6) return STAFF_WEEKDAY_LABELS[0];
   return STAFF_WEEKDAY_LABELS[day as StaffDayOfWeek];
+}
+
+export function isStaffBusinessDay(day: number): boolean {
+  return day >= 1 && day <= 5;
 }

@@ -19,6 +19,7 @@ export interface SearchBarProps {
   rightElement?: React.ReactNode;
   leadingIcon?: React.ReactNode;
   autoFocus?: boolean;
+  debounceMs?: number;
 }
 
 function toSearchFieldTone(variant: SearchBarProps['variant']): SearchFieldTone {
@@ -57,6 +58,7 @@ export function SearchBar({
   rightElement,
   leadingIcon,
   autoFocus = false,
+  debounceMs,
 }: SearchBarProps) {
   const isMobile = useIsMobile();
   const internalRef = useRef<HTMLInputElement>(null);
@@ -90,6 +92,7 @@ export function SearchBar({
         rightElement={rightElement}
         leadingIcon={leadingIcon}
         autoFocus={autoFocus}
+        debounceMs={debounceMs}
       />
     </div>
   );

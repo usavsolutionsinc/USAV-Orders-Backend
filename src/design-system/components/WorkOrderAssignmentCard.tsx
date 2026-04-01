@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from '@/components/Icons';
-import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
 import { getOrderPlatformLabel, getOrderSourceTag } from '@/utils/order-platform';
 import { WorkOrderInfoChips } from '@/components/work-orders/WorkOrderInfoStrip';
 import { toDateInputValue, type WorkOrderRow, type WorkStatus } from '@/components/work-orders/types';
 import { AssignmentOverlayCard } from './AssignmentOverlayCard';
-import { framerGesture } from '../foundations/motion-framer';
-import { fieldLabel } from '@/design-system/tokens/typography/presets';
+import { StaffButtonGrid } from '@/components/shipping/StaffButtonGrid';
 
 interface StaffOption {
   id: number;
@@ -39,10 +37,6 @@ export interface WorkOrderAssignmentCardProps {
   storageKey?: string;
   allowEditConfirmed?: boolean;
   closeWhenCompleted?: boolean;
-}
-
-function resolveTechTheme(staffId: number) {
-  return getStaffThemeById(staffId);
 }
 
 /** Plain text only (no chips): e.g. “Orders · Amazon”, “FBA”, or queue label. */
@@ -528,72 +522,22 @@ export function WorkOrderAssignmentCard({
         </div>
 
         <div className="shrink-0 space-y-4 border-t border-gray-100 px-5 pb-5 pt-2.5">
-          <div>
-            <p className="mb-2 text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">Technician</p>
-            {technicianOptions.length > 0 ? (
-              <div
-                className="grid w-full gap-2"
-                style={{ gridTemplateColumns: `repeat(${Math.max(1, technicianOptions.length)}, minmax(0, 1fr))` }}
-              >
-                {technicianOptions.map((m) => {
-                  const active = techId === m.id;
-                  const cls = stationThemeClasses[resolveTechTheme(m.id)];
-                  return (
-                    <motion.button
-                      key={m.id}
-                      type="button"
-                      whileTap={framerGesture.tapPress}
-                      onClick={() => handleTech(m.id)}
-                      className={[
-                        'touch-manipulation flex h-11 w-full min-w-0 flex-col items-center justify-center rounded-lg border-2 px-2 transition-all active:scale-[0.98]',
-                        active ? `${cls.active} border-transparent shadow-lg` : cls.inactive,
-                      ].join(' ')}
-                    >
-                      <span className="w-full text-center text-[10px] font-black uppercase leading-tight tracking-[0.04em]">
-                        {m.name}
-                      </span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className={`${fieldLabel} text-gray-500`}>
-                No technicians
-              </p>
-            )}
-          </div>
+          <StaffButtonGrid
+            label="Technician"
+            options={technicianOptions}
+            selectedId={techId}
+            onSelect={handleTech}
+            emptyMessage="No technicians"
+          />
 
-          <div>
-            <p className="mb-2.5 text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">Packer</p>
-            {packerOptions.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {packerOptions.map((m) => {
-                  const active = packerId === m.id;
-                  const cls = stationThemeClasses[getStaffThemeById(m.id)];
-                  return (
-                    <motion.button
-                      key={m.id}
-                      type="button"
-                      whileTap={framerGesture.tapPress}
-                      onClick={() => handlePacker(m.id)}
-                      className={[
-                        'touch-manipulation flex h-11 w-full min-w-0 flex-col items-center justify-center rounded-lg border-2 px-2 transition-all active:scale-[0.98]',
-                        active ? `${cls.active} border-transparent shadow-lg` : cls.inactive,
-                      ].join(' ')}
-                    >
-                      <span className="w-full text-center text-[10px] font-black uppercase leading-tight tracking-[0.04em]">
-                        {m.name}
-                      </span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className={`${fieldLabel} text-gray-500`}>
-                No packers
-              </p>
-            )}
-          </div>
+          <StaffButtonGrid
+            label="Packer"
+            options={packerOptions}
+            selectedId={packerId}
+            onSelect={handlePacker}
+            columns={2}
+            emptyMessage="No packers"
+          />
 
           <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
             <span className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">

@@ -26,8 +26,16 @@ export async function POST(req: NextRequest) {
       `DELETE FROM orders WHERE id IN (${placeholders})`,
       idsToDelete
     );
+    if ((result.rowCount || 0) === 0) {
+      return NextResponse.json(
+        { error: 'No matching orders were deleted', deleted: 0 },
+        { status: 404 }
+      );
+    }
 
-    await invalidateCacheTags(['orders', 'shipped']);
+    // Dashboard shipped table is backed by /api/packerlogs cache ("packing-logs"),
+    // not only /api/shipped, so delete must invalidate both domains.
+    await invalidateCacheTags(['orders', 'shipped', 'packing-logs']);
     await publishOrderChanged({ orderIds: idsToDelete, source: 'orders.delete' });
     return NextResponse.json({ success: true, deleted: result.rowCount || 0 });
   } catch (error: any) {

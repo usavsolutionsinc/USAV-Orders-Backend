@@ -35,6 +35,36 @@ export function useRealtimeInvalidation({
     dashboard,
   );
 
+  // Assignment changes can patch one table in-place, but other dashboard
+  // caches (including alternate filters/views) still need a refetch.
+  useAblyChannel(
+    ORDERS_CHANNEL,
+    'order.assignments',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
+    },
+    dashboard,
+  );
+
+  useAblyChannel(
+    ORDERS_CHANNEL,
+    'queue.assignments',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
+    },
+    dashboard,
+  );
+
   // Serial added from the tech station publishes order.tested (not order.changed).
   // Invalidate shipped views so the serial list in the details panel stays current.
   useAblyChannel(

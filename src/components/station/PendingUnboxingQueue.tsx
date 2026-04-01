@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Loader2, Package, X } from '@/components/Icons';
 import { TabSwitch } from '@/design-system/components';
 import { sectionLabel, chipText, dataValue, microBadge } from '@/design-system/tokens/typography/presets';
@@ -38,6 +38,17 @@ interface PendingBox {
   total_received: number;
   has_test_items: boolean;
   lines: ReceivingLine[];
+}
+
+interface ReceivingSerial {
+  id: number;
+  serial_number: string;
+  serial_type: string;
+  tested_by: number | null;
+  station_source: string;
+  receiving_line_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 const WORKFLOW_BADGE: Record<string, string> = {
@@ -160,14 +171,19 @@ function LineItemsPanel({
   trackingNumber,
   carrier,
   cachedLines,
+  staffId,
   onClose,
 }: {
   receivingId: number;
   trackingNumber: string | null;
   carrier: string | null;
   cachedLines: ReceivingLine[];
+  staffId: number | null;
   onClose: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const [activeSerialLineId, setActiveSerialLineId] = useState<number | null>(null);
+
   const { data, isLoading } = useQuery<{ success: boolean; receiving_lines: ReceivingLine[] }>({
     queryKey: ['receiving-lines', receivingId],
     queryFn: async () => {
@@ -184,6 +200,10 @@ function LineItemsPanel({
   const lines = data?.receiving_lines ?? cachedLines;
   const trackingDisplay = trackingNumber ? `…${trackingNumber.slice(-10)}` : `#${receivingId}`;
   const carrierLabel = carrier ? carrier.toUpperCase().slice(0, 6) : '';
+
+  const toggleSerialEditor = (lineId: number) => {
+    setActiveSerialLineId((prev) => (prev === lineId ? null : lineId));
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white border-t-2 border-indigo-100">
@@ -269,6 +289,15 @@ function LineItemsPanel({
                           PO {line.zoho_purchaseorder_id}
                         </p>
                       )}
+                      <div className="mt-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleSerialEditor(line.id)}
+                          className={`${microBadge} rounded border border-indigo-200 px-1.5 py-0.5 text-indigo-600 hover:bg-indigo-50`}
+                        >
+                          {activeSerialLineId === line.id ? 'Hide Serials' : 'Scan Serials'}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Qty + progress */}
@@ -294,6 +323,19 @@ function LineItemsPanel({
                       {line.notes}
                     </p>
                   )}
+
+                  {activeSerialLineId === line.id && (
+                    <LineSerialsSection
+                      receivingId={receivingId}
+                      receivingLineId={line.id}
+                      staffId={staffId}
+                      onChanged={() => {
+                        queryClient.invalidateQueries({ queryKey: ['receiving-lines', receivingId] });
+                        queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+                        queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
+                      }}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -304,11 +346,144 @@ function LineItemsPanel({
   );
 }
 
-interface PendingUnboxingQueueProps {
-  onSelectReceivingId?: (id: number) => void;
+function LineSerialsSection({
+  receivingId,
+  receivingLineId,
+  staffId,
+  onChanged,
+}: {
+  receivingId: number;
+  receivingLineId: number;
+  staffId: number | null;
+  onChanged?: () => void;
+}) {
+  const [serialInput, setSerialInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { data, isLoading, refetch } = useQuery<{ success: boolean; serials: ReceivingSerial[]; count: number }>({
+    queryKey: ['receiving-line-serials', receivingLineId],
+    queryFn: async () => {
+      const res = await fetch(`/api/receiving/serials?receiving_line_id=${receivingLineId}`);
+      if (!res.ok) throw new Error('Failed to fetch serials');
+      return res.json();
+    },
+    staleTime: 10_000,
+  });
+
+  const serials = data?.serials ?? [];
+
+  const submitSerial = async () => {
+    const serial = serialInput.trim().toUpperCase();
+    if (!serial || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/receiving/serials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiving_line_id: receivingLineId,
+          serial_number: serial,
+          tested_by: staffId,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
+      setSerialInput('');
+      await refetch();
+      onChanged?.();
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add serial');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const deleteSerial = async (id: number) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/receiving/serials?id=${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
+      await refetch();
+      onChanged?.();
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete serial');
+    }
+  };
+
+  return (
+    <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/40 p-2">
+      <p className={`${microBadge} text-indigo-700`}>Serials for line #{receivingLineId}</p>
+      <div className="mt-1 flex items-center gap-1.5">
+        <input
+          value={serialInput}
+          onChange={(e) => setSerialInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submitSerial();
+            }
+          }}
+          placeholder="Scan serial..."
+          className="flex-1 rounded border border-indigo-200 bg-white px-2 py-1 text-[10px] font-mono font-bold text-gray-900 outline-none"
+        />
+        <button
+          type="button"
+          onClick={submitSerial}
+          disabled={submitting || !serialInput.trim()}
+          className={`${microBadge} rounded bg-indigo-600 px-2 py-1 text-white disabled:opacity-50`}
+        >
+          {submitting ? 'Adding…' : 'Add'}
+        </button>
+      </div>
+
+      {error && (
+        <p className="mt-1 text-[9px] font-bold text-red-600">{error}</p>
+      )}
+
+      <div className="mt-2 max-h-24 overflow-y-auto rounded border border-indigo-100 bg-white/80 p-1.5">
+        {isLoading ? (
+          <p className={`${microBadge} text-gray-500`}>Loading serials…</p>
+        ) : serials.length === 0 ? (
+          <p className={`${microBadge} text-gray-500`}>No serials yet</p>
+        ) : (
+          <div className="space-y-1">
+            {serials.map((row) => (
+              <div key={row.id} className="flex items-center justify-between gap-2 rounded bg-gray-50 px-2 py-1">
+                <span className="truncate text-[10px] font-mono font-bold text-gray-800">{row.serial_number}</span>
+                <button
+                  type="button"
+                  onClick={() => deleteSerial(row.id)}
+                  className={`${microBadge} text-red-600 hover:text-red-700`}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <p className="mt-1 text-[8px] font-semibold uppercase tracking-wider text-gray-500">
+        Receiving #{receivingId} · Source: RECEIVING
+      </p>
+    </div>
+  );
 }
 
-export default function PendingUnboxingQueue({ onSelectReceivingId }: PendingUnboxingQueueProps) {
+interface PendingUnboxingQueueProps {
+  onSelectReceivingId?: (id: number) => void;
+  staffId?: number | null;
+}
+
+export default function PendingUnboxingQueue({ onSelectReceivingId, staffId = null }: PendingUnboxingQueueProps) {
   const [statusFilter, setStatusFilter] = useState<'pending' | 'unboxed' | 'all'>('pending');
   const [activeBoxId, setActiveBoxId] = useState<number | null>(null);
 
@@ -424,6 +599,7 @@ export default function PendingUnboxingQueue({ onSelectReceivingId }: PendingUnb
               trackingNumber={activeBox.tracking_number}
               carrier={activeBox.carrier}
               cachedLines={activeBox.lines}
+              staffId={staffId}
               onClose={() => setActiveBoxId(null)}
             />
           </motion.div>

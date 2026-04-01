@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { LayoutGroup, motion, AnimatePresence } from 'framer-motion';
 import UpNextOrder from '../UpNextOrder';
-import { Barcode, AlertCircle, Loader2, Package, MapPin, Settings } from '../Icons';
+import { Barcode, Loader2, Package, MapPin, Settings } from '../Icons';
 import ActiveStationOrderCard from './ActiveStationOrderCard';
 import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
@@ -53,7 +53,6 @@ export default function StationTesting({
     activeOrder,
     setActiveOrder,
     isActiveOrderVisible,
-    errorMessage,
     resolvedManuals,
     isManualLoading,
     handleSubmit,
@@ -180,7 +179,9 @@ export default function StationTesting({
   const detectedMode = trimmedInput ? getStationInputMode(inputValue) : null;
   const autoMode: StationInputMode =
     detectedMode ??
-    (activeOrder?.sourceType === 'fba' ? 'fba' : activeOrder ? 'serial' : 'tracking');
+    // Display behavior: once an order is active (including FNSKU-loaded),
+    // the next expected input is a serial number.
+    (activeOrder ? 'serial' : 'tracking');
   // Manual mode is a hard override for display and submit routing.
   const effectiveMode: StationInputMode =
     manualMode ??
@@ -405,21 +406,6 @@ export default function StationTesting({
 
         {/* ── Scrollable content ── */}
         <div className={`flex-1 overflow-y-auto no-scrollbar px-4 space-y-3 ${isMobile ? 'pb-2' : 'pb-4'}`}>
-          <AnimatePresence mode="wait">
-            {errorMessage && !isLoading && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={stationTween}
-                className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-200 flex items-center gap-3"
-              >
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                <p className="text-xs font-bold">{errorMessage}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           <LayoutGroup id="station-active-upnext">
             <AnimatePresence mode="popLayout" initial={false}>
               {activeOrder && isActiveOrderVisible ? (
@@ -435,7 +421,7 @@ export default function StationTesting({
               ) : null}
             </AnimatePresence>
 
-            <motion.div layout transition={stationLayoutTween} className="space-y-2 mt-2">
+            <div className="space-y-2 mt-2">
               <UpNextOrder
                 techId={userId}
                 onStart={(tracking) => {
@@ -448,7 +434,7 @@ export default function StationTesting({
                 }}
                 filterBarPortalRef={filterBarPortalRef}
               />
-            </motion.div>
+            </div>
           </LayoutGroup>
 
           <div className="mt-auto pt-6 border-t border-gray-50 text-center">

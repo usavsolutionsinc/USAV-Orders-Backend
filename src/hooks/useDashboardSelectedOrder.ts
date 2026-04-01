@@ -18,6 +18,7 @@ import {
   getOpenShippedDetailsPayload,
   type ShippedDetailsContext,
 } from '@/utils/events';
+import { readDetailsOpenBehaviorPreference } from '@/utils/dashboard-preferences';
 
 const SELECTED_ORDER_SNAPSHOT_KEY = 'dashboard:selected-order';
 
@@ -113,6 +114,9 @@ export function useDashboardSelectedOrder(detailsEnabled: boolean) {
     const handleOpen = (e: CustomEvent<ShippedOrder>) => {
       const payload = getOpenShippedDetailsPayload(e.detail);
       if (!payload?.order) return;
+      const behavior = readDetailsOpenBehaviorPreference();
+      // In side-panel mode, suppress automatic queue-click expansion.
+      if (behavior === 'side_panel' && payload.context === 'queue') return;
       applySelectedOrder(payload.order, payload.context);
     };
     // Sync URL so openOrderId does not immediately re-resolve and re-open the panel

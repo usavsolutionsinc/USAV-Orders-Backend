@@ -57,6 +57,7 @@ export {
 } from './useShippedQueries';
 
 export { useStaffNameMap } from './useStaffNameMap';
+export { useTodayStaffAvailability } from './useTodayStaffAvailability';
 export { useOrderAssignment } from './useOrderAssignment';
 export type { OrderAssignPayload } from './useOrderAssignment';
 export { useDeleteOrderRow } from './useDeleteOrderRow';

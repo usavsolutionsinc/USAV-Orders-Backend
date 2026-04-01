@@ -77,7 +77,6 @@ export function DashboardManagementPanel({
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [assigningState, setAssigningState] = useState<{ rows: WorkOrderRow[]; startIndex: number } | null>(null);
   const [isLoadingAssignment, setIsLoadingAssignment] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -217,10 +216,7 @@ export function DashboardManagementPanel({
 
   const handleInputChange = useCallback((value: string) => {
     setSearchQuery(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      handleSearch(value);
-    }, 400);
+    void handleSearch(value);
   }, [handleSearch]);
 
   const clearSearchHistory = () => {
@@ -307,7 +303,6 @@ export function DashboardManagementPanel({
               <SearchBar
                 value={searchQuery}
                 onChange={handleInputChange}
-                onSearch={handleSearch}
                 onClear={() => { setSearchQuery(''); handleSearch(''); }}
                 inputRef={searchInputRef}
                 placeholder="Search order ID, tracking, SKU, title, customer..."

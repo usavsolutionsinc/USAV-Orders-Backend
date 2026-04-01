@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -19,6 +19,12 @@ import { DateGroupHeader } from './DateGroupHeader';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import {
+  readShippedFilterPreference,
+  readShippedWeekOffsetPreference,
+  writeShippedFilterPreference,
+  writeShippedWeekOffsetPreference,
+} from '@/utils/dashboard-preferences';
 
 // FBA records are identified by scan_ref matching Amazon's FBA shipment ID format
 // (FBAxxxxxxxx) or by tracking_type being 'FBA' / 'FNSKU'.
@@ -36,7 +42,13 @@ function isSkuPackerRecord(record: { scan_ref?: string | null; tracking_type?: s
   const scanRef = String(record.scan_ref || '').trim();
   return scanRef.includes(':');
 }
+
+function hasLinkedOrder(record: { order_row_id?: number | null; order_id?: string | null }): boolean {
+  if (record.order_row_id != null) return true;
+  return String(record.order_id || '').trim().length > 0;
+}
 import { getStaffName } from '@/utils/staff';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { isEmptyDisplayValue } from '@/utils/empty-display-value';
 
@@ -72,12 +84,25 @@ export function DashboardShippedTable({
   const resolvedSearchKeyRef = useRef('');
 
   const search = searchParams.get('search') || '';
-  const shippedFilterParam = searchParams.get('shippedFilter') || 'all';
-  const weekOffset = Math.max(0, Number.parseInt(searchParams.get('shippedWeekOffset') || '0', 10) || 0);
+  const shippedFilterParam = searchParams.get('shippedFilter');
+  const shippedFilter = useMemo(() => {
+    if (shippedFilterParam === 'orders' || shippedFilterParam === 'sku' || shippedFilterParam === 'fba') {
+      return shippedFilterParam;
+    }
+    if (shippedFilterParam === 'all') return 'all';
+    return readShippedFilterPreference() ?? 'all';
+  }, [shippedFilterParam]);
+  const weekOffsetParam = searchParams.get('shippedWeekOffset');
+  const weekOffset = useMemo(() => {
+    if (weekOffsetParam != null) {
+      return Math.max(0, Number.parseInt(weekOffsetParam || '0', 10) || 0);
+    }
+    return readShippedWeekOffsetPreference() ?? 0;
+  }, [weekOffsetParam]);
   const weekRange = getWeekRangeForOffset(weekOffset);
   const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
-  const queryKey = ['dashboard-table', 'shipped', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr, packedBy, testedBy, shippedFilter: shippedFilterParam }] as const;
+  const queryKey = ['dashboard-table', 'shipped', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr, packedBy, testedBy, shippedFilter }] as const;
 
   const query = useQuery({
     queryKey,
@@ -87,13 +112,23 @@ export function DashboardShippedTable({
         testedBy,
         weekStart: weekRange.startStr,
         weekEnd: weekRange.endStr,
-        shippedFilter: shippedFilterParam,
+        shippedFilter,
       }),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     placeholderData: (previousData) => previousData,
     refetchOnWindowFocus: false,
   });
+
+  useEffect(() => {
+    writeShippedFilterPreference(
+      shippedFilter === 'orders' || shippedFilter === 'sku' || shippedFilter === 'fba' ? shippedFilter : 'all'
+    );
+  }, [shippedFilter]);
+
+  useEffect(() => {
+    writeShippedWeekOffsetPreference(weekOffset);
+  }, [weekOffset]);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -132,7 +167,7 @@ export function DashboardShippedTable({
     else params.set('shippedWeekOffset', String(nextOffset));
     const nextSearch = params.toString();
     const nextPath = pathname || '/dashboard';
-    router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
+    router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
   };
 
   const clearSearch = () => {
@@ -140,7 +175,7 @@ export function DashboardShippedTable({
     params.delete('search');
     const nextSearch = params.toString();
     const nextPath = pathname || '/dashboard';
-    router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
+    router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
   };
 
   const rawRecords = query.data || [];
@@ -157,6 +192,8 @@ export function DashboardShippedTable({
     condition: record.condition || '',
     shipment_id: record.shipment_id ?? null,
     shipping_tracking_number: record.shipping_tracking_number || '',
+    tracking_numbers: record.tracking_numbers || [],
+    tracking_number_rows: (record as any).tracking_number_rows || [],
     serial_number: record.serial_number || '',
     sku: record.sku || '',
     tester_id: record.tester_id ?? null,
@@ -185,6 +222,8 @@ export function DashboardShippedTable({
     created_at: record.created_at || record.packed_at || null,
     scan_ref: record.shipping_tracking_number || '',
     shipping_tracking_number: record.shipping_tracking_number || '',
+    tracking_numbers: Array.isArray((record as any).tracking_numbers) ? (record as any).tracking_numbers : [],
+    tracking_number_rows: Array.isArray((record as any).tracking_number_rows) ? (record as any).tracking_number_rows : [],
     packed_by: record.packer_id ?? record.packed_by ?? null,
     packed_by_name: record.packed_by_name || null,
     tracking_type: record.tracking_type || null,
@@ -210,20 +249,26 @@ export function DashboardShippedTable({
 
   const seenTracking = new Map<string, PackerRecord>();
   [...rawRecords].sort((a, b) => a.id - b.id).forEach((record) => {
-    const key = (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
+    const orderKey = String(record.order_id || '').trim();
+    const key = orderKey || (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
     seenTracking.set(key, record);
   });
   const dedupedRecords = Array.from(seenTracking.values());
   // Client-side guard — server already filters by shippedFilter, but this prevents
   // stale cached records from a prior filter mode appearing while the new fetch loads.
   const typeFilteredRecords =
-    shippedFilterParam === 'fba'
+    shippedFilter === 'fba'
       ? dedupedRecords.filter(isFbaPackerRecord)
-      : shippedFilterParam === 'orders'
-        ? dedupedRecords.filter((r) => !isFbaPackerRecord(r))
-        : shippedFilterParam === 'sku'
+      : shippedFilter === 'orders'
+        ? dedupedRecords.filter((r) => !isFbaPackerRecord(r) && hasLinkedOrder(r))
+        : shippedFilter === 'sku'
           ? dedupedRecords.filter(isSkuPackerRecord)
-          : dedupedRecords; // 'all' — show everything
+          : dedupedRecords.filter((r) => {
+              // "all" includes orders + SKU + FBA, but exclude orphaned order logs
+              // that no longer have a linked orders row (e.g. after hard delete).
+              if (isFbaPackerRecord(r) || isSkuPackerRecord(r)) return true;
+              return hasLinkedOrder(r);
+            });
   const filteredRecords = normalizedSearch
     ? typeFilteredRecords.filter((record) => {
         const haystack = [
@@ -259,10 +304,10 @@ export function DashboardShippedTable({
       normalizedSearch,
       packedBy ?? '',
       testedBy ?? '',
-      shippedFilterParam,
+      shippedFilter,
     ].join('|');
 
-    if (resolvedSearchKeyRef.current === searchKey && searchFallbackRecords.length > 0) {
+    if (resolvedSearchKeyRef.current === searchKey) {
       return;
     }
 
@@ -275,7 +320,7 @@ export function DashboardShippedTable({
           searchQuery: search,
           packedBy,
           testedBy,
-          shippedFilter: shippedFilterParam,
+          shippedFilter,
         });
         if (cancelled) return;
 
@@ -284,6 +329,7 @@ export function DashboardShippedTable({
         setSearchFallbackRecords(normalizedResults);
       } catch {
         if (!cancelled) {
+          resolvedSearchKeyRef.current = searchKey;
           setSearchFallbackRecords([]);
         }
       } finally {
@@ -303,7 +349,7 @@ export function DashboardShippedTable({
     query.isFetching,
     query.isLoading,
     search,
-    searchFallbackRecords.length,
+    shippedFilter,
     testedBy,
     toSearchResultRecord,
   ]);
@@ -411,14 +457,12 @@ export function DashboardShippedTable({
     return text;
   };
 
-  if (query.isLoading || isResolvingSearch) {
+  if (query.isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">
-            {isResolvingSearch ? 'Resolving order search...' : 'Loading shipped records...'}
-          </p>
+          <p className="text-sm font-semibold text-gray-600">Loading shipped records...</p>
         </div>
       </div>
     );
@@ -438,7 +482,7 @@ export function DashboardShippedTable({
                   ) : null}
                 </div>
                 <div className="min-w-[18px] flex items-center justify-end">
-                  {query.isFetching && !query.isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
+                  {((query.isFetching && !query.isLoading) || isResolvingSearch) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
                 </div>
               </div>
             </div>
@@ -516,6 +560,10 @@ export function DashboardShippedTable({
                           ).trim();
                           const techDisplay = normalizePersonName(techName);
                           const packerDisplay = normalizePersonName(packerName);
+                          const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
+                          const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
+                          const techColorClass = techStaffId ? stationThemeColors[getStaffThemeById(techStaffId)].text : undefined;
+                          const packerColorClass = packerStaffId ? stationThemeColors[getStaffThemeById(packerStaffId)].text : undefined;
                           const serialValue = String(record.serial_number || '').trim();
                           const serialDisplay =
                             isEmptyDisplayValue(serialValue) || serialValue === '---'
@@ -563,9 +611,9 @@ export function DashboardShippedTable({
                                     {' • '}
                                     {displayValues.sku || 'No SKU'}
                                     {' • '}
-                                    {techDisplay}
+                                    <span className={techColorClass}>{techDisplay}</span>
                                     {' • '}
-                                    {packerDisplay}
+                                    <span className={packerColorClass}>{packerDisplay}</span>
                                   </div>
                                 </div>
                               </div>

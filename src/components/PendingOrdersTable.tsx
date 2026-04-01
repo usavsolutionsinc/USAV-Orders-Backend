@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getOrdersChannelName } from '@/lib/realtime/channels';
@@ -10,6 +10,7 @@ import StockZohoOrdersTable from '@/components/dashboard/StockZohoOrdersTable';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
 import { fetchPendingOrderRowById, fetchPendingOrdersData } from '@/lib/dashboard-table-data';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { readPendingFilterPreference, writePendingFilterPreference } from '@/utils/dashboard-preferences';
 
 export interface PendingOrdersTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
@@ -69,14 +70,12 @@ export default function PendingOrdersTable({
   const queryClient = useQueryClient();
   const searchQuery = String(searchParams.get('search') || '').trim();
   const pendingFilterParam = searchParams.get('pendingFilter');
-  const pendingFilter: PendingStockFilter = overridePendingFilter
-    ?? (
-      pendingFilterParam === 'stock'
-        ? 'stock'
-        : pendingFilterParam === 'pending'
-          ? 'pending'
-          : 'all'
-    );
+  const pendingFilter: PendingStockFilter = useMemo(() => {
+    if (overridePendingFilter) return overridePendingFilter;
+    if (pendingFilterParam === 'stock') return 'stock';
+    if (pendingFilterParam === 'pending') return 'pending';
+    return readPendingFilterPreference() ?? 'all';
+  }, [overridePendingFilter, pendingFilterParam]);
   const queryKey = ['dashboard-table', 'pending', { searchQuery, packedBy, testedBy, strictSearchScope }] as const;
 
   const query = useQuery({
@@ -176,6 +175,10 @@ export default function PendingOrdersTable({
     },
     true,
   );
+
+  useEffect(() => {
+    writePendingFilterPreference(pendingFilter);
+  }, [pendingFilter]);
 
   useEffect(() => {
     const handleRefresh = () => {

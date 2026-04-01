@@ -1,7 +1,7 @@
 import pool from '@/lib/db';
 import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-format';
 
-export type ExceptionSourceStation = 'tech' | 'packer' | 'verify' | 'mobile';
+export type ExceptionSourceStation = 'tech' | 'packer' | 'verify' | 'mobile' | 'fba';
 
 export interface OrdersExceptionRecord {
   id: number;

@@ -30,7 +30,7 @@ export function RepairAgreement({ formData, signatureData, onSignatureChange }: 
       {/* Company Header — right-aligned */}
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-600 mb-0.5">Agreement</p>
+          <p className="text-[8px] font-black uppercase tracking-[0.2em] text-orange-600 mb-0.5">Agreement</p>
           <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">
             Repair Service Agreement
           </h3>
@@ -72,7 +72,7 @@ export function RepairAgreement({ formData, signatureData, onSignatureChange }: 
       </div>
 
       {/* Terms */}
-      <div className="space-y-2 text-[11px] text-gray-700 leading-relaxed border-l-4 border-blue-600 pl-4">
+      <div className="space-y-2 text-[11px] text-gray-700 leading-relaxed border-l-4 border-orange-600 pl-4">
         <p>
           Your Bose product has been received into our repair center. Under normal circumstances it will
           be repaired within the next <span className="font-black text-gray-900">3–10 working days</span> and returned to you.
@@ -100,7 +100,7 @@ function DetailRow({ label, value, highlight, isLast }: { label: string; value: 
       <span className="text-[9px] font-black uppercase tracking-wide text-gray-500 bg-gray-50 px-3 py-2.5 w-20 shrink-0 flex items-center border-r border-gray-200">
         {label}
       </span>
-      <span className={`flex-1 text-xs font-bold px-3 py-2.5 flex items-center ${highlight ? 'text-emerald-700 bg-emerald-50' : 'text-gray-900 bg-white'}`}>
+      <span className={`flex-1 text-xs font-bold px-3 py-2.5 flex items-center ${highlight ? 'text-orange-700 bg-orange-50' : 'text-gray-900 bg-white'}`}>
         {value || '—'}
       </span>
     </div>

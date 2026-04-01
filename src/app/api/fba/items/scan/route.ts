@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
 
     const summaryRes = await client.query(
       `SELECT
-         COALESCE(SUM(quantity) FILTER (WHERE source_stage = 'TECH' AND event_type = 'SCANNED'), 0)::int AS tech_scanned_qty,
+         COALESCE(SUM(quantity) FILTER (WHERE source_stage IN ('TECH', 'FBA') AND event_type = 'SCANNED'), 0)::int AS tech_scanned_qty,
          COALESCE(SUM(quantity) FILTER (WHERE source_stage = 'PACK' AND event_type IN ('READY', 'VERIFIED', 'BOXED')), 0)::int AS pack_ready_qty,
          COALESCE(SUM(quantity) FILTER (WHERE source_stage = 'SHIP' AND event_type = 'SHIPPED'), 0)::int AS shipped_qty
        FROM fba_fnsku_logs

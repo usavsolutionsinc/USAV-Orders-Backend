@@ -26,6 +26,15 @@ function computeCurrentWeekRange() {
   };
 }
 
+function isFbaTechRecord(record: TechRecord): boolean {
+  return (
+    record.source_kind === 'fba_scan' ||
+    record.account_source === 'fba' ||
+    Boolean(String(record.fnsku || '').trim()) ||
+    String(record.order_id || '').toUpperCase() === 'FBA'
+  );
+}
+
 function deduplicateByTracking(records: TechRecord[]): TechRecord[] {
   const sorted = [...records].sort(
     (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
@@ -33,6 +42,7 @@ function deduplicateByTracking(records: TechRecord[]): TechRecord[] {
   const trackingIndex = new Map<string, number>();
   const unique: TechRecord[] = [];
   for (const record of sorted) {
+    if (isFbaTechRecord(record)) { unique.push(record); continue; }
     const key = String(record.shipping_tracking_number || '')
       .trim()
       .toUpperCase()

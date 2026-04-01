@@ -200,7 +200,10 @@ export function ReceivingSidebarPanel() {
 
       {/* Pending unboxing queue */}
       <div className="flex-1 overflow-hidden">
-        <PendingUnboxingQueue onSelectReceivingId={handleSelectReceivingId} />
+        <PendingUnboxingQueue
+          onSelectReceivingId={handleSelectReceivingId}
+          staffId={Number.parseInt(staffId, 10) || null}
+        />
       </div>
     </div>
   );

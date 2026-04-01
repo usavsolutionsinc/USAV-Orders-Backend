@@ -1,36 +1,32 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import {
   ExternalLink,
   Loader2,
-  Calendar,
-  ClipboardList,
-  User,
 } from '@/components/Icons';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
-import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
-import { WorkOrderInfoStrip } from '@/components/work-orders/WorkOrderInfoStrip';
-import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
+import { HorizontalButtonSlider, type HorizontalSliderTone } from '@/components/ui/HorizontalButtonSlider';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { usePanelActions } from '@/hooks/usePanelActions';
 import { ShippingInformationSection } from '@/components/shipped/details-panel/ShippingInformationSection';
 import { ProductDetailsSection } from '@/components/shipped/details-panel/ProductDetailsSection';
 import { MarkAsShippedForm } from '@/components/shipped/stacks/MarkAsShippedForm';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
+import { DeleteOrderControl } from '@/components/shipped/stacks/DeleteOrderControl';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
 import { TECH_IDS } from '@/utils/staff';
+import { getStaffThemeById } from '@/utils/staff-colors';
 import {
   type WorkOrderRow,
   type WorkStatus,
   STATUS_OPTIONS,
   STATUS_COLOR,
-  formatDate,
   toDateInputValue,
   buildSourceHref,
 } from '@/components/work-orders/types';
@@ -66,8 +62,20 @@ function getPriorityValue(priority: PriorityPreset): number {
   return 100;
 }
 
-function getPriorityLabel(priority: PriorityPreset): string {
-  return PRIORITY_OPTIONS.find((option) => option.value === priority)?.label || 'Normal';
+
+const STAFF_THEME_TO_TONE: Record<string, HorizontalSliderTone> = {
+  green: 'emerald',
+  blue: 'blue',
+  purple: 'purple',
+  yellow: 'yellow',
+  black: 'zinc',
+  red: 'red',
+  lightblue: 'blue',
+  pink: 'red',
+};
+
+function getStaffSliderTone(staffId: number): HorizontalSliderTone {
+  return STAFF_THEME_TO_TONE[getStaffThemeById(staffId)] || 'zinc';
 }
 
 function buildOrderDetailsRecord(row: WorkOrderRow): ShippedOrder | null {
@@ -84,6 +92,16 @@ function buildOrderDetailsRecord(row: WorkOrderRow): ShippedOrder | null {
     condition: row.condition || 'USED',
     shipment_id: row.shipmentId ?? null,
     shipping_tracking_number: row.trackingNumber || null,
+    tracking_numbers: Array.isArray((row as any).trackingNumbers)
+      ? (row as any).trackingNumbers
+      : (row.trackingNumber ? [row.trackingNumber] : []),
+    tracking_number_rows: Array.isArray(row.trackingNumberRows)
+      ? row.trackingNumberRows.map((r) => ({
+          shipment_id: r.shipment_id,
+          tracking: r.tracking_number_raw,
+          is_primary: r.is_primary,
+        }))
+      : [],
     serial_number: '',
     sku: row.sku || '',
     tester_id: row.techId ?? null,
@@ -183,9 +201,34 @@ export function WorkOrderDetailsPanel({
     .filter((m) => m.role === 'packer')
     .map((m) => ({ id: Number(m.id), name: m.name }));
 
-  const handleSave = async () => {
-    if (saving) return;
+  const techSliderItems = useMemo(
+    () => technicianOptions.map((s) => ({
+      id: String(s.id),
+      label: s.name,
+      tone: getStaffSliderTone(s.id),
+    })),
+    [technicianOptions]
+  );
+
+  const packerSliderItems = useMemo(
+    () => packerOptions.map((s) => ({
+      id: String(s.id),
+      label: s.name,
+      tone: getStaffSliderTone(s.id),
+    })),
+    [packerOptions]
+  );
+
+  // Use ref so auto-save always reads the latest form values
+  const formRef = useRef(form);
+  formRef.current = form;
+  const savingRef = useRef(false);
+
+  const handleSave = useCallback(async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
+    const f = formRef.current;
     try {
       const res = await fetch('/api/work-orders', {
         method: 'PATCH',
@@ -193,11 +236,11 @@ export function WorkOrderDetailsPanel({
         body: JSON.stringify({
           entityType: row.entityType,
           entityId: row.entityId,
-          assignedTechId: form.assignedTechId ? Number(form.assignedTechId) : null,
-          assignedPackerId: form.assignedPackerId ? Number(form.assignedPackerId) : null,
-          status: form.status,
-          priority: getPriorityValue(form.priority),
-          deadlineAt: form.deadlineAt || null,
+          assignedTechId: f.assignedTechId ? Number(f.assignedTechId) : null,
+          assignedPackerId: f.assignedPackerId ? Number(f.assignedPackerId) : null,
+          status: f.status,
+          priority: getPriorityValue(f.priority),
+          deadlineAt: f.deadlineAt || null,
         }),
       });
       if (!res.ok) {
@@ -210,9 +253,26 @@ export function WorkOrderDetailsPanel({
     } catch (err: any) {
       window.alert(err?.message || 'Failed to save work order');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
-  };
+  }, [row.entityType, row.entityId, onSaved]);
+
+  // Auto-save when form changes (debounced, skip initial mount)
+  const isInitialMount = useRef(true);
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => { void handleSave(); }, 400);
+    return () => window.clearTimeout(timer);
+  }, [form.assignedTechId, form.assignedPackerId, form.status, form.priority, form.deadlineAt, handleSave]);
+
+  // Reset initial mount flag when row changes
+  useEffect(() => {
+    isInitialMount.current = true;
+  }, [row]);
 
   const handleCopyAll = async () => {
     if (!orderDetailsRecord) return;
@@ -242,28 +302,25 @@ export function WorkOrderDetailsPanel({
       transition={{ type: 'spring', damping: 26, stiffness: 360, mass: 0.45 }}
       className="fixed right-0 top-0 z-[100] flex h-screen w-[400px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-24px_0_48px_rgba(0,0,0,0.06)]"
     >
-      <div className="shrink-0 border-b border-gray-100 bg-white px-6 py-5">
+      {/* Header */}
+      <div className="shrink-0 border-b border-gray-100 bg-white px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="mb-1.5 flex items-center gap-2">
-              <span className="text-[9px] font-black uppercase tracking-[0.3em] text-emerald-700">
-                {row.queueLabel}
-              </span>
+            <div className="mb-1 flex items-center gap-2">
+              <span className={`${sectionLabel} text-emerald-700`}>{row.queueLabel}</span>
               <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] ${statusBadgeClass}`}>
                 {form.status.replace('_', ' ')}
               </span>
             </div>
-            <h2 className="truncate text-[17px] font-black uppercase tracking-tight text-gray-950">
+            <h2 className="truncate text-[15px] font-black uppercase tracking-tight text-gray-950">
               {row.recordLabel}
             </h2>
-            <p className="mt-1 line-clamp-1 text-[12px] font-semibold text-gray-500">{row.title}</p>
-            <WorkOrderInfoStrip row={row} className="mt-2 flex min-w-0 items-center justify-between gap-2" />
           </div>
           <Link
             href={buildSourceHref(row)}
             target="_blank"
             rel="noopener"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-800"
             aria-label="Open source record"
           >
             <ExternalLink className="h-3.5 w-3.5" />
@@ -280,8 +337,9 @@ export function WorkOrderDetailsPanel({
         actions={panelActions}
       />
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        <div className="space-y-6">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="space-y-3">
+          {/* Inline editors (OOS, notes, mark-as-shipped) */}
           {orderDetailsRecord ? (
             <section className="space-y-2">
               {isMarkAsShippedOpen && (
@@ -310,7 +368,7 @@ export function WorkOrderDetailsPanel({
               )}
 
               {activeInput === 'notes' && (
-                <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50/70 p-3">
+                <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50/70 p-3">
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -323,7 +381,7 @@ export function WorkOrderDetailsPanel({
                     <button
                       type="button"
                       onClick={() => setActiveInput('none')}
-                      className="h-8 rounded-lg border border-gray-200 bg-white text-[9px] font-black uppercase tracking-wider text-gray-700"
+                      className="h-8 rounded-lg border border-gray-200 bg-white text-[10px] font-black uppercase tracking-wider text-gray-700"
                     >
                       Cancel
                     </button>
@@ -331,7 +389,7 @@ export function WorkOrderDetailsPanel({
                       type="button"
                       onClick={() => void fieldSave.saveNotes(notes)}
                       disabled={fieldSave.isSavingNotes}
-                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gray-900 text-[9px] font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+                      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-gray-900 text-[10px] font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
                     >
                       {fieldSave.isSavingNotes ? 'Saving' : 'Submit'}
                     </button>
@@ -341,75 +399,78 @@ export function WorkOrderDetailsPanel({
             </section>
           ) : null}
 
+          {/* Assignment */}
           <section>
-            <div className="mb-3 flex items-center gap-2">
-              <User className="h-3.5 w-3.5 text-gray-500" />
-              <p className={sectionLabel}>Assignment</p>
-            </div>
+            <p className={`mb-2 ${sectionLabel}`}>Assignment</p>
             {staff.length > 0 ? (
-              <OrderStaffAssignmentButtons
-                testerOptions={technicianOptions}
-                packerOptions={packerOptions}
-                testerId={form.assignedTechId ? Number(form.assignedTechId) : null}
-                packerId={form.assignedPackerId ? Number(form.assignedPackerId) : null}
-                onAssignTester={(id) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    assignedTechId: prev.assignedTechId === String(id) ? '' : String(id),
-                  }))
-                }
-                onAssignPacker={(id) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    assignedPackerId: prev.assignedPackerId === String(id) ? '' : String(id),
-                  }))
-                }
-                layout="rows"
-              />
+              <div className="space-y-2">
+                <div>
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-gray-400">Tech</p>
+                  <HorizontalButtonSlider
+                    variant="fba"
+                    size="md"
+                    items={techSliderItems}
+                    value={form.assignedTechId}
+                    onChange={(id) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        assignedTechId: prev.assignedTechId === id ? '' : id,
+                      }))
+                    }
+                    aria-label="Assign technician"
+                  />
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-gray-400">Pack</p>
+                  <HorizontalButtonSlider
+                    variant="fba"
+                    size="md"
+                    items={packerSliderItems}
+                    value={form.assignedPackerId}
+                    onChange={(id) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        assignedPackerId: prev.assignedPackerId === id ? '' : id,
+                      }))
+                    }
+                    aria-label="Assign packer"
+                  />
+                </div>
+              </div>
             ) : (
-              <div className="flex items-center gap-2 text-gray-500">
+              <div className="flex items-center gap-2 text-gray-400">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span className="text-[11px]">Loading staff…</span>
+                <span className="text-[10px] font-bold">Loading staff...</span>
               </div>
             )}
           </section>
 
           <div className="h-px bg-gray-100" />
 
+          {/* Status */}
           <section>
-            <div className="mb-3 flex items-center gap-2">
-              <ClipboardList className="h-3.5 w-3.5 text-gray-500" />
-              <p className={sectionLabel}>Workflow</p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500">Status</p>
-                <HorizontalButtonSlider
-                  variant="slate"
-                  size="md"
-                  items={statusSliderItems}
-                  value={form.status}
-                  onChange={(id) => setForm((prev) => ({ ...prev, status: id as WorkStatus }))}
-                  aria-label="Work order status"
-                />
-              </div>
-
-            </div>
+            <p className={`mb-2 ${sectionLabel}`}>Status</p>
+            <HorizontalButtonSlider
+              variant="slate"
+              size="md"
+              items={statusSliderItems}
+              value={form.status}
+              onChange={(id) => setForm((prev) => ({ ...prev, status: id as WorkStatus }))}
+              aria-label="Work order status"
+            />
           </section>
 
           <div className="h-px bg-gray-100" />
 
+          {/* Priority + Deadline */}
           <section>
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <label className="block">
-                <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wider text-gray-500">
-                  P
-                </span>
+                <span className={`mb-1 block ${sectionLabel}`}>Priority</span>
                 <select
                   value={form.priority}
                   onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value as PriorityPreset }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-gray-400 focus:ring-0"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-gray-400 focus:ring-0"
                 >
                   {PRIORITY_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -419,41 +480,18 @@ export function WorkOrderDetailsPanel({
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-gray-500">
-                  <Calendar className="h-3 w-3" />
-                  D
-                </span>
+                <span className={`mb-1 block ${sectionLabel}`}>Deadline</span>
                 <input
                   type="date"
                   value={form.deadlineAt}
                   onChange={(e) => setForm((prev) => ({ ...prev, deadlineAt: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-gray-400 focus:ring-0"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-gray-400 focus:ring-0"
                 />
               </label>
             </div>
           </section>
 
-          <div className="h-px bg-gray-100" />
-
-          <section>
-            <p className={`mb-2.5 ${sectionLabel}`}>Current State</p>
-            <dl className="space-y-1.5 text-[12px]">
-              {[
-                { label: 'Queue', value: row.queueLabel },
-                { label: 'Status', value: form.status.replace('_', ' ') },
-                { label: 'Priority', value: getPriorityLabel(form.priority) },
-                { label: 'Deadline', value: formatDate(form.deadlineAt || row.deadlineAt) },
-                ...(row.notes ? [{ label: 'Notes', value: row.notes }] : []),
-                ...(row.updatedAt ? [{ label: 'Updated', value: formatDate(row.updatedAt) }] : []),
-              ].map(({ label, value }) => (
-                <div key={label} className="flex items-center justify-between gap-4">
-                  <dt className="font-semibold text-gray-500">{label}</dt>
-                  <dd className="max-w-[220px] text-right font-black text-gray-800">{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-
+          {/* Shipping + Product Details */}
           {orderDetailsRecord ? (
             <>
               <div className="h-px bg-gray-100" />
@@ -467,19 +505,23 @@ export function WorkOrderDetailsPanel({
               <ProductDetailsSection shipped={orderDetailsRecord} />
             </>
           ) : null}
-        </div>
-      </div>
 
-      <div className="shrink-0 border-t border-gray-100 bg-white px-6 py-4">
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={saving}
-          className={`inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 ${sectionLabel} text-white transition-colors hover:bg-gray-800 disabled:opacity-60`}
-        >
-          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {saving ? 'Saving…' : 'Save Work Order'}
-        </button>
+          {/* Delete */}
+          {row.entityType === 'ORDER' && (
+            <>
+              <div className="h-px bg-gray-100" />
+              <DeleteOrderControl
+                orderId={row.entityId}
+                onDeleted={() => {
+                  window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+                  window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                  onSaved();
+                  onClose();
+                }}
+              />
+            </>
+          )}
+        </div>
       </div>
     </motion.div>
   );

@@ -47,3 +47,16 @@ export function dispatchNavigateShippedDetails(direction: ShippedDetailsNavigati
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('navigate-shipped-details', { detail: { direction } }));
 }
+
+// ── Shipping Edit Card ───────────────────────────────────────────────────────
+
+export function dispatchOpenShippingEditCard(orders: ShippedOrder[], startIndex: number): void {
+  if (typeof window === 'undefined') return;
+  dispatchCloseShippedDetails();
+  window.dispatchEvent(new CustomEvent('open-shipping-edit-card', { detail: { orders, startIndex } }));
+}
+
+export function dispatchCloseShippingEditCard(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('close-shipping-edit-card'));
+}

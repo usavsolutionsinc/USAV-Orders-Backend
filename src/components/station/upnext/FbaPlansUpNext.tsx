@@ -9,6 +9,7 @@
  * Kept for potential future re-use.
  */
 
+import { useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { Loader2, Package } from '@/components/Icons';
 import type { StationTheme } from '@/utils/staff-colors';
@@ -24,7 +25,6 @@ export interface FbaPlansUpNextProps {
   activePlanId: number | null;
   stationTheme: StationTheme;
   onCreatePlan?: () => void;
-  onRefresh?: () => void;
 }
 
 function EmptyPlansSlate({
@@ -67,10 +67,15 @@ export function FbaPlansUpNext({
   activePlanId,
   stationTheme,
   onCreatePlan,
-  onRefresh,
 }: FbaPlansUpNextProps) {
   const chrome = fbaSidebarThemeChrome[stationTheme];
-  const noop = () => {};
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const toggleExpand = (id: number) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   return (
     <div className="space-y-3 px-1 pb-2">
@@ -95,7 +100,8 @@ export function FbaPlansUpNext({
                 >
                   <FbaShipmentCard
                     shipment={plan}
-                    onRefresh={onRefresh || noop}
+                    isExpanded={expandedIds.has(plan.id)}
+                    onToggleExpand={() => toggleExpand(plan.id)}
                   />
                 </motion.div>
               ))}

@@ -6,6 +6,8 @@ import { MobileShell } from '@/design-system/components/mobile/MobileShell';
 import { MobileBottomActionBar } from '@/design-system/components/mobile/MobileBottomActionBar';
 import { MobileScanSheet } from '@/design-system/components/mobile/MobileScanSheet';
 import { MobileUpNextOrder } from './MobileUpNextOrder';
+import { MobileSearchOverlay } from '../overlays/MobileSearchOverlay';
+import { SLIDER_PRESETS, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import ActiveStationOrderCard from '@/components/station/ActiveStationOrderCard';
 import StationGoalBar from '@/components/station/StationGoalBar';
 import { AlertCircle, MapPin, Package, Settings, Barcode, Loader2 } from '@/components/Icons';
@@ -53,6 +55,13 @@ export function MobileStationTesting({
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
   const [scanSheetOpen, setScanSheetOpen] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
+  // ── UpNext filter state (owned here, passed to MobileUpNextOrder + MobileSearchOverlay) ──
+  const [upNextSearch, setUpNextSearch] = useState('');
+  const [upNextFilter, setUpNextFilter] = useState('must_go');
+  const [upNextFilterItems, setUpNextFilterItems] = useState<HorizontalSliderItem[]>([
+    SLIDER_PRESETS.mustGo, SLIDER_PRESETS.newest, SLIDER_PRESETS.oldest,
+  ]);
+  const [upNextFilterVariant, setUpNextFilterVariant] = useState<'fba' | 'slate'>('fba');
   const {
     inputValue,
     setInputValue,
@@ -240,6 +249,16 @@ export function MobileStationTesting({
     [handleFormSubmit],
   );
 
+  // ── UpNext tab-change handler ──
+  const handleUpNextTabChange = useCallback(
+    (items: HorizontalSliderItem[], variant: 'fba' | 'slate') => {
+      setUpNextFilterItems(items);
+      setUpNextFilterVariant(variant);
+      setUpNextFilter(items[0]?.id ?? 'all');
+    },
+    [],
+  );
+
   // ── Mode pill row for bottom action bar ──
 
   const MODE_PILL_CONFIG = [
@@ -303,7 +322,19 @@ export function MobileStationTesting({
               </span>
             }
             onScanPress={() => setScanSheetOpen(true)}
-            pills={modePillsRow}
+            pills={
+              searchExpanded ? modePillsRow : (
+                <MobileSearchOverlay
+                  quickFilter={upNextFilter}
+                  onQuickFilterChange={setUpNextFilter}
+                  quickFilterItems={upNextFilterItems}
+                  quickFilterVariant={upNextFilterVariant}
+                  searchText={upNextSearch}
+                  onSearchChange={setUpNextSearch}
+                  placeholder="Search queue..."
+                />
+              )
+            }
             isLoading={isLoading}
             themeColor={themeColor}
           />
@@ -362,6 +393,9 @@ export function MobileStationTesting({
                 onMissingParts={() => {
                   triggerGlobalRefresh();
                 }}
+                searchText={upNextSearch}
+                quickFilter={upNextFilter}
+                onEffectiveTabChange={handleUpNextTabChange}
               />
             </motion.div>
           </LayoutGroup>

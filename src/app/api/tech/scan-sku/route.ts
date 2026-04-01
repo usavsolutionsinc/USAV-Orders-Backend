@@ -16,7 +16,9 @@ export async function POST(req: NextRequest) {
   const client = await pool.connect();
   try {
     const body = await req.json();
-    const { skuCode, tracking, techId } = body;
+    const { skuCode, tracking: rawTracking, techId, salId } = body;
+    // tracking is optional — server resolves from SAL when absent
+    const tracking = rawTracking ? String(rawTracking).trim() : null;
     const scanSessionId = body?.scanSessionId != null ? String(body.scanSessionId).trim() : '';
     const idemKey = readIdempotencyKey(req, body?.idempotencyKey);
 
@@ -27,15 +29,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!skuCode || !tracking || !techId) {
+    if (!skuCode || !techId) {
       return NextResponse.json({
         success: false,
-        error: 'skuCode, tracking, and techId are required',
+        error: 'skuCode and techId are required',
       });
     }
 
-    const parts = String(skuCode).split(':');
-    if (parts.length !== 2) {
+    const fullSkuCode = String(skuCode).trim();
+    const parts = fullSkuCode.split(':');
+    if (parts.length < 2) {
       return NextResponse.json({
         success: false,
         error: 'Invalid SKU format. Use SKU:identifier or SKUxN:identifier',
@@ -86,32 +89,40 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
-      const trk = String(tracking || '').trim();
-      const k18 = normalizeTrackingKey18(trk);
-      if (!trackingMatchesSession(sess, trk, k18)) {
-        return NextResponse.json(
-          { success: false, error: 'Tracking does not match the active scan session.' },
-          { status: 400 },
-        );
+      // Only validate tracking against session when tracking is present.
+      // When absent the SAL-based serial resolution handles context.
+      if (tracking) {
+        const trk = String(tracking).trim();
+        const k18 = normalizeTrackingKey18(trk);
+        if (!trackingMatchesSession(sess, trk, k18)) {
+          return NextResponse.json(
+            { success: false, error: 'Tracking does not match the active scan session.' },
+            { status: 400 },
+          );
+        }
       }
     }
 
-    const exactSku = await client.query(
-      `SELECT id, serial_number, notes, static_sku
-       FROM sku
-       WHERE BTRIM(static_sku) = BTRIM($1)
-       LIMIT 1`,
-      [skuToMatch],
-    );
+    // Lookup order:
+    //  1. Exact match on full colon code (GAS-compatible: static_sku may store "PROD:tag")
+    //  2. Exact match on base SKU only (web-native: static_sku stores "PROD")
+    //  3. Normalized fuzzy match on base SKU
+    let skuRecord: { id: number; serial_number: string | null; notes: string | null; static_sku: string | null } | null = null;
 
-    let skuRecord: { id: number; serial_number: string | null; notes: string | null; static_sku: string | null } | null =
-      exactSku.rows[0] ?? null;
+    const tryExact = async (value: string) => {
+      const r = await client.query(
+        `SELECT id, serial_number, notes, static_sku FROM sku WHERE BTRIM(static_sku) = BTRIM($1) LIMIT 1`,
+        [value],
+      );
+      return r.rows[0] ?? null;
+    };
+
+    skuRecord = await tryExact(fullSkuCode);            // "PROD:tag" full match
+    if (!skuRecord) skuRecord = await tryExact(skuToMatch);  // "PROD" base match
 
     if (!skuRecord) {
       const fuzzy = await client.query(
-        `SELECT id, serial_number, notes, static_sku
-         FROM sku
-         WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
+        `SELECT id, serial_number, notes, static_sku FROM sku WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
       );
       skuRecord =
         fuzzy.rows.find((r: any) => normalizeSku(String(r.static_sku || '')) === normalizedSkuToMatch) ?? null;
@@ -120,14 +131,27 @@ export async function POST(req: NextRequest) {
     if (!skuRecord) {
       return NextResponse.json({
         success: false,
-        error: `SKU ${skuToMatch} not found in sku table`,
+        error: `SKU "${skuToMatch}" not found in sku table`,
       });
     }
 
     const serialsFromSku = parseSerialCsvField(skuRecord.serial_number);
-    const normalizedTracking = String(tracking || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const trackingStr = String(tracking || '').trim();
+    const normalizedTracking = trackingStr.toUpperCase().replace(/[^A-Z0-9]/g, '');
     const isFnskuTracking = /^(X00|X0|B0)/i.test(normalizedTracking);
-    const pairingTracking = isFnskuTracking ? normalizedTracking : String(tracking || '').trim();
+    // pairingTracking is null when no tracking was provided — sku update is skipped below.
+    const pairingTracking = trackingStr ? (isFnskuTracking ? normalizedTracking : trackingStr) : null;
+
+    // Resolve shipment_id from SAL so we can write the FK back to the sku row.
+    // salId is the pinned station_activity_log row id passed by the client.
+    let resolvedShipmentId: number | null = null;
+    if (salId) {
+      const salRow = await client.query(
+        `SELECT shipment_id FROM station_activity_logs WHERE id = $1 LIMIT 1`,
+        [Number(salId)],
+      );
+      resolvedShipmentId = salRow.rows[0]?.shipment_id ?? null;
+    }
 
     const insertedSerials: string[] = [];
     let canonicalSerialList: string[] = [];
@@ -163,7 +187,27 @@ export async function POST(req: NextRequest) {
         await client.query(`UPDATE sku_stock SET stock = $1 WHERE id = $2`, [String(nextQty), stockTarget.id]);
       }
 
-      await client.query(`UPDATE sku SET shipping_tracking_number = $1 WHERE id = $2`, [pairingTracking, skuRecord.id]);
+      // Write tracking + shipment_id FK back to the sku row.
+      // Only update each column when the value is known.
+      if (pairingTracking || resolvedShipmentId) {
+        const setClauses: string[] = [];
+        const params: unknown[] = [];
+
+        if (pairingTracking) {
+          params.push(pairingTracking);
+          setClauses.push(`shipping_tracking_number = $${params.length}`);
+        }
+        if (resolvedShipmentId) {
+          params.push(resolvedShipmentId);
+          setClauses.push(`shipment_id = $${params.length}`);
+        }
+
+        params.push(skuRecord.id);
+        await client.query(
+          `UPDATE sku SET ${setClauses.join(', ')} WHERE id = $${params.length}`,
+          params,
+        );
+      }
 
       await client.query('COMMIT');
     } catch (e) {
@@ -180,10 +224,12 @@ export async function POST(req: NextRequest) {
 
     const responsePayload: Record<string, unknown> = {
       success: true,
+      matchedSku: skuRecord.static_sku ?? skuToMatch,
       serialNumbers: insertedSerials,
       productTitle,
       notes: skuRecord.notes,
       quantityDecremented: qtyToDecrement,
+      shipmentId: resolvedShipmentId,
       scanSessionId: scanSessionId || null,
       ...(serialsFromSku.length > 0 ? { updatedSerials: canonicalSerialList } : {}),
     };

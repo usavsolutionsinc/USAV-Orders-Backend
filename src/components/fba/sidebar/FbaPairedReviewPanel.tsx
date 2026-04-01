@@ -6,9 +6,10 @@ import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
 import { DeferredQtyInput } from '@/design-system/primitives';
 import { FormField } from '@/design-system/components';
-import { fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
+import { microBadge } from '@/design-system/tokens/typography/presets';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
+import { getUniqueSelectedShipmentIds } from '@/lib/fba/pairing';
 
 interface FbaPairedReviewPanelProps {
   selectedItems: FbaBoardItem[];
@@ -28,16 +29,7 @@ export function FbaPairedReviewPanel({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const shipmentIds = Array.from(
-    new Set(
-      selectedItems.flatMap((i) => {
-        const grouped = Array.isArray(i.shipment_ids) ? i.shipment_ids : [];
-        if (grouped.length > 0) return grouped.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
-        const single = Number(i.shipment_id || 0);
-        return Number.isFinite(single) && single > 0 ? [single] : [];
-      }),
-    ),
-  );
+  const shipmentIds = getUniqueSelectedShipmentIds(selectedItems);
 
   // Clean up overrides for items that left the selection
   useEffect(() => {
@@ -76,6 +68,15 @@ export function FbaPairedReviewPanel({
     setQtyOverrides((prev) => ({ ...prev, [item.item_id]: next }));
   }, [getQty]);
 
+  const removeSelectedItem = useCallback((item: FbaBoardItem) => {
+    window.dispatchEvent(new CustomEvent('fba-board-deselect-item', { detail: item.item_id }));
+    setQtyOverrides((prev) => {
+      const copy = { ...prev };
+      delete copy[item.item_id];
+      return copy;
+    });
+  }, []);
+
   const handleAttach = useCallback(async () => {
     const trackingRaw = upsTracking.trim();
     if (!trackingRaw) {
@@ -112,6 +113,14 @@ export function FbaPairedReviewPanel({
       }
 
       for (const sid of shipmentIds) {
+        const shipmentAllocations = selectedLines
+          .filter(({ item }) => Number(item.shipment_id) === sid)
+          .map(({ item, selectedQty }) => ({
+            shipment_item_id: Number(item.item_id),
+            quantity: Math.max(1, selectedQty),
+          }));
+        if (shipmentAllocations.length === 0) continue;
+
         const res = await fetch(`/api/fba/shipments/${sid}/tracking`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -119,6 +128,7 @@ export function FbaPairedReviewPanel({
             tracking_number: trackingRaw,
             carrier: 'UPS',
             label: 'UPS',
+            allocations: shipmentAllocations,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -138,7 +148,9 @@ export function FbaPairedReviewPanel({
       setUpsTracking('');
       setAmazonShipmentId('');
       setQtyOverrides({});
-      setSuccess(`Tracking attached to ${shipmentIds.length} shipment${shipmentIds.length > 1 ? 's' : ''}`);
+      const msg = `Saved ${selectedLines.length} line${selectedLines.length === 1 ? '' : 's'} across ${shipmentIds.length} shipment${shipmentIds.length === 1 ? '' : 's'}`;
+      setSuccess(msg);
+      window.dispatchEvent(new CustomEvent('fba-scan-status', { detail: msg }));
       window.dispatchEvent(new CustomEvent('fba-print-shipped'));
       window.dispatchEvent(new CustomEvent('fba-active-shipments-refresh'));
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
@@ -186,7 +198,7 @@ export function FbaPairedReviewPanel({
         Save Shipment + UPS
       </button>
 
-      <div className="divide-y divide-gray-100 border-t border-gray-200">
+      <div className="border-t border-gray-200">
         {selectedItems.map((item) => {
           const qty = getQty(item);
           const baseline = Math.max(1, Number(item.actual_qty || 0));
@@ -196,6 +208,11 @@ export function FbaPairedReviewPanel({
               key={item.item_id}
               displayTitle={item.display_title || 'No title'}
               fnsku={String(item.fnsku || '').toUpperCase()}
+              stationTheme={stationTheme}
+              checked
+              onCheckedChange={(nextChecked) => {
+                if (!nextChecked) removeSelectedItem(item);
+              }}
               rightSlot={
                 <>
                   <button
@@ -214,12 +231,7 @@ export function FbaPairedReviewPanel({
                     min={0}
                     onChange={(v) => {
                       if (v <= 0) {
-                        window.dispatchEvent(new CustomEvent('fba-board-deselect-item', { detail: item.item_id }));
-                        setQtyOverrides((prev) => {
-                          const copy = { ...prev };
-                          delete copy[item.item_id];
-                          return copy;
-                        });
+                        removeSelectedItem(item);
                         return;
                       }
                       setQtyOverrides((prev) => ({ ...prev, [item.item_id]: v }));

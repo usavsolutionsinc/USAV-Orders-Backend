@@ -9,6 +9,7 @@ import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/la
 import { OrderIdChip, TrackingChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
 import { PasteTrackingButton } from '@/components/ui/PasteTrackingButton';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
@@ -62,6 +63,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   useAlternateStripe,
   testerDisplay,
   packerDisplay,
+  testerId,
+  packerId,
   hasTechScan,
   hasOutOfStock,
   outOfStockValue,
@@ -73,12 +76,16 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   useAlternateStripe: boolean;
   testerDisplay: string;
   packerDisplay: string;
+  testerId: number | null;
+  packerId: number | null;
   hasTechScan: boolean;
   hasOutOfStock: boolean;
   outOfStockValue: string;
   daysLate: number | null;
   onRowClick: (record: ShippedOrder) => void;
 }) {
+  const testerColorClass = testerId ? stationThemeColors[getStaffThemeById(testerId)].text : undefined;
+  const packerColorClass = packerId ? stationThemeColors[getStaffThemeById(packerId)].text : undefined;
   const qty = parseInt(String(record.quantity || '1'), 10) || 1;
   const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-500';
   const trackingRaw =
@@ -130,9 +137,9 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
               {record.condition || 'No Condition'}
             </span>
             {' • '}
-            {testerDisplay}
+            <span className={testerColorClass}>{testerDisplay}</span>
             {' • '}
-            {packerDisplay}
+            <span className={packerColorClass}>{packerDisplay}</span>
             {daysLate !== null ? (
               <>
                 {' • '}
@@ -175,6 +182,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.useAlternateStripe !== next.useAlternateStripe) return false;
   if (prev.testerDisplay !== next.testerDisplay) return false;
   if (prev.packerDisplay !== next.packerDisplay) return false;
+  if (prev.testerId !== next.testerId) return false;
+  if (prev.packerId !== next.packerId) return false;
   if (prev.hasTechScan !== next.hasTechScan) return false;
   if (prev.hasOutOfStock !== next.hasOutOfStock) return false;
   if (prev.outOfStockValue !== next.outOfStockValue) return false;
@@ -522,6 +531,8 @@ export function OrdersQueueTable({
                             useAlternateStripe={index % 2 === 0}
                             testerDisplay={testerDisplay}
                             packerDisplay={packerDisplay}
+                            testerId={useWaForDisplay ? (r.tester_id as number | null) : (r.tested_by as number | null) ?? (r.tester_id as number | null)}
+                            packerId={useWaForDisplay ? (r.packer_id as number | null) : (r.packed_by as number | null) ?? (r.packer_id as number | null)}
                             hasTechScan={hasTechScan}
                             hasOutOfStock={hasOutOfStock}
                             outOfStockValue={outOfStockValue}

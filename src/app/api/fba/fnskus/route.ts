@@ -17,18 +17,20 @@ export async function POST(request: NextRequest) {
     const product_title = String(body?.product_title || '').trim() || null;
     const asin = String(body?.asin || '').trim().toUpperCase() || null;
     const sku = String(body?.sku || '').trim() || null;
+    const condition = String(body?.condition || '').trim() || null;
 
     const result = await pool.query(
-      `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, true, NOW(), NOW())
+      `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, condition, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
        ON CONFLICT (fnsku) DO UPDATE
          SET product_title = COALESCE(EXCLUDED.product_title, fba_fnskus.product_title),
              asin          = COALESCE(EXCLUDED.asin, fba_fnskus.asin),
              sku           = COALESCE(EXCLUDED.sku, fba_fnskus.sku),
+             condition     = COALESCE(EXCLUDED.condition, fba_fnskus.condition),
              is_active     = true,
              updated_at    = NOW()
-       RETURNING fnsku, product_title, asin, sku, is_active, created_at`,
-      [fnsku, product_title, asin, sku]
+       RETURNING fnsku, product_title, asin, sku, condition, is_active, created_at`,
+      [fnsku, product_title, asin, sku, condition]
     );
 
     await invalidateCacheTags(['fba-fnskus']);

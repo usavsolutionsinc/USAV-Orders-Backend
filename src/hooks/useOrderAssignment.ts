@@ -16,6 +16,9 @@ export type OrderAssignPayload = {
   shippingTrackingNumber?: string | null;
   itemNumber?: string | null;
   condition?: string | null;
+  quantity?: string | null;
+  sku?: string | null;
+  performedByStaffId?: number | null;
 };
 
 export function useOrderAssignment() {
@@ -76,6 +79,12 @@ export function useOrderAssignment() {
       }
       if (payload.condition !== undefined) {
         next.condition = payload.condition;
+      }
+      if (payload.quantity !== undefined) {
+        next.quantity = payload.quantity;
+      }
+      if (payload.sku !== undefined) {
+        next.sku = payload.sku;
       }
 
       return next;

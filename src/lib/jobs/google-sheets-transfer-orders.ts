@@ -123,6 +123,40 @@ async function upsertOrderDeadline(orderId: number, deadlineAt: Date | null) {
   );
 }
 
+async function upsertOrderShipmentLinks(
+  orderRowId: number,
+  shipmentIds: number[],
+  primaryShipmentId: number | null,
+  source: string,
+) {
+  const uniqueIds = Array.from(
+    new Set(
+      shipmentIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ),
+  );
+  if (uniqueIds.length === 0) return;
+
+  await pool.query(
+    `UPDATE order_shipment_links
+     SET is_primary = false
+     WHERE order_row_id = $1`,
+    [orderRowId],
+  );
+
+  await pool.query(
+    `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
+     SELECT $1::int, s.shipment_id, (s.shipment_id = $2::bigint), $3::text
+     FROM UNNEST($4::bigint[]) AS s(shipment_id)
+     ON CONFLICT (order_row_id, shipment_id) DO UPDATE
+       SET is_primary = EXCLUDED.is_primary,
+           source = EXCLUDED.source,
+           updated_at = NOW()`,
+    [orderRowId, primaryShipmentId, source, uniqueIds],
+  );
+}
+
 function pickLatestByKey<T extends { createdAt: Date | null }>(
   rows: T[],
   getKey: (row: T) => string
@@ -219,6 +253,8 @@ export async function runGoogleSheetsTransferOrders(
         : '';
       if (!orderId) return false;
       if (colIndices.platform >= 0 && !platform) return false;
+      // Accept all marketplace platforms present in the transfer sheet
+      // (Amazon, eBay, Ecwid, etc.) so legacy sheet-driven uploads continue to work.
       return true;
     });
 
@@ -383,56 +419,12 @@ export async function runGoogleSheetsTransferOrders(
           .orderBy(desc(customersTable.createdAt))
       : [];
 
-    const latestBlankTrackingOrderByOrderId = new Map<string, OrderProjection>();
-    sourceOrdersByOrderId.forEach((order) => {
-      const key = String(order.orderId || '').trim();
-      const tracking = normalizeTracking(
-        order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined
-      );
-      const id = Number(order.id);
-      if (!key || tracking || Number.isNaN(id) || latestBlankTrackingOrderByOrderId.has(key)) return;
-      latestBlankTrackingOrderByOrderId.set(key, {
-        id,
-        orderId: order.orderId,
-        itemNumber: order.itemNumber,
-        productTitle: order.productTitle,
-        quantity: order.quantity,
-        sku: order.sku,
-        condition: order.condition,
-        notes: order.notes,
-        customerId: order.customerId,
-        shipmentId: order.shipmentId ?? null,
-      });
-    });
-
     const latestOrderByOrderId = new Map<string, OrderProjection>();
     sourceOrdersByOrderId.forEach((order) => {
       const key = String(order.orderId || '').trim();
       const id = Number(order.id);
       if (!key || Number.isNaN(id) || latestOrderByOrderId.has(key)) return;
       latestOrderByOrderId.set(key, {
-        id,
-        orderId: order.orderId,
-        itemNumber: order.itemNumber,
-        productTitle: order.productTitle,
-        quantity: order.quantity,
-        sku: order.sku,
-        condition: order.condition,
-        notes: order.notes,
-        customerId: order.customerId,
-        shipmentId: order.shipmentId ?? null,
-      });
-    });
-
-    const latestOrderByTracking = new Map<string, OrderProjection>();
-    [...sourceOrdersByShipmentId, ...sourceLegacyOrdersByTracking].forEach((order) => {
-      const tracking = normalizeTracking(
-        order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined
-      );
-      const trackingKey = normalizeTrackingNumber(tracking) || tracking;
-      const id = Number(order.id);
-      if (!trackingKey || Number.isNaN(id) || latestOrderByTracking.has(trackingKey)) return;
-      latestOrderByTracking.set(trackingKey, {
         id,
         orderId: order.orderId,
         itemNumber: order.itemNumber,
@@ -467,64 +459,38 @@ export async function runGoogleSheetsTransferOrders(
       allOrdersByOrderId.set(key, rows);
     });
 
-    const allOrdersByTracking = new Map<string, OrderProjection[]>();
-    [...sourceOrdersByShipmentId, ...sourceLegacyOrdersByTracking].forEach((order) => {
-      const tracking = normalizeTracking(
-        order.shipmentId != null ? shipmentTrackingById.get(Number(order.shipmentId)) : undefined
-      );
-      const trackingKey = normalizeTrackingNumber(tracking) || tracking;
-      if (!trackingKey) return;
-      const record: OrderProjection = {
-        id: order.id,
-        orderId: order.orderId,
-        itemNumber: order.itemNumber,
-        productTitle: order.productTitle,
-        quantity: order.quantity,
-        sku: order.sku,
-        condition: order.condition,
-        notes: order.notes,
-        customerId: order.customerId,
-        shipmentId: order.shipmentId ?? null,
-      };
-      const rows = allOrdersByTracking.get(trackingKey) ?? [];
-      rows.push(record);
-      allOrdersByTracking.set(trackingKey, rows);
-    });
-
     const latestCustomerByOrderId = pickLatestByKey(sourceCustomers, (customer) =>
       String(customer.orderId || '').trim()
     );
 
-    const latestSourceRowByKey = new Map<string, SourceRow>();
+    const groupedSourceByOrderId = new Map<string, { row: SourceRow; trackings: Set<string> }>();
     eligibleSourceRows.forEach((row) => {
       const orderId = String(row[colIndices.orderNumber] || '').trim();
       const tracking = normalizeTracking(row[colIndices.tracking]);
-      const normalizedTracking = normalizeTrackingNumber(tracking);
-      const key = normalizedTracking ? `tracking:${normalizedTracking}` : orderId ? `order:${orderId}` : '';
-      if (!key) return;
-      latestSourceRowByKey.set(key, row);
+      if (!orderId) return;
+      const current = groupedSourceByOrderId.get(orderId) ?? { row, trackings: new Set<string>() };
+      current.row = row;
+      if (tracking) current.trackings.add(tracking);
+      groupedSourceByOrderId.set(orderId, current);
     });
 
-    const ordersToInsert: Array<{ values: Record<string, unknown>; shipByDate: Date | null }> = [];
+    const ordersToInsert: Array<{
+      orderId: string;
+      values: Record<string, unknown>;
+      shipByDate: Date | null;
+      shipmentIds: number[];
+    }> = [];
     const ordersToBackfill: Array<{ id: number; values: Record<string, unknown> }> = [];
     const ordersToDelete: number[] = [];
+    const shipmentLinksToUpsert = new Map<number, { primaryShipmentId: number | null; shipmentIds: number[] }>();
     const orderDeadlinesToUpsert: Array<{ id: number; shipByDate: Date | null }> = [];
+    let updatedOrdersTracking = 0;
     let matchedCustomers = 0;
     let unmatchedCustomers = 0;
 
-    for (const row of Array.from(latestSourceRowByKey.values())) {
-      const orderId = String(row[colIndices.orderNumber] || '').trim();
-      const sheetTracking = normalizeTracking(row[colIndices.tracking]);
-      const normalizedSheetTracking = normalizeTrackingNumber(sheetTracking);
-      const existingShipmentId = normalizedSheetTracking
-        ? shipmentIdCache.get(normalizedSheetTracking)
-            ?? shipmentByNormalized.get(normalizedSheetTracking)?.id
-            ?? null
-        : null;
-      const existingOrder = normalizedSheetTracking
-        ? latestOrderByTracking.get(normalizedSheetTracking)
-        : (orderId ? latestOrderByOrderId.get(orderId) : undefined)
-            ?? (orderId ? latestBlankTrackingOrderByOrderId.get(orderId) : undefined);
+    for (const [orderId, group] of Array.from(groupedSourceByOrderId.entries())) {
+      const row = group.row;
+      const existingOrder = latestOrderByOrderId.get(orderId);
       const rawShipByDate = row[colIndices.shipByDate] || '';
       const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
       const sheetShipByDate = parsedShipByDate && !Number.isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
@@ -545,14 +511,20 @@ export async function runGoogleSheetsTransferOrders(
         unmatchedCustomers++;
       }
 
-      if (!orderId && !sheetTracking) continue;
-      if (!existingOrder && !sheetTracking) continue;
+      const shipmentIds = new Set<number>();
+      for (const rawTracking of Array.from(group.trackings.values())) {
+        const normalized = normalizeTrackingNumber(rawTracking);
+        const resolvedShipmentId = normalized
+          ? shipmentIdCache.get(normalized) ?? shipmentByNormalized.get(normalized)?.id ?? null
+          : null;
+        const shipmentId = resolvedShipmentId ?? await ensureShipmentId(rawTracking);
+        if (shipmentId && Number.isFinite(shipmentId)) shipmentIds.add(Number(shipmentId));
+      }
 
       if (existingOrder) {
         const candidates = new Map<number, OrderProjection>();
-        const byTracking = normalizedSheetTracking ? allOrdersByTracking.get(normalizedSheetTracking) ?? [] : [];
-        const byOrderId = !normalizedSheetTracking && orderId ? allOrdersByOrderId.get(orderId) ?? [] : [];
-        [...byTracking, ...byOrderId].forEach((order) => candidates.set(order.id, order));
+        const byOrderId = allOrdersByOrderId.get(orderId) ?? [];
+        byOrderId.forEach((order) => candidates.set(order.id, order));
 
         const candidateList = Array.from(candidates.values());
         if (candidateList.length === 0) {
@@ -572,13 +544,16 @@ export async function runGoogleSheetsTransferOrders(
 
         let orderToKeep: OrderProjection;
 
-        if (candidateList.length > 1 && normalizedSheetTracking) {
+        if (candidateList.length > 1) {
           const score = (order: OrderProjection) =>
             [order.productTitle, order.condition, order.itemNumber, order.sku, order.quantity, order.notes]
               .filter((value) => !isBlank(value)).length;
           const sorted = [...candidateList].sort((a, b) => score(b) - score(a));
           orderToKeep = sorted[0];
-          sorted.slice(1).forEach((order) => ordersToDelete.push(order.id));
+          sorted.slice(1).forEach((order) => {
+            if (order.shipmentId != null) shipmentIds.add(Number(order.shipmentId));
+            ordersToDelete.push(order.id);
+          });
         } else {
           orderToKeep = candidateList[0];
         }
@@ -591,9 +566,14 @@ export async function runGoogleSheetsTransferOrders(
         if (isBlank(orderToKeep.sku) && sheetSku) updateValues.sku = sheetSku;
         if (isBlank(orderToKeep.condition) && sheetCondition) updateValues.condition = sheetCondition;
         if (isBlank(orderToKeep.notes) && sheetNotes) updateValues.notes = sheetNotes;
-        if (orderToKeep.shipmentId == null && sheetTracking) {
-          const shipmentId = existingShipmentId ?? await ensureShipmentId(sheetTracking);
-          if (shipmentId) updateValues.shipmentId = shipmentId;
+        const shipmentIdList = Array.from(shipmentIds.values());
+        const primaryShipmentId =
+          (orderToKeep.shipmentId != null ? Number(orderToKeep.shipmentId) : null)
+          ?? shipmentIdList[0]
+          ?? null;
+        if (orderToKeep.shipmentId == null && primaryShipmentId != null) {
+          updateValues.shipmentId = primaryShipmentId;
+          updatedOrdersTracking++;
         }
         if (orderToKeep.customerId == null && customerId) updateValues.customerId = customerId;
 
@@ -601,11 +581,20 @@ export async function runGoogleSheetsTransferOrders(
         if (Object.keys(compactedUpdateValues).length > 0) {
           ordersToBackfill.push({ id: orderToKeep.id, values: compactedUpdateValues });
         }
+        if (shipmentIdList.length > 0) {
+          shipmentLinksToUpsert.set(orderToKeep.id, {
+            primaryShipmentId,
+            shipmentIds: shipmentIdList,
+          });
+        }
         orderDeadlinesToUpsert.push({ id: orderToKeep.id, shipByDate: effectiveShipByDate });
       } else {
-        const shipmentId = sheetTracking ? await ensureShipmentId(sheetTracking) : null;
+        const shipmentIdList = Array.from(shipmentIds.values());
+        const primaryShipmentId = shipmentIdList[0] ?? null;
         ordersToInsert.push({
+          orderId,
           shipByDate: effectiveShipByDate,
+          shipmentIds: shipmentIdList,
           values: {
             orderId,
             itemNumber: sheetItemNumber || '',
@@ -613,7 +602,7 @@ export async function runGoogleSheetsTransferOrders(
             quantity: sheetQuantity || '1',
             sku: sheetSku || '',
             condition: sheetCondition || '',
-            shipmentId,
+            shipmentId: primaryShipmentId,
             outOfStock: '',
             notes: sheetNotes || '',
             status: 'unassigned',
@@ -654,7 +643,23 @@ export async function runGoogleSheetsTransferOrders(
         if (shipByDate) {
           orderDeadlinesToUpsert.push({ id: order.id, shipByDate });
         }
+        const shipmentIds = ordersToInsert[index]?.shipmentIds ?? [];
+        const primaryShipmentId = Number((ordersToInsert[index]?.values as any)?.shipmentId ?? 0) || null;
+        if (shipmentIds.length > 0) {
+          shipmentLinksToUpsert.set(order.id, { primaryShipmentId, shipmentIds });
+        }
       });
+    }
+
+    if (shipmentLinksToUpsert.size > 0) {
+      for (const [orderRowId, linkEntry] of Array.from(shipmentLinksToUpsert.entries())) {
+        await upsertOrderShipmentLinks(
+          orderRowId,
+          linkEntry.shipmentIds,
+          linkEntry.primaryShipmentId,
+          'google-sheets-transfer-orders',
+        );
+      }
     }
 
     if (orderDeadlinesToUpsert.length > 0) {
@@ -681,9 +686,9 @@ export async function runGoogleSheetsTransferOrders(
     return {
       success: true,
       rowCount: ordersToInsert.length,
-      processedRows: latestSourceRowByKey.size,
+      processedRows: groupedSourceByOrderId.size,
       insertedOrders: ordersToInsert.length,
-      updatedOrdersTracking: 0,
+      updatedOrdersTracking,
       updatedOrdersFields: ordersToBackfill.length,
       deletedDuplicateOrders: ordersToDelete.length,
       matchedCustomers,

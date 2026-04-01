@@ -126,27 +126,27 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
               animate="visible"
               exit="hidden"
               transition={drawerTransition}
-              className="fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[320px] shadow-2xl"
+              className="fixed inset-y-0 left-0 z-50 w-full shadow-2xl"
             >
-              {/* Close button */}
+              {/* Close button — sits in the safe-area-inset-top zone */}
               <button
                 type="button"
                 onClick={closeDrawer}
                 aria-label="Close navigation"
-                className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-10 h-9 w-9 flex items-center justify-center rounded-lg bg-gray-100/80 text-gray-600 active:scale-95 transition-transform"
+                className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-10 h-11 w-11 flex items-center justify-center rounded-xl bg-gray-100 text-gray-700 active:scale-95 active:bg-gray-200 transition-transform"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
 
               <Suspense fallback={null}>
-                <DashboardSidebar />
+                <DashboardSidebar inDrawer onNavigate={closeDrawer} />
               </Suspense>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      <CommandBar />
+      {/* CommandBar is desktop-only — cmd+k search has no mobile equivalent */}
     </div>
   );
 }

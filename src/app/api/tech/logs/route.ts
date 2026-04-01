@@ -77,19 +77,21 @@ export async function GET(req: NextRequest) {
         ) AS serial_number,
 
         -- Order data (via shipment_id join)
-        o.id AS order_db_id,
-        o.order_id,
-        COALESCE(ff.product_title, o.product_title) AS product_title,
-        o.item_number,
-        o.condition,
-        COALESCE(ff.sku, o.sku) AS sku,
-        o.quantity,
-        o.notes,
-        COALESCE(o.status_history, '[]'::jsonb) AS status_history,
-        COALESCE(o.account_source,
+        ord_match.id AS order_db_id,
+        ord_match.order_id,
+        COALESCE(ff.product_title, ord_match.product_title) AS product_title,
+        ord_match.item_number,
+        ord_match.condition,
+        COALESCE(ff.sku, ord_match.sku) AS sku,
+        ord_match.quantity,
+        ord_match.notes,
+        COALESCE(ord_match.status_history, '[]'::jsonb) AS status_history,
+        COALESCE(ord_match.account_source,
           CASE WHEN sal.fnsku IS NOT NULL THEN 'fba' ELSE NULL END
         ) AS account_source,
-        o.out_of_stock,
+        ord_match.out_of_stock,
+        COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
+        COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
         COALESCE(
           stn.is_carrier_accepted OR stn.is_in_transit OR stn.is_out_for_delivery OR stn.is_delivered,
           false
@@ -103,15 +105,87 @@ export async function GET(req: NextRequest) {
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
       LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
       LEFT JOIN fba_fnsku_logs fl ON fl.station_activity_log_id = sal.id
-      LEFT JOIN orders o ON o.shipment_id = sal.shipment_id AND sal.shipment_id IS NOT NULL
+      LEFT JOIN LATERAL (
+        SELECT
+          o.id,
+          o.order_id,
+          o.product_title,
+          o.item_number,
+          o.condition,
+          o.sku,
+          o.quantity,
+          o.notes,
+          o.status_history,
+          o.account_source,
+          o.out_of_stock,
+          o.created_at
+        FROM orders o
+        LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
+        WHERE sal.shipment_id IS NOT NULL
+          AND (
+            osl.shipment_id = sal.shipment_id
+            OR o.shipment_id = sal.shipment_id
+          )
+        ORDER BY
+          CASE
+            WHEN osl.shipment_id = sal.shipment_id THEN 0
+            WHEN o.shipment_id = sal.shipment_id THEN 1
+            ELSE 2
+          END,
+          CASE WHEN COALESCE(osl.is_primary, false) THEN 0 ELSE 1 END,
+          o.created_at DESC NULLS LAST,
+          o.id DESC
+        LIMIT 1
+      ) ord_match ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(
+          json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
+            FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+          '[]'::json
+        ) AS tracking_numbers,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'shipment_id', t.shipment_id,
+              'tracking', t.tracking_number_raw,
+              'is_primary', t.is_primary
+            )
+            ORDER BY t.sort_key, t.tracking_number_raw
+          ) FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+          '[]'::json
+        ) AS tracking_number_rows
+        FROM (
+          SELECT DISTINCT
+            osl_link.shipment_id,
+            stn_link.tracking_number_raw,
+            COALESCE(osl_link.is_primary, false) AS is_primary,
+            CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
+          FROM order_shipment_links osl_link
+          LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
+          WHERE ord_match.id IS NOT NULL
+            AND osl_link.order_row_id = ord_match.id
+
+          UNION
+
+          SELECT DISTINCT
+            o_primary.shipment_id,
+            stn_primary.tracking_number_raw,
+            true AS is_primary,
+            0 AS sort_key
+          FROM orders o_primary
+          LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
+          WHERE ord_match.id IS NOT NULL
+            AND o_primary.id = ord_match.id
+        ) t
+      ) order_trackings ON TRUE
       LEFT JOIN LATERAL (
         SELECT wa.deadline_at FROM work_assignments wa
-        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+        WHERE wa.entity_type = 'ORDER' AND wa.entity_id = ord_match.id AND wa.work_type = 'TEST'
         ORDER BY
           CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
           wa.updated_at DESC, wa.id DESC
         LIMIT 1
-      ) wa_d ON o.id IS NOT NULL
+      ) wa_d ON ord_match.id IS NOT NULL
 
       WHERE sal.station = 'TECH'
         AND sal.activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED')

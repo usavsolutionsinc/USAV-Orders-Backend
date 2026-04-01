@@ -4,8 +4,95 @@ import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { detectCarrier } from '@/lib/tracking-format';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { createFbaLog } from '@/lib/fba/createFbaLog';
 
 type Params = Promise<{ id: string }>;
+type AllocationPayload = { shipmentItemId: number; quantity: number };
+
+function normalizeAllocations(raw: unknown): AllocationPayload[] {
+  if (!Array.isArray(raw)) return [];
+  const byItem = new Map<number, number>();
+  for (const row of raw) {
+    const source = row as { shipment_item_id?: unknown; item_id?: unknown; quantity?: unknown; qty?: unknown };
+    const shipmentItemId = Number(source.shipment_item_id ?? source.item_id);
+    if (!Number.isFinite(shipmentItemId) || shipmentItemId <= 0) continue;
+    const parsedQty = Math.floor(Number(source.quantity ?? source.qty ?? 1));
+    const quantity = Number.isFinite(parsedQty) && parsedQty > 0 ? parsedQty : 1;
+    byItem.set(shipmentItemId, quantity);
+  }
+  return Array.from(byItem.entries()).map(([shipmentItemId, quantity]) => ({ shipmentItemId, quantity }));
+}
+
+async function replaceTrackingAllocations(
+  client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }> },
+  params: {
+    shipmentId: number;
+    trackingId: number;
+    allocations: AllocationPayload[];
+    staffId: number | null;
+    station: string | null;
+  }
+) {
+  const { shipmentId, trackingId, allocations, staffId, station } = params;
+  if (allocations.length === 0) return 0;
+
+  const shipmentItemIds = allocations.map((row) => row.shipmentItemId);
+  const itemRes = await client.query(
+    `SELECT id, fnsku
+     FROM fba_shipment_items
+     WHERE shipment_id = $1
+       AND id = ANY($2::int[])`,
+    [shipmentId, shipmentItemIds]
+  );
+
+  if (itemRes.rows.length !== shipmentItemIds.length) {
+    throw new Error('One or more selected items are not in this shipment');
+  }
+
+  const fnskuByItemId = new Map<number, string>();
+  for (const row of itemRes.rows) {
+    fnskuByItemId.set(Number(row.id), String(row.fnsku || '').trim().toUpperCase());
+  }
+
+  await client.query(
+    `DELETE FROM fba_tracking_item_allocations
+     WHERE shipment_id = $1
+       AND tracking_id = $2`,
+    [shipmentId, trackingId]
+  );
+
+  for (const allocation of allocations) {
+    await client.query(
+      `INSERT INTO fba_tracking_item_allocations
+         (shipment_id, tracking_id, shipment_item_id, qty)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (shipment_id, tracking_id, shipment_item_id)
+       DO UPDATE SET qty = EXCLUDED.qty, updated_at = NOW()`,
+      [shipmentId, trackingId, allocation.shipmentItemId, allocation.quantity]
+    );
+
+    const fnsku = fnskuByItemId.get(allocation.shipmentItemId);
+    if (fnsku) {
+      await createFbaLog(client, {
+        fnsku,
+        sourceStage: 'PACK',
+        eventType: 'BOXED',
+        staffId,
+        fbaShipmentId: shipmentId,
+        fbaShipmentItemId: allocation.shipmentItemId,
+        quantity: allocation.quantity,
+        station: station || 'FBA_PAIRING',
+        notes: 'Tracking bundle allocation',
+        metadata: {
+          tracking_id: trackingId,
+          trigger: 'fba.shipments.tracking.allocations',
+        },
+      });
+    }
+  }
+
+  return allocations.length;
+}
 
 // ── GET /api/fba/shipments/[id]/tracking ─────────────────────────────────────
 // Returns all tracking numbers linked to this shipment via fba_shipment_tracking.
@@ -39,7 +126,25 @@ export async function GET(
          stn.has_exception,
          stn.is_terminal,
          stn.delivered_at,
-         stn.latest_event_at
+         stn.latest_event_at,
+         COALESCE(
+           (
+             SELECT jsonb_agg(
+               jsonb_build_object(
+                 'shipment_item_id', fta.shipment_item_id,
+                 'qty', fta.qty,
+                 'fnsku', fsi.fnsku,
+                 'display_title', COALESCE(NULLIF(TRIM(fsi.product_title), ''), fsi.fnsku)
+               )
+               ORDER BY fta.shipment_item_id
+             )
+             FROM fba_tracking_item_allocations fta
+             JOIN fba_shipment_items fsi ON fsi.id = fta.shipment_item_id
+             WHERE fta.shipment_id = fst.shipment_id
+               AND fta.tracking_id = fst.tracking_id
+           ),
+           '[]'::jsonb
+         ) AS allocations
        FROM fba_shipment_tracking fst
        JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
        WHERE fst.shipment_id = $1
@@ -61,7 +166,15 @@ export async function GET(
 // Links a tracking number to this shipment.
 // 1. Upserts the raw tracking number into shipping_tracking_numbers.
 // 2. Creates the link in fba_shipment_tracking.
-// Body: { tracking_number: string, carrier?: string, label?: string }
+// 3. Optional: replaces per-item bundle allocations for this shipment+tracking.
+// Body: {
+//   tracking_number: string,
+//   carrier?: string,
+//   label?: string,
+//   staff_id?: number,
+//   station?: string,
+//   allocations?: [{ shipment_item_id|item_id, quantity|qty }]
+// }
 export async function POST(
   request: NextRequest,
   { params }: { params: Params }
@@ -82,6 +195,9 @@ export async function POST(
 
     const carrier = String(body.carrier || detectCarrier(raw)).toUpperCase();
     const label = body.label ? String(body.label).trim() : null;
+    const staffId = Number.isFinite(Number(body?.staff_id)) ? Number(body.staff_id) : null;
+    const station = body?.station ? String(body.station).trim() : null;
+    const allocations = normalizeAllocations(body?.allocations);
 
     await client.query('BEGIN');
 
@@ -109,6 +225,14 @@ export async function POST(
       [planId, trackingId, label]
     );
 
+    const allocationCount = await replaceTrackingAllocations(client, {
+      shipmentId: planId,
+      trackingId: Number(trackingId),
+      allocations,
+      staffId,
+      station,
+    });
+
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-shipments']);
@@ -122,6 +246,7 @@ export async function POST(
         tracking_number: raw,
         carrier,
         label: linkRes.rows[0].label,
+        allocation_count: allocationCount,
       },
       { status: 201 }
     );
@@ -139,7 +264,15 @@ export async function POST(
 
 // ── PATCH /api/fba/shipments/[id]/tracking ───────────────────────────────────
 // Updates a linked tracking row by link id.
-// Body: { link_id: number, tracking_number: string, carrier?: string, label?: string }
+// Body: {
+//   link_id: number,
+//   tracking_number: string,
+//   carrier?: string,
+//   label?: string,
+//   staff_id?: number,
+//   station?: string,
+//   allocations?: [{ shipment_item_id|item_id, quantity|qty }]
+// }
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Params }
@@ -156,6 +289,9 @@ export async function PATCH(
     const linkId = Number(body?.link_id);
     const raw = String(body?.tracking_number || '').trim().toUpperCase();
     const label = body?.label != null ? String(body.label || '').trim() || null : undefined;
+    const staffId = Number.isFinite(Number(body?.staff_id)) ? Number(body.staff_id) : null;
+    const station = body?.station ? String(body.station).trim() : null;
+    const allocations = normalizeAllocations(body?.allocations);
     if (!Number.isFinite(linkId) || linkId <= 0) {
       return NextResponse.json({ success: false, error: 'link_id is required' }, { status: 400 });
     }
@@ -168,7 +304,7 @@ export async function PATCH(
     await client.query('BEGIN');
 
     const linkCheck = await client.query(
-      `SELECT id
+      `SELECT id, tracking_id
        FROM fba_shipment_tracking
        WHERE id = $1 AND shipment_id = $2`,
       [linkId, planId]
@@ -191,6 +327,7 @@ export async function PATCH(
     );
 
     const trackingId = Number(trackRes.rows[0].id);
+    const previousTrackingId = Number(linkCheck.rows[0].tracking_id);
     const nextCarrier = String(trackRes.rows[0].carrier || carrier || 'UNKNOWN').toUpperCase();
 
     const updates: string[] = ['tracking_id = $1'];
@@ -210,6 +347,32 @@ export async function PATCH(
       values
     );
 
+    if (previousTrackingId !== trackingId) {
+      await client.query(
+        `INSERT INTO fba_tracking_item_allocations
+           (shipment_id, tracking_id, shipment_item_id, qty, created_at, updated_at)
+         SELECT shipment_id, $3, shipment_item_id, qty, created_at, NOW()
+         FROM fba_tracking_item_allocations
+         WHERE shipment_id = $1 AND tracking_id = $2
+         ON CONFLICT (shipment_id, tracking_id, shipment_item_id)
+         DO UPDATE SET qty = EXCLUDED.qty, updated_at = NOW()`,
+        [planId, previousTrackingId, trackingId]
+      );
+      await client.query(
+        `DELETE FROM fba_tracking_item_allocations
+         WHERE shipment_id = $1 AND tracking_id = $2`,
+        [planId, previousTrackingId]
+      );
+    }
+
+    const allocationCount = await replaceTrackingAllocations(client, {
+      shipmentId: planId,
+      trackingId,
+      allocations,
+      staffId,
+      station,
+    });
+
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-shipments']);
@@ -223,6 +386,7 @@ export async function PATCH(
       tracking_number: raw,
       carrier: nextCarrier,
       label: updated.rows[0].label ?? null,
+      allocation_count: allocationCount,
     });
   } catch (error: any) {
     await client.query('ROLLBACK');
@@ -253,10 +417,21 @@ export async function DELETE(
       return NextResponse.json({ success: false, error }, { status: 400 });
     }
 
-    await pool.query(
-      'DELETE FROM fba_shipment_tracking WHERE id = $1 AND shipment_id = $2',
+    const linkRes = await pool.query(
+      `DELETE FROM fba_shipment_tracking
+       WHERE id = $1 AND shipment_id = $2
+       RETURNING tracking_id`,
       [linkId, planId]
     );
+
+    const trackingId = Number(linkRes.rows[0]?.tracking_id || 0);
+    if (trackingId > 0) {
+      await pool.query(
+        `DELETE FROM fba_tracking_item_allocations
+         WHERE shipment_id = $1 AND tracking_id = $2`,
+        [planId, trackingId]
+      );
+    }
 
     await invalidateCacheTags(['fba-shipments']);
     await publishFbaShipmentChanged({ action: 'tracking-unlinked', shipmentId: Number(id), source: 'fba.shipments.tracking.unlink' });
@@ -270,4 +445,3 @@ export async function DELETE(
     );
   }
 }
-

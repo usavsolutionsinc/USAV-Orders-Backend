@@ -65,8 +65,8 @@ export function FbaWorkspaceScanField({
   useEffect(() => {
     if (effectiveStaffId == null) return;
     const sid = String(effectiveStaffId);
-    getStaffGoalById(sid, 'TECH').then(setFbaGoal).catch(() => {});
-    fetch(`/api/staff-goals?staffId=${sid}&station=TECH`)
+    getStaffGoalById(sid, 'FBA').then(setFbaGoal).catch(() => {});
+    fetch(`/api/staff-goals?staffId=${sid}&station=FBA`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.today_count != null) setFbaTodayCount(Number(d.today_count) || 0);
@@ -183,6 +183,11 @@ export function FbaWorkspaceScanField({
       if (upsResults.some(Boolean)) {
         trackingTargetPlanIds.forEach((planId) => patchTracking(planId, { ups: normalizedUps }));
       }
+      // Success — clear selection to close the tracking card
+      clearSelection();
+      window.dispatchEvent(new CustomEvent('fba-scan-status', { detail: 'Tracking saved' }));
+      window.dispatchEvent(new CustomEvent('fba-active-shipments-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (err: any) {
       setSaveError(err?.message || 'Failed to save tracking');
     } finally {

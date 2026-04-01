@@ -3,16 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Calendar, Check, ChevronDown, Clipboard, ClipboardList,
+  Calendar, Check, ChevronDown, ClipboardList, Copy,
   Loader2, Minus, Pencil, Plus, Trash2,
 } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { DeferredQtyInput } from '@/design-system/primitives';
-import { InlineSaveIndicator } from '@/design-system/components';
+import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { usePanelActions } from '@/hooks/usePanelActions';
-import DeleteButton from '@/components/ui/DeleteButton';
+import { emitOpenQuickAddFnsku, FBA_FNSKU_SAVED_EVENT } from './FbaQuickAddFnskuModal';
 import type { FbaBoardItem } from './FbaBoardTable';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -38,8 +38,6 @@ interface PlanEntry {
   plan_created_at: string;
   tracking_numbers: { tracking_number: string; carrier: string; label: string }[];
 }
-
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 /* ── Props ─────────────────────────────────────────────────────────── */
 
@@ -67,28 +65,11 @@ async function patchFbaItem(
   return res.ok;
 }
 
-async function patchFnskuCatalog(
-  fnsku: string,
-  body: Record<string, unknown>,
-): Promise<boolean> {
-  const res = await fetch(`/api/fba/fnskus/${encodeURIComponent(fnsku)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return res.ok;
-}
-
 async function deleteFbaItem(shipmentId: number, itemId: number): Promise<boolean> {
   const res = await fetch(`/api/fba/shipments/${shipmentId}/items/${itemId}`, {
     method: 'DELETE',
   });
   return res.ok;
-}
-
-/** True when the value is a 10-char Amazon ASIN (B0…). */
-function looksLikeAsin(value: string): boolean {
-  return /^B0[A-Z0-9]{8}$/i.test(value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''));
 }
 
 function formatPlanDate(raw: string | null): string {
@@ -107,116 +88,6 @@ function formatCreatedAt(raw: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-/* ── Editable field row (ShippingInformationSection pattern) ───────── */
-
-function EditableFieldRow({
-  label,
-  value,
-  placeholder,
-  onSave,
-  multiline = false,
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onSave: (next: string) => Promise<boolean>;
-  multiline?: boolean;
-}) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const [saveState, setSaveState] = useState<SaveState>('idle');
-  const timerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!isEditing) setDraft(value);
-  }, [value, isEditing]);
-
-  useEffect(() => {
-    if (saveState !== 'saved' && saveState !== 'error') return;
-    const t = window.setTimeout(() => setSaveState('idle'), 1600);
-    return () => window.clearTimeout(t);
-  }, [saveState]);
-
-  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current); }, []);
-
-  const commitSave = useCallback(async (next: string) => {
-    const trimmed = next.trim();
-    if (trimmed === (value || '').trim()) {
-      setIsEditing(false);
-      return;
-    }
-    setSaveState('saving');
-    const ok = await onSave(trimmed);
-    setSaveState(ok ? 'saved' : 'error');
-    if (ok) setIsEditing(false);
-  }, [value, onSave]);
-
-  const handlePaste = useCallback(async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text.trim()) return;
-      const pasted = text.trim().toUpperCase();
-      setDraft(pasted);
-      setIsEditing(true);
-      // Auto-save after paste with a short delay
-      if (timerRef.current) window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(() => void commitSave(pasted), 400);
-    } catch { /* clipboard blocked */ }
-  }, [commitSave]);
-
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-gray-100 py-2.5 last:border-b-0">
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">{label}</span>
-          <InlineSaveIndicator state={saveState} />
-        </div>
-        {isEditing ? (
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value.toUpperCase())}
-            onBlur={() => void commitSave(draft)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void commitSave(draft);
-              if (e.key === 'Escape') { setDraft(value); setIsEditing(false); }
-            }}
-            placeholder={placeholder}
-            autoFocus
-            className="h-7 w-full border-0 bg-transparent px-0 text-[13px] font-bold text-gray-900 outline-none"
-          />
-        ) : (
-          <button type="button" onClick={() => setIsEditing(true)} className="block w-full text-left">
-            <p className={`text-[13px] font-bold text-gray-900 ${multiline ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>
-              {(value || '').trim() || <span className="text-gray-400">{placeholder}</span>}
-            </p>
-          </button>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-1 text-gray-400">
-        <button
-          type="button"
-          onClick={() => setIsEditing(true)}
-          className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label={`Edit ${label}`}
-          title={`Edit ${label}`}
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void handlePaste()}
-          className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label={`Paste ${label}`}
-          title={`Paste from clipboard`}
-        >
-          <Clipboard className="h-3 w-3" />
-        </button>
-      </div>
-    </div>
-  );
 }
 
 /* ── Entry Card (one plan row) ─────────────────────────────────────── */
@@ -412,6 +283,52 @@ function PlanEntryCard({
   );
 }
 
+/* ── Delete control (armed pattern matching DeleteOrderControl) ────── */
+
+function FbaDeleteControl({ entries, onDeleted }: { entries: PlanEntry[]; onDeleted: () => void }) {
+  const [isArmed, setIsArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current); }, []);
+
+  const handleClick = async () => {
+    if (!isArmed) {
+      setIsArmed(true);
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => setIsArmed(false), 3000);
+      return;
+    }
+    if (timerRef.current) { window.clearTimeout(timerRef.current); timerRef.current = null; }
+    setIsArmed(false);
+    setDeleting(true);
+    try {
+      for (const entry of entries) {
+        await deleteFbaItem(entry.shipment_id, entry.item_id);
+      }
+      window.dispatchEvent(new Event('usav-refresh-data'));
+      onDeleted();
+    } catch {
+      window.alert('Failed to delete. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (entries.length === 0) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleClick()}
+      disabled={deleting}
+      className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+    >
+      {deleting ? 'Deleting...' : isArmed ? 'Click Again To Confirm' : 'Delete Permanently'}
+    </button>
+  );
+}
+
 /* ── Main Panel ────────────────────────────────────────────────────── */
 
 export function FbaBoardDetailPanel({
@@ -425,19 +342,43 @@ export function FbaBoardDetailPanel({
   const [entries, setEntries] = useState<PlanEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Editable catalog fields — local state seeded from item, saved to catalog + items
+  // Catalog fields — local state seeded from item, updated via Quick Add modal
   const [productTitle, setProductTitle] = useState(item.display_title || '');
   const [condition, setCondition] = useState(item.condition || '');
   const [sku, setSku] = useState(item.sku || '');
   const [asin, setAsin] = useState(item.asin || '');
 
-  // Resync when navigating between items
   useEffect(() => {
     setProductTitle(item.display_title || '');
     setCondition(item.condition || '');
     setSku(item.sku || '');
     setAsin(item.asin || '');
   }, [item.item_id, item.display_title, item.condition, item.sku, item.asin]);
+
+  // Listen for Quick Add modal saves to update local state
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ fnsku: string; product_title: string | null; asin: string | null; sku: string | null; condition: string | null }>).detail;
+      if (!detail?.fnsku || detail.fnsku.toUpperCase() !== item.fnsku.toUpperCase()) return;
+      if (detail.product_title != null) setProductTitle(detail.product_title);
+      if (detail.asin != null) setAsin(detail.asin);
+      if (detail.sku != null) setSku(detail.sku);
+      if (detail.condition != null) setCondition(detail.condition);
+      onSaved();
+    };
+    window.addEventListener(FBA_FNSKU_SAVED_EVENT, handler as EventListener);
+    return () => window.removeEventListener(FBA_FNSKU_SAVED_EVENT, handler as EventListener);
+  }, [item.fnsku, onSaved]);
+
+  const openCatalogEdit = useCallback(() => {
+    emitOpenQuickAddFnsku({
+      fnsku: item.fnsku,
+      product_title: productTitle || null,
+      asin: asin || null,
+      sku: sku || null,
+      condition: condition || null,
+    });
+  }, [item.fnsku, productTitle, asin, sku, condition]);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -460,65 +401,6 @@ export function FbaBoardDetailPanel({
     fetchEntries();
     onSaved();
   }, [fetchEntries, onSaved]);
-
-  // Save helpers for editable fields — update catalog + all item rows
-  const saveProductTitle = useCallback(async (next: string): Promise<boolean> => {
-    // B0-prefixed values are ASINs — save to ASIN field, not product title
-    if (looksLikeAsin(next)) {
-      const asinVal = next.trim().toUpperCase();
-      const ok = await patchFnskuCatalog(item.fnsku, { asin: asinVal });
-      if (ok) {
-        setAsin(asinVal);
-        for (const e of entries) {
-          await patchFbaItem(e.shipment_id, e.item_id, { asin: asinVal });
-        }
-        onSaved();
-      }
-      return ok;
-    }
-    const ok = await patchFnskuCatalog(item.fnsku, { product_title: next || null });
-    if (ok) {
-      setProductTitle(next);
-      for (const e of entries) {
-        await patchFbaItem(e.shipment_id, e.item_id, { product_title: next || null });
-      }
-      onSaved();
-    }
-    return ok;
-  }, [item.fnsku, entries, onSaved]);
-
-  const saveSku = useCallback(async (next: string): Promise<boolean> => {
-    const ok = await patchFnskuCatalog(item.fnsku, { sku: next || null });
-    if (ok) {
-      setSku(next);
-      for (const e of entries) {
-        await patchFbaItem(e.shipment_id, e.item_id, { sku: next || null });
-      }
-      onSaved();
-    }
-    return ok;
-  }, [item.fnsku, entries, onSaved]);
-
-  const saveCondition = useCallback(async (next: string): Promise<boolean> => {
-    const ok = await patchFnskuCatalog(item.fnsku, { condition: next || null });
-    if (ok) {
-      setCondition(next);
-      onSaved();
-    }
-    return ok;
-  }, [item.fnsku, onSaved]);
-
-  const saveAsin = useCallback(async (next: string): Promise<boolean> => {
-    const ok = await patchFnskuCatalog(item.fnsku, { asin: next || null });
-    if (ok) {
-      setAsin(next);
-      for (const e of entries) {
-        await patchFbaItem(e.shipment_id, e.item_id, { asin: next || null });
-      }
-      onSaved();
-    }
-    return ok;
-  }, [item.fnsku, entries, onSaved]);
 
   const panelActions = usePanelActions(
     { entityType: 'fba_item', entityId: item.item_id },
@@ -544,7 +426,7 @@ export function FbaBoardDetailPanel({
           </p>
         </div>
 
-        {/* Row 2: title (clamped in header — full title in catalog info below) */}
+        {/* Row 2: title */}
         <div className="px-6 pt-1.5 pb-2 border-b border-gray-200 h-[100px]">
           <h2 className="line-clamp-4 text-[17px] font-black leading-snug tracking-tight text-gray-950">
             {productTitle || item.fnsku || asin || 'Untitled'}
@@ -582,41 +464,118 @@ export function FbaBoardDetailPanel({
       {/* ── Scrollable body ────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-4">
-          {/* Editable catalog fields — inline edit + paste like ShippingInformationSection */}
+          {/* Catalog info — read-only rows, single edit button opens Quick Add modal */}
           <section>
-            <p className={`mb-1 ${sectionLabel}`}>Catalog Info</p>
+            <div className="mb-1 flex items-center justify-between">
+              <p className={sectionLabel}>Catalog Info</p>
+              <button
+                type="button"
+                onClick={openCatalogEdit}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Edit catalog details"
+                title="Edit catalog details"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            </div>
             <div>
-              <EditableFieldRow
+              <DetailsPanelRow
                 label="Product Title"
-                value={productTitle}
-                placeholder="Enter product title"
-                onSave={saveProductTitle}
-                multiline
-              />
-              <EditableFieldRow
+                actions={
+                  productTitle ? (
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(productTitle)}
+                      className="text-gray-400 transition-colors hover:text-gray-700"
+                      aria-label="Copy product title"
+                      title="Copy product title"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null
+                }
+              >
+                <p className="whitespace-pre-wrap break-words text-sm font-bold text-gray-900">
+                  {productTitle || <span className="text-gray-400">No title</span>}
+                </p>
+              </DetailsPanelRow>
+              <DetailsPanelRow
                 label="Condition"
-                value={condition}
-                placeholder="N/A"
-                onSave={saveCondition}
-              />
-              <div className="flex items-center justify-between gap-3 border-b border-gray-100 py-2.5 last:border-b-0">
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">FNSKU</span>
-                  <p className="font-mono text-[13px] font-bold text-gray-900">{item.fnsku}</p>
-                </div>
-              </div>
-              <EditableFieldRow
-                label="SKU"
-                value={sku}
-                placeholder="Enter SKU"
-                onSave={saveSku}
-              />
-              <EditableFieldRow
+                actions={
+                  condition ? (
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(condition)}
+                      className="text-gray-400 transition-colors hover:text-gray-700"
+                      aria-label="Copy condition"
+                      title="Copy condition"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null
+                }
+              >
+                <p className="text-sm font-bold text-gray-900">
+                  {condition || <span className="text-gray-400">—</span>}
+                </p>
+              </DetailsPanelRow>
+              <DetailsPanelRow
+                label="FNSKU"
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(item.fnsku)}
+                    className="text-gray-400 transition-colors hover:text-gray-700"
+                    aria-label="Copy FNSKU"
+                    title="Copy FNSKU"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                }
+              >
+                <p className="font-mono text-sm font-bold text-gray-900">{item.fnsku}</p>
+              </DetailsPanelRow>
+              <DetailsPanelRow
                 label="ASIN"
-                value={asin}
-                placeholder="Enter ASIN"
-                onSave={saveAsin}
-              />
+                actions={
+                  asin ? (
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(asin)}
+                      className="text-gray-400 transition-colors hover:text-gray-700"
+                      aria-label="Copy ASIN"
+                      title="Copy ASIN"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null
+                }
+              >
+                <p className="font-mono text-sm font-bold text-gray-900">
+                  {asin || <span className="text-gray-400">—</span>}
+                </p>
+              </DetailsPanelRow>
+              <DetailsPanelRow
+                label="SKU"
+                className="last:border-b-0"
+                actions={
+                  sku ? (
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(sku)}
+                      className="text-gray-400 transition-colors hover:text-gray-700"
+                      aria-label="Copy SKU"
+                      title="Copy SKU"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null
+                }
+              >
+                <p className="font-mono text-sm font-bold text-gray-900">
+                  {sku || <span className="text-gray-400">—</span>}
+                </p>
+              </DetailsPanelRow>
             </div>
           </section>
 
@@ -686,6 +645,13 @@ export function FbaBoardDetailPanel({
               </section>
             </>
           )}
+
+          <div className="h-px bg-gray-100" />
+
+          {/* Delete all entries for this FNSKU */}
+          <section className="py-4">
+            <FbaDeleteControl entries={entries} onDeleted={() => { onClose(); onSaved(); }} />
+          </section>
         </div>
       </div>
     </motion.div>

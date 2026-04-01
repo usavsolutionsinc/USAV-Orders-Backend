@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pencil, X } from '@/components/Icons';
 import { dmSans } from '@/lib/fonts';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -29,25 +29,29 @@ export function OutOfStockField({
   onEdit,
 }: OutOfStockFieldProps) {
   const [showSaved, setShowSaved] = useState(false);
-  const onSubmitRef = useRef(onSubmit);
-  useEffect(() => {
-    onSubmitRef.current = onSubmit;
-  }, [onSubmit]);
+  const lastSubmittedValueRef = useRef('');
 
-  useEffect(() => {
-    if (!editable || !value.trim()) return;
-    const t = setTimeout(() => {
-      onSubmitRef.current?.();
-      setShowSaved(true);
-    }, 700);
-    return () => clearTimeout(t);
-  }, [editable, value]);
+  const submitIfNeeded = useCallback(() => {
+    if (!editable) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (trimmed === lastSubmittedValueRef.current) return;
+    lastSubmittedValueRef.current = trimmed;
+    onSubmit?.();
+    setShowSaved(true);
+  }, [editable, onSubmit, value]);
 
   useEffect(() => {
     if (!showSaved) return;
     const t = setTimeout(() => setShowSaved(false), 1600);
     return () => clearTimeout(t);
   }, [showSaved]);
+
+  useEffect(() => {
+    if (!value.trim()) {
+      lastSubmittedValueRef.current = '';
+    }
+  }, [value]);
 
   if (editable) {
     return (
@@ -79,6 +83,13 @@ export function OutOfStockField({
           type="text"
           value={value}
           onChange={(e) => onChange?.(e.target.value)}
+          onBlur={submitIfNeeded}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              submitIfNeeded();
+            }
+          }}
           placeholder="Describe missing parts..."
           autoFocus={autoFocus}
           className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-500 ${dmSans.className}`}

@@ -66,9 +66,9 @@ export interface SearchFieldProps {
  * prop is called only after the debounce window, preventing per-keystroke DB pings.
  *
  * Sync contract:
- *  - Parent sets `value` → syncs into draft ONLY when the external value is cleared
- *    (set to '') or on mount — never on intermediate re-renders during a fetch.
- *  - Draft → parent: debounced, so a single DB query fires after the user stops typing.
+ *  - Parent clears `value` → draft resets immediately.
+ *  - Parent sets non-empty `value` → draft syncs only while input is not focused.
+ *  - Draft → parent: debounced, so a single DB query fires after typing pauses.
  */
 export function SearchField({
   value,
@@ -86,12 +86,28 @@ export function SearchField({
   autoFocus = false,
   debounceMs = 320,
 }: SearchFieldProps) {
-  // Internal draft — never reset by parent re-renders during fetches.
+  // Internal draft — avoid churn from async parent updates during typing.
   const [draft, setDraft] = useState(value);
   const committedRef = useRef(value);   // last value we sent to onChange
   const isMountedRef = useRef(false);
+  const debounceTimeoutRef = useRef<number | null>(null);
+  const inputElementRef = useRef<HTMLInputElement | null>(null);
 
-  // One-way sync: external clear (value → '') or on first mount.
+  const setInputRef = (node: HTMLInputElement | null) => {
+    inputElementRef.current = node;
+    if (!inputRef) return;
+    if (typeof inputRef === 'function') {
+      inputRef(node);
+      return;
+    }
+    (inputRef as React.MutableRefObject<HTMLInputElement | null>).current = node;
+  };
+
+  // Sync contract:
+  // - Always sync clears (parent requested reset).
+  // - Sync non-empty external updates only when input is not focused.
+  //   This preserves typing focus/cursor during async search, while still
+  //   allowing external actions (e.g. selecting a recent search) to update text.
   useEffect(() => {
     if (!isMountedRef.current) {
       isMountedRef.current = true;
@@ -99,21 +115,31 @@ export function SearchField({
       committedRef.current = value;
       return;
     }
-    // Only accept external change if parent explicitly cleared the field.
     if (value === '' && committedRef.current !== '') {
       setDraft('');
       committedRef.current = '';
+      return;
     }
-  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+    const isFocused = document.activeElement === inputElementRef.current;
+    if (!isFocused && value !== draft) {
+      setDraft(value);
+      committedRef.current = value;
+    }
+  }, [draft, value]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced propagation: fires onChange only after typing pauses.
   useEffect(() => {
     if (draft === committedRef.current) return;
     const id = window.setTimeout(() => {
       committedRef.current = draft;
+      debounceTimeoutRef.current = null;
       onChange(draft);
     }, debounceMs);
-    return () => window.clearTimeout(id);
+    debounceTimeoutRef.current = id;
+    return () => {
+      window.clearTimeout(id);
+      if (debounceTimeoutRef.current === id) debounceTimeoutRef.current = null;
+    };
   }, [draft, debounceMs, onChange]);
 
   // Pending = user has typed but debounce hasn't fired yet — show a subtle dot.
@@ -127,7 +153,10 @@ export function SearchField({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     // Flush debounce immediately on Enter.
-    window.clearTimeout(undefined);
+    if (debounceTimeoutRef.current != null) {
+      window.clearTimeout(debounceTimeoutRef.current);
+      debounceTimeoutRef.current = null;
+    }
     committedRef.current = draft;
     onChange(draft);
     onSearch?.(draft);
@@ -163,7 +192,7 @@ export function SearchField({
         </span>
 
         <input
-          ref={inputRef}
+          ref={setInputRef}
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

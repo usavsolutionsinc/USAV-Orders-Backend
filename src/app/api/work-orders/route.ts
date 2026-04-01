@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { SHIPPED_BY_CARRIER_SQL } from '@/lib/sql-fragments';
 import { normalizePSTTimestamp } from '@/utils/date';
 import {
   publishOrderAssignmentsUpdated,
@@ -62,21 +63,7 @@ interface WorkOrderRow {
   stockLevel?: number | null;
 }
 
-// Keep shipped detection in sync with /api/orders so work-orders excludes
-// anything already moving through carrier/shipped states.
-const shippedByCarrierOrLatestStatusSql = `COALESCE(
-  stn.is_carrier_accepted
-  OR stn.is_in_transit
-  OR stn.is_out_for_delivery
-  OR stn.is_delivered
-  OR (
-    COALESCE(BTRIM(stn.latest_status_category), '') <> ''
-    AND UPPER(BTRIM(stn.latest_status_category)) NOT IN ('LABEL_CREATED', 'UNKNOWN')
-  )
-  OR UPPER(COALESCE(stn.latest_status_label, '')) LIKE '%MOVING THROUGH NETWORK%'
-  OR UPPER(COALESCE(stn.latest_status_description, '')) LIKE '%MOVING THROUGH NETWORK%',
-  false
-)`;
+const shippedByCarrierOrLatestStatusSql = SHIPPED_BY_CARRIER_SQL;
 
 function normalizeQueue(raw: string | null): QueueKey {
   const value = String(raw || '').trim().toLowerCase();
@@ -167,12 +154,25 @@ async function getOrders(): Promise<WorkOrderRow[]> {
        o.item_number,
        o.shipment_id,
        stn.tracking_number_raw AS tracking_number,
+       COALESCE((
+         SELECT json_agg(json_build_object(
+           'shipment_id', osl.shipment_id,
+           'tracking_number_raw', stn2.tracking_number_raw,
+           'is_primary', osl.is_primary
+         ) ORDER BY osl.is_primary DESC, stn2.tracking_number_raw)
+         FROM order_shipment_links osl
+         JOIN shipping_tracking_numbers stn2 ON stn2.id = osl.shipment_id
+         WHERE osl.order_row_id = o.id
+       ), '[]'::json) AS tracking_number_rows,
        o.sku,
        o.condition,
        o.account_source,
        o.quantity,
        o.notes,
+       o.out_of_stock,
        o.created_at,
+       (COALESCE((SELECT count(*) FROM station_activity_logs sal2
+         WHERE sal2.shipment_id IS NOT NULL AND sal2.shipment_id = o.shipment_id), 0) > 0) AS has_tech_scan,
        test_wa.id AS test_assignment_id,
        test_wa.assigned_tech_id AS tech_id,
        st.name AS tech_name,
@@ -192,13 +192,12 @@ async function getOrders(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'ORDER'
          AND wa.entity_id = o.id
          AND wa.work_type = 'TEST'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
+         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
          WHEN 'OPEN' THEN 3
-         WHEN 'DONE' THEN 4
-         ELSE 5
+         ELSE 4
        END, wa.updated_at DESC, wa.id DESC
        LIMIT 1
      ) test_wa ON TRUE
@@ -208,13 +207,12 @@ async function getOrders(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'ORDER'
          AND wa.entity_id = o.id
          AND wa.work_type = 'PACK'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
+         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
          WHEN 'ASSIGNED' THEN 2
          WHEN 'OPEN' THEN 3
-         WHEN 'DONE' THEN 4
-         ELSE 5
+         ELSE 4
        END, wa.updated_at DESC, wa.id DESC
        LIMIT 1
      ) pack_wa ON TRUE
@@ -224,9 +222,9 @@ async function getOrders(): Promise<WorkOrderRow[]> {
      WHERE NOT ${shippedByCarrierOrLatestStatusSql}
        AND NOT EXISTS (
          SELECT 1
-         FROM packer_logs pl
-         WHERE pl.shipment_id IS NOT NULL
-           AND pl.shipment_id = o.shipment_id
+         FROM station_activity_logs sal
+         WHERE sal.shipment_id IS NOT NULL
+           AND sal.shipment_id = o.shipment_id
        )
        AND UPPER(COALESCE(o.status, '')) <> 'SHIPPED'
        AND o.shipment_id IS NOT NULL
@@ -259,6 +257,7 @@ async function getOrders(): Promise<WorkOrderRow[]> {
     primaryWorkType: 'TEST' as const,
     orderId: row.order_id ? String(row.order_id) : null,
     trackingNumber: row.tracking_number ? String(row.tracking_number) : null,
+    trackingNumberRows: Array.isArray(row.tracking_number_rows) ? row.tracking_number_rows : [],
     itemNumber: row.item_number ? String(row.item_number) : null,
     sku: row.sku ? String(row.sku) : null,
     condition: row.condition ? String(row.condition) : null,
@@ -266,6 +265,8 @@ async function getOrders(): Promise<WorkOrderRow[]> {
     accountSource: row.account_source ? String(row.account_source) : null,
     quantity: row.quantity ? String(row.quantity) : null,
     createdAt: normalizePSTTimestamp(row.created_at),
+    hasTechScan: Boolean(row.has_tech_scan),
+    outOfStock: row.out_of_stock ? String(row.out_of_stock).trim() : null,
   }));
 }
 
@@ -715,15 +716,12 @@ export async function GET(request: NextRequest) {
     const queue = normalizeQueue(searchParams.get('queue'));
     const query = String(searchParams.get('q') || '').trim();
 
-    const [orders, receiving, repairs, fbaShipments, skuStock] = await Promise.all([
+    // Only pending orders for now — receiving, FBA, repair, stock queues disabled
+    const [orders] = await Promise.all([
       safeFetch('getOrders', getOrders),
-      safeFetch('getReceiving', getReceiving),
-      safeFetch('getRepairs', getRepairs),
-      safeFetch('getFbaShipments', getFbaShipments),
-      safeFetch('getSkuStock', getSkuStock),
     ]);
 
-    const allRows = [...orders, ...receiving, ...repairs, ...fbaShipments, ...skuStock];
+    const allRows = [...orders];
 
     const counts: Record<QueueKey, number> = {
       all: allRows.length,

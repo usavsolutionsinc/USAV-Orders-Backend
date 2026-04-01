@@ -83,22 +83,37 @@ export const semanticColors = {
     neutral: baseColors.gray[100],
     lifted: baseColors.white,
   },
-  focus: {
-    ring: baseColors.navy[700],
-    success: baseColors.green[500],
-    warning: baseColors.orange[500],
-    danger: baseColors.red[500],
-  },
-  /** Item condition color mapping — OrderCard, FbaItemCard, RepairCard */
-  condition: {
-    /** Default / used condition */
-    used: baseColors.gray[900],
-    /** New items */
-    new: baseColors.yellow[500],
-    /** Parts only */
-    parts: '#92400E',
-    /** Qty highlight when >= 2 */
-    quantity: baseColors.yellow[500],
+  dashboard: {
+    all: {
+      primary: baseColors.blue[600],
+      pastel: '#E6F0FF', // Very light blue
+      accent: baseColors.blue[700],
+    },
+    tested: {
+      primary: baseColors.green[600],
+      pastel: '#E6F6EB', // Very light green
+      accent: baseColors.green[700],
+    },
+    repair: {
+      primary: baseColors.orange[500],
+      pastel: '#FFF4E6', // Very light orange
+      accent: baseColors.orange[600],
+    },
+    outOfStock: {
+      primary: baseColors.red[500],
+      pastel: '#FEE2E2', // Very light red
+      accent: baseColors.red[600],
+    },
+    fba: {
+      primary: baseColors.purple[500],
+      pastel: '#F3E8FF', // Very light purple
+      accent: baseColors.purple[600],
+    },
+    pendingLate: {
+      primary: baseColors.yellow[500],
+      pastel: '#FEF9C3', // Very light yellow
+      accent: baseColors.yellow[600],
+    },
   },
 } as const;
 

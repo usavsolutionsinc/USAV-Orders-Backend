@@ -16,6 +16,12 @@ export interface TechRecord {
   created_at: string;
   updated_at?: string | null;
   shipping_tracking_number: string;
+  tracking_numbers?: string[] | null;
+  tracking_number_rows?: Array<{
+    shipment_id: number | null;
+    tracking: string;
+    is_primary: boolean;
+  }> | null;
   serial_number: string;
   tested_by: number;
   ship_by_date?: string | null;

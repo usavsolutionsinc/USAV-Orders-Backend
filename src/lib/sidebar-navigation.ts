@@ -5,6 +5,7 @@ import {
   ClipboardList,
   FileText,
   LayoutDashboard,
+  Monitor,
   Package,
   PackageCheck,
   ShieldCheck,
@@ -16,6 +17,7 @@ import {
 
 export type SidebarRouteKey =
   | 'dashboard'
+  | 'operations'
   | 'fba'
   | 'receiving'
   | 'repair'
@@ -41,6 +43,7 @@ export interface SidebarNavItem {
 }
 
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
+  { id: 'operations', label: 'Operations', href: '/operations', icon: Monitor, kind: 'main' },
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, kind: 'main' },
   { id: 'fba', label: 'FBA', href: '/fba', icon: Package, kind: 'main' },
   { id: 'repair', label: 'Repair', href: '/repair', icon: Tool, kind: 'main' },
@@ -59,6 +62,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
 export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (!pathname) return 'unknown';
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'dashboard';
+  if (pathname === '/operations' || pathname.startsWith('/operations/')) return 'operations';
   if (pathname === '/fba' || pathname.startsWith('/fba/')) return 'fba';
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
   if (pathname === '/repair' || pathname.startsWith('/repair/')) return 'repair';

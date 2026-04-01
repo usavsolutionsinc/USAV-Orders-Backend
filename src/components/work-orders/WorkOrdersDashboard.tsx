@@ -5,14 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
-import { DateGroupHeader } from '@/design-system/components';
-import { dataValue, chipText, sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
+import { dataValue } from '@/design-system/tokens/typography/presets';
 import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
-import { getActiveStaff, getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
+import { useTodayStaffAvailability } from '@/hooks/useTodayStaffAvailability';
 import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
-import { OrderStaffAssignmentButtons } from '@/components/ui/OrderStaffAssignmentButtons';
-import { WorkOrderInfoStrip } from './WorkOrderInfoStrip';
+import { WorkOrderInfoChips } from './WorkOrderInfoStrip';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { TECH_IDS } from '@/utils/staff';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from './WorkOrderAssignmentCard';
@@ -22,9 +20,7 @@ import {
   type WorkOrderRow,
   type QueueCounts,
   EMPTY_COUNTS,
-  STATUS_COLOR,
   normalizeQueue,
-  formatDate,
 } from './types';
 import { dispatchPendingOrderRowRefetch } from '@/utils/events';
 
@@ -37,12 +33,12 @@ interface AssigningState {
   storageKey?: string;
 }
 
-function buildWorkOrdersHref(params: URLSearchParams) {
+function buildWorkOrdersHref(params: URLSearchParams, basePath = '/work-orders') {
   const query = params.toString();
-  return query ? `/work-orders?${query}` : '/work-orders';
+  return query ? `${basePath}?${query}` : basePath;
 }
 
-export function WorkOrdersDashboard() {
+export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: string } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queue = normalizeQueue(searchParams.get('queue'));
@@ -53,33 +49,27 @@ export function WorkOrdersDashboard() {
   const [rows, setRows] = useState<WorkOrderRow[]>([]);
   const [counts, setCounts] = useState<QueueCounts>(EMPTY_COUNTS);
   const [loading, setLoading] = useState(true);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [assignmentStaff, setAssignmentStaff] = useState<StaffMember[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [assigningState, setAssigningState] = useState<AssigningState | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { getStaffName } = useStaffNameMap();
-
-  useEffect(() => {
-    let active = true;
-    Promise.all([getActiveStaff(), getPresentStaffForToday()])
-      .then(([members, presentToday]) => {
-        if (!active) return;
-        setStaff(members);
-        setAssignmentStaff(presentToday);
-      })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
+  const {
+    all: staff,
+    techniciansOn,
+    packersOn,
+    techniciansOff,
+    packersOff,
+    techniciansInactive,
+    packersInactive,
+  } = useTodayStaffAvailability();
 
   useEffect(() => {
     const controller = new AbortController();
     let isCurrent = true;
     setLoading(true);
     fetch(`/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`, {
-     
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
@@ -120,7 +110,6 @@ export function WorkOrdersDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
-  // Keep selectedRow in sync when rows refresh
   const selectedRow = useMemo(
     () => rows.find((r) => r.id === selectedId) ?? null,
     [rows, selectedId]
@@ -130,11 +119,8 @@ export function WorkOrdersDashboard() {
     [rows, selectedId]
   );
 
-  // Close panel when selected row disappears from results
   useEffect(() => {
-    if (isPanelOpen && !selectedRow) {
-      setIsPanelOpen(false);
-    }
+    if (isPanelOpen && !selectedRow) setIsPanelOpen(false);
   }, [isPanelOpen, selectedRow]);
 
   useEffect(() => {
@@ -142,37 +128,51 @@ export function WorkOrdersDashboard() {
       if (!isPanelOpen || rows.length === 0 || !selectedId) return;
       const currentIndex = rows.findIndex((record) => record.id === selectedId);
       if (currentIndex < 0) return;
-
       const step = e.detail?.direction === 'up' ? -1 : 1;
       const nextRow = rows[currentIndex + step];
       if (!nextRow) return;
-
       setSelectedId(nextRow.id);
       setIsPanelOpen(true);
       const params = new URLSearchParams(searchParams.toString());
       params.set('entityType', nextRow.entityType);
       params.set('entityId', String(nextRow.entityId));
-      router.replace(buildWorkOrdersHref(params));
+      router.replace(buildWorkOrdersHref(params, basePath));
     };
-
     window.addEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
     return () => {
       window.removeEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
     };
-  }, [isPanelOpen, rows, selectedId, searchParams, router]);
+  }, [isPanelOpen, rows, selectedId, searchParams, router, basePath]);
 
-  const technicianOptions = assignmentStaff
+  const technicianOptions = techniciansOn
     .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
     .map((m) => ({ id: Number(m.id), name: m.name }))
     .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id));
-  const packerOptions = assignmentStaff
+  const packerOptions = packersOn
     .filter((m) => m.role === 'packer')
     .map((m) => ({ id: Number(m.id), name: m.name }));
+  const onTechIds = new Set(technicianOptions.map((m) => m.id));
+  const onPackerIds = new Set(packerOptions.map((m) => m.id));
+  const staffContext = {
+    techniciansOn: technicianOptions,
+    techniciansOff: techniciansOff
+      .filter((m) => TECH_IDS.includes(Number(m.id)))
+      .map((m) => ({ id: Number(m.id), name: m.name }))
+      .filter((m) => !onTechIds.has(m.id)),
+    techniciansInactive: techniciansInactive
+      .filter((m) => TECH_IDS.includes(Number(m.id)))
+      .map((m) => ({ id: Number(m.id), name: m.name })),
+    packersOn: packerOptions,
+    packersOff: packersOff
+      .map((m) => ({ id: Number(m.id), name: m.name }))
+      .filter((m) => !onPackerIds.has(m.id)),
+    packersInactive: packersInactive
+      .map((m) => ({ id: Number(m.id), name: m.name })),
+  };
 
   const refreshRows = useCallback(async (opts?: { pendingOrderId?: number }) => {
     const res = await fetch(
       `/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`,
-      
     );
     const json = await res.json();
     setRows(Array.isArray(json?.rows) ? json.rows : []);
@@ -190,11 +190,10 @@ export function WorkOrdersDashboard() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete('entityType');
     params.delete('entityId');
-    router.replace(buildWorkOrdersHref(params));
-  }, [searchParams, router]);
+    router.replace(buildWorkOrdersHref(params, basePath));
+  }, [searchParams, router, basePath]);
 
   const handleRowClick = useCallback((row: WorkOrderRow) => {
-    // Toggle: clicking the active row closes the panel
     if (selectedId === row.id && isPanelOpen) {
       setIsPanelOpen(false);
       setSelectedId(null);
@@ -206,8 +205,8 @@ export function WorkOrdersDashboard() {
     const params = new URLSearchParams(searchParams.toString());
     params.set('entityType', row.entityType);
     params.set('entityId', String(row.entityId));
-    router.replace(buildWorkOrdersHref(params));
-  }, [selectedId, isPanelOpen, searchParams, router, clearEntitySelectionParams]);
+    router.replace(buildWorkOrdersHref(params, basePath));
+  }, [selectedId, isPanelOpen, searchParams, router, clearEntitySelectionParams, basePath]);
 
   const handleClosePanel = useCallback(() => {
     setIsPanelOpen(false);
@@ -224,14 +223,10 @@ export function WorkOrdersDashboard() {
   ) => {
     if (savingRowId) return;
     setSavingRowId(row.id);
-
     const newTechId = type === 'tech' ? staffId : row.techId;
     const newPackerId = type === 'packer' ? staffId : row.packerId;
-    // Only advance status when BOTH are now set
     const newStatus =
       newTechId && newPackerId && row.status === 'OPEN' ? 'ASSIGNED' : row.status;
-
-    // Optimistic update — UI moves immediately, reverts on error
     setRows((prev) =>
       prev.map((r) =>
         r.id === row.id
@@ -239,7 +234,6 @@ export function WorkOrdersDashboard() {
           : r
       )
     );
-
     try {
       const res = await fetch('/api/work-orders', {
         method: 'PATCH',
@@ -263,7 +257,6 @@ export function WorkOrdersDashboard() {
         row.entityType === 'ORDER' ? { pendingOrderId: row.entityId } : undefined
       );
     } catch (err: any) {
-      // Revert optimistic update on failure
       setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
       window.alert(err?.message || 'Failed to assign staff');
     } finally {
@@ -271,7 +264,6 @@ export function WorkOrdersDashboard() {
     }
   };
 
-  // Called by the assignment card when user finalises a single row's selection
   const handleAssignConfirm = useCallback(async (
     row: WorkOrderRow,
     { techId: newTechId, packerId: newPackerId, deadline, status: statusOverride }: AssignmentConfirmPayload
@@ -279,8 +271,6 @@ export function WorkOrdersDashboard() {
     const newStatus =
       statusOverride ??
       (newTechId && newPackerId && row.status === 'OPEN' ? 'ASSIGNED' : row.status);
-
-    // Optimistic update — also carry names so display is instant without waiting for refreshRows.
     const newTechName = newTechId
       ? (staff.find((s) => Number(s.id) === newTechId)?.name ?? null)
       : null;
@@ -302,11 +292,7 @@ export function WorkOrdersDashboard() {
           : r
       )
     );
-
     try {
-      // Only include assignedPackerId when it is explicitly being set/cleared.
-      // Omitting it on tech-only partial saves prevents the API from null-wiping
-      // a packer that was already saved to the PACK work-assignment.
       const patchBody: Record<string, unknown> = {
         entityType: row.entityType,
         entityId: row.entityId,
@@ -317,7 +303,6 @@ export function WorkOrdersDashboard() {
         notes: row.notes,
       };
       if (newPackerId !== null) patchBody.assignedPackerId = newPackerId;
-
       const res = await fetch('/api/work-orders', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -336,8 +321,17 @@ export function WorkOrdersDashboard() {
     }
   }, [refreshRows, staff]);
 
-  // Match the API queue logic exactly:
-  // `all_unassigned` means neither tech nor packer is assigned.
+  // Refresh when external events change order state (tech scan, OOS update, etc.)
+  useEffect(() => {
+    const handleExternalRefresh = () => { void refreshRows(); };
+    window.addEventListener('usav-refresh-data', handleExternalRefresh);
+    window.addEventListener('dashboard-refresh', handleExternalRefresh);
+    return () => {
+      window.removeEventListener('usav-refresh-data', handleExternalRefresh);
+      window.removeEventListener('dashboard-refresh', handleExternalRefresh);
+    };
+  }, [refreshRows]);
+
   const unassignedRows = rows.filter((r) => !r.techId && !r.packerId);
   const assignedRows = rows.filter((r) => r.techId != null || r.packerId != null);
   const rowsNeedingAssignment = useMemo(
@@ -355,12 +349,10 @@ export function WorkOrdersDashboard() {
         window.alert('Assign session is not available for this queue.');
         return;
       }
-
       if (!rowsNeedingAssignment.length) {
         window.alert('No assignable work orders in this view.');
         return;
       }
-
       const keyQueue = queue || 'all';
       const keyQuery = query.trim().toLowerCase() || '__all__';
       const storageKey = `work-orders:assign-session:${keyQueue}:${keyQuery}`;
@@ -371,115 +363,73 @@ export function WorkOrdersDashboard() {
         storageKey,
       });
     };
-
     window.addEventListener('work-orders-open-assign-session' as any, handleOpenAssignSession as any);
     return () => {
       window.removeEventListener('work-orders-open-assign-session' as any, handleOpenAssignSession as any);
     };
   }, [queue, query, rowsNeedingAssignment]);
 
-
   return (
     <div className="flex h-full w-full min-w-0 flex-col bg-white">
+      {/* Header */}
       <div className={mainStickyHeaderClass}>
         <div className={mainStickyHeaderRowClass}>
           <div className="flex min-w-0 items-center gap-3">
             <h1 className={`${dataValue} uppercase tracking-tight`}>
-              {queue === 'stock_replenish' ? 'Stock Replenish' : 'Work Orders'}
+              {queue === 'stock_replenish' ? 'Stock Replenish' : 'Work Queue'}
             </h1>
             {queue !== 'stock_replenish' && (
-              <span className={`${chipText} text-gray-500`}>
+              <span className="text-[11px] font-bold tabular-nums text-slate-400">
                 {counts[queue] ?? rows.length}
-                {query ? ` · "${query}"` : ''}
+                {query ? ` \u00B7 "${query}"` : ''}
               </span>
             )}
           </div>
-          {queue !== 'stock_replenish' && (
-            <div className="flex shrink-0 items-center gap-4">
-              {queue !== 'local_pickups' && unassignedRows.length > 0 && (
-                <span className={`${sectionLabel} text-orange-500`}>
-                  {unassignedRows.length} unassigned
-                </span>
-              )}
-              {queue !== 'local_pickups' && assignedRows.length > 0 && (
-                <span className={`${sectionLabel} text-emerald-600`}>
-                  {assignedRows.length} assigned
-                </span>
-              )}
-            </div>
+          {queue !== 'stock_replenish' && queue !== 'local_pickups' && unassignedRows.length > 0 && (
+            <span className="text-[10px] font-black uppercase tracking-widest text-orange-500">
+              {unassignedRows.length} unassigned
+            </span>
           )}
         </div>
       </div>
 
-      {/* Stock Replenish — search-then-assign panel (never loads all SKUs) */}
+      {/* Stock / Local Pickup — dedicated panels */}
       {queue === 'stock_replenish' ? (
         <SkuStockAssignPanel technicianOptions={technicianOptions} packerOptions={packerOptions} />
       ) : queue === 'local_pickups' ? (
         <LocalPickupTable />
       ) : (
-        /* Table body — all other queues */
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex h-full items-center justify-center">
-              <Loader2 className="h-7 w-7 animate-spin text-gray-400" />
+              <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
             </div>
           ) : rows.length === 0 ? (
-            <div className="flex h-full items-center justify-center px-8 text-center">
-              <p className={`${sectionLabel} italic opacity-60`}>
-                No work orders in this queue
+            <div className="flex h-full items-center justify-center">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+                No work orders in queue
               </p>
             </div>
           ) : (
             <div className="flex w-full flex-col">
-
-              {/* ── Unassigned section ── */}
-              {unassignedRows.length > 0 && (
-                <>
-                  <DateGroupHeader
-                    date="Unassigned Focus"
-                    count={unassignedRows.length}
-                    variant="orange"
-                  />
-
-                  {unassignedRows.map((row, i) => (
-                    <WorkOrderTableRow
-                      key={row.id}
-                      row={row}
-                      isSelected={selectedId === row.id}
-                      getStaffName={getStaffName}
-                      onClick={handleRowClick}
-                      onOpenAssign={() => setAssigningState({ rows: unassignedRows, startIndex: i, mode: 'single' })}
-                    />
-                  ))}
-                </>
-              )}
-
-              {/* ── Assigned section ── */}
-              {assignedRows.length > 0 && (
-                <>
-                  <DateGroupHeader
-                    date="Assigned Focus"
-                    count={assignedRows.length}
-                    variant="emerald"
-                  />
-                  {assignedRows.map((row) => (
-                    <WorkOrderTableRow
-                      key={row.id}
-                      row={row}
-                      isSelected={selectedId === row.id}
-                      getStaffName={getStaffName}
-                      onClick={handleRowClick}
-                      onOpenAssign={() => setAssigningState({ rows: [row], startIndex: 0, mode: 'single' })}
-                    />
-                  ))}
-                </>
-              )}
+              {rows.map((row, i) => (
+                <WorkOrderTableRow
+                  key={row.id}
+                  row={row}
+                  isSelected={selectedId === row.id}
+                  isSaving={savingRowId === row.id}
+                  getStaffName={getStaffName}
+                  onClick={handleRowClick}
+                  onOpenAssign={() => setAssigningState({ rows: [row], startIndex: 0, mode: 'single' })}
+                  useAlternateStripe={i % 2 === 0}
+                />
+              ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Slide-in details panel */}
+      {/* Details panel */}
       <AnimatePresence>
         {isPanelOpen && selectedRow && (
           <WorkOrderDetailsPanel
@@ -494,7 +444,7 @@ export function WorkOrdersDashboard() {
         )}
       </AnimatePresence>
 
-      {/* Assignment overlay card */}
+      {/* Assignment card */}
       <AnimatePresence>
         {assigningState && (
           <WorkOrderAssignmentCard
@@ -507,6 +457,7 @@ export function WorkOrdersDashboard() {
             storageKey={assigningState.mode === 'session' ? assigningState.storageKey : undefined}
             allowEditConfirmed={assigningState.mode === 'session'}
             closeWhenCompleted={assigningState.mode !== 'session'}
+            staffContext={staffContext}
             onClose={() => setAssigningState(null)}
           />
         )}
@@ -516,136 +467,127 @@ export function WorkOrdersDashboard() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Row sub-component — mirrors OrderRecordsTable's row layout
+// Row — matches PendingOrdersTable (OrdersQueueTableRow) layout
 // ─────────────────────────────────────────────────────────────────────────────
+
+function getDaysLate(deadlineAt: string | null): number | null {
+  if (!deadlineAt) return null;
+  const deadline = new Date(deadlineAt);
+  if (isNaN(deadline.getTime())) return null;
+  const now = new Date();
+  const diffMs = now.getTime() - deadline.getTime();
+  return diffMs > 0 ? Math.floor(diffMs / 86400000) : 0;
+}
+
+function getDaysLateTone(days: number | null) {
+  if (days === null) return 'text-gray-500';
+  if (days > 1) return 'text-red-600';
+  if (days === 1) return 'text-yellow-600';
+  return 'text-emerald-600';
+}
 
 interface WorkOrderTableRowProps {
   row: WorkOrderRow;
   isSelected: boolean;
+  isSaving: boolean;
   getStaffName: (id: number | null | undefined) => string;
   onClick: (row: WorkOrderRow) => void;
   onOpenAssign: () => void;
+  useAlternateStripe: boolean;
 }
 
 function WorkOrderTableRow({
   row,
   isSelected,
+  isSaving,
   getStaffName,
   onClick,
   onOpenAssign,
+  useAlternateStripe,
 }: WorkOrderTableRowProps) {
-  const statusClass = STATUS_COLOR[row.status] || 'text-gray-600 bg-gray-100';
-  // SKU_STOCK only needs a tech; all other types need both tech + packer
   const isUnassigned =
     row.entityType === 'SKU_STOCK' ? !row.techId : !row.techId || !row.packerId;
 
   const techName = row.techName || (row.techId ? getStaffName(row.techId) : null);
   const packerName = row.packerName || (row.packerId ? getStaffName(row.packerId) : null);
-  const techTextClass = row.techId
-    ? stationThemeColors[getStaffThemeById(row.techId)].text
-    : 'text-gray-400';
-  const packerTextClass = row.packerId
-    ? stationThemeColors[getStaffThemeById(row.packerId)].text
-    : 'text-gray-400';
+  const techDisplay = techName || '---';
+  const packerDisplay = row.entityType === 'SKU_STOCK' ? null : (packerName || '---');
 
-  // Contextual subtitle: always show tech status; packer only for non-SKU entity types
-  const techLabel = techName ?? (row.techId ? `Tech #${row.techId}` : 'Tech unassigned');
-  const packerLabel =
-    row.entityType === 'SKU_STOCK'
-      ? null
-      : row.techId
-      ? (packerName ?? (row.packerId ? `Pack #${row.packerId}` : 'Packer unassigned'))
-      : null;
+  const daysLate = getDaysLate(row.deadlineAt);
+  const hasOutOfStock = Boolean(row.outOfStock);
+
+  // Dot color matches PendingOrdersTable: green = tested, red = out of stock, yellow = pending
+  const dotColor = row.hasTechScan
+    ? 'bg-emerald-500'
+    : hasOutOfStock
+      ? 'bg-red-500'
+      : 'bg-yellow-400';
+  const dotTitle = row.hasTechScan
+    ? 'Scanned by tech'
+    : hasOutOfStock
+      ? 'Out of stock'
+      : 'Pending order';
 
   return (
     <motion.div
       {...framerPresence.tableRow}
       transition={framerTransition.tableRowMount}
       data-work-order-row-id={row.id}
-      className={`border-b border-gray-100 cursor-pointer transition-colors ${
-        isSelected ? 'bg-blue-50' : 'hover:bg-blue-50/50'
-      }`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onClick(row)}
+      onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(row); }
+      }}
+      aria-pressed={isSelected}
+      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/50 ${
+        isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/10'
+      } ${isSaving ? 'opacity-50 pointer-events-none' : ''}`}
     >
-      {/* Main row — clickable to open panel */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onClick(row)}
-        onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-          if (e.target !== e.currentTarget) return;
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onClick(row);
-          }
-        }}
-        aria-pressed={isSelected}
-        aria-label={`Open work order ${row.title}`}
-        className="grid grid-cols-[1fr_auto] items-start gap-3 px-4 pt-3 pb-1"
-      >
-        {/* Left: title + subtitle */}
-        <div className="min-w-0 flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Status badge — hide OPEN when no tech assigned (implied) */}
-            {(row.techId || row.status !== 'OPEN') && (
-              <span
-                className={`inline-block ${microBadge} tracking-wide px-1.5 py-0.5 rounded-sm ${statusClass}`}
-              >
-                {row.status.replace('_', ' ')}
-              </span>
+      {/* Left: title + detail row */}
+      <div className="flex flex-col min-w-0">
+        {/* Row 1: dot + title */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`h-2 w-2 rounded-full ${dotColor} shrink-0`} title={dotTitle} />
+          <span className="text-[12px] font-bold text-gray-900 truncate">
+            {row.title || 'Unknown'}
+          </span>
+        </div>
+
+        {/* Row 2: qty • condition • tech • packer • days late • priority • deadline */}
+        <div className="mt-0.5 flex items-center gap-2">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1">
+            {row.quantity && <><span className={parseInt(String(row.quantity), 10) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{row.quantity}</span>{' \u2022 '}</>}
+            {row.condition && <><span className={row.condition.toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{row.condition}</span>{' \u2022 '}</>}
+            <span className={techName ? stationThemeColors[getStaffThemeById(row.techId)].text : undefined}>{techDisplay}</span>
+            {packerDisplay !== null && (
+              <>{' \u2022 '}<span className={packerName ? stationThemeColors[getStaffThemeById(row.packerId)].text : undefined}>{packerDisplay}</span></>
             )}
-            <span className={`${microBadge} text-gray-500 tracking-wide`}>
-              {row.queueLabel}
-            </span>
-            {row.stockLevel != null && (
-              <span className={`${microBadge} text-red-500 tracking-wide`}>
-                · Stock {row.stockLevel}
-              </span>
+            {daysLate !== null && (
+              <>{' \u2022 '}<span className={getDaysLateTone(daysLate)}>{daysLate}</span></>
+            )}
+            {row.priority < 100 && (
+              <>{' \u2022 '}<span className="text-rose-600">P{row.priority}</span></>
             )}
           </div>
-
-          {/* Title */}
-          <p className={`${dataValue} truncate leading-snug`}>
-            {row.title}
-          </p>
-
-          <WorkOrderInfoStrip row={row} />
-
-          {row.priority < 100 && (
-            <div className="mt-0.5 flex items-center gap-2">
-              <span className={`${microBadge} text-red-500`}>P{row.priority}</span>
-            </div>
-          )}
-
-          {/* Subtitle — tech · packer names from work_assignments + deadline */}
-          <p className={`${sectionLabel} truncate`}>
-            <span className={techTextClass}>{techLabel}</span>
-            {packerLabel ? (
-              <>
-                <span className="text-gray-300"> · </span>
-                <span className={packerTextClass}>{packerLabel}</span>
-              </>
-            ) : null}
-            {row.deadlineAt ? (
-              <span className="text-gray-400"> · {formatDate(row.deadlineAt)}</span>
-            ) : null}
-          </p>
         </div>
+      </div>
 
-        {/* Right: assign */}
-        <div className="flex items-center gap-2 shrink-0 pt-0.5">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onOpenAssign(); }}
-            className={[
-              `h-8 min-w-[86px] px-3 rounded-lg ${microBadge} tracking-wider border transition-all`,
-              isUnassigned
-                ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
-                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100',
-            ].join(' ')}
-          >
-            {isUnassigned ? 'Assign' : 'Reassign'}
-          </button>
-        </div>
+      {/* Right: chips + assign button */}
+      <div className="flex items-center shrink-0 gap-1.5">
+        <WorkOrderInfoChips row={row} />
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpenAssign(); }}
+          className={`h-6 px-2.5 rounded text-[8px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
+            isUnassigned
+              ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+              : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'
+          }`}
+        >
+          {isUnassigned ? 'Assign' : 'Edit'}
+        </button>
       </div>
     </motion.div>
   );

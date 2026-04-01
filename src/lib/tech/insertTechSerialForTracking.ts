@@ -193,6 +193,7 @@ export async function insertTechSerialForTracking(
     techSerialNumberId: targetTechSerialId,
     notes: `Serial added: ${upperSerial}`,
     metadata: {
+      source: 'tech.add-serial',
       serial: upperSerial,
       serial_type: serialType,
       context_station_activity_log_id: ctxAnchor,

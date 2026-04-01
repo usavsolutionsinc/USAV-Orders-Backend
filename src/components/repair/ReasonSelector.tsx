@@ -2,6 +2,10 @@
 
 import React from 'react';
 import { Check } from '../Icons';
+import {
+    SIDEBAR_INTAKE_LABEL_CLASS,
+    SIDEBAR_INTAKE_INPUT_CLASS,
+} from '@/design-system/components';
 
 interface ReasonSelectorProps {
     selectedReasons: string[];
@@ -40,35 +44,31 @@ export function ReasonSelector({
     return (
         <div className="space-y-4">
             <div>
-                <p className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-600 mb-0.5">
-                    Diagnosis
-                </p>
-                <h3 className="text-xs font-black text-gray-900 uppercase tracking-tight mb-3">
-                    Reason for Repair
-                </h3>
+                <p className={SIDEBAR_INTAKE_LABEL_CLASS}>Reason for Repair</p>
 
-                <div className="space-y-1.5">
+                <div className="mt-2 space-y-2">
                     {reasons.map((reason) => {
                         const isSelected = selectedReasons.includes(reason);
 
                         return (
                             <button
                                 key={reason}
+                                type="button"
                                 onClick={() => toggleReason(reason)}
-                                className={`w-full px-4 py-3.5 border-2 transition-colors text-left flex items-center gap-3 ${
+                                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
                                     isSelected
-                                        ? 'bg-blue-600 border-blue-600 text-white'
-                                        : 'bg-white border-gray-300 text-gray-900 hover:border-blue-600 active:bg-blue-50'
+                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                                        : 'border border-gray-200 bg-gray-50 text-gray-900 hover:border-blue-300 hover:bg-blue-50'
                                 }`}
                             >
-                                <div className={`w-5 h-5 border-2 flex items-center justify-center flex-shrink-0 ${
+                                <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md ${
                                     isSelected
-                                        ? 'bg-white border-white'
-                                        : 'border-gray-400'
+                                        ? 'bg-white'
+                                        : 'border border-gray-300 bg-white'
                                 }`}>
-                                    {isSelected && <Check className="w-3 h-3 text-blue-600" />}
+                                    {isSelected && <Check className="h-3 w-3 text-blue-600" />}
                                 </div>
-                                <span className="text-xs font-black uppercase tracking-wide">
+                                <span className="text-xs font-bold uppercase tracking-wide">
                                     {reason}
                                 </span>
                             </button>
@@ -78,16 +78,16 @@ export function ReasonSelector({
             </div>
 
             {/* Repair Notes */}
-            <div className="space-y-1.5">
-                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
-                    Repair Notes <span className="text-gray-400 font-normal normal-case tracking-normal">— Optional</span>
+            <div className="space-y-2">
+                <label className={SIDEBAR_INTAKE_LABEL_CLASS}>
+                    Repair Notes <span className="text-gray-400">-- Optional</span>
                 </label>
                 <textarea
                     value={notes}
                     onChange={(e) => onNotesChange(e.target.value)}
                     placeholder="Describe any additional issues or details..."
                     rows={3}
-                    className="w-full px-4 py-3.5 bg-white border-2 border-gray-300 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-600 transition-colors resize-none"
+                    className={`${SIDEBAR_INTAKE_INPUT_CLASS} resize-none`}
                 />
             </div>
         </div>

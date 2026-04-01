@@ -447,7 +447,37 @@ export default function ActiveStationOrderCard({
           </div>
         )}
 
-        {/* ── Serial numbers ── */}
+        {/* ── Storage SKU codes pulled during this session ── */}
+        <AnimatePresence initial={false}>
+          {activeOrder.scannedSkuCodes && activeOrder.scannedSkuCodes.length > 0 && (
+            <motion.div
+              key="sku-codes-section"
+              initial={framerPresence.collapseHeight.initial}
+              animate={framerPresence.collapseHeight.animate}
+              exit={framerPresence.collapseHeight.exit}
+              transition={framerTransition.stationCollapse}
+              className={`overflow-hidden border-t ${variantStyles.section}`}
+            >
+              <div className="px-4 py-2.5 bg-amber-50/60">
+                <p className={`text-[9px] font-black uppercase tracking-wider text-amber-600 mb-1.5`}>
+                  Storage SKUs ({activeOrder.scannedSkuCodes.length})
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {activeOrder.scannedSkuCodes.map((code, i) => (
+                    <span
+                      key={`${code}-${i}`}
+                      className="text-[10px] font-mono font-bold text-amber-900 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md"
+                    >
+                      {code}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      {/* ── Serial numbers ── */}
         <AnimatePresence initial={false}>
         {activeOrder.serialNumbers.length > 0 && (
           <motion.div

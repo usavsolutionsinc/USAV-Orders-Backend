@@ -2,6 +2,10 @@
 
 import React from 'react';
 import { Plus, X } from '../Icons';
+import {
+    SidebarIntakeFormField,
+    getSidebarIntakeInputClass,
+} from '@/design-system/components';
 
 interface CustomerInfoFormProps {
     customer: {
@@ -16,32 +20,30 @@ interface CustomerInfoFormProps {
     onSerialNumberChange: (value: string) => void;
     onPriceChange: (value: string) => void;
     onNotesChange: (value: string) => void;
+    tone?: 'green' | 'orange';
 }
 
-interface SerialNumberInputProps {
-    serialNumbers: string[];
-    onSerialNumbersChange: (serialNumbers: string[]) => void;
-}
-
-export function CustomerInfoForm({ 
-    customer, 
-    serialNumber, 
+export function CustomerInfoForm({
+    customer,
+    serialNumber,
     price,
     notes,
-    onCustomerChange, 
+    onCustomerChange,
     onSerialNumberChange,
     onPriceChange,
     onNotesChange,
+    tone = 'green',
 }: CustomerInfoFormProps) {
+    const inputClass = getSidebarIntakeInputClass(tone);
+    const monoInputClass = `${inputClass} font-mono`.trim();
     const [serialNumbers, setSerialNumbers] = React.useState<string[]>(
         serialNumber ? serialNumber.split(',').map(s => s.trim()).filter(s => s) : ['']
     );
 
-    // Format phone number as user types
     const handlePhoneChange = (value: string) => {
         const cleaned = value.replace(/\D/g, '');
         let formatted = cleaned;
-        
+
         if (cleaned.length >= 10) {
             formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
         } else if (cleaned.length > 6) {
@@ -49,11 +51,10 @@ export function CustomerInfoForm({
         } else if (cleaned.length > 3) {
             formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
         }
-        
+
         onCustomerChange('phone', formatted);
     };
 
-    // Update parent when serial numbers change
     React.useEffect(() => {
         const joined = serialNumbers.filter(s => s.trim()).join(', ');
         if (joined !== serialNumber) {
@@ -78,138 +79,114 @@ export function CustomerInfoForm({
     };
 
     return (
-        <div className="space-y-5">
-            {/* Name Field */}
-            <div className="space-y-1.5">
-                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
-                    Customer Name <span className="text-red-500">*</span>
-                </label>
+        <div className="space-y-4">
+            <SidebarIntakeFormField label="Customer Name" required>
                 <input
                     type="text"
                     value={customer.name}
                     onChange={(e) => onCustomerChange('name', e.target.value)}
                     placeholder="Enter customer name"
-                    className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold focus:outline-none focus:border-blue-600 transition-colors"
+                    className={inputClass}
                     required
                 />
-            </div>
+            </SidebarIntakeFormField>
 
-            {/* Phone Field */}
-            <div className="space-y-1.5">
-                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
-                    Phone Number <span className="text-red-500">*</span>
-                </label>
+            <SidebarIntakeFormField label="Phone Number" required>
                 <input
                     type="tel"
                     value={customer.phone}
                     onChange={(e) => handlePhoneChange(e.target.value)}
                     placeholder="000-000-0000"
                     maxLength={12}
-                    className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold focus:outline-none focus:border-blue-600 transition-colors"
+                    className={inputClass}
                     required
                 />
-            </div>
+            </SidebarIntakeFormField>
 
-            {/* Email Field */}
-            <div className="space-y-1.5">
-                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
-                    Email <span className="text-gray-400 font-normal normal-case tracking-normal">— Optional</span>
-                </label>
+            <SidebarIntakeFormField label="Email" optionalHint="(Optional)">
                 <input
                     type="email"
                     value={customer.email}
                     onChange={(e) => onCustomerChange('email', e.target.value)}
                     placeholder="customer@example.com"
-                    className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold lowercase focus:outline-none focus:border-blue-600 transition-colors"
+                    className={`${inputClass} lowercase`}
                 />
-            </div>
+            </SidebarIntakeFormField>
 
-            {/* Serial Numbers Field */}
-            <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                    <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
-                        Serial Numbers <span className="text-red-500">*</span>
-                    </label>
-                    <button
-                        type="button"
-                        onClick={addSerialNumber}
-                        className="flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-blue-600 hover:bg-blue-50 transition-colors"
-                    >
-                        <Plus className="w-3 h-3" />
-                        Add
-                    </button>
-                </div>
+            <SidebarIntakeFormField
+                label={
+                    <span className="flex items-center justify-between">
+                        <span>Serial Numbers <span className="text-red-500">*</span></span>
+                        <button
+                            type="button"
+                            onClick={addSerialNumber}
+                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-orange-600 hover:text-orange-700 transition-colors"
+                        >
+                            <Plus className="h-3 w-3" />
+                            Add
+                        </button>
+                    </span>
+                }
+            >
                 <div className="space-y-2">
                     {serialNumbers.map((sn, index) => (
-                        <div key={index} className="flex gap-0">
+                        <div key={index} className="flex items-center gap-2">
                             <input
                                 type="text"
                                 value={sn}
                                 onChange={(e) => updateSerialNumber(index, e.target.value)}
                                 placeholder={`Serial Number ${index + 1}`}
-                                className="flex-1 px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-mono font-bold focus:outline-none focus:border-blue-600 transition-colors"
+                                className={`flex-1 ${monoInputClass}`}
                                 required={index === 0}
                             />
                             {serialNumbers.length > 1 && (
                                 <button
                                     type="button"
                                     onClick={() => removeSerialNumber(index)}
-                                    className="flex items-center justify-center w-12 border-2 border-l-0 border-gray-300 text-red-500 hover:bg-red-50 transition-colors"
+                                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-red-400 transition-colors hover:bg-red-50 hover:text-red-600"
                                     aria-label="Remove serial number"
                                 >
-                                    <X className="w-4 h-4" />
+                                    <X className="h-4 w-4" />
                                 </button>
                             )}
                         </div>
                     ))}
                 </div>
-            </div>
+            </SidebarIntakeFormField>
 
-            {/* Price Field */}
-            <div className="space-y-1.5">
-                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
-                    Price <span className="text-red-500">*</span>
-                </label>
-                <div className="flex items-center border-2 border-gray-300 bg-white focus-within:border-blue-600 transition-colors">
-                    <span className="px-4 text-lg font-black text-gray-400 border-r-2 border-gray-300 py-3.5 leading-none">$</span>
+            <SidebarIntakeFormField label="Price" required>
+                <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-transparent transition-all">
+                    <span className="flex items-center justify-center border-r border-gray-200 px-4 py-3 text-lg font-black text-gray-400">$</span>
                     <input
                         type="text"
                         value={price}
                         onChange={(e) => onPriceChange(e.target.value)}
                         placeholder="130"
-                        className="flex-1 px-4 py-3.5 text-sm font-black text-emerald-600 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
+                        className="flex-1 bg-transparent px-4 py-3 text-sm font-black text-orange-600 outline-none placeholder:font-normal placeholder:text-gray-300"
                         required
                     />
                 </div>
-            </div>
+            </SidebarIntakeFormField>
 
-            {/* Notes Field */}
-            <div className="space-y-1.5">
-                <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
-                    Notes <span className="text-gray-400 font-normal normal-case tracking-normal">— Optional</span>
-                </label>
+            <SidebarIntakeFormField label="Notes" optionalHint="(Optional)">
                 <textarea
                     value={notes}
                     onChange={(e) => onNotesChange(e.target.value)}
                     placeholder="Additional notes..."
                     rows={3}
-                    className="w-full px-4 py-3.5 border-2 border-gray-300 bg-white text-sm font-bold focus:outline-none focus:border-blue-600 transition-colors resize-none"
+                    className={`${inputClass} resize-none`}
                 />
-            </div>
+            </SidebarIntakeFormField>
 
             {/* Info strip */}
-            <div className="p-4 bg-blue-600 text-white">
-                <p className="text-[10px] leading-relaxed font-bold">
-                    Product received into repair center — typically repaired within <span className="font-black">3–10 working days</span>.
+            <div className="rounded-xl bg-orange-600 p-4 text-white">
+                <p className="text-[10px] font-bold leading-relaxed">
+                    Product received into repair center — typically repaired within <span className="font-black">3-10 working days</span>.
                 </p>
-                <p className="text-[9px] font-black uppercase tracking-[0.15em] mt-1.5 text-blue-200">
+                <p className="mt-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-orange-200">
                     30-Day Warranty on all repairs
                 </p>
             </div>
-
-            <p className="text-[9px] text-center font-bold text-gray-400 uppercase tracking-[0.15em]">
-                <span className="text-red-500">*</span> Required fields
-            </p>
         </div>
     );
 }

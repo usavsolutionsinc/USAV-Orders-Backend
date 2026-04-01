@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState, useEffect, useCallback, useRef } from 'react';
+import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, ChevronLeft, ChevronRight, Copy, Check, AlertTriangle, Plus } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -84,7 +84,6 @@ export default function ShippedSidebar({
     const [copiedId, setCopiedId] = useState<number | null>(null);
     const { normalizeTrackingQuery } = useLast8TrackingSearch();
     const searchHistoryStorageKey = embedded && hideSectionHeader ? 'dashboard_search_history' : 'shipped_search_history';
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         setSearchQuery(searchValue);
@@ -238,10 +237,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
 
     const handleInputChange = useCallback((value: string) => {
         setSearchQuery(value);
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-            handleSearch(value);
-        }, 400);
+        void handleSearch(value);
     }, [handleSearch]);
 
     const clearSearchHistory = () => {
@@ -298,7 +294,6 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                         <SearchBar
                             value={searchQuery}
                             onChange={handleInputChange}
-                            onSearch={handleSearch}
                             placeholder="Order ID, Tracking, or Serial..."
                             isSearching={isSearching}
                             variant="blue"

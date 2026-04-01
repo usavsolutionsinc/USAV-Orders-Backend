@@ -9,6 +9,7 @@ import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson
 import { formatPSTTimestamp, normalizePSTTimestamp, getCurrentPSTDateKey } from '@/utils/date';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { createAuditLog } from '@/lib/audit-logs';
 import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged } from '@/lib/realtime/publish';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
@@ -293,10 +294,24 @@ export async function POST(req: NextRequest) {
                     packerLogId: notFoundPackerLogId,
                     notes: 'Pack scan not matched to order',
                     metadata: {
+                        source: 'packing-logs',
                         tracking_type: classification.trackingType,
                         tracking: scanInput,
                     },
                     createdAt: notFoundCreatedAt,
+                });
+                await createAuditLog(pool, {
+                    actorStaffId: staffId,
+                    source: 'api.packing-logs',
+                    action: 'PACK_COMPLETED',
+                    entityType: nfShipmentId ? 'SHIPMENT' : 'ORDERS_EXCEPTION',
+                    entityId: String(nfShipmentId ?? ordersExceptionId ?? scanInput),
+                    stationActivityLogId: nfSalId,
+                    metadata: {
+                        tracking_type: classification.trackingType,
+                        tracking: scanInput,
+                        matchedOrder: false,
+                    },
                 });
 
                 await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
@@ -408,10 +423,25 @@ export async function POST(req: NextRequest) {
                 packerLogId: foundPackerLogId,
                 notes: 'Order packed successfully',
                 metadata: {
+                    source: 'packing-logs',
                     tracking_type: classification.trackingType,
                     order_id: order.order_id ?? null,
                 },
                 createdAt: foundCreatedAt,
+            });
+            await createAuditLog(pool, {
+                actorStaffId: staffId,
+                source: 'api.packing-logs',
+                action: 'PACK_COMPLETED',
+                entityType: 'ORDER',
+                entityId: String(order.id),
+                stationActivityLogId: foundSalId,
+                metadata: {
+                    shipment_id: orderShipmentId,
+                    order_id: order.order_id ?? null,
+                    tracking_type: classification.trackingType,
+                    matchedOrder: true,
+                },
             });
 
             await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
@@ -488,6 +518,7 @@ export async function POST(req: NextRequest) {
             packerLogId: nonOrderPackerLogId,
             notes: `Pack ${classification.trackingType} scan`,
             metadata: {
+                source: 'packing-logs',
                 tracking_type: classification.trackingType,
             },
             createdAt: nonOrderInsert.rows[0]?.created_at ?? packDateTime,

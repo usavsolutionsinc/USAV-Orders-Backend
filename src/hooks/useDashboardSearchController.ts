@@ -1,12 +1,21 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   getDashboardOrderViewFromSearch,
   normalizeDashboardOrderViewParams,
   type DashboardOrderView,
 } from '@/utils/dashboard-search-state';
+import {
+  readDetailsOpenBehaviorPreference,
+  readPendingFilterPreference,
+  readShippedFilterPreference,
+  writeDetailsOpenBehaviorPreference,
+  writePendingFilterPreference,
+  writeShippedFilterPreference,
+  type DetailsOpenBehaviorPreference,
+} from '@/utils/dashboard-preferences';
 export type PendingStockFilter = 'all' | 'pending' | 'stock';
 export type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
 
@@ -18,21 +27,22 @@ export function useDashboardSearchController() {
   const orderView = getDashboardOrderViewFromSearch(searchParams);
   const searchQuery = String(searchParams.get('search') || '').trim();
   const pendingFilterParam = searchParams.get('pendingFilter');
-  const pendingFilter: PendingStockFilter =
-    pendingFilterParam === 'stock'
-      ? 'stock'
-      : pendingFilterParam === 'pending'
-        ? 'pending'
-        : 'all';
+  const pendingFilter: PendingStockFilter = useMemo(() => {
+    if (pendingFilterParam === 'stock') return 'stock';
+    if (pendingFilterParam === 'pending') return 'pending';
+    return readPendingFilterPreference() ?? 'all';
+  }, [pendingFilterParam]);
   const shippedFilterParam = searchParams.get('shippedFilter');
-  const shippedFilter: ShippedTypeFilter =
-    shippedFilterParam === 'orders'
-      ? 'orders'
-      : shippedFilterParam === 'sku'
-        ? 'sku'
-        : shippedFilterParam === 'fba'
-          ? 'fba'
-          : 'all';
+  const shippedFilter: ShippedTypeFilter = useMemo(() => {
+    if (shippedFilterParam === 'orders') return 'orders';
+    if (shippedFilterParam === 'sku') return 'sku';
+    if (shippedFilterParam === 'fba') return 'fba';
+    return readShippedFilterPreference() ?? 'all';
+  }, [shippedFilterParam]);
+  const detailsOpenBehavior: DetailsOpenBehaviorPreference = useMemo(
+    () => readDetailsOpenBehaviorPreference(),
+    [],
+  );
   const showIntakeForm = searchParams.get('new') === 'true';
   const detailsEnabled = orderView !== 'fba';
 
@@ -41,17 +51,21 @@ export function useDashboardSearchController() {
     mutate(nextParams);
     const targetPath = nextPathname || pathname || '/dashboard';
     const nextSearch = nextParams.toString();
-    router.replace(nextSearch ? `${targetPath}?${nextSearch}` : targetPath);
+    router.replace(nextSearch ? `${targetPath}?${nextSearch}` : targetPath, { scroll: false });
   }, [pathname, router, searchParams]);
 
   const setSearch = useCallback(async (nextValue: string) => {
     const trimmed = nextValue.trim();
+    const current = String(searchParams.get('search') || '').trim();
+    const hasOpenOrder = searchParams.has('openOrderId');
+    if (trimmed === current && !hasOpenOrder) return;
+
     updateSearch((params) => {
       if (trimmed) params.set('search', trimmed);
       else params.delete('search');
       params.delete('openOrderId');
     }, '/dashboard');
-  }, [updateSearch]);
+  }, [searchParams, updateSearch]);
 
   const setOrderView = useCallback((nextView: DashboardOrderView) => {
     updateSearch((params) => {
@@ -70,17 +84,23 @@ export function useDashboardSearchController() {
   }, [updateSearch]);
 
   const setPendingFilter = useCallback((value: PendingStockFilter) => {
+    writePendingFilterPreference(value);
     updateSearch((params) => {
       params.set('pendingFilter', value);
     }, '/dashboard');
   }, [updateSearch]);
 
   const setShippedFilter = useCallback((value: ShippedTypeFilter) => {
+    writeShippedFilterPreference(value);
     updateSearch((params) => {
       if (value === 'all') params.delete('shippedFilter');
       else params.set('shippedFilter', value);
     }, '/dashboard');
   }, [updateSearch]);
+
+  const setDetailsOpenBehavior = useCallback((value: DetailsOpenBehaviorPreference) => {
+    writeDetailsOpenBehaviorPreference(value);
+  }, []);
 
   const openIntakeForm = useCallback(() => {
     updateSearch((params) => {
@@ -94,11 +114,20 @@ export function useDashboardSearchController() {
     }, '/dashboard');
   }, [updateSearch]);
 
+  useEffect(() => {
+    writePendingFilterPreference(pendingFilter);
+  }, [pendingFilter]);
+
+  useEffect(() => {
+    writeShippedFilterPreference(shippedFilter);
+  }, [shippedFilter]);
+
   return {
     orderView,
     searchQuery,
     pendingFilter,
     shippedFilter,
+    detailsOpenBehavior,
     showIntakeForm,
     detailsEnabled,
     setSearch,
@@ -106,6 +135,7 @@ export function useDashboardSearchController() {
     openShippedMatches,
     setPendingFilter,
     setShippedFilter,
+    setDetailsOpenBehavior,
     openIntakeForm,
     closeIntakeForm,
   };

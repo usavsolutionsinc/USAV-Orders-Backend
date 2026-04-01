@@ -36,6 +36,7 @@ export interface WorkOrderRow {
   updatedAt: string | null;
   orderId?: string | null;
   trackingNumber?: string | null;
+  trackingNumberRows?: Array<{ shipment_id: number | null; tracking_number_raw: string; is_primary: boolean }>;
   itemNumber?: string | null;
   sku?: string | null;
   condition?: string | null;
@@ -44,6 +45,8 @@ export interface WorkOrderRow {
   quantity?: string | null;
   createdAt?: string | null;
   stockLevel?: number | null;
+  hasTechScan?: boolean;
+  outOfStock?: string | null;
 }
 
 export interface QueueCounts {

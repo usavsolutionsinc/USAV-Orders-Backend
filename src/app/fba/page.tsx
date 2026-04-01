@@ -236,7 +236,6 @@ function FbaPageContent() {
               ) : (
                 <FbaBoardTable
                   items={filteredPendingItems}
-                  variant="board"
                   stationTheme={stationTheme}
                   emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No pending FBA items'}
                   onDetailOpen={setDetailItem}

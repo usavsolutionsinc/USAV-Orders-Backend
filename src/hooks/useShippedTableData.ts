@@ -118,6 +118,16 @@ export function useShippedTableData(options: UseShippedTableDataOptions = {}) {
     queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
   });
 
+  // Assignment broadcasts can change deadline/tester/packer fields that appear
+  // in shipped/order views even when no base row mutation fires.
+  useAblyChannel(ORDERS_CHANNEL, 'order.assignments', () => {
+    queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+  });
+
+  useAblyChannel(ORDERS_CHANNEL, 'queue.assignments', () => {
+    queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+  });
+
   // A serial was added from the tech station (insertTechSerialForTracking publishes
   // order.tested, not order.changed). Without this listener the shipped table cache
   // stays stale and the details panel shows an incomplete serial list.

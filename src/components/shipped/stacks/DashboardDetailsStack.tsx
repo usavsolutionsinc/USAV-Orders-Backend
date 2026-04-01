@@ -8,7 +8,7 @@ import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { toPSTDateKey } from '@/utils/date';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
-import { dispatchCloseShippedDetails } from '@/utils/events';
+import { dispatchCloseShippedDetails, dispatchOpenShippingEditCard } from '@/utils/events';
 import { getActiveStaff } from '@/lib/staffCache';
 import { PACKER_IDS } from '@/utils/staff';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
@@ -286,8 +286,21 @@ export function DashboardDetailsStack({
         />
       </motion.div>
 
-      <motion.section variants={itemVariants} className="mx-8 pt-2">
-        <DeleteOrderControl orderId={shipped.id} onDeleted={() => onUpdate?.()} />
+      <motion.section variants={itemVariants} className="mx-8 pt-2 space-y-2">
+        <button
+          type="button"
+          onClick={() => dispatchOpenShippingEditCard([shipped], 0)}
+          className="w-full h-8 rounded-lg border border-blue-200 bg-blue-50 text-[9px] font-black uppercase tracking-[0.18em] text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+        >
+          Edit in Card
+        </button>
+        <DeleteOrderControl
+          orderId={shipped.id}
+          packerLogId={(shipped as any).packer_log_id ?? null}
+          stationActivityLogId={(shipped as any).station_activity_log_id ?? (shipped as any).sal_id ?? null}
+          trackingType={shipped.tracking_type}
+          onDeleted={() => onUpdate?.()}
+        />
       </motion.section>
     </motion.div>
   );

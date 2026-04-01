@@ -1,98 +1,164 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import {
-  DndContext,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import {
   FbaShipmentCard,
   type ActiveShipment,
   type ShipmentCardItem,
 } from '@/components/station/upnext/FbaShipmentCard';
+import type { StationTheme } from '@/utils/staff-colors';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
+
+type TrackingAllocation = {
+  shipment_item_id: number;
+  qty: number;
+};
+
+type TrackingRow = {
+  link_id: number;
+  tracking_number_raw: string;
+  carrier: string;
+  allocations?: TrackingAllocation[];
+};
 
 /* ── Component ─────────────────────────────────────────────────────── */
 
-export function FbaActiveShipments() {
+export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: StationTheme }) {
   const [shipments, setShipments] = useState<ActiveShipment[]>([]);
+  const [recentShipped, setRecentShipped] = useState<ActiveShipment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reassigning, setReassigning] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
-  /* ── Fetch active shipments (have tracking, not shipped) ────────── */
+  const toggleExpand = (id: number) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const enrichShipment = useCallback(async (s: any, includeShipped: boolean): Promise<ActiveShipment> => {
+    let items: ShipmentCardItem[] = [];
+    let trackingLinkId: number | null = null;
+    let trackingNumberRaw: string | null = null;
+    let trackingCarrier: string | null = null;
+    let allocationByItemId = new Map<number, number>();
+
+    try {
+      const [trackingRes, itemsRes] = await Promise.all([
+        fetch(`/api/fba/shipments/${s.id}/tracking`, { cache: 'no-store' }),
+        fetch(`/api/fba/shipments/${s.id}/items`, { cache: 'no-store' }),
+      ]);
+      const trackingData = await trackingRes.json().catch(() => ({}));
+      const itemsData = await itemsRes.json().catch(() => ({}));
+
+      if (trackingRes.ok && Array.isArray(trackingData?.tracking) && trackingData.tracking.length > 0) {
+        const primary = trackingData.tracking[0] as TrackingRow;
+        trackingLinkId = Number(primary.link_id) || null;
+        trackingNumberRaw = String(primary.tracking_number_raw || '').trim() || null;
+        trackingCarrier = String(primary.carrier || '').trim() || null;
+        const allocations = Array.isArray(primary.allocations) ? primary.allocations : [];
+        allocationByItemId = new Map(
+          allocations
+            .map((row) => [Number(row.shipment_item_id), Math.max(1, Number(row.qty) || 1)] as const)
+            .filter(([itemId]) => Number.isFinite(itemId) && itemId > 0),
+        );
+      }
+
+      if (itemsData.success && Array.isArray(itemsData.items)) {
+        const sourceItems = itemsData.items
+          .filter((i: any) => includeShipped || i.status !== 'SHIPPED')
+          .map((i: any) => ({
+            item_id: i.id,
+            fnsku: i.fnsku,
+            display_title: i.display_title || i.product_title || i.fnsku,
+            expected_qty: Number(i.expected_qty) || 0,
+            actual_qty: Number(i.actual_qty) || 0,
+            status: i.status,
+            shipment_id: s.id,
+          }));
+
+        if (allocationByItemId.size > 0) {
+          items = sourceItems
+            .filter((i: any) => allocationByItemId.has(Number(i.item_id)))
+            .map((i: any) => ({
+              ...i,
+              expected_qty: allocationByItemId.get(Number(i.item_id)) ?? i.expected_qty,
+            }));
+        } else {
+          items = sourceItems;
+        }
+      }
+    } catch {
+      // skip fetch failure per shipment
+    }
+
+    return {
+      id: s.id,
+      shipment_ref: s.shipment_ref,
+      amazon_shipment_id: s.amazon_shipment_id || null,
+      status: s.status,
+      shipped_at: s.shipped_at || null,
+      tracking_numbers: (s.tracking_numbers || []).map((t: any) => ({
+        tracking_number: t.tracking_number,
+        carrier: t.carrier || '',
+      })),
+      tracking_link_id: trackingLinkId,
+      tracking_number_raw: trackingNumberRaw,
+      tracking_carrier: trackingCarrier,
+      items,
+    };
+  }, []);
+
   const fetchShipments = useCallback(async () => {
     try {
-      // Get non-shipped shipments
-      const res = await fetch('/api/fba/shipments?status=PLANNED,READY_TO_GO,LABEL_ASSIGNED&limit=50', {
-        cache: 'no-store',
-      });
-      const data = await res.json();
-      if (!res.ok || !Array.isArray(data.shipments)) return;
+      const [activeRes, shippedRes] = await Promise.all([
+        fetch('/api/fba/shipments?status=PLANNED,READY_TO_GO,LABEL_ASSIGNED&limit=50', { cache: 'no-store' }),
+        fetch('/api/fba/shipments?status=SHIPPED&limit=10', { cache: 'no-store' }),
+      ]);
+      const activeData = await activeRes.json().catch(() => ({}));
+      const shippedData = await shippedRes.json().catch(() => ({}));
 
-      // Filter to only those with tracking numbers
-      const withTracking = data.shipments.filter(
-        (s: any) => Array.isArray(s.tracking_numbers) && s.tracking_numbers.length > 0,
-      );
+      // Active shipments (with tracking only)
+      if (activeRes.ok && Array.isArray(activeData.shipments)) {
+        const withTracking = activeData.shipments.filter(
+          (s: any) => Array.isArray(s.tracking_numbers) && s.tracking_numbers.length > 0,
+        );
+        const enriched = await Promise.all(withTracking.map((s: any) => enrichShipment(s, false)));
+        const next = enriched.filter((s) => s.items.length > 0);
+        const nextIds = new Set(next.map((s) => s.id));
+        setExpandedIds((prev) => {
+          const pruned = new Set([...prev].filter((id) => nextIds.has(id)));
+          return pruned.size === prev.size ? prev : pruned;
+        });
+        setShipments(next);
+      }
 
-      // Fetch items for each shipment
-      const enriched: ActiveShipment[] = await Promise.all(
-        withTracking.map(async (s: any) => {
-          let items: ShipmentCardItem[] = [];
-          try {
-            const itemsRes = await fetch(`/api/fba/shipments/${s.id}/items`, { cache: 'no-store' });
-            const itemsData = await itemsRes.json();
-            if (itemsData.success && Array.isArray(itemsData.items)) {
-              items = itemsData.items
-                .filter((i: any) => i.status !== 'SHIPPED')
-                .map((i: any) => ({
-                  item_id: i.id,
-                  fnsku: i.fnsku,
-                  display_title: i.display_title || i.product_title || i.fnsku,
-                  expected_qty: Number(i.expected_qty) || 0,
-                  actual_qty: Number(i.actual_qty) || 0,
-                  status: i.status,
-                  shipment_id: s.id,
-                }));
-            }
-          } catch {
-            // skip items fetch failure
-          }
-          return {
-            id: s.id,
-            shipment_ref: s.shipment_ref,
-            amazon_shipment_id: s.amazon_shipment_id || null,
-            status: s.status,
-            tracking_numbers: (s.tracking_numbers || []).map((t: any) => ({
-              tracking_number: t.tracking_number,
-              carrier: t.carrier || '',
-            })),
-            items,
-          };
-        }),
-      );
-
-      // Only show shipments that have items
-      setShipments(enriched.filter((s) => s.items.length > 0));
+      // Recent shipped (last 10, with tracking)
+      if (shippedRes.ok && Array.isArray(shippedData.shipments)) {
+        const withTracking = shippedData.shipments.filter(
+          (s: any) => Array.isArray(s.tracking_numbers) && s.tracking_numbers.length > 0,
+        );
+        const enriched = await Promise.all(withTracking.map((s: any) => enrichShipment(s, true)));
+        setRecentShipped(enriched.filter((s) => s.items.length > 0));
+      }
     } catch {
       // silent
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enrichShipment]);
 
   useEffect(() => {
-    fetchShipments();
+    void fetchShipments();
   }, [fetchShipments]);
 
-  // Listen for refresh events
   useEffect(() => {
-    const handler = () => fetchShipments();
+    const handler = () => {
+      void fetchShipments();
+    };
     window.addEventListener('usav-refresh-data', handler);
     window.addEventListener('fba-print-shipped', handler);
     window.addEventListener('fba-active-shipments-refresh', handler);
@@ -103,67 +169,6 @@ export function FbaActiveShipments() {
     };
   }, [fetchShipments]);
 
-  /* ── DnD sensors (pointer + touch for mobile) ──────────────────── */
-  const pointerSensor = useSensor(PointerSensor, {
-    activationConstraint: { distance: 8 },
-  });
-  const touchSensor = useSensor(TouchSensor, {
-    activationConstraint: { delay: 200, tolerance: 5 },
-  });
-  const sensors = useSensors(pointerSensor, touchSensor);
-
-  /* ── Handle drop: reassign item to target shipment ─────────────── */
-  const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over) return;
-
-      const draggedItem = active.data.current?.item as ShipmentCardItem | undefined;
-      const targetShipment = over.data.current?.shipment as ActiveShipment | undefined;
-
-      if (!draggedItem || !targetShipment) return;
-      if (draggedItem.shipment_id === targetShipment.id) return;
-
-      setReassigning(true);
-      try {
-        const res = await fetch(
-          `/api/fba/shipments/${draggedItem.shipment_id}/items/${draggedItem.item_id}/reassign`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target_shipment_id: targetShipment.id }),
-          },
-        );
-        const data = await res.json();
-        if (data.success) {
-          // Optimistic update: move item between cards locally
-          setShipments((prev) =>
-            prev
-              .map((s) => {
-                if (s.id === draggedItem.shipment_id) {
-                  return { ...s, items: s.items.filter((i) => i.item_id !== draggedItem.item_id) };
-                }
-                if (s.id === targetShipment.id) {
-                  return {
-                    ...s,
-                    items: [...s.items, { ...draggedItem, shipment_id: targetShipment.id }],
-                  };
-                }
-                return s;
-              })
-              .filter((s) => s.items.length > 0),
-          );
-          window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-        }
-      } catch {
-        // silent — will refresh
-      } finally {
-        setReassigning(false);
-      }
-    },
-    [],
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center px-3 py-4">
@@ -172,30 +177,47 @@ export function FbaActiveShipments() {
     );
   }
 
-  if (shipments.length === 0) return null;
+  if (shipments.length === 0 && recentShipped.length === 0) return null;
 
   return (
-    <div className="border-b border-gray-100 px-3 py-3">
-      <div className="mb-2 flex items-center justify-between">
-        <p className={sectionLabel}>
-          Active Shipments ({shipments.length})
-        </p>
-        {reassigning && <Loader2 className="h-3 w-3 animate-spin text-purple-500" />}
-      </div>
-
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+    <div className="space-y-3 pb-2">
+      {shipments.length > 0 ? (
         <div className="space-y-2">
           <AnimatePresence initial={false}>
             {shipments.map((shipment) => (
               <FbaShipmentCard
                 key={shipment.id}
                 shipment={shipment}
-                onRefresh={fetchShipments}
+                stationTheme={stationTheme}
+                editable
+                isExpanded={expandedIds.has(shipment.id)}
+                onToggleExpand={() => toggleExpand(shipment.id)}
+                onChanged={() => {
+                  window.dispatchEvent(new CustomEvent('fba-active-shipments-refresh'));
+                  window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                }}
               />
             ))}
           </AnimatePresence>
         </div>
-      </DndContext>
+      ) : null}
+
+      {recentShipped.length > 0 ? (
+        <div className="space-y-2">
+          <p className={`px-1 ${sectionLabel}`}>Recent shipments</p>
+          <AnimatePresence initial={false}>
+            {recentShipped.map((shipment) => (
+              <FbaShipmentCard
+                key={shipment.id}
+                shipment={shipment}
+                stationTheme={stationTheme}
+                isExpanded={expandedIds.has(shipment.id)}
+                onToggleExpand={() => toggleExpand(shipment.id)}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+      ) : null}
     </div>
   );
 }

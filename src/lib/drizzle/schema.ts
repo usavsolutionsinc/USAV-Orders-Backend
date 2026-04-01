@@ -36,6 +36,49 @@ export const staffWeeklySchedule = pgTable('staff_weekly_schedule', {
   pk: primaryKey({ columns: [table.staffId, table.dayOfWeek] }),
 }));
 
+export const staffScheduleOverrides = pgTable('staff_schedule_overrides', {
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  scheduleDate: date('schedule_date').notNull(),
+  isScheduled: boolean('is_scheduled').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.staffId, table.scheduleDate] }),
+}));
+
+export const staffWeekPlans = pgTable('staff_week_plans', {
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  weekStartDate: date('week_start_date').notNull(),
+  dayOfWeek: integer('day_of_week').notNull(),
+  isScheduled: boolean('is_scheduled').notNull(),
+  source: text('source').notNull().default('manual'),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.staffId, table.weekStartDate, table.dayOfWeek] }),
+}));
+
+export const staffAvailabilityRules = pgTable('staff_availability_rules', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  staffId: integer('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  ruleType: text('rule_type').notNull(),
+  dayOfWeek: integer('day_of_week'),
+  isAllowed: boolean('is_allowed').notNull().default(true),
+  effectiveStartDate: date('effective_start_date'),
+  effectiveEndDate: date('effective_end_date'),
+  priority: integer('priority').notNull().default(100),
+  reason: text('reason'),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+}, (table) => ({
+  staffPriorityIdx: index('staff_availability_rules_staff_active_idx').on(table.staffId, table.deletedAt, table.priority),
+  weekdayIdx: index('staff_availability_rules_weekday_idx').on(table.staffId, table.dayOfWeek),
+  dateWindowIdx: index('staff_availability_rules_date_window_idx').on(table.effectiveStartDate, table.effectiveEndDate),
+}));
+
 export const favoriteSkus = pgTable('favorite_skus', {
   id: serial('id').primaryKey(),
   ecwidProductId: varchar('ecwid_product_id', { length: 64 }),
@@ -548,6 +591,22 @@ export const orders = pgTable('orders', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+// Multi-shipment links per order row. Keeps orders.shipment_id as canonical
+// primary link while allowing additional shipment IDs to be associated.
+export const orderShipmentLinks = pgTable('order_shipment_links', {
+  orderRowId: integer('order_row_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  shipmentId: bigint('shipment_id', { mode: 'number' }).notNull(),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  source: text('source'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.orderRowId, table.shipmentId] }),
+  orderIdx: index('order_shipment_links_order_row_id_idx').on(table.orderRowId),
+  shipmentIdx: index('order_shipment_links_shipment_id_idx').on(table.shipmentId),
+  primaryIdx: index('order_shipment_links_primary_idx').on(table.orderRowId, table.isPrimary),
+}));
+
 // Packer logs - audit trail for all packer scans (orders, SKU, FNSKU, FBA, etc.)
 // Photos are stored in the photos table (entity_type='PACKER_LOG', entity_id=packer_logs.id)
 // shipment_id links ORDERS-type scans to shipping_tracking_numbers (carrier tracking)
@@ -878,6 +937,24 @@ export const fbaShipmentTracking = pgTable('fba_shipment_tracking', {
   shipmentTrackingUnique: uniqueIndex('ux_fba_shipment_tracking_plan_tracking').on(table.shipmentId, table.trackingId),
 }));
 
+// Per-tracking bundle composition for a shipment: many shipment items can map to one tracking row.
+export const fbaTrackingItemAllocations = pgTable('fba_tracking_item_allocations', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  shipmentId: integer('shipment_id').notNull().references(() => fbaShipments.id, { onDelete: 'cascade' }),
+  trackingId: bigint('tracking_id', { mode: 'number' }).notNull(),
+  shipmentItemId: integer('shipment_item_id').notNull().references(() => fbaShipmentItems.id, { onDelete: 'cascade' }),
+  qty: integer('qty').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueBundleItem: uniqueIndex('ux_fba_tracking_item_allocations_bundle_item')
+    .on(table.shipmentId, table.trackingId, table.shipmentItemId),
+  byShipmentTracking: index('idx_fba_tracking_item_allocations_shipment_tracking')
+    .on(table.shipmentId, table.trackingId),
+  byShipmentItem: index('idx_fba_tracking_item_allocations_item')
+    .on(table.shipmentItemId),
+}));
+
 export const fbaFnskuLogs = pgTable('fba_fnsku_logs', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   fnsku: text('fnsku').notNull().references(() => fbaFnskus.fnsku, { onDelete: 'restrict' }),
@@ -901,10 +978,14 @@ export const fbaFnskuLogs = pgTable('fba_fnsku_logs', {
 // scan_ref stores non-carrier raw inputs (FNSKU X00..., etc.)
 export const techSerialNumbers = pgTable('tech_serial_numbers', {
   id: serial('id').primaryKey(),
+  /** Origin station for this serial event (TECH default; RECEIVING for unboxing serial capture). */
+  stationSource: text('station_source').notNull().default('TECH'),
   /** FK to shipping_tracking_numbers for carrier-tracking rows */
   shipmentId: bigint('shipment_id', { mode: 'number' }),
   /** FK to orders_exceptions for unmatched carrier scans */
   ordersExceptionId: integer('orders_exception_id').references(() => ordersExceptions.id, { onDelete: 'set null' }),
+  /** FK to receiving_lines for unboxing/receiving serial capture. */
+  receivingLineId: integer('receiving_line_id').references(() => receivingLines.id, { onDelete: 'set null' }),
   /** Raw scan value for non-carrier rows (FNSKU, etc.) */
   scanRef: text('scan_ref'),
   serialNumber: text('serial_number').notNull(),

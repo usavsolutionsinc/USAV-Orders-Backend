@@ -1,3 +1,5 @@
+export interface StaffOption { id: number; name: string; }
+
 export interface ReceivingQueueItem {
   assignment_id: number;
   receiving_id: number;

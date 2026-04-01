@@ -368,14 +368,38 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
             </div>
 
             <div className="absolute bottom-3 left-3 z-30 flex w-[320px] flex-col gap-2">
-                <AnimatePresence initial={false} mode="wait">
+                <AnimatePresence initial={false}>
+                    {showSearch ? (
+                        <motion.div
+                            key="receiving-logs-filter"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                        >
+                            <div className="rounded-2xl border border-zinc-200/90 bg-white/95 p-2 shadow-md shadow-zinc-900/5 backdrop-blur-sm">
+                                <HorizontalButtonSlider
+                                    variant="fba"
+                                    size="lg"
+                                    legend="View"
+                                    items={logFilterSliderItems}
+                                    value={logChannelFilter}
+                                    onChange={(id) => setLogChannelFilter(id as ReceivingLogFilter)}
+                                    aria-label="Receiving log filter"
+                                />
+                            </div>
+                        </motion.div>
+                    ) : null}
+                </AnimatePresence>
+
+                <AnimatePresence initial={false}>
                     {showSearch ? (
                         <motion.div
                             key="receiving-logs-search-bar"
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 6 }}
-                            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
                         >
                             <OverlaySearchBar
                                 value={searchQuery}
@@ -391,34 +415,25 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                     ) : null}
                 </AnimatePresence>
 
-                <div className="rounded-2xl border border-zinc-200/90 bg-white/95 p-2 shadow-md shadow-zinc-900/5 backdrop-blur-sm">
-                    <HorizontalButtonSlider
-                        variant="fba"
-                        size="lg"
-                        legend="View"
-                        items={logFilterSliderItems}
-                        value={logChannelFilter}
-                        onChange={(id) => setLogChannelFilter(id as ReceivingLogFilter)}
-                        aria-label="Receiving log filter"
-                    />
-                </div>
-
-                {!showSearch ? (
-                    <motion.button
-                        key="receiving-logs-search-trigger"
-                        type="button"
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.96 }}
-                        onClick={() => setSearchOpen(true)}
-                        className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 will-change-transform transition hover:bg-blue-500"
-                        aria-label="Open receiving logs search"
-                    >
-                        <Search className="h-4 w-4" />
-                    </motion.button>
-                ) : null}
+                <AnimatePresence initial={false}>
+                    {!showSearch ? (
+                        <motion.button
+                            key="receiving-logs-search-trigger"
+                            type="button"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            whileHover={{ scale: 1.04 }}
+                            whileTap={{ scale: 0.96 }}
+                            onClick={() => setSearchOpen(true)}
+                            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/25 will-change-transform transition hover:bg-blue-500"
+                            aria-label="Open receiving logs search"
+                        >
+                            <Search className="h-4 w-4" />
+                        </motion.button>
+                    ) : null}
+                </AnimatePresence>
             </div>
         </div>
     );

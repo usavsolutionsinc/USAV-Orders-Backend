@@ -28,9 +28,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                         {children}
                     </SiteTooltipProvider>
                 </UIModeProvider>
-                <Toaster position="top-right" richColors closeButton />
+                <Toaster position="bottom-right" richColors closeButton />
             </AblyProvider>
         </QueryClientProvider>
     );
 }
-

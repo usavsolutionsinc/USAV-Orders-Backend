@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { logRouteMetric } from '@/lib/route-metrics';
+import { SHIPPED_BY_CARRIER_SQL } from '@/lib/sql-fragments';
 
 let replenishmentSchemaCheck:
   | { value: boolean; checkedAt: number }
@@ -63,6 +64,7 @@ export async function GET(req: NextRequest) {
     const status             = searchParams.get('status');
     const assignedTo         = searchParams.get('assignedTo');
     const query              = searchParams.get('q') || '';
+    const hasSearchQuery     = Boolean(String(query || '').trim());
     const weekStart          = searchParams.get('weekStart') || '';
     const weekEnd            = searchParams.get('weekEnd') || '';
     const assignmentStatus   = searchParams.get('assignmentStatus') || '';
@@ -77,19 +79,7 @@ export async function GET(req: NextRequest) {
     const excludePacked      = searchParams.get('excludePacked') === 'true';
     /** awaitingOnly=true → only orders without shipment_id (Awaiting tab: no tracking yet) */
     const awaitingOnly       = searchParams.get('awaitingOnly') === 'true';
-    const shippedByCarrierOrLatestStatusSql = `COALESCE(
-      stn.is_carrier_accepted
-      OR stn.is_in_transit
-      OR stn.is_out_for_delivery
-      OR stn.is_delivered
-      OR (
-        COALESCE(BTRIM(stn.latest_status_category), '') <> ''
-        AND UPPER(BTRIM(stn.latest_status_category)) NOT IN ('LABEL_CREATED', 'UNKNOWN')
-      )
-      OR UPPER(COALESCE(stn.latest_status_label, '')) LIKE '%MOVING THROUGH NETWORK%'
-      OR UPPER(COALESCE(stn.latest_status_description, '')) LIKE '%MOVING THROUGH NETWORK%',
-      false
-    )`;
+    const shippedByCarrierOrLatestStatusSql = SHIPPED_BY_CARRIER_SQL;
 
     const cacheLookup = createCacheLookupKey({
       status:             status || '',
@@ -111,7 +101,7 @@ export async function GET(req: NextRequest) {
 
     const CACHE_HEADERS = { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' };
 
-    if (!singleOrderMode) {
+    if (!singleOrderMode && !hasSearchQuery) {
       const cached = await getCachedJson<any>('api:orders', cacheLookup);
       if (cached) {
         ok = true;
@@ -351,6 +341,8 @@ export async function GET(req: NextRequest) {
         o.quantity,
         o.shipment_id,
         stn.tracking_number_raw AS tracking_number,
+        COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
+        COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
         o.sku,
         o.condition,
         o.out_of_stock,
@@ -389,6 +381,57 @@ export async function GET(req: NextRequest) {
       LEFT JOIN pack_activity ON pack_activity.shipment_id = o.shipment_id
       LEFT JOIN next_pack_activity ON next_pack_activity.shipment_id = o.shipment_id
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      LEFT JOIN LATERAL (
+        SELECT
+          COALESCE(
+            json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
+              FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+            '[]'::json
+          ) AS tracking_numbers,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'shipment_id', t.shipment_id,
+                'tracking', t.tracking_number_raw,
+                'is_primary', t.is_primary
+              )
+              ORDER BY t.sort_key, t.tracking_number_raw
+            ) FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
+            '[]'::json
+          ) AS tracking_number_rows
+        FROM (
+          SELECT DISTINCT
+            osl_link.shipment_id,
+            stn_link.tracking_number_raw,
+            COALESCE(osl_link.is_primary, false) AS is_primary,
+            CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
+          FROM order_shipment_links osl_link
+          LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
+          WHERE osl_link.order_row_id = o.id
+
+          UNION
+
+          SELECT DISTINCT
+            o_primary.shipment_id,
+            stn_primary.tracking_number_raw,
+            true AS is_primary,
+            0 AS sort_key
+          FROM orders o_primary
+          LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
+          WHERE o_primary.id = o.id
+
+          UNION
+
+          SELECT DISTINCT
+            o_sibling.shipment_id,
+            stn_sibling.tracking_number_raw,
+            false AS is_primary,
+            2 AS sort_key
+          FROM orders o_sibling
+          LEFT JOIN shipping_tracking_numbers stn_sibling ON stn_sibling.id = o_sibling.shipment_id
+          WHERE o_sibling.order_id = o.order_id
+        ) t
+      ) order_trackings ON TRUE
       LEFT JOIN rr ON rr.order_id = o.id
       LEFT JOIN test_activity ON test_activity.shipment_id = o.shipment_id
       LEFT JOIN next_test_activity ON next_test_activity.shipment_id = o.shipment_id
@@ -542,14 +585,16 @@ export async function GET(req: NextRequest) {
       weekStart: weekStart || null,
       weekEnd:   weekEnd   || null,
     };
-    if (!singleOrderMode) {
+    if (!singleOrderMode && !hasSearchQuery) {
       await setCachedJson('api:orders', cacheLookup, payload, 300, ['orders']);
       cache = 'MISS';
+    } else {
+      cache = 'BYPASS';
     }
     ok = true;
     return NextResponse.json(payload, {
       headers: {
-        'x-cache': singleOrderMode ? 'BYPASS' : 'MISS',
+        'x-cache': singleOrderMode || hasSearchQuery ? 'BYPASS' : 'MISS',
         ...CACHE_HEADERS,
       },
     });

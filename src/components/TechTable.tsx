@@ -133,6 +133,8 @@ export function TechTable({ testedBy }: TechTableProps) {
       item_number: record.item_number || null,
       condition: record.condition || '',
       shipping_tracking_number: record.shipping_tracking_number || '',
+      tracking_numbers: record.tracking_numbers || [],
+      tracking_number_rows: record.tracking_number_rows || [],
       serial_number: record.serial_number || '',
       sku: record.sku || '',
       tester_id: null,

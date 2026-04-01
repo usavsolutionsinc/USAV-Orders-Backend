@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight } from '@/components/Icons';
+import { ChevronLeft, ChevronRight, User } from '@/components/Icons';
 import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
 import { getOrderPlatformLabel, getOrderSourceTag } from '@/utils/order-platform';
 import { AssignmentOverlayCard } from '@/design-system/components/AssignmentOverlayCard';
@@ -14,6 +14,15 @@ import { toDateInputValue, type WorkOrderRow, type WorkStatus } from './types';
 interface StaffOption {
   id: number;
   name: string;
+}
+
+interface AssignmentStaffContext {
+  techniciansOn?: StaffOption[];
+  techniciansOff?: StaffOption[];
+  techniciansInactive?: StaffOption[];
+  packersOn?: StaffOption[];
+  packersOff?: StaffOption[];
+  packersInactive?: StaffOption[];
 }
 
 interface AssignmentDraft {
@@ -39,6 +48,7 @@ export interface WorkOrderAssignmentCardProps {
   storageKey?: string;
   allowEditConfirmed?: boolean;
   closeWhenCompleted?: boolean;
+  staffContext?: AssignmentStaffContext;
 }
 
 function resolveTechTheme(staffId: number) {
@@ -120,6 +130,7 @@ export function WorkOrderAssignmentCard({
   storageKey,
   allowEditConfirmed = false,
   closeWhenCompleted = true,
+  staffContext,
 }: WorkOrderAssignmentCardProps) {
   const [index, setIndex] = useState(0);
   const confirmedIdsRef = useRef(new Set<string>());
@@ -439,6 +450,14 @@ export function WorkOrderAssignmentCard({
 
   const handleMarkDone = () => commit({ status: 'DONE' });
   const handleMarkShipped = () => commit({ status: 'DONE', packerId: packerId ?? null });
+  const unavailableTechnicians = [
+    ...(staffContext?.techniciansOff || []).map((m) => `${m.name} (Off today)`),
+    ...(staffContext?.techniciansInactive || []).map((m) => `${m.name} (Inactive)`),
+  ];
+  const unavailablePackers = [
+    ...(staffContext?.packersOff || []).map((m) => `${m.name} (Off today)`),
+    ...(staffContext?.packersInactive || []).map((m) => `${m.name} (Inactive)`),
+  ];
 
   const topBar = (
     <div className="flex items-center justify-between gap-2 px-4 py-2">
@@ -524,7 +543,15 @@ export function WorkOrderAssignmentCard({
 
         <div className="shrink-0 space-y-4 border-t border-gray-100 px-5 pb-5 pt-2.5">
           <div>
-            <p className={`mb-2 ${sectionLabel}`}>Technician</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className={sectionLabel}>Technician</p>
+              <User className="h-4 w-4 text-gray-400" />
+            </div>
+            {unavailableTechnicians.length > 0 && (
+              <p className={`mb-2 ${fieldLabel} text-gray-500`}>
+                Unavailable: {unavailableTechnicians.join(', ')}
+              </p>
+            )}
             {technicianOptions.length > 0 ? (
               <div
                 className="grid w-full gap-2"
@@ -559,7 +586,15 @@ export function WorkOrderAssignmentCard({
           </div>
 
           <div>
-            <p className={`mb-2.5 ${sectionLabel}`}>Packer</p>
+            <div className="mb-2.5 flex items-center justify-between">
+              <p className={sectionLabel}>Packer</p>
+              <User className="h-4 w-4 text-gray-400" />
+            </div>
+            {unavailablePackers.length > 0 && (
+              <p className={`mb-2 ${fieldLabel} text-gray-500`}>
+                Unavailable: {unavailablePackers.join(', ')}
+              </p>
+            )}
             {packerOptions.length > 0 ? (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {packerOptions.map((m) => {

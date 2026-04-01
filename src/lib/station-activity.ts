@@ -2,14 +2,18 @@ type Queryable = {
   query: (text: string, params?: any[]) => Promise<{ rows: any[] }>;
 };
 
-export type StationName = 'TECH' | 'PACK' | 'RECEIVING' | 'ADMIN';
+export type StationName = 'TECH' | 'PACK' | 'FBA' | 'RECEIVING' | 'ADMIN';
 export type StationActivityType =
   | 'TRACKING_SCANNED'
   | 'FNSKU_SCANNED'
   | 'SERIAL_ADDED'
   | 'PACK_COMPLETED'
   | 'PACK_SCAN'
-  | 'FBA_READY';
+  | 'FBA_READY'
+  | 'WS_ORDER_TESTED'
+  | 'WS_REPAIR_CHANGED'
+  | 'WS_RECEIVING_CHANGED'
+  | 'WS_FBA_SCAN';
 
 export async function createStationActivityLog(
   db: Queryable,

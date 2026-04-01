@@ -7,7 +7,6 @@ import confetti from 'canvas-confetti';
 import { Package } from '@/components/Icons';
 import { TabSwitch } from '@/components/ui/TabSwitch';
 import { useUpNextData } from '@/hooks/useUpNextData';
-import { UpNextFilterBar } from '@/components/station/upnext/UpNextFilterBar';
 import { getTechStationLightChromeOutlineClass } from '@/utils/staff-colors';
 import { getOrderPlatformLabel } from '@/utils/order-platform';
 import { SLIDER_PRESETS, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
@@ -27,6 +26,15 @@ interface MobileUpNextOrderProps {
   onStart: (tracking: string) => void;
   onMissingParts: (orderId: number, reason: string) => void;
   onAllCompleted?: () => void;
+  /** Controlled search text — if omitted, managed internally */
+  searchText?: string;
+  /** Controlled quick-filter value — if omitted, managed internally */
+  quickFilter?: string;
+  /**
+   * Called whenever the effective tab changes.
+   * Parent uses this to sync the filter pills in MobileSearchOverlay.
+   */
+  onEffectiveTabChange?: (items: HorizontalSliderItem[], variant: 'fba' | 'slate') => void;
 }
 
 // ─── Helpers (same as desktop UpNextOrder) ──────────────────────────────────
@@ -80,15 +88,26 @@ const QUICK_FILTER_ITEMS: Record<TabId, HorizontalSliderItem[]> = {
  * - Tab bar scrolls horizontally
  * - No filterBarPortalRef needed
  */
-export function MobileUpNextOrder({ techId, onStart, onMissingParts, onAllCompleted }: MobileUpNextOrderProps) {
+export function MobileUpNextOrder({
+  techId,
+  onStart,
+  onMissingParts,
+  onAllCompleted,
+  searchText: searchTextProp,
+  quickFilter: quickFilterProp,
+  onEffectiveTabChange,
+}: MobileUpNextOrderProps) {
   const [activeTab, setActiveTab] = useState<TabId>('all');
   const [tabSlideDir, setTabSlideDir] = useState(1);
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
   const [missingPartsReason, setMissingPartsReason] = useState('');
-  const [searchText, setSearchText] = useState('');
-  const [quickFilter, setQuickFilter] = useState('must_go');
+  // Internal fallback state — used only when props are not provided
+  const [internalSearchText, setInternalSearchText] = useState('');
+  const [internalQuickFilter, setInternalQuickFilter] = useState('must_go');
+  const searchText = searchTextProp !== undefined ? searchTextProp : internalSearchText;
+  const quickFilter = quickFilterProp !== undefined ? quickFilterProp : internalQuickFilter;
   const hasCelebratedRef = useRef(false);
 
   const { allOrders, allRepairs, fbaItems, receivingItems, loading, allCompletedToday, fetchOrders } =
@@ -259,9 +278,14 @@ export function MobileUpNextOrder({ techId, onStart, onMissingParts, onAllComple
     setExpandedItemKey(null);
     setShowMissingPartsInput(null);
     setMissingPartsReason('');
-    setSearchText('');
-    setQuickFilter(QUICK_FILTER_ITEMS[effectiveTab]?.[0]?.id ?? 'all');
-  }, [effectiveTab]);
+    const items = QUICK_FILTER_ITEMS[effectiveTab] ?? [];
+    const variant: 'fba' | 'slate' = items.some((i) => i.tone) ? 'fba' : 'slate';
+    // Reset internal state only when uncontrolled
+    if (searchTextProp === undefined) setInternalSearchText('');
+    if (quickFilterProp === undefined) setInternalQuickFilter(items[0]?.id ?? 'all');
+    // Notify parent so MobileSearchOverlay can update its pills
+    onEffectiveTabChange?.(items, variant);
+  }, [effectiveTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (effectiveTab === 'all' || effectiveTab === 'orders') return;
@@ -600,20 +624,6 @@ export function MobileUpNextOrder({ techId, onStart, onMissingParts, onAllComple
         </div>
       )}
 
-      {/* ── Filter bar — inline at bottom on mobile (no portal) ── */}
-      {tabCounts[effectiveTab] > 0 && (
-        <div className="sticky bottom-0 left-0 right-0 z-10 bg-white/90 backdrop-blur-sm border-t border-gray-100 px-1 py-2">
-          <UpNextFilterBar
-            searchText={searchText}
-            onSearchChange={setSearchText}
-            quickFilter={quickFilter}
-            onQuickFilterChange={setQuickFilter}
-            quickFilterItems={QUICK_FILTER_ITEMS[effectiveTab]}
-            quickFilterVariant={QUICK_FILTER_ITEMS[effectiveTab].some((i) => i.tone) ? 'fba' : 'slate'}
-            placeholder={`Search ${visibleTabs.find((t) => t.id === effectiveTab)?.label ?? ''}...`}
-          />
-        </div>
-      )}
     </div>
   );
 }

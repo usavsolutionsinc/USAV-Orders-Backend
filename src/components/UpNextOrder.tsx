@@ -332,9 +332,14 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   );
 
   const isFiltering = Boolean(searchText.trim() || (quickFilter !== 'all' && !SORT_FILTER_IDS.has(quickFilter)));
-  const Wrap = isFiltering
-    ? ({ children }: { children: React.ReactNode }) => <>{children}</>
-    : ({ children }: { children: React.ReactNode }) => <AnimatePresence mode="popLayout">{children}</AnimatePresence>;
+  const renderRows = useCallback(
+    (children: React.ReactNode) => (
+      isFiltering
+        ? <>{children}</>
+        : <AnimatePresence initial={false} mode="popLayout">{children}</AnimatePresence>
+    ),
+    [isFiltering],
+  );
 
   const allSections = [
     {
@@ -343,9 +348,9 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       headerColor: 'orange' as const,
       count: sortedOrders.length,
       render: () => (
-        <Wrap>
+        <>
           {sortedOrders.map((order) => renderOrderCard(order))}
-        </Wrap>
+        </>
       ),
     },
     {
@@ -354,7 +359,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       headerColor: 'purple' as const,
       count: filteredFbaItems.length,
       render: () => (
-        <Wrap>
+        <>
           {filteredFbaItems.map((item) => (
             <FbaItemCard
               key={item.item_id}
@@ -363,7 +368,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               onToggleExpand={() => toggleExpandedItem(`fba-${item.item_id}`)}
             />
           ))}
-        </Wrap>
+        </>
       ),
     },
     {
@@ -372,7 +377,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       headerColor: 'orange' as const,
       count: filteredRepairs.length,
       render: () => (
-        <Wrap>
+        <>
           {filteredRepairs.map((repair) => (
             <RepairCard
               key={`repair-${repair.repairId}`}
@@ -382,7 +387,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
             />
           ))}
-        </Wrap>
+        </>
       ),
     },
     {
@@ -391,11 +396,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       headerColor: 'orange' as const,
       count: filteredReceivingItems.length,
       render: () => (
-        <Wrap>
+        <>
           {filteredReceivingItems.map((item) => (
             <ReceivingAssignmentCard key={item.assignment_id} item={item} />
           ))}
-        </Wrap>
+        </>
       ),
     },
   ].filter((section) => section.count > 0);
@@ -410,44 +415,47 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   }
 
   return (
-    <div className="relative flex flex-col space-y-1.5">
-        <TabSwitch
-          tabs={visibleTabs}
-          activeTab={effectiveTab}
-          onTabChange={(tab) => selectTab(tab as TabId)}
-          scrollable
-          variant="upNext"
-          stationChromeOutlineClassName={stationTabChromeOutline}
-        />
+    <div className="relative flex flex-col">
+        {/* ── Sticky tab bar — pinned above scrolling card list ── */}
+        <div className="sticky top-0 z-10 bg-white pb-1.5">
+          <TabSwitch
+            tabs={visibleTabs}
+            activeTab={effectiveTab}
+            onTabChange={(tab) => selectTab(tab as TabId)}
+            scrollable
+            variant="upNext"
+            stationChromeOutlineClassName={stationTabChromeOutline}
+          />
 
-        {/* ── Urgency summary bar ── */}
-        <AnimatePresence initial={false}>
-          {tabCounts.all > 0 && (lateCount > 0 || dueTodayCount > 0) && (
-            <motion.div
-              {...framerPresence.collapseHeight}
-              transition={framerTransition.upNextCollapse}
-              className="overflow-hidden"
-            >
-              <div className="flex items-center gap-2 px-1 pt-0.5">
-                {lateCount > 0 && (
-                  <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-red-500">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
-                    {lateCount} late
-                  </span>
-                )}
-                {lateCount > 0 && dueTodayCount > 0 && (
-                  <span className="text-gray-500 text-[9px]">·</span>
-                )}
-                {dueTodayCount > 0 && (
-                  <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-500">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    {dueTodayCount} due today
-                  </span>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {/* ── Urgency summary bar ── */}
+          <AnimatePresence initial={false}>
+            {tabCounts.all > 0 && (lateCount > 0 || dueTodayCount > 0) && (
+              <motion.div
+                {...framerPresence.collapseHeight}
+                transition={framerTransition.upNextCollapse}
+                className="overflow-hidden"
+              >
+                <div className="flex items-center gap-2 px-1 pt-0.5">
+                  {lateCount > 0 && (
+                    <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-red-500">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+                      {lateCount} late
+                    </span>
+                  )}
+                  {lateCount > 0 && dueTodayCount > 0 && (
+                    <span className="text-gray-500 text-[9px]">·</span>
+                  )}
+                  {dueTodayCount > 0 && (
+                    <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-500">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      {dueTodayCount} due today
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* ── Primary tab content ── */}
         <div>
@@ -456,11 +464,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                 <EmptySlate label={isFiltering ? "No results" : "No out-of-stock orders"} color="red" />
               ) : (
                 <div className="flex flex-col">
-                  <Wrap>
-                    {filteredStockOrders.map((order) => (
+                  {renderRows(
+                    filteredStockOrders.map((order) => (
                       renderOrderCard(order, `stock-${order.id}`, 'stock')
-                    ))}
-                  </Wrap>
+                    ))
+                  )}
                 </div>
               )
 
@@ -486,7 +494,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                         <SectionHeader label={section.label} color={section.headerColor} />
                       )}
                       <div className="flex flex-col">
-                        {section.render()}
+                        {renderRows(section.render())}
                       </div>
                     </div>
                   ))}
@@ -498,8 +506,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                 <EmptySlate label={isFiltering ? "No results" : "No repairs in queue"} />
               ) : (
                 <div className="flex flex-col">
-                  <Wrap>
-                    {filteredRepairs.map((repair) => (
+                  {renderRows(
+                    filteredRepairs.map((repair) => (
                       <RepairCard
                         key={repair.repairId}
                         repair={repair}
@@ -507,8 +515,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                         isExpanded={expandedItemKey === `repair-${repair.repairId}`}
                         onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
                       />
-                    ))}
-                  </Wrap>
+                    ))
+                  )}
                 </div>
               )
 
@@ -517,16 +525,16 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                 <EmptySlate label={isFiltering ? "No results" : "No active FBA items"} color={isFiltering ? "gray" : "purple"} />
               ) : (
                 <div className="flex flex-col">
-                  <Wrap>
-                    {filteredFbaItems.map((item) => (
+                  {renderRows(
+                    filteredFbaItems.map((item) => (
                       <FbaItemCard
                         key={item.item_id}
                         item={item}
                         isExpanded={expandedItemKey === `fba-${item.item_id}`}
                         onToggleExpand={() => toggleExpandedItem(`fba-${item.item_id}`)}
                       />
-                    ))}
-                  </Wrap>
+                    ))
+                  )}
                 </div>
               )
 
@@ -535,11 +543,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                 <EmptySlate label={isFiltering ? "No results" : "No receiving items assigned"} color={isFiltering ? "gray" : "teal"} />
               ) : (
                 <div className="flex flex-col">
-                  <Wrap>
-                    {filteredReceivingItems.map((item) => (
+                  {renderRows(
+                    filteredReceivingItems.map((item) => (
                       <ReceivingAssignmentCard key={item.assignment_id} item={item} />
-                    ))}
-                  </Wrap>
+                    ))
+                  )}
                 </div>
               )
 
@@ -550,8 +558,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                   <div className="mt-3">
                     <SectionHeader label="Repair Service" />
                     <div className="flex flex-col">
-                      <Wrap>
-                        {filteredRepairs.map((repair) => (
+                      {renderRows(
+                        filteredRepairs.map((repair) => (
                           <RepairCard
                             key={`orders-repair-${repair.repairId}`}
                             repair={repair}
@@ -559,8 +567,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                             isExpanded={expandedItemKey === `repair-${repair.repairId}`}
                             onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
                           />
-                        ))}
-                      </Wrap>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}
@@ -568,11 +576,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
             ) : (
               <div className="flex flex-col">
-                <Wrap>
-                  {filteredOrders.map((order) => (
+                {renderRows(
+                  filteredOrders.map((order) => (
                     renderOrderCard(order)
-                  ))}
-                </Wrap>
+                  ))
+                )}
               </div>
             )}
         </div>
@@ -587,11 +595,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               <div className="h-px flex-1 bg-orange-200" />
             </div>
             <div className="flex flex-col">
-              <Wrap>
-                {filteredStockOrders.map((order) => (
+              {renderRows(
+                filteredStockOrders.map((order) => (
                   renderOrderCard(order, `stock-${order.id}`, 'stock')
-                ))}
-              </Wrap>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -599,7 +607,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
         {/* ── Filter bar ── */}
         {tabCounts[effectiveTab] > 0 && (() => {
           const filterBar = (
-            <div className="bg-white/90 backdrop-blur-sm border-t border-gray-100 px-1 py-1.5">
+            <div className="md:hidden bg-white/90 backdrop-blur-sm border-t border-gray-100 px-1 py-1.5">
               <UpNextFilterBar
                 searchText={searchText}
                 onSearchChange={setSearchText}

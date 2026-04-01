@@ -32,6 +32,10 @@ const ACTIVITY_LABELS: Record<string, string> = {
   PACK_SCAN: 'Pack Scan',
   FNSKU_SCANNED: 'FNSKU Scanned',
   FBA_READY: 'FBA Ready',
+  WS_ORDER_TESTED: 'WS Order Tested',
+  WS_REPAIR_CHANGED: 'WS Repair Changed',
+  WS_RECEIVING_CHANGED: 'WS Receiving Changed',
+  WS_FBA_SCAN: 'WS FBA Scan',
 };
 
 function formatTime(iso: string) {
