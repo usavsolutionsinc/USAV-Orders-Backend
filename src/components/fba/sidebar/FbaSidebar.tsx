@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { fbaPaths } from '@/lib/fba/api-paths';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, X } from '@/components/Icons';
@@ -20,7 +21,13 @@ import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
 import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
 import { FbaShippedTable } from '@/components/fba/FbaShippedTable';
 import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
+import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
+import {
+  FBA_PAIRED_REVIEW_TOGGLE,
+  FBA_SELECTION_ADJUSTED,
+  FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW,
+} from '@/lib/fba/events';
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
 const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
@@ -47,12 +54,17 @@ function emitOpenUploadFba() {
 function FbaCatalogSidebarFallback() {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
-      <div className={`${sidebarSubBandClass} px-3 py-2`}>
-        <div className="h-9 w-full rounded-xl bg-zinc-100" />
+      <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
+        <div className="h-4 w-24 bg-zinc-100 rounded mb-2 animate-pulse" />
+        <div className="h-10 w-full rounded-xl bg-zinc-100 animate-pulse" />
       </div>
-      <div className="min-h-0 flex-1 space-y-2 p-3">
-        <div className="h-14 rounded-lg bg-zinc-100" />
-        <div className="h-14 rounded-lg bg-zinc-100" />
+      <div className="min-h-0 flex-1 space-y-4 p-3">
+        <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse" />
+        <div className="space-y-2">
+          <div className="h-14 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+          <div className="h-14 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+          <div className="h-14 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+        </div>
       </div>
     </div>
   );
@@ -166,15 +178,22 @@ function FbaWorkspaceSidebarFallback() {
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
       <div className={sidebarHeaderBandClass}>
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
-          <div className="h-11 bg-zinc-50" />
-          <div className="h-11 bg-zinc-50" />
+          <div className="h-11 bg-zinc-50 animate-pulse" />
+          <div className="h-11 bg-zinc-50 animate-pulse" />
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
-          <div className="h-24 w-full rounded-xl bg-zinc-100" />
+          <div className="h-24 w-full rounded-2xl bg-zinc-100 animate-pulse" />
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-white" />
+        <div className="min-h-0 flex-1 space-y-3 p-3 overflow-y-auto bg-white">
+          <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-16 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+            <div className="h-16 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+            <div className="h-16 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -198,15 +217,51 @@ function FbaWorkspaceSidebarInner() {
     }
   }, [activeTab]);
 
-  // Board selection counts from FbaBoardTable
+  // Board emits raw counts; paired panel emits adjusted counts (qty steppers).
   const [boardSelectionCount, setBoardSelectionCount] = useState({ selected: 0, total: 0, selectedQty: 0, totalQty: 0 });
   useEffect(() => {
-    const handler = (e: Event) => {
-      const counts = (e as CustomEvent<{ selected: number; total: number; selectedQty: number; totalQty: number }>).detail;
-      setBoardSelectionCount(counts);
+    const boardHandler = (e: Event) => {
+      const c = (e as CustomEvent<{ selected: number; total: number; selectedQty: number; totalQty: number }>).detail;
+      if (c) setBoardSelectionCount(c);
     };
-    window.addEventListener('fba-board-selection-count', handler);
-    return () => window.removeEventListener('fba-board-selection-count', handler);
+    const adjustedHandler = (e: Event) => {
+      const a = (e as CustomEvent<{ selected: number; selectedQty: number }>).detail;
+      if (a) setBoardSelectionCount((prev) => ({ ...prev, selected: a.selected, selectedQty: a.selectedQty }));
+    };
+    window.addEventListener('fba-board-selection-count', boardHandler);
+    window.addEventListener(FBA_SELECTION_ADJUSTED, adjustedHandler);
+    return () => {
+      window.removeEventListener('fba-board-selection-count', boardHandler);
+      window.removeEventListener(FBA_SELECTION_ADJUSTED, adjustedHandler);
+    };
+  }, []);
+
+  /** Combine review panel: full form vs compact strip (toggled from panel header or active-shipment X). */
+  const [pairedReviewExpanded, setPairedReviewExpanded] = useState(true);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<{
+        sendToPaired?: {
+          items: FbaBoardItem[];
+          amazonShipmentId: string;
+          upsTracking: string;
+          activeShipmentSplit?: { sourcePlanId: number; prefilledAmazonShipmentId: string };
+        };
+      }>).detail;
+      setPairedReviewExpanded((was) => {
+        const next = !was;
+        if (!was && next && d?.sendToPaired) {
+          queueMicrotask(() => {
+            window.dispatchEvent(
+              new CustomEvent(FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW, { detail: d.sendToPaired }),
+            );
+          });
+        }
+        return next;
+      });
+    };
+    window.addEventListener(FBA_PAIRED_REVIEW_TOGGLE, handler);
+    return () => window.removeEventListener(FBA_PAIRED_REVIEW_TOGGLE, handler);
   }, []);
 
   const [staffIdNum] = usePersistedStaffId();
@@ -297,7 +352,7 @@ function FbaWorkspaceSidebarInner() {
     if (activeTab === 'shipped') return;
     setPlansError(null);
     try {
-      const res = await fetch('/api/fba/shipments?status=PLANNED&limit=50', { cache: 'no-store' });
+      const res = await fetch(fbaPaths.plans() + '?status=PLANNED&limit=50', { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load plans');
       if (!Array.isArray(data?.shipments)) return;
@@ -458,11 +513,13 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Selection review card */}
-        {isBoard && boardSelection.length > 0 && (
+        {/* Selection review + tracking pairing card */}
+        {isBoard && (
           <FbaPairedReviewPanel
             selectedItems={boardSelection}
             stationTheme={stationTheme}
+            expanded={pairedReviewExpanded}
+            onToggleExpanded={() => setPairedReviewExpanded((v) => !v)}
           />
         )}
 

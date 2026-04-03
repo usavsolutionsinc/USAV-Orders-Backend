@@ -26,6 +26,18 @@ export const FBA_BOARD_DESELECT_ITEM = 'fba-board-deselect-item' as const;
 /** FbaPage → sidebar: paired-tab selection changed */
 export const FBA_PAIRED_SELECTION = 'fba-paired-selection' as const;
 
+// ── Board injection (select-mode auto-add) ─────────────────────────────────
+/** Inject a single FbaBoardItem into the board without a full refresh. */
+export const FBA_BOARD_INJECT_ITEM = 'fba-board-inject-item' as const;
+/** Remove item IDs from the board after combining/shipping (detail: number[]). */
+export const FBA_BOARD_REMOVE_ITEMS = 'fba-board-remove-items' as const;
+/** Adjusted selection counts from the paired review panel (qty steppers). */
+export const FBA_SELECTION_ADJUSTED = 'fba-selection-adjusted' as const;
+/** Active shipment bundle → paired review: prefill FBA ID + UPS and set selection. detail: { items, amazonShipmentId, upsTracking, activeShipmentSplit?: { sourcePlanId, prefilledAmazonShipmentId } } */
+export const FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW = 'fba-send-shipment-to-paired-review' as const;
+/** Toggle combine / paired review panel expanded vs compact strip. Optional detail.sendToPaired when expanding from strip with active-shipment selection. */
+export const FBA_PAIRED_REVIEW_TOGGLE = 'fba-paired-review-toggle' as const;
+
 // ── Plan lifecycle ──────────────────────────────────────────────────────────
 /** After a new plan is created (POST /api/fba/shipments) */
 export const FBA_PLAN_CREATED = 'fba-plan-created' as const;

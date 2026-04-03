@@ -6,6 +6,7 @@ import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { FbaCreateShipmentForm, type FbaCreateShipmentFormState } from './FbaCreateShipmentForm';
+import { fbaPaths } from '@/lib/fba/api-paths';
 
 export const FBA_OPEN_CREATE_PLAN_EVENT = 'fba-open-create-plan';
 
@@ -57,7 +58,7 @@ export function FbaCreatePlanModal({ stationTheme = 'blue' }: { stationTheme?: S
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch('/api/fba/shipments', {
+      const res = await fetch(fbaPaths.plans(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

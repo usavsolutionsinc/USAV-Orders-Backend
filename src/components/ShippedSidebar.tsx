@@ -9,13 +9,19 @@ import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SearchBar } from './ui/SearchBar';
 import { TabSwitch } from './ui/TabSwitch';
+import { HorizontalButtonSlider } from './ui/HorizontalButtonSlider';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { formatDateTimePST } from '@/utils/date';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { getStaffName } from '@/utils/staff';
-import { isFbaOrder } from '@/utils/order-platform';
 import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
+import {
+    getShippedSearchHelperText,
+    getShippedSearchPlaceholder,
+    SHIPPED_SEARCH_FIELD_OPTIONS,
+    type ShippedSearchField,
+} from '@/lib/shipped-search';
 
 interface SearchHistory {
     query: string;
@@ -37,10 +43,13 @@ interface ShippedSidebarProps {
     onSearchChange?: (value: string) => void;
     shippedFilter?: ShippedTypeFilter;
     onShippedFilterChange?: (value: ShippedTypeFilter) => void;
+    shippedSearchField?: ShippedSearchField;
+    onShippedSearchFieldChange?: (value: ShippedSearchField) => void;
 }
 
 
 function toShippedOrder(order: any): ShippedOrder {
+    const primaryTracking = order.shipping_tracking_number || order.tracking_number || null;
     return {
         ...order,
         packed_at: order.packed_at || null,
@@ -48,6 +57,7 @@ function toShippedOrder(order: any): ShippedOrder {
         tested_by: order.tested_by ?? null,
         serial_number: order.serial_number || '',
         condition: order.condition || '',
+        shipping_tracking_number: primaryTracking,
     };
 }
 
@@ -70,6 +80,8 @@ export default function ShippedSidebar({
     onSearchChange,
     shippedFilter = 'all',
     onShippedFilterChange,
+    shippedSearchField = 'all',
+    onShippedSearchFieldChange,
 }: ShippedSidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
@@ -87,6 +99,10 @@ export default function ShippedSidebar({
 
     useEffect(() => {
         setSearchQuery(searchValue);
+        if (!String(searchValue || '').trim()) {
+            setResults([]);
+            setHasSearched(false);
+        }
     }, [searchValue]);
 
     // Listen for custom events to coordinate details panel
@@ -195,16 +211,20 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
         try {
             const runSearch = async (value: string) => {
                 const params = new URLSearchParams({ q: value });
+                if (shippedFilter !== 'all') params.set('shippedFilter', shippedFilter);
+                if (shippedSearchField !== 'all') params.set('searchField', shippedSearchField);
                 const res = await fetch(`/api/shipped?${params.toString()}`);
+                if (!res.ok) {
+                    const data = await res.json().catch(() => null);
+                    throw new Error(data?.details || data?.error || 'Failed to search shipped orders');
+                }
                 const data = await res.json();
                 const orders = Array.isArray(data?.results)
                     ? data.results
                     : Array.isArray(data?.shipped)
                         ? data.shipped
                         : [];
-                return orders
-                    .map(toShippedOrder)
-                    .filter((record: ShippedOrder) => !isFbaOrder(record.order_id, record.account_source));
+                return orders.map(toShippedOrder);
             };
 
             let records = await runSearch(trimmedQuery);
@@ -233,12 +253,17 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
             setIsSearching(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname, normalizeTrackingQuery, onSearchChange]);
+    }, [pathname, normalizeTrackingQuery, onSearchChange, shippedFilter, shippedSearchField]);
 
     const handleInputChange = useCallback((value: string) => {
         setSearchQuery(value);
         void handleSearch(value);
     }, [handleSearch]);
+
+    useEffect(() => {
+        if (!searchQuery.trim() || !hasSearched) return;
+        void handleSearch(searchQuery);
+    }, [handleSearch, hasSearched, searchQuery, shippedFilter, shippedSearchField]);
 
     const clearSearchHistory = () => {
         setSearchHistory([]);
@@ -294,7 +319,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                         <SearchBar
                             value={searchQuery}
                             onChange={handleInputChange}
-                            placeholder="Order ID, Tracking, or Serial..."
+                            placeholder={getShippedSearchPlaceholder(shippedSearchField)}
                             isSearching={isSearching}
                             variant="blue"
                             rightElement={
@@ -324,8 +349,22 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             />
                         )}
 
+                        {onShippedSearchFieldChange && (
+                            <HorizontalButtonSlider
+                                items={SHIPPED_SEARCH_FIELD_OPTIONS.map((option) => ({
+                                    id: option.id,
+                                    label: option.label,
+                                }))}
+                                value={shippedSearchField}
+                                onChange={(id) => onShippedSearchFieldChange(id as ShippedSearchField)}
+                                variant="slate"
+                                size="md"
+                                aria-label="Shipped search field"
+                            />
+                        )}
+
                         <p className={`${microBadge} text-gray-500 px-1`}>
-                            Click a Shipped Row for More Details
+                            {getShippedSearchHelperText(shippedSearchField)}
                         </p>
 
                         {/* Search Results */}
@@ -390,23 +429,39 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                         )}
 
                         {hasSearched && !isSearching && results.length === 0 && (
-                            <div className="bg-red-50 border border-red-100 rounded-xl p-6 text-center animate-in fade-in slide-in-from-top-2 duration-300">
-                                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <Search className="w-6 h-6 text-red-600" />
+                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 text-center animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <Search className="w-6 h-6 text-blue-600" />
                                 </div>
-                                <h3 className="text-sm font-black text-red-900 uppercase tracking-tight mb-1">Order not found</h3>
-                                <p className={`${sectionLabel} text-red-600 leading-relaxed`}>
-                                    We couldn't find any records matching "{searchQuery}"
+                                <h3 className="text-sm font-black text-blue-900 uppercase tracking-tight mb-1">No matching shipped records</h3>
+                                <p className={`${sectionLabel} text-blue-700 leading-relaxed`}>
+                                    No shipped records matched "{searchQuery}". Try searching all fields or checking the tracking number.
                                 </p>
-                                <button 
-                                    onClick={() => {
-                                        setSearchQuery('');
-                                        setHasSearched(false);
-                                    }}
-                                    className={`mt-4 ${sectionLabel} text-red-700 hover:underline`}
-                                >
-                                    Clear search
-                                </button>
+                                <div className="mt-4 flex items-center justify-center gap-3">
+                                    {shippedSearchField !== 'all' && onShippedSearchFieldChange ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onShippedSearchFieldChange('all');
+                                            }}
+                                            className={`rounded-xl bg-blue-600 px-4 py-2 text-white ${sectionLabel} shadow-sm transition-colors hover:bg-blue-700`}
+                                        >
+                                            Change To All
+                                        </button>
+                                    ) : null}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearchQuery('');
+                                            setResults([]);
+                                            setHasSearched(false);
+                                            void onSearchChange?.('');
+                                        }}
+                                        className={`rounded-xl border border-blue-200 bg-white px-4 py-2 text-blue-700 ${sectionLabel} transition-colors hover:border-blue-300 hover:bg-blue-100`}
+                                    >
+                                        Clear Search
+                                    </button>
+                                </div>
                             </div>
                         )}
 

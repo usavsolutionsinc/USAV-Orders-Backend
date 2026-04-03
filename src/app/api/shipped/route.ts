@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAllShippedOrders, updateShippedOrderField, searchShippedOrders, type ShippedFilterMode } from '@/lib/neon/orders-queries';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { logRouteMetric } from '@/lib/route-metrics';
+import { normalizeShippedSearchField } from '@/lib/shipped-search';
 
 const CACHE_HEADERS = {
   'Cache-Control': 'private, max-age=300, stale-while-revalidate=60',
@@ -34,8 +35,10 @@ export async function GET(req: NextRequest) {
       : rawShippedFilter === 'fba' ? 'fba'
       : rawShippedFilter === 'sku' ? 'sku'
       : 'all';
+    const searchField = normalizeShippedSearchField(searchParams.get('searchField'));
     const cacheLookup = createCacheLookupKey({
       query: query || '',
+      searchField,
       page,
       limit,
       weekStart,
@@ -54,7 +57,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (query) {
-      let results = await searchShippedOrders(query, { shippedFilter });
+      let results = await searchShippedOrders(query, { shippedFilter, searchField });
       const packedById = packedBy ? Number(packedBy) : null;
       const testedById = testedBy ? Number(testedBy) : null;
 
@@ -72,7 +75,8 @@ export async function GET(req: NextRequest) {
         shipped: results,
         results,
         count: results.length,
-        query
+        query,
+        searchField,
       };
       await setCachedJson('api:shipped', cacheLookup, payload, 300, ['shipped']);
       ok = true;

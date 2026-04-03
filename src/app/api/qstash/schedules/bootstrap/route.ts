@@ -14,6 +14,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '0 */2 * * *',
     path: '/api/qstash/shipping/sync-due',
     body: {},
+    retries: 3,
+    timeout: 120,
     label: 'shipping-sync-due',
   },
   {
@@ -21,6 +23,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '0 * * * *',
     path: '/api/qstash/ebay/refresh-tokens',
     body: {},
+    retries: 3,
+    timeout: 60,
     label: 'ebay-refresh-tokens',
   },
   {
@@ -28,6 +32,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '30 16 * * *',
     path: '/api/qstash/google-sheets/transfer-orders',
     body: {},
+    retries: 3,
+    timeout: 300,
     label: 'google-sheets-transfer-orders',
   },
   {
@@ -35,6 +41,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '0 18 * * *',
     path: '/api/qstash/google-sheets/transfer-orders',
     body: {},
+    retries: 3,
+    timeout: 300,
     label: 'google-sheets-transfer-orders',
   },
   {
@@ -42,6 +50,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '0 22 * * *',
     path: '/api/qstash/google-sheets/transfer-orders',
     body: {},
+    retries: 3,
+    timeout: 300,
     label: 'google-sheets-transfer-orders',
   },
   {
@@ -49,6 +59,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '10,25,40,55 * * * *',
     path: '/api/qstash/ebay/sync',
     body: { reconcileExceptions: true },
+    retries: 3,
+    timeout: 300,
     label: 'ebay-sync',
   },
   {
@@ -56,6 +68,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '*/5 * * * *',
     path: '/api/qstash/zoho/items/sync',
     body: { type: 'incremental' },
+    retries: 3,
+    timeout: 300,
     label: 'zoho-items-sync',
   },
   {
@@ -63,6 +77,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '0 9 * * *',
     path: '/api/qstash/zoho/items/sync',
     body: { type: 'full' },
+    retries: 3,
+    timeout: 300,
     label: 'zoho-items-full-sync',
   },
   {
@@ -70,6 +86,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '20,50 * * * *',
     path: '/api/zoho/purchase-orders/sync',
     body: { days_back: 2, per_page: 200, max_pages: 20, max_items: 2000 },
+    retries: 3,
+    timeout: 300,
     label: 'zoho-purchase-orders-sync',
   },
   {
@@ -77,6 +95,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '25,55 * * * *',
     path: '/api/zoho/purchase-receives/sync',
     body: { per_page: 100, max_pages: 10, max_items: 1000 },
+    retries: 3,
+    timeout: 300,
     label: 'zoho-purchase-receives-sync',
   },
   {
@@ -84,6 +104,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '35,5 * * * *',
     path: '/api/orders-exceptions/sync',
     body: {},
+    retries: 3,
+    timeout: 120,
     label: 'orders-exceptions-sync',
   },
   {
@@ -91,6 +113,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '*/30 * * * *',
     path: '/api/qstash/replenishment/sync',
     body: {},
+    retries: 3,
+    timeout: 120,
     label: 'replenishment-sync',
   },
   {
@@ -98,6 +122,8 @@ const HEAVY_JOB_SCHEDULES = [
     cron: '0 3 * * *',
     path: '/api/qstash/cleanup/idempotency',
     body: {},
+    retries: 3,
+    timeout: 30,
     label: 'idempotency-cleanup',
   },
 ] as Array<{
@@ -106,6 +132,8 @@ const HEAVY_JOB_SCHEDULES = [
   path: string;
   body: Record<string, unknown>;
   label: string;
+  retries?: number;
+  timeout?: number;
   headers?: Record<string, string>;
 }>;
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
-import { getAppBaseUrl } from '@/lib/qstash';
 import { runEbaySync } from '@/lib/jobs/ebay-sync';
 
 export const dynamic = 'force-dynamic';
@@ -26,9 +25,7 @@ async function handleEbaySync(request: NextRequest) {
   }
 }
 
-export const POST = verifySignatureAppRouter(handleEbaySync, {
-  url: `${getAppBaseUrl()}/api/qstash/ebay/sync`,
-});
+export const POST = verifySignatureAppRouter(handleEbaySync);
 
 export async function GET() {
   return NextResponse.json({ ok: true, queue: 'qstash', job: 'ebay-sync' });

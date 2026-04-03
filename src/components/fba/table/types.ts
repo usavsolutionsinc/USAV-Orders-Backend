@@ -93,8 +93,6 @@ export interface PrintSelectionPayload {
   selectedItems: EnrichedItem[];
   /** Canonical internal `fba_shipments.id` targets for sidebar pairing. */
   planIds: number[];
-  /** Compatibility alias for older listeners. Mirrors `planIds`. */
-  shipmentIds: number[];
   readyCount: number;
   pendingCount: number;
   needsPrintCount: number;

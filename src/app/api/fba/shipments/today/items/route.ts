@@ -205,6 +205,10 @@ export async function POST(request: NextRequest) {
         asin: item.asin,
         sku: item.sku,
       });
+      // Use the resolved FNSKU from the catalog — when a B0 ASIN is scanned and
+      // an existing catalog row maps that ASIN to a real X00 FNSKU, catalogRow.fnsku
+      // will be the real FNSKU rather than the B0 value.
+      const resolvedFnsku = String(catalogRow?.fnsku || fnsku).trim().toUpperCase();
       const catalogTitle = catalogRow?.product_title ?? null;
       const catalogAsin = catalogRow?.asin ?? null;
       const catalogSku = catalogRow?.sku ?? null;
@@ -214,7 +218,7 @@ export async function POST(request: NextRequest) {
            (shipment_id, fnsku, expected_qty, product_title, asin, sku, status)
          VALUES ($1, $2, $3, $4, $5, $6, 'PLANNED')
          RETURNING id`,
-        [shipmentId, fnsku, qty, catalogTitle, catalogAsin, catalogSku]
+        [shipmentId, resolvedFnsku, qty, catalogTitle, catalogAsin, catalogSku]
       );
       const itemId: number = itemRes.rows[0].id;
 

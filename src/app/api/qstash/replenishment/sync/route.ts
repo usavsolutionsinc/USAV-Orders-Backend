@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
-import { getAppBaseUrl } from '@/lib/qstash';
 import { runReplenishmentSync } from '@/lib/replenishment';
 
 export const dynamic = 'force-dynamic';
@@ -19,9 +18,7 @@ async function handleReplenishmentSync() {
   }
 }
 
-export const POST = verifySignatureAppRouter(handleReplenishmentSync, {
-  url: `${getAppBaseUrl()}/api/qstash/replenishment/sync`,
-});
+export const POST = verifySignatureAppRouter(handleReplenishmentSync);
 
 export async function GET() {
   return NextResponse.json({ ok: true, queue: 'qstash', job: 'replenishment-sync' });

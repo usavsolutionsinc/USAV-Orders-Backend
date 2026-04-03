@@ -27,7 +27,6 @@ const EMPTY_SELECTION: FbaWorkspaceSelectionState = {
   ownerId: null,
   selectedItems: [],
   planIds: [],
-  shipmentIds: [],
   readyCount: 0,
   pendingCount: 0,
   needsPrintCount: 0,

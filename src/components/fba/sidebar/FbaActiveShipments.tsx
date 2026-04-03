@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { fbaPaths } from '@/lib/fba/api-paths';
+import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED } from '@/lib/fba/events';
 import { AnimatePresence } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
 import {
   FbaShipmentCard,
   type ActiveShipment,
   type ShipmentCardItem,
+  type TrackingBundle,
 } from '@/components/station/upnext/FbaShipmentCard';
 import type { StationTheme } from '@/utils/staff-colors';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
@@ -40,60 +43,72 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
     });
 
   const enrichShipment = useCallback(async (s: any, includeShipped: boolean): Promise<ActiveShipment> => {
-    let items: ShipmentCardItem[] = [];
-    let trackingLinkId: number | null = null;
-    let trackingNumberRaw: string | null = null;
-    let trackingCarrier: string | null = null;
-    let allocationByItemId = new Map<number, number>();
+    let allItems: ShipmentCardItem[] = [];
+    const bundles: TrackingBundle[] = [];
 
     try {
       const [trackingRes, itemsRes] = await Promise.all([
-        fetch(`/api/fba/shipments/${s.id}/tracking`, { cache: 'no-store' }),
-        fetch(`/api/fba/shipments/${s.id}/items`, { cache: 'no-store' }),
+        fetch(fbaPaths.planTracking(s.id), { cache: 'no-store' }),
+        fetch(fbaPaths.planItems(s.id), { cache: 'no-store' }),
       ]);
       const trackingData = await trackingRes.json().catch(() => ({}));
       const itemsData = await itemsRes.json().catch(() => ({}));
 
-      if (trackingRes.ok && Array.isArray(trackingData?.tracking) && trackingData.tracking.length > 0) {
-        const primary = trackingData.tracking[0] as TrackingRow;
-        trackingLinkId = Number(primary.link_id) || null;
-        trackingNumberRaw = String(primary.tracking_number_raw || '').trim() || null;
-        trackingCarrier = String(primary.carrier || '').trim() || null;
-        const allocations = Array.isArray(primary.allocations) ? primary.allocations : [];
-        allocationByItemId = new Map(
-          allocations
-            .map((row) => [Number(row.shipment_item_id), Math.max(1, Number(row.qty) || 1)] as const)
-            .filter(([itemId]) => Number.isFinite(itemId) && itemId > 0),
-        );
-      }
-
+      // Build a lookup of all items by ID.
+      const itemById = new Map<number, ShipmentCardItem>();
       if (itemsData.success && Array.isArray(itemsData.items)) {
-        const sourceItems = itemsData.items
-          .filter((i: any) => includeShipped || i.status !== 'SHIPPED')
-          .map((i: any) => ({
-            item_id: i.id,
+        for (const i of itemsData.items) {
+          if (!includeShipped && i.status === 'SHIPPED') continue;
+          itemById.set(Number(i.id), {
+            item_id: Number(i.id),
             fnsku: i.fnsku,
             display_title: i.display_title || i.product_title || i.fnsku,
             expected_qty: Number(i.expected_qty) || 0,
             actual_qty: Number(i.actual_qty) || 0,
             status: i.status,
             shipment_id: s.id,
-          }));
-
-        if (allocationByItemId.size > 0) {
-          items = sourceItems
-            .filter((i: any) => allocationByItemId.has(Number(i.item_id)))
-            .map((i: any) => ({
-              ...i,
-              expected_qty: allocationByItemId.get(Number(i.item_id)) ?? i.expected_qty,
-            }));
-        } else {
-          items = sourceItems;
+          });
         }
       }
+
+      // Map each tracking row's allocations to items, stamping tracking_number per item.
+      if (trackingRes.ok && Array.isArray(trackingData?.tracking)) {
+        const usedItemIds = new Set<number>();
+        for (const row of trackingData.tracking as TrackingRow[]) {
+          const linkId = Number(row.link_id) || 0;
+          const trackingNumber = String(row.tracking_number_raw || '').trim();
+          const carrier = String(row.carrier || '').trim();
+          if (!linkId || !trackingNumber) continue;
+
+          const allocations = Array.isArray(row.allocations) ? row.allocations : [];
+          const bundleItems: ShipmentCardItem[] = [];
+          for (const alloc of allocations) {
+            const itemId = Number(alloc.shipment_item_id);
+            const item = itemById.get(itemId);
+            if (!item) continue;
+            bundleItems.push({
+              ...item,
+              expected_qty: Math.max(1, Number(alloc.qty) || 1),
+              tracking_number: trackingNumber,
+              tracking_carrier: carrier,
+            });
+            usedItemIds.add(itemId);
+          }
+
+          if (bundleItems.length > 0) {
+            bundles.push({ link_id: linkId, tracking_number: trackingNumber, carrier, items: bundleItems });
+          }
+        }
+      }
+
+      // Flatten all bundle items for the `items` field.
+      allItems = bundles.flatMap((b) => b.items);
     } catch {
       // skip fetch failure per shipment
     }
+
+    // Compat: first bundle's values for legacy fields.
+    const primary = bundles[0] ?? null;
 
     return {
       id: s.id,
@@ -101,22 +116,20 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
       amazon_shipment_id: s.amazon_shipment_id || null,
       status: s.status,
       shipped_at: s.shipped_at || null,
-      tracking_numbers: (s.tracking_numbers || []).map((t: any) => ({
-        tracking_number: t.tracking_number,
-        carrier: t.carrier || '',
-      })),
-      tracking_link_id: trackingLinkId,
-      tracking_number_raw: trackingNumberRaw,
-      tracking_carrier: trackingCarrier,
-      items,
+      bundles,
+      tracking_numbers: bundles.map((b) => ({ tracking_number: b.tracking_number, carrier: b.carrier })),
+      tracking_link_id: primary?.link_id ?? null,
+      tracking_number_raw: primary?.tracking_number ?? null,
+      tracking_carrier: primary?.carrier ?? null,
+      items: allItems,
     };
   }, []);
 
   const fetchShipments = useCallback(async () => {
     try {
       const [activeRes, shippedRes] = await Promise.all([
-        fetch('/api/fba/shipments?status=PLANNED,READY_TO_GO,LABEL_ASSIGNED&limit=50', { cache: 'no-store' }),
-        fetch('/api/fba/shipments?status=SHIPPED&limit=10', { cache: 'no-store' }),
+        fetch(fbaPaths.plans() + '?status=PLANNED,READY_TO_GO,LABEL_ASSIGNED&limit=50', { cache: 'no-store' }),
+        fetch(fbaPaths.plans() + '?status=SHIPPED&limit=10', { cache: 'no-store' }),
       ]);
       const activeData = await activeRes.json().catch(() => ({}));
       const shippedData = await shippedRes.json().catch(() => ({}));
@@ -159,20 +172,22 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
     const handler = () => {
       void fetchShipments();
     };
-    window.addEventListener('usav-refresh-data', handler);
-    window.addEventListener('fba-print-shipped', handler);
+    window.addEventListener(USAV_REFRESH_DATA, handler);
+    window.addEventListener(FBA_PRINT_SHIPPED, handler);
     window.addEventListener('fba-active-shipments-refresh', handler);
     return () => {
-      window.removeEventListener('usav-refresh-data', handler);
-      window.removeEventListener('fba-print-shipped', handler);
+      window.removeEventListener(USAV_REFRESH_DATA, handler);
+      window.removeEventListener(FBA_PRINT_SHIPPED, handler);
       window.removeEventListener('fba-active-shipments-refresh', handler);
     };
   }, [fetchShipments]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center px-3 py-4">
-        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+      <div className="space-y-2 px-3 py-4">
+        <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse mb-3" />
+        <div className="h-24 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
+        <div className="h-24 w-full rounded-xl bg-zinc-50 border border-zinc-100 animate-pulse" />
       </div>
     );
   }
@@ -182,7 +197,7 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
   return (
     <div className="space-y-3 pb-2">
       {shipments.length > 0 ? (
-        <div className="space-y-2">
+        <div>
           <AnimatePresence initial={false}>
             {shipments.map((shipment) => (
               <FbaShipmentCard
@@ -203,8 +218,8 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
       ) : null}
 
       {recentShipped.length > 0 ? (
-        <div className="space-y-2">
-          <p className={`px-1 ${sectionLabel}`}>Recent shipments</p>
+        <div>
+          <p className={`px-3 py-2 ${sectionLabel}`}>Recent shipments</p>
           <AnimatePresence initial={false}>
             {recentShipped.map((shipment) => (
               <FbaShipmentCard

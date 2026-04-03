@@ -88,7 +88,7 @@ export default function StationPacking({
             combinedPackScannedQty: Number(
               data.combined_pack_scanned_qty ?? data.actual_qty ?? 0
             ),
-            isNew: !!data.is_new,
+            isNew: !!data.is_new || !!data.auto_added_to_plan,
           });
           onComplete?.();
           window.dispatchEvent(new CustomEvent('usav-refresh-data'));
@@ -114,7 +114,17 @@ export default function StationPacking({
         if (!res.ok) throw new Error(data?.error || 'Failed to save packing scan');
 
         const resolvedScanType = String(data?.trackingType || '').trim() || 'ORDERS';
-        if (resolvedScanType === 'ORDERS') {
+        if (resolvedScanType === 'FBA' && data?.fba) {
+          // UPS tracking matched an FBA shipment — show as FBA card.
+          setActiveFba({
+            fnsku: String(data.fba.fnskus || '').split(',')[0]?.trim() || '',
+            productTitle: String(data?.productTitle || '').trim() || 'FBA Shipment',
+            shipmentRef: data.fba.shipment_ref || null,
+            plannedQty: Number(data.fba.total_qty ?? 0),
+            combinedPackScannedQty: Number(data.fba.total_qty ?? 0),
+            isNew: false,
+          });
+        } else if (resolvedScanType === 'ORDERS') {
           setActiveOrder({
             orderId: String(data?.orderId || '').trim(),
             productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
@@ -219,8 +229,8 @@ export default function StationPacking({
                   <div className="flex items-center gap-2">
                     <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest">FBA Scan</p>
                     {activeFba.isNew && (
-                      <span className="text-[9px] font-black bg-amber-100 text-amber-700 border border-amber-200 rounded-lg px-1.5 py-0.5 uppercase tracking-wider">
-                        No Plan Found
+                      <span className="text-[9px] font-black bg-blue-100 text-blue-700 border border-blue-200 rounded-lg px-1.5 py-0.5 uppercase tracking-wider">
+                        Added to Today
                       </span>
                     )}
                   </div>

@@ -1,14 +1,28 @@
 'use client';
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Loader2 } from '@/components/Icons';
+import { InlineNotice } from '@/design-system/components';
+import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimaryButtons';
+import {
+  ASSIGN_SESSION_FEEDBACK_EVENT,
+  OPEN_ASSIGN_SESSION_EVENT,
+  type AssignSessionFeedbackDetail,
+} from '@/components/work-orders/assign-session-events';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import type { DashboardData } from '@/features/operations/types';
 
 const formatActivityType = (type: string) =>
   type.toLowerCase().split('_').map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+
+type OperationsView = 'work-queue' | 'orders';
+
+function resolveOperationsView(raw: string | null): OperationsView {
+  return raw === 'orders' ? 'orders' : 'work-queue';
+}
 
 function StaffGoalEntry({ s }: { s: DashboardData['staffProgress'][0] }) {
   const queryClient = useQueryClient();
@@ -133,6 +147,12 @@ function StaffGoalEntry({ s }: { s: DashboardData['staffProgress'][0] }) {
 }
 
 export function OperationsSidebarPanel() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentView = resolveOperationsView(searchParams.get('view'));
+  const [pendingAssignLaunch, setPendingAssignLaunch] = useState(false);
+  const [assignFeedback, setAssignFeedback] = useState<string | null>(null);
+
   const { data: staffGoals = [] } = useQuery<DashboardData['staffProgress']>({
     queryKey: ['staff-goals-all'],
     queryFn: async () => {
@@ -181,8 +201,63 @@ export function OperationsSidebarPanel() {
     [staffGoals]
   );
 
+  useEffect(() => {
+    if (!pendingAssignLaunch || currentView !== 'work-queue') return;
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(OPEN_ASSIGN_SESSION_EVENT));
+      setPendingAssignLaunch(false);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [pendingAssignLaunch, currentView]);
+
+  useEffect(() => {
+    const handleAssignFeedback = (event: Event) => {
+      const detail = (event as CustomEvent<AssignSessionFeedbackDetail>).detail;
+      setAssignFeedback(detail?.message || null);
+      setPendingAssignLaunch(false);
+    };
+
+    window.addEventListener(ASSIGN_SESSION_FEEDBACK_EVENT as any, handleAssignFeedback as any);
+    return () => {
+      window.removeEventListener(ASSIGN_SESSION_FEEDBACK_EVENT as any, handleAssignFeedback as any);
+    };
+  }, []);
+
+  const handleStartAssignSession = () => {
+    setAssignFeedback(null);
+
+    if (currentView === 'work-queue') {
+      window.dispatchEvent(new CustomEvent(OPEN_ASSIGN_SESSION_EVENT));
+      return;
+    }
+
+    setPendingAssignLaunch(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('view');
+    params.delete('entityType');
+    params.delete('entityId');
+    const nextSearch = params.toString();
+    router.replace(nextSearch ? `/operations?${nextSearch}` : '/operations');
+  };
+
   return (
     <div className="h-full overflow-y-auto px-3 py-4 space-y-6 bg-white border-r border-slate-200">
+      <section>
+        {assignFeedback && (
+          <InlineNotice tone="warning" size="sm" className="mb-2">
+            {assignFeedback}
+          </InlineNotice>
+        )}
+        <button
+          type="button"
+          onClick={handleStartAssignSession}
+          disabled={pendingAssignLaunch}
+          className={SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS}
+        >
+          {pendingAssignLaunch ? 'Opening Assign Session…' : 'Start Assign Session'}
+        </button>
+      </section>
+
       {/* Staff Performance */}
       <section className="space-y-3">
         <p className="px-1 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Staff Goals</p>

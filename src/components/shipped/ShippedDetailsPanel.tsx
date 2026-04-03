@@ -13,7 +13,6 @@ import { ShippedDetailsPanelContent } from './ShippedDetailsPanelContent';
 import { QtyBadge } from '@/components/ui/QtyBadge';
 import { useDeleteOrderRow } from '@/hooks';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
-import { TECH_IDS } from '@/utils/staff';
 import { getStaffName } from '@/utils/staff';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { toPSTDateKey } from '@/utils/date';
@@ -143,9 +142,9 @@ export function ShippedDetailsPanel({
   }, [itemNumber, orderNumber, persistInlineFields, shippingTrackingNumber]);
 
   const technicianOptions = staff
-    .filter((member) => member.role === 'technician' && TECH_IDS.includes(Number(member.id)))
+    .filter((member) => member.role === 'technician')
     .map((member) => ({ id: Number(member.id), name: member.name }))
-    .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id));
+    .sort((a, b) => a.name.localeCompare(b.name));
   const packerOptions = staff
     .filter((member) => member.role === 'packer')
     .map((member) => ({ id: Number(member.id), name: member.name }));

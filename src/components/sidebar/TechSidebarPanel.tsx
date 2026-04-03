@@ -97,7 +97,7 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
 
   // Use the same hook + week range as TechTable so counts always match
   const weekRange = useMemo(() => computeCurrentWeekRange(), []);
-  const { data: records = [] } = useTechLogs(parseInt(techId, 10), { weekOffset: 0, weekRange });
+  const { data: records = [], isLoading } = useTechLogs(parseInt(techId, 10), { weekOffset: 0, weekRange });
 
   const todayCount = useMemo(() => {
     const todayDate = getCurrentPSTDateKey();
@@ -126,6 +126,30 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
   const refreshHistory = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['tech-logs', parseInt(techId, 10)] });
   }, [queryClient, techId]);
+
+  if (isLoading && records.length === 0) {
+    return (
+      <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
+        <div className={sidebarHeaderBandClass}>
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
+            <div className="h-11 bg-zinc-50 animate-pulse" />
+            <div className="h-11 bg-zinc-50 animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 p-4 space-y-4">
+          <div className="h-24 w-full rounded-2xl bg-zinc-100 animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-4 w-24 bg-zinc-100 rounded animate-pulse" />
+            <div className="h-10 w-full rounded-xl bg-zinc-100 animate-pulse" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse" />
+            <div className="h-32 w-full rounded-2xl bg-zinc-100 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">

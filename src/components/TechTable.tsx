@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
 import { Loader2 } from './Icons';
 import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, PlatformChip, getLast4, getLast6Serial } from './ui/CopyChip';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
@@ -144,7 +144,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       packed_by: null,
       packed_at: null,
       packer_photos_url: [],
-      tracking_type: null,
+      tracking_type: record.fnsku ? 'FNSKU' : null,
       account_source: record.account_source || null,
       notes: record.notes || '',
       status_history: record.status_history || [],
@@ -378,10 +378,12 @@ export function TechTable({ testedBy }: TechTableProps) {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Loading tech records...</p>
+      <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
+        <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
+          <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+        </div>
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+          <SkeletonList count={12} />
         </div>
       </div>
     );
@@ -463,6 +465,8 @@ export function TechTable({ testedBy }: TechTableProps) {
                           <motion.div
                             {...framerPresence.tableRow}
                             transition={framerTransition.tableRowMount}
+                            whileHover={{ x: 2 }}
+                            whileTap={{ scale: 0.998 }}
                             key={getRowKey(record)}
                             onClick={() => openDetails(record)}
                             className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${

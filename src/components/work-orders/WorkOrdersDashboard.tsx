@@ -12,10 +12,15 @@ import { useTodayStaffAvailability } from '@/hooks/useTodayStaffAvailability';
 import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
 import { WorkOrderInfoChips } from './WorkOrderInfoStrip';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import { TECH_IDS } from '@/utils/staff';
+import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from './WorkOrderAssignmentCard';
 import { SkuStockAssignPanel } from './SkuStockAssignPanel';
 import { LocalPickupTable } from './LocalPickupTable';
+import {
+  ASSIGN_SESSION_FEEDBACK_EVENT,
+  OPEN_ASSIGN_SESSION_EVENT,
+  type AssignSessionFeedbackDetail,
+} from './assign-session-events';
 import {
   type WorkOrderRow,
   type QueueCounts,
@@ -145,9 +150,9 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
   }, [isPanelOpen, rows, selectedId, searchParams, router, basePath]);
 
   const technicianOptions = techniciansOn
-    .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
+    .filter((m) => m.role === 'technician')
     .map((m) => ({ id: Number(m.id), name: m.name }))
-    .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id));
+    .sort((a, b) => a.name.localeCompare(b.name));
   const packerOptions = packersOn
     .filter((m) => m.role === 'packer')
     .map((m) => ({ id: Number(m.id), name: m.name }));
@@ -156,11 +161,11 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
   const staffContext = {
     techniciansOn: technicianOptions,
     techniciansOff: techniciansOff
-      .filter((m) => TECH_IDS.includes(Number(m.id)))
+      .filter((m) => m.role === 'technician')
       .map((m) => ({ id: Number(m.id), name: m.name }))
       .filter((m) => !onTechIds.has(m.id)),
     techniciansInactive: techniciansInactive
-      .filter((m) => TECH_IDS.includes(Number(m.id)))
+      .filter((m) => m.role === 'technician')
       .map((m) => ({ id: Number(m.id), name: m.name })),
     packersOn: packerOptions,
     packersOff: packersOff
@@ -235,24 +240,16 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
       )
     );
     try {
-      const res = await fetch('/api/work-orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entityType: row.entityType,
-          entityId: row.entityId,
-          assignedTechId: newTechId,
-          assignedPackerId: newPackerId,
-          status: newStatus,
-          priority: row.priority,
-          deadlineAt: row.deadlineAt,
-          notes: row.notes,
-        }),
+      await saveWorkOrder({
+        entityType: row.entityType,
+        entityId: row.entityId,
+        assignedTechId: newTechId,
+        assignedPackerId: newPackerId,
+        status: newStatus,
+        priority: row.priority,
+        deadlineAt: row.deadlineAt,
+        notes: row.notes,
       });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        throw new Error(payload?.details || payload?.error || 'Failed to assign');
-      }
       await refreshRows(
         row.entityType === 'ORDER' ? { pendingOrderId: row.entityId } : undefined
       );
@@ -293,25 +290,16 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
       )
     );
     try {
-      const patchBody: Record<string, unknown> = {
+      await saveWorkOrder({
         entityType: row.entityType,
         entityId: row.entityId,
         assignedTechId: newTechId,
+        assignedPackerId: newPackerId !== null ? newPackerId : undefined,
         status: newStatus,
         priority: row.priority,
         deadlineAt: deadline,
         notes: row.notes,
-      };
-      if (newPackerId !== null) patchBody.assignedPackerId = newPackerId;
-      const res = await fetch('/api/work-orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patchBody),
       });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        throw new Error(payload?.details || payload?.error || 'Failed to assign');
-      }
       void refreshRows(
         row.entityType === 'ORDER' ? { pendingOrderId: row.entityId } : undefined
       );
@@ -346,11 +334,17 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
   useEffect(() => {
     const handleOpenAssignSession = () => {
       if (queue === 'local_pickups' || queue === 'stock_replenish') {
-        window.alert('Assign session is not available for this queue.');
+        window.dispatchEvent(new CustomEvent<AssignSessionFeedbackDetail>(
+          ASSIGN_SESSION_FEEDBACK_EVENT,
+          { detail: { message: 'Assign Session is available for active work queues only.' } }
+        ));
         return;
       }
       if (!rowsNeedingAssignment.length) {
-        window.alert('No assignable work orders in this view.');
+        window.dispatchEvent(new CustomEvent<AssignSessionFeedbackDetail>(
+          ASSIGN_SESSION_FEEDBACK_EVENT,
+          { detail: { message: 'Nothing needs assignment in the current view.' } }
+        ));
         return;
       }
       const keyQueue = queue || 'all';
@@ -363,9 +357,9 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
         storageKey,
       });
     };
-    window.addEventListener('work-orders-open-assign-session' as any, handleOpenAssignSession as any);
+    window.addEventListener(OPEN_ASSIGN_SESSION_EVENT as any, handleOpenAssignSession as any);
     return () => {
-      window.removeEventListener('work-orders-open-assign-session' as any, handleOpenAssignSession as any);
+      window.removeEventListener(OPEN_ASSIGN_SESSION_EVENT as any, handleOpenAssignSession as any);
     };
   }, [queue, query, rowsNeedingAssignment]);
 

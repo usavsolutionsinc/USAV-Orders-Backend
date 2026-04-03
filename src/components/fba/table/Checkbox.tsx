@@ -9,6 +9,8 @@ export function PrintTableCheckbox({
   checked,
   indeterminate,
   onChange,
+  /** When set, called instead of toggling `checked` (e.g. shift-range select in tables). */
+  onClick,
   reducedMotion = false,
   label,
   stationTheme = 'lightblue',
@@ -18,6 +20,7 @@ export function PrintTableCheckbox({
   checked: boolean;
   indeterminate?: boolean;
   onChange: (v: boolean) => void;
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   reducedMotion?: boolean;
   label?: string;
   stationTheme?: StationTheme;
@@ -33,6 +36,10 @@ export function PrintTableCheckbox({
       onClick={(event) => {
         event.stopPropagation();
         if (disabled) return;
+        if (onClick) {
+          onClick(event);
+          return;
+        }
         onChange(!checked);
       }}
       role="checkbox"

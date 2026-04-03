@@ -14,6 +14,15 @@ interface StaffOption {
   name: string;
 }
 
+export interface AssignmentStaffContext {
+  techniciansOn?: StaffOption[];
+  techniciansOff?: StaffOption[];
+  techniciansInactive?: StaffOption[];
+  packersOn?: StaffOption[];
+  packersOff?: StaffOption[];
+  packersInactive?: StaffOption[];
+}
+
 interface AssignmentDraft {
   techId: number | null;
   packerId: number | null;
@@ -37,6 +46,7 @@ export interface WorkOrderAssignmentCardProps {
   storageKey?: string;
   allowEditConfirmed?: boolean;
   closeWhenCompleted?: boolean;
+  staffContext?: AssignmentStaffContext;
 }
 
 /** Plain text only (no chips): e.g. “Orders · Amazon”, “FBA”, or queue label. */
@@ -115,6 +125,7 @@ export function WorkOrderAssignmentCard({
   storageKey,
   allowEditConfirmed = false,
   closeWhenCompleted = true,
+  staffContext,
 }: WorkOrderAssignmentCardProps) {
   const [index, setIndex] = useState(0);
   const confirmedIdsRef = useRef(new Set<string>());
@@ -124,8 +135,8 @@ export function WorkOrderAssignmentCard({
 
   const orderedRows = useMemo(() => [...rows].sort(compareRowsByUpdatedAtDesc), [rows]);
   const assignableRows = useMemo(
-    () => orderedRows.filter((r) => isRowNeedingAssignment(r)),
-    [orderedRows]
+    () => allowEditConfirmed ? orderedRows : orderedRows.filter((r) => isRowNeedingAssignment(r)),
+    [allowEditConfirmed, orderedRows]
   );
 
   const todayDateKey = useMemo(() => toLocalDateKey(new Date()), []);
@@ -233,11 +244,24 @@ export function WorkOrderAssignmentCard({
       nextIndex = resolvedIndex ?? 0;
     }
 
+    // Auto-fill when only one staff option is available
+    if (technicianOptions.length === 1 || packerOptions.length === 1) {
+      assignableRows.forEach((r) => {
+        const draft = nextDrafts[r.id];
+        if (draft.techId == null && technicianOptions.length === 1) {
+          draft.techId = technicianOptions[0].id;
+        }
+        if (r.entityType !== 'SKU_STOCK' && draft.packerId == null && packerOptions.length === 1) {
+          draft.packerId = packerOptions[0].id;
+        }
+      });
+    }
+
     setDrafts(nextDrafts);
     setIndex(nextIndex);
     confirmedIdsRef.current = confirmedIds;
     setConfirmedCount(confirmedIds.size);
-  }, [assignableRows, rows, startIndex, storageKey, allowEditConfirmed]);
+  }, [assignableRows, rows, startIndex, storageKey, allowEditConfirmed, technicianOptions, packerOptions]);
 
   const changed =
     techId !== (row?.techId ?? null) ||
@@ -266,10 +290,14 @@ export function WorkOrderAssignmentCard({
     }
   }, [storageKey, index, row?.id, drafts, confirmedCount]);
 
-  const findNextIndex = useCallback((from: number, dir: 'next' | 'prev') => {
+  const findNextNavigableIndex = useCallback((from: number, dir: 'next' | 'prev') => {
+    const next = dir === 'next' ? from + 1 : from - 1;
+    return next >= 0 && next < assignableRows.length ? next : null;
+  }, [assignableRows]);
+
+  const findNextUnconfirmedIndex = useCallback((from: number, dir: 'next' | 'prev') => {
     if (allowEditConfirmed) {
-      const next = dir === 'next' ? from + 1 : from - 1;
-      return next >= 0 && next < assignableRows.length ? next : null;
+      return findNextNavigableIndex(from, dir);
     }
 
     if (dir === 'next') {
@@ -282,16 +310,16 @@ export function WorkOrderAssignmentCard({
       if (!confirmedIdsRef.current.has(assignableRows[i].id)) return i;
     }
     return null;
-  }, [allowEditConfirmed, assignableRows, confirmedCount]);
+  }, [allowEditConfirmed, assignableRows, confirmedCount, findNextNavigableIndex]);
 
   const advance = useCallback(() => {
-    const next = findNextIndex(index, 'next');
+    const next = findNextUnconfirmedIndex(index, 'next');
     if (next !== null) {
       setTimeout(() => { setIndex(next); }, 300);
       return;
     }
 
-    const prev = findNextIndex(index, 'prev');
+    const prev = findNextUnconfirmedIndex(index, 'prev');
     if (prev !== null) {
       setTimeout(() => { setIndex(prev); }, 300);
       return;
@@ -307,7 +335,7 @@ export function WorkOrderAssignmentCard({
       }
       setTimeout(onClose, 350);
     }
-  }, [findNextIndex, index, closeWhenCompleted, storageKey, onClose]);
+  }, [findNextUnconfirmedIndex, index, closeWhenCompleted, storageKey, onClose]);
 
   const markConfirmed = useCallback((rowId: string) => {
     if (confirmedIdsRef.current.has(rowId)) return;
@@ -360,10 +388,10 @@ export function WorkOrderAssignmentCard({
   }, [techId, packerId, deadline, changed, save, cancelPendingDebouncedSave]);
 
   const navigate = useCallback((dir: 'next' | 'prev') => {
-    const next = findNextIndex(index, dir);
+    const next = findNextNavigableIndex(index, dir);
     if (next === null) return;
     setIndex(next);
-  }, [index, findNextIndex]);
+  }, [index, findNextNavigableIndex]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -398,8 +426,8 @@ export function WorkOrderAssignmentCard({
     }));
   };
 
-  const hasPrev = findNextIndex(index, 'prev') !== null;
-  const hasNext = findNextIndex(index, 'next') !== null;
+  const hasPrev = findNextNavigableIndex(index, 'prev') !== null;
+  const hasNext = findNextNavigableIndex(index, 'next') !== null;
   const remaining = allowEditConfirmed
     ? assignableRows.filter((r) => !isDraftComplete(r, drafts[r.id] || toDraft(r))).length
     : assignableRows.filter((r) => !confirmedIdsRef.current.has(r.id)).length;
@@ -423,7 +451,7 @@ export function WorkOrderAssignmentCard({
     const next = packerId === id ? null : id;
     setPackerId(next);
     updateCurrentDraft({ packerId: next });
-    if (isDraftComplete(row, { techId, packerId: next, deadline })) {
+    if (next != null) {
       setTimeout(() => {
         if (!row) return;
         cancelPendingDebouncedSave();
@@ -522,22 +550,42 @@ export function WorkOrderAssignmentCard({
         </div>
 
         <div className="shrink-0 space-y-4 border-t border-gray-100 px-5 pb-5 pt-2.5">
-          <StaffButtonGrid
-            label="Technician"
-            options={technicianOptions}
-            selectedId={techId}
-            onSelect={handleTech}
-            emptyMessage="No technicians"
-          />
+          <div>
+            <StaffButtonGrid
+              label="Technician"
+              options={technicianOptions}
+              selectedId={techId}
+              onSelect={handleTech}
+              emptyMessage="No technicians"
+            />
+            {staffContext && (staffContext.techniciansOff?.length || staffContext.techniciansInactive?.length) ? (
+              <p className="mt-1.5 text-[9px] font-bold text-gray-400">
+                Unavailable: {[
+                  ...(staffContext.techniciansOff || []).map((m) => `${m.name} (Off today)`),
+                  ...(staffContext.techniciansInactive || []).map((m) => `${m.name} (Inactive)`),
+                ].join(', ')}
+              </p>
+            ) : null}
+          </div>
 
-          <StaffButtonGrid
-            label="Packer"
-            options={packerOptions}
-            selectedId={packerId}
-            onSelect={handlePacker}
-            columns={2}
-            emptyMessage="No packers"
-          />
+          <div>
+            <StaffButtonGrid
+              label="Packer"
+              options={packerOptions}
+              selectedId={packerId}
+              onSelect={handlePacker}
+              columns={2}
+              emptyMessage="No packers"
+            />
+            {staffContext && (staffContext.packersOff?.length || staffContext.packersInactive?.length) ? (
+              <p className="mt-1.5 text-[9px] font-bold text-gray-400">
+                Unavailable: {[
+                  ...(staffContext.packersOff || []).map((m) => `${m.name} (Off today)`),
+                  ...(staffContext.packersInactive || []).map((m) => `${m.name} (Inactive)`),
+                ].join(', ')}
+              </p>
+            ) : null}
+          </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3">
             <span className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-500">

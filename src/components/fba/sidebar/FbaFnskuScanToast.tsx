@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { fbaPaths } from '@/lib/fba/api-paths';
 import { X, Package, Loader2 } from '@/components/Icons';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
@@ -72,7 +73,7 @@ export function FbaFnskuScanToast({ pendingPlans, stationTheme }: FbaFnskuScanTo
 
     setAdding(true);
     try {
-      const res = await fetch(`/api/fba/shipments/${planId}/items`, {
+      const res = await fetch(fbaPaths.planItems(planId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fnsku: detail.fnsku, expected_qty: 1 }),

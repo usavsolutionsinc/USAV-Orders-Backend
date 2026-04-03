@@ -1,15 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import {
   ExternalLink,
-  Loader2,
 } from '@/components/Icons';
-import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
-import { HorizontalButtonSlider, type HorizontalSliderTone } from '@/components/ui/HorizontalButtonSlider';
+import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { usePanelActions } from '@/hooks/usePanelActions';
 import { ShippingInformationSection } from '@/components/shipped/details-panel/ShippingInformationSection';
@@ -20,12 +18,14 @@ import { DeleteOrderControl } from '@/components/shipped/stacks/DeleteOrderContr
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
-import { TECH_IDS } from '@/utils/staff';
-import { getStaffThemeById } from '@/utils/staff-colors';
+import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
+import {
+  WorkOrderAssignmentCard,
+  type AssignmentConfirmPayload,
+} from '@/design-system/components/WorkOrderAssignmentCard';
 import {
   type WorkOrderRow,
   type WorkStatus,
-  STATUS_OPTIONS,
   STATUS_COLOR,
   toDateInputValue,
   buildSourceHref,
@@ -39,43 +39,6 @@ interface WorkOrderDetailsPanelProps {
   query: string;
   disableMoveUp?: boolean;
   disableMoveDown?: boolean;
-}
-
-type PriorityPreset = 'NORMAL' | 'MUST_GO' | 'LATER';
-
-const PRIORITY_OPTIONS: Array<{ value: PriorityPreset; label: string }> = [
-  { value: 'NORMAL', label: 'Normal' },
-  { value: 'MUST_GO', label: 'Must Go' },
-  { value: 'LATER', label: 'Later' },
-];
-
-function getPriorityPreset(priority: number | null | undefined): PriorityPreset {
-  const value = Number(priority || 100);
-  if (value <= 25) return 'MUST_GO';
-  if (value >= 250) return 'LATER';
-  return 'NORMAL';
-}
-
-function getPriorityValue(priority: PriorityPreset): number {
-  if (priority === 'MUST_GO') return 10;
-  if (priority === 'LATER') return 500;
-  return 100;
-}
-
-
-const STAFF_THEME_TO_TONE: Record<string, HorizontalSliderTone> = {
-  green: 'emerald',
-  blue: 'blue',
-  purple: 'purple',
-  yellow: 'yellow',
-  black: 'zinc',
-  red: 'red',
-  lightblue: 'blue',
-  pink: 'red',
-};
-
-function getStaffSliderTone(staffId: number): HorizontalSliderTone {
-  return STAFF_THEME_TO_TONE[getStaffThemeById(staffId)] || 'zinc';
 }
 
 function buildOrderDetailsRecord(row: WorkOrderRow): ShippedOrder | null {
@@ -131,17 +94,16 @@ export function WorkOrderDetailsPanel({
   disableMoveDown = false,
 }: WorkOrderDetailsPanelProps) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [saving, setSaving] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   const [outOfStock, setOutOfStock] = useState(String((row as any).out_of_stock || ''));
   const [notes, setNotes] = useState(row.notes || '');
   const [isMarkAsShippedOpen, setIsMarkAsShippedOpen] = useState(false);
+  const [isAssignmentOpen, setIsAssignmentOpen] = useState(false);
   const [activeInput, setActiveInput] = useState<'none' | 'out_of_stock' | 'notes'>('none');
   const [form, setForm] = useState({
     assignedTechId: row.techId ? String(row.techId) : '',
     assignedPackerId: row.packerId ? String(row.packerId) : '',
     status: row.status as WorkStatus,
-    priority: getPriorityPreset(row.priority),
     deadlineAt: toDateInputValue(row.deadlineAt),
   });
 
@@ -156,7 +118,7 @@ export function WorkOrderDetailsPanel({
 
   useEffect(() => {
     let active = true;
-    getActiveStaff()
+    getPresentStaffForToday()
       .then((members) => { if (active) setStaff(members); })
       .catch(() => {});
     return () => { active = false; };
@@ -167,7 +129,6 @@ export function WorkOrderDetailsPanel({
       assignedTechId: row.techId ? String(row.techId) : '',
       assignedPackerId: row.packerId ? String(row.packerId) : '',
       status: row.status,
-      priority: getPriorityPreset(row.priority),
       deadlineAt: toDateInputValue(row.deadlineAt),
     });
     setOutOfStock(String((row as any).out_of_stock || ''));
@@ -175,6 +136,10 @@ export function WorkOrderDetailsPanel({
     setActiveInput('none');
     setIsMarkAsShippedOpen(false);
   }, [row]);
+
+  useEffect(() => {
+    setIsAssignmentOpen(false);
+  }, [row.id]);
 
   useEffect(() => {
     if (!copiedAll) return;
@@ -194,85 +159,15 @@ export function WorkOrderDetailsPanel({
   );
 
   const technicianOptions = staff
-    .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
+    .filter((m) => m.role === 'technician')
     .map((m) => ({ id: Number(m.id), name: m.name }))
-    .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id));
+    .sort((a, b) => a.name.localeCompare(b.name));
   const packerOptions = staff
     .filter((m) => m.role === 'packer')
     .map((m) => ({ id: Number(m.id), name: m.name }));
 
-  const techSliderItems = useMemo(
-    () => technicianOptions.map((s) => ({
-      id: String(s.id),
-      label: s.name,
-      tone: getStaffSliderTone(s.id),
-    })),
-    [technicianOptions]
-  );
-
-  const packerSliderItems = useMemo(
-    () => packerOptions.map((s) => ({
-      id: String(s.id),
-      label: s.name,
-      tone: getStaffSliderTone(s.id),
-    })),
-    [packerOptions]
-  );
-
-  // Use ref so auto-save always reads the latest form values
   const formRef = useRef(form);
   formRef.current = form;
-  const savingRef = useRef(false);
-
-  const handleSave = useCallback(async () => {
-    if (savingRef.current) return;
-    savingRef.current = true;
-    setSaving(true);
-    const f = formRef.current;
-    try {
-      const res = await fetch('/api/work-orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entityType: row.entityType,
-          entityId: row.entityId,
-          assignedTechId: f.assignedTechId ? Number(f.assignedTechId) : null,
-          assignedPackerId: f.assignedPackerId ? Number(f.assignedPackerId) : null,
-          status: f.status,
-          priority: getPriorityValue(f.priority),
-          deadlineAt: f.deadlineAt || null,
-        }),
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        throw new Error(payload?.details || payload?.error || 'Failed to save work order');
-      }
-      onSaved();
-      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-    } catch (err: any) {
-      window.alert(err?.message || 'Failed to save work order');
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
-  }, [row.entityType, row.entityId, onSaved]);
-
-  // Auto-save when form changes (debounced, skip initial mount)
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    const timer = window.setTimeout(() => { void handleSave(); }, 400);
-    return () => window.clearTimeout(timer);
-  }, [form.assignedTechId, form.assignedPackerId, form.status, form.priority, form.deadlineAt, handleSave]);
-
-  // Reset initial mount flag when row changes
-  useEffect(() => {
-    isInitialMount.current = true;
-  }, [row]);
 
   const handleCopyAll = async () => {
     if (!orderDetailsRecord) return;
@@ -289,10 +184,35 @@ export function WorkOrderDetailsPanel({
   };
 
   const statusBadgeClass = STATUS_COLOR[form.status] || 'text-gray-600 bg-gray-100';
-  const statusSliderItems = useMemo(
-    () => STATUS_OPTIONS.map((status) => ({ id: status, label: status.replace('_', ' ') })),
-    []
-  );
+  const handleAssignmentConfirm = useCallback(async (_assignmentRow: WorkOrderRow, payload: AssignmentConfirmPayload) => {
+    const nextForm = {
+      ...formRef.current,
+      assignedTechId: payload.techId ? String(payload.techId) : '',
+      assignedPackerId: payload.packerId ? String(payload.packerId) : '',
+      status: payload.status ?? formRef.current.status,
+      deadlineAt: payload.deadline || '',
+    };
+
+    formRef.current = nextForm;
+    setForm(nextForm);
+
+    try {
+      await saveWorkOrder({
+        entityType: row.entityType,
+        entityId: row.entityId,
+        assignedTechId: payload.techId,
+        assignedPackerId: payload.packerId,
+        status: nextForm.status,
+        priority: Number(row.priority || 100),
+        deadlineAt: payload.deadline,
+      });
+      onSaved();
+      window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+    } catch (err: any) {
+      window.alert(err?.message || 'Failed to save work order');
+    }
+  }, [onSaved, row.entityId, row.entityType]);
 
   return (
     <motion.div
@@ -332,6 +252,7 @@ export function WorkOrderDetailsPanel({
         onClose={onClose}
         onMoveUp={() => dispatchNavigateShippedDetails('up')}
         onMoveDown={() => dispatchNavigateShippedDetails('down')}
+        onAssign={() => setIsAssignmentOpen(true)}
         disableMoveUp={disableMoveUp}
         disableMoveDown={disableMoveDown}
         actions={panelActions}
@@ -399,102 +320,9 @@ export function WorkOrderDetailsPanel({
             </section>
           ) : null}
 
-          {/* Assignment */}
-          <section>
-            <p className={`mb-2 ${sectionLabel}`}>Assignment</p>
-            {staff.length > 0 ? (
-              <div className="space-y-2">
-                <div>
-                  <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-gray-400">Tech</p>
-                  <HorizontalButtonSlider
-                    variant="fba"
-                    size="md"
-                    items={techSliderItems}
-                    value={form.assignedTechId}
-                    onChange={(id) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        assignedTechId: prev.assignedTechId === id ? '' : id,
-                      }))
-                    }
-                    aria-label="Assign technician"
-                  />
-                </div>
-                <div>
-                  <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-gray-400">Pack</p>
-                  <HorizontalButtonSlider
-                    variant="fba"
-                    size="md"
-                    items={packerSliderItems}
-                    value={form.assignedPackerId}
-                    onChange={(id) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        assignedPackerId: prev.assignedPackerId === id ? '' : id,
-                      }))
-                    }
-                    aria-label="Assign packer"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-gray-400">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span className="text-[10px] font-bold">Loading staff...</span>
-              </div>
-            )}
-          </section>
-
-          <div className="h-px bg-gray-100" />
-
-          {/* Status */}
-          <section>
-            <p className={`mb-2 ${sectionLabel}`}>Status</p>
-            <HorizontalButtonSlider
-              variant="slate"
-              size="md"
-              items={statusSliderItems}
-              value={form.status}
-              onChange={(id) => setForm((prev) => ({ ...prev, status: id as WorkStatus }))}
-              aria-label="Work order status"
-            />
-          </section>
-
-          <div className="h-px bg-gray-100" />
-
-          {/* Priority + Deadline */}
-          <section>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className={`mb-1 block ${sectionLabel}`}>Priority</span>
-                <select
-                  value={form.priority}
-                  onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value as PriorityPreset }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-gray-400 focus:ring-0"
-                >
-                  {PRIORITY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className={`mb-1 block ${sectionLabel}`}>Deadline</span>
-                <input
-                  type="date"
-                  value={form.deadlineAt}
-                  onChange={(e) => setForm((prev) => ({ ...prev, deadlineAt: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-gray-400 focus:ring-0"
-                />
-              </label>
-            </div>
-          </section>
-
           {/* Shipping + Product Details */}
           {orderDetailsRecord ? (
             <>
-              <div className="h-px bg-gray-100" />
               <ShippingInformationSection
                 shipped={orderDetailsRecord}
                 copiedAll={copiedAll}
@@ -523,6 +351,28 @@ export function WorkOrderDetailsPanel({
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {isAssignmentOpen ? (
+          <WorkOrderAssignmentCard
+            rows={[{
+              ...row,
+              techId: form.assignedTechId ? Number(form.assignedTechId) : null,
+              packerId: form.assignedPackerId ? Number(form.assignedPackerId) : null,
+              status: form.status,
+              deadlineAt: form.deadlineAt || null,
+              priority: Number(row.priority || 100),
+            }]}
+            startIndex={0}
+            technicianOptions={technicianOptions}
+            packerOptions={packerOptions}
+            onConfirm={handleAssignmentConfirm}
+            allowEditConfirmed
+            closeWhenCompleted={false}
+            onClose={() => setIsAssignmentOpen(false)}
+          />
+        ) : null}
+      </AnimatePresence>
     </motion.div>
   );
 }

@@ -1,9 +1,17 @@
 export type PendingStockFilterPreference = 'all' | 'pending' | 'stock';
 export type ShippedTypeFilterPreference = 'all' | 'orders' | 'sku' | 'fba';
+export type ShippedSearchFieldPreference =
+  | 'all'
+  | 'order_id'
+  | 'tracking'
+  | 'product_title'
+  | 'sku'
+  | 'serial_number';
 export type DetailsOpenBehaviorPreference = 'auto' | 'side_panel';
 
 const PREF_PENDING_FILTER = 'dashboard:pending-filter';
 const PREF_SHIPPED_FILTER = 'dashboard:shipped-filter';
+const PREF_SHIPPED_SEARCH_FIELD = 'dashboard:shipped-search-field';
 const PREF_SHIPPED_WEEK_OFFSET = 'dashboard:shipped-week-offset';
 const PREF_DETAILS_OPEN_BEHAVIOR = 'dashboard:details-open-behavior';
 
@@ -33,6 +41,25 @@ export function readShippedFilterPreference(): ShippedTypeFilterPreference | nul
 export function writeShippedFilterPreference(value: ShippedTypeFilterPreference): void {
   if (!canUseStorage()) return;
   window.localStorage.setItem(PREF_SHIPPED_FILTER, value);
+}
+
+export function readShippedSearchFieldPreference(): ShippedSearchFieldPreference | null {
+  if (!canUseStorage()) return null;
+  const raw = String(window.localStorage.getItem(PREF_SHIPPED_SEARCH_FIELD) || '').trim();
+  if (
+    raw === 'all'
+    || raw === 'order_id'
+    || raw === 'tracking'
+    || raw === 'product_title'
+    || raw === 'sku'
+    || raw === 'serial_number'
+  ) return raw;
+  return null;
+}
+
+export function writeShippedSearchFieldPreference(value: ShippedSearchFieldPreference): void {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(PREF_SHIPPED_SEARCH_FIELD, value);
 }
 
 export function readShippedWeekOffsetPreference(): number | null {

@@ -1,9 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
+import { fbaPaths } from '@/lib/fba/api-paths';
 import { Check, ChevronDown, Loader2 } from '@/components/Icons';
-import type { StationTheme } from '@/utils/staff-colors';
+import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
 import { stationThemeColors } from '@/utils/staff-colors';
+import type { StationTheme } from '@/utils/staff-colors';
+
 
 type TrackingEntry = {
   link_id: number;
@@ -71,7 +75,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
       params.set('status', 'SHIPPED');
       params.set('limit', '200');
       if (searchQuery.trim()) params.set('q', searchQuery.trim());
-      const res = await fetch(`/api/fba/shipments?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`${fbaPaths.plans()}?${params.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to load shipped rows');
       const rows = Array.isArray(data.shipments) ? (data.shipments as ShipmentRow[]) : [];
@@ -123,7 +127,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
     if (itemsByShipment[shipmentId]) return;
     setItemLoadingId(shipmentId);
     try {
-      const res = await fetch(`/api/fba/shipments/${shipmentId}/items`, { cache: 'no-store' });
+      const res = await fetch(fbaPaths.planItems(shipmentId), { cache: 'no-store' });
       const data = await res.json();
       const rows = Array.isArray(data?.items) ? (data.items as ShipmentItem[]) : [];
       setItemsByShipment((prev) => ({ ...prev, [shipmentId]: rows }));
@@ -147,7 +151,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
     setSavingShipmentId(row.id);
     setError(null);
     try {
-      const shipmentRes = await fetch(`/api/fba/shipments/${row.id}`, {
+      const shipmentRes = await fetch(fbaPaths.plan(row.id), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amazon_shipment_id: amazon || null }),
@@ -158,7 +162,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
       if (ups) {
         const primary = getPrimaryUps(row.tracking_numbers || []);
         if (primary?.link_id) {
-          const trackingRes = await fetch(`/api/fba/shipments/${row.id}/tracking`, {
+          const trackingRes = await fetch(fbaPaths.planTracking(row.id), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -171,7 +175,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
           const trackingJson = await trackingRes.json().catch(() => ({}));
           if (!trackingRes.ok) throw new Error(trackingJson?.error || 'Failed to update UPS tracking');
         } else {
-          const trackingRes = await fetch(`/api/fba/shipments/${row.id}/tracking`, {
+          const trackingRes = await fetch(fbaPaths.planTracking(row.id), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tracking_number: ups, carrier: 'UPS', label: 'UPS' }),
@@ -201,7 +205,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
     setSavingItemId(item.id);
     setError(null);
     try {
-      const res = await fetch(`/api/fba/shipments/${shipmentId}/items/${item.id}`, {
+      const res = await fetch(fbaPaths.planItem(shipmentId, item.id), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fnsku: nextFnsku }),
@@ -225,9 +229,8 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
 
   if (loading && shipments.length === 0) {
     return (
-      <div className="flex items-center justify-center px-4 py-8 text-gray-500">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="ml-2 text-xs font-bold">Loading shipped rows…</span>
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        <SkeletonList count={12} />
       </div>
     );
   }
@@ -256,7 +259,14 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                 ups: String(primaryUps?.tracking_number || '').toUpperCase(),
               };
               return (
-                <div key={group.key} className="bg-white">
+                <motion.div
+                  {...framerPresence.tableRow}
+                  transition={framerTransition.tableRowMount}
+                  whileHover={{ x: 2 }}
+                  whileTap={{ scale: 0.998 }}
+                  key={group.key}
+                  className="bg-white"
+                >
                   <button
                     type="button"
                     onClick={() => void toggleExpand(row.id)}
@@ -363,7 +373,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                       )}
                     </div>
                   ) : null}
-                </div>
+                </motion.div>
               );
             })}
           </div>

@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Check, ChevronRight, ClipboardList } from '@/components/Icons';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { sectionLabel, framerPresence, framerTransition, SkeletonList } from '@/design-system';
 import type { StationTheme } from '@/utils/staff-colors';
 import { printQueueTableUi } from '@/utils/staff-colors';
 
@@ -31,6 +32,7 @@ export interface FbaBoardItem {
 
 interface FbaBoardTableProps {
   items: FbaBoardItem[];
+  loading?: boolean;
   stationTheme?: StationTheme;
   emptyMessage?: string;
   onSelectionChange?: (selected: FbaBoardItem[]) => void;
@@ -60,6 +62,7 @@ function sortBoardItems(a: FbaBoardItem, b: FbaBoardItem) {
 
 export function FbaBoardTable({
   items,
+  loading = false,
   stationTheme = 'green',
   emptyMessage,
   onSelectionChange,
@@ -70,6 +73,8 @@ export function FbaBoardTable({
   const sortedItems = useMemo(() => [...items].sort(sortBoardItems), [items]);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  /** Index in `sortedItems` for the last plain click — shift-click selects the inclusive range from here. */
+  const anchorIndexRef = useRef<number | null>(null);
 
   const emitSelection = useCallback(
     (nextIds: Set<number>) => {
@@ -120,6 +125,12 @@ export function FbaBoardTable({
     return () => cancelAnimationFrame(id);
   }, [selectedIds, sortedItems]);
 
+  useEffect(() => {
+    if (anchorIndexRef.current !== null && anchorIndexRef.current >= sortedItems.length) {
+      anchorIndexRef.current = null;
+    }
+  }, [sortedItems.length]);
+
   const toggleItem = useCallback(
     (id: number) => {
       setSelectedIds((prev) => {
@@ -133,6 +144,35 @@ export function FbaBoardTable({
     [emitSelection],
   );
 
+  const selectRangeInclusive = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      const lo = Math.min(fromIndex, toIndex);
+      const hi = Math.max(fromIndex, toIndex);
+      const next = new Set<number>();
+      for (let i = lo; i <= hi; i++) {
+        const row = sortedItems[i];
+        if (row) next.add(row.item_id);
+      }
+      setSelectedIds(next);
+      emitSelection(next);
+    },
+    [sortedItems, emitSelection],
+  );
+
+  const handleRowActivate = useCallback(
+    (event: React.MouseEvent | React.KeyboardEvent, index: number, item: FbaBoardItem) => {
+      const shiftKey = 'shiftKey' in event && event.shiftKey;
+      if (shiftKey && anchorIndexRef.current !== null) {
+        event.preventDefault();
+        selectRangeInclusive(anchorIndexRef.current, index);
+        return;
+      }
+      toggleItem(item.item_id);
+      anchorIndexRef.current = index;
+    },
+    [selectRangeInclusive, toggleItem],
+  );
+
   useEffect(() => {
     const handler = (e: Event) => {
       const action = (e as CustomEvent<'all' | 'none'>).detail;
@@ -140,9 +180,11 @@ export function FbaBoardTable({
         const next = new Set(sortedItems.map((i) => i.item_id));
         setSelectedIds(next);
         emitSelection(next);
+        anchorIndexRef.current = null;
       } else {
         setSelectedIds(new Set());
         emitSelection(new Set());
+        anchorIndexRef.current = null;
       }
     };
     window.addEventListener('fba-board-toggle-all', handler);
@@ -192,7 +234,10 @@ export function FbaBoardTable({
     const selectByFnskuHandler = (e: Event) => {
       const fnsku = String((e as CustomEvent<string>).detail || '').toUpperCase();
       if (!fnsku) return;
-      const matching = sortedItems.filter((i) => i.fnsku.toUpperCase() === fnsku);
+      // Match by FNSKU or ASIN — a B0 ASIN scan should select items that have that ASIN.
+      const matching = sortedItems.filter(
+        (i) => i.fnsku.toUpperCase() === fnsku || (i.asin && i.asin.toUpperCase() === fnsku),
+      );
       if (matching.length === 0) {
         window.dispatchEvent(
           new CustomEvent('fba-board-fnsku-select-result', {
@@ -224,6 +269,14 @@ export function FbaBoardTable({
     };
   }, [sortedItems, emitSelection]);
 
+  if (loading) {
+    return (
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        <SkeletonList count={12} />
+      </div>
+    );
+  }
+
   if (sortedItems.length === 0) {
     return (
       <div className="flex items-center justify-center px-4 py-12 text-center">
@@ -237,18 +290,22 @@ export function FbaBoardTable({
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       <div className="divide-y divide-gray-200">
-        {sortedItems.map((item) => {
+        {sortedItems.map((item, index) => {
           const isSelected = selectedIds.has(item.item_id);
           return (
-            <div
+            <motion.div
+              {...framerPresence.tableRow}
+              transition={framerTransition.tableRowMount}
+              whileHover={{ x: 2 }}
+              whileTap={{ scale: 0.998 }}
               key={item.item_id}
               role="button"
               tabIndex={0}
-              onClick={() => toggleItem(item.item_id)}
+              onClick={(e) => handleRowActivate(e, index, item)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  toggleItem(item.item_id);
+                  handleRowActivate(e, index, item);
                 }
               }}
               className={[
@@ -262,6 +319,7 @@ export function FbaBoardTable({
                 <PrintTableCheckbox
                   checked={isSelected}
                   onChange={() => toggleItem(item.item_id)}
+                  onClick={(e) => handleRowActivate(e, index, item)}
                   stationTheme={stationTheme}
                   label={`${isSelected ? 'Deselect' : 'Select'} ${item.fnsku}`}
                 />
@@ -305,7 +363,7 @@ export function FbaBoardTable({
                   </button>
                 )}
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>

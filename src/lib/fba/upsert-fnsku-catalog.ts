@@ -17,18 +17,56 @@ function normalizeNullableUpperText(value: unknown): string | null {
   return normalized ? normalized.toUpperCase() : null;
 }
 
+/** Returns true when the value looks like an Amazon ASIN (B0 + 8 alphanumeric). */
+function looksLikeAsin(value: string): boolean {
+  return /^B0[A-Z0-9]{8}$/i.test(value);
+}
+
 export async function upsertFnskuCatalogRow(
   client: PoolClient,
   input: UpsertFnskuCatalogInput,
 ) {
-  const fnsku = normalizeNullableUpperText(input.fnsku);
+  let fnsku = normalizeNullableUpperText(input.fnsku);
   if (!fnsku) {
     throw new Error('fnsku is required');
   }
 
   const productTitle = normalizeNullableText(input.productTitle);
-  const asin = normalizeNullableUpperText(input.asin);
+  let asin = normalizeNullableUpperText(input.asin);
   const sku = normalizeNullableText(input.sku);
+
+  // When the "fnsku" value is actually a B0 ASIN, check if a catalog row
+  // already maps that ASIN to a real FNSKU (X00...).  If so, use the real
+  // FNSKU as the key.  Either way, ensure the asin column is populated.
+  if (looksLikeAsin(fnsku)) {
+    if (!asin) asin = fnsku;
+
+    const existing = await client.query(
+      `SELECT fnsku, product_title, asin, sku, is_active
+       FROM fba_fnskus
+       WHERE asin = $1 AND fnsku != $1
+       ORDER BY last_seen_at DESC NULLS LAST
+       LIMIT 1`,
+      [fnsku],
+    );
+    if (existing.rows.length > 0) {
+      // A real FNSKU exists for this ASIN — update it and return.
+      const realFnsku = existing.rows[0].fnsku as string;
+      const result = await client.query(
+        `UPDATE fba_fnskus
+         SET product_title = COALESCE($2, product_title),
+             sku           = COALESCE($3, sku),
+             is_active     = TRUE,
+             last_seen_at  = NOW(),
+             updated_at    = NOW()
+         WHERE fnsku = $1
+         RETURNING fnsku, product_title, asin, sku, is_active`,
+        [realFnsku, productTitle, sku],
+      );
+      return result.rows[0];
+    }
+    // No real FNSKU mapped yet — fall through and use the ASIN as the fnsku key.
+  }
 
   const result = await client.query(
     `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)

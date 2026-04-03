@@ -31,7 +31,7 @@ import {
 } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails } from '@/utils/events';
-import { parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
+import { getDashboardOrderViewFromSearch, parseDashboardOpenOrderId } from '@/utils/dashboard-search-state';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 import { DeviceModeToggle } from '@/components/sidebar/DeviceModeToggle';
 
@@ -255,6 +255,8 @@ function SidebarContextPanel() {
           onSearchChange={dashboardSearch.setSearch}
           shippedFilter={dashboardSearch.shippedFilter}
           onShippedFilterChange={dashboardSearch.setShippedFilter}
+          shippedSearchField={dashboardSearch.shippedSearchField}
+          onShippedSearchFieldChange={dashboardSearch.setShippedSearchField}
         />
       );
     }
@@ -377,10 +379,14 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
   const searchParams = useSearchParams();
   const routeKey = getSidebarRouteKey(pathname);
   const [stationDetailsOpen, setStationDetailsOpen] = useState(false);
+  const dashboardOrderView =
+    routeKey === 'dashboard' ? getDashboardOrderViewFromSearch(searchParams) : null;
   const dashboardOpenOrderId =
     routeKey === 'dashboard' ? parseDashboardOpenOrderId(searchParams.get('openOrderId')) : null;
   const collapseDesktopSidebar =
-    routeKey === 'dashboard' ? dashboardOpenOrderId != null : stationDetailsOpen;
+    routeKey === 'dashboard'
+      ? dashboardOpenOrderId != null && dashboardOrderView !== 'shipped'
+      : stationDetailsOpen;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
   const [showHomeNavigation, setShowHomeNavigation] = useState(false);

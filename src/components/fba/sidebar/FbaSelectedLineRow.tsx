@@ -17,7 +17,7 @@ export interface FbaSelectedLineRowProps {
   checked?: boolean;
   checkboxDisabled?: boolean;
   onCheckedChange?: (checked: boolean) => void;
-  /** When provided, renders an edit (pencil) button that calls this callback. */
+  /** Opens Quick Add / catalog edit; always shown at full contrast when provided. */
   onEditDetails?: () => void;
   /** Typically qty steppers — rendered in the right column, vertically centered with the title block. */
   rightSlot: ReactNode;
@@ -60,16 +60,26 @@ export function FbaSelectedLineRow({
         </p>
       </div>
       <div className="col-start-2 row-start-2 flex items-center justify-end gap-1.5 self-end pt-0.5">
-        {onEditDetails ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onEditDetails(); }}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            aria-label={`Edit details for ${fnsku}`}
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditDetails?.();
+          }}
+          className={[
+            'flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-600 transition-colors',
+            // CopyChip’s underline + pb sits lower than a plain icon; nudge pencil up to align optically
+            '-translate-y-1',
+            onEditDetails
+              ? 'hover:bg-gray-100 hover:text-gray-900'
+              : 'pointer-events-none cursor-default',
+          ].join(' ')}
+          aria-disabled={!onEditDetails}
+          aria-label={onEditDetails ? `Edit catalog details for ${fnsku}` : `FNSKU ${fnsku}`}
+          title={onEditDetails ? 'Edit catalog details' : undefined}
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
         <FnskuChip value={fnsku} />
       </div>
       <div className="col-start-3 row-span-2 flex shrink-0 flex-col items-start pt-0.5">{rightSlot}</div>

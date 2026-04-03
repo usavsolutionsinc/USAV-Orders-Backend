@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getPresentStaffForToday } from '@/lib/staffCache';
-import { TECH_IDS } from '@/utils/staff';
+import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { StaffOption } from '@/components/station/upnext/upnext-types';
+
 
 export interface UseWorkOrderAssignmentReturn {
   showAssignment: boolean;
@@ -31,9 +32,9 @@ export function useWorkOrderAssignment(): UseWorkOrderAssignmentReturn {
       const members = await getPresentStaffForToday();
       setTechnicianOptions(
         members
-          .filter((m) => m.role === 'technician' && TECH_IDS.includes(Number(m.id)))
+          .filter((m) => m.role === 'technician')
           .map((m) => ({ id: Number(m.id), name: m.name }))
-          .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id)),
+          .sort((a, b) => a.name.localeCompare(b.name)),
       );
       setPackerOptions(
         members
@@ -49,24 +50,16 @@ export function useWorkOrderAssignment(): UseWorkOrderAssignmentReturn {
       payload.status ??
       (payload.techId && row.status === 'OPEN' ? 'ASSIGNED' : row.status);
     try {
-      const res = await fetch('/api/work-orders', {
-        method:  'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entityType:       row.entityType,
-          entityId:         row.entityId,
-          assignedTechId:   payload.techId,
-          assignedPackerId: payload.packerId,
-          status:           newStatus,
-          priority:         row.priority,
-          deadlineAt:       payload.deadline,
-          notes:            row.notes,
-        }),
+      await saveWorkOrder({
+        entityType: row.entityType,
+        entityId: row.entityId,
+        assignedTechId: payload.techId,
+        assignedPackerId: payload.packerId,
+        status: newStatus,
+        priority: row.priority,
+        deadlineAt: payload.deadline,
+        notes: row.notes,
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.details || data?.error || 'Failed to save');
-      }
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     } catch (err: any) {
       window.alert(err?.message || 'Failed to save assignment');

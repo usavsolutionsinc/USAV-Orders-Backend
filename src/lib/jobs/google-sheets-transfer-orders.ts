@@ -3,10 +3,9 @@ import { db } from '@/lib/drizzle/db';
 import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
 import { getGoogleAuth } from '@/lib/google-auth';
+import { invalidateOrderViews } from '@/lib/orders/invalidation';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
-import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import { publishOrderChanged } from '@/lib/realtime/publish';
 import { desc, eq, inArray } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
@@ -668,16 +667,15 @@ export async function runGoogleSheetsTransferOrders(
       }
     }
 
-    // Bust the /api/orders Upstash cache and notify all connected clients
-    // so the pending-orders dashboard picks up changes immediately.
+    // Use the shared post-commit invalidation path so manual, queued, and
+    // scheduled transfers all refresh the same cached order views.
     const affectedOrderIds = [
       ...insertedOrderIds,
       ...ordersToBackfill.map((e) => e.id),
       ...ordersToDelete,
     ];
     if (affectedOrderIds.length > 0) {
-      await invalidateCacheTags(['orders']);
-      await publishOrderChanged({
+      await invalidateOrderViews({
         orderIds: affectedOrderIds,
         source: 'google-sheets-transfer-orders',
       });

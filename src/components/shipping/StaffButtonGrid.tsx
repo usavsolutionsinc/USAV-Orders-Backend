@@ -29,7 +29,7 @@ export function StaffButtonGrid({
   emptyMessage = 'None available',
   className,
 }: StaffButtonGridProps) {
-  const cols = columns ?? options.length;
+  const cols = Math.min(columns ?? options.length, options.length);
 
   return (
     <div className={className}>

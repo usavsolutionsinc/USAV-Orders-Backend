@@ -8,6 +8,8 @@ import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/bloc
 import { ContextualManualLinkRow } from '@/components/shipped/details-panel/blocks/ContextualManualLinkRow';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
+import { FnskuCatalogInfoPanel } from '@/components/fba/FnskuCatalogInfoPanel';
+import { getFnskuCatalogValue, isFnskuCatalogContext } from '@/utils/fnsku-catalog';
 
 type ConditionValue = 'NEW' | 'USED' | 'PARTS';
 
@@ -55,6 +57,14 @@ export function ProductDetailsSection({
     }
   };
 
+  const fnskuCatalogValue = getFnskuCatalogValue(shipped);
+  const showFnskuCatalog = isFnskuCatalogContext(shipped) && Boolean(fnskuCatalogValue);
+
+  const refreshAfterCatalogSave = () => {
+    window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+    window.dispatchEvent(new Event('usav-refresh-data'));
+  };
+
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-2">
@@ -62,45 +72,64 @@ export function ProductDetailsSection({
         <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Product Details</h3>
       </div>
 
-      <div className="space-y-0">
-        <CopyableValueFieldBlock
-          label="Product Title"
-          value={shipped.product_title || 'Not provided'}
-          twoLineValue
-          variant="flat"
-          valueClassName="font-dm-sans"
-        />
-
-        <DetailsPanelRow
-          label="Condition"
-          actions={isSavingCondition ? (
-            <span className="text-[10px] font-black uppercase tracking-wide text-blue-600">Saving</span>
-          ) : null}
-          className="last:border-b-0"
-        >
-          <ViewDropdown
-            options={CONDITION_OPTIONS}
-            value={conditionValue}
-            onChange={handleConditionChange}
-            className="w-full"
-            buttonClassName="h-8 w-full border-0 bg-transparent px-0 pr-8 text-left text-sm font-bold uppercase tracking-wide text-gray-900 outline-none transition-colors hover:text-gray-700"
-            optionClassName="text-xs font-bold tracking-wide text-gray-800"
+      {showFnskuCatalog ? (
+        <div className="space-y-3">
+          <FnskuCatalogInfoPanel
+            fnsku={fnskuCatalogValue}
+            productTitle={shipped.product_title}
+            condition={shipped.condition}
+            sku={shipped.sku}
+            asin={(shipped as { asin?: string | null }).asin ?? null}
+            sourceKey={shipped.id}
+            onCatalogSaved={refreshAfterCatalogSave}
           />
-        </DetailsPanelRow>
+          <ContextualManualLinkRow
+            sku={shipped.sku}
+            itemNumber={shipped.item_number}
+            allowEmbeddedItemNumberInput={false}
+          />
+        </div>
+      ) : (
+        <div className="space-y-0">
+          <CopyableValueFieldBlock
+            label="Product Title"
+            value={shipped.product_title || 'Not provided'}
+            twoLineValue
+            variant="flat"
+            valueClassName="font-dm-sans"
+          />
 
-        <ContextualManualLinkRow
-          sku={shipped.sku}
-          itemNumber={shipped.item_number}
-          allowEmbeddedItemNumberInput={false}
-        />
+          <DetailsPanelRow
+            label="Condition"
+            actions={isSavingCondition ? (
+              <span className="text-[10px] font-black uppercase tracking-wide text-blue-600">Saving</span>
+            ) : null}
+            className="last:border-b-0"
+          >
+            <ViewDropdown
+              options={CONDITION_OPTIONS}
+              value={conditionValue}
+              onChange={handleConditionChange}
+              className="w-full"
+              buttonClassName="h-8 w-full border-0 bg-transparent px-0 pr-8 text-left text-sm font-bold uppercase tracking-wide text-gray-900 outline-none transition-colors hover:text-gray-700"
+              optionClassName="text-xs font-bold tracking-wide text-gray-800"
+            />
+          </DetailsPanelRow>
 
-        <CopyableValueFieldBlock
-          label="SKU"
-          value={shipped.sku || 'N/A'}
-          variant="flat"
-          keepBottomDivider
-        />
-      </div>
+          <ContextualManualLinkRow
+            sku={shipped.sku}
+            itemNumber={shipped.item_number}
+            allowEmbeddedItemNumberInput={false}
+          />
+
+          <CopyableValueFieldBlock
+            label="SKU"
+            value={shipped.sku || 'N/A'}
+            variant="flat"
+            keepBottomDivider
+          />
+        </div>
+      )}
     </section>
   );
 }

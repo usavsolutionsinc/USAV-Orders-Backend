@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { createStationActivityLog } from '@/lib/station-activity';
-import { publishFbaItemChanged } from '@/lib/realtime/publish';
+import { publishFbaItemChanged, publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
+import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 
 // Pack-station FNSKU scan.
 // Writes into the shared fba_fnsku_logs ledger and, when an open shipment item
@@ -27,17 +29,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
     }
 
-    // Ensure FNSKU exists in catalog (pack-station creates stub rows for reconciliation in admin).
-    const metaRes = await client.query(
-      `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
-       VALUES ($1, NULL, NULL, NULL, TRUE, NOW(), NOW())
-       ON CONFLICT (fnsku) DO UPDATE SET
-         last_seen_at = EXCLUDED.last_seen_at,
-         updated_at = EXCLUDED.updated_at
-       RETURNING fnsku, product_title, asin, sku`,
-      [normalizedFnsku]
-    );
-    const meta = metaRes.rows[0];
+    // Ensure FNSKU exists in catalog. When the scan is a B0 ASIN and the
+    // catalog already maps that ASIN to a real X00 FNSKU, the resolved fnsku
+    // will be the real FNSKU.
+    const isAsinScan = /^B0[A-Z0-9]{8}$/i.test(normalizedFnsku);
+    const meta = await upsertFnskuCatalogRow(client, {
+      fnsku: normalizedFnsku,
+      asin: isAsinScan ? normalizedFnsku : null,
+    });
+    const resolvedFnsku = String(meta?.fnsku || normalizedFnsku).trim().toUpperCase();
 
     const itemRes = await client.query(
       `SELECT
@@ -60,13 +60,15 @@ export async function POST(request: NextRequest) {
          fs.created_at ASC,
          fsi.id ASC
        LIMIT 1`,
-      [normalizedFnsku]
+      [resolvedFnsku]
     );
 
-    const openItem = itemRes.rows[0] ?? null;
+    let openItem = itemRes.rows[0] ?? null;
     let updatedItem = openItem;
+    let autoCreatedPlan = false;
 
     if (openItem) {
+      // ── Existing plan item: increment actual_qty and advance status ──
       const updatedRes = await client.query(
         `UPDATE fba_shipment_items
          SET actual_qty = actual_qty + 1,
@@ -82,7 +84,47 @@ export async function POST(request: NextRequest) {
         [staff_id, openItem.id]
       );
       updatedItem = updatedRes.rows[0];
+    } else {
+      // ── No plan item exists: auto-add to today's plan ───────────────
+      // Find or create today's PLANNED shipment.
+      let todayPlanRes = await client.query(
+        `SELECT id, shipment_ref FROM fba_shipments
+         WHERE due_date = CURRENT_DATE AND status = 'PLANNED'
+         ORDER BY created_at DESC LIMIT 1`,
+      );
 
+      let todayPlanId: number;
+      if (todayPlanRes.rows.length === 0) {
+        const dateRes = await client.query<{ d: string }>(`SELECT CURRENT_DATE::text AS d`);
+        const ref = buildFbaPlanRefFromIsoDate(String(dateRes.rows[0]?.d || ''));
+        const newPlan = await client.query(
+          `INSERT INTO fba_shipments (shipment_ref, due_date, status)
+           VALUES ($1, CURRENT_DATE, 'PLANNED') RETURNING id`,
+          [ref],
+        );
+        todayPlanId = newPlan.rows[0].id;
+        autoCreatedPlan = true;
+      } else {
+        todayPlanId = todayPlanRes.rows[0].id;
+      }
+
+      // Insert a new item row with expected_qty=1 and actual_qty=1 (already scanned once).
+      const newItemRes = await client.query(
+        `INSERT INTO fba_shipment_items
+           (shipment_id, fnsku, product_title, asin, sku,
+            expected_qty, actual_qty, status,
+            verified_by_staff_id, verified_at)
+         VALUES ($1, $2, $3, $4, $5, 1, 1, 'READY_TO_GO', $6, NOW())
+         RETURNING *`,
+        [todayPlanId, resolvedFnsku, meta.product_title, meta.asin, meta.sku, staff_id],
+      );
+      updatedItem = newItemRes.rows[0];
+      // Treat it as a found open item for the rest of the flow.
+      openItem = { ...updatedItem, shipment_ref: todayPlanRes.rows[0]?.shipment_ref ?? null };
+    }
+
+    // ── Refresh shipment aggregate counts ──────────────────────────────
+    if (updatedItem?.shipment_id) {
       await client.query(
         `UPDATE fba_shipments fs
          SET ready_item_count = counts.ready_item_count,
@@ -105,7 +147,7 @@ export async function POST(request: NextRequest) {
            GROUP BY shipment_id
          ) counts
          WHERE fs.id = counts.shipment_id`,
-        [openItem.shipment_id]
+        [updatedItem.shipment_id],
       );
     }
 
@@ -115,16 +157,20 @@ export async function POST(request: NextRequest) {
        VALUES ($1, 'PACK', 'READY', $2, $3, $4, 1, $5, $6, $7::jsonb)
        RETURNING id, created_at`,
       [
-        normalizedFnsku,
+        resolvedFnsku,
         staff_id,
         updatedItem?.shipment_id ?? null,
         updatedItem?.id ?? null,
         station || 'PACK_STATION',
-        openItem ? 'Pack station scan matched open shipment item' : 'Pack station scan without open shipment item',
+        autoCreatedPlan
+          ? 'Pack station scan — auto-created today plan + item'
+          : 'Pack station FNSKU ready scan',
         JSON.stringify({
           product_title: meta.product_title ?? null,
           sku: meta.sku ?? null,
           asin: meta.asin ?? null,
+          scanned_raw: normalizedFnsku,
+          resolved_fnsku: resolvedFnsku,
           matched_open_item: Boolean(openItem),
         }),
       ]
@@ -135,10 +181,12 @@ export async function POST(request: NextRequest) {
       activityType: 'FBA_READY',
       staffId: Number(staff_id),
       scanRef: normalizedFnsku,
-      fnsku: normalizedFnsku,
+      fnsku: resolvedFnsku,
       fbaShipmentId: updatedItem?.shipment_id ?? null,
       fbaShipmentItemId: updatedItem?.id ?? null,
-      notes: openItem ? 'Pack station FNSKU ready scan' : 'Pack station FNSKU scan without open item',
+      notes: autoCreatedPlan
+        ? 'Pack station scan — auto-created today plan + item'
+        : 'Pack station FNSKU ready scan',
       metadata: {
         fnsku_log_id: Number(fnskuLogRes.rows[0].id),
         product_title: meta.product_title ?? null,
@@ -155,7 +203,7 @@ export async function POST(request: NextRequest) {
        FROM fba_fnsku_logs
        WHERE fnsku = $1
          AND event_type != 'VOID'`,
-      [normalizedFnsku]
+      [resolvedFnsku]
     );
 
     const summary = summaryRes.rows[0] || {
@@ -187,11 +235,25 @@ export async function POST(request: NextRequest) {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
-    await publishFbaItemChanged({ action: 'scan', shipmentId: Number(updatedItem?.shipment_id || 0), itemId: Number(updatedItem?.id || 0), fnsku: normalizedFnsku, source: 'fba.items.scan' });
+    publishFbaItemChanged({
+      action: 'scan',
+      shipmentId: Number(updatedItem?.shipment_id || 0),
+      itemId: Number(updatedItem?.id || 0),
+      fnsku: resolvedFnsku,
+      source: 'fba.items.scan',
+    }).catch(() => {});
+    if (autoCreatedPlan && updatedItem?.shipment_id) {
+      publishFbaShipmentChanged({
+        action: 'created',
+        shipmentId: updatedItem.shipment_id,
+        source: 'fba.items.scan.auto-plan',
+      }).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,
-      fnsku: normalizedFnsku,
+      fnsku: resolvedFnsku,
+      scanned_raw: normalizedFnsku !== resolvedFnsku ? normalizedFnsku : undefined,
       fnsku_log_id: Number(fnskuLogRes.rows[0].id),
       product_title: meta.product_title || null,
       asin: meta.asin || null,
@@ -204,7 +266,8 @@ export async function POST(request: NextRequest) {
       planned_qty: plannedQty,
       combined_pack_scanned_qty: combinedPackScannedQty,
       status: updatedItem?.status || 'READY_TO_GO',
-      is_new: !openItem,
+      is_new: autoCreatedPlan,
+      auto_added_to_plan: true,
       summary: {
         tech_scanned_qty: techScannedQty,
         pack_ready_qty: packReadyQty,

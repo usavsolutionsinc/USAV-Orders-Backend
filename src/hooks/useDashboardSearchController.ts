@@ -11,11 +11,14 @@ import {
   readDetailsOpenBehaviorPreference,
   readPendingFilterPreference,
   readShippedFilterPreference,
+  readShippedSearchFieldPreference,
   writeDetailsOpenBehaviorPreference,
   writePendingFilterPreference,
   writeShippedFilterPreference,
+  writeShippedSearchFieldPreference,
   type DetailsOpenBehaviorPreference,
 } from '@/utils/dashboard-preferences';
+import { normalizeShippedSearchField, type ShippedSearchField } from '@/lib/shipped-search';
 export type PendingStockFilter = 'all' | 'pending' | 'stock';
 export type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
 
@@ -39,6 +42,13 @@ export function useDashboardSearchController() {
     if (shippedFilterParam === 'fba') return 'fba';
     return readShippedFilterPreference() ?? 'all';
   }, [shippedFilterParam]);
+  const shippedSearchFieldParam = searchParams.get('shippedSearchField');
+  const shippedSearchField: ShippedSearchField = useMemo(() => {
+    if (shippedSearchFieldParam != null) {
+      return normalizeShippedSearchField(shippedSearchFieldParam);
+    }
+    return readShippedSearchFieldPreference() ?? 'all';
+  }, [shippedSearchFieldParam]);
   const detailsOpenBehavior: DetailsOpenBehaviorPreference = useMemo(
     () => readDetailsOpenBehaviorPreference(),
     [],
@@ -98,6 +108,14 @@ export function useDashboardSearchController() {
     }, '/dashboard');
   }, [updateSearch]);
 
+  const setShippedSearchField = useCallback((value: ShippedSearchField) => {
+    writeShippedSearchFieldPreference(value);
+    updateSearch((params) => {
+      if (value === 'all') params.delete('shippedSearchField');
+      else params.set('shippedSearchField', value);
+    }, '/dashboard');
+  }, [updateSearch]);
+
   const setDetailsOpenBehavior = useCallback((value: DetailsOpenBehaviorPreference) => {
     writeDetailsOpenBehaviorPreference(value);
   }, []);
@@ -122,11 +140,16 @@ export function useDashboardSearchController() {
     writeShippedFilterPreference(shippedFilter);
   }, [shippedFilter]);
 
+  useEffect(() => {
+    writeShippedSearchFieldPreference(shippedSearchField);
+  }, [shippedSearchField]);
+
   return {
     orderView,
     searchQuery,
     pendingFilter,
     shippedFilter,
+    shippedSearchField,
     detailsOpenBehavior,
     showIntakeForm,
     detailsEnabled,
@@ -135,6 +158,7 @@ export function useDashboardSearchController() {
     openShippedMatches,
     setPendingFilter,
     setShippedFilter,
+    setShippedSearchField,
     setDetailsOpenBehavior,
     openIntakeForm,
     closeIntakeForm,

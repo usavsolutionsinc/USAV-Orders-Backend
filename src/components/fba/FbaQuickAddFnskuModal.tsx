@@ -76,7 +76,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       <button
         type="button"
         className="absolute inset-0 bg-black/35"
@@ -86,7 +86,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
           setOpen(false);
         }}
       />
-      <div className="relative z-[81] w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
+      <div className="relative z-[111] w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
           <div>
             <p className={`text-[10px] font-black uppercase tracking-[0.16em] ${chrome.sectionLabel}`}>Quick add</p>
@@ -121,12 +121,11 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
               className={chrome.input}
             >
               <option value="">Select condition</option>
-              <option value="New">New</option>
-              <option value="Used - Like New">Used - Like New</option>
-              <option value="Used - Very Good">Used - Very Good</option>
-              <option value="Used - Good">Used - Good</option>
-              <option value="Used - Acceptable">Used - Acceptable</option>
-              <option value="Refurbished">Refurbished</option>
+              <option value="A+ New">New</option>
+              <option value="A Used - Like New">Used - Like New</option>
+              <option value="B+ Used - Very Good">Used - Very Good</option>
+              <option value="B Used - Good">Used - Good</option>
+              <option value="C Used - Acceptable">Used - Acceptable</option>
             </select>
           </SidebarIntakeFormField>
 

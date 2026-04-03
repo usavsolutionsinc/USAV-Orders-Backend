@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Dispatch } from 'react';
+import { fbaPaths } from '@/lib/fba/api-paths';
 import type { EnrichedItem, ItemStatus, TableAction } from './types';
 import { RemoveFromPlanButton } from './RemoveFromPlanButton';
 import { enrichFromApi } from './utils';
@@ -12,7 +13,7 @@ async function patchItem(
   itemId: number,
   body: Record<string, unknown>
 ): Promise<{ ok: boolean; item?: PrintQueueItem }> {
-  const res = await fetch(`/api/fba/shipments/${planId}/items/${itemId}`, {
+  const res = await fetch(fbaPaths.planItem(planId, itemId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

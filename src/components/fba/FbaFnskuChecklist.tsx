@@ -19,6 +19,7 @@ import { getStaffIdByName } from '@/utils/staff';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { enrichFromApi } from '@/components/fba/table/utils';
 import type { EnrichedItem, PrintSelectionPayload, ShipmentTrackingEntry } from '@/components/fba/table/types';
+import { fbaPaths } from '@/lib/fba/api-paths';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DraftItem {
@@ -350,7 +351,7 @@ export function FbaFnskuChecklist({
 
     Promise.all([
       fetch(`/api/fba/fnskus/validate?fnskus=${encodeURIComponent(fnskus.join(','))}&persist_missing=1`).then((r) => r.json()),
-      fetch('/api/fba/shipments/today').then((r) => r.json()),
+      fetch(fbaPaths.today()).then((r) => r.json()),
     ])
       .then(([validateData, todayData]) => {
         const todayItems: string[] = todayData?.shipment?.items?.map((i: any) => String(i.fnsku)) ?? [];
@@ -394,8 +395,8 @@ export function FbaFnskuChecklist({
     setPlanLoading(true);
     try {
       const [shipRes, itemsRes] = await Promise.all([
-        fetch(`/api/fba/shipments/${targetId}`),
-        fetch(`/api/fba/shipments/${targetId}/items`),
+        fetch(fbaPaths.plan(targetId)),
+        fetch(fbaPaths.planItems(targetId)),
       ]);
       const shipData  = await shipRes.json();
       const itemsData = await itemsRes.json();
@@ -435,7 +436,7 @@ export function FbaFnskuChecklist({
   const loadTodayPlan = useCallback(async () => {
     setPlanLoading(true);
     try {
-      const res  = await fetch('/api/fba/shipments/today');
+      const res  = await fetch(fbaPaths.today());
       const data = await res.json();
       if (data?.shipment) {
         setTodayPlanId(data.shipment.id);
@@ -491,7 +492,7 @@ export function FbaFnskuChecklist({
     clearTimeout(savingRef.current[itemId]);
     savingRef.current[itemId] = setTimeout(async () => {
       try {
-        await fetch(`/api/fba/shipments/${id}/items/${itemId}`, {
+        await fetch(fbaPaths.planItem(id, itemId), {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ expected_qty: qty }),
         });
@@ -523,7 +524,7 @@ export function FbaFnskuChecklist({
     if (newDraftItems.length === 0) { setCreateError('No new items to add'); return; }
     setCreating(true); setCreateError(null);
     try {
-      const res = await fetch('/api/fba/shipments/today/items', {
+      const res = await fetch(fbaPaths.todayItems(), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: newDraftItems.map((i) => ({
@@ -568,7 +569,7 @@ export function FbaFnskuChecklist({
       // Commit the move
       setUndoToast(null);
       try {
-        await fetch(`/api/fba/shipments/${activePlanId}/items/${itemId}`, {
+        await fetch(fbaPaths.planItem(activePlanId, itemId), {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'READY_TO_GO' }),
         });
@@ -596,7 +597,7 @@ export function FbaFnskuChecklist({
     if (!nextStatus || !activePlanId) return;
     setCyclingItemId(itemId);
     try {
-      const res = await fetch(`/api/fba/shipments/${activePlanId}/items/${itemId}`, {
+      const res = await fetch(fbaPaths.planItem(activePlanId, itemId), {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),
       });
@@ -622,7 +623,7 @@ export function FbaFnskuChecklist({
     if (!activePlanId) return;
     noteSaveRef.current = setTimeout(async () => {
       try {
-        await fetch(`/api/fba/shipments/${activePlanId}/items/${itemId}`, {
+        await fetch(fbaPaths.planItem(activePlanId, itemId), {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ notes: text.trim() || null }),
         });
@@ -681,7 +682,6 @@ export function FbaFnskuChecklist({
       return {
         selectedItems: [],
         planIds: [],
-        shipmentIds: [],
         readyCount: 0,
         pendingCount: 0,
         needsPrintCount: 0,
@@ -702,7 +702,6 @@ export function FbaFnskuChecklist({
     return {
       selectedItems: enriched,
       planIds,
-      shipmentIds: planIds,
       readyCount,
       pendingCount,
       needsPrintCount,

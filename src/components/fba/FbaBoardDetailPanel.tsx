@@ -2,17 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { fbaPaths } from '@/lib/fba/api-paths';
 import {
-  Calendar, Check, ChevronDown, ClipboardList, Copy,
-  Loader2, Minus, Pencil, Plus, Trash2,
+  Calendar, Check, ChevronDown, ClipboardList,
+  Loader2, Minus, Plus, Trash2,
 } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { DeferredQtyInput } from '@/design-system/primitives';
-import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { usePanelActions } from '@/hooks/usePanelActions';
-import { emitOpenQuickAddFnsku, FBA_FNSKU_SAVED_EVENT } from './FbaQuickAddFnskuModal';
+import { FnskuCatalogInfoPanel, type FnskuCatalogMeta } from './FnskuCatalogInfoPanel';
 import type { FbaBoardItem } from './FbaBoardTable';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -57,7 +57,7 @@ async function patchFbaItem(
   itemId: number,
   body: Record<string, unknown>,
 ): Promise<boolean> {
-  const res = await fetch(`/api/fba/shipments/${shipmentId}/items/${itemId}`, {
+  const res = await fetch(fbaPaths.planItem(shipmentId, itemId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -65,11 +65,13 @@ async function patchFbaItem(
   return res.ok;
 }
 
-async function deleteFbaItem(shipmentId: number, itemId: number): Promise<boolean> {
-  const res = await fetch(`/api/fba/shipments/${shipmentId}/items/${itemId}`, {
+async function deleteFbaItem(shipmentId: number, itemId: number): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(fbaPaths.planItem(shipmentId, itemId), {
     method: 'DELETE',
   });
-  return res.ok;
+  if (res.ok) return { ok: true };
+  const data = await res.json().catch(() => ({}));
+  return { ok: false, error: data?.error || `Delete failed (${res.status})` };
 }
 
 function formatPlanDate(raw: string | null): string {
@@ -106,10 +108,12 @@ function PlanEntryCard({
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     setQty(entry.expected_qty);
     setConfirmDelete(false);
+    setDeleteError(null);
   }, [entry.item_id, entry.expected_qty]);
 
   const saveQty = useCallback(
@@ -127,11 +131,14 @@ function PlanEntryCard({
 
   const handleDelete = useCallback(async () => {
     setDeleting(true);
-    const ok = await deleteFbaItem(entry.shipment_id, entry.item_id);
+    setDeleteError(null);
+    const result = await deleteFbaItem(entry.shipment_id, entry.item_id);
     setDeleting(false);
-    if (ok) {
+    if (result.ok) {
       onDeleted();
       window.dispatchEvent(new Event('usav-refresh-data'));
+    } else {
+      setDeleteError(result.error || 'Failed to remove');
     }
   }, [entry.shipment_id, entry.item_id, onDeleted]);
 
@@ -257,10 +264,13 @@ function PlanEntryCard({
               <p className="text-[11px] font-bold text-red-800">
                 Remove this entry from {entry.shipment_ref || 'plan'}?
               </p>
+              {deleteError && (
+                <p className="mt-1 text-[10px] font-semibold text-red-600">{deleteError}</p>
+              )}
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setConfirmDelete(false)}
+                  onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
                   className="h-7 rounded-md border border-gray-200 bg-white text-[9px] font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
@@ -288,6 +298,7 @@ function PlanEntryCard({
 function FbaDeleteControl({ entries, onDeleted }: { entries: PlanEntry[]; onDeleted: () => void }) {
   const [isArmed, setIsArmed] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current); }, []);
@@ -295,6 +306,7 @@ function FbaDeleteControl({ entries, onDeleted }: { entries: PlanEntry[]; onDele
   const handleClick = async () => {
     if (!isArmed) {
       setIsArmed(true);
+      setError(null);
       if (timerRef.current) window.clearTimeout(timerRef.current);
       timerRef.current = window.setTimeout(() => setIsArmed(false), 3000);
       return;
@@ -302,14 +314,21 @@ function FbaDeleteControl({ entries, onDeleted }: { entries: PlanEntry[]; onDele
     if (timerRef.current) { window.clearTimeout(timerRef.current); timerRef.current = null; }
     setIsArmed(false);
     setDeleting(true);
+    setError(null);
     try {
+      const errors: string[] = [];
       for (const entry of entries) {
-        await deleteFbaItem(entry.shipment_id, entry.item_id);
+        const result = await deleteFbaItem(entry.shipment_id, entry.item_id);
+        if (!result.ok) errors.push(`${entry.shipment_ref || entry.shipment_id}: ${result.error}`);
       }
-      window.dispatchEvent(new Event('usav-refresh-data'));
-      onDeleted();
+      if (errors.length > 0) {
+        setError(errors.join('; '));
+      } else {
+        window.dispatchEvent(new Event('usav-refresh-data'));
+        onDeleted();
+      }
     } catch {
-      window.alert('Failed to delete. Please try again.');
+      setError('Failed to delete. Please try again.');
     } finally {
       setDeleting(false);
     }
@@ -318,14 +337,21 @@ function FbaDeleteControl({ entries, onDeleted }: { entries: PlanEntry[]; onDele
   if (entries.length === 0) return null;
 
   return (
-    <button
-      type="button"
-      onClick={() => void handleClick()}
-      disabled={deleting}
-      className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
-    >
-      {deleting ? 'Deleting...' : isArmed ? 'Click Again To Confirm' : 'Delete Permanently'}
-    </button>
+    <div className="space-y-2">
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-700">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={() => void handleClick()}
+        disabled={deleting}
+        className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider disabled:opacity-50"
+      >
+        {deleting ? 'Deleting...' : isArmed ? 'Click Again To Confirm' : 'Delete Permanently'}
+      </button>
+    </div>
   );
 }
 
@@ -341,44 +367,11 @@ export function FbaBoardDetailPanel({
 }: FbaBoardDetailPanelProps) {
   const [entries, setEntries] = useState<PlanEntry[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Catalog fields — local state seeded from item, updated via Quick Add modal
-  const [productTitle, setProductTitle] = useState(item.display_title || '');
-  const [condition, setCondition] = useState(item.condition || '');
-  const [sku, setSku] = useState(item.sku || '');
-  const [asin, setAsin] = useState(item.asin || '');
+  const [catalogSnapshot, setCatalogSnapshot] = useState<FnskuCatalogMeta | null>(null);
 
   useEffect(() => {
-    setProductTitle(item.display_title || '');
-    setCondition(item.condition || '');
-    setSku(item.sku || '');
-    setAsin(item.asin || '');
-  }, [item.item_id, item.display_title, item.condition, item.sku, item.asin]);
-
-  // Listen for Quick Add modal saves to update local state
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ fnsku: string; product_title: string | null; asin: string | null; sku: string | null; condition: string | null }>).detail;
-      if (!detail?.fnsku || detail.fnsku.toUpperCase() !== item.fnsku.toUpperCase()) return;
-      if (detail.product_title != null) setProductTitle(detail.product_title);
-      if (detail.asin != null) setAsin(detail.asin);
-      if (detail.sku != null) setSku(detail.sku);
-      if (detail.condition != null) setCondition(detail.condition);
-      onSaved();
-    };
-    window.addEventListener(FBA_FNSKU_SAVED_EVENT, handler as EventListener);
-    return () => window.removeEventListener(FBA_FNSKU_SAVED_EVENT, handler as EventListener);
-  }, [item.fnsku, onSaved]);
-
-  const openCatalogEdit = useCallback(() => {
-    emitOpenQuickAddFnsku({
-      fnsku: item.fnsku,
-      product_title: productTitle || null,
-      asin: asin || null,
-      sku: sku || null,
-      condition: condition || null,
-    });
-  }, [item.fnsku, productTitle, asin, sku, condition]);
+    setCatalogSnapshot(null);
+  }, [item.item_id, item.fnsku]);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -409,6 +402,12 @@ export function FbaBoardDetailPanel({
   const totalExpected = entries.reduce((sum, e) => sum + (Number(e.expected_qty) || 0), 0);
   const totalActual = entries.reduce((sum, e) => sum + (Number(e.actual_qty) || 0), 0);
 
+  const headerTitle =
+    (catalogSnapshot?.productTitle || item.display_title || '').trim() ||
+    item.fnsku ||
+    (catalogSnapshot?.asin || item.asin || '').trim() ||
+    'Untitled';
+
   return (
     <motion.div
       initial={{ x: '100%' }}
@@ -429,7 +428,7 @@ export function FbaBoardDetailPanel({
         {/* Row 2: title */}
         <div className="px-6 pt-1.5 pb-2 border-b border-gray-200 h-[100px]">
           <h2 className="line-clamp-4 text-[17px] font-black leading-snug tracking-tight text-gray-950">
-            {productTitle || item.fnsku || asin || 'Untitled'}
+            {headerTitle}
           </h2>
         </div>
 
@@ -464,120 +463,16 @@ export function FbaBoardDetailPanel({
       {/* ── Scrollable body ────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-6 py-4">
-          {/* Catalog info — read-only rows, single edit button opens Quick Add modal */}
-          <section>
-            <div className="mb-1 flex items-center justify-between">
-              <p className={sectionLabel}>Catalog Info</p>
-              <button
-                type="button"
-                onClick={openCatalogEdit}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                aria-label="Edit catalog details"
-                title="Edit catalog details"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div>
-              <DetailsPanelRow
-                label="Product Title"
-                actions={
-                  productTitle ? (
-                    <button
-                      type="button"
-                      onClick={() => navigator.clipboard.writeText(productTitle)}
-                      className="text-gray-400 transition-colors hover:text-gray-700"
-                      aria-label="Copy product title"
-                      title="Copy product title"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null
-                }
-              >
-                <p className="whitespace-pre-wrap break-words text-sm font-bold text-gray-900">
-                  {productTitle || <span className="text-gray-400">No title</span>}
-                </p>
-              </DetailsPanelRow>
-              <DetailsPanelRow
-                label="Condition"
-                actions={
-                  condition ? (
-                    <button
-                      type="button"
-                      onClick={() => navigator.clipboard.writeText(condition)}
-                      className="text-gray-400 transition-colors hover:text-gray-700"
-                      aria-label="Copy condition"
-                      title="Copy condition"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null
-                }
-              >
-                <p className="text-sm font-bold text-gray-900">
-                  {condition || <span className="text-gray-400">—</span>}
-                </p>
-              </DetailsPanelRow>
-              <DetailsPanelRow
-                label="FNSKU"
-                actions={
-                  <button
-                    type="button"
-                    onClick={() => navigator.clipboard.writeText(item.fnsku)}
-                    className="text-gray-400 transition-colors hover:text-gray-700"
-                    aria-label="Copy FNSKU"
-                    title="Copy FNSKU"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                }
-              >
-                <p className="font-mono text-sm font-bold text-gray-900">{item.fnsku}</p>
-              </DetailsPanelRow>
-              <DetailsPanelRow
-                label="ASIN"
-                actions={
-                  asin ? (
-                    <button
-                      type="button"
-                      onClick={() => navigator.clipboard.writeText(asin)}
-                      className="text-gray-400 transition-colors hover:text-gray-700"
-                      aria-label="Copy ASIN"
-                      title="Copy ASIN"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null
-                }
-              >
-                <p className="font-mono text-sm font-bold text-gray-900">
-                  {asin || <span className="text-gray-400">—</span>}
-                </p>
-              </DetailsPanelRow>
-              <DetailsPanelRow
-                label="SKU"
-                className="last:border-b-0"
-                actions={
-                  sku ? (
-                    <button
-                      type="button"
-                      onClick={() => navigator.clipboard.writeText(sku)}
-                      className="text-gray-400 transition-colors hover:text-gray-700"
-                      aria-label="Copy SKU"
-                      title="Copy SKU"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                  ) : null
-                }
-              >
-                <p className="font-mono text-sm font-bold text-gray-900">
-                  {sku || <span className="text-gray-400">—</span>}
-                </p>
-              </DetailsPanelRow>
-            </div>
-          </section>
+          <FnskuCatalogInfoPanel
+            fnsku={item.fnsku}
+            productTitle={item.display_title}
+            condition={item.condition}
+            sku={item.sku}
+            asin={item.asin}
+            sourceKey={item.item_id}
+            onCatalogMetaChange={setCatalogSnapshot}
+            onCatalogSaved={onSaved}
+          />
 
           <div className="h-px bg-gray-100" />
 

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
-import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
+import { sectionLabel, fieldLabel, SkeletonList } from '@/design-system';
 import { Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { OrderIdChip, TrackingChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
@@ -100,6 +100,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
     <motion.div
       {...framerPresence.tableRow}
       transition={framerTransition.tableRowMount}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.998 }}
       onClick={() => onRowClick(record)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -415,10 +417,25 @@ export function OrdersQueueTable({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Loading order records...</p>
+      <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
+        {bannerTitle ? (
+          <div className={mainStickyHeaderClass}>
+            <div className={mainStickyHeaderRowClass}>
+              <div>
+                <p className={`${sectionLabel} text-blue-700`}>{bannerTitle}</p>
+                {bannerSubtitle ? (
+                  <p className={`${fieldLabel} mt-0.5 text-gray-500`}>{bannerSubtitle}</p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
+            <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+          </div>
+        )}
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+          <SkeletonList count={12} />
         </div>
       </div>
     );

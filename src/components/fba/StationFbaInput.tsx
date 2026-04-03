@@ -1,7 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { fbaPaths } from '@/lib/fba/api-paths';
+import { FBA_BOARD_INJECT_ITEM, FBA_SELECTION_ADJUSTED } from '@/lib/fba/events';
 import { AlertCircle, Loader2, Minus, Package, Plus } from '@/components/Icons';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
@@ -12,7 +14,6 @@ import { usePendingCatalog } from '@/components/fba/hooks/usePendingCatalog';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import { normalizeFnsku } from '@/lib/tracking-format';
 import { useTodayPlan } from '@/components/fba/hooks/useTodayPlan';
-import { useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku, looksLikeFnskuPrefix } from '@/lib/scan-resolver';
 import {
   fbaWorkspaceScanChrome,
@@ -192,13 +193,6 @@ export default function StationFbaInput({
   const router = useRouter();
   const searchParams = useSearchParams();
   const staffIdRaw = String(searchParams.get('staffId') || '').trim();
-  const userId = useMemo(() => {
-    if (techStaffIdOverride != null && techStaffIdOverride !== '') {
-      const n = Number(techStaffIdOverride);
-      if (Number.isFinite(n) && n > 0) return String(n);
-    }
-    return /^\d+$/.test(staffIdRaw) ? staffIdRaw : '1';
-  }, [techStaffIdOverride, staffIdRaw]);
   const stationTheme = useMemo((): StationTheme => {
     if (workspaceThemeProp) return workspaceThemeProp;
     return getStaffThemeById(staffIdRaw || null);
@@ -229,7 +223,7 @@ export default function StationFbaInput({
 
   const fetchTodayQtyMap = useCallback(async (): Promise<Record<string, number>> => {
     try {
-      const res = await fetch('/api/fba/shipments/today');
+      const res = await fetch(fbaPaths.today());
       const data = await res.json().catch(() => ({}));
       return todayShipmentQtyByFnskuFromJson(data);
     } catch {
@@ -239,7 +233,7 @@ export default function StationFbaInput({
 
   const fetchTodayShipmentSnapshot = useCallback(async () => {
     try {
-      const res = await fetch('/api/fba/shipments/today');
+      const res = await fetch(fbaPaths.today());
       const data = await res.json().catch(() => ({}));
       return todayShipmentSnapshotFromJson(data);
     } catch {
@@ -342,6 +336,25 @@ export default function StationFbaInput({
 
   const boardSelection = useFbaBoardSelection({ includePairedSelection: true });
 
+  // Single state for selection counts. Board writes it, panel overwrites with adjusted qtys.
+  const [selCounts, setSelCounts] = useState({ selected: 0, total: 0, selectedQty: 0, totalQty: 0 });
+  useEffect(() => {
+    const boardHandler = (e: Event) => {
+      const c = (e as CustomEvent<typeof selCounts>).detail;
+      if (c) setSelCounts(c);
+    };
+    const adjustedHandler = (e: Event) => {
+      const a = (e as CustomEvent<{ selected: number; selectedQty: number }>).detail;
+      if (a) setSelCounts((prev) => ({ ...prev, selected: a.selected, selectedQty: a.selectedQty }));
+    };
+    window.addEventListener('fba-board-selection-count', boardHandler);
+    window.addEventListener(FBA_SELECTION_ADJUSTED, adjustedHandler);
+    return () => {
+      window.removeEventListener('fba-board-selection-count', boardHandler);
+      window.removeEventListener(FBA_SELECTION_ADJUSTED, adjustedHandler);
+    };
+  }, []);
+
   // Bubble select-mode fallback items to parent so its FbaPairedReviewPanel sees them.
   useEffect(() => {
     if (selectModeItems.length === 0) return;
@@ -356,7 +369,7 @@ export default function StationFbaInput({
     async (line: PlanPreviewLine, nextQty: number) => {
       const { shipmentId: sid, itemId: iid } = line;
       if (nextQty <= 0) {
-        const res = await fetch(`/api/fba/shipments/${sid}/items/${iid}`, { method: 'DELETE' });
+        const res = await fetch(fbaPaths.planItem(sid, iid), { method: 'DELETE' });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) {
           setFbaError(data?.error || 'Could not remove line');
@@ -368,7 +381,7 @@ export default function StationFbaInput({
         window.dispatchEvent(new Event('fba-plan-created'));
         return;
       }
-      const res = await fetch(`/api/fba/shipments/${sid}/items/${iid}`, {
+      const res = await fetch(fbaPaths.planItem(sid, iid), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ expected_qty: Math.min(PLAN_QTY_MAX, nextQty) }),
@@ -388,64 +401,8 @@ export default function StationFbaInput({
     [bumpFbaRefresh],
   );
 
-  const {
-    inputValue,
-    setInputValue,
-    isLoading,
-    inputRef,
-    setActiveOrder,
-    errorMessage,
-    successMessage,
-    trackingNotFoundAlert,
-    handleSubmit,
-    triggerGlobalRefresh,
-  } = useStationTestingController({
-    userId,
-    userName: 'FBA',
-    themeColor: 'blue',
-    onComplete: bumpFbaRefresh,
-    onTrackingOrderLoaded: useCallback(() => {}, []),
-    onActiveOrderCardAutoHidden: useCallback(() => {}, []),
-  });
-
-  const applyScanFnskuFeedback = useCallback(
-    async (fnsku: string) => {
-      try {
-        const res = await fetch(
-          `/api/fba/scan-fnsku?fnsku=${encodeURIComponent(fnsku)}&staffId=${encodeURIComponent(userId)}`
-        );
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.found) return;
-
-        if (!fbaScanOnly) {
-          setActiveOrder({
-            id: data.order?.id ?? null,
-            orderId: data.order?.orderId ?? 'FNSKU',
-            fnsku,
-            productTitle: data.order?.productTitle ?? data.order?.tracking ?? fnsku,
-            itemNumber: data.order?.itemNumber ?? null,
-            sku: data.order?.sku ?? 'N/A',
-            condition: data.order?.condition ?? 'N/A',
-            notes: data.order?.notes ?? '',
-            tracking: data.order?.tracking ?? fnsku,
-            serialNumbers: Array.isArray(data.order?.serialNumbers) ? data.order.serialNumbers : [],
-            testDateTime: data.order?.testDateTime ?? null,
-            testedBy: data.order?.testedBy ?? null,
-            quantity: parseInt(String(data.order?.quantity || 1), 10) || 1,
-            shipByDate: data.order?.shipByDate ?? null,
-            createdAt: data.order?.createdAt ?? null,
-            orderFound: data.orderFound !== false,
-            sourceType: 'fba',
-          });
-          triggerGlobalRefresh();
-        }
-
-      } catch {
-        /* optional telemetry */
-      }
-    },
-    [userId, setActiveOrder, triggerGlobalRefresh, fbaScanOnly]
-  );
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFnskuSelectFlow = useCallback(
     (raw: string) => {
@@ -468,7 +425,11 @@ export default function StationFbaInput({
       const pending = Array.isArray(data?.pending) ? (data.pending as FbaBoardItem[]) : [];
       const key = normalizeFnsku(fnsku);
       if (!key) return [];
-      return pending.filter((row) => normalizeFnsku(String(row.fnsku || '')) === key);
+      // Match by FNSKU or ASIN — a B0 ASIN scan should find items with that ASIN.
+      return pending.filter(
+        (row) => normalizeFnsku(String(row.fnsku || '')) === key
+          || (row.asin && normalizeFnsku(String(row.asin)) === key),
+      );
     } catch {
       return [];
     }
@@ -496,7 +457,7 @@ export default function StationFbaInput({
             setFbaError('Plan data is out of date — try again.');
             return;
           }
-          const res = await fetch(`/api/fba/shipments/${sid}/items/${meta.id}`, {
+          const res = await fetch(fbaPaths.planItem(sid, meta.id), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ expected_qty: Math.min(PLAN_QTY_MAX, r.qty) }),
@@ -527,7 +488,7 @@ export default function StationFbaInput({
         const postMoved: LineHead[] = [];
 
         if (toPost.length > 0) {
-          const res = await fetch('/api/fba/shipments/today/items', {
+          const res = await fetch(fbaPaths.todayItems(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -598,7 +559,7 @@ export default function StationFbaInput({
         }
         window.dispatchEvent(new Event('fba-plan-created'));
         window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
-        await applyScanFnskuFeedback(addableRows[0].fnsku);
+
         setInputValue('');
       } catch {
         setFbaError('Network error - try again.');
@@ -606,7 +567,7 @@ export default function StationFbaInput({
     },
     [
       addFnskus,
-      applyScanFnskuFeedback,
+
       bumpFbaRefresh,
       fbaScanOnly,
       fetchTodayShipmentSnapshot,
@@ -664,7 +625,7 @@ export default function StationFbaInput({
         }
 
         if (openPlanId) {
-          const res = await fetch(`/api/fba/shipments/${openPlanId}/items`, {
+          const res = await fetch(fbaPaths.planItems(openPlanId), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -700,7 +661,7 @@ export default function StationFbaInput({
           window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
           window.dispatchEvent(new Event('fba-plan-created'));
           bumpFbaRefresh();
-          await applyScanFnskuFeedback(fnsku);
+
         } else {
           const map = await fetchTodayQtyMap();
           if ((map[fnsku] ?? 0) > 0) {
@@ -708,7 +669,7 @@ export default function StationFbaInput({
             addFnskus([fnsku]);
             bumpFbaRefresh();
             window.dispatchEvent(new Event('fba-plan-created'));
-            await applyScanFnskuFeedback(fnsku);
+  
             return;
           }
           const newRow: BulkScanCandidate = {
@@ -737,7 +698,7 @@ export default function StationFbaInput({
       addPending,
       addFnskus,
       bumpFbaRefresh,
-      applyScanFnskuFeedback,
+
       fbaScanOnly,
       setInputValue,
       inputRef,
@@ -779,15 +740,57 @@ export default function StationFbaInput({
           return;
         }
 
-        // Not on board — switch to plan mode and add it.
-        setSelectResult(null);
-        setFbaMode('plan');
-        void handleFnskuPlanFlow(detail.fnsku);
+        // Not on board — auto-add 1 to today's plan, then select it.
+        // Stay in select mode so the label printer flow isn't interrupted.
+        try {
+          const res = await fetch(fbaPaths.todayItems(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: [{ fnsku: detail.fnsku, expected_qty: 1 }],
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data?.success !== false) {
+            // Build a FbaBoardItem from the response and inject it directly.
+            const added = data.added?.[0] || data.merged?.[0] || data.moved?.[0];
+            const newItem: FbaBoardItem = {
+              item_id: Number(added?.item_id ?? 0),
+              fnsku: detail.fnsku,
+              expected_qty: 1,
+              actual_qty: 0,
+              item_status: 'PLANNED',
+              display_title: String(added?.display_title || detail.fnsku),
+              asin: null,
+              sku: null,
+              item_notes: null,
+              shipment_id: Number(data.shipment_id ?? 0),
+              shipment_ref: String(data.shipment_ref ?? ''),
+              amazon_shipment_id: null,
+              due_date: new Date().toISOString().slice(0, 10),
+              shipment_status: 'PLANNED',
+              destination_fc: null,
+              tracking_numbers: [],
+              condition: null,
+            };
+
+            // Inject into board without full refresh, then immediately select.
+            window.dispatchEvent(new CustomEvent(FBA_BOARD_INJECT_ITEM, { detail: newItem }));
+            window.dispatchEvent(new CustomEvent('fba-board-select-by-fnsku', { detail: detail.fnsku }));
+
+            setSelectResult({ fnsku: detail.fnsku, found: true, count: 1, title: newItem.display_title });
+            setPlanHint('Added to plan + selected');
+          } else {
+            setFbaError(data?.error || 'Could not auto-add to plan');
+          }
+        } catch {
+          setFbaError('Network error — could not auto-add to plan');
+        }
       })();
     };
     window.addEventListener('fba-board-fnsku-select-result', handler as EventListener);
     return () => window.removeEventListener('fba-board-fnsku-select-result', handler as EventListener);
-  }, [fbaScanOnly, fbaMode, fetchSelectableBoardRows, handleFnskuPlanFlow]);
+  }, [fbaScanOnly, fbaMode, fetchSelectableBoardRows]);
 
   const handleBulkFnskuPlanFlow = useCallback(
     async (rows: BulkScanCandidate[]) => {
@@ -810,7 +813,7 @@ export default function StationFbaInput({
 
         const previewAccum: PlanPreviewLine[] = [];
         for (const row of addableRows) {
-          const res = await fetch(`/api/fba/shipments/${openPlanId}/items`, {
+          const res = await fetch(fbaPaths.planItems(openPlanId), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -854,7 +857,7 @@ export default function StationFbaInput({
         window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
         window.dispatchEvent(new Event('fba-plan-created'));
         bumpFbaRefresh();
-        await applyScanFnskuFeedback(addableRows[0].fnsku);
+
         setInputValue('');
       } catch {
         setFbaError('Network error - try again.');
@@ -866,7 +869,7 @@ export default function StationFbaInput({
     [
       addFnskus,
       addPending,
-      applyScanFnskuFeedback,
+
       bumpFbaRefresh,
       fbaScanOnly,
       inputRef,
@@ -899,14 +902,9 @@ export default function StationFbaInput({
         } else {
           void handleFnskuPlanFlow(raw);
         }
-        return;
       }
-
-      setFbaError(null);
-      setPlanHint(null);
-      void handleSubmit(undefined, undefined, undefined);
     },
-    [inputValue, handleFnskuPlanFlow, handleFnskuSelectFlow, handleSubmit, setInputValue, fbaScanOnly, fbaMode]
+    [inputValue, handleFnskuPlanFlow, handleFnskuSelectFlow, setInputValue, fbaScanOnly, fbaMode]
   );
 
   const handleInputChange = useCallback(
@@ -951,17 +949,41 @@ export default function StationFbaInput({
         }));
         if (fbaScanOnly) {
           void (async () => {
-            const map = await fetchTodayQtyMap();
+            const [map, validateJson] = await Promise.all([
+              fetchTodayQtyMap(),
+              fetch(`/api/fba/fnskus/validate?fnskus=${encodeURIComponent(Array.from(counts.keys()).join(','))}&persist_missing=1`)
+                .then((r) => r.json().catch(() => ({}))),
+            ]);
+            const enriched = rows.map((row) => {
+              const match = Array.isArray(validateJson?.results)
+                ? (validateJson.results as ValidatedFnskuRow[]).find((r) => r.fnsku === row.fnsku)
+                : null;
+              return match
+                ? { ...row, found: !!match.found, product_title: match.product_title ?? null, asin: match.asin ?? row.asin, sku: match.sku ?? row.sku }
+                : row;
+            });
             setTodayPlanQtyByFnsku(map);
-            setPendingTodayPlanRows((prev) => mergeIntoPendingToday(prev, rows, map));
+            setPendingTodayPlanRows((prev) => mergeIntoPendingToday(prev, enriched, map));
           })();
           return;
         }
         if (!openPlanId) {
           void (async () => {
-            const map = await fetchTodayQtyMap();
+            const [map, validateJson] = await Promise.all([
+              fetchTodayQtyMap(),
+              fetch(`/api/fba/fnskus/validate?fnskus=${encodeURIComponent(Array.from(counts.keys()).join(','))}&persist_missing=1`)
+                .then((r) => r.json().catch(() => ({}))),
+            ]);
+            const enriched = rows.map((row) => {
+              const match = Array.isArray(validateJson?.results)
+                ? (validateJson.results as ValidatedFnskuRow[]).find((r) => r.fnsku === row.fnsku)
+                : null;
+              return match
+                ? { ...row, found: !!match.found, product_title: match.product_title ?? null, asin: match.asin ?? row.asin, sku: match.sku ?? row.sku }
+                : row;
+            });
             setTodayPlanQtyByFnsku(map);
-            setPendingTodayPlanRows((prev) => mergeIntoPendingToday(prev, rows, map));
+            setPendingTodayPlanRows((prev) => mergeIntoPendingToday(prev, enriched, map));
           })();
         } else {
           void handleBulkFnskuPlanFlow(rows);
@@ -997,21 +1019,25 @@ export default function StationFbaInput({
     [pendingTodayPlanRows, todayPlanQtyByFnsku],
   );
 
-  const scanError = fbaScanOnly ? fbaError : trackingNotFoundAlert || errorMessage || fbaError;
-  const busy = fbaScanOnly ? isFbaLoading : isLoading || isFbaLoading;
+  const scanError = fbaError;
+  const busy = isFbaLoading;
 
   const routingHint = openPlanId
     ? 'FNSKU adds to the open plan. No plan selected → FNSKU starts a new plan.'
     : 'FNSKU starts a new plan. Select a plan in the list to add lines there instead.';
 
+  const selectedCount = selCounts.selected;
+  const selectedQty = selCounts.selectedQty;
   const fbaOnlyHint =
     fbaMode === 'select'
-      ? 'Select mode: scan FNSKU to select board rows.'
+      ? selectedCount > 0
+        ? `${selectedCount} FNSKU${selectedCount !== 1 ? 's' : ''} selected \u00b7 ${selectedQty} unit${selectedQty !== 1 ? 's' : ''}. Scan more or attach tracking below.`
+        : 'Scan FNSKU or ASIN to select for combining shipment.'
       : pendingTodayPlanRows && pendingTodayPlanRows.length > 0
       ? pendingNotInPlanCount > 0
         ? `${pendingNotInPlanCount} currently not in plan. Review qty, then Add to plan.`
         : 'Review qty, then Update plan.'
-      : 'Scan FNSKU (X00…) to review qty before adding to today plan.';
+      : 'Scan FNSKU (X00\u2026) or ASIN (B0\u2026) to add to today\u2019s plan.';
 
   return (
     <div className={`space-y-2 ${className}`.trim()}>
@@ -1034,7 +1060,7 @@ export default function StationFbaInput({
         onSubmit={handleFormSubmit}
         inputRef={inputRef}
         inputBorderClassName={scanOutlineClass}
-        placeholder={fbaScanOnly ? 'FNSKU (X00…)' : 'FNSKU, tracking, RS-, serial'}
+        placeholder={fbaScanOnly ? 'FNSKU (X00\u2026) or ASIN (B0\u2026)' : 'FNSKU, ASIN, tracking, RS-, serial'}
         autoFocus={false}
         hasRightContent={fbaScanOnly || busy}
         onPaste={fbaScanOnly ? handleInputChange : undefined}
@@ -1080,7 +1106,7 @@ export default function StationFbaInput({
           <p className={`text-[10px] font-bold uppercase tracking-widest ${
             planHint
               ? 'text-emerald-600'
-              : fbaMode === 'select' && selectResult?.found
+              : selectedCount > 0
                 ? 'text-blue-600'
                 : isFbaLoading
                   ? 'text-gray-500'
@@ -1090,11 +1116,11 @@ export default function StationFbaInput({
               ? 'Updating plan\u2026'
               : planHint
                 ? planHint
-                : fbaMode === 'select' && selectResult?.found
-                  ? `Selected ${selectResult.count} item${selectResult.count !== 1 ? 's' : ''} for combining`
-                  : fbaMode === 'plan'
-                    ? 'Scan FNSKU to add to today\u2019s plan'
-                    : 'Scan FNSKU to select items for combining shipment'}
+                : selectedCount > 0
+                  ? `${selectedCount} selected \u00b7 ${selectedQty} unit${selectedQty !== 1 ? 's' : ''}`
+                  : fbaMode === 'select'
+                    ? 'Scan FNSKU or ASIN to select'
+                    : 'Scan to add to today\u2019s plan'}
           </p>
         </div>
       ) : null}
@@ -1207,6 +1233,16 @@ export default function StationFbaInput({
               key={`${line.itemId}-${idx}`}
               displayTitle={line.displayTitle}
               fnsku={line.fnsku}
+              stationTheme={stationTheme}
+              onEditDetails={() =>
+                emitOpenQuickAddFnsku({
+                  fnsku: line.fnsku,
+                  product_title: line.displayTitle || null,
+                  asin: null,
+                  sku: null,
+                  condition: null,
+                })
+              }
               rightSlot={
                 <>
                   <button
@@ -1265,17 +1301,6 @@ export default function StationFbaInput({
         </div>
       ) : null}
 
-      {!scanError && planHint && !fbaScanOnly ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs font-semibold text-emerald-900">
-          {planHint}
-        </p>
-      ) : null}
-
-      {!fbaScanOnly && !scanError && successMessage && !planHint ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs font-semibold text-emerald-900">
-          {successMessage}
-        </p>
-      ) : null}
 
 
       {/* FbaPairedReviewPanel removed — the parent FbaSidebar renders it via boardSelection */}

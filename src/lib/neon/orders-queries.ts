@@ -2,6 +2,8 @@ import pool from '../db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { queryWithRetry } from '@/lib/db-retry';
+import { getShippedSearchFieldConfig, type ShippedSearchField } from '@/lib/shipped-search';
+import { buildRankedSearchSql, buildTextSearchVariants, type RankedSearchVariant } from '@/lib/search/sql-ranked-search';
 
 // Order record with shipping information
 export interface ShippedOrder {
@@ -153,12 +155,13 @@ const ORDER_SERIALS_CTE = `
       o.item_number,
       o.condition,
       stn.tracking_number_raw AS tracking_number,
-      COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
-      COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
+      stn.tracking_number_raw AS shipping_tracking_number,
+      COALESCE(order_trackings.tracking_numbers, '[]'::jsonb) AS tracking_numbers,
+      COALESCE(order_trackings.tracking_number_rows, '[]'::jsonb) AS tracking_number_rows,
       o.sku,
       o.account_source,
       o.notes,
-      o.status_history,
+      COALESCE(o.status_history::jsonb, '[]'::jsonb) AS status_history,
       COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
         OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
       stn.latest_status_category AS shipment_status,
@@ -198,20 +201,20 @@ const ORDER_SERIALS_CTE = `
     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
     LEFT JOIN LATERAL (
       SELECT COALESCE(
-        json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
+        jsonb_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
           FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
-        '[]'::json
+        '[]'::jsonb
       ) AS tracking_numbers,
       COALESCE(
-        json_agg(
-          json_build_object(
+        jsonb_agg(
+          jsonb_build_object(
             'shipment_id', t.shipment_id,
             'tracking', t.tracking_number_raw,
             'is_primary', t.is_primary
           )
           ORDER BY t.sort_key, t.tracking_number_raw
         ) FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
-        '[]'::json
+        '[]'::jsonb
       ) AS tracking_number_rows
       FROM (
         SELECT DISTINCT
@@ -289,7 +292,7 @@ const ORDER_SERIALS_CTE = `
             OR stn.is_out_for_delivery OR stn.is_delivered, false)
     GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
              o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
-             o.account_source, o.notes, o.status_history,
+             o.account_source, o.notes, o.status_history::jsonb,
              stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
              stn.latest_status_category, stn.carrier,
              wa_t.assigned_tech_id, wa_p.assigned_packer_id,
@@ -408,12 +411,13 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.item_number,
           o.condition,
           stn.tracking_number_raw AS tracking_number,
-          COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
-          COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
+          stn.tracking_number_raw AS shipping_tracking_number,
+          COALESCE(order_trackings.tracking_numbers, '[]'::jsonb) AS tracking_numbers,
+          COALESCE(order_trackings.tracking_number_rows, '[]'::jsonb) AS tracking_number_rows,
           o.sku,
           o.account_source,
           o.notes,
-          o.status_history,
+          COALESCE(o.status_history::jsonb, '[]'::jsonb) AS status_history,
           COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
             OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
           stn.latest_status_category AS shipment_status,
@@ -453,20 +457,20 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
         LEFT JOIN LATERAL (
           SELECT COALESCE(
-            json_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
+            jsonb_agg(t.tracking_number_raw ORDER BY t.sort_key, t.tracking_number_raw)
               FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
-            '[]'::json
+            '[]'::jsonb
           ) AS tracking_numbers,
           COALESCE(
-            json_agg(
-              json_build_object(
+            jsonb_agg(
+              jsonb_build_object(
                 'shipment_id', t.shipment_id,
                 'tracking', t.tracking_number_raw,
                 'is_primary', t.is_primary
               )
               ORDER BY t.sort_key, t.tracking_number_raw
             ) FILTER (WHERE COALESCE(t.tracking_number_raw, '') <> ''),
-            '[]'::json
+            '[]'::jsonb
           ) AS tracking_number_rows
           FROM (
             SELECT DISTINCT
@@ -542,7 +546,7 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
                 OR stn.is_out_for_delivery OR stn.is_delivered, false)
         GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
                  o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
-                 o.account_source, o.notes, o.status_history,
+                 o.account_source, o.notes, o.status_history::jsonb,
                  stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
                  stn.latest_status_category, stn.carrier,
                  wa_t.assigned_tech_id, wa_p.assigned_packer_id,
@@ -573,21 +577,14 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
  */
 export async function searchShippedOrders(
   query: string,
-  options?: { shippedFilter?: ShippedFilterMode },
+  options?: { shippedFilter?: ShippedFilterMode; searchField?: ShippedSearchField },
 ): Promise<ShippedOrder[]> {
   try {
-    const searchTerm = `%${query}%`;
-    const digitsOnly = query.replace(/\D/g, '');
+    const trimmedQuery = String(query || '').trim();
+    const digitsOnly = trimmedQuery.replace(/\D/g, '');
     const last8 = digitsOnly.length >= 8 ? digitsOnly.slice(-8) : '';
-    const key18 = normalizeTrackingKey18(query);
-    const params: any[] = [searchTerm, query, last8];
-    const key18Clause = key18
-      ? ` OR os.shipment_id IN (
-          SELECT s.id FROM shipping_tracking_numbers s
-          WHERE RIGHT(regexp_replace(UPPER(COALESCE(s.tracking_number_normalized, '')), '[^A-Z0-9]', '', 'g'), 18) = $4
-        )`
-      : '';
-    if (key18) params.push(key18);
+    const key18 = normalizeTrackingKey18(trimmedQuery);
+    const searchField = options?.searchField ?? 'all';
 
     // Build an optional AND clause for the type filter
     let typeFilterClause = '';
@@ -599,43 +596,334 @@ export async function searchShippedOrders(
       typeFilterClause = ` AND BTRIM(COALESCE(os.sku, '')) != ''`;
     }
 
-    const result = await pool.query(
-      `WITH ${ORDER_SERIALS_CTE}
-       SELECT
-         os.*,
-         s1.name AS tested_by_name,
-         s2.name AS packed_by_name,
-         s3.name AS tester_name
-       FROM order_serials os
-       LEFT JOIN staff s1 ON os.tested_by = s1.id
-       LEFT JOIN staff s2 ON os.packed_by = s2.id
-       LEFT JOIN staff s3 ON os.tester_id = s3.id
-       WHERE (
-         os.tracking_number::text = $2
-         OR os.order_id::text = $2
-         OR os.tracking_number::text ILIKE $1
-         OR os.order_id::text ILIKE $1
-         OR os.product_title::text ILIKE $1
-         OR os.sku::text ILIKE $1
-         OR os.serial_number::text ILIKE $1
-         OR (
-           $3 != '' AND LENGTH($3) >= 8 AND (
-             RIGHT(regexp_replace(COALESCE(os.tracking_number::text, ''), '[^0-9]', '', 'g'), 8) = $3
-             OR RIGHT(regexp_replace(COALESCE(os.order_id::text, ''), '[^0-9]', '', 'g'), 8) = $3
-           )
-         )${key18Clause}
-       )${typeFilterClause}
-       ORDER BY
-         CASE WHEN os.tracking_number::text = $2 OR os.order_id::text = $2 THEN 1 ELSE 2 END,
-         COALESCE(os.packed_at, os.created_at)::timestamp DESC NULLS LAST,
-         os.id DESC
-       LIMIT 100`,
-      params,
-    );
-    return result.rows;
+    const searchConfig = getShippedSearchFieldConfig(searchField);
+
+    const runSearch = async (enableFuzzy: boolean) => {
+      const params: any[] = [];
+      const pushParam = (value: any) => {
+        params.push(value);
+        return `$${params.length}`;
+      };
+
+      const wantsOrderId = searchField === 'all' || searchField === 'order_id';
+      const wantsTracking = searchField === 'all' || searchField === 'tracking';
+      const wantsProductTitle = searchField === 'all' || searchField === 'product_title';
+      const wantsSku = searchField === 'all' || searchField === 'sku';
+      const wantsSerial = searchField === 'all' || searchField === 'serial_number';
+      const hasContainsSearch = searchField !== 'order_id';
+      const hasPrefixSearch =
+        searchField === 'all'
+        || searchField === 'order_id'
+        || searchField === 'product_title'
+        || searchField === 'sku'
+        || searchField === 'serial_number';
+      const allowFuzzy = enableFuzzy && searchConfig.fuzzyEnabled && trimmedQuery.length >= searchConfig.fuzzyMinQueryLength;
+
+      const exactParam = pushParam(trimmedQuery);
+      const prefixParam = hasPrefixSearch ? pushParam(`${trimmedQuery}%`) : null;
+      const likeParam = hasContainsSearch ? pushParam(`%${trimmedQuery}%`) : null;
+      const fuzzyParam = allowFuzzy ? pushParam(trimmedQuery) : null;
+      const last8Param = last8 && wantsTracking ? pushParam(last8) : null;
+      const key18Param = key18 && wantsTracking ? pushParam(key18) : null;
+      const numericParam =
+        wantsOrderId && /^\d+$/.test(trimmedQuery) && trimmedQuery.length <= 10
+          ? pushParam(Number(trimmedQuery))
+          : null;
+
+      const orderIdExpression = `COALESCE(os.order_id::text, '')`;
+      const trackingExpression = `COALESCE(os.tracking_number::text, '')`;
+      const productTitleExpression = `COALESCE(os.product_title::text, '')`;
+      const skuExpression = `COALESCE(os.sku::text, '')`;
+      const serialExpression = `COALESCE(os.serial_number::text, '')`;
+
+      const variants: RankedSearchVariant[] = [];
+
+      if (wantsOrderId) {
+        variants.push(...buildTextSearchVariants({
+          expression: orderIdExpression,
+          exactParam,
+          prefixParam,
+          likeParam: searchField === 'all' ? likeParam : null,
+          enableExact: true,
+          enablePrefix: true,
+          enableContains: searchField === 'all',
+          enableFuzzy: false,
+          exactScore: searchField === 'order_id' ? 1500 : 1450,
+          prefixScore: searchField === 'order_id' ? 1320 : 1240,
+          containsScore: 980,
+        }));
+      }
+
+      if (wantsTracking) {
+        variants.push(...buildTextSearchVariants({
+          expression: trackingExpression,
+          exactParam,
+          likeParam,
+          enableExact: true,
+          enablePrefix: false,
+          enableContains: true,
+          enableFuzzy: false,
+          exactScore: searchField === 'tracking' ? 1480 : 1380,
+          containsScore: searchField === 'tracking' ? 1080 : 940,
+        }));
+      }
+
+      if (wantsProductTitle) {
+        variants.push(...buildTextSearchVariants({
+          expression: productTitleExpression,
+          exactParam,
+          prefixParam,
+          likeParam,
+          fuzzyParam,
+          enableExact: true,
+          enablePrefix: true,
+          enableContains: true,
+          enableFuzzy: allowFuzzy,
+          exactScore: searchField === 'product_title' ? 1280 : 860,
+          prefixScore: searchField === 'product_title' ? 1120 : 740,
+          containsScore: searchField === 'product_title' ? 920 : 660,
+          fuzzyBaseScore: searchField === 'product_title' ? 700 : 520,
+          fuzzyScale: 140,
+          fuzzyThreshold: 0.22,
+        }));
+      }
+
+      if (wantsSku) {
+        variants.push(...buildTextSearchVariants({
+          expression: skuExpression,
+          exactParam,
+          prefixParam,
+          likeParam,
+          fuzzyParam,
+          enableExact: true,
+          enablePrefix: true,
+          enableContains: true,
+          enableFuzzy: allowFuzzy,
+          exactScore: searchField === 'sku' ? 1360 : 980,
+          prefixScore: searchField === 'sku' ? 1180 : 860,
+          containsScore: searchField === 'sku' ? 960 : 740,
+          fuzzyBaseScore: searchField === 'sku' ? 760 : 560,
+          fuzzyScale: 150,
+          fuzzyThreshold: 0.32,
+        }));
+      }
+
+      if (wantsSerial) {
+        variants.push(...buildTextSearchVariants({
+          expression: serialExpression,
+          exactParam,
+          prefixParam,
+          likeParam,
+          fuzzyParam,
+          enableExact: true,
+          enablePrefix: true,
+          enableContains: true,
+          enableFuzzy: allowFuzzy,
+          exactScore: searchField === 'serial_number' ? 1380 : 1000,
+          prefixScore: searchField === 'serial_number' ? 1200 : 880,
+          containsScore: searchField === 'serial_number' ? 980 : 760,
+          fuzzyBaseScore: searchField === 'serial_number' ? 780 : 580,
+          fuzzyScale: 150,
+          fuzzyThreshold: 0.36,
+        }));
+      }
+
+      if (numericParam) {
+        variants.push({
+          predicate: `os.id = ${numericParam}`,
+          score: 1420,
+        });
+      }
+
+      if (last8Param && searchField === 'all') {
+        variants.push({
+          predicate: `RIGHT(regexp_replace(${orderIdExpression}, '[^0-9]', '', 'g'), 8) = ${last8Param}`,
+          score: 1160,
+        });
+      }
+
+      if (last8Param && wantsTracking) {
+        variants.push({
+          predicate: `RIGHT(regexp_replace(${trackingExpression}, '[^0-9]', '', 'g'), 8) = ${last8Param}`,
+          score: searchField === 'tracking' ? 1320 : 1200,
+        });
+      }
+
+      if (key18Param && wantsTracking) {
+        variants.push({
+          predicate: `os.shipment_id IN (
+            SELECT s.id FROM shipping_tracking_numbers s
+            WHERE RIGHT(regexp_replace(UPPER(COALESCE(s.tracking_number_normalized, '')), '[^A-Z0-9]', '', 'g'), 18) = ${key18Param}
+          )`,
+          score: searchField === 'tracking' ? 1400 : 1280,
+        });
+      }
+
+      const { whereClause, rankClause } = buildRankedSearchSql(variants);
+
+      return pool.query(
+        `WITH ${ORDER_SERIALS_CTE}
+         SELECT
+           os.*,
+           s1.name AS tested_by_name,
+           s2.name AS packed_by_name,
+           s3.name AS tester_name,
+           ${rankClause} AS search_rank
+         FROM order_serials os
+         LEFT JOIN staff s1 ON os.tested_by = s1.id
+         LEFT JOIN staff s2 ON os.packed_by = s2.id
+         LEFT JOIN staff s3 ON os.tester_id = s3.id
+         WHERE (
+           ${whereClause}
+         )${typeFilterClause}
+         ORDER BY
+           search_rank DESC,
+           COALESCE(os.packed_at, os.created_at)::timestamp DESC NULLS LAST,
+           os.id DESC
+         LIMIT 100`,
+        params,
+      );
+    };
+
+    const searchExceptionTrackingRows = async (): Promise<ShippedOrder[]> => {
+      const wantsTracking = searchField === 'all' || searchField === 'tracking';
+      if (!wantsTracking) return [];
+
+      const params: any[] = [];
+      const pushParam = (value: any) => {
+        params.push(value);
+        return `$${params.length}`;
+      };
+
+      const exactParam = pushParam(trimmedQuery);
+      const likeParam = pushParam(`%${trimmedQuery}%`);
+      const last8Param = last8 ? pushParam(last8) : null;
+      const key18Param = key18 ? pushParam(key18) : null;
+      const trackingExpression = `COALESCE(oe.shipping_tracking_number, '')`;
+
+      const variants: RankedSearchVariant[] = buildTextSearchVariants({
+        expression: trackingExpression,
+        exactParam,
+        likeParam,
+        enableExact: true,
+        enablePrefix: false,
+        enableContains: true,
+        enableFuzzy: false,
+        exactScore: searchField === 'tracking' ? 1460 : 1360,
+        containsScore: searchField === 'tracking' ? 1060 : 920,
+      });
+
+      if (last8Param) {
+        variants.push({
+          predicate: `RIGHT(regexp_replace(${trackingExpression}, '[^0-9]', '', 'g'), 8) = ${last8Param}`,
+          score: searchField === 'tracking' ? 1300 : 1180,
+        });
+      }
+
+      if (key18Param) {
+        variants.push({
+          predicate: `RIGHT(regexp_replace(UPPER(${trackingExpression}), '[^A-Z0-9]', '', 'g'), 18) = ${key18Param}`,
+          score: searchField === 'tracking' ? 1380 : 1260,
+        });
+      }
+
+      const { whereClause, rankClause } = buildRankedSearchSql(variants);
+
+      const result = await pool.query(
+        `SELECT
+           oe.id,
+           NULL::bigint AS shipment_id,
+           NULL::text AS ship_by_date,
+           CONCAT('EX-', oe.id::text) AS order_id,
+           CONCAT('Tracking Exception • ', INITCAP(COALESCE(oe.source_station, 'unknown'))) AS product_title,
+           '1'::text AS quantity,
+           NULL::text AS item_number,
+           'EXCEPTION'::text AS condition,
+           oe.shipping_tracking_number AS tracking_number,
+           oe.shipping_tracking_number AS shipping_tracking_number,
+           jsonb_build_array(oe.shipping_tracking_number) AS tracking_numbers,
+           jsonb_build_array(
+             jsonb_build_object(
+               'shipment_id', NULL,
+               'tracking', oe.shipping_tracking_number,
+               'is_primary', true
+             )
+           ) AS tracking_number_rows,
+           ''::text AS sku,
+           NULL::text AS account_source,
+           COALESCE(oe.notes, '') AS notes,
+           '[]'::jsonb AS status_history,
+           false AS is_shipped,
+           oe.status AS shipment_status,
+           false AS is_delivered,
+           NULL::text AS carrier,
+           to_char(oe.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
+           'exception'::text AS row_source,
+           oe.exception_reason,
+           oe.status AS exception_status,
+           NULL::int AS tester_id,
+           NULL::int AS packer_id,
+           oe.staff_id AS packed_by,
+           to_char(oe.created_at, 'YYYY-MM-DD HH24:MI:SS') AS packed_at,
+           NULL::text AS pack_activity_at,
+           '[]'::jsonb AS packer_photos_url,
+           'EXCEPTION'::text AS tracking_type,
+           ''::text AS serial_number,
+           NULL::int AS tested_by,
+           NULL::text AS test_date_time,
+           NULL::text AS test_activity_at,
+           NULL::text AS tested_by_name,
+           oe.staff_name AS packed_by_name,
+           NULL::text AS tester_name,
+           ${rankClause} AS search_rank
+         FROM orders_exceptions oe
+         WHERE oe.status = 'open'
+           AND (${whereClause})
+         ORDER BY search_rank DESC, oe.updated_at DESC, oe.id DESC
+         LIMIT 25`,
+        params,
+      );
+
+      return result.rows;
+    };
+
+    const mergeSearchRows = (rows: ShippedOrder[], exceptionRows: ShippedOrder[]) =>
+      [...rows, ...exceptionRows]
+        .sort((a, b) => {
+          const rankA = Number((a as any).search_rank || 0);
+          const rankB = Number((b as any).search_rank || 0);
+          if (rankA !== rankB) return rankB - rankA;
+          const dateA = new Date(String(a.packed_at || a.created_at || 0)).getTime();
+          const dateB = new Date(String(b.packed_at || b.created_at || 0)).getTime();
+          if (dateA !== dateB) return dateB - dateA;
+          return Number(b.id) - Number(a.id);
+        })
+        .slice(0, 100);
+
+    try {
+      const result = await runSearch(true);
+      const exceptionRows = await searchExceptionTrackingRows();
+      return mergeSearchRows(result.rows, exceptionRows);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : '';
+      const pgTrgmUnavailable =
+        searchConfig.fuzzyEnabled
+        && (message.includes('similarity') || message.includes('word_similarity'))
+        && message.includes('does not exist');
+
+      if (pgTrgmUnavailable) {
+        console.warn('pg_trgm is unavailable for shipped search; falling back to exact/prefix/contains search.');
+        const fallbackResult = await runSearch(false);
+        const exceptionRows = await searchExceptionTrackingRows();
+        return mergeSearchRows(fallbackResult.rows, exceptionRows);
+      }
+
+      throw error;
+    }
   } catch (error) {
     console.error('Error searching shipped orders:', error);
-    throw new Error('Failed to search shipped orders');
+    const message = error instanceof Error ? error.message : 'Failed to search shipped orders';
+    throw new Error(message);
   }
 }
 

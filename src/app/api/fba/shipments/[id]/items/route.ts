@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
-import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
+import { addFnskuToPlan } from '@/domain/fba/condense-fnsku';
+import { publishFbaItemChanged, publishFbaShipmentChanged } from '@/lib/realtime/publish';
 
 // â”€â”€ GET /api/fba/shipments/[id]/items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns all items for a specific FBA shipment with staff names joined.
@@ -62,9 +63,11 @@ export async function GET(
 }
 
 // â”€â”€ POST /api/fba/shipments/[id]/items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Add (or upsert) an item to an existing shipment.
-// Pulls product metadata from fba_fnskus if product_title is not provided.
-// Body: { fnsku, expected_qty?, product_title?, asin?, sku? }
+// Add an FNSKU to a plan with automatic condensing:
+//   - If the FNSKU exists in another unshipped plan, it is moved/merged here.
+//   - If the FNSKU already exists in this plan, its expected_qty is incremented.
+//   - Otherwise a new item row is created.
+// Body: { fnsku, expected_qty?, product_title?, asin?, sku?, staff_id? }
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -72,8 +75,8 @@ export async function POST(
   const client = await pool.connect();
   try {
     const { id } = await params;
-    const shipmentId = parseFbaPlanId(id);
-    if (shipmentId == null) {
+    const planId = parseFbaPlanId(id);
+    if (planId == null) {
       return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
@@ -84,58 +87,69 @@ export async function POST(
     }
 
     const expectedQty = Math.max(1, Number(body?.expected_qty) || 1);
+    const staffId = body?.staff_id ? Number(body.staff_id) : null;
 
     await client.query('BEGIN');
 
-    const shipmentCheck = await client.query(
+    // Verify the target plan exists and is not shipped.
+    const planCheck = await client.query(
       `SELECT id, status FROM fba_shipments WHERE id = $1`,
-      [shipmentId]
+      [planId],
     );
-    if (!shipmentCheck.rows[0]) {
+    if (!planCheck.rows[0]) {
       await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Shipment not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
     }
-    if (shipmentCheck.rows[0].status === 'SHIPPED') {
+    if (planCheck.rows[0].status === 'SHIPPED') {
       await client.query('ROLLBACK');
       return NextResponse.json(
-        { success: false, error: 'Cannot add items to a shipped shipment' },
-        { status: 409 }
+        { success: false, error: 'Cannot add items to a shipped plan' },
+        { status: 409 },
       );
     }
 
-    const catalogRow = await upsertFnskuCatalogRow(client, {
+    const result = await addFnskuToPlan(client, {
+      targetPlanId: planId,
       fnsku,
+      expectedQty,
+      staffId,
       productTitle: body?.product_title,
       asin: body?.asin,
       sku: body?.sku,
     });
-    const productTitle = catalogRow?.product_title ?? null;
-    const asin = catalogRow?.asin ?? null;
-    const sku = catalogRow?.sku ?? null;
-
-    const result = await client.query(
-      `INSERT INTO fba_shipment_items
-         (shipment_id, fnsku, product_title, asin, sku, expected_qty)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (shipment_id, fnsku) DO UPDATE
-         SET expected_qty  = fba_shipment_items.expected_qty + EXCLUDED.expected_qty,
-             product_title = COALESCE(EXCLUDED.product_title, fba_shipment_items.product_title),
-             asin          = COALESCE(EXCLUDED.asin, fba_shipment_items.asin),
-             sku           = COALESCE(EXCLUDED.sku, fba_shipment_items.sku),
-             updated_at    = NOW()
-       RETURNING *`,
-      [shipmentId, fnsku, productTitle, asin, sku, expectedQty]
-    );
 
     await client.query('COMMIT');
 
-    return NextResponse.json({ success: true, item: result.rows[0] }, { status: 201 });
+    // Fire realtime events so the board refreshes.
+    publishFbaItemChanged({
+      action: result.action === 'condensed' ? 'reassign' : 'update',
+      shipmentId: planId,
+      itemId: result.itemId,
+      fnsku,
+      source: 'api:add-item',
+    }).catch(() => {});
+
+    if (result.action === 'condensed' && result.fromPlanId) {
+      publishFbaShipmentChanged({
+        action: 'updated',
+        shipmentId: result.fromPlanId,
+        source: 'api:condense-item-removed',
+      }).catch(() => {});
+    }
+
+    return NextResponse.json({
+      success: true,
+      item_id: result.itemId,
+      action: result.action,
+      new_qty: result.newQty,
+      from_plan_id: result.fromPlanId ?? null,
+    }, { status: 201 });
   } catch (error: any) {
     await client.query('ROLLBACK');
     console.error('[POST /api/fba/shipments/[id]/items]', error);
     return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to add shipment item' },
-      { status: 500 }
+      { success: false, error: error?.message || 'Failed to add item to plan' },
+      { status: 500 },
     );
   } finally {
     client.release();

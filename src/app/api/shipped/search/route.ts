@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchShippedOrders } from '@/lib/neon/orders-queries';
 import { logRouteMetric } from '@/lib/route-metrics';
+import { normalizeShippedSearchField } from '@/lib/shipped-search';
 
 export async function GET(req: NextRequest) {
     const startedAt = Date.now();
@@ -8,18 +9,20 @@ export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const query = searchParams.get('q');
+        const searchField = normalizeShippedSearchField(searchParams.get('searchField'));
 
         if (!query) {
             return NextResponse.json({ error: 'Search query is required' }, { status: 400 });
         }
 
-        const results = await searchShippedOrders(query);
+        const results = await searchShippedOrders(query, { searchField });
         ok = true;
 
         return NextResponse.json({
             results,
             count: results.length,
-            query: query
+            query: query,
+            searchField,
         });
     } catch (error: any) {
         console.error('Error searching shipped table:', error);

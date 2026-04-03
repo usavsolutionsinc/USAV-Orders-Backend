@@ -1,15 +1,17 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ChevronRight, ChevronUp } from '@/components/Icons';
+import { ChevronRight, ChevronUp, Settings } from '@/components/Icons';
 import type { PanelAction } from '@/hooks/usePanelActions';
 
 interface PanelActionBarProps {
   onClose: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onAssign?: () => void;
   disableMoveUp?: boolean;
   disableMoveDown?: boolean;
+  disableAssign?: boolean;
   actions?: PanelAction[];
 }
 
@@ -44,8 +46,10 @@ export function PanelActionBar({
   onClose,
   onMoveUp,
   onMoveDown,
+  onAssign,
   disableMoveUp = false,
   disableMoveDown = false,
+  disableAssign = false,
   actions = [],
 }: PanelActionBarProps) {
   return (
@@ -66,10 +70,16 @@ export function PanelActionBar({
           <ActionButton onClick={onMoveDown} label="Move down a row" disabled={disableMoveDown}>
             <ChevronUp className="h-3.5 w-3.5 rotate-180" />
           </ActionButton>
+
         </div>
 
-        {actions.length > 0 && (
+        {(onAssign || actions.length > 0) && (
           <div className="flex items-center gap-2">
+            {onAssign ? (
+              <ActionButton onClick={onAssign} label="Open assignment" disabled={disableAssign}>
+                <Settings className="h-3.5 w-3.5" />
+              </ActionButton>
+            ) : null}
             {actions.map((action) => (
               <ActionButton
                 key={action.key}

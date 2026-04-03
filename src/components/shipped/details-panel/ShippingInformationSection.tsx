@@ -109,6 +109,8 @@ function ShippingEditableRow({
   headerAccessory,
   headerAccessoryClassName,
   allowEdit = true,
+  className,
+  dividerClassName,
 }: {
   label: string;
   value: string;
@@ -119,6 +121,8 @@ function ShippingEditableRow({
   headerAccessory?: string;
   headerAccessoryClassName?: string;
   allowEdit?: boolean;
+  className?: string;
+  dividerClassName?: string;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const displayValue = String(value || '').trim();
@@ -173,7 +177,8 @@ function ShippingEditableRow({
         </span>
       ) : null}
       actions={actions}
-      className="last:border-b-0"
+      className={className ? `${className} last:border-b-0` : 'last:border-b-0'}
+      dividerClassName={dividerClassName}
     >
       {allowEdit && isEditing ? (
         <input
@@ -798,6 +803,11 @@ export function ShippingInformationSection({
     }
     return out;
   })();
+  const hasRowsAfterItemNumber =
+    showSerialNumber
+    || Boolean(prepackedSku)
+    || Boolean(metaFields?.packedByName)
+    || Boolean(metaFields?.testedByName);
 
   useEffect(() => {
     const next: Record<string, string> = {};
@@ -935,6 +945,8 @@ export function ShippingInformationSection({
             onChange={ef.onItemNumberChange}
             onBlur={ef.onBlur}
             externalUrl={getExternalUrlByItemNumber(ef.itemNumber)}
+            dividerClassName="border-b-0"
+            className={hasRowsAfterItemNumber ? '!border-b-0' : '!border-b-0 pb-0'}
           />
 
           {showSerialNumber ? (

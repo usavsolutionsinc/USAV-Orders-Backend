@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { framerPresence, framerTransition } from '@/design-system';
+import { framerPresence, framerTransition, framerVariants, SkeletonList } from '@/design-system';
 import confetti from 'canvas-confetti';
 import { Package } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
@@ -334,9 +334,23 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
   const isFiltering = Boolean(searchText.trim() || (quickFilter !== 'all' && !SORT_FILTER_IDS.has(quickFilter)));
   const renderRows = useCallback(
     (children: React.ReactNode) => (
-      isFiltering
-        ? <>{children}</>
-        : <AnimatePresence initial={false} mode="popLayout">{children}</AnimatePresence>
+      isFiltering ? (
+        <div className="flex flex-col">
+          {children}
+        </div>
+      ) : (
+        <motion.div
+          variants={framerVariants.staggeredList}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          className="flex flex-col"
+        >
+          <AnimatePresence initial={false} mode="popLayout">
+            {children}
+          </AnimatePresence>
+        </motion.div>
+      )
     ),
     [isFiltering],
   );
@@ -407,9 +421,13 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
 
   if (loading) {
     return (
-      <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200 animate-pulse">
-        <div className="h-4 bg-gray-200 rounded w-20 mb-3" />
-        <div className="h-20 bg-gray-200 rounded" />
+      <div className="flex flex-col gap-1">
+        <div className="h-10 w-full bg-white mb-2 flex gap-2 overflow-x-hidden px-1">
+          <div className="h-8 w-16 bg-gray-100 rounded-full animate-pulse flex-shrink-0" />
+          <div className="h-8 w-20 bg-gray-100 rounded-full animate-pulse flex-shrink-0" />
+          <div className="h-8 w-20 bg-gray-100 rounded-full animate-pulse flex-shrink-0" />
+        </div>
+        <SkeletonList count={4} type="card" />
       </div>
     );
   }
@@ -463,13 +481,11 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
               filteredStockOrders.length === 0 ? (
                 <EmptySlate label={isFiltering ? "No results" : "No out-of-stock orders"} color="red" />
               ) : (
-                <div className="flex flex-col">
-                  {renderRows(
-                    filteredStockOrders.map((order) => (
-                      renderOrderCard(order, `stock-${order.id}`, 'stock')
-                    ))
-                  )}
-                </div>
+                renderRows(
+                  filteredStockOrders.map((order) => (
+                    renderOrderCard(order, `stock-${order.id}`, 'stock')
+                  ))
+                )
               )
 
             ) : effectiveTab === 'all' ? (
@@ -482,7 +498,7 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                   <EmptySlate label="No current work" color="green" />
                 )
               ) : (
-                <div className="flex flex-col">
+                <>
                   {showNoCurrentOrdersBanner && (
                     <div className="mb-3">
                       <EmptySlate label="No current orders" color="green" />
@@ -493,114 +509,94 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
                       {(index > 0 || showNoCurrentOrdersBanner) && (
                         <SectionHeader label={section.label} color={section.headerColor} />
                       )}
-                      <div className="flex flex-col">
-                        {renderRows(section.render())}
-                      </div>
+                      {renderRows(section.render())}
                     </div>
                   ))}
-                </div>
+                </>
               )
 
             ) : effectiveTab === 'repair' ? (
               filteredRepairs.length === 0 ? (
                 <EmptySlate label={isFiltering ? "No results" : "No repairs in queue"} />
               ) : (
-                <div className="flex flex-col">
-                  {renderRows(
-                    filteredRepairs.map((repair) => (
-                      <RepairCard
-                        key={repair.repairId}
-                        repair={repair}
-                        techId={techId}
-                        isExpanded={expandedItemKey === `repair-${repair.repairId}`}
-                        onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
-                      />
-                    ))
-                  )}
-                </div>
+                renderRows(
+                  filteredRepairs.map((repair) => (
+                    <RepairCard
+                      key={repair.repairId}
+                      repair={repair}
+                      techId={techId}
+                      isExpanded={expandedItemKey === `repair-${repair.repairId}`}
+                      onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
+                    />
+                  ))
+                )
               )
 
             ) : effectiveTab === 'fba' ? (
               filteredFbaItems.length === 0 ? (
                 <EmptySlate label={isFiltering ? "No results" : "No active FBA items"} color={isFiltering ? "gray" : "purple"} />
               ) : (
-                <div className="flex flex-col">
-                  {renderRows(
-                    filteredFbaItems.map((item) => (
-                      <FbaItemCard
-                        key={item.item_id}
-                        item={item}
-                        isExpanded={expandedItemKey === `fba-${item.item_id}`}
-                        onToggleExpand={() => toggleExpandedItem(`fba-${item.item_id}`)}
-                      />
-                    ))
-                  )}
-                </div>
+                renderRows(
+                  filteredFbaItems.map((item) => (
+                    <FbaItemCard
+                      key={item.item_id}
+                      item={item}
+                      isExpanded={expandedItemKey === `fba-${item.item_id}`}
+                      onToggleExpand={() => toggleExpandedItem(`fba-${item.item_id}`)}
+                    />
+                  ))
+                )
               )
 
             ) : effectiveTab === 'receiving' ? (
               filteredReceivingItems.length === 0 ? (
                 <EmptySlate label={isFiltering ? "No results" : "No receiving items assigned"} color={isFiltering ? "gray" : "teal"} />
               ) : (
-                <div className="flex flex-col">
-                  {renderRows(
-                    filteredReceivingItems.map((item) => (
-                      <ReceivingAssignmentCard key={item.assignment_id} item={item} />
-                    ))
-                  )}
-                </div>
+                renderRows(
+                  filteredReceivingItems.map((item) => (
+                    <ReceivingAssignmentCard key={item.assignment_id} item={item} />
+                  ))
+                )
               )
 
             ) : filteredOrders.length === 0 ? (
-              <div className="flex flex-col">
+              <>
                 <EmptySlate label={isFiltering ? "No results" : "No current orders"} color={isFiltering ? "gray" : "green"} />
                 {!isFiltering && filteredRepairs.length > 0 && (
                   <div className="mt-3">
                     <SectionHeader label="Repair Service" />
-                    <div className="flex flex-col">
-                      {renderRows(
-                        filteredRepairs.map((repair) => (
-                          <RepairCard
-                            key={`orders-repair-${repair.repairId}`}
-                            repair={repair}
-                            techId={techId}
-                            isExpanded={expandedItemKey === `repair-${repair.repairId}`}
-                            onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
-                          />
-                        ))
-                      )}
-                    </div>
+                    {renderRows(
+                      filteredRepairs.map((repair) => (
+                        <RepairCard
+                          key={`orders-repair-${repair.repairId}`}
+                          repair={repair}
+                          techId={techId}
+                          isExpanded={expandedItemKey === `repair-${repair.repairId}`}
+                          onToggleExpand={() => toggleExpandedItem(`repair-${repair.repairId}`)}
+                        />
+                      ))
+                    )}
                   </div>
                 )}
-              </div>
+              </>
 
             ) : (
-              <div className="flex flex-col">
-                {renderRows(
-                  filteredOrders.map((order) => (
-                    renderOrderCard(order)
-                  ))
-                )}
-              </div>
+              renderRows(
+                filteredOrders.map((order) => (
+                  renderOrderCard(order)
+                ))
+              )
             )}
         </div>
 
         {shouldShowStockSection && (
           <div className="mt-3">
-            <div className="flex items-center gap-2 px-1 py-1.5 mb-1">
-              <div className="h-px flex-1 bg-orange-200" />
-              <span className="text-[9px] font-black uppercase tracking-widest text-orange-600">
-                Out Of Stock
-              </span>
-              <div className="h-px flex-1 bg-orange-200" />
-            </div>
-            <div className="flex flex-col">
-              {renderRows(
-                filteredStockOrders.map((order) => (
-                  renderOrderCard(order, `stock-${order.id}`, 'stock')
-                ))
-              )}
-            </div>
+            <SectionHeader label="Out Of Stock" />
+            {renderRows(
+              filteredStockOrders.map((order) => (
+                renderOrderCard(order, `stock-${order.id}`, 'stock')
+              ))
+            )}
           </div>
         )}
 

@@ -214,6 +214,117 @@ export async function POST(req: NextRequest) {
                 );
             }
 
+            // ── FBA path: check if this tracking belongs to an FBA shipment ──
+            if (orderLookup.rows.length === 0) {
+                const fbaLookup = await pool.query(
+                    `SELECT
+                       fs.id              AS plan_id,
+                       fs.shipment_ref,
+                       fs.amazon_shipment_id,
+                       fs.status          AS plan_status,
+                       stn.tracking_number_raw,
+                       stn.carrier,
+                       (SELECT string_agg(DISTINCT fsi.fnsku, ', ' ORDER BY fsi.fnsku)
+                        FROM fba_shipment_items fsi WHERE fsi.shipment_id = fs.id
+                       ) AS fnskus,
+                       (SELECT COALESCE(fsi2.product_title, ff.product_title, fsi2.fnsku)
+                        FROM fba_shipment_items fsi2
+                        LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi2.fnsku
+                        WHERE fsi2.shipment_id = fs.id
+                        ORDER BY fsi2.id LIMIT 1
+                       ) AS first_product_title,
+                       (SELECT COUNT(*)::int FROM fba_shipment_items fsi3
+                        WHERE fsi3.shipment_id = fs.id) AS item_count,
+                       (SELECT SUM(fsi4.expected_qty)::int FROM fba_shipment_items fsi4
+                        WHERE fsi4.shipment_id = fs.id) AS total_qty
+                     FROM fba_shipment_tracking fst
+                     JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
+                     JOIN fba_shipments fs ON fs.id = fst.shipment_id
+                     WHERE stn.tracking_number_normalized = $1
+                     ORDER BY fs.created_at DESC
+                     LIMIT 1`,
+                    [normalizedInput],
+                );
+
+                if (fbaLookup.rows.length > 0) {
+                    const fba = fbaLookup.rows[0];
+                    const { shipmentId: fbaShipId, scanRef: fbaScanRef } = await resolveShipmentId(scanInput);
+
+                    // Log the packer scan
+                    const fbaPackerInsert = await pool.query(`
+                        INSERT INTO packer_logs (shipment_id, scan_ref, tracking_type, created_at, packed_by)
+                        VALUES ($1, $2, 'FBA', $3, $4)
+                        ON CONFLICT DO NOTHING
+                        RETURNING id, created_at::text
+                    `, [fbaShipId, fbaScanRef ?? scanInput, packDateTime, staffId]);
+
+                    const fbaPackerLogId = fbaPackerInsert.rows[0]?.id ?? null;
+                    const fbaCreatedAt = fbaPackerInsert.rows[0]?.created_at ?? packDateTime;
+
+                    await createStationActivityLog(pool, {
+                        station: 'PACK',
+                        activityType: 'PACK_COMPLETED',
+                        staffId,
+                        shipmentId: fbaShipId ?? null,
+                        scanRef: fbaScanRef ?? scanInput,
+                        fbaShipmentId: Number(fba.plan_id),
+                        packerLogId: fbaPackerLogId,
+                        notes: `FBA pack scan — ${fba.shipment_ref}`,
+                        metadata: {
+                            source: 'packing-logs',
+                            tracking_type: 'FBA',
+                            tracking: scanInput,
+                            fba_plan_id: fba.plan_id,
+                            amazon_shipment_id: fba.amazon_shipment_id,
+                        },
+                        createdAt: fbaCreatedAt,
+                    });
+
+                    const productTitle = String(
+                        fba.first_product_title ||
+                        (fba.amazon_shipment_id ? `FBA ${fba.amazon_shipment_id}` : null) ||
+                        fba.shipment_ref ||
+                        'FBA Shipment',
+                    ).trim();
+
+                    const fbaRecord = {
+                        id: fbaPackerLogId,
+                        created_at: fbaCreatedAt,
+                        tracking_number: scanInput,
+                        packed_by: staffId,
+                        order_id: fba.amazon_shipment_id || fba.shipment_ref,
+                        product_title: productTitle,
+                        condition: `${fba.item_count} SKU · ${fba.total_qty} units`,
+                        quantity: fba.total_qty,
+                        sku: fba.fnskus,
+                    };
+
+                    await invalidateCacheTags(['packing-logs', 'fba-board']);
+                    if (fbaRecord.id) await prependToPackerLogsCache(staffId, fbaRecord);
+
+                    return NextResponse.json({
+                        success: true,
+                        trackingType: 'FBA',
+                        orderId: fba.amazon_shipment_id || fba.shipment_ref,
+                        productTitle: productTitle,
+                        condition: `${fba.item_count} SKU · ${fba.total_qty} units`,
+                        qty: fba.total_qty,
+                        shippingTrackingNumber: scanInput,
+                        packedBy: staffId,
+                        packDateTime,
+                        packerRecord: fbaRecord,
+                        fba: {
+                            plan_id: fba.plan_id,
+                            shipment_ref: fba.shipment_ref,
+                            amazon_shipment_id: fba.amazon_shipment_id,
+                            item_count: fba.item_count,
+                            total_qty: fba.total_qty,
+                            fnskus: fba.fnskus,
+                        },
+                    });
+                }
+            }
+
             if (orderLookup.rows.length === 0) {
                 const upsertResult = await upsertOpenOrderException({
                     shippingTrackingNumber: scanInput,

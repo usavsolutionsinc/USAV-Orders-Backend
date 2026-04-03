@@ -19,6 +19,7 @@ import { DateGroupHeader } from './DateGroupHeader';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { normalizeShippedSearchField, type ShippedSearchField } from '@/lib/shipped-search';
 import {
   readShippedFilterPreference,
   readShippedWeekOffsetPreference,
@@ -75,7 +76,7 @@ export function DashboardShippedTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const [selectedShipped, setSelectedShipped] = useState<ShippedOrder | null>(null);
+  const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [searchFallbackRecords, setSearchFallbackRecords] = useState<PackerRecord[]>([]);
   const [stickyDate, setStickyDate] = useState('');
   const [currentCount, setCurrentCount] = useState(0);
@@ -84,6 +85,7 @@ export function DashboardShippedTable({
   const resolvedSearchKeyRef = useRef('');
 
   const search = searchParams.get('search') || '';
+  const shippedSearchField = normalizeShippedSearchField(searchParams.get('shippedSearchField'));
   const shippedFilterParam = searchParams.get('shippedFilter');
   const shippedFilter = useMemo(() => {
     if (shippedFilterParam === 'orders' || shippedFilterParam === 'sku' || shippedFilterParam === 'fba') {
@@ -148,9 +150,10 @@ export function DashboardShippedTable({
   useEffect(() => {
     const handleOpen = (e: CustomEvent<ShippedOrder>) => {
       const payload = getOpenShippedDetailsPayload(e.detail);
-      if (payload?.order) setSelectedShipped(payload.order);
+      const nextId = Number(payload?.order?.id);
+      setSelectedDetailId(Number.isFinite(nextId) ? nextId : null);
     };
-    const handleClose = () => setSelectedShipped(null);
+    const handleClose = () => setSelectedDetailId(null);
 
     window.addEventListener('open-shipped-details' as any, handleOpen as any);
     window.addEventListener('close-shipped-details' as any, handleClose as any);
@@ -173,6 +176,9 @@ export function DashboardShippedTable({
   const clearSearch = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete('search');
+    resolvedSearchKeyRef.current = '';
+    setSearchFallbackRecords([]);
+    setIsResolvingSearch(false);
     const nextSearch = params.toString();
     const nextPath = pathname || '/dashboard';
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
@@ -213,9 +219,14 @@ export function DashboardShippedTable({
     tester_name: record.tester_name || null,
     packer_log_id: record.packer_log_id ?? null,
     station_activity_log_id: record.id,
+    row_source: ((record as any).row_source || 'order') as ShippedOrder['row_source'],
+    exception_reason: (record as any).exception_reason || null,
+    exception_status: (record as any).exception_status || null,
     fnsku: record.fnsku || null,
     fnsku_log_id: record.fnsku_log_id ?? null,
   } as ShippedOrder), []);
+
+  const getDetailId = useCallback((record: PackerRecord) => Number(record.order_row_id || record.id), []);
 
   const toSearchResultRecord = useCallback((record: ShippedOrder): PackerRecord => ({
     id: Number(record.id),
@@ -245,6 +256,11 @@ export function DashboardShippedTable({
     test_date_time: record.test_date_time || null,
     tested_by_name: record.tested_by_name || null,
     tester_name: record.tester_name || null,
+    row_source: (record as any).row_source || 'order',
+    exception_reason: (record as any).exception_reason || null,
+    exception_status: (record as any).exception_status || null,
+    fnsku: record.fnsku ?? null,
+    fnsku_log_id: record.fnsku_log_id ?? null,
   } as PackerRecord), []);
 
   const seenTracking = new Map<string, PackerRecord>();
@@ -270,19 +286,29 @@ export function DashboardShippedTable({
               return hasLinkedOrder(r);
             });
   const filteredRecords = normalizedSearch
-    ? typeFilteredRecords.filter((record) => {
-        const haystack = [
-          record.product_title,
-          record.order_id,
-          record.shipping_tracking_number,
-          record.scan_ref,
-          record.sku,
-          record.condition,
-          record.account_source,
-        ]
-          .map((value) => String(value || '').toLowerCase())
-          .join(' ');
-        return haystack.includes(normalizedSearch);
+      ? typeFilteredRecords.filter((record) => {
+        const haystackByField: Record<ShippedSearchField, Array<unknown>> = {
+          all: [
+            record.product_title,
+            record.order_id,
+            record.shipping_tracking_number,
+            record.scan_ref,
+            record.sku,
+            record.serial_number,
+          ],
+          order_id: [record.order_id],
+          tracking: [record.shipping_tracking_number, record.scan_ref],
+          product_title: [record.product_title],
+          sku: [record.sku],
+          serial_number: [record.serial_number],
+        };
+        const values = haystackByField[shippedSearchField]
+          .map((value) => String(value || '').trim().toLowerCase())
+          .filter(Boolean);
+        if (shippedSearchField === 'order_id') {
+          return values.some((value) => value === normalizedSearch || value.startsWith(normalizedSearch));
+        }
+        return values.join(' ').includes(normalizedSearch);
       })
     : typeFilteredRecords;
 
@@ -305,6 +331,7 @@ export function DashboardShippedTable({
       packedBy ?? '',
       testedBy ?? '',
       shippedFilter,
+      shippedSearchField,
     ].join('|');
 
     if (resolvedSearchKeyRef.current === searchKey) {
@@ -321,6 +348,7 @@ export function DashboardShippedTable({
           packedBy,
           testedBy,
           shippedFilter,
+          searchField: shippedSearchField,
         });
         if (cancelled) return;
 
@@ -349,6 +377,7 @@ export function DashboardShippedTable({
     query.isFetching,
     query.isLoading,
     search,
+    shippedSearchField,
     shippedFilter,
     testedBy,
     toSearchResultRecord,
@@ -356,15 +385,17 @@ export function DashboardShippedTable({
 
   const handleRowClick = useCallback((record: PackerRecord) => {
     const detail = toDetailRecord(record);
-    if (selectedShipped && Number(selectedShipped.id) === Number(detail.id)) {
+    const detailId = getDetailId(record);
+
+    if (selectedDetailId !== null && detailId === selectedDetailId) {
       dispatchCloseShippedDetails();
-      setSelectedShipped(null);
+      setSelectedDetailId(null);
       return;
     }
 
     dispatchOpenShippedDetails(detail, 'shipped');
-    setSelectedShipped(detail);
-  }, [selectedShipped, toDetailRecord]);
+    setSelectedDetailId(detailId);
+  }, [getDetailId, selectedDetailId, toDetailRecord]);
 
   const groupedRecords: Record<string, PackerRecord[]> = {};
   records.forEach((record) => {
@@ -394,9 +425,9 @@ export function DashboardShippedTable({
 
   useEffect(() => {
     const handleNavigate = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
-      if (!selectedShipped || orderedRecords.length === 0) return;
+      if (selectedDetailId === null || orderedRecords.length === 0) return;
 
-      const currentIndex = orderedRecords.findIndex((record) => Number(record.order_row_id || record.id) === Number(selectedShipped.id));
+      const currentIndex = orderedRecords.findIndex((record) => getDetailId(record) === selectedDetailId);
       if (currentIndex < 0) return;
 
       const step = e.detail?.direction === 'up' ? -1 : 1;
@@ -405,14 +436,14 @@ export function DashboardShippedTable({
 
       const nextDetail = toDetailRecord(nextRecord);
       dispatchOpenShippedDetails(nextDetail, 'shipped');
-      setSelectedShipped(nextDetail);
+      setSelectedDetailId(getDetailId(nextRecord));
     };
 
     window.addEventListener('navigate-shipped-details' as any, handleNavigate as any);
     return () => {
       window.removeEventListener('navigate-shipped-details' as any, handleNavigate as any);
     };
-  }, [orderedRecords, selectedShipped, toDetailRecord]);
+  }, [getDetailId, orderedRecords, selectedDetailId, toDetailRecord]);
 
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
@@ -584,11 +615,11 @@ export function DashboardShippedTable({
                               }}
                               role="button"
                               tabIndex={0}
-                              aria-pressed={selectedShipped?.id === detail.id}
+                              aria-pressed={selectedDetailId === detail.id}
                               aria-label={`Open shipped order ${record.order_id || record.id}`}
                               data-order-row-id={String(record.order_row_id || record.id)}
                               className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
-                                selectedShipped?.id === detail.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
+                                selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                               }`}
                             >
                               <div className="flex flex-col min-w-0">

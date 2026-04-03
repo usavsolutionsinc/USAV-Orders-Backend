@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
 import { Loader2, Search } from './Icons';
 import { FnskuChip, OrderIdChip, TrackingChip, PlatformChip, getLast4 } from './ui/CopyChip';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
@@ -115,8 +115,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       packed_by: record.packed_by || null,
       packed_at: record.created_at || null,
       packer_photos_url: record.packer_photos_url || [],
-      tracking_type: null,
-      account_source: null,
+      tracking_type: record.tracking_type || null,
+      account_source: record.account_source || null,
       notes: '',
       status_history: [],
       is_shipped: undefined,
@@ -124,6 +124,12 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       quantity: record.quantity || '1',
       packer_log_id: record.packer_log_id ?? null,
       station_activity_log_id: record.id,
+      fnsku:
+        record.fnsku ||
+        (String(record.tracking_type || '').toUpperCase() === 'FNSKU'
+          ? String(record.scan_ref || '').trim() || null
+          : null),
+      fnsku_log_id: record.fnsku_log_id ?? null,
     };
   };
 
@@ -310,10 +316,12 @@ export function PackerTable({ packedBy }: PackerTableProps) {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Loading packer records...</p>
+      <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
+        <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
+          <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+        </div>
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+          <SkeletonList count={12} />
         </div>
       </div>
     );
@@ -383,6 +391,8 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                           <motion.div
                             {...framerPresence.tableRow}
                             transition={framerTransition.tableRowMount}
+                            whileHover={{ x: 2 }}
+                            whileTap={{ scale: 0.998 }}
                             key={record.id}
                             onClick={() => openDetails(record)}
                             className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${

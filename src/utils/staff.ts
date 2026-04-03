@@ -9,9 +9,6 @@ export const STAFF_NAMES: Record<number, string> = {
   8: 'Lien',
 };
 
-/** Technician staff IDs in display order. */
-export const TECH_IDS: readonly number[] = [1, 2, 3, 6];
-
 /** Packer staff IDs in display order. */
 export const PACKER_IDS: readonly number[] = [4, 5];
 

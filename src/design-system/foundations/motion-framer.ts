@@ -539,4 +539,11 @@ export const framerVariants: Record<string, Variants> = {
     animate: framerPresence.sidebarSection.animate,
     exit: framerPresence.sidebarSection.exit,
   },
+  staggeredList: {
+    animate: {
+      transition: {
+        staggerChildren: 0.05,
+      },
+    },
+  },
 };

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fbaPaths } from '@/lib/fba/api-paths';
 import { Loader2, Minus } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { formatDateTimePST } from '@/utils/date';
@@ -94,11 +95,11 @@ function QtyCellWithRemove({ row }: { row: FBAShipmentLifecycleRow }) {
     if (!canRemove || busy) return;
     setBusy(true);
     try {
-      const itemsRes = await fetch(`/api/fba/shipments/${row.id}/items`, { cache: 'no-store' });
+      const itemsRes = await fetch(fbaPaths.planItems(row.id), { cache: 'no-store' });
       const data = await itemsRes.json();
       const items = Array.isArray(data?.items) ? data.items : [];
       if (items.length !== 1 || String(items[0].status) !== 'PLANNED') return;
-      const del = await fetch(`/api/fba/shipments/${row.id}/items/${items[0].id}`, {
+      const del = await fetch(fbaPaths.planItem(row.id, items[0].id), {
         method: 'DELETE',
       });
       if (del.ok) {

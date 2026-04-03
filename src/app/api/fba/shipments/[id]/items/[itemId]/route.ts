@@ -268,11 +268,15 @@ export async function PATCH(
 }
 
 // â”€â”€ DELETE /api/fba/shipments/[id]/items/[itemId] â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Hard-delete a shipment item. Only allowed when status = 'PLANNED'.
+// Remove a shipment item from a plan.
+// Any unshipped item can be removed. Shipped items are blocked.
+// Tracking allocations referencing this item are cleaned up automatically
+// (FK cascade), and a VOID log is recorded for audit.
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Params }
 ) {
+  const client = await pool.connect();
   try {
     const { id, itemId } = await params;
     const shipmentId = parseFbaPlanId(id);
@@ -282,47 +286,82 @@ export async function DELETE(
       return NextResponse.json({ success: false, error }, { status: 400 });
     }
 
-    const check = await pool.query(
-      `SELECT id, status, expected_qty, actual_qty FROM fba_shipment_items WHERE id = $1 AND shipment_id = $2`,
-      [itemIdNum, shipmentId]
+    const check = await client.query(
+      `SELECT id, fnsku, status, expected_qty, actual_qty FROM fba_shipment_items WHERE id = $1 AND shipment_id = $2`,
+      [itemIdNum, shipmentId],
     );
     if (!check.rows[0]) {
       return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 });
     }
+
     const row = check.rows[0] as {
+      fnsku: string;
       status: string;
       expected_qty: number;
       actual_qty: number;
     };
-    const canDeletePlanned = row.status === 'PLANNED';
-    const canDeleteSingleReady =
-      row.status === 'READY_TO_GO' &&
-      Number(row.expected_qty) === 1 &&
-      Number(row.actual_qty) === 0;
-    if (!canDeletePlanned && !canDeleteSingleReady) {
+
+    // Only block removal of already-shipped items.
+    if (row.status === 'SHIPPED') {
       return NextResponse.json(
-        {
-          success: false,
-          error: `Cannot delete this item (status ${row.status}). Only PLANNED rows, or single-unit READY_TO_GO rows with no scans, can be removed.`,
-        },
-        { status: 409 }
+        { success: false, error: 'Cannot remove a shipped item. Mark the shipment as unshipped first.' },
+        { status: 409 },
       );
     }
 
-    await pool.query(
-      `DELETE FROM fba_shipment_items WHERE id = $1 AND shipment_id = $2`,
-      [itemIdNum, shipmentId]
+    await client.query('BEGIN');
+
+    // Audit log first — fba_shipment_item_id is NULL because the row is about to be deleted.
+    // (The FK is ON DELETE SET NULL, so referencing the item_id before delete would also work,
+    //  but NULL is cleaner since the row won't exist after this transaction.)
+    await client.query(
+      `INSERT INTO fba_fnsku_logs
+         (fnsku, source_stage, event_type, fba_shipment_id, quantity, metadata)
+       VALUES ($1, 'FBA', 'VOID', $2, $3, $4::jsonb)`,
+      [
+        row.fnsku,
+        shipmentId,
+        Number(row.expected_qty) || 0,
+        JSON.stringify({
+          removed_item_id: itemIdNum,
+          removed_status: row.status,
+          actual_qty: row.actual_qty,
+        }),
+      ],
     );
 
+    // Delete tracking allocations for this item (belt-and-suspenders; FK cascade also handles this).
+    await client.query(
+      `DELETE FROM fba_tracking_item_allocations WHERE shipment_item_id = $1`,
+      [itemIdNum],
+    );
+
+    // Delete the item itself.
+    await client.query(
+      `DELETE FROM fba_shipment_items WHERE id = $1 AND shipment_id = $2`,
+      [itemIdNum, shipmentId],
+    );
+
+    await client.query('COMMIT');
+
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
-    await publishFbaItemChanged({ action: 'delete', shipmentId: Number(id), itemId: Number(itemId), source: 'fba.shipments.items.delete' });
+    publishFbaItemChanged({
+      action: 'delete',
+      shipmentId,
+      itemId: itemIdNum,
+      fnsku: row.fnsku,
+      source: 'fba.shipments.items.delete',
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, deleted_id: itemIdNum });
   } catch (error: any) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[DELETE /api/fba/shipments/[id]/items/[itemId]]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to delete item' },
-      { status: 500 }
+      { status: 500 },
     );
+  } finally {
+    client.release();
   }
 }

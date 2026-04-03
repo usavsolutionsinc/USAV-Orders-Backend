@@ -39,7 +39,7 @@ export async function GET(_request: NextRequest) {
          JOIN fba_shipments fs ON fs.id = fsi.shipment_id
          LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
          WHERE fs.status != 'SHIPPED'
-           AND fsi.status != 'SHIPPED'
+           AND fsi.status NOT IN ('SHIPPED', 'LABEL_ASSIGNED')
        ),
        grouped AS (
          SELECT

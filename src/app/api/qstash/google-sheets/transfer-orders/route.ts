@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
-import { getAppBaseUrl } from '@/lib/qstash';
 import {
   GoogleSheetsTransferOrdersJobError,
   runGoogleSheetsTransferOrders,
@@ -24,9 +23,7 @@ async function handleTransferOrders(request: NextRequest) {
   }
 }
 
-export const POST = verifySignatureAppRouter(handleTransferOrders, {
-  url: `${getAppBaseUrl()}/api/qstash/google-sheets/transfer-orders`,
-});
+export const POST = verifySignatureAppRouter(handleTransferOrders);
 
 export async function GET() {
   return NextResponse.json({ ok: true, queue: 'qstash', job: 'google-sheets-transfer-orders' });

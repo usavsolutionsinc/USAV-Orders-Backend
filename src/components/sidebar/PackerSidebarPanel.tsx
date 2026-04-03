@@ -13,6 +13,7 @@ import { useActiveStaffDirectory } from './hooks';
 export function PackerSidebarPanel() {
   const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [dailyGoal, setDailyGoal] = useState(50);
   const [staffIdNum] = usePersistedStaffId({ storageKey: 'packer-staff-id' });
   const packerId = String(staffIdNum);
@@ -22,6 +23,7 @@ export function PackerSidebarPanel() {
   const packerName = packerMember?.name || 'Packer';
   useEffect(() => {
     const fetchHistory = async () => {
+      setLoading(true);
       try {
         const res = await fetch(`/api/packerlogs?packerId=${packerId}&limit=5000`);
         if (!res.ok) return;
@@ -29,6 +31,8 @@ export function PackerSidebarPanel() {
         if (Array.isArray(data)) setHistory(data);
       } catch {
         // no-op
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -54,6 +58,27 @@ export function PackerSidebarPanel() {
       // no-op
     }
   };
+
+  if (loading && history.length === 0) {
+    return (
+      <div className="h-full flex flex-col overflow-hidden bg-white">
+        <div className={sidebarHeaderBandClass}>
+          <div className="h-11 w-full bg-zinc-50 animate-pulse" />
+        </div>
+        <div className="flex-1 p-4 space-y-4">
+          <div className="h-24 w-full rounded-2xl bg-zinc-100 animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-4 w-24 bg-zinc-100 rounded animate-pulse" />
+            <div className="h-10 w-full rounded-xl bg-zinc-100 animate-pulse" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-4 w-32 bg-zinc-100 rounded animate-pulse" />
+            <div className="h-32 w-full rounded-2xl bg-zinc-100 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

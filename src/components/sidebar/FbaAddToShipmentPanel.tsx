@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fbaPaths } from '@/lib/fba/api-paths';
 import { ChevronDown, Loader2, Plus } from '@/components/Icons';
 import { motion } from 'framer-motion';
 import { microBadge } from '@/design-system/tokens/typography/presets';
@@ -64,7 +65,7 @@ export function FbaAddToShipmentPanel({
       );
       const validateJson = await validate.json();
       const row = Array.isArray(validateJson?.results) ? validateJson.results[0] : null;
-      const res = await fetch(`/api/fba/shipments/${sid}/items`, {
+      const res = await fetch(fbaPaths.planItems(sid), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

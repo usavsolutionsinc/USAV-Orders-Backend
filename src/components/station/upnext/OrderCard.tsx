@@ -16,6 +16,7 @@ import {
   DetailCell,
   CopyIconButton,
   ExternalLinkButton,
+  SkeletonOrderCard,
 } from '@/design-system';
 import { ExternalLink, Play, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
@@ -294,3 +295,5 @@ export function OrderCard({
     </>
   );
 }
+
+OrderCard.Skeleton = SkeletonOrderCard;

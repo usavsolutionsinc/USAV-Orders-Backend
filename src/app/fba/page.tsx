@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Loader2, Search } from '@/components/Icons';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
@@ -17,6 +17,7 @@ import { useStationTheme } from '@/hooks/useStationTheme';
 import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_BOARD_REMOVE_ITEMS } from '@/lib/fba/events';
 
 type Tab = 'combine' | 'shipped';
 
@@ -46,11 +47,6 @@ function resolveActiveTab(rawTab: string | null): Tab {
   return 'combine';
 }
 
-function buildFbaHref(params: URLSearchParams) {
-  const query = params.toString();
-  return query ? `/fba?${query}` : '/fba';
-}
-
 const TAB_LABELS: Record<Tab, string> = {
   combine: 'Combine',
   shipped: 'Shipped',
@@ -61,7 +57,6 @@ interface CombineData {
 }
 
 function FbaPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   useFbaRealtimeInvalidation();
 
@@ -97,28 +92,38 @@ function FbaPageContent() {
 
   useEffect(() => {
     const handler = () => fetchBoard();
-    window.addEventListener('usav-refresh-data', handler);
-    window.addEventListener('fba-print-shipped', handler);
+    window.addEventListener(USAV_REFRESH_DATA, handler);
+    window.addEventListener(FBA_PRINT_SHIPPED, handler);
+
+    // Select-mode auto-add: inject a single item without a full board refresh.
+    const injectHandler = (e: Event) => {
+      const item = (e as CustomEvent<FbaBoardItem>).detail;
+      if (!item?.item_id) return;
+      setBoard((prev) => {
+        if (prev.pending.some((i) => i.item_id === item.item_id)) return prev;
+        return { pending: [...prev.pending, item] };
+      });
+    };
+    window.addEventListener(FBA_BOARD_INJECT_ITEM, injectHandler);
+
+    // After combine/ship: remove items from board immediately.
+    const removeHandler = (e: Event) => {
+      const ids = (e as CustomEvent<number[]>).detail;
+      if (!Array.isArray(ids) || ids.length === 0) return;
+      const removeSet = new Set(ids);
+      setBoard((prev) => ({
+        pending: prev.pending.filter((i) => !removeSet.has(i.item_id)),
+      }));
+    };
+    window.addEventListener(FBA_BOARD_REMOVE_ITEMS, removeHandler);
+
     return () => {
-      window.removeEventListener('usav-refresh-data', handler);
-      window.removeEventListener('fba-print-shipped', handler);
+      window.removeEventListener(USAV_REFRESH_DATA, handler);
+      window.removeEventListener(FBA_PRINT_SHIPPED, handler);
+      window.removeEventListener(FBA_BOARD_INJECT_ITEM, injectHandler);
+      window.removeEventListener(FBA_BOARD_REMOVE_ITEMS, removeHandler);
     };
   }, [fetchBoard]);
-
-  // ── Legacy URL redirects ──────────────────────────────────────────────
-  useEffect(() => {
-    const mode = String(searchParams.get('mode') || '').toUpperCase();
-    const tab = searchParams.get('tab');
-    const legacy =
-      mode === 'PRINT_READY' || mode === 'READY_TO_GO' || mode === 'READY_TO_PRINT' ||
-      tab === 'labels' || tab === 'summary' || tab === 'awaiting' || tab === 'packed';
-    if (!legacy) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('mode');
-    params.delete('print');
-    params.delete('tab');
-    router.replace(buildFbaHref(params));
-  }, [searchParams, router]);
 
   // ── Week pagination ──────────────────────────────────────────────────
   const todayKey = getCurrentPSTDateKey();
@@ -223,9 +228,7 @@ function FbaPageContent() {
             />
 
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
-              {loading && !board.pending.length ? (
-                <FbaLoadingState theme={stationTheme} label="Loading…" />
-              ) : error ? (
+              {error ? (
                 <FbaErrorState message={error} onRetry={fetchBoard} theme={stationTheme} />
               ) : activeTab === 'shipped' ? (
                 <div className="flex h-full items-center justify-center px-5 text-center">
@@ -236,6 +239,7 @@ function FbaPageContent() {
               ) : (
                 <FbaBoardTable
                   items={filteredPendingItems}
+                  loading={loading && !board.pending.length}
                   stationTheme={stationTheme}
                   emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No pending FBA items'}
                   onDetailOpen={setDetailItem}
@@ -315,12 +319,17 @@ export default function FbaPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-full w-full items-center justify-center bg-stone-100/80 px-6">
-          <div className="rounded-2xl border border-zinc-200/80 bg-white px-6 py-5 text-center shadow-sm shadow-zinc-200/70">
-            <Loader2 className="mx-auto h-7 w-7 animate-spin text-gray-400" />
-            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-zinc-700">
-              Loading FBA workspace
-            </p>
+        <div className="flex h-full w-full flex-col bg-stone-50">
+          <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
+            <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+          </div>
+          <div className="flex-1 flex items-center justify-center p-6">
+            <div className="w-full max-w-sm rounded-2xl border border-zinc-200/80 bg-white px-6 py-8 text-center shadow-sm shadow-zinc-200/70">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-zinc-400" />
+              <p className="mt-4 text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500">
+                Initializing Workspace
+              </p>
+            </div>
           </div>
         </div>
       }

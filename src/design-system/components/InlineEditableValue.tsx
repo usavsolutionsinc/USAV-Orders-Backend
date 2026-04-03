@@ -30,6 +30,8 @@ interface InlineEditableValueProps {
   autoFocus?: boolean;
   accessory?: ReactNode;
   showEditIcon?: boolean;
+  /** Where the pencil sits; `start` keeps it left of the value (e.g. UPS row). */
+  editIconPosition?: 'start' | 'end';
 }
 
 export function InlineEditableValue({
@@ -47,6 +49,7 @@ export function InlineEditableValue({
   autoFocus = false,
   accessory,
   showEditIcon = true,
+  editIconPosition = 'end',
 }: InlineEditableValueProps) {
   const [isEditing, setIsEditing] = useState(autoFocus);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -67,8 +70,21 @@ export function InlineEditableValue({
     );
   }
 
+  const editButton = showEditIcon ? (
+    <button
+      type="button"
+      onClick={() => setIsEditing((prev) => !prev)}
+      className="shrink-0 text-gray-500 transition-colors duration-100 ease-out hover:text-gray-900 active:scale-95"
+      aria-label="Edit value"
+      title="Edit"
+    >
+      <Pencil className="h-[14px] w-[14px]" />
+    </button>
+  ) : null;
+
   return (
     <div className={`flex min-w-0 items-center gap-2 ${className}`.trim()}>
+      {editIconPosition === 'start' ? editButton : null}
       <div className="min-w-0 flex-1">
         {isEditing ? (
           <input
@@ -108,17 +124,7 @@ export function InlineEditableValue({
         )}
       </div>
       {accessory}
-      {showEditIcon ? (
-        <button
-          type="button"
-          onClick={() => setIsEditing((prev) => !prev)}
-          className="text-gray-500 transition-colors duration-100 ease-out hover:text-gray-900 active:scale-95"
-          aria-label="Edit value"
-          title="Edit"
-        >
-          <Pencil className="h-[14px] w-[14px]" />
-        </button>
-      ) : null}
+      {editIconPosition === 'end' ? editButton : null}
     </div>
   );
 }

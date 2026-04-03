@@ -3,6 +3,9 @@
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { isFbaOrder } from '@/utils/order-platform';
+import type { ShippedSearchField } from '@/lib/shipped-search';
+
+const FRESH_FETCH_OPTIONS: RequestInit = { cache: 'no-store' };
 
 function toOrderRecord(order: any): ShippedOrder {
   const primaryTracking = order.shipping_tracking_number || order.tracking_number || null;
@@ -37,6 +40,9 @@ function toOrderRecord(order: any): ShippedOrder {
     shipping_tracking_number: primaryTracking,
     tracking_numbers: mergedTrackingNumbers,
     tracking_number_rows: trackingNumberRows,
+    row_source: order.row_source || 'order',
+    exception_reason: order.exception_reason || null,
+    exception_status: order.exception_status || null,
   };
 }
 
@@ -78,7 +84,7 @@ export async function fetchPendingOrdersData({
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
 
   const url = params.toString() ? `/api/orders?${params.toString()}` : '/api/orders';
-  const res = await fetch(url);
+  const res = await fetch(url, FRESH_FETCH_OPTIONS);
   if (!res.ok) {
     throw new Error('Failed to fetch pending orders');
   }
@@ -109,7 +115,7 @@ export async function fetchPendingOrderRowById(
   if (options.packedBy !== undefined) params.set('packedBy', String(options.packedBy));
   if (options.testedBy !== undefined) params.set('testedBy', String(options.testedBy));
 
-  const res = await fetch(`/api/orders?${params.toString()}`);
+  const res = await fetch(`/api/orders?${params.toString()}`, FRESH_FETCH_OPTIONS);
   if (!res.ok) return null;
   const data = await res.json();
   const records = dedupeByOrderId(
@@ -126,7 +132,7 @@ export async function fetchDashboardOrderRowById(orderId: number): Promise<Shipp
   params.set('orderId', String(orderId));
   params.set('includeShipped', 'true');
 
-  const res = await fetch(`/api/orders?${params.toString()}`);
+  const res = await fetch(`/api/orders?${params.toString()}`, FRESH_FETCH_OPTIONS);
   if (!res.ok) return null;
 
   const data = await res.json();
@@ -167,7 +173,7 @@ export async function fetchUnshippedOrdersData({
   // omit so search can find any order; client still filters for display.
   if (!searchQuery.trim()) params.set('awaitingOnly', 'true');
 
-  const res = await fetch(`/api/orders?${params.toString()}`);
+  const res = await fetch(`/api/orders?${params.toString()}`, FRESH_FETCH_OPTIONS);
   if (!res.ok) {
     throw new Error('Failed to fetch unshipped orders');
   }
@@ -187,6 +193,7 @@ export async function fetchDashboardShippedData({
   weekStart,
   weekEnd,
   shippedFilter,
+  searchField,
 }: {
   searchQuery?: string;
   packedBy?: number;
@@ -195,10 +202,12 @@ export async function fetchDashboardShippedData({
   weekEnd?: string;
   /** When provided the server filters by type; omit for backward-compat (client filters FBA). */
   shippedFilter?: string;
+  searchField?: ShippedSearchField;
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) {
     params.set('q', searchQuery.trim());
+    if (searchField && searchField !== 'all') params.set('searchField', searchField);
   } else {
     if (weekStart) params.set('weekStart', weekStart);
     if (weekEnd) params.set('weekEnd', weekEnd);
@@ -208,7 +217,7 @@ export async function fetchDashboardShippedData({
   if (shippedFilter) params.set('shippedFilter', shippedFilter);
 
   const url = `/api/shipped?${params.toString()}`;
-  const res = await fetch(url);
+  const res = await fetch(url, FRESH_FETCH_OPTIONS);
   if (!res.ok) {
     throw new Error('Failed to fetch shipped orders');
   }
@@ -247,7 +256,7 @@ export async function fetchDashboardPackedRecords({
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
   if (shippedFilter) params.set('shippedFilter', shippedFilter);
 
-  const res = await fetch(`/api/packerlogs?${params.toString()}`);
+  const res = await fetch(`/api/packerlogs?${params.toString()}`, FRESH_FETCH_OPTIONS);
   if (!res.ok) {
     throw new Error('Failed to fetch packed records');
   }

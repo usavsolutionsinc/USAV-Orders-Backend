@@ -1,6 +1,8 @@
 export const FBA_ID_RE = /^FBA[0-9A-Z]{8,}$/i;
 export const UPS_RE = /^1Z[A-Z0-9]{16}$/i;
 
+import { fbaPaths } from '@/lib/fba/api-paths';
+
 export const FBA_TRACKING_PATCH_EVENT = 'fba-print-tracking-patch';
 
 export function normalizeFbaId(raw: string): string {
@@ -26,7 +28,7 @@ export function dispatchFbaTrackingPatch(detail: { planId: number; shipmentId?: 
 export async function persistAmazonShipmentId(planId: number, amazonRaw: string): Promise<boolean> {
   const amazon = normalizeFbaId(amazonRaw);
   if (!FBA_ID_RE.test(amazon)) return false;
-  const res = await fetch(`/api/fba/shipments/${planId}`, {
+  const res = await fetch(fbaPaths.plan(planId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ amazon_shipment_id: amazon }),
@@ -41,7 +43,7 @@ export async function persistAmazonShipmentId(planId: number, amazonRaw: string)
 export async function persistUpsTracking(planId: number, upsRaw: string): Promise<boolean> {
   const tracking_number = normalizeUps(upsRaw);
   if (!UPS_RE.test(tracking_number)) return false;
-  const res = await fetch(`/api/fba/shipments/${planId}/tracking`, {
+  const res = await fetch(fbaPaths.planTracking(planId), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tracking_number, carrier: 'UPS', label: 'Print queue' }),

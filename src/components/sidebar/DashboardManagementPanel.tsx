@@ -2,6 +2,7 @@
 
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -19,8 +20,8 @@ import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { getPresentStaffForToday } from '@/lib/staffCache';
+import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
 import { SIDEBAR_GRAY_ASSIGN_BUTTON_CLASS } from '@/components/ui/sidebarPrimaryButtons';
-import { TECH_IDS } from '@/utils/staff';
 import { sectionLabel, fieldLabel, microBadge } from '@/design-system/tokens/typography/presets';
 
 type PendingStockFilter = 'all' | 'pending' | 'stock';
@@ -67,6 +68,7 @@ export function DashboardManagementPanel({
   onPendingFilterChange,
   highContrastSliders = false,
 }: DashboardManagementPanelProps) {
+  const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -103,9 +105,9 @@ export function DashboardManagementPanel({
         return;
       }
       const techs = staffMembers
-        .filter((member) => member.role === 'technician' && TECH_IDS.includes(Number(member.id)))
+        .filter((member) => member.role === 'technician')
         .map((member) => ({ id: Number(member.id), name: member.name }))
-        .sort((a, b) => TECH_IDS.indexOf(a.id) - TECH_IDS.indexOf(b.id));
+        .sort((a, b) => a.name.localeCompare(b.name));
       const packers = staffMembers
         .filter((member) => member.role === 'packer')
         .map((member) => ({ id: Number(member.id), name: member.name }));
@@ -125,19 +127,15 @@ export function DashboardManagementPanel({
       statusOverride ??
       (newTechId && newPackerId && row.status === 'OPEN' ? 'ASSIGNED' : row.status);
     try {
-      await fetch('/api/work-orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entityType: row.entityType,
-          entityId: row.entityId,
-          assignedTechId: newTechId,
-          assignedPackerId: newPackerId,
-          status: newStatus,
-          priority: row.priority,
-          deadlineAt: deadline,
-          notes: row.notes,
-        }),
+      await saveWorkOrder({
+        entityType: row.entityType,
+        entityId: row.entityId,
+        assignedTechId: newTechId,
+        assignedPackerId: newPackerId,
+        status: newStatus,
+        priority: row.priority,
+        deadlineAt: deadline,
+        notes: row.notes,
       });
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       window.dispatchEvent(new CustomEvent('usav-refresh-data'));
@@ -251,8 +249,13 @@ export function DashboardManagementPanel({
         if (inserted > 0) parts.push(`${inserted} inserted`);
         if (updated > 0) parts.push(`${updated} updated`);
         const message = parts.length > 0 ? `Orders table synced: ${parts.join(', ')}` : 'Orders table already up to date';
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' }),
+          queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'], refetchType: 'active' }),
+          queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'], refetchType: 'active' }),
+          queryClient.invalidateQueries({ queryKey: ['shipped-table'], refetchType: 'active' }),
+        ]);
         setStatus({ type: 'success', message });
-        window.dispatchEvent(new CustomEvent('dashboard-refresh'));
       } else {
         setStatus({ type: 'error', message: data.error || 'Transfer failed' });
       }

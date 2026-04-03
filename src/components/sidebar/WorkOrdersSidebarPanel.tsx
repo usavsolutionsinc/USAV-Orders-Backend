@@ -3,8 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sidebarHeaderBandClass, sidebarHeaderRowClass } from '@/components/layout/header-shell';
+import { InlineNotice } from '@/design-system/components';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { TabSwitch } from '@/design-system/components';
+import {
+  ASSIGN_SESSION_FEEDBACK_EVENT,
+  OPEN_ASSIGN_SESSION_EVENT,
+  type AssignSessionFeedbackDetail,
+} from '@/components/work-orders/assign-session-events';
 import { sectionLabel, dataValue, chipText, fieldLabel } from '@/design-system/tokens/typography/presets';
 import {
   type QueueKey,
@@ -30,6 +36,7 @@ export function WorkOrdersSidebarPanel() {
   const [localSearch, setLocalSearch] = useState(searchParams.get('q') || '');
   const [counts, setCounts] = useState<QueueCounts>(EMPTY_COUNTS);
   const [pickupDates, setPickupDates] = useState<Array<{ pickup_date: string; item_count: number; total_value: string }>>([]);
+  const [assignFeedback, setAssignFeedback] = useState<string | null>(null);
   const canStartAssignSession = queue !== 'local_pickups' && queue !== 'stock_replenish';
 
   useEffect(() => {
@@ -105,6 +112,18 @@ export function WorkOrdersSidebarPanel() {
     router.replace(`/work-orders?${params.toString()}`);
   }, [pickupDates, queue, router, searchParams]);
 
+  useEffect(() => {
+    const handleAssignFeedback = (event: Event) => {
+      const detail = (event as CustomEvent<AssignSessionFeedbackDetail>).detail;
+      setAssignFeedback(detail?.message || null);
+    };
+
+    window.addEventListener(ASSIGN_SESSION_FEEDBACK_EVENT as any, handleAssignFeedback as any);
+    return () => {
+      window.removeEventListener(ASSIGN_SESSION_FEEDBACK_EVENT as any, handleAssignFeedback as any);
+    };
+  }, []);
+
   return (
     <div className="font-dm-sans flex h-full flex-col overflow-hidden bg-white">
       <div className={`${sidebarHeaderBandClass} px-3 py-2`}>
@@ -132,9 +151,17 @@ export function WorkOrdersSidebarPanel() {
       </div>
 
       <div className={`${sidebarHeaderBandClass} px-3 pb-2`}>
+        {assignFeedback && (
+          <InlineNotice tone="warning" size="sm" className="mb-2">
+            {assignFeedback}
+          </InlineNotice>
+        )}
         <button
           type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('work-orders-open-assign-session'))}
+          onClick={() => {
+            setAssignFeedback(null);
+            window.dispatchEvent(new CustomEvent(OPEN_ASSIGN_SESSION_EVENT));
+          }}
           disabled={!canStartAssignSession}
           className={`h-11 w-full rounded-xl ${sectionLabel} transition-colors ${
             canStartAssignSession

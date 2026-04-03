@@ -19,6 +19,7 @@
 
 export type ScanCarrier =
   | 'UPS'
+  | 'UPS_MI'
   | 'FEDEX'
   | 'USPS'
   | 'DHL_EXPRESS'
@@ -53,6 +54,10 @@ const TRACKING_PATTERNS: ReadonlyArray<{ carrier: ScanCarrier; regex: RegExp }> 
   // UPS — 1Z + 16 alphanumeric chars (18 total)
   { carrier: 'UPS',           regex: /^1Z[A-Z0-9]{16}$/ },
 
+  // UPS Mail Innovations / SurePost — 22-34 digits, often starts with 9274 or MI prefix
+  { carrier: 'UPS_MI',        regex: /^MI\d{20,30}$/ },
+  { carrier: 'UPS_MI',        regex: /^9274\d{22,28}$/ },
+
   // FedEx Express — 12 digits, commonly prefixed with 3 or 9
   { carrier: 'FEDEX',         regex: /^[39]\d{11}$/ },
 
@@ -71,17 +76,25 @@ const TRACKING_PATTERNS: ReadonlyArray<{ carrier: ScanCarrier; regex: RegExp }> 
   // Extended FedEx long labels seen in station scans (33–34 digits, 9621…)
   { carrier: 'FEDEX',         regex: /^9621\d{29,30}$/ },
 
+  // FedEx Ground 2D / SSC34 — 34 digits, prefixed with 9261 or 9274 (before USPS to avoid false match)
+  { carrier: 'FEDEX',         regex: /^9261\d{30}$/ },
+
+  // USPS — IMpb with routing prefix: 420 + 5-digit ZIP (+ optional 4-digit ZIP ext) + 20-22 digit tracking
+  { carrier: 'USPS',          regex: /^420\d{5}(\d{4})?(9[2345]\d{18,20}|9\d{15,21}|\d{20,22})$/ },
   // USPS — IMpb starts 9XXXX (various lengths 16-22) or pure-digit 20-22
   { carrier: 'USPS',          regex: /^(9[2345][0-9]{18,20}|9[0-9]{15,21}|[0-9]{20,22})$/ },
 
-  // DHL eCommerce — JD + 18 digits (20 total)
+  // DHL eCommerce — JD + 18 digits (20 total), GM + 14-18 digits, LX + 13 digits, JVGL + 14 digits
   { carrier: 'DHL_ECOMMERCE', regex: /^JD\d{18}$/ },
+  { carrier: 'DHL_ECOMMERCE', regex: /^GM\d{14,18}$/ },
+  { carrier: 'DHL_ECOMMERCE', regex: /^LX\d{13}$/ },
+  { carrier: 'DHL_ECOMMERCE', regex: /^JVGL\d{14}$/ },
 
   // DHL Express — 10 or 11 pure digits
   { carrier: 'DHL_EXPRESS',   regex: /^\d{10,11}$/ },
 
-  // Amazon Logistics — TBA + 12 digits
-  { carrier: 'AMAZON',        regex: /^TBA\d{12}$/ },
+  // Amazon Logistics — TBA + 12-15 alphanumeric chars (covers newer mixed-format codes)
+  { carrier: 'AMAZON',        regex: /^TBA[A-Z0-9]{12,15}$/ },
 
   // UPU international postal — 2 letters + 9 digits + 2 letters  (e.g. LZ123456789US)
   { carrier: 'UPU_INTL',      regex: /^[A-Z]{2}\d{9}[A-Z]{2}$/ },
