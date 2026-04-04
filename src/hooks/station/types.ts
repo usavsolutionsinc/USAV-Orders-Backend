@@ -35,9 +35,10 @@ export interface ResolvedProductManual {
   id: number;
   sku: string | null;
   itemNumber: string | null;
+  displayName: string | null;
   googleFileId: string;
   type: string | null;
-  matchedBy: 'sku' | 'item_number';
+  matchedBy: 'item_number';
   updatedAt: string;
   previewUrl: string;
   viewUrl: string;

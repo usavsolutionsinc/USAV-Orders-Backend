@@ -5,13 +5,13 @@ import { normalizePSTTimestamp } from '@/utils/date';
 /**
  * GET /api/tech/orders-without-manual?techId=3&days=365
  *
- * Returns distinct orders processed by the given tech that have no active
- * product_manual with a non-empty google_file_id.
+ * Returns distinct orders processed by the given tech that do not yet have
+ * an assigned manual record in product_manuals.
  *
  * Query mirrors /api/tech-logs exactly (LEFT JOIN LATERAL for FBA + orders,
  * same field set) but:
  *  - DISTINCT ON (o.id) — one row per order
- *  - NOT EXISTS filter for product_manuals
+ *  - product_manuals assigned-status filter
  *  - Rolling days window (no Mon–Fri weekly slice)
  *  - Sorted ASC by created_at (oldest unresolved first)
  */
@@ -137,13 +137,14 @@ export async function GET(req: NextRequest) {
           AND NOT EXISTS (
             SELECT 1
             FROM product_manuals pm
-            WHERE pm.is_active = true
-              AND pm.google_file_id IS NOT NULL
-              AND TRIM(pm.google_file_id) <> ''
-              AND (
-                (o.item_number IS NOT NULL AND o.item_number <> '' AND pm.item_number = o.item_number)
-                OR (o.sku     IS NOT NULL AND o.sku      <> '' AND pm.sku      = o.sku)
-              )
+            WHERE pm.is_active = TRUE
+              AND pm.status = 'assigned'
+              AND pm.relative_path IS NOT NULL
+              AND TRIM(pm.relative_path) <> ''
+              AND o.item_number IS NOT NULL
+              AND o.item_number <> ''
+              AND regexp_replace(UPPER(TRIM(COALESCE(pm.item_number, ''))), '[^A-Z0-9]', '', 'g') =
+                  regexp_replace(UPPER(TRIM(o.item_number)), '[^A-Z0-9]', '', 'g')
           )
         ORDER BY
           COALESCE(o.id::text, COALESCE(stn.tracking_number_raw, tsn.scan_ref)),

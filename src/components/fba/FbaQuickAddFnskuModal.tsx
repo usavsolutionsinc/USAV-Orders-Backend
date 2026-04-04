@@ -6,9 +6,12 @@ import { SidebarIntakeFormField } from '@/design-system/components';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import { normalizeFnsku } from '@/lib/tracking-format';
+import { FBA_OPEN_QUICK_ADD_FNSKU, FBA_FNSKU_SAVED } from '@/lib/fba/events';
 
-export const FBA_OPEN_QUICK_ADD_FNSKU_EVENT = 'fba-open-quick-add-fnsku';
-export const FBA_FNSKU_SAVED_EVENT = 'fba-fnsku-saved';
+/** @deprecated Use FBA_OPEN_QUICK_ADD_FNSKU from events.ts */
+export const FBA_OPEN_QUICK_ADD_FNSKU_EVENT = FBA_OPEN_QUICK_ADD_FNSKU;
+/** @deprecated Use FBA_FNSKU_SAVED from events.ts */
+export const FBA_FNSKU_SAVED_EVENT = FBA_FNSKU_SAVED;
 
 interface OpenQuickAddFnskuDetail {
   fnsku?: string | null;

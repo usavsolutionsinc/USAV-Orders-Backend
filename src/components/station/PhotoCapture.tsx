@@ -51,24 +51,44 @@ export function PhotoCapture({ onCapture, disabled = false, className }: PhotoCa
   }, [onCapture]);
 
   // ── Desktop: getUserMedia webcam ───────────────────────────────────────────
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   const startWebcam = useCallback(async () => {
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
-      setStream(s);
-      setMode('webcam');
-      // Attach stream after next render
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = s;
-          videoRef.current.play().catch(() => {});
-        }
-      });
-    } catch {
-      // getUserMedia not available — fall back to file input
-      fileInputRef.current?.click();
+    setCameraError(null);
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera API unavailable — requires HTTPS or localhost.');
+      return;
     }
+
+    // Desktop Safari has no rear camera; use 'user' (front) as primary, then any camera as fallback
+    const attempts: MediaStreamConstraints[] = [
+      { video: { width: { ideal: 1280 }, height: { ideal: 720 } } },
+      { video: { facingMode: 'user' } },
+      { video: true },
+    ];
+
+    for (const constraints of attempts) {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia(constraints);
+        setStream(s);
+        setMode('webcam');
+        requestAnimationFrame(() => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = s;
+            videoRef.current.play().catch(() => {});
+          }
+        });
+        return; // success
+      } catch {
+        // try next constraint set
+      }
+    }
+
+    // All attempts failed
+    setCameraError(
+      'Camera permission denied or no camera found. Check Safari → Settings → Websites → Camera → Allow.',
+    );
   }, []);
 
   const captureSnapshot = useCallback(() => {
@@ -123,23 +143,30 @@ export function PhotoCapture({ onCapture, disabled = false, className }: PhotoCa
 
       {/* Idle / trigger button */}
       {mode === 'idle' && (
-        <button
-          type="button"
-          onClick={handleCameraClick}
-          disabled={disabled}
-          className={cn(
-            'flex flex-col items-center justify-center gap-2',
-            'w-full h-32 rounded-station border-2 border-dashed border-gray-200',
-            'text-gray-400 hover:border-navy-400 hover:text-navy-600',
-            'transition-colors touch-manipulation',
-            disabled && 'opacity-40 cursor-not-allowed',
+        <div>
+          <button
+            type="button"
+            onClick={handleCameraClick}
+            disabled={disabled}
+            className={cn(
+              'flex flex-col items-center justify-center gap-2',
+              'w-full h-32 rounded-station border-2 border-dashed border-gray-200',
+              'text-gray-400 hover:border-navy-400 hover:text-navy-600',
+              'transition-colors touch-manipulation',
+              disabled && 'opacity-40 cursor-not-allowed',
+            )}
+          >
+            <Camera size={24} strokeWidth={1.5} />
+            <span className="text-[10px] font-bold tracking-[0.12em] uppercase font-sans">
+              Take Photo
+            </span>
+          </button>
+          {cameraError && (
+            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-red-600">
+              {cameraError}
+            </p>
           )}
-        >
-          <Camera size={24} strokeWidth={1.5} />
-          <span className="text-[10px] font-bold tracking-[0.12em] uppercase font-sans">
-            Take Photo
-          </span>
-        </button>
+        </div>
       )}
 
       {/* Webcam live view (desktop) */}

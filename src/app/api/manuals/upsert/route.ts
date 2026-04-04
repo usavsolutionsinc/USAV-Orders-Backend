@@ -19,14 +19,17 @@ function extractGoogleFileId(input: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const sku = normalizeIdentifier(String(body?.sku || ''));
     const itemNumber = normalizeIdentifier(String(body?.itemNumber || ''));
     const productTitle = String(body?.productTitle || body?.product_title || '').trim() || null;
+    const displayName =
+      String(body?.displayName || body?.display_name || '').trim()
+      || productTitle
+      || (itemNumber ? `${itemNumber} Manual` : null);
     const googleFileId = extractGoogleFileId(String(body?.googleLinkOrFileId || ''));
     const type = String(body?.type || '').trim() || null;
 
-    if (!sku && !itemNumber) {
-      return NextResponse.json({ success: false, error: 'sku or itemNumber is required' }, { status: 400 });
+    if (!itemNumber) {
+      return NextResponse.json({ success: false, error: 'itemNumber is required' }, { status: 400 });
     }
     if (!googleFileId) {
       return NextResponse.json({ success: false, error: 'Valid Google Drive file id/link is required' }, { status: 400 });
@@ -36,25 +39,16 @@ export async function POST(req: NextRequest) {
     try {
       await client.query('BEGIN');
 
-      // Only deactivate manuals with the same (identifier, type) so multiple types can coexist per SKU.
-      if (sku) {
-        await client.query(
-          'UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND sku = $1 AND (type = $2 OR ($2 IS NULL AND type IS NULL))',
-          [sku, type]
-        );
-      }
-      if (itemNumber) {
-        await client.query(
-          'UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND item_number = $1 AND (type = $2 OR ($2 IS NULL AND type IS NULL))',
-          [itemNumber, type]
-        );
-      }
+      await client.query(
+        'UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND item_number = $1 AND (type = $2 OR ($2 IS NULL AND type IS NULL))',
+        [itemNumber, type]
+      );
 
       const inserted = await client.query(
-        `INSERT INTO product_manuals (sku, item_number, product_title, google_file_id, type, is_active, updated_at)
-         VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
+        `INSERT INTO product_manuals (sku, item_number, product_title, display_name, google_file_id, type, is_active, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
          RETURNING id`,
-        [sku || null, itemNumber || null, productTitle, googleFileId, type]
+        [null, itemNumber || null, productTitle, displayName, googleFileId, type]
       );
 
       await client.query('COMMIT');

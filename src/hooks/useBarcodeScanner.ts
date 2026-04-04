@@ -80,6 +80,12 @@ export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeSc
   const [lastScannedValue, setLastScannedValue] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const log = useCallback((msg: string) => {
+    if (typeof window !== 'undefined' && !(window as any).__USAV_CAMERA_DEBUG) return;
+    const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    console.debug(`[useBarcodeScanner ${ts}] ${msg}`);
+  }, []);
+
   // Dedup + cooldown refs
   const lastDecodedRef = useRef<{ value: string; timestamp: number } | null>(null);
   const cooldownUntilRef = useRef<number>(0);
@@ -87,67 +93,168 @@ export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeSc
   // ── Start scanning ──
 
   const startScanning = useCallback(async () => {
-    if (instanceRef.current) return; // already running
-    const container = containerRef.current;
-    if (!container) return;
+    log('startScanning called');
 
-    // Ensure the mount div exists inside the container
-    let mountDiv = container.querySelector(`#${elementId}`) as HTMLDivElement | null;
-    if (!mountDiv) {
-      mountDiv = document.createElement('div');
-      mountDiv.id = elementId;
-      mountDiv.style.width = '100%';
-      mountDiv.style.height = '100%';
-      container.appendChild(mountDiv);
+    // Check API availability
+    const hasMediaDevices = !!navigator.mediaDevices;
+    const hasGetUserMedia = !!(navigator.mediaDevices?.getUserMedia);
+    const isSecureOrigin = location.protocol === 'https:'
+      || location.hostname === 'localhost'
+      || location.hostname === '127.0.0.1';
+    log(`mediaDevices: ${hasMediaDevices}, getUserMedia: ${hasGetUserMedia}`);
+    log(`userAgent: ${navigator.userAgent.slice(0, 80)}`);
+    log(`protocol: ${location.protocol}, host: ${location.host}`);
+    log(`standalone: ${('standalone' in navigator && (navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches}`);
+
+    if (!hasGetUserMedia) {
+      setScanStatus('error');
+      setError(
+        isSecureOrigin
+          ? 'Camera API unavailable in this browser.'
+          : 'Camera access requires HTTPS or localhost. Safari will not prompt on an insecure dev URL.',
+      );
+      return;
     }
+
+    // Clean up any previous failed instance before retrying
+    if (instanceRef.current) {
+      log('Cleaning up previous instance');
+      try {
+        if (instanceRef.current.isScanning) await instanceRef.current.stop();
+        instanceRef.current.clear();
+      } catch { /* best-effort */ }
+      instanceRef.current = null;
+    }
+
+    const container = containerRef.current;
+    if (!container) { log('ERROR: no container ref'); return; }
+
+    // Remove stale mount div and create fresh (html5-qrcode leaves artifacts on error)
+    const stale = container.querySelector(`#${elementId}`);
+    if (stale) { stale.remove(); log('Removed stale mount div'); }
+
+    const mountDiv = document.createElement('div');
+    mountDiv.id = elementId;
+    mountDiv.style.width = '100%';
+    mountDiv.style.height = '100%';
+    container.appendChild(mountDiv);
+    log('Mount div created');
 
     try {
       // Dynamic import to avoid SSR crashes
+      log('Importing html5-qrcode...');
       const { Html5Qrcode } = await import('html5-qrcode');
+      log('html5-qrcode imported OK');
 
-      const qr = new Html5Qrcode(elementId, {
+      const createScanner = () => new Html5Qrcode(elementId, {
         formatsToSupport: SUPPORTED_FORMAT_IDS as any,
         useBarCodeDetectorIfSupported: true,
         verbose: false,
       });
 
-      instanceRef.current = qr;
+      const scanConfig = {
+        fps,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+          width: Math.floor(viewfinderWidth * 0.85),
+          height: Math.floor(viewfinderHeight * 0.7),
+        }),
+        disableFlip: false,
+      };
+
+      const onDecoded = (decodedText: string) => {
+        const now = Date.now();
+
+        if (now < cooldownUntilRef.current) return;
+
+        const last = lastDecodedRef.current;
+        if (last && last.value === decodedText && now - last.timestamp < dedupMs) {
+          return;
+        }
+
+        lastDecodedRef.current = { value: decodedText, timestamp: now };
+        setLastScannedValue(decodedText);
+      };
+
+      const startAttempts: Array<{ label: string; cameraIdOrConfig: string | { facingMode: 'environment' | 'user' } }> = [
+        { label: 'rear camera', cameraIdOrConfig: { facingMode: 'environment' } },
+        { label: 'front camera', cameraIdOrConfig: { facingMode: 'user' } },
+      ];
+
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        if (cameras[0]?.id) {
+          startAttempts.push({ label: 'first available camera', cameraIdOrConfig: cameras[0].id });
+        }
+      } catch (cameraListErr: any) {
+        log(`getCameras failed: ${cameraListErr?.message || cameraListErr}`);
+      }
+
       setScanStatus('scanning');
       setError(null);
 
-      await qr.start(
-        { facingMode: 'environment' },
-        {
-          fps,
-          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-            width: Math.floor(viewfinderWidth * 0.85),
-            height: Math.floor(viewfinderHeight * 0.7),
-          }),
-          disableFlip: false,
-        },
-        // Success callback
-        (decodedText: string) => {
-          const now = Date.now();
+      let lastStartError: any = null;
+      for (const attempt of startAttempts) {
+        const qr = createScanner();
+        instanceRef.current = qr;
+        log(`Calling qr.start(${attempt.label})...`);
 
-          // Cooldown after accepted scan
-          if (now < cooldownUntilRef.current) return;
+        try {
+          await qr.start(
+            attempt.cameraIdOrConfig,
+            scanConfig,
+            onDecoded,
+            () => {},
+          );
+          log(`qr.start() succeeded via ${attempt.label}`);
+          return;
+        } catch (attemptErr: any) {
+          lastStartError = attemptErr;
+          const attemptName = attemptErr?.name || '';
+          const attemptMsg = String(attemptErr?.message || '').toLowerCase();
+          log(`qr.start(${attempt.label}) failed: ${attemptName} ${String(attemptErr?.message || '').slice(0, 120)}`);
 
-          // Dedup: suppress same value within dedupMs
-          const last = lastDecodedRef.current;
-          if (last && last.value === decodedText && now - last.timestamp < dedupMs) {
-            return;
+          try {
+            qr.clear();
+          } catch {
+            // Best-effort cleanup before next attempt
           }
+          instanceRef.current = null;
 
-          lastDecodedRef.current = { value: decodedText, timestamp: now };
-          setLastScannedValue(decodedText);
-        },
-        // Error callback (called on every frame without a detection — ignore)
-        () => {},
-      );
+          const unrecoverable =
+            attemptName === 'NotAllowedError' ||
+            attemptName === 'PermissionDeniedError' ||
+            attemptMsg.includes('permission') ||
+            attemptMsg.includes('not allowed') ||
+            attemptMsg.includes('secure context') ||
+            attemptMsg.includes('https or localhost');
+
+          if (unrecoverable) break;
+        }
+      }
+
+      throw lastStartError || new Error('Camera unavailable');
     } catch (err: any) {
       setScanStatus('error');
-      setError(err?.message || 'Camera unavailable');
       instanceRef.current = null;
+
+      const errName = err?.name || '';
+      const errMsg = String(err?.message || '').toLowerCase();
+      log(`ERROR: name=${errName} msg=${err?.message?.slice(0, 120)}`);
+
+      if (!isSecureOrigin || errMsg.includes('secure context') || errMsg.includes('https or localhost')) {
+        setError('Camera access requires HTTPS or localhost. If mobile Safari is on http://<your-ip>:3000, it will not show a permission prompt.');
+      } else if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError'
+          || errMsg.includes('permission') || errMsg.includes('not allowed')) {
+        setError(
+          'Camera permission denied. On Safari: Settings → Safari → Camera → Allow. Then reload the page.',
+        );
+      } else if (errName === 'NotReadableError' || errMsg.includes('could not start video source')) {
+        setError('Camera is busy or blocked by another app or browser tab.');
+      } else if (errName === 'NotFoundError' || errMsg.includes('no camera') || errMsg.includes('not found')) {
+        setError('No camera found on this device.');
+      } else {
+        setError(err?.message || 'Camera unavailable');
+      }
     }
   }, [elementId, fps, dedupMs]);
 

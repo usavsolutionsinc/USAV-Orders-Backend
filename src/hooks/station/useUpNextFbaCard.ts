@@ -11,6 +11,14 @@ function getAsinUrl(value: string | null | undefined) {
   return `https://www.amazon.com/dp/${encodeURIComponent(asin)}`;
 }
 
+function getFbaExternalUrl(asin: string | null | undefined, fnsku: string | null | undefined) {
+  const fromAsin = getAsinUrl(asin);
+  if (fromAsin) return fromAsin;
+  const f = String(fnsku || '').trim();
+  if (f) return `https://www.amazon.com/s?k=${encodeURIComponent(f)}`;
+  return null;
+}
+
 function getConditionLabel(value: string | null | undefined) {
   const raw = String(value || '').trim();
   const normalized = raw.toUpperCase().replace(/\s+/g, ' ');
@@ -70,7 +78,7 @@ export function useUpNextFbaCard({ item }: UseUpNextFbaCardOptions) {
   const qtyLabel       = qtyExpected > 0 ? qtyExpected : qtyReady || 1;
   const fnsku          = String(item.fnsku || '').trim();
   const asin           = String(item.asin || '').trim();
-  const asinUrl        = getAsinUrl(asin);
+  const asinUrl        = getFbaExternalUrl(asin, item.fnsku);
   const conditionLabel = getConditionLabel(item.condition);
   const conditionColor = getFbaConditionColor(item.condition);
   const pendingTitle   = String(item.plan_title || item.shipment_ref || '').trim();

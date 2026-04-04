@@ -3,10 +3,12 @@
 import { type ReactNode, useState, useCallback, useEffect, useRef } from 'react';
 import { Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { usePathname, useRouter } from 'next/navigation';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { CommandBar } from '@/components/CommandBar';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { Menu, X } from '@/components/Icons';
+import { getSidebarRouteKey, isSidebarRouteMobileRestricted } from '@/lib/sidebar-navigation';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -44,18 +46,41 @@ const drawerTransition = {
  */
 export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const { isMobile } = useUIMode();
+  const pathname = usePathname();
+  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  /** Tech/packer pages provide their own top bar — hide the floating hamburger only. The same nav drawer as dashboard must still mount so `open-mobile-drawer` works. */
+  const hideGlobalMobileHamburger =
+    (pathname?.startsWith('/tech') || pathname?.startsWith('/packer')) ?? false;
+  const routeKey = getSidebarRouteKey(pathname);
+  const mobileRouteRestricted = isMobile && isSidebarRouteMobileRestricted(routeKey);
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
-  // Close drawer on route change (user tapped a nav item)
   useEffect(() => {
-    if (!isMobile) {
-      setDrawerOpen(false);
-    }
-  }, [isMobile]);
+    setMounted(true);
+  }, []);
+
+  // Allow any component to open the mobile drawer via a global event
+  useEffect(() => {
+    const handler = () => setDrawerOpen(true);
+    window.addEventListener('open-mobile-drawer', handler);
+    return () => window.removeEventListener('open-mobile-drawer', handler);
+  }, []);
+
+  // Close drawer when the route changes (e.g. user picked a page in the drawer)
+  useEffect(() => {
+    if (!isMobile) return;
+    setDrawerOpen(false);
+  }, [pathname, isMobile]);
+
+  useEffect(() => {
+    if (!mobileRouteRestricted) return;
+    router.replace('/dashboard');
+  }, [mobileRouteRestricted, router]);
 
   // Lock body scroll when drawer is open
   useEffect(() => {
@@ -64,6 +89,10 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       return () => { document.body.style.overflow = ''; };
     }
   }, [drawerOpen]);
+
+  if (!mounted) {
+    return <div className="flex h-full w-full bg-white" aria-hidden="true" />;
+  }
 
   // ── Desktop layout (unchanged) ──
   if (!isMobile) {
@@ -82,25 +111,31 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
     );
   }
 
+  if (mobileRouteRestricted) {
+    return <div className="flex h-full w-full bg-white" aria-hidden="true" />;
+  }
+
   // ── Mobile layout: full-width content + drawer sidebar ──
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
-      {/* Hamburger trigger — fixed top-left, only shown when no page toolbar overrides it */}
-      <button
-        type="button"
-        onClick={openDrawer}
-        aria-label="Open navigation"
-        className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-3 z-40 h-11 w-11 flex items-center justify-center rounded-xl bg-white/90 backdrop-blur-sm shadow-md border border-gray-100 active:scale-95 transition-transform"
-      >
-        <Menu className="h-5 w-5 text-gray-700" />
-      </button>
+      {/* Hamburger trigger — hidden on tech/packer (those screens use in-page back / menu). */}
+      {!hideGlobalMobileHamburger && (
+        <button
+          type="button"
+          onClick={openDrawer}
+          aria-label="Open navigation"
+          className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-3 z-40 h-11 w-11 flex items-center justify-center rounded-xl bg-white/90 backdrop-blur-sm shadow-md border border-gray-100 active:scale-95 transition-transform"
+        >
+          <Menu className="h-5 w-5 text-gray-700" />
+        </button>
+      )}
 
       {/* Main content — full width */}
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {children}
       </main>
 
-      {/* Drawer overlay + sidebar */}
+      {/* Drawer overlay + sidebar — same `DashboardSidebar inDrawer` as dashboard hamburger (also opened via `open-mobile-drawer` on tech/packer). */}
       <AnimatePresence>
         {drawerOpen && (
           <>

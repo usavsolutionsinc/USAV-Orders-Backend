@@ -414,7 +414,6 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
                   isSaving={savingRowId === row.id}
                   getStaffName={getStaffName}
                   onClick={handleRowClick}
-                  onOpenAssign={() => setAssigningState({ rows: [row], startIndex: 0, mode: 'single' })}
                   useAlternateStripe={i % 2 === 0}
                 />
               ))}
@@ -486,7 +485,6 @@ interface WorkOrderTableRowProps {
   isSaving: boolean;
   getStaffName: (id: number | null | undefined) => string;
   onClick: (row: WorkOrderRow) => void;
-  onOpenAssign: () => void;
   useAlternateStripe: boolean;
 }
 
@@ -496,12 +494,8 @@ function WorkOrderTableRow({
   isSaving,
   getStaffName,
   onClick,
-  onOpenAssign,
   useAlternateStripe,
 }: WorkOrderTableRowProps) {
-  const isUnassigned =
-    row.entityType === 'SKU_STOCK' ? !row.techId : !row.techId || !row.packerId;
-
   const techName = row.techName || (row.techId ? getStaffName(row.techId) : null);
   const packerName = row.packerName || (row.packerId ? getStaffName(row.packerId) : null);
   const techDisplay = techName || '---';
@@ -568,20 +562,9 @@ function WorkOrderTableRow({
         </div>
       </div>
 
-      {/* Right: chips + assign button */}
+      {/* Right: copy chips */}
       <div className="flex items-center shrink-0 gap-1.5">
         <WorkOrderInfoChips row={row} />
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onOpenAssign(); }}
-          className={`h-6 px-2.5 rounded text-[8px] font-black uppercase tracking-wider border transition-all active:scale-95 ${
-            isUnassigned
-              ? 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
-              : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'
-          }`}
-        >
-          {isUnassigned ? 'Assign' : 'Edit'}
-        </button>
       </div>
     </motion.div>
   );

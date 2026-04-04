@@ -10,6 +10,7 @@ export interface ManualAssignmentRow {
   itemNumber: string;
   productTitle: string;
   googleDocId: string;
+  manualDisplayName?: string;
   /** orders.order_id (string, e.g. eBay order number) */
   orderId?: string;
   /** orders.id (numeric DB primary key) — needed to back-fill item_number */

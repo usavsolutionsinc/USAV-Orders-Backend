@@ -30,6 +30,7 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+    turbopack: {},
     outputFileTracingRoot: process.cwd(),
     experimental: {
         webpackMemoryOptimizations: true,

@@ -24,7 +24,8 @@ export default function RootLayout({
                 {/* PWA */}
                 <link rel="manifest" href="/manifest.json" />
                 <meta name="application-name" content="USAV Solutions" />
-                <meta name="apple-mobile-web-app-capable" content="yes" />
+                {/* NOTE: apple-mobile-web-app-capable removed — iOS standalone mode blocks getUserMedia (camera).
+                    Using minimal-ui in manifest.json instead so camera/barcode scanning works. */}
                 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
                 <meta name="apple-mobile-web-app-title" content="USAV" />
                 <meta name="theme-color" content="#0f1f3d" />

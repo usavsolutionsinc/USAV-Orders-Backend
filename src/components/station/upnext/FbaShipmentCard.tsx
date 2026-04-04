@@ -7,78 +7,15 @@ import { Loader2, Minus, Package, Plus, X } from '@/components/Icons';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
-import { InlineEditableValue } from '@/design-system/components';
+import { InlineEditableValue, framerGesture } from '@/design-system';
 import { UndoToast } from '@/components/fba/table/UndoToast';
 import { ChevronToggle, DeferredQtyInput } from '@/design-system/primitives';
 import type { StationTheme } from '@/utils/staff-colors';
 import { emitOpenQuickAddFnsku } from '@/components/fba/FbaQuickAddFnskuModal';
-import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
+import type { FbaBoardItem, ActiveShipment, ShipmentCardItem, TrackingBundle } from '@/lib/fba/types';
+export type { ActiveShipment, ShipmentCardItem, TrackingBundle } from '@/lib/fba/types';
 import { FBA_PAIRED_REVIEW_TOGGLE } from '@/lib/fba/events';
-
-/* ── Types ─────────────────────────────────────────────────────────── */
-
-export interface ShipmentCardItem {
-  item_id: number;
-  fnsku: string;
-  display_title: string;
-  expected_qty: number;
-  actual_qty: number;
-  status: string;
-  shipment_id: number;
-  /** UPS tracking number this item is allocated to (from fba_tracking_item_allocations). */
-  tracking_number?: string | null;
-  tracking_carrier?: string | null;
-}
-
-/** One UPS tracking bundle within a shipment — its own items and link_id. */
-export interface TrackingBundle {
-  link_id: number;
-  tracking_number: string;
-  carrier: string;
-  items: ShipmentCardItem[];
-}
-
-export interface ActiveShipment {
-  id: number;
-  shipment_ref: string;
-  amazon_shipment_id: string | null;
-  status: string;
-  shipped_at?: string | null;
-  /** All tracking bundles for this shipment (one per UPS tracking number). */
-  bundles: TrackingBundle[];
-  /** @deprecated Compat — first bundle's values. */
-  tracking_numbers: { tracking_number: string; carrier: string }[];
-  tracking_link_id?: number | null;
-  tracking_number_raw?: string | null;
-  tracking_carrier?: string | null;
-  items: ShipmentCardItem[];
-}
-
-function shipmentItemsToBoardItems(
-  shipment: Pick<ActiveShipment, 'id' | 'shipment_ref' | 'amazon_shipment_id'>,
-  rows: ShipmentCardItem[],
-  getQty: (i: ShipmentCardItem) => number,
-): FbaBoardItem[] {
-  return rows.map((item) => ({
-    item_id: item.item_id,
-    fnsku: item.fnsku,
-    expected_qty: getQty(item),
-    actual_qty: item.actual_qty,
-    item_status: item.status,
-    display_title: item.display_title,
-    asin: null,
-    sku: null,
-    item_notes: null,
-    shipment_id: shipment.id,
-    shipment_ref: shipment.shipment_ref,
-    amazon_shipment_id: shipment.amazon_shipment_id,
-    due_date: null,
-    shipment_status: item.status,
-    destination_fc: null,
-    tracking_numbers: [],
-    condition: null,
-  }));
-}
+import { shipmentItemsToBoardItems } from '@/lib/fba/board-item';
 
 /** Bundles from API, or a single synthetic bundle when legacy flat `items` + primary link. */
 function resolveBundlesForSave(shipment: ActiveShipment, flatItems: ShipmentCardItem[]): TrackingBundle[] {
@@ -657,6 +594,8 @@ export function FbaShipmentCard({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      whileHover={framerGesture.cardHover}
+      whileTap={framerGesture.tapPress}
       transition={{ duration: 0.15, ease: 'easeOut' }}
       className="[overflow:clip] border border-gray-200 bg-white transition-colors"
     >

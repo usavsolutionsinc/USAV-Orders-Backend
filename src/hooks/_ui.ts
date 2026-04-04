@@ -75,17 +75,17 @@ export function useDeviceMode(): DeviceInfo {
   const [hasCamera, setHasCamera] = useState(false);
 
   // Manual override persisted in localStorage
-  const [modeOverride, setModeOverride] = useState<'mobile' | 'desktop' | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const stored = localStorage.getItem(OVERRIDE_KEY);
-    if (stored === 'mobile' || stored === 'desktop') return stored;
-    return null;
-  });
+  const [modeOverride, setModeOverride] = useState<'mobile' | 'desktop' | null>(null);
 
   // Detect device type + camera on mount (client-only)
   useEffect(() => {
     setIsMobileDevice(detectMobileDevice());
     detectCamera().then(setHasCamera);
+
+    const stored = localStorage.getItem(OVERRIDE_KEY);
+    if (stored === 'mobile' || stored === 'desktop') {
+      setModeOverride(stored);
+    }
   }, []);
 
   const setOverride = useCallback((next: 'mobile' | 'desktop' | null) => {
@@ -200,16 +200,18 @@ export function useClickOutside<T extends HTMLElement = HTMLElement>(
  * @example const isMobile = useMediaQuery('(max-width: 768px)');
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia(query).matches;
-  });
+  const [matches, setMatches] = useState(false);
+
   useEffect(() => {
     const mql = window.matchMedia(query);
+    const sync = () => setMatches(mql.matches);
     const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+
+    sync();
     mql.addEventListener('change', handler);
     return () => mql.removeEventListener('change', handler);
   }, [query]);
+
   return matches;
 }
 

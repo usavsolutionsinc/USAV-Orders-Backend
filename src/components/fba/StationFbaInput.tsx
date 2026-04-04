@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { fbaPaths } from '@/lib/fba/api-paths';
-import { FBA_BOARD_INJECT_ITEM, FBA_SELECTION_ADJUSTED } from '@/lib/fba/events';
+import { FBA_BOARD_INJECT_ITEM, FBA_SELECTION_ADJUSTED, FBA_SCAN_STATUS } from '@/lib/fba/events';
 import { AlertCircle, Loader2, Minus, Package, Plus } from '@/components/Icons';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
@@ -293,8 +293,8 @@ export default function StationFbaInput({
       const msg = (e as CustomEvent<string>).detail;
       if (msg) setPlanHint(msg);
     };
-    window.addEventListener('fba-scan-status', handler);
-    return () => window.removeEventListener('fba-scan-status', handler);
+    window.addEventListener(FBA_SCAN_STATUS, handler);
+    return () => window.removeEventListener(FBA_SCAN_STATUS, handler);
   }, [fbaScanOnly]);
 
   // When user saves FNSKU details via modal, update the pending row title in real-time.

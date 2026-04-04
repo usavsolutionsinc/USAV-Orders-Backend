@@ -99,9 +99,9 @@ export function OrderCard({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                card.openExternalByItemNumber(order.item_number);
+                card.openExternalByItemNumber(card.itemNumberValue);
               }}
-              disabled={!card.getExternalUrlByItemNumber(order.item_number)}
+              disabled={!card.getExternalUrlByItemNumber(card.itemNumberValue)}
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-2 text-gray-900 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-900 transition-colors"
             >
               <span className={`${chipText} leading-none translate-y-px`}>#{getOrderIdLast4(order.order_id)}</span>

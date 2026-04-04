@@ -11,6 +11,7 @@ interface ProductManual {
   sku: string | null;
   item_number: string | null;
   product_title: string | null;
+  display_name: string | null;
   google_file_id: string;
   type: string | null;
   updated_at: string | null;
@@ -22,7 +23,7 @@ function buildManualsHref(pathname: string, params: URLSearchParams) {
 }
 
 function ManualDetailPanel({ manual, onClose }: { manual: ProductManual; onClose: () => void }) {
-  const title = manual.product_title || manual.sku || manual.item_number || `Manual #${manual.id}`;
+  const title = manual.display_name || manual.product_title || manual.item_number || `Manual #${manual.id}`;
   const docUrl = manual.google_file_id
     ? `https://docs.google.com/document/d/${manual.google_file_id}/preview`
     : null;
@@ -57,11 +58,6 @@ function ManualDetailPanel({ manual, onClose }: { manual: ProductManual; onClose
 
       <div className="border-b border-gray-100 px-4 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          {manual.sku && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gray-100 text-[9px] font-black uppercase tracking-wider text-gray-600">
-              SKU: {manual.sku}
-            </span>
-          )}
           {manual.item_number && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gray-100 text-[9px] font-black uppercase tracking-wider text-gray-600">
               Item: {manual.item_number}
@@ -118,8 +114,7 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-gray-100">
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Product Title</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">SKU</th>
+            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Manual</th>
             <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Item #</th>
             <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Type</th>
             <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Updated</th>
@@ -142,19 +137,14 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
                 role="button"
                 tabIndex={0}
                 aria-pressed={isSelected}
-                aria-label={`Open manual ${manual.product_title || manual.sku || manual.item_number || `#${manual.id}`}`}
+                aria-label={`Open manual ${manual.display_name || manual.product_title || manual.item_number || `#${manual.id}`}`}
                 className={`border-b border-gray-50 cursor-pointer transition-colors group ${
                   isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                 } focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300`}
               >
                 <td className="px-4 py-3">
                   <span className={`text-[11px] font-black tracking-tight ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
-                    {manual.product_title || <span className="text-gray-500 font-semibold">—</span>}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-[10px] font-bold text-gray-500 font-mono">
-                    {manual.sku || <span className="text-gray-500">—</span>}
+                    {manual.display_name || manual.product_title || <span className="text-gray-500 font-semibold">—</span>}
                   </span>
                 </td>
                 <td className="px-4 py-3">

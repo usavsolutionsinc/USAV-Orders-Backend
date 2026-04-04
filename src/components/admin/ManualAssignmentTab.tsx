@@ -13,6 +13,7 @@ interface CategoryProductRow {
   id?: number | string;
   item_number: string;
   product_title: string;
+  display_name?: string;
   google_file_id?: string;
 }
 
@@ -30,9 +31,9 @@ interface RecentOrder {
 
 interface RecentManual {
   id: number;
-  sku: string | null;
   itemNumber: string | null;
   productTitle: string | null;
+  displayName: string | null;
   googleFileId: string;
   type: string | null;
   isActive: boolean;
@@ -68,6 +69,7 @@ function buildRows(products: CategoryProductRow[]): ManualAssignmentRow[] {
     .map((product) => ({
       itemNumber: String(product.item_number || '').trim(),
       productTitle: String(product.product_title || '').trim() || '-',
+      manualDisplayName: String(product.display_name || '').trim(),
       googleDocId: String(product.google_file_id || '').trim(),
     }))
     .filter((row) => row.itemNumber.length > 0)
@@ -83,7 +85,7 @@ async function parseResponse(res: Response): Promise<any> {
 
 interface InlineFormProps {
   row: ManualAssignmentRow;
-  onSaved: (itemNumber: string, googleDocId: string) => void;
+  onSaved: (itemNumber: string, googleDocId: string, manualDisplayName: string) => void;
   onClose: () => void;
 }
 
@@ -94,6 +96,9 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
   const itemNumberMissing = !row.itemNumber.trim();
 
   const [draft, setDraft] = useState(row.googleDocId || '');
+  const [draftDisplayName, setDraftDisplayName] = useState(
+    row.manualDisplayName || row.productTitle || (row.itemNumber ? `${row.itemNumber} Manual` : '')
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -106,11 +111,12 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
   // Reset when row changes
   useEffect(() => {
     setDraft(row.googleDocId || '');
+    setDraftDisplayName(row.manualDisplayName || row.productTitle || (row.itemNumber ? `${row.itemNumber} Manual` : ''));
     setLocalItemNumber('');
     setSaveError(null);
     setSaveSuccess(false);
     setPreviewActive(false);
-  }, [row.itemNumber, row.googleDocId]);
+  }, [row.itemNumber, row.googleDocId, row.manualDisplayName, row.productTitle]);
 
   // Load linked manuals (only when we have a known item number)
   const loadManuals = useCallback(async () => {
@@ -135,6 +141,8 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
     }
     const docId = normalizeGoogleDocId(draft);
     if (!docId) { setSaveError('Paste a Google Drive link or file ID.'); return; }
+    const displayName = draftDisplayName.trim() || row.productTitle || `${effectiveItemNumber} Manual`;
+    if (!displayName) { setSaveError('Enter a manual name before saving.'); return; }
     setSaveError(null);
     setIsSaving(true);
 
@@ -154,6 +162,8 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
         item_number: effectiveItemNumber,
         productTitle: row.productTitle || null,
         product_title: row.productTitle || null,
+        displayName,
+        display_name: displayName,
         googleDocId: docId,
         google_file_id: docId,
       };
@@ -166,9 +176,10 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
       if (!res.ok) { setSaveError(data?.error || `Save failed (HTTP ${res.status})`); return; }
       const savedId = String(data?.manual?.google_file_id || docId).trim();
       setDraft(savedId);
+      setDraftDisplayName(String(data?.manual?.display_name || displayName));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
-      onSaved(effectiveItemNumber, savedId);
+      onSaved(effectiveItemNumber, savedId, String(data?.manual?.display_name || displayName));
       await loadManuals();
     } catch { setSaveError('Network error. Try again.'); }
     finally { setIsSaving(false); }
@@ -185,9 +196,14 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
   const activeManual = manuals.find((m) => m.isActive) ?? null;
   const hasLinked = Boolean(activeManual || row.googleDocId.trim());
   const displayFileId = activeManual?.googleFileId || normalizeGoogleDocId(row.googleDocId);
-  const viewUrl = displayFileId ? `https://drive.google.com/file/d/${displayFileId}/view` : null;
-  const previewUrl = displayFileId ? `https://drive.google.com/file/d/${displayFileId}/preview` : null;
-  const downloadUrl = displayFileId ? `https://drive.google.com/uc?export=download&id=${displayFileId}` : null;
+  const manualTitle =
+    activeManual?.displayName
+    || row.manualDisplayName
+    || row.productTitle
+    || (effectiveItemNumber ? `${effectiveItemNumber} Manual` : 'Product Manual');
+  const viewUrl = displayFileId ? `https://docs.google.com/document/d/${displayFileId}` : null;
+  const previewUrl = displayFileId ? `https://docs.google.com/document/d/${displayFileId}/preview` : null;
+  const downloadUrl = displayFileId ? `https://docs.google.com/document/d/${displayFileId}/export?format=pdf` : null;
 
   return (
     <div className="bg-white">
@@ -206,7 +222,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
               <div className="flex items-center gap-2 min-w-0">
                 <FileText className="w-3.5 h-3.5 text-indigo-300 flex-shrink-0" />
                 <p className={`${sectionLabel} text-white`}>
-                  {activeManual?.type || 'Product Manual'} linked
+                  {manualTitle}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -217,7 +233,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
                 {downloadUrl && (
                   <a href={downloadUrl} target="_blank" rel="noopener noreferrer"
                     className={`${sectionLabel} inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-all`}>
-                    <Printer className="w-3 h-3" /> Print
+                    <Printer className="w-3 h-3" /> Print PDF
                   </a>
                 )}
                 <button type="button" onClick={() => setPreviewActive((v) => !v)}
@@ -256,10 +272,10 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
                       }`}>
                       <div className="min-w-0 flex-1">
                         <p className={`${sectionLabel} ${manual.isActive ? 'text-indigo-700' : 'text-indigo-500'}`}>
-                          {manual.type || 'Manual'}
+                          {manual.displayName || manual.type || 'Manual'}
                           {!manual.isActive && <span className="ml-1 text-[8px] normal-case tracking-normal font-semibold opacity-70">(inactive)</span>}
                         </p>
-                        <p className="mt-0.5 text-[9px] font-mono text-gray-500 truncate">{manual.googleFileId}</p>
+                        <p className="mt-0.5 text-[9px] font-mono text-gray-500 truncate">{manual.itemNumber || 'NO-ITEM'}</p>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <a href={manual.viewUrl} target="_blank" rel="noopener noreferrer"
@@ -313,6 +329,21 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
             </div>
           )}
 
+          <label className="flex flex-col gap-1">
+            <span className={`${sectionLabel} ${effectiveItemNumber ? 'text-blue-700' : 'text-gray-500'}`}>
+              Manual Name
+            </span>
+            <input
+              type="text"
+              value={draftDisplayName}
+              onChange={(e) => { setDraftDisplayName(e.target.value); setSaveError(null); }}
+              placeholder={effectiveItemNumber ? `${effectiveItemNumber} Manual` : 'Enter item number first'}
+              disabled={!effectiveItemNumber}
+              autoComplete="off"
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-xs font-semibold text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500 transition-colors shadow-sm"
+            />
+          </label>
+
           {/* Step 2 — Google Doc input + Paste + Save */}
           <label className="flex flex-col gap-1">
             <span className={`${sectionLabel} ${effectiveItemNumber ? 'text-blue-700' : 'text-gray-500'}`}>
@@ -337,7 +368,7 @@ export function InlineManualForm({ row, onSaved, onClose }: InlineFormProps) {
               </svg>
               Paste
             </button>
-            <button type="button" onClick={() => void handleSave()} disabled={isSaving || !draft.trim() || !effectiveItemNumber}
+            <button type="button" onClick={() => void handleSave()} disabled={isSaving || !draft.trim() || !draftDisplayName.trim() || !effectiveItemNumber}
               className={`${sectionLabel} flex-shrink-0 h-[38px] px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors flex items-center gap-1.5 shadow-sm`}>
               {isSaving ? <><Loader2 className="w-3 h-3 animate-spin" /> Saving</> : saveSuccess ? 'Saved' : 'Save'}
             </button>
@@ -406,7 +437,7 @@ export function ManualAssignmentTab({
       const order = allOrders.find((o) => String(o.id) === oid);
       if (!order) { setRows([]); setError('Order not found.'); return; }
       const manualRow: ManualAssignmentRow = {
-        itemNumber: order.item_number || order.sku || '',
+        itemNumber: order.item_number || '',
         productTitle: order.product_title || '',
         googleDocId: '',
         orderId: order.order_id,
@@ -419,6 +450,7 @@ export function ManualAssignmentTab({
         const manualData = await parseResponse(manualRes);
         if (manualRes.ok && Array.isArray(manualData?.manuals) && manualData.manuals.length > 0) {
           manualRow.googleDocId = String(manualData.manuals[0]?.googleFileId || '');
+          manualRow.manualDisplayName = String(manualData.manuals[0]?.displayName || '');
         }
       }
       setRows([manualRow]);
@@ -452,9 +484,9 @@ export function ManualAssignmentTab({
     setSelectedRow((prev) => (prev?.itemNumber === row.itemNumber ? null : row));
   };
 
-  const handleSaved = (itemNumber: string, googleDocId: string) => {
-    setRows((prev) => prev.map((r) => r.itemNumber === itemNumber ? { ...r, googleDocId } : r));
-    setSelectedRow((prev) => prev?.itemNumber === itemNumber ? { ...prev, googleDocId } : prev);
+  const handleSaved = (itemNumber: string, googleDocId: string, manualDisplayName: string) => {
+    setRows((prev) => prev.map((r) => r.itemNumber === itemNumber ? { ...r, googleDocId, manualDisplayName } : r));
+    setSelectedRow((prev) => prev?.itemNumber === itemNumber ? { ...prev, googleDocId, manualDisplayName } : prev);
   };
 
   return (

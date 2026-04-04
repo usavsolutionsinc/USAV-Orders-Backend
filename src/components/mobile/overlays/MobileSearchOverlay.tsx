@@ -27,12 +27,12 @@ export interface MobileSearchOverlayProps {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 /**
- * MobileSearchOverlay — pills + expandable text search row for the upnext queue.
+ * MobileSearchOverlay — pills + expandable text search for the current queue list (filter only).
  *
- * Designed to be dropped into MobileBottomActionBar's `pills` slot.
- * Mirrors the UpNextFilterBar interaction pattern:
- *   collapsed → search icon + horizontal slider pills
- *   expanded  → animated search input (full width)
+ * Use in `MobileQueueFilterSheet` or the bottom bar `pills` slot. Not for station tracking
+ * submission — that uses `StationScanBar` / scan sheet + `MobileBottomActionBar` search mode when enabled.
+ *
+ * Interaction: collapsed → search icon + horizontal slider pills; expanded → full-width search field.
  */
 export function MobileSearchOverlay({
   quickFilter,

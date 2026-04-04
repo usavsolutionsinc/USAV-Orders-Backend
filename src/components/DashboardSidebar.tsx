@@ -23,9 +23,10 @@ import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { WorkOrdersSidebarPanel } from '@/components/sidebar/WorkOrdersSidebarPanel';
 import { OperationsSidebarPanel } from '@/components/sidebar/OperationsSidebarPanel';
+import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import {
-  APP_SIDEBAR_NAV,
   getSidebarRouteKey,
+  getSidebarNavItems,
   isSidebarNavActive,
   type SidebarNavItem,
 } from '@/lib/sidebar-navigation';
@@ -174,7 +175,7 @@ function AiSidebarPanel() {
   );
 }
 
-function SidebarContextPanel() {
+function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -327,7 +328,13 @@ function SidebarContextPanel() {
 
   if (routeKey === 'tech') {
     const techId = searchParams.get('staffId') || getPathStaffId(pathname, 'tech') || '1';
-    return <TechSidebarPanel techId={techId} />;
+    return (
+      <TechSidebarPanel
+        techId={techId}
+        onBackToAppNav={onBackToAppNav}
+        contextNavTitle={getSidebarTitle(pathname)}
+      />
+    );
   }
 
   if (routeKey === 'packer') {
@@ -375,6 +382,7 @@ function NavSection({
 }
 
 export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inDrawer?: boolean; onNavigate?: () => void }) {
+  const { isMobile } = useUIMode();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const routeKey = getSidebarRouteKey(pathname);
@@ -474,10 +482,12 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
 
   const sidebarTitle = getSidebarTitle(pathname);
 
+  const visibleNavItems = getSidebarNavItems({ mobileRestricted: isMobile });
+
   const groupedNav = {
-    main: APP_SIDEBAR_NAV.filter((item) => item.kind === 'main'),
-    station: APP_SIDEBAR_NAV.filter((item) => item.kind === 'station'),
-    bottom: APP_SIDEBAR_NAV.filter((item) => item.kind === 'bottom'),
+    main: visibleNavItems.filter((item) => item.kind === 'main'),
+    station: visibleNavItems.filter((item) => item.kind === 'station'),
+    bottom: visibleNavItems.filter((item) => item.kind === 'bottom'),
   };
 
   const containerVariants = {
@@ -523,22 +533,24 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
           </motion.div>
         ) : (
           <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden bg-white">
-            <motion.button
-              variants={itemVariants}
-              type="button"
-              onClick={() => setShowHomeNavigation(true)}
-              className="w-full flex min-h-[44px] items-center gap-2 border-b border-gray-200 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
-              aria-label="Back to navigation"
-            >
-              <div className="h-9 w-7 flex items-center justify-start text-gray-500">
-                <ChevronLeft className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-black tracking-tight text-gray-900 truncate">{sidebarTitle}</p>
-              </div>
-            </motion.button>
+            {routeKey !== 'tech' && (
+              <motion.button
+                variants={itemVariants}
+                type="button"
+                onClick={() => setShowHomeNavigation(true)}
+                className="w-full flex min-h-[44px] items-center gap-2 border-b border-gray-200 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
+                aria-label="Back to navigation"
+              >
+                <div className="h-9 w-7 flex items-center justify-start text-gray-500">
+                  <ChevronLeft className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-black tracking-tight text-gray-900 truncate">{sidebarTitle}</p>
+                </div>
+              </motion.button>
+            )}
             <motion.div variants={itemVariants} className="flex-1 overflow-hidden">
-              <SidebarContextPanel />
+              <SidebarContextPanel onBackToAppNav={() => setShowHomeNavigation(true)} />
             </motion.div>
           </motion.div>
         )}

@@ -8,6 +8,7 @@ import {
   framerPresenceMobile,
   framerTransition,
   framerTransitionMobile,
+  framerGesture,
 } from '../foundations/motion-framer';
 
 type CardTone = 'emerald' | 'red' | 'orange' | 'purple' | 'teal' | 'gray';
@@ -61,8 +62,8 @@ export function CardShell({
       initial={presence.initial}
       animate={presence.animate}
       exit={presence.exit}
-      whileHover={{ scale: 1.002, x: 2 }}
-      whileTap={{ scale: 0.995 }}
+      whileHover={framerGesture.cardHover}
+      whileTap={framerGesture.tapPress}
       transition={transition}
       onClick={onClick}
       className={`${isMobile ? mobileClasses : desktopClasses} ${className}`}

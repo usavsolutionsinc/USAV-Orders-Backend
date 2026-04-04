@@ -17,6 +17,7 @@ import {
 } from '@/components/fba/sidebar/fbaShipmentTracking';
 import { fbaWorkspaceScanChrome, stationThemeColors } from '@/utils/staff-colors';
 import { useStationTheme } from '@/hooks/useStationTheme';
+import { FBA_SCAN_STATUS, FBA_ACTIVE_SHIPMENTS_REFRESH, USAV_REFRESH_DATA } from '@/lib/fba/events';
 import { SIDEBAR_INTAKE_LABEL_CLASS } from '@/design-system/components/sidebar-intake/intakeFormClasses';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 
@@ -185,9 +186,9 @@ export function FbaWorkspaceScanField({
       }
       // Success — clear selection to close the tracking card
       clearSelection();
-      window.dispatchEvent(new CustomEvent('fba-scan-status', { detail: 'Tracking saved' }));
-      window.dispatchEvent(new CustomEvent('fba-active-shipments-refresh'));
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      window.dispatchEvent(new CustomEvent(FBA_SCAN_STATUS, { detail: 'Tracking saved' }));
+      window.dispatchEvent(new CustomEvent(FBA_ACTIVE_SHIPMENTS_REFRESH));
+      window.dispatchEvent(new CustomEvent(USAV_REFRESH_DATA));
     } catch (err: any) {
       setSaveError(err?.message || 'Failed to save tracking');
     } finally {

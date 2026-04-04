@@ -6,6 +6,25 @@ import { mainStickyHeaderClass } from '@/components/layout/header-shell';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 
+/** Inner row for the week strip — use for sticky day/group rows so they align with WeekHeader. */
+export const weekHeaderInnerRowClass =
+  'flex min-h-[44px] items-center justify-between gap-4 px-3 py-1.5';
+
+/**
+ * Per-day band in scroll content — same look as the old sticky day row, but **not** sticky.
+ * Only the weekly {@link WeekHeader} should stick; these rows scroll normally beneath it.
+ */
+export const weekDayGroupBandClass =
+  'border-y border-gray-200 bg-gray-50/95';
+
+/** Date label in a day-group row — matches mobile week tables + {@link DateGroupHeader}. */
+export const weekDayGroupDateClass =
+  'text-[11px] font-black uppercase tracking-[0.2em] text-gray-700';
+
+/** Count in a day-group row (add `countClassName` from staff theme for accent parity with WeekHeader). */
+export const weekDayGroupCountClass =
+  'text-[11px] font-black tabular-nums text-gray-900';
+
 interface WeekRange {
   startStr: string;
   endStr: string;
@@ -70,7 +89,7 @@ export default function WeekHeader({
 
   const dateTextClass = highContrast
     ? `text-sm font-black uppercase tracking-widest text-gray-900`
-    : `${sectionLabel} text-gray-900`;
+    : `text-[11px] font-black uppercase tracking-[0.2em] text-gray-900`;
 
   const countTextClass = highContrast
     ? `font-dm-sans text-sm font-semibold tabular-nums ${countClassName}`
@@ -80,7 +99,7 @@ export default function WeekHeader({
 
   return (
     <div className={mainStickyHeaderClass}>
-      <div className="flex min-h-[44px] items-center justify-between gap-4 px-2 py-1">
+      <div className={weekHeaderInnerRowClass}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}
           <p className={`min-w-0 truncate ${dateTextClass}`}>{stickyDateLabel}</p>

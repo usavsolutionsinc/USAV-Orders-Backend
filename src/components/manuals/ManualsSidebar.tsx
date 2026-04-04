@@ -12,6 +12,7 @@ interface ProductManual {
   sku: string | null;
   item_number: string | null;
   product_title: string | null;
+  display_name: string | null;
   google_file_id: string;
   type: string | null;
   updated_at: string | null;
@@ -26,8 +27,8 @@ function ManualRow({
   isSelected: boolean;
   onSelect: (manual: ProductManual) => void;
 }) {
-  const title = manual.product_title || manual.sku || manual.item_number || `Manual #${manual.id}`;
-  const subtitle = [manual.sku, manual.item_number].filter(Boolean).join(' · ');
+  const title = manual.display_name || manual.product_title || manual.item_number || `Manual #${manual.id}`;
+  const subtitle = manual.item_number ? `Item ${manual.item_number}` : '';
 
   return (
     <button

@@ -2,8 +2,10 @@ export const FBA_ID_RE = /^FBA[0-9A-Z]{8,}$/i;
 export const UPS_RE = /^1Z[A-Z0-9]{16}$/i;
 
 import { fbaPaths } from '@/lib/fba/api-paths';
+import { FBA_TRACKING_PATCH, FBA_PRINT_QUEUE_REFRESH } from '@/lib/fba/events';
 
-export const FBA_TRACKING_PATCH_EVENT = 'fba-print-tracking-patch';
+/** @deprecated Use FBA_TRACKING_PATCH from events.ts */
+export const FBA_TRACKING_PATCH_EVENT = FBA_TRACKING_PATCH;
 
 export function normalizeFbaId(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, '');
@@ -36,7 +38,7 @@ export async function persistAmazonShipmentId(planId: number, amazonRaw: string)
   const data = await res.json().catch(() => ({}));
   if (!data.success && !res.ok) return false;
   dispatchFbaTrackingPatch({ planId, amazon });
-  window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
+  window.dispatchEvent(new CustomEvent(FBA_PRINT_QUEUE_REFRESH));
   return true;
 }
 
@@ -51,6 +53,6 @@ export async function persistUpsTracking(planId: number, upsRaw: string): Promis
   const data = await res.json().catch(() => ({}));
   if (!data.success && !res.ok) return false;
   dispatchFbaTrackingPatch({ planId, ups: tracking_number });
-  window.dispatchEvent(new CustomEvent('fba-print-queue-refresh'));
+  window.dispatchEvent(new CustomEvent(FBA_PRINT_QUEUE_REFRESH));
   return true;
 }

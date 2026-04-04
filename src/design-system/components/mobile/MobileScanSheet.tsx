@@ -132,9 +132,9 @@ export function MobileScanSheet({
       setPhase('scanning');
       setManualValue('');
       scanner.resetLastScan();
-      scanner.startScanning();
+      void scanner.startScanning();
     } else {
-      scanner.stopScanning();
+      void scanner.stopScanning();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -152,6 +152,10 @@ export function MobileScanSheet({
   const handleRescan = useCallback(() => {
     setPhase('scanning');
     scanner.resetLastScan();
+    if (scanner.scanStatus === 'idle') {
+      void scanner.startScanning();
+      return;
+    }
     scanner.resumeScanning();
   }, [scanner]);
 
@@ -174,7 +178,15 @@ export function MobileScanSheet({
 
   const handleBackToScan = useCallback(() => {
     setPhase('scanning');
+    if (scanner.scanStatus === 'idle') {
+      void scanner.startScanning();
+      return;
+    }
     scanner.resumeScanning();
+  }, [scanner]);
+
+  const handleStartCamera = useCallback(() => {
+    void scanner.startScanning();
   }, [scanner]);
 
   return (
@@ -210,8 +222,17 @@ export function MobileScanSheet({
 
           {/* ── Camera viewfinder ── */}
           <div className="flex-1 relative overflow-hidden">
+            {/* Keep the scanner mount point in the DOM even before startScanning()
+               so Safari tap-start has a live container ref to attach to. */}
+            <div
+              ref={scanner.containerRef as React.RefObject<HTMLDivElement>}
+              className={`pointer-events-none absolute inset-0 w-full h-full [&_video]:pointer-events-none [&_video]:object-cover [&_video]:w-full [&_video]:h-full ${
+                scanner.scanStatus === 'scanning' || scanner.scanStatus === 'paused' ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+
             {scanner.scanStatus === 'error' ? (
-              // Camera unavailable fallback
+              // Camera failed — show error + retry button + manual fallback
               <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
                 <div className="h-16 w-16 rounded-full bg-gray-800 flex items-center justify-center mb-4">
                   <svg className="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,22 +243,35 @@ export function MobileScanSheet({
                 <p className="text-xs text-gray-400 mb-4">
                   {scanner.error || 'Enable camera access in your browser settings.'}
                 </p>
-                <button
-                  type="button"
-                  onClick={handleOpenManual}
-                  className="h-11 px-5 rounded-xl bg-white/10 text-white text-[11px] font-black uppercase tracking-wider active:bg-white/20 transition-colors"
-                >
-                  Type Manually
-                </button>
+                <div className="flex flex-col gap-2 w-full max-w-[200px]">
+                  <button
+                    type="button"
+                    onClick={handleStartCamera}
+                    className="h-11 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenManual}
+                    className="h-11 px-5 rounded-xl bg-white/10 text-white text-[11px] font-black uppercase tracking-wider active:bg-white/20 transition-colors"
+                  >
+                    Type Manually
+                  </button>
+                </div>
+              </div>
+            ) : scanner.scanStatus === 'idle' ? (
+              <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+                <div className="h-16 w-16 rounded-full bg-gray-800 flex items-center justify-center mb-4">
+                  <svg className="h-8 w-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <p className="text-sm font-bold text-white mb-1">Preparing camera</p>
+                <p className="text-xs text-gray-400 mb-4">Starting the scanner...</p>
               </div>
             ) : (
               <>
-                {/* html5-qrcode mounts its video here */}
-                <div
-                  ref={scanner.containerRef as React.RefObject<HTMLDivElement>}
-                  className="absolute inset-0 w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full"
-                />
-
                 {/* Viewfinder overlay */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   {/* Corner markers */}

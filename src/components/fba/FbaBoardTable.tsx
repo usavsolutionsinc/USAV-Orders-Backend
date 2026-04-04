@@ -9,26 +9,18 @@ import { sectionLabel, framerPresence, framerTransition, SkeletonList } from '@/
 import type { StationTheme } from '@/utils/staff-colors';
 import { printQueueTableUi } from '@/utils/staff-colors';
 
-export interface FbaBoardItem {
-  item_id: number;
-  fnsku: string;
-  expected_qty: number;
-  actual_qty: number;
-  item_status: string;
-  display_title: string;
-  asin: string | null;
-  sku: string | null;
-  item_notes: string | null;
-  shipment_id: number;
-  shipment_ref: string;
-  amazon_shipment_id: string | null;
-  due_date: string | null;
-  shipment_status: string;
-  destination_fc: string | null;
-  tracking_numbers: { tracking_number: string; carrier: string; label: string }[];
-  condition: string | null;
-  shipment_ids?: number[];
-}
+import type { FbaBoardItem } from '@/lib/fba/types';
+export type { FbaBoardItem } from '@/lib/fba/types';
+import {
+  FBA_BOARD_SELECTION,
+  FBA_BOARD_SELECTION_COUNT,
+  FBA_BOARD_TOGGLE_ALL,
+  FBA_BOARD_SELECT_BY_DAY,
+  FBA_BOARD_DESELECT_BY_DAY,
+  FBA_BOARD_DESELECT_ITEM,
+  FBA_BOARD_SELECT_BY_FNSKU,
+  FBA_BOARD_FNSKU_SELECT_RESULT,
+} from '@/lib/fba/events';
 
 interface FbaBoardTableProps {
   items: FbaBoardItem[];
@@ -80,7 +72,7 @@ export function FbaBoardTable({
     (nextIds: Set<number>) => {
       onSelectionChange?.(sortedItems.filter((i) => nextIds.has(i.item_id)));
       window.dispatchEvent(
-        new CustomEvent('fba-board-selection', {
+        new CustomEvent(FBA_BOARD_SELECTION, {
           detail: sortedItems.filter((i) => nextIds.has(i.item_id)),
         }),
       );
@@ -112,7 +104,7 @@ export function FbaBoardTable({
         .reduce((sum, i) => sum + qtyOrOne(i), 0);
       const totalQty = sortedItems.reduce((sum, i) => sum + qtyOrOne(i), 0);
       window.dispatchEvent(
-        new CustomEvent('fba-board-selection-count', {
+        new CustomEvent(FBA_BOARD_SELECTION_COUNT, {
           detail: {
             selected: sortedItems.filter((i) => selectedIds.has(i.item_id)).length,
             total: sortedItems.length,
@@ -187,7 +179,7 @@ export function FbaBoardTable({
         anchorIndexRef.current = null;
       }
     };
-    window.addEventListener('fba-board-toggle-all', handler);
+    window.addEventListener(FBA_BOARD_TOGGLE_ALL, handler);
 
     // Select all items for a specific plan day (due_date)
     const selectByDayHandler = (e: Event) => {
@@ -204,7 +196,7 @@ export function FbaBoardTable({
         return next;
       });
     };
-    window.addEventListener('fba-board-select-by-day', selectByDayHandler);
+    window.addEventListener(FBA_BOARD_SELECT_BY_DAY, selectByDayHandler);
 
     const deselectByDayHandler = (e: Event) => {
       const dueDate = (e as CustomEvent<string>).detail;
@@ -218,7 +210,7 @@ export function FbaBoardTable({
         return next;
       });
     };
-    window.addEventListener('fba-board-deselect-by-day', deselectByDayHandler);
+    window.addEventListener(FBA_BOARD_DESELECT_BY_DAY, deselectByDayHandler);
 
     const deselectHandler = (e: Event) => {
       const itemId = (e as CustomEvent<number>).detail;
@@ -229,7 +221,7 @@ export function FbaBoardTable({
         return next;
       });
     };
-    window.addEventListener('fba-board-deselect-item', deselectHandler);
+    window.addEventListener(FBA_BOARD_DESELECT_ITEM, deselectHandler);
 
     const selectByFnskuHandler = (e: Event) => {
       const fnsku = String((e as CustomEvent<string>).detail || '').toUpperCase();
@@ -240,7 +232,7 @@ export function FbaBoardTable({
       );
       if (matching.length === 0) {
         window.dispatchEvent(
-          new CustomEvent('fba-board-fnsku-select-result', {
+          new CustomEvent(FBA_BOARD_FNSKU_SELECT_RESULT, {
             detail: { fnsku, found: false, count: 0 },
           }),
         );
@@ -253,19 +245,19 @@ export function FbaBoardTable({
         return next;
       });
       window.dispatchEvent(
-        new CustomEvent('fba-board-fnsku-select-result', {
+        new CustomEvent(FBA_BOARD_FNSKU_SELECT_RESULT, {
           detail: { fnsku, found: true, count: matching.length, title: matching[0].display_title },
         }),
       );
     };
-    window.addEventListener('fba-board-select-by-fnsku', selectByFnskuHandler);
+    window.addEventListener(FBA_BOARD_SELECT_BY_FNSKU, selectByFnskuHandler);
 
     return () => {
-      window.removeEventListener('fba-board-toggle-all', handler);
-      window.removeEventListener('fba-board-deselect-item', deselectHandler);
-      window.removeEventListener('fba-board-select-by-day', selectByDayHandler);
-      window.removeEventListener('fba-board-deselect-by-day', deselectByDayHandler);
-      window.removeEventListener('fba-board-select-by-fnsku', selectByFnskuHandler);
+      window.removeEventListener(FBA_BOARD_TOGGLE_ALL, handler);
+      window.removeEventListener(FBA_BOARD_DESELECT_ITEM, deselectHandler);
+      window.removeEventListener(FBA_BOARD_SELECT_BY_DAY, selectByDayHandler);
+      window.removeEventListener(FBA_BOARD_DESELECT_BY_DAY, deselectByDayHandler);
+      window.removeEventListener(FBA_BOARD_SELECT_BY_FNSKU, selectByFnskuHandler);
     };
   }, [sortedItems, emitSelection]);
 

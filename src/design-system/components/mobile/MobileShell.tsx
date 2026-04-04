@@ -1,19 +1,22 @@
 'use client';
 
 import { type ReactNode } from 'react';
+import { cn } from '@/utils/_cn';
 import { MobileNavBar, type MobileNavItem } from './MobileNavBar';
 import { MobileToolbar } from './MobileToolbar';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+export type MobileShellToolbarConfig = {
+  title: string;
+  subtitle?: string;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+};
+
 export interface MobileShellProps {
-  /** Top toolbar config — omit for full-screen flows (camera, onboarding). */
-  toolbar?: {
-    title: string;
-    subtitle?: string;
-    leading?: ReactNode;
-    trailing?: ReactNode;
-  };
+  /** Top toolbar config — omit or pass `false` when a parent supplies the header (camera, onboarding, unified tech bar). */
+  toolbar?: MobileShellToolbarConfig | false;
   /** Bottom navigation items. Omit to hide bottom nav (e.g., during camera scan). */
   navItems?: MobileNavItem[];
   /** Active bottom nav tab ID. */
@@ -26,6 +29,11 @@ export interface MobileShellProps {
   fab?: ReactNode;
   /** Slot for bottom-docked controls (scan bar, confirm button). Sits above nav. */
   bottomDock?: ReactNode;
+  /**
+   * `inset` — dock is a normal flex footer (white strip). `overlay` — dock is fixed to the bottom
+   * with no shell chrome so content can scroll beneath (use with {@link MobileBottomActionBar} `chrome="ghost"`).
+   */
+  bottomDockVariant?: 'inset' | 'overlay';
   className?: string;
 }
 
@@ -63,10 +71,18 @@ export function MobileShell({
   children,
   fab,
   bottomDock,
+  bottomDockVariant = 'inset',
   className = '',
 }: MobileShellProps) {
+  const dockOverlay = bottomDockVariant === 'overlay';
+
   return (
-    <div className={`flex flex-col h-[100dvh] bg-white overflow-hidden ${className}`.trim()}>
+    <div
+      className={cn(
+        'relative flex min-h-0 flex-col overflow-hidden bg-white h-[100dvh]',
+        className,
+      )}
+    >
       {/* ── Top toolbar ── */}
       {toolbar && (
         <MobileToolbar
@@ -77,16 +93,28 @@ export function MobileShell({
         />
       )}
 
-      {/* ── Scrollable content ── */}
-      <main className="flex-1 overflow-y-auto overscroll-contain no-scrollbar">
+      {/* ── Scrollable content — min-h-0 required for flex + overflow inside nested layouts (e.g. mobile tech header). */}
+      <main
+        className={cn(
+          'min-h-0 flex-1 overflow-y-auto overscroll-contain no-scrollbar',
+          dockOverlay &&
+            'pb-[calc(5.5rem+env(safe-area-inset-bottom))]',
+        )}
+      >
         {children}
       </main>
 
       {/* ── Bottom dock (scan bar, action bar) ── */}
       {bottomDock && (
-        <div className="flex-shrink-0 border-t border-gray-100 bg-white">
-          {bottomDock}
-        </div>
+        dockOverlay ? (
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30">
+            <div className="pointer-events-auto">{bottomDock}</div>
+          </div>
+        ) : (
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white">
+            {bottomDock}
+          </div>
+        )
       )}
 
       {/* ── Bottom navigation ── */}

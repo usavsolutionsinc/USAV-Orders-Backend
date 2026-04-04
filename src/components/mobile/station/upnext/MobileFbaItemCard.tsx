@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   framerPresence,
   framerTransition,
+  chipText,
   CardShell,
   ChevronToggle,
   DetailGrid,
@@ -12,7 +13,7 @@ import {
   CopyIconButton,
   ExternalLinkButton,
 } from '@/design-system';
-import { Package, Settings } from '@/components/Icons';
+import { ExternalLink, Package, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
 import { WorkOrderAssignmentCard } from '@/components/work-orders/WorkOrderAssignmentCard';
@@ -50,9 +51,18 @@ export function MobileFbaItemCard({ item, isExpanded, onToggleExpand }: MobileFb
             <span className="text-[15px] font-black tabular-nums text-blue-700">{card.daysLate}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] font-extrabold font-mono text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
-              #{card.fnskuLast4}
-            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (card.asinUrl) window.open(card.asinUrl, '_blank', 'noopener,noreferrer');
+              }}
+              disabled={!card.asinUrl}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-2 text-gray-900 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-900 transition-colors"
+            >
+              <span className={`${chipText} leading-none translate-y-px`}>#{card.fnskuLast4}</span>
+              <ExternalLink className="w-3.5 h-3.5 text-blue-300" />
+            </button>
             <ChevronToggle isExpanded={isExpanded} tone="purple" />
           </div>
         </div>

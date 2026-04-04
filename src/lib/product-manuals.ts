@@ -8,7 +8,15 @@ export interface LegacyProductManualRecord {
   sku: string | null;
   item_number: string | null;
   product_title: string | null;
-  google_file_id: string;
+  display_name: string | null;
+  google_file_id: string | null;
+  source_url: string | null;
+  relative_path: string | null;
+  folder_path: string | null;
+  file_name: string | null;
+  status: string | null;
+  assigned_at: string | null;
+  assigned_by: string | null;
   type: string | null;
   updated_at: string | null;
 }
@@ -56,54 +64,115 @@ function toLegacyManualRecord(row: any): LegacyProductManualRecord {
     sku: row.sku ? String(row.sku) : null,
     item_number: row.item_number ? String(row.item_number) : null,
     product_title: row.product_title ? String(row.product_title) : null,
-    google_file_id: String(row.google_file_id || row.google_file_id || ''),
+    display_name: row.display_name ? String(row.display_name) : null,
+    google_file_id: row.google_file_id ? String(row.google_file_id) : null,
+    source_url: row.source_url ? String(row.source_url) : null,
+    relative_path: row.relative_path ? String(row.relative_path) : null,
+    folder_path: row.folder_path ? String(row.folder_path) : null,
+    file_name: row.file_name ? String(row.file_name) : null,
+    status: row.status ? String(row.status) : null,
+    assigned_at: row.assigned_at ? String(row.assigned_at) : null,
+    assigned_by: row.assigned_by ? String(row.assigned_by) : null,
     type: row.type ? String(row.type) : null,
     updated_at: row.updated_at ? String(row.updated_at) : null,
   };
 }
 
 export async function upsertProductManual(params: {
-  sku?: string | null;
   itemNumber?: string | null;
   productTitle?: string | null;
-  googleDocIdOrUrl: string;
+  displayName?: string | null;
+  googleDocIdOrUrl?: string | null;
+  sourceUrl?: string | null;
+  relativePath?: string | null;
+  folderPath?: string | null;
+  fileName?: string | null;
+  status?: 'unassigned' | 'assigned' | 'archived' | null;
+  assignedBy?: string | null;
   type?: string | null;
 }): Promise<LegacyProductManualRecord> {
-  const sku = normalizeIdentifier(String(params.sku || '')) || null;
   const itemNumber = normalizeIdentifier(String(params.itemNumber || '')) || null;
   const productTitle = String(params.productTitle || '').trim() || null;
-  const googleDocId = extractGoogleDocId(String(params.googleDocIdOrUrl || ''));
+  const relativePath = String(params.relativePath || '').trim() || null;
+  const fileName = String(params.fileName || '').trim() || (relativePath ? relativePath.split('/').pop() || null : null);
+  const displayName =
+    String(params.displayName || '').trim()
+    || productTitle
+    || fileName
+    || (itemNumber ? `${itemNumber} Manual` : null);
+  const googleDocId = extractGoogleDocId(String(params.googleDocIdOrUrl || '')) || null;
+  const sourceUrl = String(params.sourceUrl || '').trim() || null;
+  const status = String(params.status || '').trim().toLowerCase() || 'assigned';
+  const folderPath = String(params.folderPath || '').trim()
+    || (status === 'assigned' && itemNumber ? `assigned/${itemNumber}` : null);
   const type = String(params.type || '').trim() || null;
 
-  if (!sku && !itemNumber) {
-    throw new Error('sku or itemNumber is required');
+  if (!itemNumber && status === 'assigned') {
+    throw new Error('itemNumber is required for assigned manuals');
   }
-  if (!googleDocId) {
-    throw new Error('Valid Google Doc ID/URL is required');
+  if (!googleDocId && !relativePath) {
+    throw new Error('Valid Google Doc ID/URL or relativePath is required');
   }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    if (sku) {
-      await client.query(
-        'UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND sku = $1 AND (type = $2 OR ($2 IS NULL AND type IS NULL))',
-        [sku, type]
+    const existing = relativePath
+      ? await client.query(
+        `SELECT id
+         FROM product_manuals
+         WHERE is_active = TRUE
+           AND relative_path = $1
+         LIMIT 1`,
+        [relativePath],
+      )
+      : await client.query(
+        `SELECT id
+         FROM product_manuals
+         WHERE is_active = TRUE
+           AND google_file_id = $1
+           AND (
+             ($2::text IS NULL AND item_number IS NULL)
+             OR regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $2
+           )
+         LIMIT 1`,
+        [googleDocId, itemNumber],
       );
-    }
-    if (itemNumber) {
-      await client.query(
-        'UPDATE product_manuals SET is_active = FALSE WHERE is_active = TRUE AND item_number = $1 AND (type = $2 OR ($2 IS NULL AND type IS NULL))',
-        [itemNumber, type]
+
+    if ((existing.rowCount ?? 0) > 0) {
+      const updated = await client.query(
+        `UPDATE product_manuals
+         SET sku = $2,
+             item_number = $3,
+             product_title = $4,
+             display_name = $5,
+             google_file_id = $6,
+             source_url = $7,
+             relative_path = $8,
+             folder_path = $9,
+             file_name = $10,
+             status = $11,
+             assigned_at = CASE WHEN $11 = 'assigned' THEN COALESCE(assigned_at, NOW()) ELSE NULL END,
+             assigned_by = $12,
+             type = $13,
+             is_active = TRUE,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at`,
+        [existing.rows[0].id, null, itemNumber, productTitle, displayName, googleDocId, sourceUrl, relativePath, folderPath, fileName, status, params.assignedBy ?? null, type],
       );
+
+      await client.query('COMMIT');
+      return toLegacyManualRecord(updated.rows[0]);
     }
 
     const inserted = await client.query(
-      `INSERT INTO product_manuals (sku, item_number, product_title, google_file_id, type, is_active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
-       RETURNING id, sku, item_number, product_title, google_file_id, type, updated_at`,
-      [sku, itemNumber, productTitle, googleDocId, type]
+      `INSERT INTO product_manuals
+        (sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10 = 'assigned' THEN NOW() ELSE NULL END, $11, $12, TRUE, NOW())
+       RETURNING id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at`,
+      [null, itemNumber, productTitle, displayName, googleDocId, sourceUrl, relativePath, folderPath, fileName, status, params.assignedBy ?? null, type]
     );
 
     await client.query('COMMIT');

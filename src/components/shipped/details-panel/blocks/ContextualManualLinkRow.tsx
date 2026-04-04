@@ -26,12 +26,10 @@ interface ContextualManualLinkRowProps {
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 export function ContextualManualLinkRow({
-  sku,
   itemNumber,
   onSaved,
   allowEmbeddedItemNumberInput = true,
 }: ContextualManualLinkRowProps) {
-  const normalizedSku = String(sku || '').trim().toUpperCase();
   const normalizedItemNumber = String(itemNumber || '').trim().toUpperCase();
   const [localItemNumber, setLocalItemNumber] = useState(normalizedItemNumber);
   const [googleInput, setGoogleInput] = useState('');
@@ -43,7 +41,7 @@ export function ContextualManualLinkRow({
   const lastSavedFileIdRef = useRef('');
 
   const effectiveItemNumber = normalizedItemNumber || localItemNumber.trim().toUpperCase();
-  const contextualKey = effectiveItemNumber || normalizedSku || 'order';
+  const contextualKey = effectiveItemNumber || 'order';
   const pendingFileId = extractGoogleFileId(googleInput);
   const canSave = Boolean(effectiveItemNumber && pendingFileId);
 
@@ -92,7 +90,7 @@ export function ContextualManualLinkRow({
         body: JSON.stringify({
           itemNumber: effectiveItemNumber,
           item_number: effectiveItemNumber,
-          sku: normalizedSku || effectiveItemNumber,
+          displayName: `${effectiveItemNumber} Manual`,
           googleDocId: pendingFileId,
         }),
       });
@@ -111,16 +109,16 @@ export function ContextualManualLinkRow({
 
   const openUrl = useMemo(() => {
     if (!savedFileId) return null;
-    return `https://drive.google.com/file/d/${savedFileId}/view`;
+    return `https://docs.google.com/document/d/${savedFileId}`;
   }, [savedFileId]);
 
   return (
     <DetailsPanelRow
       label="Product Manual"
       headerAccessory={
-        (effectiveItemNumber || normalizedSku) ? (
+        effectiveItemNumber ? (
           <span className="truncate text-[10px] font-black uppercase tracking-wide text-gray-500">
-            {effectiveItemNumber || normalizedSku}
+            {effectiveItemNumber}
           </span>
         ) : null
       }

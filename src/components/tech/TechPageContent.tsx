@@ -12,8 +12,8 @@ interface TechPageContentProps {
 /**
  * TechPageContent — client-side desktop/mobile branch for the tech page.
  *
- * Desktop → existing TechDashboard (sidebar station + right panel).
- * Mobile  → MobileTechDashboard (full-screen MobileStationTesting).
+ * Desktop → {@link TechDashboard} (sidebar station + right panel).
+ * Mobile  → {@link MobileTechDashboard} (unified header + view modes: history table, testing station, etc.).
  */
 export function TechPageContent({ techId }: TechPageContentProps) {
   const { isMobile } = useUIMode();

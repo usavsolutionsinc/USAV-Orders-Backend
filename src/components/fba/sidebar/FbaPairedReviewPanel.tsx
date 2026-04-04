@@ -16,9 +16,12 @@ import {
   FBA_BOARD_REMOVE_ITEMS,
   FBA_PAIRED_SELECTION,
   FBA_PRINT_SHIPPED,
+  FBA_REEDIT_SHIPMENT,
   FBA_SELECTION_ADJUSTED,
   FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW,
   USAV_REFRESH_DATA,
+  FBA_SCAN_STATUS,
+  FBA_ACTIVE_SHIPMENTS_REFRESH,
 } from '@/lib/fba/events';
 import { emitOpenQuickAddFnsku } from '@/components/fba/FbaQuickAddFnskuModal';
 
@@ -114,7 +117,24 @@ export function FbaPairedReviewPanel({
       window.dispatchEvent(new CustomEvent(FBA_PAIRED_SELECTION, { detail: d.items }));
     };
     window.addEventListener(FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW, handler as EventListener);
-    return () => window.removeEventListener(FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW, handler as EventListener);
+
+    // Re-edit: lock an FBA Shipment ID from the active shipments display.
+    // User can then select items and attach new/different tracking under this FBA ID.
+    const reeditHandler = (e: Event) => {
+      const d = (e as CustomEvent<{ amazonShipmentId: string }>).detail;
+      if (!d?.amazonShipmentId) return;
+      setLockedFbaId(d.amazonShipmentId.trim().toUpperCase());
+      setAmazonShipmentId(d.amazonShipmentId.trim().toUpperCase());
+      setUpsTracking('');
+      setError(null);
+      setSuccess('Select items to add or reassign under this FBA Shipment ID');
+    };
+    window.addEventListener(FBA_REEDIT_SHIPMENT, reeditHandler as EventListener);
+
+    return () => {
+      window.removeEventListener(FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW, handler as EventListener);
+      window.removeEventListener(FBA_REEDIT_SHIPMENT, reeditHandler as EventListener);
+    };
   }, []);
 
   const adjustQty = useCallback((item: FbaBoardItem, delta: number) => {
@@ -271,9 +291,9 @@ export function FbaPairedReviewPanel({
       setQtyOverrides({});
       const msg = `Combined ${selectedLines.length} line${selectedLines.length === 1 ? '' : 's'}`;
       setSuccess(msg);
-      window.dispatchEvent(new CustomEvent('fba-scan-status', { detail: msg }));
+      window.dispatchEvent(new CustomEvent(FBA_SCAN_STATUS, { detail: msg }));
       window.dispatchEvent(new CustomEvent(FBA_PRINT_SHIPPED));
-      window.dispatchEvent(new CustomEvent('fba-active-shipments-refresh'));
+      window.dispatchEvent(new CustomEvent(FBA_ACTIVE_SHIPMENTS_REFRESH));
       window.dispatchEvent(new CustomEvent(USAV_REFRESH_DATA));
     } catch (err: any) {
       setError(err?.message || 'Failed to attach tracking');

@@ -56,10 +56,10 @@ export async function GET(req: NextRequest) {
         EXISTS (
           SELECT 1 FROM product_manuals pm
           WHERE pm.is_active = true
-            AND (
-              (o.item_number IS NOT NULL AND pm.item_number = o.item_number)
-              OR (o.sku IS NOT NULL AND pm.sku = o.sku)
-            )
+            AND o.item_number IS NOT NULL
+            AND o.item_number <> ''
+            AND regexp_replace(UPPER(TRIM(COALESCE(pm.item_number, ''))), '[^A-Z0-9]', '', 'g') =
+                regexp_replace(UPPER(TRIM(o.item_number)), '[^A-Z0-9]', '', 'g')
         ) AS has_manual
       FROM orders o
       LEFT JOIN LATERAL (

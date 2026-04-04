@@ -7,8 +7,9 @@ import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { FbaCreateShipmentForm, type FbaCreateShipmentFormState } from './FbaCreateShipmentForm';
 import { fbaPaths } from '@/lib/fba/api-paths';
+import { FBA_OPEN_CREATE_PLAN } from '@/lib/fba/events';
 
-export const FBA_OPEN_CREATE_PLAN_EVENT = 'fba-open-create-plan';
+export const FBA_OPEN_CREATE_PLAN_EVENT = FBA_OPEN_CREATE_PLAN;
 
 const INITIAL_FORM: FbaCreateShipmentFormState = {
   shipment_ref: '',

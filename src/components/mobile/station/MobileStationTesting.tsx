@@ -2,23 +2,23 @@
 
 import { useState, useCallback } from 'react';
 import { LayoutGroup, AnimatePresence, motion } from 'framer-motion';
-import { MobileShell } from '@/design-system/components/mobile/MobileShell';
+import { MobileShell, type MobileShellProps } from '@/design-system/components/mobile/MobileShell';
 import { MobileBottomActionBar } from '@/design-system/components/mobile/MobileBottomActionBar';
 import { MobileScanSheet } from '@/design-system/components/mobile/MobileScanSheet';
 import { MobileUpNextOrder } from './MobileUpNextOrder';
-import { MobileSearchOverlay } from '../overlays/MobileSearchOverlay';
-import { SLIDER_PRESETS, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { MobileQueueFilterSheet } from '../overlays/MobileQueueFilterSheet';
+import { HorizontalButtonSlider, SLIDER_PRESETS, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import ActiveStationOrderCard from '@/components/station/ActiveStationOrderCard';
 import StationGoalBar from '@/components/station/StationGoalBar';
-import { AlertCircle, MapPin, Package, Settings, Barcode, Loader2 } from '@/components/Icons';
+import { AlertCircle } from '@/components/Icons';
 import {
-  getStationInputMode,
   type StationInputMode,
   useStationTestingController,
 } from '@/hooks/useStationTestingController';
 import type { StationScanType } from '@/lib/station-scan-routing';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { useStationTheme } from '@/hooks/useStationTheme';
+import { requestCameraPermission } from '@/hooks/useCamera';
 
 // ─── Animation constants ────────────────────────────────────────────────────
 
@@ -37,6 +37,12 @@ interface MobileStationTestingProps {
   goal?: number;
   onComplete?: () => void;
   onViewManual?: () => void;
+  toolbar?: MobileShellProps['toolbar'];
+  showQueueSearchOverlay?: boolean;
+  /** Forwards to `MobileShell` — use `!h-full min-h-0` when nested under a flex parent (e.g. mobile tech header band). */
+  shellClassName?: string;
+  /** When true, `MobileShell` renders no top toolbar (parent provides back + staff + view row). */
+  suppressShellToolbar?: boolean;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -50,11 +56,15 @@ export function MobileStationTesting({
   goal = 50,
   onComplete,
   onViewManual,
+  toolbar,
+  showQueueSearchOverlay = true,
+  shellClassName,
+  suppressShellToolbar = false,
 }: MobileStationTestingProps) {
   const { theme: themeColor, inputBorder } = useStationTheme({ staffId });
   const [manualMode, setManualMode] = useState<StationInputMode | null>(null);
   const [scanSheetOpen, setScanSheetOpen] = useState(false);
-  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [queueFilterSheetOpen, setQueueFilterSheetOpen] = useState(false);
   // ── UpNext filter state (owned here, passed to MobileUpNextOrder + MobileSearchOverlay) ──
   const [upNextSearch, setUpNextSearch] = useState('');
   const [upNextFilter, setUpNextFilter] = useState('must_go');
@@ -77,7 +87,6 @@ export function MobileStationTesting({
     triggerGlobalRefresh,
     activeColor,
     clearFeedback,
-    reopenLastActiveOrderCard,
   } = useStationTestingController({
     userId,
     userName,
@@ -187,58 +196,6 @@ export function MobileStationTesting({
     [activeOrder, setActiveOrder, triggerGlobalRefresh, userId],
   );
 
-  const toggleMode = useCallback(
-    (nextMode: StationInputMode) => {
-      const togglingOff = manualMode === nextMode;
-      const nextManualMode = togglingOff ? null : nextMode;
-      setManualMode(nextManualMode);
-
-      if (nextManualMode === 'serial') reopenLastActiveOrderCard();
-
-      const pendingInput = inputValue.trim();
-      if (togglingOff || !pendingInput) {
-        queueMicrotask(() => inputRef.current?.focus());
-        return;
-      }
-
-      const forced = forcedTypeForManualMode(nextManualMode);
-      if (!forced) {
-        queueMicrotask(() => inputRef.current?.focus());
-        return;
-      }
-
-      const raw = inputValue;
-      setManualMode(null);
-      if (forced === 'FNSKU') {
-        handleSubmit(undefined, raw, { forcedType: 'FNSKU' });
-        return;
-      }
-      handleSubmit(undefined, raw, { forcedType: forced });
-    },
-    [manualMode, inputValue, inputRef, forcedTypeForManualMode, handleSubmit, reopenLastActiveOrderCard, setManualMode],
-  );
-
-  // ── Derived state ──
-
-  const trimmedInput = inputValue.trim();
-  const detectedMode = trimmedInput ? getStationInputMode(inputValue) : null;
-  const autoMode: StationInputMode =
-    detectedMode ??
-    (activeOrder?.sourceType === 'fba' ? 'fba' : activeOrder ? 'serial' : 'tracking');
-  const effectiveMode: StationInputMode =
-    manualMode ??
-    (trimmedInput && detectedMode ? detectedMode : autoMode);
-
-  const modeBadgeIcon = (() => {
-    switch (effectiveMode) {
-      case 'tracking': return <MapPin className="h-[17px] w-[17px] text-blue-600" />;
-      case 'fba': return <Package className="h-[17px] w-[17px] text-violet-600" />;
-      case 'repair': return <Settings className="h-[17px] w-[17px] text-amber-600" />;
-      case 'serial':
-      default: return <Barcode className="h-[17px] w-[17px] text-emerald-600" />;
-    }
-  })();
-
   // ── Camera scan confirmed ──
 
   const handleScanConfirmed = useCallback(
@@ -248,6 +205,12 @@ export function MobileStationTesting({
     },
     [handleFormSubmit],
   );
+
+  const handleOpenScanSheet = useCallback(() => {
+    void requestCameraPermission().finally(() => {
+      setScanSheetOpen(true);
+    });
+  }, []);
 
   // ── UpNext tab-change handler ──
   const handleUpNextTabChange = useCallback(
@@ -259,82 +222,53 @@ export function MobileStationTesting({
     [],
   );
 
-  // ── Mode pill row for bottom action bar ──
-
-  const MODE_PILL_CONFIG = [
-    { mode: 'tracking' as const, label: 'Track', Icon: MapPin, active: 'bg-blue-600 text-white', armed: 'ring-2 ring-offset-1 ring-blue-400/50' },
-    { mode: 'serial' as const, label: 'Serial', Icon: Barcode, active: 'bg-emerald-600 text-white', armed: 'ring-2 ring-offset-1 ring-emerald-400/50' },
-    { mode: 'fba' as const, label: 'FBA', Icon: Package, active: 'bg-violet-600 text-white', armed: 'ring-2 ring-offset-1 ring-violet-400/50' },
-    { mode: 'repair' as const, label: 'Repair', Icon: Settings, active: 'bg-amber-600 text-white', armed: 'ring-2 ring-offset-1 ring-amber-400/50' },
-  ];
-
-  const modePillsRow = (
-    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-      {MODE_PILL_CONFIG.map(({ mode, label, Icon, active, armed }) => {
-        const isArmed = manualMode === mode;
-        const isActive = effectiveMode === mode && manualMode === null;
-        return (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => toggleMode(mode)}
-            aria-pressed={isArmed}
-            className={`flex items-center gap-1.5 rounded-full px-3 min-h-[36px] text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
-              isArmed ? `${active} ${armed}` : isActive ? active : 'bg-gray-100 text-gray-500'
-            }`}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
-        );
-      })}
-      {isLoading && (
-        <Loader2 className="h-4 w-4 animate-spin text-gray-400 ml-auto flex-shrink-0" />
-      )}
-    </div>
-  );
+  /** Quick filter slider for bottom bar filter mode (same data as the queue filter sheet). */
+  const queueQuickFilterRow =
+    showQueueSearchOverlay && upNextFilterItems.length > 0 ? (
+      <div className="flex min-h-[36px] w-full min-w-0 flex-1 items-center">
+        {upNextFilterItems.length > 1 ? (
+          <HorizontalButtonSlider
+            items={upNextFilterItems}
+            value={upNextFilter}
+            onChange={setUpNextFilter}
+            variant={upNextFilterVariant}
+            size="md"
+            aria-label="Filter queue"
+          />
+        ) : (
+          <span className="text-[11px] font-bold text-gray-400">Quick filters load with the queue…</span>
+        )}
+      </div>
+    ) : null;
 
   // ── Render ──
 
   return (
-    <>
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
       <MobileShell
-        toolbar={{
+        className={shellClassName}
+        toolbar={suppressShellToolbar ? false : (toolbar ?? {
           title: `Welcome, ${userName}`,
           trailing: (
             <span className="text-[11px] font-black text-gray-500 tabular-nums">
               {todayCount}/{goal}
             </span>
           ),
-        }}
+        })}
+        bottomDockVariant="overlay"
         bottomDock={
           <MobileBottomActionBar
+            chrome="ghost"
             searchValue={inputValue}
             onSearchChange={setInputValue}
             onSearchSubmit={handleFormSubmit}
             searchPlaceholder="Tracking, FNSKU, RS, SN"
-            searchExpanded={searchExpanded}
-            onSearchExpandedChange={setSearchExpanded}
+            searchExpanded={false}
             searchInputRef={inputRef}
-            searchIcon={
-              <span className="-ml-0.5 flex items-center justify-center">
-                {modeBadgeIcon}
-              </span>
-            }
-            onScanPress={() => setScanSheetOpen(true)}
-            pills={
-              searchExpanded ? modePillsRow : (
-                <MobileSearchOverlay
-                  quickFilter={upNextFilter}
-                  onQuickFilterChange={setUpNextFilter}
-                  quickFilterItems={upNextFilterItems}
-                  quickFilterVariant={upNextFilterVariant}
-                  searchText={upNextSearch}
-                  onSearchChange={setUpNextSearch}
-                  placeholder="Search queue..."
-                />
-              )
-            }
+            onQueueFilterPress={() => setQueueFilterSheetOpen(true)}
+            showInlineFilterButton={false}
+            onScanPress={handleOpenScanSheet}
+            pills={queueQuickFilterRow}
             isLoading={isLoading}
             themeColor={themeColor}
           />
@@ -422,6 +356,18 @@ export function MobileStationTesting({
             : null
         }
       />
-    </>
+
+      <MobileQueueFilterSheet
+        isOpen={queueFilterSheetOpen}
+        onClose={() => setQueueFilterSheetOpen(false)}
+        quickFilter={upNextFilter}
+        onQuickFilterChange={setUpNextFilter}
+        quickFilterItems={upNextFilterItems}
+        quickFilterVariant={upNextFilterVariant}
+        searchText={upNextSearch}
+        onSearchChange={setUpNextSearch}
+        placeholder="Search queue..."
+      />
+    </div>
   );
 }

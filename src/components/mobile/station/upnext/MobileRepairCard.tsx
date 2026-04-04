@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   framerPresence,
   framerTransition,
+  chipText,
   CardShell,
   ChevronToggle,
   DetailGrid,
@@ -57,7 +58,7 @@ export function MobileRepairCard({ repair, techId, isExpanded, onToggleExpand, o
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] font-extrabold font-mono text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
+            <span className={`${chipText} text-gray-900 px-1.5 py-0.5 rounded border border-gray-300`}>
               #{card.ticketShort}
             </span>
             <PlatformExternalChip

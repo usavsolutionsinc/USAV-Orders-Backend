@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeviceMode } from '@/hooks';
+import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { Monitor, Smartphone } from '@/components/Icons';
 
 /**
@@ -12,7 +12,7 @@ import { Monitor, Smartphone } from '@/components/Icons';
  * fall back to automatic device detection.
  */
 export function DeviceModeToggle() {
-  const { mode, modeOverride, setModeOverride, isMobileDevice } = useDeviceMode();
+  const { mode, modeOverride, setModeOverride, isMobileDevice } = useUIMode();
 
   const isAutoMode = modeOverride === null;
   const isMobileMode = mode === 'mobile';

@@ -170,18 +170,16 @@ export function useStationTestingController({
     publishLastManual([]);
   };
 
-  const resolveManual = async (sku?: string | null, itemNumber?: string | null) => {
+  const resolveManual = async (_sku?: string | null, itemNumber?: string | null) => {
     const requestId = ++manualRequestIdRef.current;
-    const skuValue = String(sku || '').trim();
     const itemNumberValue = String(itemNumber || '').trim();
-    if (!skuValue && !itemNumberValue) {
+    if (!itemNumberValue) {
       clearManuals();
       return;
     }
     setIsManualLoading(true);
     try {
       const params = new URLSearchParams();
-      if (skuValue) params.set('sku', skuValue);
       if (itemNumberValue) params.set('itemNumber', itemNumberValue);
       const res = await fetch(`/api/manuals/resolve?${params.toString()}`);
       const data = await res.json();

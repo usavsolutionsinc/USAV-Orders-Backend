@@ -13,7 +13,7 @@ import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
 import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
-import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
+import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { getTrackingUrl } from '@/utils/order-links';
 import { isEmptyDisplayValue, missingItemNumberLabelForStation } from '@/utils/empty-display-value';
@@ -139,7 +139,6 @@ export default function ActiveStationOrderCard({
   onViewManual,
   onRemoveSerial,
 }: ActiveStationOrderCardProps) {
-  const { getExternalUrlByItemNumber, openExternalByItemNumber } = useExternalItemUrl();
   const [isExpanded, setIsExpanded] = useState(false);
   const [lastAddedSerial, setLastAddedSerial] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<CopyFieldKey | null>(null);
@@ -192,6 +191,24 @@ export default function ActiveStationOrderCard({
     : getOrderIdLast4(activeOrder.orderId);
   const trackingUrl = getTrackingUrl(trackingNumber);
 
+  const externalListingUrl = (() => {
+    if (orderVariant === 'fba') {
+      const fnsku = String(activeOrder.fnsku || '').trim();
+      if (fnsku) return `https://www.amazon.com/s?k=${encodeURIComponent(fnsku)}`;
+      return null;
+    }
+    if (orderVariant === 'repair') {
+      return getExternalUrlByItemNumber(activeOrder.sku);
+    }
+    return getExternalUrlByItemNumber(activeOrder.itemNumber);
+  })();
+
+  const openExternalListing = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!externalListingUrl) return;
+    window.open(externalListingUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const handleCopyValue = async (e: React.MouseEvent, key: CopyFieldKey, value: string) => {
     e.stopPropagation();
     if (!value) return;
@@ -232,9 +249,17 @@ export default function ActiveStationOrderCard({
       className={`rounded-2xl border-2 bg-white shadow-sm overflow-hidden transition-colors ${variantStyles.card}`}
     >
       {/* ── Header + title (tap to expand details — matches Up Next OrderCard) ── */}
-      <button
-        type="button"
+      {/* Use a div, not <button>, so nested external-link controls stay valid and clickable. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setIsExpanded((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsExpanded((v) => !v);
+          }
+        }}
         aria-expanded={isExpanded}
         className={`w-full text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${variantStyles.focus}`}
       >
@@ -263,11 +288,8 @@ export default function ActiveStationOrderCard({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openExternalByItemNumber(activeOrder.itemNumber);
-              }}
-              disabled={orderVariant !== 'order' || !getExternalUrlByItemNumber(activeOrder.itemNumber)}
+              onClick={openExternalListing}
+              disabled={!externalListingUrl}
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-2 text-gray-900 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-900 transition-colors"
             >
               <span className={`${chipText} leading-none translate-y-px`}>#{displayIdentifier}</span>
@@ -297,7 +319,7 @@ export default function ActiveStationOrderCard({
             </p>
           ) : null}
         </div>
-      </button>
+      </div>
 
       {activeOrder.notes && (
         <div className={`px-3 mt-2 border-t pt-2 ${variantStyles.section}`}>

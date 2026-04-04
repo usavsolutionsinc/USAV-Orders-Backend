@@ -1,4 +1,5 @@
 import type { ScanHandlerContext } from './types';
+import { FBA_FNSKU_STATION_SCANNED } from '@/lib/fba/events';
 
 interface FnskuCallbacks {
   onFnskuOrderLoaded?: (() => void) | null;
@@ -108,7 +109,7 @@ export async function handleFnskuScan(
     );
 
     // Notify FBA workspace sidebar so techs can add this FNSKU to an open plan.
-    window.dispatchEvent(new CustomEvent('fba-fnsku-station-scanned', {
+    window.dispatchEvent(new CustomEvent(FBA_FNSKU_STATION_SCANNED, {
       detail: {
         fnsku,
         productTitle: data.order?.productTitle ?? null,

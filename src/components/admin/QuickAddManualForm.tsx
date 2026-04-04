@@ -33,9 +33,8 @@ export interface QuickAddManualFormProps {
  *   2. Once item number is known → show Google Doc ID / Drive URL input
  *   3. After save              → show success strip with "Open" link
  */
-export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualFormProps) {
+export function QuickAddManualForm({ itemNumber, onSaved }: QuickAddManualFormProps) {
   const normalizedItemNumber = String(itemNumber || '').trim();
-  const normalizedSku = String(sku || '').trim();
 
   const [localItemNumber, setLocalItemNumber] = useState('');
   const [googleInput, setGoogleInput] = useState('');
@@ -90,7 +89,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
         body: JSON.stringify({
           itemNumber: effectiveItemNumber,
           item_number: effectiveItemNumber,
-          sku: normalizedSku || effectiveItemNumber,
+          displayName: `${effectiveItemNumber} Manual`,
           googleDocId: fileId,
         }),
       });
@@ -112,7 +111,7 @@ export function QuickAddManualForm({ sku, itemNumber, onSaved }: QuickAddManualF
 
   // ── Saved state — show success strip ────────────────────────────────────────
   if (savedFileId) {
-    const viewUrl = `https://drive.google.com/file/d/${savedFileId}/view`;
+    const viewUrl = `https://docs.google.com/document/d/${savedFileId}`;
     return (
       <section className="mx-8 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">

@@ -1,4 +1,4 @@
-import PackerDashboard from '@/components/PackerDashboard';
+import { PackerPageContent } from '@/components/packer/PackerPageContent';
 
 export default async function PackerPage({
   searchParams,
@@ -9,5 +9,5 @@ export default async function PackerPage({
   const staffId = String(params?.staffId || '').trim();
   const packerId = /^\d+$/.test(staffId) ? staffId : '4';
 
-  return <PackerDashboard packerId={packerId} />;
+  return <PackerPageContent packerId={packerId} />;
 }

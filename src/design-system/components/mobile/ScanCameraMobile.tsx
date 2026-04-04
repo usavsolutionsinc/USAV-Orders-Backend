@@ -76,25 +76,29 @@ export function ScanCameraMobile({
   const [cameraError, setCameraError] = useState(false);
   const manualInputRef = useRef<HTMLInputElement>(null);
 
-  // Start/stop camera with overlay lifecycle
-  useEffect(() => {
-    if (!isOpen) {
-      stopCamera();
-      return;
-    }
-
+  const attemptStartCamera = useCallback(() => {
+    setCameraError(false);
     startCamera({
       facingMode: 'environment',
       width: { ideal: 1280 },
       height: { ideal: 720 },
     }).catch(() => {
       setCameraError(true);
-      // Focus manual input if camera fails
       setTimeout(() => manualInputRef.current?.focus(), 300);
     });
+  }, [startCamera]);
 
+  // Start/stop camera with overlay lifecycle
+  useEffect(() => {
+    if (!isOpen) {
+      stopCamera();
+      setCameraError(false);
+      return;
+    }
+
+    attemptStartCamera();
     return () => stopCamera();
-  }, [isOpen, startCamera, stopCamera]);
+  }, [isOpen, stopCamera, attemptStartCamera]);
 
   // Auto-reset status after feedback
   useEffect(() => {
@@ -267,6 +271,13 @@ export function ScanCameraMobile({
                 <p className="text-xs text-gray-400 mb-4">
                   Enable camera access in your browser settings, or enter the code manually below.
                 </p>
+                <button
+                  type="button"
+                  onClick={attemptStartCamera}
+                  className="h-11 px-5 rounded-xl bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
+                >
+                  Try Again
+                </button>
               </div>
             )}
           </div>

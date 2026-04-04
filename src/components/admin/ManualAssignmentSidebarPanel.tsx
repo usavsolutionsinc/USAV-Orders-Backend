@@ -250,7 +250,7 @@ export function ManualAssignmentSidebarPanel() {
               {group.orders.map((order) => {
                 const isActive = String(order.id) === activeOrderId;
                 const displayTitle =
-                  order.product_title || order.item_number || order.sku || order.order_id;
+                  order.product_title || order.item_number || order.order_id;
                 return (
                   <button
                     key={order.id}

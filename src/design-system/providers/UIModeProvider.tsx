@@ -3,7 +3,9 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useState,
   type ReactNode,
 } from 'react';
 import { useDeviceMode, type DeviceInfo } from '@/hooks';
@@ -65,11 +67,15 @@ interface UIModeProviderProps {
  */
 export function UIModeProvider({ children, forceMode }: UIModeProviderProps) {
   const device = useDeviceMode();
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
-  // Check prefers-reduced-motion
-  const prefersReducedMotion = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    sync();
+    mediaQuery.addEventListener('change', sync);
+    return () => mediaQuery.removeEventListener('change', sync);
   }, []);
 
   const mode: UIMode = forceMode ?? device.mode;

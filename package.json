@@ -25,6 +25,7 @@
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:migrate:product-manuals": "node scripts/create-product-manuals-table.js",
     "db:migrate:station-sessions": "node scripts/migrate-station-scan-sessions.mjs",
     "db:migrate:tsn-context-sal": "node scripts/add-tech-serial-context-sal-column.mjs",
     "realtime:relay": "node scripts/realtime-outbox-relay.js",

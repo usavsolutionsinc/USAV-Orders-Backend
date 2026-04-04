@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ManualAssignmentTable, type ManualAssignmentRow } from './admin/ManualAssignmentTable';
-import { InlineManualForm } from './admin/ManualAssignmentTab';
 import { sidebarHeaderBandClass } from '@/components/layout/header-shell';
 import { RefreshCw } from './Icons';
+import { ManualUpdateDetailsStack } from '@/components/manuals/ManualUpdateDetailsStack';
 
 interface OrderWithoutManual {
   id: number | null;
@@ -113,33 +113,16 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
     });
   };
 
-  const handleSaved = (itemNumber: string, googleDocId: string) => {
-    // Optimistically update then remove rows once the manual is confirmed saved
-    setRows((prev) =>
-      prev.map((r) => (r.itemNumber === itemNumber ? { ...r, googleDocId } : r))
-    );
-    setSelectedRow((prev) =>
-      prev?.itemNumber === itemNumber ? { ...prev, googleDocId } : prev
-    );
-    setTimeout(() => {
-      setRows((prev) => prev.filter((r) => r.itemNumber !== itemNumber));
-      setSelectedRow((prev) => {
-        if (prev?.itemNumber === itemNumber) {
-          setSelectedRowKey(null);
-          return null;
-        }
-        return prev;
-      });
-    }, 1200);
+  const handleAssigned = () => {
+    setSelectedRow(null);
+    setSelectedRowKey(null);
+    setLastRefresh((value) => value + 1);
   };
 
-  const missingCount = useMemo(
-    () => rows.filter((r) => !r.googleDocId.trim()).length,
-    [rows]
-  );
+  const missingCount = useMemo(() => rows.length, [rows]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="relative flex h-full min-h-0 flex-col bg-white">
 
       {/* ── Header ── */}
       <div className={sidebarHeaderBandClass}>
@@ -184,19 +167,35 @@ export default function UpdateManualsView({ techId, days = 365 }: UpdateManualsV
           loading={loading}
           emptyMessage="All your orders have manuals linked — great job!"
           getRowKey={manualRowKey}
-          renderExpanded={(row) => (
-            <InlineManualForm
-              row={row}
-              onSaved={handleSaved}
+        />
+      </div>
+
+      <AnimatePresence>
+        {selectedRow ? (
+          <>
+            <motion.button
+              type="button"
+              aria-label="Close manual details"
+              onClick={() => {
+                setSelectedRow(null);
+                setSelectedRowKey(null);
+              }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-10 bg-slate-900/10"
+            />
+            <ManualUpdateDetailsStack
+              row={selectedRow}
               onClose={() => {
                 setSelectedRow(null);
                 setSelectedRowKey(null);
               }}
+              onAssigned={handleAssigned}
             />
-          )}
-        />
-      </div>
-
+          </>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

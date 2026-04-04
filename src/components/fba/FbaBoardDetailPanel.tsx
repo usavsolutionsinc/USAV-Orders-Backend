@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { fbaPaths } from '@/lib/fba/api-paths';
+import { patchFbaItem, deleteFbaItem } from '@/lib/fba/patch';
 import {
   Calendar, Check, ChevronDown, ClipboardList,
   Loader2, Minus, Plus, Trash2,
@@ -51,28 +51,6 @@ interface FbaBoardDetailPanelProps {
 }
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
-
-async function patchFbaItem(
-  shipmentId: number,
-  itemId: number,
-  body: Record<string, unknown>,
-): Promise<boolean> {
-  const res = await fetch(fbaPaths.planItem(shipmentId, itemId), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return res.ok;
-}
-
-async function deleteFbaItem(shipmentId: number, itemId: number): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch(fbaPaths.planItem(shipmentId, itemId), {
-    method: 'DELETE',
-  });
-  if (res.ok) return { ok: true };
-  const data = await res.json().catch(() => ({}));
-  return { ok: false, error: data?.error || `Delete failed (${res.status})` };
-}
 
 function formatPlanDate(raw: string | null): string {
   if (!raw) return 'No date';

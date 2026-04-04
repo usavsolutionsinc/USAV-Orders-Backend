@@ -16,6 +16,14 @@ async function main() {
     .readdirSync(migrationPath)
     .filter((name) => name.includes('product_manuals'))
     .sort((a, b) => {
+      const getPriority = (name) => {
+        if (name.includes('create_product_manuals')) return 0;
+        if (name.includes('align_product_manuals')) return 1;
+        if (name.includes('rename_manual_version_to_type')) return 2;
+        return 3;
+      };
+      const priorityDiff = getPriority(a) - getPriority(b);
+      if (priorityDiff !== 0) return priorityDiff;
       const aIsAlign = a.includes('align_product_manuals');
       const bIsAlign = b.includes('align_product_manuals');
       if (aIsAlign && !bIsAlign) return -1;
@@ -40,13 +48,13 @@ async function main() {
       await client.query(sql);
       console.log(`Applied: ${fileName}`);
     }
-    console.log('product_manuals migrations applied successfully.');
+    console.log('product_manuals schema migrations applied successfully.');
   } finally {
     await client.end();
   }
 }
 
 main().catch((err) => {
-  console.error('Failed to create product_manuals table:', err.message || err);
+  console.error('Failed to apply product_manuals schema migrations:', err.message || err);
   process.exit(1);
 });

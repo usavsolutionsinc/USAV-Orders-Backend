@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   framerPresence,
   framerTransition,
+  chipText,
   CardShell,
   ChevronToggle,
   DetailGrid,
@@ -12,9 +13,8 @@ import {
   CopyIconButton,
   ExternalLinkButton,
 } from '@/design-system';
-import { Play, Settings } from '@/components/Icons';
+import { ExternalLink, Play, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
-import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
@@ -67,6 +67,10 @@ export function MobileOrderCard({
     onMissingPartsReasonChange,
   });
 
+  const headerExternalHref = card.itemNumberValue
+    ? card.getExternalUrlByItemNumber(card.itemNumberValue)
+    : null;
+
   return (
     <>
       <CardShell
@@ -88,15 +92,26 @@ export function MobileOrderCard({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] font-extrabold font-mono text-gray-900 px-1.5 py-0.5 rounded border border-gray-300">
-              #{getOrderIdLast4(order.order_id)}
-            </span>
-            <PlatformExternalChip
-              orderId={order.order_id}
-              accountSource={order.account_source}
-              canOpen={!!card.getExternalUrlByItemNumber(order.item_number)}
-              onOpen={() => card.openExternalByItemNumber(order.item_number)}
-            />
+            {headerExternalHref ? (
+              <a
+                href={headerExternalHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="group inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-2 text-gray-900 transition-colors hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600"
+              >
+                <span className={`${chipText} leading-none translate-y-px`}>#{getOrderIdLast4(order.order_id)}</span>
+                <ExternalLink className="w-3.5 h-3.5 text-blue-500 transition-colors group-hover:text-blue-600" aria-hidden />
+              </a>
+            ) : (
+              <span
+                className="inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2 text-gray-400"
+                aria-disabled
+              >
+                <span className={`${chipText} leading-none translate-y-px`}>#{getOrderIdLast4(order.order_id)}</span>
+                <ExternalLink className="w-3.5 h-3.5 opacity-40" aria-hidden />
+              </span>
+            )}
             <ChevronToggle isExpanded={isExpanded} />
           </div>
         </div>

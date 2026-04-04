@@ -4,7 +4,7 @@
   "description": "USAV Solutions — Station Operations",
   "theme_color": "#0f1f3d",
   "background_color": "#ffffff",
-  "display": "standalone",
+  "display": "minimal-ui",
   "orientation": "portrait",
   "scope": "/",
   "start_url": "/stations",

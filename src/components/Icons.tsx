@@ -128,6 +128,12 @@ export const Settings = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+export const SlidersHorizontal = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 21v-7m0-4V3m0 11h6m-6 0H3m1-7h10M14 7V3m0 18v-4m0 0h7m-7 0h-2m12-7v11m0-15V3m0 7h-8m8 0h1" />
+    </svg>
+);
+
 export const Loader2 = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />

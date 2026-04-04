@@ -7,8 +7,7 @@ import { X, Package, Loader2 } from '@/components/Icons';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
-
-const FBA_FNSKU_STATION_SCANNED = 'fba-fnsku-station-scanned';
+import { FBA_FNSKU_STATION_SCANNED } from '@/lib/fba/events';
 const AUTO_DISMISS_MS = 12_000;
 
 interface ScannedDetail {

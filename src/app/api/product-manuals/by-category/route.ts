@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchProductsByEcwidCategory } from '@/lib/product-manuals';
+import { fetchProductsByEcwidCategory, normalizeIdentifier } from '@/lib/product-manuals';
 import pool from '@/lib/db';
 import { getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
@@ -12,6 +12,7 @@ interface ProductWithManual {
   item_number: string;
   product_title: string;
   category: string;
+  display_name: string;
   google_file_id: string;
 }
 
@@ -29,7 +30,7 @@ async function getCachedEcwidProducts(categoryId: string) {
   const rows = products
     .map((p) => ({
       id: String(p.id),
-      item_number: String(p.sku || p.id).trim(),
+      item_number: normalizeIdentifier(String(p.sku || p.id)),
       product_title: String(p.name || '').trim(),
       category: categoryId,
     }))
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
     const itemNumbers = ecwidRows.map((r) => r.item_number);
     const placeholders = itemNumbers.map((_, i) => `$${i + 1}`).join(', ');
     const dbResult = await pool.query(
-      `SELECT item_number, google_file_id AS google_file_id
+      `SELECT item_number, display_name, google_file_id AS google_file_id
        FROM product_manuals
        WHERE is_active = TRUE
          AND item_number IN (${placeholders})`,
@@ -80,15 +81,21 @@ export async function GET(request: NextRequest) {
     );
 
     // Build O(1) lookup
-    const manualMap = new Map<string, string>();
+    const manualMap = new Map<string, { displayName: string; googleFileId: string }>();
     for (const row of dbResult.rows) {
-      if (row.item_number) manualMap.set(String(row.item_number), String(row.google_file_id || ''));
+      if (row.item_number) {
+        manualMap.set(String(row.item_number), {
+          displayName: String(row.display_name || ''),
+          googleFileId: String(row.google_file_id || ''),
+        });
+      }
     }
 
     // Merge
     const products: ProductWithManual[] = ecwidRows.map((r) => ({
       ...r,
-      google_file_id: manualMap.get(r.item_number) || '',
+      display_name: manualMap.get(r.item_number)?.displayName || '',
+      google_file_id: manualMap.get(r.item_number)?.googleFileId || '',
     }));
 
     const payload = { success: true, products };

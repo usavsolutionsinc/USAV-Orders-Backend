@@ -2,59 +2,54 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeIdentifier } from '@/lib/product-manuals';
 
-function buildDriveUrls(googleFileId: string) {
+function buildDocUrls(googleFileId: string) {
   return {
-    previewUrl: `https://drive.google.com/file/d/${googleFileId}/preview`,
-    viewUrl: `https://drive.google.com/file/d/${googleFileId}/view`,
-    downloadUrl: `https://drive.google.com/uc?export=download&id=${googleFileId}`,
+    previewUrl: `https://docs.google.com/document/d/${googleFileId}/preview`,
+    viewUrl: `https://docs.google.com/document/d/${googleFileId}`,
+    downloadUrl: `https://docs.google.com/document/d/${googleFileId}/export?format=pdf`,
   };
 }
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const sku = String(searchParams.get('sku') || '');
     const itemNumber = String(searchParams.get('itemNumber') || '');
     const limitParam = Number(searchParams.get('limit') || 3);
     const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 10) : 3;
 
-    const normalizedSku = normalizeIdentifier(sku);
     const normalizedItemNumber = normalizeIdentifier(itemNumber);
 
-    if (!normalizedSku && !normalizedItemNumber) {
+    if (!normalizedItemNumber) {
       return NextResponse.json({ success: true, manuals: [] });
     }
 
     const result = await pool.query(
       `SELECT
          id,
-         sku,
          item_number,
          product_title,
+         display_name,
          google_file_id,
          type,
          is_active,
          updated_at
        FROM product_manuals
-       WHERE
-         ($1 <> '' AND regexp_replace(UPPER(TRIM(COALESCE(sku, ''))), '[^A-Z0-9]', '', 'g') = $1)
-         OR
-         ($2 <> '' AND regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $2)
+       WHERE regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $1
        ORDER BY is_active DESC, updated_at DESC
-       LIMIT $3`,
-      [normalizedSku, normalizedItemNumber, limit]
+       LIMIT $2`,
+      [normalizedItemNumber, limit]
     );
 
     const manuals = result.rows.map((row) => ({
       id: row.id as number,
-      sku: (row.sku as string) || null,
       itemNumber: (row.item_number as string) || null,
       productTitle: (row.product_title as string) || null,
+      displayName: (row.display_name as string) || null,
       googleFileId: row.google_file_id as string,
       type: (row.type as string) || null,
       isActive: !!row.is_active,
       updatedAt: row.updated_at as string,
-      ...buildDriveUrls(row.google_file_id as string),
+      ...buildDocUrls(row.google_file_id as string),
     }));
 
     return NextResponse.json({ success: true, manuals });

@@ -64,7 +64,7 @@ export function MobileToolbar({
       <div className="flex items-center gap-2 px-3 h-12">
         {/* Leading action — 44px touch target */}
         {leading && (
-          <div className="flex-shrink-0 h-11 w-11 flex items-center justify-center -ml-1">
+          <div className="-ml-1 flex h-11 min-w-[40px] shrink-0 items-stretch">
             {leading}
           </div>
         )}

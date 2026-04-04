@@ -1,21 +1,32 @@
 'use client';
 
+import { cn } from '@/utils/_cn';
+import {
+  weekHeaderInnerRowClass,
+  weekDayGroupBandClass,
+  weekDayGroupDateClass,
+  weekDayGroupCountClass,
+} from '@/components/ui/WeekHeader';
+
 interface DateGroupHeaderProps {
   date: string;
   total: number;
   formatDate: (date: string) => string;
+  /** Optional accent for the count (e.g. staff theme) — matches WeekHeader `countClassName` on mobile. */
+  countClassName?: string;
 }
 
-export function DateGroupHeader({ date, total, formatDate }: DateGroupHeaderProps) {
+/** Per-day band in shipped queues — same layout/typography as mobile tech/packer week-group rows. */
+export function DateGroupHeader({ date, total, formatDate, countClassName }: DateGroupHeaderProps) {
   return (
     <div
       data-day-header
       data-date={date}
       data-count={total}
-      className="bg-gray-50/80 border-y border-gray-300 px-2 py-1 flex items-center justify-between z-10"
+      className={cn(weekHeaderInnerRowClass, weekDayGroupBandClass)}
     >
-      <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-      <p className="text-[11px] font-black text-gray-700 uppercase">{total}</p>
+      <p className={weekDayGroupDateClass}>{formatDate(date)}</p>
+      <p className={cn(weekDayGroupCountClass, countClassName)}>{total}</p>
     </div>
   );
 }

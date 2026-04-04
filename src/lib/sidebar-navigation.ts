@@ -42,6 +42,15 @@ export interface SidebarNavItem {
   kind?: 'main' | 'station' | 'bottom';
 }
 
+const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
+  'operations',
+  'work-orders',
+  'manuals',
+  'support',
+  'previous-quarters',
+  'admin',
+]);
+
 export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'operations', label: 'Operations', href: '/operations', icon: Monitor, kind: 'main' },
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, kind: 'main' },
@@ -58,6 +67,15 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'previous-quarters', label: 'Quarters', href: '/previous-quarters', icon: Calendar, kind: 'bottom' },
   { id: 'admin', label: 'Admin', href: '/admin', icon: ShieldCheck, kind: 'bottom' },
 ];
+
+export function isSidebarRouteMobileRestricted(routeKey: SidebarRouteKey): boolean {
+  return MOBILE_RESTRICTED_SIDEBAR_IDS.has(routeKey);
+}
+
+export function getSidebarNavItems({ mobileRestricted = false }: { mobileRestricted?: boolean } = {}): SidebarNavItem[] {
+  if (!mobileRestricted) return APP_SIDEBAR_NAV;
+  return APP_SIDEBAR_NAV.filter((item) => !isSidebarRouteMobileRestricted(item.id as SidebarRouteKey));
+}
 
 export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (!pathname) return 'unknown';

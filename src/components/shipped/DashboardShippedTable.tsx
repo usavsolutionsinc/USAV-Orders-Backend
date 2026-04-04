@@ -56,6 +56,8 @@ import { isEmptyDisplayValue } from '@/utils/empty-display-value';
 export interface DashboardShippedTableProps {
   packedBy?: number;
   testedBy?: number;
+  /** Mobile tech/packer: one scroll column, no extra shell wrappers; WeekHeader matches other mobile week tables. */
+  embedded?: boolean;
   bannerTitle?: DashboardSearchSectionProps['bannerTitle'];
   bannerSubtitle?: DashboardSearchSectionProps['bannerSubtitle'];
   searchEmptyTitle?: DashboardSearchSectionProps['searchEmptyTitle'];
@@ -66,6 +68,7 @@ export interface DashboardShippedTableProps {
 export function DashboardShippedTable({
   packedBy,
   testedBy,
+  embedded = false,
   bannerTitle,
   bannerSubtitle,
   searchEmptyTitle = 'No shipped orders found',
@@ -462,8 +465,10 @@ export function DashboardShippedTable({
       }
     }
 
-    if (activeDate) setStickyDate(formatDate(activeDate));
-    if (activeCount) setCurrentCount(activeCount);
+    if (activeDate) {
+      setStickyDate(formatDate(activeDate));
+      setCurrentCount(activeCount);
+    }
   }, []);
 
   useEffect(() => {
@@ -499,10 +504,8 @@ export function DashboardShippedTable({
     );
   }
 
-  return (
-    <div className="flex-1 min-w-0 h-full overflow-hidden">
-      <div className="flex h-full min-w-0 flex-1 bg-white relative">
-      <div className="flex-1 flex flex-col overflow-hidden">
+  const shippedTableInner = (
+    <>
           {bannerTitle ? (
             <div className={mainStickyHeaderClass}>
               <div className={mainStickyHeaderRowClass}>
@@ -522,18 +525,22 @@ export function DashboardShippedTable({
               stickyDate={stickyDate}
               fallbackDate={fallbackDate}
               count={currentCount || totalCount}
-              countClassName="text-blue-700"
+              countClassName={
+                embedded && testedBy != null
+                  ? stationThemeColors[getStaffThemeById(testedBy)].text
+                  : 'text-blue-700'
+              }
               weekRange={weekRange}
               weekOffset={weekOffset}
               onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
               onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
               formatDate={formatDate}
               showWeekControls
-              highContrast
+              highContrast={!embedded}
             />
           )}
 
-          <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
+          <div ref={scrollRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full">
             {Object.keys(groupedRecords).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-40 text-center">
                 {search ? (
@@ -563,7 +570,16 @@ export function DashboardShippedTable({
 
                     return (
                       <div key={date} className="flex flex-col">
-                        <DateGroupHeader date={date} total={dayRecords.length} formatDate={formatDate} />
+                        <DateGroupHeader
+                          date={date}
+                          total={dayRecords.length}
+                          formatDate={formatDate}
+                          countClassName={
+                            testedBy != null
+                              ? stationThemeColors[getStaffThemeById(testedBy)].text
+                              : undefined
+                          }
+                        />
                         {sortedRecords.map((record, index) => {
                           const detail = toDetailRecord(record);
                           const displayValues = getOrderDisplayValues({
@@ -681,6 +697,22 @@ export function DashboardShippedTable({
               </div>
             )}
           </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
+        {shippedTableInner}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 min-w-0 h-full overflow-hidden">
+      <div className="flex h-full min-w-0 flex-1 bg-white relative">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {shippedTableInner}
         </div>
       </div>
     </div>

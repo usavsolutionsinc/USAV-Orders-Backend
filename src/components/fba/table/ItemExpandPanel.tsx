@@ -2,26 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import type { Dispatch } from 'react';
-import { fbaPaths } from '@/lib/fba/api-paths';
 import type { EnrichedItem, ItemStatus, TableAction } from './types';
 import { RemoveFromPlanButton } from './RemoveFromPlanButton';
 import { enrichFromApi } from './utils';
 import type { PrintQueueItem } from './types';
-
-async function patchItem(
-  planId: number,
-  itemId: number,
-  body: Record<string, unknown>
-): Promise<{ ok: boolean; item?: PrintQueueItem }> {
-  const res = await fetch(fbaPaths.planItem(planId, itemId), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!data.success) return { ok: false };
-  return { ok: true, item: data.item };
-}
+import { patchFbaItemWithResponse } from '@/lib/fba/patch';
 
 function buildNotesForStatus(status: ItemStatus, reason: 'qc_fail' | 'out_of_stock', note: string): string | null {
   if (status === 'pending_qc_fail' || reason === 'qc_fail') {
@@ -74,7 +59,7 @@ export function ItemExpandPanel({
   const savePatch = async (body: Record<string, unknown>, optimistic: Partial<EnrichedItem>) => {
     setSaving(true);
     dispatch({ type: 'PATCH_ITEM', id: item.item_id, patch: optimistic });
-    const response = await patchItem(item.plan_id, item.item_id, body);
+    const response = await patchFbaItemWithResponse<PrintQueueItem>(item.plan_id, item.item_id, body);
     setSaving(false);
     if (response.ok && response.item) applyServerItem(response.item as unknown as Record<string, unknown>);
   };

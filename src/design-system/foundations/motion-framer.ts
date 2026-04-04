@@ -284,6 +284,8 @@ export const framerPresence = {
 /** Tech / packer grid chips — shared `whileTap` target */
 export const framerGesture = {
   tapPress: { scale: 0.9 },
+  cardHover: { scale: 1.002, y: -2 },
+  rowHover: { x: 2 },
 } as const;
 
 /**

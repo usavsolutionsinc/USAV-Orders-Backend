@@ -10,6 +10,7 @@ import StationTesting from '@/components/station/StationTesting';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
+import { ChevronLeft } from '@/components/Icons';
 import { useActiveStaffDirectory } from './hooks';
 
 function computeCurrentWeekRange() {
@@ -69,7 +70,15 @@ const TECH_VIEW_OPTIONS = [
 
 type TechViewMode = 'history' | 'shipped' | 'pending' | 'manual' | 'update-manuals';
 
-export function TechSidebarPanel({ techId }: { techId: string }) {
+interface TechSidebarPanelProps {
+  techId: string;
+  /** Opens the main app page list in the sidebar (Main / Stations / More) — same as the desktop sidebar chevron, not a route to `/dashboard`. */
+  onBackToAppNav?: () => void;
+  /** Label next to the chevron (e.g. “Technicians”). */
+  contextNavTitle?: string;
+}
+
+export function TechSidebarPanel({ techId, onBackToAppNav, contextNavTitle = 'Technicians' }: TechSidebarPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -131,6 +140,9 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
     return (
       <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
         <div className={sidebarHeaderBandClass}>
+          {onBackToAppNav ? (
+            <div className="flex min-h-[44px] w-full border-b border-gray-200 bg-zinc-50 animate-pulse" />
+          ) : null}
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200">
             <div className="h-11 bg-zinc-50 animate-pulse" />
             <div className="h-11 bg-zinc-50 animate-pulse" />
@@ -154,6 +166,21 @@ export function TechSidebarPanel({ techId }: { techId: string }) {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-white">
       <div className={sidebarHeaderBandClass}>
+        {onBackToAppNav ? (
+          <button
+            type="button"
+            onClick={onBackToAppNav}
+            className="flex w-full min-h-[44px] items-center gap-2 border-b border-gray-200 py-1 pl-1.5 pr-3 text-left transition-colors hover:bg-gray-50"
+            aria-label="Back to app navigation"
+          >
+            <div className="flex h-9 w-7 items-center justify-start text-gray-500">
+              <ChevronLeft className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black tracking-tight text-gray-900">{contextNavTitle}</p>
+            </div>
+          </button>
+        ) : null}
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-400">
           <div className="min-w-0">
             <StaffSelector
