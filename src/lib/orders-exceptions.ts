@@ -221,12 +221,15 @@ export async function syncOrderExceptionsToOrders(): Promise<{
       [trackingKey18, order.id]
     );
 
-    const deletedResult = await pool.query(
-      `DELETE FROM orders_exceptions WHERE id = $1`,
+    // Mark as resolved instead of deleting — station_scan_sessions holds FK
+    // references to orders_exceptions rows, so deletion would violate the
+    // constraint. Keeping resolved rows preserves the audit trail.
+    const resolvedResult = await pool.query(
+      `UPDATE orders_exceptions SET status = 'resolved', updated_at = NOW() WHERE id = $1`,
       [row.id]
     );
 
-    deleted += deletedResult.rowCount || 0;
+    deleted += resolvedResult.rowCount || 0;
   }
 
   return {
