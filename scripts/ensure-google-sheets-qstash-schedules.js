@@ -29,9 +29,9 @@ async function main() {
   const destination = `${baseUrl}/api/qstash/google-sheets/transfer-orders`;
 
   const expectedSchedules = [
-    { scheduleId: 'google-sheets-transfer-orders-0830-pacific', cron: '30 16 * * *' },
-    { scheduleId: 'google-sheets-transfer-orders-1000-weekdays-pacific', cron: '0 18 * * *' },
-    { scheduleId: 'google-sheets-transfer-orders-1600-weekdays-pacific', cron: '0 22 * * *' },
+    { scheduleId: 'google-sheets-transfer-orders-0830-pacific', cron: 'CRON_TZ=America/Los_Angeles 30 8 * * 1-5' },
+    { scheduleId: 'google-sheets-transfer-orders-1000-weekdays-pacific', cron: 'CRON_TZ=America/Los_Angeles 0 11 * * 1-5' },
+    { scheduleId: 'google-sheets-transfer-orders-1600-weekdays-pacific', cron: 'CRON_TZ=America/Los_Angeles 0 15 * * 1-5' },
   ];
 
   const client = new Client({

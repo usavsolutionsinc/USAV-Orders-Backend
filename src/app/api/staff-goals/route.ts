@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { upsertStaffGoal } from '@/lib/neon/staff-goals-queries';
+import { upsertStaffGoalWithHistory } from '@/lib/neon/staff-goals-queries';
 
 export async function GET(req: NextRequest) {
   try {
@@ -113,7 +113,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'station must be TECH, PACK, UNBOX, SALES, or FBA' }, { status: 400 });
     }
 
-    await upsertStaffGoal(staffId, dailyGoal, station);
+    await upsertStaffGoalWithHistory(staffId, dailyGoal, station);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error updating staff goal:', error);

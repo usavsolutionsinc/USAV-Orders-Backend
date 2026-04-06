@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { resolveShipmentId } from '@/lib/shipping/resolve';
 
 /**
  * GET /api/sku/by-tracking?tracking=xxx
@@ -17,11 +18,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const resolved = await resolveShipmentId(tracking);
     const result = await pool.query<{
       id: number;
       static_sku: string | null;
       serial_number: string | null;
       shipping_tracking_number: string | null;
+      shipment_id: number | null;
       notes: string | null;
       location: string | null;
       created_at: string | null;
@@ -34,6 +37,7 @@ export async function GET(req: NextRequest) {
          s.static_sku,
          s.serial_number,
          s.shipping_tracking_number,
+         s.shipment_id,
          s.notes,
          s.location,
          s.created_at,
@@ -46,13 +50,23 @@ export async function GET(req: NextRequest) {
          ) AS photos
        FROM sku s
        LEFT JOIN sku_stock ss
-         ON ss.sku = split_part(s.static_sku, ':', 2)
+         ON regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
+            regexp_replace(UPPER(TRIM(split_part(COALESCE(s.static_sku, ''), ':', 1))), '^0+', '')
        LEFT JOIN photos p
          ON p.entity_type = 'SKU' AND p.entity_id = s.id
-       WHERE s.shipping_tracking_number = $1
+       WHERE ($1::bigint IS NOT NULL AND s.shipment_id = $1)
+          OR BTRIM(COALESCE(s.shipping_tracking_number, '')) = BTRIM($2)
        GROUP BY s.id, ss.product_title
+       ORDER BY
+         CASE
+           WHEN $1::bigint IS NOT NULL AND s.shipment_id = $1 THEN 0
+           WHEN BTRIM(COALESCE(s.shipping_tracking_number, '')) = BTRIM($2) THEN 1
+           ELSE 2
+         END,
+         s.updated_at DESC NULLS LAST,
+         s.id DESC
        LIMIT 1`,
-      [tracking],
+      [resolved.shipmentId ?? null, tracking],
     );
 
     if (result.rows.length === 0) {
@@ -67,6 +81,7 @@ export async function GET(req: NextRequest) {
         static_sku: row.static_sku,
         serial_number: row.serial_number,
         shipping_tracking_number: row.shipping_tracking_number,
+        shipment_id: row.shipment_id,
         notes: row.notes,
         location: row.location,
         created_at: row.created_at,

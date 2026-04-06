@@ -6,10 +6,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  AlertTriangle,
   Check,
   Database,
   Loader2,
   Plus,
+  ShieldCheck,
   X,
 } from '@/components/Icons';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
@@ -74,7 +76,18 @@ export function DashboardManagementPanel({
   const searchParams = useSearchParams();
   const [isTransferring, setIsTransferring] = useState(false);
   const [manualSheetName, setManualSheetName] = useState('');
-  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [status, setStatus] = useState<{
+    type: 'success' | 'error';
+    message: string;
+    details?: {
+      tabName?: string;
+      inserted?: number;
+      updated?: number;
+      processedRows?: number;
+      exceptionsResolved?: number;
+      durationMs?: number;
+    };
+  } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState<SearchHistory[]>([]);
   const [showAllSearchHistory, setShowAllSearchHistory] = useState(false);
@@ -245,17 +258,29 @@ export function DashboardManagementPanel({
       if (data.success) {
         const inserted = Number(data.insertedOrders || 0);
         const updated = Number(data.updatedOrdersFields || 0);
+        const exceptionsResolved = Number(data.exceptionsResolved || 0);
         const parts = [];
         if (inserted > 0) parts.push(`${inserted} inserted`);
         if (updated > 0) parts.push(`${updated} updated`);
-        const message = parts.length > 0 ? `Orders table synced: ${parts.join(', ')}` : 'Orders table already up to date';
+        const message = parts.length > 0 ? `Orders synced: ${parts.join(', ')}` : 'Orders already up to date';
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' }),
           queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'], refetchType: 'active' }),
           queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'], refetchType: 'active' }),
           queryClient.invalidateQueries({ queryKey: ['shipped-table'], refetchType: 'active' }),
         ]);
-        setStatus({ type: 'success', message });
+        setStatus({
+          type: 'success',
+          message,
+          details: {
+            tabName: data.tabName,
+            inserted,
+            updated,
+            processedRows: Number(data.processedRows || 0),
+            exceptionsResolved,
+            durationMs: Number(data.durationMs || 0),
+          },
+        });
       } else {
         setStatus({ type: 'error', message: data.error || 'Transfer failed' });
       }
@@ -409,20 +434,112 @@ export function DashboardManagementPanel({
               </div>
             </motion.div>
 
-            {status ? (
-              <motion.div
-                variants={itemVariants}
-                className={`p-4 rounded-2xl border ${
-                  status.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'
-                } flex items-start gap-3`}
-              >
-                {status.type === 'success' ? <Check className="w-4 h-4 mt-0.5 shrink-0" /> : <X className="w-4 h-4 mt-0.5 shrink-0" />}
-                <div className="space-y-1">
-                  <p className={sectionLabel}>{status.type === 'success' ? 'Success' : 'Error'}</p>
-                  <p className="text-[9px] font-medium leading-relaxed">{status.message}</p>
-                </div>
-              </motion.div>
-            ) : null}
+            <AnimatePresence mode="wait">
+              {status ? (
+                <motion.div
+                  key={status.type + status.message}
+                  initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                  transition={{ type: 'spring', damping: 26, stiffness: 340, mass: 0.5 }}
+                  className={`rounded-2xl border overflow-hidden ${
+                    status.type === 'success'
+                      ? 'bg-emerald-50/80 border-emerald-200/60'
+                      : 'bg-red-50/80 border-red-200/60'
+                  }`}
+                >
+                  {/* Header */}
+                  <div className={`flex items-center gap-2.5 px-4 py-3 ${
+                    status.type === 'success' ? 'text-emerald-700' : 'text-red-700'
+                  }`}>
+                    <motion.div
+                      initial={{ scale: 0, rotate: -90 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ type: 'spring', damping: 14, stiffness: 280, delay: 0.1 }}
+                    >
+                      {status.type === 'success' ? <Check className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                    </motion.div>
+                    <div className="min-w-0 flex-1">
+                      <p className={sectionLabel}>{status.type === 'success' ? 'Sync Complete' : 'Sync Failed'}</p>
+                      <p className="text-[9px] font-medium leading-relaxed opacity-80">{status.message}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStatus(null)}
+                      className="shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors"
+                      aria-label="Dismiss"
+                    >
+                      <X className="w-3 h-3 opacity-50" />
+                    </button>
+                  </div>
+
+                  {/* Details breakdown */}
+                  {status.type === 'success' && status.details ? (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      transition={{ type: 'spring', damping: 24, stiffness: 300, delay: 0.15 }}
+                      className="border-t border-emerald-200/40"
+                    >
+                      <div className="px-4 py-3 space-y-2.5">
+                        {/* Sheet tab badge */}
+                        {status.details.tabName ? (
+                          <motion.div
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.2 }}
+                            className="flex items-center gap-2"
+                          >
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-100/80 text-emerald-700">
+                              <Database className="w-2.5 h-2.5" />
+                              <span className={`${microBadge} text-emerald-700`}>{status.details.tabName}</span>
+                            </span>
+                            {status.details.durationMs ? (
+                              <span className={`${microBadge} text-emerald-500`}>{(status.details.durationMs / 1000).toFixed(1)}s</span>
+                            ) : null}
+                          </motion.div>
+                        ) : null}
+
+                        {/* Stats row */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { label: 'Processed', value: status.details.processedRows ?? 0 },
+                            { label: 'Inserted', value: status.details.inserted ?? 0 },
+                            { label: 'Updated', value: status.details.updated ?? 0 },
+                          ].map((stat, i) => (
+                            <motion.div
+                              key={stat.label}
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.25 + i * 0.05 }}
+                              className="text-center rounded-xl bg-white/60 border border-emerald-100/60 py-1.5"
+                            >
+                              <p className="text-[13px] font-black text-emerald-700 tabular-nums">{stat.value}</p>
+                              <p className={`${microBadge} text-emerald-500`}>{stat.label}</p>
+                            </motion.div>
+                          ))}
+                        </div>
+
+                        {/* Exceptions resolved */}
+                        {(status.details.exceptionsResolved ?? 0) > 0 ? (
+                          <motion.div
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.4 }}
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50/80 border border-blue-100/60"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <p className={`${fieldLabel} text-blue-700`}>
+                              <span className="font-black">{status.details.exceptionsResolved}</span> exception{status.details.exceptionsResolved === 1 ? '' : 's'} auto-resolved
+                            </p>
+                          </motion.div>
+                        ) : null}
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </div>
 
           <motion.footer variants={itemVariants} className="mt-auto pt-4 border-t border-gray-100 opacity-30 text-center">

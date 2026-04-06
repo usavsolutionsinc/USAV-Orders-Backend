@@ -4,6 +4,7 @@ import {
   GoogleSheetsTransferOrdersJobError,
   runGoogleSheetsTransferOrders,
 } from '@/lib/jobs/google-sheets-transfer-orders';
+import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -20,13 +21,30 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await runGoogleSheetsTransferOrders(body.manualSheetName);
+
+    // Immediately resolve any open exceptions that now match newly imported orders
+    let exceptionsResolved = 0;
+    try {
+      const syncResult = await syncOrderExceptionsToOrders();
+      exceptionsResolved = syncResult.matched;
+      if (syncResult.matched > 0) {
+        console.log('[qstash/google-sheets/transfer-orders] Resolved exceptions', {
+          scanned: syncResult.scanned,
+          matched: syncResult.matched,
+        });
+      }
+    } catch (err: any) {
+      console.error('[qstash/google-sheets/transfer-orders] Exception sync failed (non-fatal):', err?.message);
+    }
+
     console.log('[qstash/google-sheets/transfer-orders] Completed', {
       processedRows: result.processedRows,
       insertedOrders: result.insertedOrders,
       tabName: result.tabName,
       durationMs: result.durationMs,
+      exceptionsResolved,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, exceptionsResolved });
   } catch (error: any) {
     console.error('[qstash/google-sheets/transfer-orders] Job failed:', error?.message, error?.stack);
     if (error instanceof GoogleSheetsTransferOrdersJobError) {

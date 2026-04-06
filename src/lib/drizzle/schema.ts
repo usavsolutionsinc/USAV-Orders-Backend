@@ -821,6 +821,7 @@ export const sku = pgTable('sku', {
   staticSku: text('static_sku'),
   serialNumber: text('serial_number'),
   shippingTrackingNumber: text('shipping_tracking_number'),
+  shipmentId: bigint('shipment_id', { mode: 'number' }),
   notes: text('notes'),
   location: text('location'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -982,6 +983,8 @@ export const techSerialNumbers = pgTable('tech_serial_numbers', {
   stationSource: text('station_source').notNull().default('TECH'),
   /** FK to shipping_tracking_numbers for carrier-tracking rows */
   shipmentId: bigint('shipment_id', { mode: 'number' }),
+  /** SKU bucket row that supplied this serial, when the serial was pulled from storage via a colon SKU scan. */
+  sourceSkuId: integer('source_sku_id').references(() => sku.id, { onDelete: 'set null' }),
   /** FK to orders_exceptions for unmatched carrier scans */
   ordersExceptionId: integer('orders_exception_id').references(() => ordersExceptions.id, { onDelete: 'set null' }),
   /** FK to receiving_lines for unboxing/receiving serial capture. */

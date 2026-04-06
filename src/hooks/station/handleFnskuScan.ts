@@ -40,6 +40,7 @@ export async function handleFnskuScan(
       notes: data.order.notes ?? '',
       tracking: data.order.tracking ?? fnsku,
       serialNumbers: data.order.serialNumbers || [],
+      scannedSkuCodes: Array.isArray(data.order.scannedSkuCodes) ? data.order.scannedSkuCodes : [],
       testDateTime: data.order.testDateTime,
       testedBy: data.order.testedBy,
       quantity: parseInt(String(data.order.quantity || 1), 10) || 1,

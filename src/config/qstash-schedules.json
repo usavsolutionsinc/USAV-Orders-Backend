@@ -1,0 +1,105 @@
+[
+  {
+    "scheduleId": "shipping-sync-due-every-2h",
+    "cron": "0 */2 * * *",
+    "path": "/api/qstash/shipping/sync-due",
+    "body": {},
+    "retries": 3,
+    "timeout": 120,
+    "label": "shipping-sync-due"
+  },
+  {
+    "scheduleId": "ebay-refresh-tokens-hourly",
+    "cron": "0 * * * *",
+    "path": "/api/qstash/ebay/refresh-tokens",
+    "body": {},
+    "retries": 3,
+    "timeout": 60,
+    "label": "ebay-refresh-tokens"
+  },
+  {
+    "scheduleId": "google-sheets-transfer-orders-0830-pacific",
+    "cron": "CRON_TZ=America/Los_Angeles 30 8 * * 1-5",
+    "path": "/api/qstash/google-sheets/transfer-orders",
+    "body": {},
+    "retries": 3,
+    "timeout": 300,
+    "label": "google-sheets-transfer-orders"
+  },
+  {
+    "scheduleId": "google-sheets-transfer-orders-1000-weekdays-pacific",
+    "cron": "CRON_TZ=America/Los_Angeles 0 11 * * 1-5",
+    "path": "/api/qstash/google-sheets/transfer-orders",
+    "body": {},
+    "retries": 3,
+    "timeout": 300,
+    "label": "google-sheets-transfer-orders"
+  },
+  {
+    "scheduleId": "google-sheets-transfer-orders-1600-weekdays-pacific",
+    "cron": "CRON_TZ=America/Los_Angeles 0 15 * * 1-5",
+    "path": "/api/qstash/google-sheets/transfer-orders",
+    "body": {},
+    "retries": 3,
+    "timeout": 300,
+    "label": "google-sheets-transfer-orders"
+  },
+  {
+    "scheduleId": "ebay-sync-exceptions-quarter-hour",
+    "cron": "10,25,40,55 * * * *",
+    "path": "/api/qstash/ebay/sync",
+    "body": {
+      "reconcileExceptions": true
+    },
+    "retries": 3,
+    "timeout": 300,
+    "label": "ebay-sync"
+  },
+  {
+    "scheduleId": "zoho-items-incremental-every-5m",
+    "cron": "*/5 * * * *",
+    "path": "/api/qstash/zoho/items/sync",
+    "body": {
+      "type": "incremental"
+    },
+    "retries": 3,
+    "timeout": 300,
+    "label": "zoho-items-sync"
+  },
+  {
+    "scheduleId": "zoho-purchase-orders-half-hour",
+    "cron": "20,50 * * * *",
+    "path": "/api/zoho/purchase-orders/sync",
+    "body": {
+      "days_back": 2,
+      "per_page": 200,
+      "max_pages": 20,
+      "max_items": 2000
+    },
+    "retries": 3,
+    "timeout": 300,
+    "label": "zoho-purchase-orders-sync"
+  },
+  {
+    "scheduleId": "zoho-purchase-receives-half-hour",
+    "cron": "25,55 * * * *",
+    "path": "/api/zoho/purchase-receives/sync",
+    "body": {
+      "per_page": 100,
+      "max_pages": 10,
+      "max_items": 1000
+    },
+    "retries": 3,
+    "timeout": 300,
+    "label": "zoho-purchase-receives-sync"
+  },
+  {
+    "scheduleId": "staff-goal-history-nightly-pacific",
+    "cron": "CRON_TZ=America/Los_Angeles 30 17 * * *",
+    "path": "/api/qstash/staff-goals/history",
+    "body": {},
+    "retries": 3,
+    "timeout": 120,
+    "label": "staff-goal-history-snapshot"
+  }
+]

@@ -5,6 +5,7 @@ import {
     GoogleSheetsTransferOrdersJobError,
     runGoogleSheetsTransferOrders,
 } from '@/lib/jobs/google-sheets-transfer-orders';
+import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
 import { logRouteMetric } from '@/lib/route-metrics';
 
 export const dynamic = 'force-dynamic';
@@ -33,8 +34,18 @@ export async function POST(req: NextRequest) {
     }
     try {
         const result = await runGoogleSheetsTransferOrders(manualSheetName);
+
+        // Immediately resolve any open exceptions that now match newly imported orders
+        let exceptionsResolved = 0;
+        try {
+            const syncResult = await syncOrderExceptionsToOrders();
+            exceptionsResolved = syncResult.matched;
+        } catch (err: any) {
+            console.error('[google-sheets/transfer-orders] Exception sync failed (non-fatal):', err?.message);
+        }
+
         ok = true;
-        return NextResponse.json(result);
+        return NextResponse.json({ ...result, exceptionsResolved });
     } catch (error: any) {
         if (error instanceof GoogleSheetsTransferOrdersJobError) {
             return NextResponse.json(error.body, { status: error.status });

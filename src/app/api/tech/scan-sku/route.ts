@@ -7,7 +7,11 @@ import { TECH_EMPLOYEE_IDS } from '@/utils/staff';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishTechLogChanged } from '@/lib/realtime/publish';
 import { parseSerialCsvField } from '@/lib/tech/serialFields';
-import { insertTechSerialForTracking } from '@/lib/tech/insertTechSerialForTracking';
+import {
+  getTechSerialsBySalId,
+  insertTechSerialForSalContext,
+  resolveTechSerialSalContext,
+} from '@/lib/tech/insertTechSerialForSalContext';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 
 const ROUTE = 'tech.scan-sku';
@@ -142,19 +146,21 @@ export async function POST(req: NextRequest) {
     // pairingTracking is null when no tracking was provided — sku update is skipped below.
     const pairingTracking = trackingStr ? (isFnskuTracking ? normalizedTracking : trackingStr) : null;
 
-    // Resolve shipment_id from SAL so we can write the FK back to the sku row.
-    // salId is the pinned station_activity_log row id passed by the client.
-    let resolvedShipmentId: number | null = null;
-    if (salId) {
-      const salRow = await client.query(
-        `SELECT shipment_id FROM station_activity_logs WHERE id = $1 LIMIT 1`,
-        [Number(salId)],
-      );
-      resolvedShipmentId = salRow.rows[0]?.shipment_id ?? null;
+    const salIdNum = Number(salId);
+    if (!Number.isFinite(salIdNum) || salIdNum <= 0) {
+      return NextResponse.json({
+        success: false,
+        error: 'salId is required for SKU scan context',
+      }, { status: 400 });
     }
+    const salCtxResult = await resolveTechSerialSalContext(client, salIdNum);
+    if (!salCtxResult.ok) {
+      return NextResponse.json({ success: false, error: salCtxResult.error }, { status: salCtxResult.status });
+    }
+    const salCtx = salCtxResult.ctx;
+    const resolvedShipmentId = salCtx.shipmentId;
 
     const insertedSerials: string[] = [];
-    let canonicalSerialList: string[] = [];
     let productTitle = '';
 
     await client.query('BEGIN');
@@ -162,17 +168,20 @@ export async function POST(req: NextRequest) {
     try {
       if (serialsFromSku.length > 0) {
         for (const rawSerial of serialsFromSku) {
-          const ins = await insertTechSerialForTracking(
-            client,
-            { serial: rawSerial, techId },
-            { skipInvalidateAndPublish: true },
-          );
+          const ins = await insertTechSerialForSalContext(client, {
+            salContext: salCtx,
+            staffId,
+            serial: rawSerial,
+            source: 'tech.scan-sku',
+            sourceMethod: 'SKU_PULL',
+            sourceSkuId: skuRecord.id,
+            sourceSkuCode: skuRecord.static_sku ?? fullSkuCode,
+          });
           if (!ins.ok) {
             await client.query('ROLLBACK');
             return NextResponse.json({ success: false, error: ins.error }, { status: ins.status });
           }
-          insertedSerials.push(rawSerial.toUpperCase());
-          canonicalSerialList = ins.serialNumbers;
+          insertedSerials.push(ins.serial);
         }
       }
 
@@ -214,6 +223,8 @@ export async function POST(req: NextRequest) {
       await client.query('ROLLBACK');
       throw e;
     }
+
+    const canonicalSerialList = await getTechSerialsBySalId(client, salIdNum);
 
     await invalidateCacheTags(['tech-logs', 'orders-next']);
     await publishTechLogChanged({

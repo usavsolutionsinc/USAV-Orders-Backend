@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
-import { upsertQStashSchedule } from '@/lib/qstash';
+import qstashSchedules from '@/config/qstash-schedules.json';
+import { getQStashClient, upsertQStashSchedule } from '@/lib/qstash';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,125 +9,7 @@ function isAuthorized(req: NextRequest): boolean {
   return isAllowedAdminOrigin(req);
 }
 
-const HEAVY_JOB_SCHEDULES = [
-  {
-    scheduleId: 'shipping-sync-due-every-2h',
-    cron: '0 */2 * * *',
-    path: '/api/qstash/shipping/sync-due',
-    body: {},
-    retries: 3,
-    timeout: 120,
-    label: 'shipping-sync-due',
-  },
-  {
-    scheduleId: 'ebay-refresh-tokens-hourly',
-    cron: '0 * * * *',
-    path: '/api/qstash/ebay/refresh-tokens',
-    body: {},
-    retries: 3,
-    timeout: 60,
-    label: 'ebay-refresh-tokens',
-  },
-  {
-    scheduleId: 'google-sheets-transfer-orders-0830-pacific',
-    cron: '30 16 * * *',
-    path: '/api/qstash/google-sheets/transfer-orders',
-    body: {},
-    retries: 3,
-    timeout: 300,
-    label: 'google-sheets-transfer-orders',
-  },
-  {
-    scheduleId: 'google-sheets-transfer-orders-1000-weekdays-pacific',
-    cron: '0 18 * * *',
-    path: '/api/qstash/google-sheets/transfer-orders',
-    body: {},
-    retries: 3,
-    timeout: 300,
-    label: 'google-sheets-transfer-orders',
-  },
-  {
-    scheduleId: 'google-sheets-transfer-orders-1600-weekdays-pacific',
-    cron: '0 22 * * *',
-    path: '/api/qstash/google-sheets/transfer-orders',
-    body: {},
-    retries: 3,
-    timeout: 300,
-    label: 'google-sheets-transfer-orders',
-  },
-  {
-    scheduleId: 'ebay-sync-exceptions-quarter-hour',
-    cron: '10,25,40,55 * * * *',
-    path: '/api/qstash/ebay/sync',
-    body: { reconcileExceptions: true },
-    retries: 3,
-    timeout: 300,
-    label: 'ebay-sync',
-  },
-  {
-    scheduleId: 'zoho-items-incremental-every-5m',
-    cron: '*/5 * * * *',
-    path: '/api/qstash/zoho/items/sync',
-    body: { type: 'incremental' },
-    retries: 3,
-    timeout: 300,
-    label: 'zoho-items-sync',
-  },
-  {
-    scheduleId: 'zoho-items-full-nightly-pacific',
-    cron: '0 9 * * *',
-    path: '/api/qstash/zoho/items/sync',
-    body: { type: 'full' },
-    retries: 3,
-    timeout: 300,
-    label: 'zoho-items-full-sync',
-  },
-  {
-    scheduleId: 'zoho-purchase-orders-half-hour',
-    cron: '20,50 * * * *',
-    path: '/api/zoho/purchase-orders/sync',
-    body: { days_back: 2, per_page: 200, max_pages: 20, max_items: 2000 },
-    retries: 3,
-    timeout: 300,
-    label: 'zoho-purchase-orders-sync',
-  },
-  {
-    scheduleId: 'zoho-purchase-receives-half-hour',
-    cron: '25,55 * * * *',
-    path: '/api/zoho/purchase-receives/sync',
-    body: { per_page: 100, max_pages: 10, max_items: 1000 },
-    retries: 3,
-    timeout: 300,
-    label: 'zoho-purchase-receives-sync',
-  },
-  {
-    scheduleId: 'orders-exceptions-sync-half-hour',
-    cron: '35,5 * * * *',
-    path: '/api/orders-exceptions/sync',
-    body: {},
-    retries: 3,
-    timeout: 120,
-    label: 'orders-exceptions-sync',
-  },
-  {
-    scheduleId: 'replenishment-sync-every-30m',
-    cron: '*/30 * * * *',
-    path: '/api/qstash/replenishment/sync',
-    body: {},
-    retries: 3,
-    timeout: 120,
-    label: 'replenishment-sync',
-  },
-  {
-    scheduleId: 'idempotency-cleanup-daily-3am-utc',
-    cron: '0 3 * * *',
-    path: '/api/qstash/cleanup/idempotency',
-    body: {},
-    retries: 3,
-    timeout: 30,
-    label: 'idempotency-cleanup',
-  },
-] as Array<{
+const HEAVY_JOB_SCHEDULES = qstashSchedules as Array<{
   scheduleId: string;
   cron: string;
   path: string;
@@ -143,6 +26,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const client = getQStashClient();
+    const existingSchedules = await client.schedules.list();
+    const expectedIds = new Set(HEAVY_JOB_SCHEDULES.map((schedule) => schedule.scheduleId));
+    const obsoleteSchedules = existingSchedules.filter(
+      (schedule) => !expectedIds.has(String(schedule.scheduleId)),
+    );
+
+    if (obsoleteSchedules.length > 0) {
+      await Promise.all(
+        obsoleteSchedules.map((schedule) => client.schedules.delete(String(schedule.scheduleId))),
+      );
+    }
+
     const results = await Promise.all(
       HEAVY_JOB_SCHEDULES.map(async ({ headers, ...schedule }) => {
         const result = await upsertQStashSchedule({ ...schedule, headers });
@@ -153,6 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       schedules: results,
+      deletedScheduleIds: obsoleteSchedules.map((schedule) => String(schedule.scheduleId)),
       count: results.length,
     });
   } catch (error: any) {

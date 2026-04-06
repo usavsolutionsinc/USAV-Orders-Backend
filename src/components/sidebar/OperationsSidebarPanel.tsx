@@ -24,6 +24,25 @@ function resolveOperationsView(raw: string | null): OperationsView {
   return raw === 'orders' ? 'orders' : 'work-queue';
 }
 
+function getStaffGoalStatus(percent: number, current: number, goal: number) {
+  if (percent <= 0 || current <= 0) {
+    return { label: 'Not Started', className: 'text-slate-400' };
+  }
+  if (current > goal || percent > 100) {
+    return { label: 'Above Goal', className: 'text-cyan-700' };
+  }
+  if (current === goal || percent === 100) {
+    return { label: 'Hit Goal', className: 'text-emerald-700' };
+  }
+  if (percent >= 75) {
+    return { label: 'On the Way', className: 'text-blue-700' };
+  }
+  if (percent >= 40) {
+    return { label: 'Making Progress', className: 'text-sky-700' };
+  }
+  return { label: 'Getting Started', className: 'text-indigo-600' };
+}
+
 function StaffGoalEntry({ s }: { s: DashboardData['staffProgress'][0] }) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
@@ -32,6 +51,7 @@ function StaffGoalEntry({ s }: { s: DashboardData['staffProgress'][0] }) {
 
   const theme = getStaffThemeById(s.staffId);
   const colors = stationThemeColors[theme];
+  const statusDisplay = getStaffGoalStatus(s.percent, s.current, s.goal);
 
   const mutation = useMutation({
     mutationFn: async (newGoal: number) => {
@@ -87,8 +107,8 @@ function StaffGoalEntry({ s }: { s: DashboardData['staffProgress'][0] }) {
           </div>
           <span className="text-[11px] font-bold text-slate-900">{s.name}</span>
         </div>
-        <span className={`text-[9px] font-black uppercase tracking-widest ${s.status === 'on_track' ? 'text-emerald-600' : s.status === 'at_risk' ? 'text-amber-600' : 'text-rose-600'}`}>
-          {s.status.replace('_', ' ')}
+        <span className={`text-[9px] font-black uppercase tracking-widest ${statusDisplay.className}`}>
+          {statusDisplay.label}
         </span>
       </div>
       <div className="flex items-center gap-3">
@@ -167,9 +187,8 @@ export function OperationsSidebarPanel() {
       }> = await res.json();
       return rows.map((r) => {
         const percent = r.daily_goal > 0 ? Math.round((r.today_count / r.daily_goal) * 100) : 0;
-        let status: 'on_track' | 'at_risk' | 'behind' = 'behind';
+        let status: 'on_track' | 'behind' = 'behind';
         if (percent >= 85) status = 'on_track';
-        else if (percent >= 60) status = 'at_risk';
         return {
           staffId: r.staff_id,
           name: r.name,

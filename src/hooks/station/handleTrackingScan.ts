@@ -56,6 +56,7 @@ export async function handleTrackingScan(
       notes: data.order.notes,
       tracking: data.order.tracking,
       serialNumbers: data.order.serialNumbers || [],
+      scannedSkuCodes: Array.isArray(data.order.scannedSkuCodes) ? data.order.scannedSkuCodes : [],
       testDateTime: data.order.testDateTime,
       testedBy: data.order.testedBy,
       quantity: parseInt(String(data.order.quantity || 1), 10) || 1,

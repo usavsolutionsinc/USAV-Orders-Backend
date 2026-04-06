@@ -94,6 +94,28 @@ async function getSerialsBySalId(db: typeof pool, salId: number): Promise<string
   return mergeSerialsFromTsnRows(r.rows);
 }
 
+async function getScannedSkuCodes(
+  db: typeof pool,
+  params: { shipmentId?: number | null; trackingValue?: string | null },
+): Promise<string[]> {
+  const shipmentId = params.shipmentId ?? null;
+  const trackingValue = String(params.trackingValue || '').trim();
+  if (!shipmentId && !trackingValue) return [];
+
+  const r = await db.query(
+    `SELECT DISTINCT BTRIM(static_sku) AS static_sku
+     FROM sku
+     WHERE (shipment_id = $1)
+        OR ($2::text <> '' AND BTRIM(COALESCE(shipping_tracking_number, '')) = BTRIM($2))
+     ORDER BY BTRIM(static_sku) ASC`,
+    [shipmentId, trackingValue],
+  );
+
+  return r.rows
+    .map((row) => String(row.static_sku || '').trim())
+    .filter(Boolean);
+}
+
 /** Find existing FNSKU in catalog. */
 async function findFnsku(db: typeof pool, fnsku: string) {
   const r = await db.query(
@@ -268,6 +290,7 @@ export async function POST(req: NextRequest) {
 
         // Get existing serials for this session
         const serials = salId ? await getSerialsBySalId(client as any, salId) : [];
+        const scannedSkuCodes = await getScannedSkuCodes(client as any, { trackingValue: fnsku });
         const summary = await fnskuStageCounts(client as any, fnsku);
 
         await client.query('COMMIT');
@@ -314,6 +337,7 @@ export async function POST(req: NextRequest) {
             condition: 'FBA Scan',
             tracking: fnsku,
             serialNumbers: serials,
+            scannedSkuCodes,
             testDateTime,
             testedBy,
             accountSource: 'fba',
@@ -409,6 +433,10 @@ export async function POST(req: NextRequest) {
 
       // Get existing serials for this shipment (via any SAL row for same shipment)
       const existingSerials = salId ? await getSerialsBySalId(client as any, salId) : [];
+      const scannedSkuCodes = await getScannedSkuCodes(client as any, {
+        shipmentId: matchedShipmentId,
+        trackingValue,
+      });
 
       await client.query('COMMIT');
       await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
@@ -438,6 +466,7 @@ export async function POST(req: NextRequest) {
         order: buildOrderPayload(order, {
           tracking: trackingValue,
           serialNumbers: existingSerials,
+          scannedSkuCodes,
           testDateTime,
           testedBy,
         }),

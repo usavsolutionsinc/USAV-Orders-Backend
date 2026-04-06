@@ -1,42 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import { publishActivityLogged, publishTechLogChanged } from '@/lib/realtime/publish';
-import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
+import { publishTechLogChanged } from '@/lib/realtime/publish';
+import {
+  getTechSerialsBySalId,
+  insertTechSerialForSalContext,
+  normalizeTechSerial,
+  resolveTechSerialSalContext,
+} from '@/lib/tech/insertTechSerialForSalContext';
 
 type Action = 'add' | 'remove' | 'update' | 'undo';
-
-function normalizeSerial(s: unknown): string {
-  return String(s || '').trim().toUpperCase();
-}
-
-/** Get the anchor SAL row for this session. */
-async function getSalRow(db: typeof pool, salId: number) {
-  const r = await db.query(
-    `SELECT id, staff_id, shipment_id, scan_ref, fnsku, orders_exception_id,
-            fba_shipment_id, fba_shipment_item_id
-     FROM station_activity_logs WHERE id = $1`,
-    [salId],
-  );
-  return r.rows[0] ?? null;
-}
-
-/** Get all serials for a SAL anchor. */
-async function getSerials(db: typeof pool, salId: number): Promise<string[]> {
-  const r = await db.query(
-    `SELECT serial_number FROM tech_serial_numbers
-     WHERE context_station_activity_log_id = $1 ORDER BY id`,
-    [salId],
-  );
-  return mergeSerialsFromTsnRows(r.rows);
-}
-
-/** Detect serial type from value and context. */
-function detectSerialType(serial: string, fnsku: string | null): string {
-  if (/^X0|^B0/i.test(serial)) return 'FNSKU';
-  if (fnsku) return 'FNSKU';
-  return 'SERIAL';
-}
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -64,143 +37,142 @@ export async function POST(req: NextRequest) {
     }
     const staffId = staffResult.rows[0].id;
 
-    // Validate SAL row exists
-    const sal = await getSalRow(pool, salId);
-    if (!sal) {
-      return NextResponse.json({ success: false, error: 'Scan session not found' }, { status: 404 });
-    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const fnsku = sal.fnsku || null;
-    const isFba = Boolean(fnsku);
-
-    if (action === 'add') {
-      const serial = normalizeSerial(body.serial);
-      if (!serial) return NextResponse.json({ success: false, error: 'serial is required' }, { status: 400 });
-
-      const serialType = detectSerialType(serial, fnsku);
-
-      // Check duplicate (unless FBA which allows duplicates)
-      if (!isFba) {
-        const dup = await pool.query(
-          `SELECT 1 FROM tech_serial_numbers
-           WHERE context_station_activity_log_id = $1 AND UPPER(TRIM(serial_number)) = $2 LIMIT 1`,
-          [salId, serial],
+      const salCtxResult = await resolveTechSerialSalContext(client, salId);
+      if (!salCtxResult.ok) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { success: false, error: salCtxResult.error },
+          { status: salCtxResult.status },
         );
-        if (dup.rows.length > 0) {
-          return NextResponse.json({ success: false, error: `Serial ${serial} already scanned for this order` }, { status: 400 });
+      }
+      const salCtx = salCtxResult.ctx;
+
+      if (action === 'add') {
+        const serial = normalizeTechSerial(body.serial);
+        const ins = await insertTechSerialForSalContext(client, {
+          salContext: salCtx,
+          staffId,
+          serial,
+          source: 'tech.serial',
+          sourceMethod: 'SCAN',
+        });
+        if (!ins.ok) {
+          await client.query('ROLLBACK');
+          return NextResponse.json({ success: false, error: ins.error }, { status: ins.status });
         }
+
+        const serialNumbers = await getTechSerialsBySalId(client, salId);
+        await client.query('COMMIT');
+
+        await invalidateCacheTags(['tech-logs', 'orders-next']);
+        await publishTechLogChanged({ techId: staffId, action: 'insert', source: 'tech.serial' });
+
+        return NextResponse.json({ success: true, serialNumbers, tsnId: ins.techSerialId });
       }
 
-      // Insert TSN row — only serial + link to SAL
-      const insertResult = await pool.query(
-        `INSERT INTO tech_serial_numbers
-         (serial_number, serial_type, tested_by, context_station_activity_log_id)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id`,
-        [serial, serialType, staffId, salId],
-      );
-      const tsnId = insertResult.rows[0]?.id ? Number(insertResult.rows[0].id) : null;
-
-      await invalidateCacheTags(['tech-logs', 'orders-next']);
-      await publishTechLogChanged({ techId: staffId, action: 'insert', source: 'tech.serial' });
-      // Publish to live feed without creating a SAL row — TSN is the permanent record
-      if (tsnId) publishActivityLogged({ id: tsnId, station: 'TECH', activityType: 'SERIAL_ADDED', staffId, scanRef: serial, fnsku, source: 'tech.serial' }).catch(() => {});
-
-      const serialNumbers = await getSerials(pool, salId);
-      return NextResponse.json({ success: true, serialNumbers, tsnId });
-    }
-
-    if (action === 'remove') {
-      const tsnId = Number(body.tsnId);
-      if (!Number.isFinite(tsnId) || tsnId <= 0) {
-        return NextResponse.json({ success: false, error: 'tsnId is required for remove' }, { status: 400 });
-      }
-
-      // Delete SAL rows referencing this TSN
-      await pool.query(
-        `DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`,
-        [tsnId],
-      );
-      // Delete the TSN row
-      await pool.query(`DELETE FROM tech_serial_numbers WHERE id = $1 AND context_station_activity_log_id = $2`, [tsnId, salId]);
-
-      await invalidateCacheTags(['tech-logs', 'orders-next']);
-      await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
-
-      const serialNumbers = await getSerials(pool, salId);
-      return NextResponse.json({ success: true, serialNumbers });
-    }
-
-    if (action === 'update') {
-      // Full sync: caller sends desired final set of serials
-      const desiredRaw: unknown[] = Array.isArray(body.serials) ? body.serials : [];
-      const normalized = desiredRaw.map(normalizeSerial).filter(Boolean);
-      const desired: string[] = Array.from(new Set(normalized));
-
-      const existing = await pool.query(
-        `SELECT id, UPPER(TRIM(serial_number)) AS serial FROM tech_serial_numbers
-         WHERE context_station_activity_log_id = $1 ORDER BY id`,
-        [salId],
-      );
-      const existingMap = new Map<string, number>();
-      for (const row of existing.rows) existingMap.set(row.serial, row.id);
-
-      const desiredSet = new Set(desired);
-
-      // Delete removed
-      for (const [serial, id] of existingMap) {
-        if (!desiredSet.has(serial)) {
-          await pool.query(`DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`, [id]);
-          await pool.query(`DELETE FROM tech_serial_numbers WHERE id = $1`, [id]);
+      if (action === 'remove') {
+        const tsnId = Number(body.tsnId);
+        if (!Number.isFinite(tsnId) || tsnId <= 0) {
+          await client.query('ROLLBACK');
+          return NextResponse.json({ success: false, error: 'tsnId is required for remove' }, { status: 400 });
         }
+
+        await client.query(
+          `DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`,
+          [tsnId],
+        );
+        await client.query(`DELETE FROM tech_serial_numbers WHERE id = $1 AND context_station_activity_log_id = $2`, [tsnId, salId]);
+
+        const serialNumbers = await getTechSerialsBySalId(client, salId);
+        await client.query('COMMIT');
+
+        await invalidateCacheTags(['tech-logs', 'orders-next']);
+        await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
+
+        return NextResponse.json({ success: true, serialNumbers });
       }
 
-      // Insert new
-      for (const serial of desired) {
-        if (!existingMap.has(serial)) {
-          const serialType = detectSerialType(serial, fnsku);
-          const ins = await pool.query(
-            `INSERT INTO tech_serial_numbers
-             (serial_number, serial_type, tested_by, context_station_activity_log_id)
-             VALUES ($1, $2, $3, $4) RETURNING id`,
-            [serial, serialType, staffId, salId],
-          );
-          const tsnId = ins.rows[0]?.id ? Number(ins.rows[0].id) : null;
-          if (tsnId) {
-            publishActivityLogged({ id: tsnId, station: 'TECH', activityType: 'SERIAL_ADDED', staffId, scanRef: serial, fnsku, source: 'tech.serial.update' }).catch(() => {});
+      if (action === 'update') {
+        const desiredRaw: unknown[] = Array.isArray(body.serials) ? body.serials : [];
+        const desired = Array.from(new Set(desiredRaw.map(normalizeTechSerial).filter(Boolean)));
+
+        const existing = await client.query(
+          `SELECT id, UPPER(TRIM(serial_number)) AS serial FROM tech_serial_numbers
+           WHERE context_station_activity_log_id = $1 ORDER BY id`,
+          [salId],
+        );
+        const existingMap = new Map<string, number>();
+        for (const row of existing.rows) existingMap.set(row.serial, row.id);
+
+        const desiredSet = new Set(desired);
+
+        for (const [serial, id] of existingMap) {
+          if (!desiredSet.has(serial)) {
+            await client.query(`DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`, [id]);
+            await client.query(`DELETE FROM tech_serial_numbers WHERE id = $1`, [id]);
           }
         }
+
+        for (const serial of desired) {
+          if (existingMap.has(serial)) continue;
+          const ins = await insertTechSerialForSalContext(client, {
+            salContext: salCtx,
+            staffId,
+            serial,
+            source: 'tech.serial.update',
+            sourceMethod: 'SCAN',
+          });
+          if (!ins.ok) {
+            await client.query('ROLLBACK');
+            return NextResponse.json({ success: false, error: ins.error }, { status: ins.status });
+          }
+        }
+
+        const serialNumbers = await getTechSerialsBySalId(client, salId);
+        await client.query('COMMIT');
+
+        await invalidateCacheTags(['tech-logs', 'orders-next']);
+        await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
+
+        return NextResponse.json({ success: true, serialNumbers });
       }
 
-      await invalidateCacheTags(['tech-logs', 'orders-next']);
-      await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
+      if (action === 'undo') {
+        const last = await client.query(
+          `SELECT id, serial_number FROM tech_serial_numbers
+           WHERE context_station_activity_log_id = $1 ORDER BY id DESC LIMIT 1`,
+          [salId],
+        );
+        if (last.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return NextResponse.json({ success: false, error: 'No serials to undo' }, { status: 400 });
+        }
+        const lastRow = last.rows[0];
+        await client.query(`DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`, [lastRow.id]);
+        await client.query(`DELETE FROM tech_serial_numbers WHERE id = $1`, [lastRow.id]);
 
-      const serialNumbers = await getSerials(pool, salId);
-      return NextResponse.json({ success: true, serialNumbers });
-    }
+        const serialNumbers = await getTechSerialsBySalId(client, salId);
+        await client.query('COMMIT');
 
-    if (action === 'undo') {
-      // Remove the last TSN row
-      const last = await pool.query(
-        `SELECT id, serial_number FROM tech_serial_numbers
-         WHERE context_station_activity_log_id = $1 ORDER BY id DESC LIMIT 1`,
-        [salId],
-      );
-      if (last.rows.length === 0) {
-        return NextResponse.json({ success: false, error: 'No serials to undo' }, { status: 400 });
+        await invalidateCacheTags(['tech-logs', 'orders-next']);
+        await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
+
+        return NextResponse.json({ success: true, serialNumbers, removedSerial: lastRow.serial_number });
       }
-      const lastRow = last.rows[0];
-      await pool.query(`DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`, [lastRow.id]);
-      await pool.query(`DELETE FROM tech_serial_numbers WHERE id = $1`, [lastRow.id]);
 
-      await invalidateCacheTags(['tech-logs', 'orders-next']);
-      await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
-
-      const serialNumbers = await getSerials(pool, salId);
-      return NextResponse.json({ success: true, serialNumbers, removedSerial: lastRow.serial_number });
+      await client.query('ROLLBACK');
+      return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
+    } catch (error: any) {
+      await client.query('ROLLBACK');
+      console.error('Error in tech serial:', error);
+      return NextResponse.json({ success: false, error: 'Failed', details: error.message }, { status: 500 });
+    } finally {
+      client.release();
     }
-
-    return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
   } catch (error: any) {
     console.error('Error in tech serial:', error);
     return NextResponse.json({ success: false, error: 'Failed', details: error.message }, { status: 500 });

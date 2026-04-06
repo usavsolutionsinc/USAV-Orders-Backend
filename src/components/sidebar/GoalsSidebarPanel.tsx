@@ -8,9 +8,9 @@ import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typo
 
 const GOAL_VIEW_OPTIONS = [
   { value: 'all', label: 'All Staff' },
-  { value: 'behind', label: 'Behind Goal' },
-  { value: 'on-track', label: 'On Track' },
-  { value: 'exceeded', label: 'Goal Met' },
+  { value: 'behind', label: 'Below 70%' },
+  { value: 'on-track', label: '70% - 99%' },
+  { value: 'exceeded', label: '100%+' },
 ] as const;
 
 type GoalViewMode = (typeof GOAL_VIEW_OPTIONS)[number]['value'];

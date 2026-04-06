@@ -24,26 +24,50 @@ function getProgress(row: GoalRow, overrideValue?: string) {
 }
 
 function getPerformanceTone(progress: number) {
-  if (progress >= 1) {
+  if (progress <= 0) {
     return {
-      label: 'Exceeded',
+      label: 'Not Started',
+      textClass: 'text-slate-400',
+      barClass: 'bg-slate-300',
+    };
+  }
+
+  if (progress > 1) {
+    return {
+      label: 'Above Goal',
+      textClass: 'text-cyan-700',
+      barClass: 'bg-cyan-600',
+    };
+  }
+
+  if (progress === 1) {
+    return {
+      label: 'Hit Goal',
       textClass: 'text-emerald-700',
       barClass: 'bg-emerald-600',
     };
   }
 
-  if (progress >= 0.7) {
+  if (progress >= 0.75) {
     return {
-      label: 'On Track',
+      label: 'On the Way',
       textClass: 'text-blue-700',
       barClass: 'bg-blue-600',
     };
   }
 
+  if (progress >= 0.4) {
+    return {
+      label: 'Making Progress',
+      textClass: 'text-sky-700',
+      barClass: 'bg-sky-600',
+    };
+  }
+
   return {
-    label: 'Behind',
-    textClass: 'text-amber-700',
-    barClass: 'bg-amber-600',
+    label: 'Getting Started',
+    textClass: 'text-indigo-600',
+    barClass: 'bg-indigo-500',
   };
 }
 
@@ -127,16 +151,16 @@ export function GoalsAnalyticsTab() {
       total: filteredRows.length,
       today: 0,
       week: 0,
-      behind: 0,
-      exceeded: 0,
+      belowSeventy: 0,
+      reachedGoal: 0,
     };
 
     for (const row of filteredRows) {
       const { progress } = getProgress(row, goalInputs[rowKey(row)]);
       totals.today += row.today_count;
       totals.week += row.week_count;
-      if (progress >= 1) totals.exceeded += 1;
-      else if (progress < 0.7) totals.behind += 1;
+      if (progress >= 1) totals.reachedGoal += 1;
+      else if (progress < 0.7) totals.belowSeventy += 1;
     }
 
     return totals;
@@ -198,7 +222,7 @@ export function GoalsAnalyticsTab() {
             <span>{summary.today} done today</span>
             <span>{summary.week} this week</span>
             <span>
-              {summary.exceeded} met goal / {summary.behind} behind
+              {summary.reachedGoal} at or above goal / {summary.belowSeventy} below 70%
             </span>
           </div>
         </div>
