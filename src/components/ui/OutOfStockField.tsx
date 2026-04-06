@@ -108,10 +108,11 @@ export function OutOfStockField({
           <button
             type="button"
             onClick={onEdit}
-            className="flex h-5 w-5 items-center justify-center text-gray-500 transition-colors hover:text-red-600"
+            className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-colors hover:border-red-300 hover:bg-red-100"
             aria-label="Edit need-to-order note"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil className="h-3 w-3" />
+            Edit Note
           </button>
         ) : null}
       </div>

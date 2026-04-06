@@ -352,11 +352,13 @@ function FbaWorkspaceSidebarInner() {
     if (activeTab === 'shipped') return;
     setPlansError(null);
     try {
-      const res = await fetch(fbaPaths.plans() + '?status=PLANNED&limit=50', { cache: 'no-store' });
+      const res = await fetch(fbaPaths.activeWithDetails(), { cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to load plans');
-      if (!Array.isArray(data?.shipments)) return;
-      const sorted = [...data.shipments].sort((a: any, b: any) => {
+      // The consolidated endpoint returns { active, shipped } — extract PLANNED from active
+      const allActive: any[] = Array.isArray(data?.active) ? data.active : [];
+      const planned = allActive.filter((s: any) => s.status === 'PLANNED');
+      const sorted = [...planned].sort((a: any, b: any) => {
         if (!a.due_date && !b.due_date) return 0;
         if (!a.due_date) return 1;
         if (!b.due_date) return -1;
@@ -374,7 +376,13 @@ function FbaWorkspaceSidebarInner() {
           created_by_name: s.created_by_name || null,
           created_at: s.created_at,
           amazon_shipment_id: s.amazon_shipment_id ?? null,
-          tracking_numbers: Array.isArray(s.tracking_numbers) ? s.tracking_numbers : [],
+          tracking_numbers: Array.isArray(s.tracking) ? s.tracking.map((t: any) => ({
+            link_id: t.link_id,
+            tracking_id: t.tracking_id,
+            tracking_number: t.tracking_number_raw,
+            carrier: t.carrier,
+            label: t.label,
+          })) : [],
         }))
       );
     } catch (err: any) {

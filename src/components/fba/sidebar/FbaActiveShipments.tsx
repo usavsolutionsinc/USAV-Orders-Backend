@@ -278,66 +278,52 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
       return next;
     });
 
-  const enrichShipment = useCallback(async (s: any, includeShipped: boolean): Promise<ActiveShipment> => {
-    let allItems: ShipmentCardItem[] = [];
+  /** Transform a raw API row into an ActiveShipment with bundles. */
+  const parseShipment = useCallback((s: any, includeShipped: boolean): ActiveShipment => {
+    const rawItems: any[] = Array.isArray(s.items) ? s.items : [];
+    const rawTracking: any[] = Array.isArray(s.tracking) ? s.tracking : [];
+
+    const itemById = new Map<number, ShipmentCardItem>();
+    for (const i of rawItems) {
+      if (!includeShipped && i.status === 'SHIPPED') continue;
+      itemById.set(Number(i.id), {
+        item_id: Number(i.id),
+        fnsku: i.fnsku,
+        display_title: i.display_title || i.product_title || i.fnsku,
+        expected_qty: Number(i.expected_qty) || 0,
+        actual_qty: Number(i.actual_qty) || 0,
+        status: i.status,
+        shipment_id: s.id,
+      });
+    }
+
     const bundles: TrackingBundle[] = [];
+    for (const row of rawTracking) {
+      const linkId = Number(row.link_id) || 0;
+      const trackingNumber = String(row.tracking_number_raw || '').trim();
+      const carrier = String(row.carrier || '').trim();
+      if (!linkId || !trackingNumber) continue;
 
-    try {
-      const [trackingRes, itemsRes] = await Promise.all([
-        fetch(fbaPaths.planTracking(s.id), { cache: 'no-store' }),
-        fetch(fbaPaths.planItems(s.id), { cache: 'no-store' }),
-      ]);
-      const trackingData = await trackingRes.json().catch(() => ({}));
-      const itemsData = await itemsRes.json().catch(() => ({}));
-
-      const itemById = new Map<number, ShipmentCardItem>();
-      if (itemsData.success && Array.isArray(itemsData.items)) {
-        for (const i of itemsData.items) {
-          if (!includeShipped && i.status === 'SHIPPED') continue;
-          itemById.set(Number(i.id), {
-            item_id: Number(i.id),
-            fnsku: i.fnsku,
-            display_title: i.display_title || i.product_title || i.fnsku,
-            expected_qty: Number(i.expected_qty) || 0,
-            actual_qty: Number(i.actual_qty) || 0,
-            status: i.status,
-            shipment_id: s.id,
-          });
-        }
+      const allocations = Array.isArray(row.allocations) ? row.allocations : [];
+      const bundleItems: ShipmentCardItem[] = [];
+      for (const alloc of allocations) {
+        const itemId = Number(alloc.shipment_item_id);
+        const item = itemById.get(itemId);
+        if (!item) continue;
+        bundleItems.push({
+          ...item,
+          expected_qty: Math.max(1, Number(alloc.qty) || 1),
+          tracking_number: trackingNumber,
+          tracking_carrier: carrier,
+        });
       }
 
-      if (trackingRes.ok && Array.isArray(trackingData?.tracking)) {
-        for (const row of trackingData.tracking as TrackingRow[]) {
-          const linkId = Number(row.link_id) || 0;
-          const trackingNumber = String(row.tracking_number_raw || '').trim();
-          const carrier = String(row.carrier || '').trim();
-          if (!linkId || !trackingNumber) continue;
-
-          const allocations = Array.isArray(row.allocations) ? row.allocations : [];
-          const bundleItems: ShipmentCardItem[] = [];
-          for (const alloc of allocations) {
-            const itemId = Number(alloc.shipment_item_id);
-            const item = itemById.get(itemId);
-            if (!item) continue;
-            bundleItems.push({
-              ...item,
-              expected_qty: Math.max(1, Number(alloc.qty) || 1),
-              tracking_number: trackingNumber,
-              tracking_carrier: carrier,
-            });
-          }
-
-          if (bundleItems.length > 0) {
-            bundles.push({ link_id: linkId, tracking_number: trackingNumber, carrier, items: bundleItems });
-          }
-        }
+      if (bundleItems.length > 0) {
+        bundles.push({ link_id: linkId, tracking_number: trackingNumber, carrier, items: bundleItems });
       }
-
-      allItems = Array.from(itemById.values());
-    } catch { /* silent */ }
+    }
 
     const primary = bundles[0] ?? null;
-
     return {
       id: s.id,
       shipment_ref: s.shipment_ref,
@@ -349,39 +335,35 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
       tracking_link_id: primary?.link_id ?? null,
       tracking_number_raw: primary?.tracking_number ?? null,
       tracking_carrier: primary?.carrier ?? null,
-      items: allItems,
+      items: Array.from(itemById.values()),
     };
   }, []);
 
   const fetchShipments = useCallback(async () => {
     try {
-      const [activeRes, shippedRes] = await Promise.all([
-        fetch(fbaPaths.plans() + '?status=PLANNED,READY_TO_GO,LABEL_ASSIGNED&limit=50', { cache: 'no-store' }),
-        fetch(fbaPaths.plans() + '?status=SHIPPED&limit=10', { cache: 'no-store' }),
-      ]);
-      const activeData = await activeRes.json().catch(() => ({}));
-      const shippedData = await shippedRes.json().catch(() => ({}));
+      const res = await fetch(fbaPaths.activeWithDetails(), { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed');
 
-      if (activeRes.ok && Array.isArray(activeData.shipments)) {
-        const withTracking = activeData.shipments.filter(
-          (s: any) => Array.isArray(s.tracking_numbers) && s.tracking_numbers.length > 0,
-        );
-        const enriched = await Promise.all(withTracking.map((s: any) => enrichShipment(s, false)));
-        const next = enriched.filter((s) => s.items.length > 0);
-        setShipments(next);
-      }
+      const activeRaw: any[] = Array.isArray(data.active) ? data.active : [];
+      const shippedRaw: any[] = Array.isArray(data.shipped) ? data.shipped : [];
 
-      if (shippedRes.ok && Array.isArray(shippedData.shipments)) {
-        const withTracking = shippedData.shipments.filter(
-          (s: any) => Array.isArray(s.tracking_numbers) && s.tracking_numbers.length > 0,
-        );
-        const enriched = await Promise.all(withTracking.map((s: any) => enrichShipment(s, true)));
-        setRecentShipped(enriched.filter((s) => s.items.length > 0));
-      }
+      // Only show shipments that have tracking bundles with items
+      const activeWithTracking = activeRaw
+        .filter((s) => Array.isArray(s.tracking) && s.tracking.length > 0)
+        .map((s) => parseShipment(s, false))
+        .filter((s) => s.items.length > 0);
+      setShipments(activeWithTracking);
+
+      const shippedWithTracking = shippedRaw
+        .filter((s) => Array.isArray(s.tracking) && s.tracking.length > 0)
+        .map((s) => parseShipment(s, true))
+        .filter((s) => s.items.length > 0);
+      setRecentShipped(shippedWithTracking);
     } catch { /* silent */ } finally {
       setLoading(false);
     }
-  }, [enrichShipment]);
+  }, [parseShipment]);
 
   useEffect(() => { void fetchShipments(); }, [fetchShipments]);
 

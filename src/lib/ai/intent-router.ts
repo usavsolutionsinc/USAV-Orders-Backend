@@ -1,3 +1,5 @@
+import { normalizeTrackingCanonical } from '@/lib/tracking-format';
+
 export type IntentDomain =
   | 'orders'
   | 'shipped'
@@ -145,9 +147,6 @@ function uniquePush(values: IntentDomain[], value: IntentDomain) {
   if (!values.includes(value)) values.push(value);
 }
 
-function normalizeTrackingNumber(raw: string): string {
-  return raw.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-}
 
 export function detectIntents(message: string): IntentDomain[] {
   const text = message.trim();
@@ -187,7 +186,7 @@ export function extractParams(message: string, intents: IntentDomain[]): IntentP
     text.match(/\b(9[0-9A-Z]{15,30})\b/i) ||
     text.match(/\b([A-Z]{2}[0-9]{9}[A-Z]{2})\b/i);
   if (trackingMatch?.[1]) {
-    params.trackingNumber = normalizeTrackingNumber(trackingMatch[1]);
+    params.trackingNumber = normalizeTrackingCanonical(trackingMatch[1]);
   }
 
   const skuMatch =

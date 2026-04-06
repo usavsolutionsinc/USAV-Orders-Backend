@@ -228,24 +228,9 @@ export async function PATCH(
       if (fixRes.rows[0]) result.rows[0] = fixRes.rows[0];
     }
 
-    // Re-roll shipment item count cache
+    // Touch updated_at so real-time listeners pick up the change
     await client.query(
-      `UPDATE fba_shipments fs
-       SET ready_item_count   = counts.ready_item_count,
-           packed_item_count  = counts.packed_item_count,
-           shipped_item_count = counts.shipped_item_count,
-           updated_at         = NOW()
-       FROM (
-         SELECT
-           shipment_id,
-           COUNT(*) FILTER (WHERE status IN ('READY_TO_GO', 'LABEL_ASSIGNED', 'SHIPPED'))::int AS ready_item_count,
-           COUNT(*) FILTER (WHERE status IN ('LABEL_ASSIGNED', 'SHIPPED'))::int                AS packed_item_count,
-           COUNT(*) FILTER (WHERE status = 'SHIPPED')::int                                    AS shipped_item_count
-         FROM fba_shipment_items
-         WHERE shipment_id = $1
-         GROUP BY shipment_id
-       ) counts
-       WHERE fs.id = counts.shipment_id`,
+      `UPDATE fba_shipments SET updated_at = NOW() WHERE id = $1`,
       [shipmentId]
     );
 

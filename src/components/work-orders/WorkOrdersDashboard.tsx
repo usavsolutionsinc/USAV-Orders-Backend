@@ -2,16 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
+import { getDaysLateNullable, getDaysLateTone } from '@/utils/date';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { dataValue } from '@/design-system/tokens/typography/presets';
 import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { useTodayStaffAvailability } from '@/hooks/useTodayStaffAvailability';
+import { ShippedDetailsPanel } from '@/components/shipped/ShippedDetailsPanel';
 import { WorkOrderDetailsPanel } from '@/components/shipped/details-panel/WorkOrderDetailsPanel';
 import { WorkOrderInfoChips } from './WorkOrderInfoStrip';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { getStaffTextColor } from '@/design-system/components/StaffBadge';
 import { saveWorkOrder } from '@/lib/work-orders/saveWorkOrder';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from './WorkOrderAssignmentCard';
 import { SkuStockAssignPanel } from './SkuStockAssignPanel';
@@ -27,6 +31,7 @@ import {
   EMPTY_COUNTS,
   normalizeQueue,
 } from './types';
+import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchPendingOrderRowRefetch } from '@/utils/events';
 
 export type { WorkOrderRow };
@@ -51,9 +56,26 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
   const entityTypeParam = searchParams.get('entityType');
   const entityIdParam = Number(searchParams.get('entityId'));
 
+  const queryClient = useQueryClient();
+  const { data: workOrdersData, isLoading: loading } = useQuery<{ rows: WorkOrderRow[]; counts: QueueCounts }>({
+    queryKey: ['work-orders', queue, query],
+    queryFn: async ({ signal }) => {
+      const res = await fetch(`/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`, { signal });
+      if (!res.ok) throw new Error('Failed to fetch');
+      return res.json();
+    },
+  });
+
+  // Local state for optimistic updates — synced from query data
   const [rows, setRows] = useState<WorkOrderRow[]>([]);
   const [counts, setCounts] = useState<QueueCounts>(EMPTY_COUNTS);
-  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (workOrdersData) {
+      setRows(Array.isArray(workOrdersData.rows) ? workOrdersData.rows : []);
+      setCounts({ ...EMPTY_COUNTS, ...(workOrdersData.counts || {}) });
+    }
+  }, [workOrdersData]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
@@ -69,35 +91,6 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
     techniciansInactive,
     packersInactive,
   } = useTodayStaffAvailability();
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let isCurrent = true;
-    setLoading(true);
-    fetch(`/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`, {
-      signal: controller.signal,
-    })
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
-      .then((json) => {
-        if (!isCurrent) return;
-        setRows(Array.isArray(json?.rows) ? json.rows : []);
-        setCounts({ ...EMPTY_COUNTS, ...(json?.counts || {}) });
-      })
-      .catch((err) => {
-        if (!isCurrent) return;
-        if (err.name !== 'AbortError') {
-          setRows([]);
-          setCounts(EMPTY_COUNTS);
-        }
-      })
-      .finally(() => {
-        if (isCurrent) setLoading(false);
-      });
-    return () => {
-      isCurrent = false;
-      controller.abort();
-    };
-  }, [queue, query]);
 
   useEffect(() => {
     if (!rows.length) {
@@ -176,12 +169,7 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
   };
 
   const refreshRows = useCallback(async (opts?: { pendingOrderId?: number }) => {
-    const res = await fetch(
-      `/api/work-orders?queue=${queue}&q=${encodeURIComponent(query)}`,
-    );
-    const json = await res.json();
-    setRows(Array.isArray(json?.rows) ? json.rows : []);
-    setCounts({ ...EMPTY_COUNTS, ...(json?.counts || {}) });
+    await queryClient.invalidateQueries({ queryKey: ['work-orders', queue, query] });
     window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     const pid = opts?.pendingOrderId;
     if (pid != null && Number.isFinite(pid) && pid > 0) {
@@ -189,7 +177,7 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
     } else {
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     }
-  }, [queue, query]);
+  }, [queryClient, queue, query]);
 
   const clearEntitySelectionParams = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
@@ -425,15 +413,24 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
       {/* Details panel */}
       <AnimatePresence>
         {isPanelOpen && selectedRow && (
-          <WorkOrderDetailsPanel
-            row={selectedRow}
-            onClose={handleClosePanel}
-            onSaved={handleSaved}
-            queue={queue}
-            query={query}
-            disableMoveUp={selectedIndex <= 0}
-            disableMoveDown={selectedIndex < 0 || selectedIndex >= rows.length - 1}
-          />
+          selectedRow.entityType === 'ORDER' ? (
+            <ShippedDetailsPanel
+              shipped={buildWorkOrderDashboardRecord(selectedRow)}
+              context="queue"
+              onClose={handleClosePanel}
+              onUpdate={handleSaved}
+            />
+          ) : (
+            <WorkOrderDetailsPanel
+              row={selectedRow}
+              onClose={handleClosePanel}
+              onSaved={handleSaved}
+              queue={queue}
+              query={query}
+              disableMoveUp={selectedIndex <= 0}
+              disableMoveDown={selectedIndex < 0 || selectedIndex >= rows.length - 1}
+            />
+          )
         )}
       </AnimatePresence>
 
@@ -459,25 +456,55 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
   );
 }
 
+function buildWorkOrderDashboardRecord(row: WorkOrderRow): ShippedOrder & { out_of_stock: string | null } {
+  return {
+    id: row.entityId,
+    deadline_at: row.deadlineAt,
+    ship_by_date: row.deadlineAt,
+    order_id: row.orderId || row.recordLabel,
+    product_title: row.title,
+    quantity: row.quantity || null,
+    item_number: row.itemNumber || null,
+    condition: row.condition || 'USED',
+    shipment_id: row.shipmentId ?? null,
+    shipping_tracking_number: row.trackingNumber || null,
+    tracking_numbers: Array.isArray((row as any).trackingNumbers)
+      ? (row as any).trackingNumbers
+      : (row.trackingNumber ? [row.trackingNumber] : []),
+    tracking_number_rows: Array.isArray(row.trackingNumberRows)
+      ? row.trackingNumberRows.map((trackingRow) => ({
+          shipment_id: trackingRow.shipment_id,
+          tracking: trackingRow.tracking_number_raw,
+          is_primary: trackingRow.is_primary,
+        }))
+      : [],
+    serial_number: '',
+    sku: row.sku || '',
+    tester_id: row.techId ?? null,
+    tested_by: row.techId ?? null,
+    test_date_time: null,
+    packer_id: row.packerId ?? null,
+    packed_by: row.packerId ?? null,
+    packed_at: null,
+    packer_photos_url: [],
+    tracking_type: null,
+    account_source: row.accountSource || null,
+    notes: row.notes || '',
+    status_history: [],
+    created_at: row.createdAt || null,
+    tester_name: row.techName || null,
+    packed_by_name: row.packerName || null,
+    tested_by_name: row.techName || null,
+    is_shipped: false,
+    out_of_stock: row.outOfStock || null,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Row — matches PendingOrdersTable (OrdersQueueTableRow) layout
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getDaysLate(deadlineAt: string | null): number | null {
-  if (!deadlineAt) return null;
-  const deadline = new Date(deadlineAt);
-  if (isNaN(deadline.getTime())) return null;
-  const now = new Date();
-  const diffMs = now.getTime() - deadline.getTime();
-  return diffMs > 0 ? Math.floor(diffMs / 86400000) : 0;
-}
 
-function getDaysLateTone(days: number | null) {
-  if (days === null) return 'text-gray-500';
-  if (days > 1) return 'text-red-600';
-  if (days === 1) return 'text-yellow-600';
-  return 'text-emerald-600';
-}
 
 interface WorkOrderTableRowProps {
   row: WorkOrderRow;
@@ -501,8 +528,9 @@ function WorkOrderTableRow({
   const techDisplay = techName || '---';
   const packerDisplay = row.entityType === 'SKU_STOCK' ? null : (packerName || '---');
 
-  const daysLate = getDaysLate(row.deadlineAt);
-  const hasOutOfStock = Boolean(row.outOfStock);
+  const daysLate = getDaysLateNullable(row.deadlineAt);
+  const outOfStockValue = String(row.outOfStock || '').trim();
+  const hasOutOfStock = outOfStockValue !== '';
 
   // Dot color matches PendingOrdersTable: green = tested, red = out of stock, yellow = pending
   const dotColor = row.hasTechScan
@@ -548,12 +576,15 @@ function WorkOrderTableRow({
           <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1">
             {row.quantity && <><span className={parseInt(String(row.quantity), 10) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{row.quantity}</span>{' \u2022 '}</>}
             {row.condition && <><span className={row.condition.toLowerCase() === 'new' ? 'text-yellow-600' : undefined}>{row.condition}</span>{' \u2022 '}</>}
-            <span className={techName ? stationThemeColors[getStaffThemeById(row.techId)].text : undefined}>{techDisplay}</span>
+            <span className={techName ? getStaffTextColor(row.techId) : undefined}>{techDisplay}</span>
             {packerDisplay !== null && (
-              <>{' \u2022 '}<span className={packerName ? stationThemeColors[getStaffThemeById(row.packerId)].text : undefined}>{packerDisplay}</span></>
+              <>{' \u2022 '}<span className={packerName ? getStaffTextColor(row.packerId) : undefined}>{packerDisplay}</span></>
             )}
             {daysLate !== null && (
               <>{' \u2022 '}<span className={getDaysLateTone(daysLate)}>{daysLate}</span></>
+            )}
+            {hasOutOfStock && (
+              <>{' \u2022 '}<span className="text-red-600">{outOfStockValue}</span></>
             )}
             {row.priority < 100 && (
               <>{' \u2022 '}<span className="text-rose-600">P{row.priority}</span></>

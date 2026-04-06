@@ -1,5 +1,6 @@
 import type { ScanHandlerContext } from './types';
 import { FBA_FNSKU_STATION_SCANNED } from '@/lib/fba/events';
+import { normalizeTrackingCanonical } from '@/lib/tracking-format';
 
 interface FnskuCallbacks {
   onFnskuOrderLoaded?: (() => void) | null;
@@ -12,7 +13,7 @@ export async function handleFnskuScan(
 ): Promise<void> {
   ctx.setIsLoading(true);
   try {
-    const fnsku = fnskuInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const fnsku = normalizeTrackingCanonical(fnskuInput);
     const res = await fetch('/api/tech/scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -16,27 +16,17 @@ export function normalizeAllocations(raw: unknown): AllocationPayload[] {
   return Array.from(byItem.entries()).map(([shipmentItemId, quantity]) => ({ shipmentItemId, quantity }));
 }
 
+/**
+ * No-op — denormalized counters (ready_item_count, packed_item_count, shipped_item_count)
+ * have been removed from fba_shipments. Counts are now computed inline via
+ * COUNT(*) FILTER (...) in read queries. This function is retained for call-site
+ * compatibility and can be deleted once all callers are cleaned up.
+ */
 export async function refreshShipmentAggregateCounts(
-  client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> },
-  shipmentId: number,
+  _client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> },
+  _shipmentId: number,
 ) {
-  await client.query(
-    `UPDATE fba_shipments fs
-     SET ready_item_count = counts.ready,
-         packed_item_count = counts.packed,
-         shipped_item_count = counts.shipped,
-         updated_at = NOW()
-     FROM (
-       SELECT shipment_id,
-         COUNT(*) FILTER (WHERE status IN ('READY_TO_GO','LABEL_ASSIGNED','SHIPPED'))::int AS ready,
-         COUNT(*) FILTER (WHERE status IN ('LABEL_ASSIGNED','SHIPPED'))::int AS packed,
-         COUNT(*) FILTER (WHERE status = 'SHIPPED')::int AS shipped
-       FROM fba_shipment_items WHERE shipment_id = $1
-       GROUP BY shipment_id
-     ) counts
-     WHERE fs.id = counts.shipment_id`,
-    [shipmentId],
-  );
+  // Intentional no-op — counters removed in 2026-04-06 migration
 }
 
 export async function replaceTrackingAllocations(

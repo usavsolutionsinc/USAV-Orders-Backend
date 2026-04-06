@@ -11,6 +11,7 @@ import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
 import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged } from '@/lib/realtime/publish';
+import { ensureReplenishmentForOrder } from '@/lib/replenishment';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -569,6 +570,13 @@ export async function POST(req: NextRequest) {
                     source: 'packing-logs',
                 }),
             ]);
+
+            // Fire-and-forget: detect replenishment need for shipped order
+            ensureReplenishmentForOrder({
+                orderId: order.id,
+                reason: 'shipped',
+                changedBy: 'packer-station',
+            }).catch(() => {});
 
             return NextResponse.json({
                 success: true,

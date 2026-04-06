@@ -1,11 +1,14 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, X } from '@/components/Icons';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Check, Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, X } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
-import { formatDateTimePST, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { formatDateTimePST, getCurrentPSTDateKey, toPSTDateKey, getDaysLateNumber } from '@/utils/date';
+import { normalizeTrackingKey } from '@/lib/tracking-format';
 import { useExternalItemUrl } from '@/hooks/useExternalItemUrl';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
@@ -37,24 +40,7 @@ interface ShippingMetaFields {
   testingDuration: string;
 }
 
-function getDaysLateNumber(deadlineAt: string | null | undefined): number {
-  const deadlineKey = toPSTDateKey(deadlineAt);
-  if (!deadlineKey) return 0;
-  const todayKey = getCurrentPSTDateKey();
-  if (!todayKey) return 0;
-  const [dy, dm, dd] = deadlineKey.split('-').map(Number);
-  const [ty, tm, td] = todayKey.split('-').map(Number);
-  const deadlineIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
-  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
-  return Math.max(0, todayIndex - deadlineIndex);
-}
 
-function normalizeTrackingKey(value: string | null | undefined): string {
-  return String(value || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
-}
 
 function normalizeTrackingList(raw: unknown): string[] {
   if (Array.isArray(raw)) {
@@ -96,6 +82,62 @@ function normalizeTrackingRows(raw: unknown): TrackingRow[] {
     });
   }
   return out;
+}
+
+function normalizeShipByDraft(value: string | null | undefined): string {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  if (/^\d{1,2}-\d{1,2}(?:-\d{2,4})?$/.test(trimmed)) return trimmed;
+  const pstDateKey = toPSTDateKey(trimmed);
+  if (!pstDateKey) return '';
+  const [year, month, day] = pstDateKey.split('-').map(Number);
+  return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${String(year % 100).padStart(2, '0')}`;
+}
+
+function parseSerialTextDraft(value: string): string[] {
+  return String(value || '')
+    .split(/[\n,]+/)
+    .map((row) => row.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function PasteableDraftInput({
+  value,
+  onChange,
+  onPaste,
+  placeholder,
+  inputClassName = '',
+  ariaLabel,
+  title,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onPaste: () => Promise<void>;
+  placeholder: string;
+  inputClassName?: string;
+  ariaLabel: string;
+  title: string;
+}) {
+  return (
+    <div className="relative rounded-xl border border-gray-200 bg-white transition-colors focus-within:border-blue-400">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`h-10 w-full border-0 bg-transparent px-3 pr-10 text-sm font-bold text-gray-900 outline-none ${inputClassName}`}
+      />
+      <button
+        type="button"
+        onClick={() => { void onPaste(); }}
+        className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center text-gray-400 transition-all duration-100 ease-out hover:text-blue-600 active:scale-95"
+        aria-label={ariaLabel}
+        title={title}
+      >
+        <Clipboard className="h-4 w-4" />
+      </button>
+    </div>
+  );
 }
 
 
@@ -140,17 +182,6 @@ function ShippingEditableRow({
           title={`Open ${label}`}
         >
           <ExternalLink className={iconClassName} />
-        </button>
-      ) : null}
-      {allowEdit ? (
-        <button
-          type="button"
-          onClick={() => setIsEditing((prev) => !prev)}
-          className="transition-colors hover:text-gray-900"
-          aria-label={`Edit ${label}`}
-          title={`Edit ${label}`}
-        >
-          <Pencil className={iconClassName} />
         </button>
       ) : null}
       <button
@@ -214,6 +245,7 @@ function ShippingSerialNumberRow({
   fnskuLogId,
   salId,
   onUpdate,
+  allowEdit = true,
 }: {
   rowId: number;
   trackingNumber: string | null | undefined;
@@ -222,6 +254,7 @@ function ShippingSerialNumberRow({
   fnskuLogId?: number | null;
   salId?: number | null;
   onUpdate?: () => void;
+  allowEdit?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [serialRows, setSerialRows] = useState<string[]>(() => parseSerialRows(serialNumber));
@@ -465,7 +498,7 @@ function ShippingSerialNumberRow({
       actions={(
         <div className="flex items-center gap-1.5 text-gray-400">
           <InlineSaveIndicator state={saveState} />
-          {isEditing ? (
+          {allowEdit && isEditing ? (
             <>
               <button
                 type="button"
@@ -508,7 +541,7 @@ function ShippingSerialNumberRow({
                 <X className="w-3.5 h-3.5" />
               </button>
             </>
-          ) : (
+          ) : allowEdit ? (
             <button
               type="button"
               onClick={() => {
@@ -522,7 +555,7 @@ function ShippingSerialNumberRow({
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
-          )}
+          ) : null}
           <button
             type="button"
             onClick={copyAllSerials}
@@ -536,7 +569,7 @@ function ShippingSerialNumberRow({
         </div>
       )}
     >
-      {isEditing ? (
+      {allowEdit && isEditing ? (
         <div>
           {serialRows.map((serial, index) => (
             <div key={index} className="flex items-center gap-2 border-b border-gray-100 last:border-b-0">
@@ -586,7 +619,7 @@ function ShippingSerialNumberRow({
             </div>
           ))}
         </div>
-      ) : (
+      ) : allowEdit ? (
         <button
           type="button"
           onClick={() => {
@@ -636,6 +669,16 @@ function ShippingSerialNumberRow({
             </div>
           )}
         </button>
+      ) : (
+        normalizedRows.length > 0 ? (
+          <div className="divide-y divide-gray-100">
+            {normalizedRows.map((serial, idx) => (
+              <p key={idx} className="truncate py-1 last:pb-0 font-mono text-sm font-bold text-gray-900">{serial}</p>
+            ))}
+          </div>
+        ) : (
+          <p className="py-0.5 text-sm font-dm-sans font-normal text-gray-400">No serials</p>
+        )
       )}
 
       {error ? (
@@ -655,21 +698,27 @@ export interface PrepackedSkuInfo {
 
 function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
   const hasPhotos = Array.isArray(sku.photos) && sku.photos.length > 0;
+  const skuBrowserUrl = `/sku-stock?view=sku_history&search=${encodeURIComponent(sku.staticSku)}`;
 
   return (
     <DetailsPanelRow
       label="From Prepacked SKU"
       actions={
-        hasPhotos ? (
-          <span className="flex items-center gap-1 text-indigo-500 pointer-events-none">
-            <ImageIcon className="w-3 h-3" />
-            <span className="text-[9px] font-black uppercase tracking-wide">{sku.photos!.length} photo{sku.photos!.length !== 1 ? 's' : ''}</span>
-          </span>
-        ) : undefined
+        <button
+          type="button"
+          onClick={() => {
+            window.open(skuBrowserUrl, '_blank', 'noopener,noreferrer');
+          }}
+          className="text-gray-400 transition-colors hover:text-blue-700"
+          aria-label="Open SKU table view"
+          title="Open SKU table view"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </button>
       }
     >
       <div className="space-y-1.5">
-        <p className="text-sm font-bold text-indigo-700 font-mono">{sku.staticSku}</p>
+        <p className="text-sm font-bold text-black font-mono">{sku.staticSku}</p>
         {sku.productTitle ? (
           <p className="text-[10px] font-semibold text-gray-500 truncate">{sku.productTitle}</p>
         ) : null}
@@ -698,6 +747,326 @@ interface ShippingInformationSectionProps {
   prepackedSku?: PrepackedSkuInfo | null;
 }
 
+type ShippingInfoEditDraft = {
+  shipByDate: string;
+  trackingNumber: string;
+  orderNumber: string;
+  itemNumber: string;
+  additionalTrackingRows: Array<{ shipmentId: number | null; tracking: string }>;
+  serialRows: string[];
+};
+
+function ShippingInfoEditModal({
+  open,
+  draft,
+  setDraft,
+  isSaving,
+  isSaveSuccess,
+  error,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  draft: ShippingInfoEditDraft;
+  setDraft: (updater: ShippingInfoEditDraft | ((current: ShippingInfoEditDraft) => ShippingInfoEditDraft)) => void;
+  isSaving: boolean;
+  isSaveSuccess: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          key="shipping-edit-modal-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 px-4 py-6"
+          onClick={onClose}
+        >
+          <motion.div
+            key="shipping-edit-modal-panel"
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.985 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="w-full max-w-2xl rounded-3xl border border-gray-200 bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">Shipping Info</p>
+                <h3 className="mt-1 text-lg font-black tracking-tight text-gray-900">Edit Order Details</h3>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Close shipping editor"
+                title="Close shipping editor"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-5">
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Ship By Date</span>
+                  <input
+                    type="text"
+                    value={draft.shipByDate}
+                    onChange={(e) => setDraft((current) => ({ ...current, shipByDate: e.target.value }))}
+                    placeholder="MM-DD-YY"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-blue-400"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Order ID</span>
+                  <input
+                    type="text"
+                    value={draft.orderNumber}
+                    onChange={(e) => setDraft((current) => ({ ...current, orderNumber: e.target.value }))}
+                    placeholder="Enter order ID"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none transition-colors focus:border-blue-400"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Item Number</span>
+                  <PasteableDraftInput
+                    value={draft.itemNumber}
+                    onChange={(value) => setDraft((current) => ({ ...current, itemNumber: value }))}
+                    onPaste={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (!text.trim()) return;
+                        setDraft((current) => ({ ...current, itemNumber: text.trim().toUpperCase() }));
+                      } catch {}
+                    }}
+                    placeholder="Enter item number"
+                    ariaLabel="Paste item number"
+                    title="Paste item number"
+                  />
+                </label>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Tracking Numbers</p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <PasteableDraftInput
+                        value={draft.trackingNumber}
+                        onChange={(value) => setDraft((current) => ({ ...current, trackingNumber: value }))}
+                        onPaste={async () => {
+                          try {
+                            const text = await navigator.clipboard.readText();
+                            if (!text.trim()) return;
+                            setDraft((current) => ({ ...current, trackingNumber: text.trim().toUpperCase() }));
+                          } catch {}
+                        }}
+                        placeholder="Primary tracking number"
+                        ariaLabel="Paste primary tracking number"
+                        title="Paste primary tracking number"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraft((current) => ({
+                          ...current,
+                          additionalTrackingRows: [...current.additionalTrackingRows, { shipmentId: null, tracking: '' }],
+                        }));
+                      }}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
+                      aria-label="Add tracking number"
+                      title="Add tracking number"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {draft.additionalTrackingRows.map((row, index) => (
+                    <PasteableDraftInput
+                      key={`${row.shipmentId ?? 'new'}-${index}`}
+                      value={row.tracking}
+                      onChange={(value) => {
+                        setDraft((current) => ({
+                          ...current,
+                          additionalTrackingRows: current.additionalTrackingRows.map((entry, entryIndex) =>
+                            entryIndex === index ? { ...entry, tracking: value } : entry
+                          ),
+                        }));
+                      }}
+                      onPaste={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (!text.trim()) return;
+                          const pasted = text.trim().toUpperCase();
+                          setDraft((current) => ({
+                            ...current,
+                            additionalTrackingRows: current.additionalTrackingRows.map((entry, entryIndex) =>
+                              entryIndex === index ? { ...entry, tracking: pasted } : entry
+                            ),
+                          }));
+                        } catch {}
+                      }}
+                      placeholder={`Tracking Number ${index + 2}`}
+                      ariaLabel={`Paste tracking number ${index + 2}`}
+                      title="Paste tracking number"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Serial Numbers</p>
+                </div>
+                <div className="space-y-2">
+                  {draft.serialRows.length > 0 ? draft.serialRows.map((row, index) => (
+                    index === 0 ? (
+                      <div key={`serial-${index}`} className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <PasteableDraftInput
+                            value={row}
+                            onChange={(value) => {
+                              setDraft((current) => ({
+                                ...current,
+                                serialRows: current.serialRows.map((entry, entryIndex) => (
+                                  entryIndex === index ? value.toUpperCase() : entry
+                                )),
+                              }));
+                            }}
+                            onPaste={async () => {
+                              try {
+                                const text = await navigator.clipboard.readText();
+                                if (!text.trim()) return;
+                                const pasted = text.trim().toUpperCase();
+                                setDraft((current) => ({
+                                  ...current,
+                                  serialRows: current.serialRows.map((entry, entryIndex) => (
+                                    entryIndex === index ? pasted : entry
+                                  )),
+                                }));
+                              } catch {}
+                            }}
+                            placeholder={`Serial ${index + 1}`}
+                            inputClassName="font-mono"
+                            ariaLabel={`Paste serial ${index + 1}`}
+                            title="Paste serial"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraft((current) => ({ ...current, serialRows: [...current.serialRows, ''] }));
+                          }}
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
+                          aria-label="Add serial number"
+                          title="Add serial number"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <PasteableDraftInput
+                        key={`serial-${index}`}
+                        value={row}
+                        onChange={(value) => {
+                          setDraft((current) => ({
+                            ...current,
+                            serialRows: current.serialRows.map((entry, entryIndex) => (
+                              entryIndex === index ? value.toUpperCase() : entry
+                            )),
+                          }));
+                        }}
+                        onPaste={async () => {
+                          try {
+                            const text = await navigator.clipboard.readText();
+                            if (!text.trim()) return;
+                            const pasted = text.trim().toUpperCase();
+                            setDraft((current) => ({
+                              ...current,
+                              serialRows: current.serialRows.map((entry, entryIndex) => (
+                                entryIndex === index ? pasted : entry
+                              )),
+                            }));
+                          } catch {}
+                        }}
+                        placeholder={`Serial ${index + 1}`}
+                        inputClassName="font-mono"
+                        ariaLabel={`Paste serial ${index + 1}`}
+                        title="Paste serial"
+                      />
+                    )
+                  )) : (
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-10 min-w-0 flex-1 items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-400">
+                        No serials yet.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraft((current) => ({ ...current, serialRows: [''] }));
+                        }}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
+                        aria-label="Add serial number"
+                        title="Add serial number"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {error ? <p className="text-sm font-bold text-red-600">{error}</p> : null}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSaving || isSaveSuccess}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={isSaving || isSaveSuccess}
+                className={`relative min-w-[140px] rounded-xl px-4 py-2 text-sm font-bold text-white transition-all duration-200 disabled:opacity-50 ${
+                  isSaveSuccess
+                    ? 'bg-emerald-600 hover:bg-emerald-600'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                <span className="flex items-center justify-center">
+                  {isSaveSuccess ? 'Saved' : isSaving ? 'Saving…' : 'Save Changes'}
+                </span>
+                <span className={`absolute right-4 top-1/2 -translate-y-1/2 transition-all duration-200 ${
+                  isSaveSuccess ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+                }`}>
+                  <Check className="h-4 w-4" />
+                </span>
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>,
+    document.body
+  );
+}
+
 export function ShippingInformationSection({
   shipped,
   copiedAll: _copiedAll,
@@ -711,7 +1080,13 @@ export function ShippingInformationSection({
   prepackedSku,
 }: ShippingInformationSectionProps) {
   const { getExternalUrlByItemNumber } = useExternalItemUrl();
+  const queryClient = useQueryClient();
   const [linkedTrackingDrafts, setLinkedTrackingDrafts] = useState<Record<string, string>>({});
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isEditModalSaving, setIsEditModalSaving] = useState(false);
+  const isEditModalSavingRef = useRef(false);
+  const [isEditModalSaveSuccess, setIsEditModalSaveSuccess] = useState(false);
+  const [editModalError, setEditModalError] = useState<string | null>(null);
   const accountSourceLabel = getAccountSourceLabel(shipped.order_id, shipped.account_source);
 
   // Internal editable state — used when no editableShippingFields prop is provided
@@ -727,17 +1102,38 @@ export function ShippingInformationSection({
     initialTrackingNumber: shipped.shipping_tracking_number || '',
     onUpdate,
   });
+  const { resetRefs } = internalFieldSave;
   const internalOnBlur = useCallback(() => {
     void internalFieldSave.saveInlineFields(internalOrderNumber, internalItemNumber, internalTrackingNumber);
   }, [internalFieldSave, internalOrderNumber, internalItemNumber, internalTrackingNumber]);
+  const [editDraft, setEditDraft] = useState<ShippingInfoEditDraft>({
+    shipByDate: '',
+    trackingNumber: '',
+    orderNumber: '',
+    itemNumber: '',
+    additionalTrackingRows: [],
+    serialRows: [],
+  });
 
   // Sync internal state when shipped record changes
   useEffect(() => {
-    setInternalOrderNumber(shipped.order_id || '');
-    setInternalItemNumber(shipped.item_number || '');
-    setInternalTrackingNumber(shipped.shipping_tracking_number || '');
+    const nextOrderNumber = shipped.order_id || '';
+    const nextItemNumber = shipped.item_number || '';
+    const nextTrackingNumber = shipped.shipping_tracking_number || '';
+
+    setInternalOrderNumber(nextOrderNumber);
+    setInternalItemNumber(nextItemNumber);
+    setInternalTrackingNumber(nextTrackingNumber);
     setInternalShipByDate(String(shipped.ship_by_date || '').trim().split(/[T ]/)[0] || '');
-  }, [shipped.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    resetRefs(nextOrderNumber, nextItemNumber, nextTrackingNumber);
+  }, [
+    resetRefs,
+    shipped.id,
+    shipped.item_number,
+    shipped.order_id,
+    shipped.ship_by_date,
+    shipped.shipping_tracking_number,
+  ]);
 
   // Resolve effective editable fields — external prop or internal state
   const ef: EditableShippingFields = editableShippingFields ?? {
@@ -845,12 +1241,270 @@ export function ShippingInformationSection({
       onUpdate?.();
     } catch (error: any) {
       console.error(error);
-      window.alert(error?.message || 'Failed to update tracking');
+      throw new Error(error?.message || 'Failed to update tracking');
     }
   };
 
+  const createLinkedTracking = async (nextTracking: string) => {
+    const orderId = Number((shipped as any).id);
+    if (!Number.isFinite(orderId) || orderId <= 0) return;
+    const trimmed = String(nextTracking || '').trim();
+    if (!trimmed) return;
+    try {
+      const res = await fetch('/api/orders/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          trackingLinkCreates: [
+            {
+              shippingTrackingNumber: trimmed,
+            },
+          ],
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(String(payload?.details || payload?.error || 'Failed to add tracking'));
+      }
+      onUpdate?.();
+    } catch (error: any) {
+      console.error(error);
+      throw new Error(error?.message || 'Failed to add tracking');
+    }
+  };
+
+  const syncOrderExceptions = async () => {
+    const res = await fetch('/api/orders-exceptions/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || data?.message || 'Failed to sync orders exceptions');
+    }
+  };
+
+  const openEditModal = useCallback(() => {
+    setEditDraft({
+      shipByDate: normalizeShipByDraft(ef.shipByDate),
+      trackingNumber: ef.trackingNumber,
+      orderNumber: ef.orderNumber,
+      itemNumber: ef.itemNumber,
+      additionalTrackingRows: additionalTrackingRows.map((row) => ({
+        shipmentId: row.shipmentId,
+        tracking: row.tracking,
+      })),
+      serialRows: serialNumberRows.length > 0 ? serialNumberRows.map((row) => row.toUpperCase()) : [''],
+    });
+    setEditModalError(null);
+    setIsEditModalSaveSuccess(false);
+    setIsEditModalOpen(true);
+  }, [additionalTrackingRows, ef.itemNumber, ef.orderNumber, ef.shipByDate, ef.trackingNumber, serialNumberRows]);
+
+  const saveSerialRowsFromModal = useCallback(async (serials: string[], trackingOverride?: string) => {
+    const trackingNumber = String(trackingOverride || shipped.shipping_tracking_number || '').trim();
+    const fnskuLogId = shipped.fnsku_log_id ?? null;
+    const salId = shipped.sal_id ?? null;
+
+    if (!trackingNumber && !fnskuLogId && !salId) {
+      throw new Error('Tracking number or scan session is required to update serials.');
+    }
+
+    const response = salId
+      ? await fetch('/api/tech/serial', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            salId,
+            serials,
+            techId: shipped.tested_by ?? shipped.tester_id ?? null,
+          }),
+        })
+      : await fetch('/api/tech/update-serials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tracking: trackingNumber || null,
+            serialNumbers: serials,
+            techId: shipped.tested_by ?? shipped.tester_id ?? null,
+            fnskuLogId,
+          }),
+        });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.success) {
+      throw new Error(data?.details || data?.error || 'Failed to update serials');
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['tech-logs'] });
+  }, [queryClient, shipped.fnsku_log_id, shipped.sal_id, shipped.shipping_tracking_number, shipped.tested_by, shipped.tester_id]);
+
+  const handleModalSave = useCallback(async () => {
+    if (isEditModalSavingRef.current) return;
+    isEditModalSavingRef.current = true;
+    setIsEditModalSaving(true);
+    setIsEditModalSaveSuccess(false);
+    setEditModalError(null);
+    try {
+      await internalFieldSave.saveInlineFields(
+        editDraft.orderNumber,
+        editDraft.itemNumber,
+        editDraft.trackingNumber,
+      );
+
+      if (normalizeShipByDraft(editDraft.shipByDate) !== normalizeShipByDraft(ef.shipByDate)) {
+        await internalFieldSave.saveShipByDate(editDraft.shipByDate);
+      }
+
+      let trackingChanged = normalizeTrackingKey(editDraft.trackingNumber) !== normalizeTrackingKey(ef.trackingNumber);
+
+      const previousLinkedRowsById = new Map(
+        additionalTrackingRows
+          .filter((row) => Number.isFinite(Number(row.shipmentId)) && Number(row.shipmentId) > 0)
+          .map((row) => [Number(row.shipmentId), String(row.tracking || '').trim()])
+      );
+      const nextSeenShipmentIds = new Set<number>();
+      const trackingLinkDeletes: Array<{ shipmentId: number }> = [];
+      const trackingLinkEdits: Array<{ shipmentId: number; shippingTrackingNumber: string }> = [];
+      const trackingLinkCreates: Array<{ shippingTrackingNumber: string }> = [];
+
+      for (const nextRow of editDraft.additionalTrackingRows) {
+        const shipmentId = Number(nextRow.shipmentId);
+        const nextTracking = String(nextRow.tracking || '').trim();
+
+        if (Number.isFinite(shipmentId) && shipmentId > 0) {
+          nextSeenShipmentIds.add(shipmentId);
+          const prevTracking = String(previousLinkedRowsById.get(shipmentId) || '').trim();
+          if (!nextTracking) {
+            trackingLinkDeletes.push({ shipmentId });
+            continue;
+          }
+          if (nextTracking !== prevTracking) {
+            trackingLinkEdits.push({
+              shipmentId,
+              shippingTrackingNumber: nextTracking,
+            });
+          }
+          continue;
+        }
+
+        if (nextTracking) {
+          trackingLinkCreates.push({ shippingTrackingNumber: nextTracking });
+        }
+      }
+
+      for (const shipmentId of previousLinkedRowsById.keys()) {
+        if (!nextSeenShipmentIds.has(shipmentId)) {
+          trackingLinkDeletes.push({ shipmentId });
+        }
+      }
+
+      if (
+        trackingLinkDeletes.length > 0
+        || trackingLinkEdits.length > 0
+        || trackingLinkCreates.length > 0
+      ) {
+        const res = await fetch('/api/orders/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: Number((shipped as any).id),
+            trackingLinkDeletes,
+            trackingLinkEdits,
+            trackingLinkCreates,
+          }),
+        });
+
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(String(payload?.details || payload?.error || 'Failed to update tracking links'));
+        }
+
+        trackingChanged = true;
+      }
+
+      const nextSerialRows = editDraft.serialRows
+        .map((row) => row.trim().toUpperCase())
+        .filter(Boolean);
+      const currentSerialRows = serialNumberRows.map((row) => row.trim().toUpperCase()).filter(Boolean);
+      if (nextSerialRows.join(', ') !== currentSerialRows.join(', ')) {
+        await saveSerialRowsFromModal(nextSerialRows, editDraft.trackingNumber);
+      }
+
+      // Only reflect the draft into local/parent field state after the writes succeed.
+      if (editDraft.orderNumber !== ef.orderNumber) {
+        ef.onOrderNumberChange(editDraft.orderNumber);
+      }
+      if (editDraft.itemNumber !== ef.itemNumber) {
+        ef.onItemNumberChange(editDraft.itemNumber);
+      }
+      if (editDraft.trackingNumber !== ef.trackingNumber) {
+        ef.onTrackingNumberChange(editDraft.trackingNumber);
+      }
+      if (editDraft.shipByDate !== ef.shipByDate) {
+        ef.onShipByDateChange(editDraft.shipByDate);
+      }
+
+      setLinkedTrackingDrafts((prev) => {
+        const next = { ...prev };
+        editDraft.additionalTrackingRows.forEach((row, index) => {
+          const key = `${row.shipmentId ?? 'none'}:${index}`;
+          next[key] = row.tracking;
+        });
+        return next;
+      });
+
+      setIsEditModalSaveSuccess(true);
+      onUpdate?.();
+
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
+
+      setIsEditModalOpen(false);
+      setIsEditModalSaveSuccess(false);
+
+      if (trackingChanged) {
+        void syncOrderExceptions().catch((error) => {
+          console.error('Background orders exception sync failed:', error);
+        });
+      }
+    } catch (error) {
+      setEditModalError(error instanceof Error ? error.message : 'Failed to save shipping details');
+    } finally {
+      isEditModalSavingRef.current = false;
+      setIsEditModalSaving(false);
+    }
+  }, [
+    additionalTrackingRows,
+    editDraft,
+    ef,
+    internalFieldSave,
+    onUpdate,
+    createLinkedTracking,
+    saveLinkedTracking,
+    saveSerialRowsFromModal,
+    serialNumberRows,
+    syncOrderExceptions,
+  ]);
+
   return (
     <section className="space-y-6">
+      <ShippingInfoEditModal
+        open={isEditModalOpen}
+        draft={editDraft}
+        setDraft={setEditDraft}
+        isSaving={isEditModalSaving}
+        isSaveSuccess={isEditModalSaveSuccess}
+        error={editModalError}
+        onClose={() => {
+          if (isEditModalSaving || isEditModalSaveSuccess) return;
+          setIsEditModalOpen(false);
+          setIsEditModalSaveSuccess(false);
+          setEditModalError(null);
+        }}
+        onSave={() => { void handleModalSave(); }}
+      />
       {showReturnInformation && shipped.packed_at && shipped.packed_at !== '1' ? (
         <div className="space-y-3">
           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Return Information</h3>
@@ -880,7 +1534,18 @@ export function ShippingInformationSection({
       ) : null}
 
       <div className="space-y-3">
-        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Shipping Information</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Shipping Information</h3>
+          <button
+            type="button"
+            onClick={openEditModal}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Edit shipping information"
+            title="Edit shipping information"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
         <div className="space-y-0">
           {showShippingTimestamp && (
@@ -901,6 +1566,7 @@ export function ShippingInformationSection({
             placeholder="MM-DD-YY"
             onChange={ef.onShipByDateChange}
             onBlur={ef.onShipByDateBlur}
+            allowEdit={false}
           />
           <ShippingEditableRow
             label="Tracking Number"
@@ -909,6 +1575,7 @@ export function ShippingInformationSection({
             onChange={ef.onTrackingNumberChange}
             onBlur={ef.onBlur}
             externalUrl={getTrackingUrl(ef.trackingNumber)}
+            allowEdit={false}
           />
           {additionalTrackingRows.map((row, index) => {
             const draftKey = `${row.shipmentId ?? 'none'}:${index}`;
@@ -924,7 +1591,7 @@ export function ShippingInformationSection({
               }}
               onBlur={() => { void saveLinkedTracking(row.shipmentId, draftValue); }}
               externalUrl={getTrackingUrl(draftValue)}
-              allowEdit
+              allowEdit={false}
             />
             );
           })}
@@ -937,6 +1604,7 @@ export function ShippingInformationSection({
             externalUrl={getOrderIdUrl(ef.orderNumber)}
             headerAccessory={accountSourceLabel || undefined}
             headerAccessoryClassName="text-[10px] font-black tracking-wide text-blue-600"
+            allowEdit={false}
           />
           <ShippingEditableRow
             label="Item Number"
@@ -947,6 +1615,7 @@ export function ShippingInformationSection({
             externalUrl={getExternalUrlByItemNumber(ef.itemNumber)}
             dividerClassName="border-b-0"
             className={hasRowsAfterItemNumber ? '!border-b-0' : '!border-b-0 pb-0'}
+            allowEdit={false}
           />
 
           {showSerialNumber ? (
@@ -958,6 +1627,7 @@ export function ShippingInformationSection({
               fnskuLogId={shipped.fnsku_log_id ?? null}
               salId={shipped.sal_id ?? null}
               onUpdate={onUpdate}
+              allowEdit={false}
             />
           ) : null}
 

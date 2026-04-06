@@ -895,9 +895,7 @@ export const fbaShipments = pgTable('fba_shipments', {
   createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
   assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
   assignedPackerId: integer('assigned_packer_id').references(() => staff.id, { onDelete: 'set null' }),
-  readyItemCount: integer('ready_item_count').notNull().default(0),
-  packedItemCount: integer('packed_item_count').notNull().default(0),
-  shippedItemCount: integer('shipped_item_count').notNull().default(0),
+  // Counter columns removed — counts computed inline via COUNT(*) FILTER (...)
   shippedAt: timestamp('shipped_at', { withTimezone: true }),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

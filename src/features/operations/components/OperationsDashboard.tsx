@@ -65,9 +65,9 @@ export function OperationsDashboard() {
       {/* KPI TILES — GROUNDED IN DESIGN SYSTEM 2026 */}
       <section className="grid grid-cols-6 bg-white border-b border-slate-200 shadow-sm flex-none">
         <StatCard category="all" label="Daily Velocity" value={data?.summary.all.value || 0} delta={data?.summary.all.delta} icon={<Activity />} isLoading={isLoading} />
-        <StatCard category="tested" label="Tested Today" value={data?.summary.tested.value || 0} delta={data?.summary.tested.delta} icon={<Package />} isLoading={isLoading} />
+        <StatCard category="tested" label="Tested Today" value={data?.summary.tested.value || 0} delta={data?.summary.tested.delta} icon={<Barcode />} isLoading={isLoading} />
         <StatCard category="repair" label="Repair Queue" value={data?.summary.repair.value || 0} delta={data?.summary.repair.delta} icon={<Wrench />} isLoading={isLoading} />
-        <StatCard category="fba" label="FBA / FNSKU" value={data?.summary.fba.value || 0} delta={data?.summary.fba.delta} icon={<Barcode />} isLoading={isLoading} />
+        <StatCard category="fba" label="FBA / FNSKU" value={data?.summary.fba.value || 0} delta={data?.summary.fba.delta} icon={<Package />} isLoading={isLoading} />
         <StatCard category="outOfStock" label="Alerts / OOS" value={data?.summary.outOfStock.value || 0} delta={data?.summary.outOfStock.delta} icon={<AlertCircle />} isLoading={isLoading} />
         <StatCard category="pendingLate" label="Late Orders" value={data?.summary.pendingLate.value || 0} delta={data?.summary.pendingLate.delta} icon={<Clock />} isLoading={isLoading} />
       </section>

@@ -23,6 +23,7 @@ import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { WorkOrdersSidebarPanel } from '@/components/sidebar/WorkOrdersSidebarPanel';
 import { OperationsSidebarPanel } from '@/components/sidebar/OperationsSidebarPanel';
+import { ReplenishSidebarPanel } from '@/components/sidebar/ReplenishSidebarPanel';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import {
   getSidebarRouteKey,
@@ -61,6 +62,7 @@ function getSidebarTitle(pathname: string | null) {
     receiving: 'Receiving',
     repair: 'Repair',
     'work-orders': 'Work Orders',
+    replenish: 'Replenish',
     'sku-stock': 'Sku Stock',
     tech: 'Technicians',
     packer: 'Packers',
@@ -321,6 +323,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'receiving') return <ReceivingSidebarPanel />;
   if (routeKey === 'fba') return <FbaSidebarPanel />;
   if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
+  if (routeKey === 'replenish') return <ReplenishSidebarPanel />;
   if (routeKey === 'sku-stock') return <BarcodeSidebar embedded />;
   if (routeKey === 'repair') return <RepairSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;

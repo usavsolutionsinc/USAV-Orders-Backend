@@ -99,31 +99,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Close shipment and refresh counters.
+    // Close shipment — set status to SHIPPED.
     const closedShipmentRes = await client.query(
-      `UPDATE fba_shipments fs
+      `UPDATE fba_shipments
        SET status     = 'SHIPPED',
            shipped_at = NOW(),
-           ready_item_count = (
-             SELECT COUNT(*)::int
-             FROM fba_shipment_items i
-             WHERE i.shipment_id = fs.id
-               AND i.status IN ('READY_TO_GO', 'LABEL_ASSIGNED', 'SHIPPED')
-           ),
-           packed_item_count = (
-             SELECT COUNT(*)::int
-             FROM fba_shipment_items i
-             WHERE i.shipment_id = fs.id
-               AND i.status IN ('LABEL_ASSIGNED', 'SHIPPED')
-           ),
-           shipped_item_count = (
-             SELECT COUNT(*)::int
-             FROM fba_shipment_items i
-             WHERE i.shipment_id = fs.id
-               AND i.status = 'SHIPPED'
-           ),
            updated_at = NOW()
-       WHERE fs.id = $1
+       WHERE id = $1
        RETURNING *`,
       [shipment_id]
     );

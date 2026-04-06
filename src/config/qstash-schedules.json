@@ -101,5 +101,14 @@
     "retries": 3,
     "timeout": 120,
     "label": "staff-goal-history-snapshot"
+  },
+  {
+    "scheduleId": "replenishment-sync-daily-6am-pacific",
+    "cron": "CRON_TZ=America/Los_Angeles 0 6 * * *",
+    "path": "/api/qstash/replenishment/sync",
+    "body": {},
+    "retries": 3,
+    "timeout": 300,
+    "label": "replenishment-sync"
   }
 ]

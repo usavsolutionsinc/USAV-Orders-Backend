@@ -111,11 +111,23 @@ export function DashboardDetailsStack({
     await fieldSave.saveInlineFields(orderNumber, itemNumber, shippingTrackingNumber);
   }, [fieldSave, itemNumber, orderNumber, shippingTrackingNumber]);
 
+  const saveOutOfStockOnClose = useCallback(async () => {
+    const initialOutOfStock = String((shipped as any).out_of_stock || '').trim();
+    const nextOutOfStock = outOfStock.trim();
+    if (nextOutOfStock === initialOutOfStock) return;
+    await fieldSave.saveOutOfStock(outOfStock);
+  }, [fieldSave, outOfStock, shipped]);
+
   useEffect(() => {
-    const handleClose = () => { void saveInlineFields(); };
+    const handleClose = () => {
+      void (async () => {
+        await saveOutOfStockOnClose();
+        await saveInlineFields();
+      })();
+    };
     window.addEventListener('close-shipped-details' as any, handleClose as any);
     return () => window.removeEventListener('close-shipped-details' as any, handleClose as any);
-  }, [saveInlineFields]);
+  }, [saveInlineFields, saveOutOfStockOnClose]);
 
   const handleUndo = async () => {
     setIsUndoing(true);
@@ -214,6 +226,8 @@ export function DashboardDetailsStack({
                 setActiveInput('none');
               }}
               onSubmit={() => void fieldSave.saveOutOfStock(outOfStock)}
+              autoSaveOnChange={false}
+              saveHint="Saves when the details panel closes."
               autoFocus
             />
           ) : (

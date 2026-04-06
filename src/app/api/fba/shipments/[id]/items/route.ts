@@ -21,7 +21,7 @@ export async function GET(
       `SELECT
          fsi.id,
          fsi.fnsku,
-         COALESCE(fsi.product_title, ff.product_title, fsi.fnsku) AS display_title,
+         COALESCE(ff.product_title, fsi.fnsku) AS display_title,
          fsi.product_title,
          fsi.asin,
          fsi.sku,

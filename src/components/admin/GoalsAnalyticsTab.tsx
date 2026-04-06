@@ -2,24 +2,52 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { invalidateStaffGoalsCache, getAllStaffGoals, type GoalRow } from '@/lib/staffGoalsCache';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 
 type GoalViewMode = 'all' | 'behind' | 'on-track' | 'exceeded';
 type StationFilter = 'ALL' | 'TECH' | 'PACK';
+type RangeFilter = 7 | 14 | 30;
+
+interface GoalHistoryRow {
+  staff_id: number;
+  name: string;
+  role: string;
+  station: string;
+  goal: number;
+  actual: number;
+  logged_date: string;
+}
+
+interface StaffHistorySummary {
+  key: string;
+  staffId: number;
+  name: string;
+  role: string;
+  station: string;
+  latestGoal: number;
+  latestActual: number;
+  latestDate: string;
+  latestProgress: number;
+  latestPercent: number;
+  hitDays: number;
+  aboveGoalDays: number;
+  averageActual: number;
+  averagePercent: number;
+  recentEntries: GoalHistoryRow[];
+}
 
 function parseGoalView(value: string | null): GoalViewMode {
   if (value === 'behind' || value === 'on-track' || value === 'exceeded') return value;
   return 'all';
 }
 
-function getProgress(row: GoalRow, overrideValue?: string) {
-  const goal = Math.max(1, Number(overrideValue) || row.daily_goal || 50);
-  const progress = row.today_count / goal;
+function getProgress(actual: number, goal: number) {
+  const safeGoal = Math.max(1, goal);
+  const progress = actual / safeGoal;
   return {
-    goal,
     progress,
-    percent: Math.min(progress * 100, 100),
+    percent: Math.round(progress * 100),
   };
 }
 
@@ -84,122 +112,132 @@ const STATION_TABS: { value: StationFilter; label: string }[] = [
   { value: 'PACK', label: 'Pack' },
 ];
 
+const RANGE_OPTIONS: { value: RangeFilter; label: string }[] = [
+  { value: 7, label: '7D' },
+  { value: 14, label: '14D' },
+  { value: 30, label: '30D' },
+];
+
+function formatShortDate(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 export function GoalsAnalyticsTab() {
   const searchParams = useSearchParams();
   const searchTerm = (searchParams.get('search') || '').trim().toLowerCase();
   const goalView = parseGoalView(searchParams.get('goalView'));
 
-  const [rows, setRows] = useState<GoalRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [goalInputs, setGoalInputs] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
   const [stationFilter, setStationFilter] = useState<StationFilter>('ALL');
-  const tableGridClass =
-    'grid grid-cols-[minmax(180px,1.4fr)_80px_minmax(168px,1fr)_88px_88px_88px_minmax(220px,1fr)] gap-x-3';
+  const [rangeFilter, setRangeFilter] = useState<RangeFilter>(14);
 
-  /** Composite key for a goal row: staffId:station */
-  const rowKey = (row: GoalRow) => `${row.staff_id}:${row.station}`;
-
-  const fetchRows = async () => {
-    setLoading(true);
-    try {
-      const normalized = await getAllStaffGoals(
-        stationFilter === 'ALL' ? undefined : stationFilter,
-      );
-      setRows(normalized);
-      setGoalInputs((current) => {
-        const next = { ...current };
-        for (const row of normalized) {
-          const key = rowKey(row);
-          if (!next[key]) next[key] = String(row.daily_goal || 50);
-        }
-        return next;
-      });
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: historyRows = [], isLoading: loading } = useQuery<GoalHistoryRow[]>({
+    queryKey: ['staff-goals-history', stationFilter, rangeFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set('days', String(rangeFilter));
+      if (stationFilter !== 'ALL') params.set('station', stationFilter);
+      const res = await fetch(`/api/staff-goals/history?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch history');
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+  });
 
   useEffect(() => {
-    fetchRows();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stationFilter]);
-
-  useEffect(() => {
-    const handleRefresh = () => {
-      invalidateStaffGoalsCache();
-      fetchRows();
-    };
-
+    const handleRefresh = () => queryClient.invalidateQueries({ queryKey: ['staff-goals-history'] });
     window.addEventListener('admin-goals-refresh', handleRefresh as EventListener);
     return () => window.removeEventListener('admin-goals-refresh', handleRefresh as EventListener);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [queryClient]);
 
-  const filteredRows = useMemo(() => {
-    return rows.filter((row) => {
-      const matchesSearch = !searchTerm || row.name.toLowerCase().includes(searchTerm);
-      const { progress } = getProgress(row, goalInputs[rowKey(row)]);
-      return matchesSearch && matchesView(progress, goalView);
-    });
-  }, [goalInputs, goalView, rows, searchTerm]);
+  const groupedRows = useMemo(() => {
+    const groups = new Map<string, GoalHistoryRow[]>();
+
+    for (const row of historyRows) {
+      const key = `${row.staff_id}:${row.station}`;
+      const current = groups.get(key);
+      if (current) current.push(row);
+      else groups.set(key, [row]);
+    }
+
+    const summaries: StaffHistorySummary[] = [];
+
+    for (const [key, rows] of groups.entries()) {
+      const sorted = [...rows].sort((a, b) => b.logged_date.localeCompare(a.logged_date));
+      const latest = sorted[0];
+      const latestMetrics = getProgress(latest.actual, latest.goal);
+      const hitDays = sorted.filter((row) => row.actual >= row.goal).length;
+      const aboveGoalDays = sorted.filter((row) => row.actual > row.goal).length;
+      const averageActual = sorted.reduce((sum, row) => sum + row.actual, 0) / sorted.length;
+      const averagePercent = sorted.reduce((sum, row) => sum + getProgress(row.actual, row.goal).percent, 0) / sorted.length;
+
+      summaries.push({
+        key,
+        staffId: latest.staff_id,
+        name: latest.name,
+        role: latest.role,
+        station: latest.station,
+        latestGoal: latest.goal,
+        latestActual: latest.actual,
+        latestDate: latest.logged_date,
+        latestProgress: latestMetrics.progress,
+        latestPercent: latestMetrics.percent,
+        hitDays,
+        aboveGoalDays,
+        averageActual,
+        averagePercent,
+        recentEntries: sorted,
+      });
+    }
+
+    return summaries;
+  }, [historyRows]);
+
+  const filteredStaffHistory = useMemo(() => {
+    return groupedRows
+      .filter((row) => {
+        const matchesSearch =
+          !searchTerm ||
+          row.name.toLowerCase().includes(searchTerm) ||
+          row.role.toLowerCase().includes(searchTerm);
+        return matchesSearch && matchesView(row.latestProgress, goalView);
+      })
+      .sort((a, b) => b.latestPercent - a.latestPercent || a.name.localeCompare(b.name));
+  }, [goalView, groupedRows, searchTerm]);
 
   const summary = useMemo(() => {
-    const totals = {
-      total: filteredRows.length,
-      today: 0,
-      week: 0,
-      belowSeventy: 0,
-      reachedGoal: 0,
+    const snapshotRows = filteredStaffHistory.flatMap((row) => row.recentEntries);
+    const latestDate = snapshotRows.reduce<string | null>((max, row) => {
+      if (!max || row.logged_date > max) return row.logged_date;
+      return max;
+    }, null);
+
+    const latestRows = latestDate
+      ? filteredStaffHistory.filter((row) => row.latestDate === latestDate)
+      : [];
+
+    const averageAttainment = filteredStaffHistory.length > 0
+      ? Math.round(
+          filteredStaffHistory.reduce((sum, row) => sum + row.averagePercent, 0) / filteredStaffHistory.length,
+        )
+      : 0;
+
+    return {
+      staffCount: filteredStaffHistory.length,
+      snapshotCount: snapshotRows.length,
+      latestDate,
+      goalHitsOnLatestDay: latestRows.filter((row) => row.latestActual >= row.latestGoal).length,
+      averageAttainment,
     };
-
-    for (const row of filteredRows) {
-      const { progress } = getProgress(row, goalInputs[rowKey(row)]);
-      totals.today += row.today_count;
-      totals.week += row.week_count;
-      if (progress >= 1) totals.reachedGoal += 1;
-      else if (progress < 0.7) totals.belowSeventy += 1;
-    }
-
-    return totals;
-  }, [filteredRows, goalInputs]);
-
-  const saveGoal = async (row: GoalRow) => {
-    const key = rowKey(row);
-    const parsedGoal = Number(goalInputs[key] || 0);
-    if (!Number.isFinite(parsedGoal) || parsedGoal <= 0) return;
-
-    setSavingId(key);
-    try {
-      const res = await fetch('/api/staff-goals', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          staffId: row.staff_id,
-          dailyGoal: parsedGoal,
-          station: row.station,
-        }),
-      });
-
-      if (!res.ok) throw new Error('Failed to save goal');
-
-      invalidateStaffGoalsCache(String(row.staff_id));
-      await fetchRows();
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setSavingId(null);
-    }
-  };
+  }, [filteredStaffHistory]);
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-white">
       <div className={mainStickyHeaderClass}>
         <div className={`${mainStickyHeaderShellRowClass} flex-wrap gap-y-2 px-6`}>
           <div className="flex items-center gap-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-900">Daily Goals</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-900">KPI History</p>
             <div className="flex items-center gap-1">
               {STATION_TABS.map((tab) => (
                 <button
@@ -216,109 +254,155 @@ export function GoalsAnalyticsTab() {
                 </button>
               ))}
             </div>
+            <div className="flex items-center gap-1">
+              {RANGE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setRangeFilter(option.value)}
+                  className={`px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors ${
+                    rangeFilter === option.value
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-            <span>{summary.total} staff shown</span>
-            <span>{summary.today} done today</span>
-            <span>{summary.week} this week</span>
+            <span>{summary.staffCount} staff in history</span>
+            <span>{summary.snapshotCount} snapshots</span>
+            <span>{summary.averageAttainment}% average attainment</span>
             <span>
-              {summary.reachedGoal} at or above goal / {summary.belowSeventy} below 70%
+              {summary.latestDate
+                ? `${summary.goalHitsOnLatestDay} at goal on ${formatShortDate(summary.latestDate)}`
+                : 'Waiting for daily snapshots'}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden px-6 py-5">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden border border-gray-200">
-          <div className="min-h-0 flex-1 overflow-auto">
-            <div className="min-w-[1020px]">
-              <div
-                className={`${tableGridClass} border-b border-gray-200 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500`}
-              >
+      <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
+        {loading ? (
+          <div className="flex h-full items-center justify-center rounded-sm border border-gray-200 px-6 py-10 text-xs text-gray-500">
+            Loading KPI history...
+          </div>
+        ) : filteredStaffHistory.length === 0 ? (
+          <div className="flex h-full items-center justify-center rounded-sm border border-dashed border-gray-300 px-6 py-10 text-center text-xs text-gray-500">
+            No KPI history matches this search or filter yet.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {summary.latestDate && (
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-sm border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Latest Snapshot</p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{formatShortDate(summary.latestDate)}</p>
+                </div>
+                <div className="rounded-sm border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">At Or Above Goal</p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{summary.goalHitsOnLatestDay}</p>
+                </div>
+                <div className="rounded-sm border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Average Attainment</p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{summary.averageAttainment}%</p>
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-hidden rounded-sm border border-gray-200">
+              <div className="grid grid-cols-[minmax(200px,1.4fr)_76px_110px_110px_120px_minmax(180px,1fr)] gap-x-3 border-b border-gray-200 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
                 <p>Staff</p>
                 <p>Station</p>
-                <p>Daily Goal</p>
-                <p className="text-right">Done Today</p>
-                <p className="text-right">This Week</p>
-                <p className="text-right">7-Day Avg</p>
-                <p>Performance</p>
+                <p>Latest</p>
+                <p>Hit Days</p>
+                <p>Avg Attainment</p>
+                <p>Trend</p>
               </div>
 
-              {loading ? (
-                <div className="flex h-full items-center justify-center px-6 py-10 text-xs text-gray-500">
-                  Loading goal progress...
-                </div>
-              ) : filteredRows.length === 0 ? (
-                <div className="flex h-full items-center justify-center px-6 py-10 text-center text-xs text-gray-500">
-                  No staff match this search or goal view.
-                </div>
-              ) : (
-                filteredRows.map((row) => {
-                  const key = rowKey(row);
-                  const { goal, percent, progress } = getProgress(row, goalInputs[key]);
-                  const tone = getPerformanceTone(progress);
+              {filteredStaffHistory.map((row) => {
+                const tone = getPerformanceTone(row.latestProgress);
+                const recentTrend = row.recentEntries.slice(0, Math.min(rangeFilter, 10)).reverse();
 
-                  return (
-                    <div
-                      key={key}
-                      className={`${tableGridClass} items-center border-b border-gray-200 px-4 py-3 text-sm last:border-b-0`}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-gray-900">{row.name}</p>
-                        <p className="truncate text-xs text-gray-500">{row.role}</p>
-                      </div>
+                return (
+                  <div
+                    key={row.key}
+                    className="grid grid-cols-[minmax(200px,1.4fr)_76px_110px_110px_120px_minmax(180px,1fr)] gap-x-3 border-b border-gray-200 px-4 py-3 text-sm last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-gray-900">{row.name}</p>
+                      <p className="truncate text-xs text-gray-500">
+                        {row.role} • Updated {formatShortDate(row.latestDate)}
+                      </p>
+                    </div>
 
-                      <div className="min-w-0">
-                        <span className={`inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${
-                          row.station === 'PACK'
-                            ? 'bg-violet-50 text-violet-700'
-                            : 'bg-blue-50 text-blue-700'
-                        }`}>
-                          {row.station}
-                        </span>
-                      </div>
+                    <div className="min-w-0">
+                      <span className={`inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${
+                        row.station === 'PACK'
+                          ? 'bg-violet-50 text-violet-700'
+                          : 'bg-blue-50 text-blue-700'
+                      }`}>
+                        {row.station}
+                      </span>
+                    </div>
 
-                      <div className="min-w-0 flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          value={goalInputs[key] ?? String(row.daily_goal)}
-                          onChange={(e) => setGoalInputs((current) => ({ ...current, [key]: e.target.value }))}
-                          aria-label={`Daily goal for ${row.name} (${row.station})`}
-                          className="w-14 border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-900 outline-none focus:border-gray-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => saveGoal(row)}
-                          disabled={savingId === key}
-                          className="shrink-0 border border-gray-300 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-700 disabled:opacity-50"
-                        >
-                          {savingId === key ? 'Saving' : 'Save'}
-                        </button>
-                      </div>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-semibold ${tone.textClass}`}>{tone.label}</p>
+                      <p className="text-xs text-gray-500">
+                        {row.latestActual}/{row.latestGoal}
+                      </p>
+                    </div>
 
-                      <p className="text-right font-semibold text-gray-900">{row.today_count}</p>
-                      <p className="text-right font-semibold text-gray-900">{row.week_count}</p>
-                      <p className="text-right font-semibold text-gray-900">{row.avg_daily_last_7d}</p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900">
+                        {row.hitDays}/{row.recentEntries.length}
+                      </p>
+                      <p className="text-xs text-gray-500">{row.aboveGoalDays} above goal</p>
+                    </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-3 text-xs">
-                          <span className={`font-semibold ${tone.textClass}`}>{tone.label}</span>
-                          <span className="text-gray-500">
-                            {row.today_count}/{goal}
-                          </span>
-                        </div>
-                        <div className="mt-2 h-1.5 overflow-hidden bg-gray-100">
-                          <div className={`h-full ${tone.barClass}`} style={{ width: `${percent}%` }} />
-                        </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900">{Math.round(row.averagePercent)}%</p>
+                      <p className="text-xs text-gray-500">{row.averageActual.toFixed(1)} avg actual</p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-end gap-1">
+                        {recentTrend.map((entry) => {
+                          const metrics = getProgress(entry.actual, entry.goal);
+                          const height = Math.max(10, Math.min(44, Math.round(metrics.percent * 0.44)));
+                          const entryTone = getPerformanceTone(metrics.progress);
+
+                          return (
+                            <div key={`${row.key}-${entry.logged_date}`} className="flex flex-col items-center gap-1">
+                              <div className="flex h-11 items-end">
+                                <div
+                                  className={`w-3 rounded-sm ${entryTone.barClass}`}
+                                  style={{ height: `${height}px` }}
+                                  title={`${entry.logged_date}: ${entry.actual}/${entry.goal}`}
+                                />
+                              </div>
+                              <span className="text-[9px] font-medium text-gray-400">
+                                {formatShortDate(entry.logged_date).split(' ')[1]}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  );
-                })
-              )}
+                  </div>
+                );
+              })}
             </div>
+
+            {historyRows.length > 0 && historyRows.every((row) => row.logged_date === historyRows[0].logged_date) && (
+              <div className="rounded-sm border border-dashed border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-700">
+                KPI history currently has one snapshot day loaded. The nightly `staff_goal_history` job will make this trend view richer over time.
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </section>
   );

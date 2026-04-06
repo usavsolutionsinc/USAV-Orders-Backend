@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
+import { MobileDateGroupHeader } from '@/components/mobile/MobileDateGroupHeader';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
@@ -15,7 +16,6 @@ import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { fetchDashboardPackedRecords, fetchDashboardShippedData } from '@/lib/dashboard-table-data';
 import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
-import { DateGroupHeader } from './DateGroupHeader';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
@@ -50,6 +50,7 @@ function hasLinkedOrder(record: { order_row_id?: number | null; order_id?: strin
 }
 import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { getStaffTextColor } from '@/design-system/components/StaffBadge';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { isEmptyDisplayValue } from '@/utils/empty-display-value';
 
@@ -527,7 +528,7 @@ export function DashboardShippedTable({
               count={currentCount || totalCount}
               countClassName={
                 embedded && testedBy != null
-                  ? stationThemeColors[getStaffThemeById(testedBy)].text
+                  ? getStaffTextColor(testedBy) ?? 'text-blue-700'
                   : 'text-blue-700'
               }
               weekRange={weekRange}
@@ -570,13 +571,13 @@ export function DashboardShippedTable({
 
                     return (
                       <div key={date} className="flex flex-col">
-                        <DateGroupHeader
+                        <MobileDateGroupHeader
                           date={date}
                           total={dayRecords.length}
                           formatDate={formatDate}
                           countClassName={
                             testedBy != null
-                              ? stationThemeColors[getStaffThemeById(testedBy)].text
+                              ? getStaffTextColor(testedBy)
                               : undefined
                           }
                         />
@@ -609,8 +610,8 @@ export function DashboardShippedTable({
                           const packerDisplay = normalizePersonName(packerName);
                           const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
                           const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
-                          const techColorClass = techStaffId ? stationThemeColors[getStaffThemeById(techStaffId)].text : undefined;
-                          const packerColorClass = packerStaffId ? stationThemeColors[getStaffThemeById(packerStaffId)].text : undefined;
+                          const techColorClass = getStaffTextColor(techStaffId);
+                          const packerColorClass = getStaffTextColor(packerStaffId);
                           const serialValue = String(record.serial_number || '').trim();
                           const serialDisplay =
                             isEmptyDisplayValue(serialValue) || serialValue === '---'

@@ -17,7 +17,7 @@ import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { getTrackingUrl } from '@/utils/order-links';
 import { isEmptyDisplayValue, missingItemNumberLabelForStation } from '@/utils/empty-display-value';
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { getCurrentPSTDateKey, toPSTDateKey, getDaysLateNumber, getDaysLateTone } from '@/utils/date';
 
 type OrderVariant = 'order' | 'fba' | 'repair';
 
@@ -90,22 +90,6 @@ function getDisplayShipByDate(order: ActiveStationOrder) {
   return isInvalid ? createdAtRaw || null : shipByRaw;
 }
 
-function getDaysLateNumber(shipByDate: string | null | undefined, fallbackDate?: string | null) {
-  const shipByKey = toPSTDateKey(shipByDate) || toPSTDateKey(fallbackDate);
-  const todayKey = getCurrentPSTDateKey();
-  if (!shipByKey || !todayKey) return 0;
-  const [sy, sm, sd] = shipByKey.split('-').map(Number);
-  const [ty, tm, td] = todayKey.split('-').map(Number);
-  const shipByIndex = Math.floor(Date.UTC(sy, sm - 1, sd) / 86400000);
-  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
-  return Math.max(0, todayIndex - shipByIndex);
-}
-
-function getDaysLateTone(daysLate: number) {
-  if (daysLate > 1) return 'text-red-600';
-  if (daysLate === 1) return 'text-yellow-600';
-  return 'text-emerald-600';
-}
 
 function getConditionColor(condition: string | null | undefined) {
   const c = (condition || '').toLowerCase().trim();

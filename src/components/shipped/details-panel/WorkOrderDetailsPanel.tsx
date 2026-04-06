@@ -13,6 +13,7 @@ import { usePanelActions } from '@/hooks/usePanelActions';
 import { ShippingInformationSection } from '@/components/shipped/details-panel/ShippingInformationSection';
 import { ProductDetailsSection } from '@/components/shipped/details-panel/ProductDetailsSection';
 import { MarkAsShippedForm } from '@/components/shipped/stacks/MarkAsShippedForm';
+import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { DeleteOrderControl } from '@/components/shipped/stacks/DeleteOrderControl';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
@@ -44,7 +45,7 @@ interface WorkOrderDetailsPanelProps {
 function buildOrderDetailsRecord(row: WorkOrderRow): ShippedOrder | null {
   if (row.entityType !== 'ORDER') return null;
 
-  return {
+  const detailsRecord: ShippedOrder & { out_of_stock: string | null } = {
     id: row.entityId,
     deadline_at: row.deadlineAt,
     ship_by_date: row.deadlineAt,
@@ -83,7 +84,10 @@ function buildOrderDetailsRecord(row: WorkOrderRow): ShippedOrder | null {
     packed_by_name: row.packerName || null,
     tested_by_name: row.techName || null,
     is_shipped: false,
+    out_of_stock: row.outOfStock || null,
   };
+
+  return detailsRecord;
 }
 
 export function WorkOrderDetailsPanel({
@@ -95,7 +99,7 @@ export function WorkOrderDetailsPanel({
 }: WorkOrderDetailsPanelProps) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [copiedAll, setCopiedAll] = useState(false);
-  const [outOfStock, setOutOfStock] = useState(String((row as any).out_of_stock || ''));
+  const [outOfStock, setOutOfStock] = useState(String(row.outOfStock || ''));
   const [notes, setNotes] = useState(row.notes || '');
   const [isMarkAsShippedOpen, setIsMarkAsShippedOpen] = useState(false);
   const [isAssignmentOpen, setIsAssignmentOpen] = useState(false);
@@ -108,6 +112,7 @@ export function WorkOrderDetailsPanel({
   });
 
   const orderDetailsRecord = useMemo(() => buildOrderDetailsRecord(row), [row]);
+  const hasOutOfStockValue = outOfStock.trim().length > 0;
   const fieldSave = useOrderFieldSave({
     orderId: row.entityType === 'ORDER' ? row.entityId : -1,
     initialOrderNumber: row.orderId || '',
@@ -131,7 +136,7 @@ export function WorkOrderDetailsPanel({
       status: row.status,
       deadlineAt: toDateInputValue(row.deadlineAt),
     });
-    setOutOfStock(String((row as any).out_of_stock || ''));
+    setOutOfStock(String(row.outOfStock || ''));
     setNotes(row.notes || '');
     setActiveInput('none');
     setIsMarkAsShippedOpen(false);
@@ -274,18 +279,25 @@ export function WorkOrderDetailsPanel({
                 />
               )}
 
-              {activeInput === 'out_of_stock' && (
-                <OutOfStockEditorBlock
-                  value={outOfStock}
-                  onChange={setOutOfStock}
-                  onCancel={() => {
-                    setOutOfStock(String((row as any).out_of_stock || ''));
-                    setActiveInput('none');
-                  }}
-                  onSubmit={() => void fieldSave.saveOutOfStock(outOfStock)}
-                  isSaving={fieldSave.isSavingOutOfStock}
-                  autoFocus
-                />
+              {(activeInput === 'out_of_stock' || hasOutOfStockValue) && (
+                activeInput === 'out_of_stock' ? (
+                  <OutOfStockEditorBlock
+                    value={outOfStock}
+                    onChange={setOutOfStock}
+                    onCancel={() => {
+                      setOutOfStock(String(row.outOfStock || ''));
+                      setActiveInput('none');
+                    }}
+                    onSubmit={() => void fieldSave.saveOutOfStock(outOfStock)}
+                    isSaving={fieldSave.isSavingOutOfStock}
+                    autoFocus
+                  />
+                ) : (
+                  <OutOfStockField
+                    value={outOfStock}
+                    onEdit={() => setActiveInput('out_of_stock')}
+                  />
+                )
               )}
 
               {activeInput === 'notes' && (

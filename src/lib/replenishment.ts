@@ -484,11 +484,19 @@ export async function listNeedToOrder(options: {
   statuses?: ReplenishmentStatus[];
   page?: number;
   limit?: number;
+  skuSearch?: string | null;
+  sort?: 'fifo' | 'newest';
 }) {
   const statuses = options.statuses?.length ? options.statuses : ACTIVE_STATUSES;
   const limit = Math.max(1, Math.min(options.limit ?? 50, 200));
   const page = Math.max(1, options.page ?? 1);
   const offset = (page - 1) * limit;
+  const skuSearch = cleanText(options.skuSearch) ?? null;
+  const sortDir = options.sort === 'newest' ? 'DESC' : 'ASC'; // FIFO by default
+
+  const skuClause = skuSearch ? `AND (rr.sku ILIKE '%' || $4 || '%' OR rr.item_name ILIKE '%' || $4 || '%')` : '';
+  const params: unknown[] = [statuses, limit, offset];
+  if (skuSearch) params.push(skuSearch);
 
   const [rows, count] = await Promise.all([
     pool.query(
@@ -511,15 +519,17 @@ export async function listNeedToOrder(options: {
        FROM replenishment_requests rr
        LEFT JOIN item_stock_cache isc ON isc.zoho_item_id = rr.zoho_item_id
        WHERE rr.status = ANY($1::replenishment_status[])
-       ORDER BY rr.created_at DESC
+       ${skuClause}
+       ORDER BY rr.created_at ${sortDir}
        LIMIT $2 OFFSET $3`,
-      [statuses, limit, offset]
+      params
     ),
     pool.query(
       `SELECT COUNT(*)::int AS count
        FROM replenishment_requests
-       WHERE status = ANY($1::replenishment_status[])`,
-      [statuses]
+       WHERE status = ANY($1::replenishment_status[])
+       ${skuSearch ? `AND (sku ILIKE '%' || $2 || '%' OR item_name ILIKE '%' || $2 || '%')` : ''}`,
+      skuSearch ? [statuses, skuSearch] : [statuses]
     ),
   ]);
 
@@ -701,8 +711,23 @@ export async function reconcilePOStatus(request: ReplenishmentRequestRow) {
     return sum + toNumber(line?.quantity_received, 0);
   }, 0);
 
-  if (totalReceived >= toNumber(request.quantity_needed, 0) && request.status !== 'fulfilled') {
-    await transitionReplenishmentStatus(request.id, 'fulfilled', 'system', `Received ${totalReceived} units`);
+  // Also check local receiving_lines for units received against this PO
+  let localReceived = 0;
+  if (request.zoho_po_id) {
+    const localResult = await pool.query(
+      `SELECT COALESCE(SUM(quantity_received), 0)::int AS total
+       FROM receiving_lines
+       WHERE zoho_purchaseorder_id = $1
+         AND zoho_item_id = $2
+         AND workflow_status = 'DONE'`,
+      [request.zoho_po_id, request.zoho_item_id]
+    );
+    localReceived = toNumber(localResult.rows[0]?.total, 0);
+  }
+
+  const effectiveReceived = Math.max(totalReceived, localReceived);
+  if (effectiveReceived >= toNumber(request.quantity_needed, 0) && request.status !== 'fulfilled') {
+    await transitionReplenishmentStatus(request.id, 'fulfilled', 'system', `Received ${effectiveReceived} units`);
   }
 }
 

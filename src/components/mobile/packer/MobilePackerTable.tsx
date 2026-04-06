@@ -11,12 +11,14 @@ import WeekHeader, {
   weekDayGroupCountClass,
 } from '@/components/ui/WeekHeader';
 import { cn } from '@/utils/_cn';
-import { getCurrentPSTDateKey, toPSTDateKey, formatDateWithOrdinal } from '@/utils/date';
+import { getCurrentPSTDateKey, toPSTDateKey, formatDateWithOrdinal, computeWeekRange } from '@/utils/date';
 import { usePackerLogs, type PackerRecord } from '@/hooks/usePackerLogs';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { isFbaOrder } from '@/utils/order-platform';
+import { normalizeTrackingKey } from '@/lib/tracking-format';
+import { usePackerTableController, isFbaPackerRecord } from '@/hooks/station/usePackerTableController';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -29,34 +31,7 @@ interface MobilePackerTableProps {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function computeWeekRange(weekOffset: number) {
-  const todayPst = getCurrentPSTDateKey();
-  const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
-  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-  const currentDay = now.getDay();
-  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
-  monday.setHours(0, 0, 0, 0);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  friday.setHours(23, 59, 59, 999);
-  return {
-    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
-    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
-  };
-}
 
-function isFbaPackerRecord(record: PackerRecord): boolean {
-  return (
-    isFbaOrder(record.order_id, record.account_source) ||
-    String(record.tracking_type || '').toUpperCase() === 'FNSKU'
-  );
-}
-
-function normalizeTrackingKey(value: string | null | undefined): string {
-  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
 
 function toDetailRecord(record: PackerRecord): ShippedOrder {
   const shipByDate = record.ship_by_date
@@ -122,96 +97,19 @@ export function MobilePackerTable({
   onOpenDetail,
   onOrderedDetailsChange,
 }: MobilePackerTableProps) {
-  const [stickyDate, setStickyDate] = useState('');
-  const [currentCount, setCurrentCount] = useState(0);
-  const [weekOffset, setWeekOffset] = useState(0);
+  const {
+    weekOffset, setWeekOffset, weekRange,
+    visibleRecords, filteredGroupedRecords, orderedRecords,
+    loading, isRefreshing,
+    scrollRef, stickyDate, currentCount,
+  } = usePackerTableController({ staffId: packerId });
+
   const [removedRowKeys, setRemovedRowKeys] = useState<Set<string>>(new Set());
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const weekRange = computeWeekRange(weekOffset);
-  const { data: records = [], isLoading, isFetching } = usePackerLogs(packerId, { weekOffset, weekRange });
-  const loading = isLoading && records.length === 0;
-  const isRefreshing = isFetching && !isLoading;
   const weekHeaderCountClass = stationThemeColors[getStaffThemeById(packerId)].text;
-
-  const visibleRecords = useMemo(() => {
-    const base = records.filter((record) => !removedRowKeys.has(getRowKey(record)));
-    const sorted = [...base].sort(
-      (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
-    );
-
-    const trackingIndex = new Map<string, number>();
-    const unique: PackerRecord[] = [];
-
-    for (const record of sorted) {
-      if (isFbaPackerRecord(record)) {
-        unique.push(record);
-        continue;
-      }
-      const key = normalizeTrackingKey(record.shipping_tracking_number);
-      if (!key) { unique.push(record); continue; }
-      if (!trackingIndex.has(key)) {
-        trackingIndex.set(key, unique.length);
-        unique.push(record);
-      }
-    }
-    return unique;
-  }, [records, removedRowKeys]);
-
-  const groupedRecords = useMemo(() => {
-    const grouped: Record<string, PackerRecord[]> = {};
-    visibleRecords.forEach((record) => {
-      if (!record.created_at) return;
-      const date = toPSTDateKey(record.created_at) || 'Unknown';
-      if (!grouped[date]) grouped[date] = [];
-      grouped[date].push(record);
-    });
-    return Object.fromEntries(
-      Object.entries(grouped).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr),
-    );
-  }, [visibleRecords, weekRange.endStr, weekRange.startStr]);
-
-  const orderedRecords = useMemo(
-    () => Object.entries(groupedRecords)
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .flatMap(([, dateRecords]) => (
-        [...dateRecords].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-      )),
-    [groupedRecords],
-  );
 
   useEffect(() => {
     onOrderedDetailsChange?.(orderedRecords.map(toDetailRecord));
   }, [onOrderedDetailsChange, orderedRecords]);
-
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
-    for (let i = 0; i < headers.length; i += 1) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
-      } else {
-        break;
-      }
-    }
-    if (activeDate) {
-      setStickyDate(formatDateWithOrdinal(activeDate));
-      setCurrentCount(activeCount);
-    }
-  }, []);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) return undefined;
-    container.addEventListener('scroll', handleScroll);
-    window.setTimeout(() => handleScroll(), 80);
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, groupedRecords]);
 
   useEffect(() => {
     const handleRemoved = (e: Event) => {
@@ -228,7 +126,7 @@ export function MobilePackerTable({
     return () => window.removeEventListener('packer-log-removed', handleRemoved as EventListener);
   }, []);
 
-  const getWeekCount = () => Object.values(groupedRecords).reduce((sum, recs) => sum + recs.length, 0);
+  const getWeekCount = () => Object.values(filteredGroupedRecords).reduce((sum, recs) => sum + recs.length, 0);
 
   if (loading) {
     return (
@@ -266,7 +164,7 @@ export function MobilePackerTable({
           </div>
         ) : (
           <div className="pb-[max(1rem,env(safe-area-inset-bottom))]">
-            {Object.entries(groupedRecords)
+            {Object.entries(filteredGroupedRecords)
               .sort((a, b) => b[0].localeCompare(a[0]))
               .map(([date, dateRecords]) => {
                 const sortedRecords = [...dateRecords].sort(

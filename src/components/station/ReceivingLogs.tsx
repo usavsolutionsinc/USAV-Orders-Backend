@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Package, Loader2, Search } from '../Icons';
 import { CopyChip, getLast4 } from '@/components/ui/CopyChip';
 import { AnimatePresence, motion } from 'framer-motion';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, computeWeekRange } from '@/utils/date';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { OverlaySearchBar } from '@/components/ui/OverlaySearchBar';
@@ -58,22 +58,6 @@ function formatDbTime(value: string | null | undefined): string {
     return '--:--';
 }
 
-function computeWeekRange(weekOffset: number) {
-    const todayPst = getCurrentPSTDateKey();
-    const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
-    const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-    const dayOfWeek = now.getDay();
-    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
-    monday.setHours(0, 0, 0, 0);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    friday.setHours(23, 59, 59, 999);
-    const fmt = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return { startStr: fmt(monday), endStr: fmt(friday), start: monday, end: friday };
-}
 
 export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingLogsProps) {
     const queryClient = useQueryClient();

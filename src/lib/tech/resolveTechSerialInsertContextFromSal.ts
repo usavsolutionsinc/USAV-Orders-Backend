@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { normalizeTrackingKey18 } from '@/lib/tracking-format';
+import { normalizeTrackingKey18, normalizeTrackingCanonical } from '@/lib/tracking-format';
 
 export type TechSerialInsertDb = Pick<Pool, 'query'>;
 
@@ -123,7 +123,7 @@ export async function resolveTechSerialInsertContextFromSal(
     const ordersExceptionId =
       tsn.orders_exception_id != null ? Number(tsn.orders_exception_id) : null;
     const normalizedFnsku = tsn.fnsku
-      ? String(tsn.fnsku).trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+      ? normalizeTrackingCanonical(String(tsn.fnsku))
       : null;
 
     let matchedFnskuLog: TechSerialSalInsertContext['matchedFnskuLog'] = null;

@@ -210,6 +210,7 @@ export function ShippedDetailsPanel({
     onClose,
     onMoveUp: () => dispatchNavigateShippedDetails('up'),
     onMoveDown: () => dispatchNavigateShippedDetails('down'),
+    onAssign: canEditAssignment ? openAssignmentCard : undefined,
   };
 
   const handleCopyOrderId = () => {

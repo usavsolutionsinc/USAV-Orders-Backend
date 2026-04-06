@@ -12,6 +12,8 @@ interface OutOfStockEditorBlockProps {
   onSubmit: () => void;
   isSaving?: boolean;
   autoFocus?: boolean;
+  autoSaveOnChange?: boolean;
+  saveHint?: string;
   className?: string;
 }
 
@@ -21,23 +23,24 @@ export function OutOfStockEditorBlock({
   onCancel,
   onSubmit,
   autoFocus = false,
+  autoSaveOnChange = true,
+  saveHint,
   className = '',
 }: OutOfStockEditorBlockProps) {
   const [showSaved, setShowSaved] = useState(false);
   const onSubmitRef = useRef(onSubmit);
   useEffect(() => { onSubmitRef.current = onSubmit; }, [onSubmit]);
 
-  // Debounced auto-save on value change
   useEffect(() => {
+    if (!autoSaveOnChange) return;
     if (!value.trim()) return;
     const t = setTimeout(() => {
       onSubmitRef.current();
       setShowSaved(true);
     }, 700);
     return () => clearTimeout(t);
-  }, [value]);
+  }, [autoSaveOnChange, value]);
 
-  // Fade out "Saved" after 1.6s
   useEffect(() => {
     if (!showSaved) return;
     const t = setTimeout(() => setShowSaved(false), 1600);
@@ -79,6 +82,11 @@ export function OutOfStockEditorBlock({
         autoFocus={autoFocus}
         className={`w-full bg-transparent text-sm font-normal text-gray-900 outline-none placeholder:text-gray-500 ${dmSans.className}`}
       />
+      {!autoSaveOnChange && saveHint ? (
+        <p className="mt-1.5 text-[10px] font-bold tracking-wide text-gray-500">
+          {saveHint}
+        </p>
+      ) : null}
     </div>
   );
 }

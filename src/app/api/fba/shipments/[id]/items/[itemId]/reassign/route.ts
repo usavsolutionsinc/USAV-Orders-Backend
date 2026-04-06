@@ -67,27 +67,9 @@ export async function PATCH(
       [targetShipmentId, itemIdNum],
     );
 
-    // Refresh counts on both shipments
-    const refreshCounts = `
-      UPDATE fba_shipments fs
-      SET ready_item_count   = COALESCE(counts.ready, 0),
-          packed_item_count  = COALESCE(counts.packed, 0),
-          shipped_item_count = COALESCE(counts.shipped, 0),
-          updated_at         = NOW()
-      FROM (
-        SELECT
-          shipment_id,
-          COUNT(*) FILTER (WHERE status IN ('READY_TO_GO','LABEL_ASSIGNED','SHIPPED'))::int AS ready,
-          COUNT(*) FILTER (WHERE status IN ('LABEL_ASSIGNED','SHIPPED'))::int                AS packed,
-          COUNT(*) FILTER (WHERE status = 'SHIPPED')::int                                   AS shipped
-        FROM fba_shipment_items
-        WHERE shipment_id = $1
-        GROUP BY shipment_id
-      ) counts
-      WHERE fs.id = counts.shipment_id`;
-
-    await client.query(refreshCounts, [sourceShipmentId]);
-    await client.query(refreshCounts, [targetShipmentId]);
+    // Touch updated_at on both shipments so real-time listeners pick up the change
+    await client.query(`UPDATE fba_shipments SET updated_at = NOW() WHERE id = $1`, [sourceShipmentId]);
+    await client.query(`UPDATE fba_shipments SET updated_at = NOW() WHERE id = $1`, [targetShipmentId]);
 
     await client.query('COMMIT');
 

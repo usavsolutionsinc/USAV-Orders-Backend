@@ -21,7 +21,7 @@ export async function GET(_request: NextRequest) {
            fsi.expected_qty,
            fsi.actual_qty,
            fsi.status AS item_status,
-           COALESCE(fsi.product_title, ff.product_title, fsi.fnsku) AS display_title,
+           COALESCE(ff.product_title, fsi.fnsku) AS display_title,
            fsi.asin,
            fsi.sku,
            fsi.notes AS item_notes,

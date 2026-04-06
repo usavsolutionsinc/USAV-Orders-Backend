@@ -31,7 +31,7 @@ export async function GET() {
 
     const itemsRes = await pool.query(`
       SELECT fsi.id, fsi.fnsku, fsi.expected_qty, fsi.status,
-             COALESCE(fsi.product_title, ff.product_title, fsi.fnsku) AS display_title,
+             COALESCE(ff.product_title, fsi.fnsku) AS display_title,
              fsi.asin, fsi.sku,
              fsi.ready_by_staff_id,
              fsi.verified_by_staff_id,

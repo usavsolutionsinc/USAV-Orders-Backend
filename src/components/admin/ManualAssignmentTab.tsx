@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ManualAssignmentTable, type ManualAssignmentRow } from './ManualAssignmentTable';
 import { ExternalLink, FileText, Loader2, Printer } from '@/components/Icons';
@@ -392,50 +393,33 @@ export function ManualAssignmentTab({
   orderId = '',
   searchValue = '',
 }: ManualAssignmentTabProps) {
-  const [rows, setRows] = useState<ManualAssignmentRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [selectedRow, setSelectedRow] = useState<ManualAssignmentRow | null>(null);
 
-  const attachedCount = useMemo(
-    () => rows.filter((r) => r.googleDocId.trim().length > 0).length,
-    [rows]
-  );
-
-  const filteredRows = useMemo(() => {
-    const q = searchValue.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) =>
-      [row.itemNumber, row.productTitle, row.googleDocId].some((v) =>
-        String(v || '').toLowerCase().includes(q)
-      )
-    );
-  }, [rows, searchValue]);
-
-  const loadCategoryProducts = useCallback(async (catId: string) => {
-    if (!catId) { setRows([]); return; }
-    setLoading(true); setError(null);
-    try {
-      // Single request — server now joins Ecwid products + manual assignments together
-      const res = await fetch(`/api/product-manuals/by-category?category=${encodeURIComponent(catId)}`);
+  // Category mode query
+  const { data: categoryData, isLoading: categoryLoading, error: categoryError } = useQuery({
+    queryKey: ['manual-assignment', 'category', categoryId],
+    enabled: manualMode === 'category' && !!categoryId,
+    queryFn: async () => {
+      const res = await fetch(`/api/product-manuals/by-category?category=${encodeURIComponent(categoryId)}`);
       const data = await parseResponse(res);
-      if (!res.ok) { setError(data.error || `Failed (HTTP ${res.status})`); return; }
+      if (!res.ok) throw new Error(data.error || `Failed (HTTP ${res.status})`);
       const products = Array.isArray(data?.products) ? data.products : [];
-      setRows(buildRows(products));
-    } catch { setError('Network error while loading products.'); }
-    finally { setLoading(false); }
-  }, []);
+      return buildRows(products);
+    },
+  });
 
-  const loadOrderRow = useCallback(async (oid: string) => {
-    if (!oid) { setRows([]); return; }
-    setLoading(true); setError(null);
-    try {
+  // Order mode query
+  const { data: orderData, isLoading: orderLoading, error: orderError } = useQuery({
+    queryKey: ['manual-assignment', 'order', orderId],
+    enabled: manualMode === 'orders' && !!orderId,
+    queryFn: async () => {
       const res = await fetch(`/api/orders/recent?days=30`);
       const data = await parseResponse(res);
-      if (!res.ok) { setError(data.error || 'Failed to load order.'); return; }
+      if (!res.ok) throw new Error(data.error || 'Failed to load order.');
       const allOrders: RecentOrder[] = (data?.groups ?? []).flatMap((g: { orders: RecentOrder[] }) => g.orders);
-      const order = allOrders.find((o) => String(o.id) === oid);
-      if (!order) { setRows([]); setError('Order not found.'); return; }
+      const order = allOrders.find((o) => String(o.id) === orderId);
+      if (!order) throw new Error('Order not found.');
       const manualRow: ManualAssignmentRow = {
         itemNumber: order.item_number || '',
         productTitle: order.product_title || '',
@@ -453,32 +437,38 @@ export function ManualAssignmentTab({
           manualRow.manualDisplayName = String(manualData.manuals[0]?.displayName || '');
         }
       }
-      setRows([manualRow]);
-    } catch { setError('Network error while loading order.'); }
-    finally { setLoading(false); }
-  }, []);
+      return [manualRow];
+    },
+  });
 
-  const prevCategoryId = useRef('');
-  const prevOrderId = useRef('');
-  const prevMode = useRef('');
+  // Unified rows + loading + error from active mode
+  const [rows, setRows] = useState<ManualAssignmentRow[]>([]);
+  const queryRows = manualMode === 'category' ? categoryData : orderData;
+  const loading = manualMode === 'category' ? categoryLoading : orderLoading;
+  const error = (manualMode === 'category' ? categoryError : orderError)?.message ?? null;
 
   useEffect(() => {
-    if (manualMode === 'category') {
-      if (categoryId !== prevCategoryId.current || manualMode !== prevMode.current) {
-        prevCategoryId.current = categoryId;
-        prevMode.current = manualMode;
-        setSelectedRow(null);
-        void loadCategoryProducts(categoryId);
-      }
-    } else {
-      if (orderId !== prevOrderId.current || manualMode !== prevMode.current) {
-        prevOrderId.current = orderId;
-        prevMode.current = manualMode;
-        setSelectedRow(null);
-        void loadOrderRow(orderId);
-      }
-    }
-  }, [manualMode, categoryId, orderId, loadCategoryProducts, loadOrderRow]);
+    if (queryRows) setRows(queryRows);
+    else if (!loading) setRows([]);
+  }, [queryRows, loading]);
+
+  // Reset selection when mode/id changes
+  useEffect(() => { setSelectedRow(null); }, [manualMode, categoryId, orderId]);
+
+  const attachedCount = useMemo(
+    () => rows.filter((r) => r.googleDocId.trim().length > 0).length,
+    [rows]
+  );
+
+  const filteredRows = useMemo(() => {
+    const q = searchValue.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((row) =>
+      [row.itemNumber, row.productTitle, row.googleDocId].some((v) =>
+        String(v || '').toLowerCase().includes(q)
+      )
+    );
+  }, [rows, searchValue]);
 
   const handleRowClick = (row: ManualAssignmentRow) => {
     setSelectedRow((prev) => (prev?.itemNumber === row.itemNumber ? null : row));

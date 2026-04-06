@@ -34,4 +34,6 @@ export const fbaPaths = {
   markShipped: () => `${BASE}/mark-shipped`,
   /** POST close a shipment */
   close: () => `${BASE}/close`,
+  /** GET all active + recently shipped shipments with nested items + tracking */
+  activeWithDetails: () => `${BASE}/active-with-details`,
 } as const;

@@ -10,33 +10,16 @@ import { OrderIdChip, TrackingChip, PlatformChip, getLast4 } from '@/components/
 import { PasteTrackingButton } from '@/components/ui/PasteTrackingButton';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { getStaffTextColor } from '@/design-system/components/StaffBadge';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import WeekHeader from '@/components/ui/WeekHeader';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, getDaysLateNullable, getDaysLateTone } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { getOpenShippedDetailsPayload } from '@/utils/events';
 
-function getDaysLateNumber(deadlineAt: string | null | undefined): number | null {
-  const deadlineKey = toPSTDateKey(deadlineAt);
-  if (!deadlineKey) return null;
-  const todayKey = getCurrentPSTDateKey();
-  if (!todayKey) return null;
-  const [dy, dm, dd] = deadlineKey.split('-').map(Number);
-  const [ty, tm, td] = todayKey.split('-').map(Number);
-  const deadlineIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
-  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
-  return Math.max(0, todayIndex - deadlineIndex);
-}
-
-function getDaysLateTone(daysLate: number | null) {
-  if (daysLate === null) return 'text-gray-500';
-  if (daysLate > 1) return 'text-red-600';
-  if (daysLate === 1) return 'text-yellow-600';
-  return 'text-emerald-600';
-}
 
 function normalizePersonName(value: unknown): string {
   const text = String(value ?? '')
@@ -84,8 +67,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   daysLate: number | null;
   onRowClick: (record: ShippedOrder) => void;
 }) {
-  const testerColorClass = testerId ? stationThemeColors[getStaffThemeById(testerId)].text : undefined;
-  const packerColorClass = packerId ? stationThemeColors[getStaffThemeById(packerId)].text : undefined;
+  const testerColorClass = getStaffTextColor(testerId);
+  const packerColorClass = getStaffTextColor(packerId);
   const qty = parseInt(String(record.quantity || '1'), 10) || 1;
   const qtyClass = qty > 1 ? 'text-yellow-600' : 'text-gray-500';
   const trackingRaw =
@@ -387,23 +370,6 @@ export function OrdersQueueTable({
 
   const totalCount = Object.values(groupedRecords).reduce((sum, dayRecords) => sum + dayRecords.length, 0);
   const fallbackDate = formatDate(getCurrentPSTDateKey());
-  const getDaysLateNumber = (deadlineAt: string | null | undefined): number | null => {
-    const deadlineKey = toPSTDateKey(deadlineAt);
-    if (!deadlineKey) return null;
-    const todayKey = getCurrentPSTDateKey();
-    if (!todayKey) return null;
-    const [dy, dm, dd] = deadlineKey.split('-').map(Number);
-    const [ty, tm, td] = todayKey.split('-').map(Number);
-    const deadlineIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
-    const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
-    return Math.max(0, todayIndex - deadlineIndex);
-  };
-  const getDaysLateTone = (daysLate: number | null) => {
-    if (daysLate === null) return 'text-gray-500';
-    if (daysLate > 1) return 'text-red-600';
-    if (daysLate === 1) return 'text-yellow-600';
-    return 'text-emerald-600';
-  };
   const normalizePersonName = (value: unknown): string => {
     const text = String(value ?? '')
       .replace(/^tech:\s*/i, '')
@@ -538,7 +504,7 @@ export function OrdersQueueTable({
                         const outOfStockValue = String(r.out_of_stock || '').trim();
                         const hasOutOfStock = outOfStockValue !== '';
                         const hasTechScan = Boolean(r.has_tech_scan);
-                        const defaultDaysLate = getDaysLateNumber(r.deadline_at as string | null | undefined);
+                        const defaultDaysLate = getDaysLateNullable(r.deadline_at as string | null | undefined);
 
                         return (
                           <OrdersQueueTableRow

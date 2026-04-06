@@ -330,8 +330,9 @@ export async function runGoogleSheetsTransferOrders(
       return resolved.shipmentId ?? null;
     };
 
-    for (const tracking of sourceTrackings) {
-      await ensureShipmentId(tracking);
+    // Resolve all tracking numbers in parallel (batches of 10 to avoid overwhelming the DB)
+    for (let i = 0; i < sourceTrackings.length; i += 10) {
+      await Promise.all(sourceTrackings.slice(i, i + 10).map(ensureShipmentId));
     }
 
     const resolvedShipmentIds = Array.from(
@@ -613,20 +614,17 @@ export async function runGoogleSheetsTransferOrders(
     }
 
     if (ordersToDelete.length > 0) {
-      for (const id of ordersToDelete) {
-        await db.delete(ordersTable).where(eq(ordersTable.id, id));
-      }
+      await db.delete(ordersTable).where(inArray(ordersTable.id, ordersToDelete));
     }
 
     if (ordersToBackfill.length > 0) {
-      for (const entry of ordersToBackfill) {
-        const compactedUpdateValues = compactUpdateValues(entry.values);
-        if (Object.keys(compactedUpdateValues).length === 0) continue;
-        await db
-          .update(ordersTable)
-          .set(compactedUpdateValues)
-          .where(eq(ordersTable.id, entry.id));
-      }
+      await Promise.all(
+        ordersToBackfill.map((entry) => {
+          const compacted = compactUpdateValues(entry.values);
+          if (Object.keys(compacted).length === 0) return Promise.resolve();
+          return db.update(ordersTable).set(compacted).where(eq(ordersTable.id, entry.id));
+        })
+      );
     }
 
     let insertedOrderIds: number[] = [];
@@ -651,20 +649,22 @@ export async function runGoogleSheetsTransferOrders(
     }
 
     if (shipmentLinksToUpsert.size > 0) {
-      for (const [orderRowId, linkEntry] of Array.from(shipmentLinksToUpsert.entries())) {
-        await upsertOrderShipmentLinks(
-          orderRowId,
-          linkEntry.shipmentIds,
-          linkEntry.primaryShipmentId,
-          'google-sheets-transfer-orders',
-        );
-      }
+      await Promise.all(
+        Array.from(shipmentLinksToUpsert.entries()).map(([orderRowId, linkEntry]) =>
+          upsertOrderShipmentLinks(
+            orderRowId,
+            linkEntry.shipmentIds,
+            linkEntry.primaryShipmentId,
+            'google-sheets-transfer-orders',
+          )
+        )
+      );
     }
 
     if (orderDeadlinesToUpsert.length > 0) {
-      for (const entry of orderDeadlinesToUpsert) {
-        await upsertOrderDeadline(entry.id, entry.shipByDate);
-      }
+      await Promise.all(
+        orderDeadlinesToUpsert.map((entry) => upsertOrderDeadline(entry.id, entry.shipByDate))
+      );
     }
 
     // Use the shared post-commit invalidation path so manual, queued, and

@@ -1,3 +1,5 @@
+import { normalizeTrackingCanonical } from '@/lib/tracking-format';
+
 /**
  * scan-resolver.ts
  * ─────────────────────────────────────────────────────────────────
@@ -127,7 +129,7 @@ export const SERIAL_PARTIAL_REGEX = /^[A-Z0-9]{1,10}$/i;
 export const FNSKU_OR_ASIN_REGEX = /^(X00[A-Z0-9]{7}|B0[A-Z0-9]{8})$/;
 
 export function looksLikeFnsku(value: string): boolean {
-  const v = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const v = normalizeTrackingCanonical(value);
   return FNSKU_OR_ASIN_REGEX.test(v);
 }
 
@@ -137,7 +139,7 @@ export function looksLikeFnsku(value: string): boolean {
  */
 export function looksLikeFnskuPrefix(value: string): boolean {
   if (looksLikeFnsku(value)) return true;
-  const v = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const v = normalizeTrackingCanonical(value);
   if (!v) return false;
   if (/^X00[A-Z0-9]{0,7}$/.test(v) && v.length < 10) return true;
   if (/^B0[A-Z0-9]{0,8}$/.test(v) && v.length < 10) return true;

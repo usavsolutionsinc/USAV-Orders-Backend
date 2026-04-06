@@ -11,8 +11,9 @@ import WeekHeader, {
   weekDayGroupCountClass,
 } from '@/components/ui/WeekHeader';
 import { cn } from '@/utils/_cn';
-import { getCurrentPSTDateKey, toPSTDateKey, formatDateWithOrdinal } from '@/utils/date';
-import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
+import { getCurrentPSTDateKey, toPSTDateKey, formatDateWithOrdinal, computeWeekRange } from '@/utils/date';
+import { type TechRecord } from '@/hooks/useTechLogs';
+import { useTechTableController, hasUsableProductTitle, isFbaTechRecord } from '@/hooks/station/useTechTableController';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import {
@@ -23,6 +24,7 @@ import {
   TrackingChip,
   SerialChip,
 } from '@/components/ui/CopyChip';
+import { normalizeTrackingKey } from '@/lib/tracking-format';
 
 interface MobileTechTableProps {
   techId: number;
@@ -31,67 +33,10 @@ interface MobileTechTableProps {
   onOrderedDetailsChange?: (details: ShippedOrder[]) => void;
 }
 
-function computeWeekRange(weekOffset: number) {
-  const todayPst = getCurrentPSTDateKey();
-  const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
-  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-  const currentDay = now.getDay();
-  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
-  monday.setHours(0, 0, 0, 0);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  friday.setHours(23, 59, 59, 999);
-  return {
-    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
-    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
-  };
-}
 
-function normalizeTrackingKey(value: string | null | undefined): string {
-  return String(value || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
-}
 
 function normalizeProductTitle(value: string | null | undefined): string {
   return String(value || '').trim();
-}
-
-function hasUsableProductTitle(value: string | null | undefined): boolean {
-  const normalized = normalizeProductTitle(value);
-  return Boolean(normalized) && !/^unknown product$/i.test(normalized);
-}
-
-function hasSerialValue(value: string | null | undefined): boolean {
-  return Boolean(String(value || '').trim());
-}
-
-function isFbaTechRecord(record: TechRecord): boolean {
-  return (
-    record.source_kind === 'fba_scan' ||
-    record.account_source === 'fba' ||
-    Boolean(String(record.fnsku || '').trim()) ||
-    String(record.order_id || '').toUpperCase() === 'FBA'
-  );
-}
-
-function pickBestValue(primary: string | null | undefined, fallback: string | null | undefined): string | null {
-  const a = String(primary || '').trim();
-  const b = String(fallback || '').trim();
-  if (a && !/^n\/a$/i.test(a)) return a;
-  if (b && !/^n\/a$/i.test(b)) return b;
-  return a || b || null;
-}
-
-function mergeSerialNumbers(a: string | null | undefined, b: string | null | undefined): string {
-  const combined = [
-    ...String(a || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
-    ...String(b || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
-  ];
-  return Array.from(new Set(combined)).join(', ');
 }
 
 function toDetailRecord(record: TechRecord): ShippedOrder {
@@ -150,119 +95,25 @@ export function MobileTechTable({
   onOpenDetail,
   onOrderedDetailsChange,
 }: MobileTechTableProps) {
-  const [stickyDate, setStickyDate] = useState('');
-  const [currentCount, setCurrentCount] = useState(0);
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [removedRowKeys, setRemovedRowKeys] = useState<Set<string>>(new Set());
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const {
+    weekOffset, setWeekOffset, weekRange,
+    visibleRecords, groupedRecords, loading, isRefreshing,
+    getRowKey, removedRowKeys, setRemovedRowKeys,
+    scrollRef, stickyDate, currentCount,
+  } = useTechTableController({ staffId: techId });
 
-  const weekRange = computeWeekRange(weekOffset);
-  const { data: records = [], isLoading, isFetching } = useTechLogs(techId, { weekOffset, weekRange });
-  const loading = isLoading && records.length === 0;
-  const isRefreshing = isFetching && !isLoading;
   const weekHeaderCountClass = stationThemeColors[getStaffThemeById(techId)].text;
 
-  const visibleRecords = useMemo(() => {
-    const base = records.filter((record) => !removedRowKeys.has(getRowKey(record)));
-    const sorted = [...base].sort((a, b) => {
-      const timeA = new Date(a.created_at || 0).getTime();
-      const timeB = new Date(b.created_at || 0).getTime();
-      return timeB - timeA;
-    });
-
-    const trackingIndexByKey = new Map<string, number>();
-    const unique: TechRecord[] = [];
-
-    for (const record of sorted) {
-      if (isFbaTechRecord(record)) {
-        unique.push(record);
-        continue;
-      }
-
-      const trackingKey = normalizeTrackingKey(record.shipping_tracking_number);
-      if (!trackingKey) {
-        unique.push(record);
-        continue;
-      }
-
-      const existingIndex = trackingIndexByKey.get(trackingKey);
-      if (existingIndex === undefined) {
-        trackingIndexByKey.set(trackingKey, unique.length);
-        unique.push(record);
-        continue;
-      }
-
-      const existing = unique[existingIndex];
-      if (!existing) continue;
-
-      const existingHasSerial = hasSerialValue(existing.serial_number);
-      const candidateHasSerial = hasSerialValue(record.serial_number);
-      const shouldPreferCandidate =
-        (candidateHasSerial && !existingHasSerial)
-        || (
-          candidateHasSerial
-          && existingHasSerial
-          && existing.source_kind !== 'tech_serial'
-          && record.source_kind === 'tech_serial'
-        );
-
-      const mergedProductTitle = hasUsableProductTitle(record.product_title)
-        ? normalizeProductTitle(record.product_title)
-        : hasUsableProductTitle(existing.product_title)
-          ? normalizeProductTitle(existing.product_title)
-          : record.product_title;
-      const mergedCondition = shouldPreferCandidate
-        ? pickBestValue(record.condition, existing.condition)
-        : pickBestValue(existing.condition, record.condition);
-      const mergedSku = shouldPreferCandidate
-        ? pickBestValue(record.sku, existing.sku)
-        : pickBestValue(existing.sku, record.sku);
-      const mergedSerial = mergeSerialNumbers(existing.serial_number, record.serial_number);
-
-      if (shouldPreferCandidate) {
-        unique[existingIndex] = {
-          ...record,
-          product_title: mergedProductTitle,
-          condition: mergedCondition,
-          sku: mergedSku,
-          serial_number: mergedSerial,
-        };
-        continue;
-      }
-
-      const titleImproved = !hasUsableProductTitle(existing.product_title) && hasUsableProductTitle(record.product_title);
-      const conditionImproved = mergedCondition !== existing.condition;
-      const skuImproved = mergedSku !== existing.sku;
-      const serialImproved = mergedSerial !== (existing.serial_number || '');
-      if (titleImproved || conditionImproved || skuImproved || serialImproved) {
-        unique[existingIndex] = {
-          ...existing,
-          product_title: mergedProductTitle,
-          condition: mergedCondition,
-          sku: mergedSku,
-          serial_number: mergedSerial,
-        };
-      }
-    }
-
-    return unique;
-  }, [records, removedRowKeys]);
-
-  const groupedRecords = useMemo(() => {
-    const grouped: Record<string, TechRecord[]> = {};
-    visibleRecords.forEach((record) => {
-      if (!record.created_at) return;
-      const date = toPSTDateKey(record.created_at) || 'Unknown';
-      if (!grouped[date]) grouped[date] = [];
-      grouped[date].push(record);
-    });
-    return Object.fromEntries(
-      Object.entries(grouped).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr),
-    );
-  }, [visibleRecords, weekRange.endStr, weekRange.startStr]);
+  // Filter grouped records to week range for mobile
+  const filteredGroupedRecords = useMemo(() =>
+    Object.fromEntries(
+      Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr),
+    ),
+    [groupedRecords, weekRange.startStr, weekRange.endStr],
+  );
 
   const orderedRecords = useMemo(
-    () => Object.entries(groupedRecords)
+    () => Object.entries(filteredGroupedRecords)
       .sort((a, b) => b[0].localeCompare(a[0]))
       .flatMap(([, dateRecords]) => (
         [...dateRecords].sort((a, b) => {
@@ -271,41 +122,13 @@ export function MobileTechTable({
           return timeB - timeA;
         })
       )),
-    [groupedRecords],
+    [filteredGroupedRecords],
   );
 
   useEffect(() => {
     onOrderedDetailsChange?.(orderedRecords.map((record) => toDetailRecord(record)));
   }, [onOrderedDetailsChange, orderedRecords]);
 
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
-    for (let i = 0; i < headers.length; i += 1) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
-      } else {
-        break;
-      }
-    }
-    if (activeDate) {
-      setStickyDate(formatDateWithOrdinal(activeDate));
-      setCurrentCount(activeCount);
-    }
-  }, []);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) return undefined;
-    container.addEventListener('scroll', handleScroll);
-    window.setTimeout(() => handleScroll(), 80);
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, groupedRecords]);
 
   useEffect(() => {
     const handleTechLogRemoved = (e: Event) => {
@@ -325,7 +148,7 @@ export function MobileTechTable({
     return () => window.removeEventListener('tech-log-removed', handleTechLogRemoved as EventListener);
   }, []);
 
-  const getWeekCount = () => Object.values(groupedRecords).reduce((sum, dateRecords) => sum + dateRecords.length, 0);
+  const getWeekCount = () => Object.values(filteredGroupedRecords).reduce((sum, dateRecords) => sum + dateRecords.length, 0);
 
   if (loading) {
     return (
@@ -363,7 +186,7 @@ export function MobileTechTable({
           </div>
         ) : (
           <div className="pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            {Object.entries(groupedRecords)
+            {Object.entries(filteredGroupedRecords)
               .sort((a, b) => b[0].localeCompare(a[0]))
               .map(([date, dateRecords]) => {
                 const sortedRecords = [...dateRecords].sort((a, b) => {

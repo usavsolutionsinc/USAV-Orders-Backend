@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
 import type { IntentDomain, IntentParams } from '@/lib/ai/intent-router';
+import { normalizeTrackingCanonical } from '@/lib/tracking-format';
 
 function pct(value: number, total: number): string {
   if (!total) return '0%';
@@ -10,9 +11,6 @@ function normalizeLookupLike(value: string): string {
   return `%${value.trim()}%`;
 }
 
-function normalizeTrackingNumber(raw: string): string {
-  return raw.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-}
 
 function formatTitle(value: string | null | undefined, fallback: string): string {
   const cleaned = String(value || '').trim();
@@ -505,7 +503,7 @@ export async function fetchShippedContext(params: IntentParams): Promise<string>
     orderCondition = `o.order_id ILIKE $${values.length}`;
   }
   if (params.trackingNumber) {
-    values.push(normalizeTrackingNumber(params.trackingNumber));
+    values.push(normalizeTrackingCanonical(params.trackingNumber));
     trackingCondition = `stn.tracking_number_normalized = $${values.length}`;
   }
 

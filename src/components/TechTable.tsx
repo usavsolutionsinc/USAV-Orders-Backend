@@ -5,100 +5,39 @@ import { motion } from 'framer-motion';
 import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
 import { Loader2 } from './Icons';
 import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, PlatformChip, getLast4, getLast6Serial } from './ui/CopyChip';
+import { DesktopDateGroupHeader } from './ui/DesktopDateGroupHeader';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import WeekHeader from './ui/WeekHeader';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, computeWeekRange } from '@/utils/date';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import { useTechLogs, TechRecord } from '@/hooks/useTechLogs';
+import { type TechRecord } from '@/hooks/useTechLogs';
+import { normalizeTrackingKey } from '@/lib/tracking-format';
+import { useTechTableController, hasUsableProductTitle, isFbaTechRecord } from '@/hooks/station/useTechTableController';
 
 interface TechTableProps {
   testedBy: number;
 }
 
-function computeWeekRange(weekOffset: number) {
-  const todayPst = getCurrentPSTDateKey();
-  const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
-  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-  const currentDay = now.getDay();
-  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
-  monday.setHours(0, 0, 0, 0);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  friday.setHours(23, 59, 59, 999);
-  return {
-    start: monday,
-    end: friday,
-    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
-    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
-  };
-}
 
-function normalizeTrackingKey(value: string | null | undefined): string {
-  return String(value || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
-}
 
 function normalizeProductTitle(value: string | null | undefined): string {
   return String(value || '').trim();
 }
 
-function hasUsableProductTitle(value: string | null | undefined): boolean {
-  const normalized = normalizeProductTitle(value);
-  return Boolean(normalized) && !/^unknown product$/i.test(normalized);
-}
-
-function hasSerialValue(value: string | null | undefined): boolean {
-  return Boolean(String(value || '').trim());
-}
-
-function isFbaTechRecord(record: TechRecord): boolean {
-  return (
-    record.source_kind === 'fba_scan' ||
-    record.account_source === 'fba' ||
-    Boolean(String(record.fnsku || '').trim()) ||
-    String(record.order_id || '').toUpperCase() === 'FBA'
-  );
-}
-
-/** Returns the first value that is non-empty and not a placeholder like "N/A". */
-function pickBestValue(primary: string | null | undefined, fallback: string | null | undefined): string | null {
-  const a = String(primary || '').trim();
-  const b = String(fallback || '').trim();
-  if (a && !/^n\/a$/i.test(a)) return a;
-  if (b && !/^n\/a$/i.test(b)) return b;
-  return a || b || null;
-}
-
-/** Merges two serial_number strings (comma-separated) into one deduplicated value. */
-function mergeSerialNumbers(a: string | null | undefined, b: string | null | undefined): string {
-  const combined = [
-    ...String(a || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
-    ...String(b || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
-  ];
-  return Array.from(new Set(combined)).join(', ');
-}
-
 export function TechTable({ testedBy }: TechTableProps) {
-  const [stickyDate, setStickyDate] = useState<string>('');
-  const [currentCount, setCurrentCount] = useState<number>(0);
-  const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
-  const [removedRowKeys, setRemovedRowKeys] = useState<Set<string>>(new Set());
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Compute week range before calling the hook so it can be used in the query key
-  const weekRange = computeWeekRange(weekOffset);
-  const { data: records = [], isLoading, isFetching } = useTechLogs(testedBy, { weekOffset, weekRange });
-  const loading = isLoading && records.length === 0;
-  const isRefreshing = isFetching && !isLoading;
+  const {
+    weekOffset, setWeekOffset, weekRange,
+    visibleRecords, groupedRecords, loading, isRefreshing,
+    getRowKey, removedRowKeys, setRemovedRowKeys,
+    scrollRef, stickyDate, currentCount,
+  } = useTechTableController({ staffId: testedBy });
+
   const weekHeaderCountClass = stationThemeColors[getStaffThemeById(testedBy)].text;
 
   useEffect(() => {
@@ -167,8 +106,6 @@ export function TechTable({ testedBy }: TechTableProps) {
     return Number(detail.id ?? detail.shipment_id ?? record.id);
   };
 
-  const getRowKey = (record: TechRecord) =>
-    `${record.source_kind || 'tech'}:${record.source_row_id ?? record.id}`;
 
   const openDetails = (record: TechRecord) => {
     const detail = toDetailRecord(record);
@@ -186,138 +123,6 @@ export function TechTable({ testedBy }: TechTableProps) {
 
   const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
 
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
-    for (let i = 0; i < headers.length; i++) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0');
-      } else {
-        break;
-      }
-    }
-    if (activeDate) setStickyDate(formatDate(activeDate));
-    if (activeCount) setCurrentCount(activeCount);
-  }, []);
-
-  const visibleRecords = useMemo(() => {
-    const base = records.filter((record) => !removedRowKeys.has(getRowKey(record)));
-    const sorted = [...base].sort((a, b) => {
-      const timeA = new Date(a.created_at || 0).getTime();
-      const timeB = new Date(b.created_at || 0).getTime();
-      return timeB - timeA;
-    });
-
-    const trackingIndexByKey = new Map<string, number>();
-    const unique: TechRecord[] = [];
-    for (const record of sorted) {
-      if (isFbaTechRecord(record)) {
-        unique.push(record);
-        continue;
-      }
-
-      const trackingKey = normalizeTrackingKey(record.shipping_tracking_number);
-      if (!trackingKey) {
-        unique.push(record);
-        continue;
-      }
-
-      const existingIndex = trackingIndexByKey.get(trackingKey);
-      if (existingIndex === undefined) {
-        trackingIndexByKey.set(trackingKey, unique.length);
-        unique.push(record);
-        continue;
-      }
-
-      const existing = unique[existingIndex];
-      if (!existing) continue;
-      const existingHasSerial = hasSerialValue(existing.serial_number);
-      const candidateHasSerial = hasSerialValue(record.serial_number);
-      const shouldPreferCandidate =
-        (candidateHasSerial && !existingHasSerial)
-        || (
-          candidateHasSerial
-          && existingHasSerial
-          && existing.source_kind !== 'tech_serial'
-          && record.source_kind === 'tech_serial'
-        );
-
-      const mergedProductTitle = hasUsableProductTitle(record.product_title)
-        ? normalizeProductTitle(record.product_title)
-        : hasUsableProductTitle(existing.product_title)
-          ? normalizeProductTitle(existing.product_title)
-          : record.product_title;
-
-      // Always pick the best condition + SKU from either row so a re-scan of the
-      // same tracking (which may produce a tech_scan row with null fields) never
-      // overwrites the values already established by the tech_serial row.
-      const mergedCondition = shouldPreferCandidate
-        ? pickBestValue(record.condition, existing.condition)
-        : pickBestValue(existing.condition, record.condition);
-      const mergedSku = shouldPreferCandidate
-        ? pickBestValue(record.sku, existing.sku)
-        : pickBestValue(existing.sku, record.sku);
-      // Always union all serial numbers from both rows so that multiple TSN
-      // records for the same tracking all appear together in the details panel.
-      const mergedSerial = mergeSerialNumbers(existing.serial_number, record.serial_number);
-
-      if (shouldPreferCandidate) {
-        unique[existingIndex] = {
-          ...record,
-          product_title: mergedProductTitle,
-          condition: mergedCondition,
-          sku: mergedSku,
-          serial_number: mergedSerial,
-        };
-        continue;
-      }
-
-      // Always patch the winner if any field improved — not just when product_title changed.
-      const titleImproved = !hasUsableProductTitle(existing.product_title) && hasUsableProductTitle(record.product_title);
-      const conditionImproved = mergedCondition !== existing.condition;
-      const skuImproved = mergedSku !== existing.sku;
-      const serialImproved = mergedSerial !== (existing.serial_number || '');
-      if (titleImproved || conditionImproved || skuImproved || serialImproved) {
-        unique[existingIndex] = {
-          ...existing,
-          product_title: mergedProductTitle,
-          condition: mergedCondition,
-          sku: mergedSku,
-          serial_number: mergedSerial,
-        };
-      }
-    }
-    return unique;
-  }, [records, removedRowKeys]);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      setTimeout(() => handleScroll(), 100);
-    }
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, visibleRecords]);
-
-  // Group records by PST date (server pre-filters by week with ±1 day UTC buffer;
-  // grouping + display filter below gives exact PST-week accuracy).
-  const groupedRecords: { [key: string]: TechRecord[] } = {};
-  visibleRecords.forEach(record => {
-    if (!record.created_at) return;
-    let date = '';
-    try {
-      date = toPSTDateKey(record.created_at) || 'Unknown';
-    } catch (e) {
-      date = 'Unknown';
-    }
-    if (!groupedRecords[date]) groupedRecords[date] = [];
-    groupedRecords[date].push(record);
-  });
 
   const filteredGroupedRecords = Object.fromEntries(
     Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
@@ -425,15 +230,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                   });
                   return (
                     <div key={date} className="flex flex-col">
-                      <div
-                        data-day-header
-                        data-date={date}
-                        data-count={dateRecords.length}
-                        className="bg-gray-50/80 border-y border-gray-300 px-2 py-1 flex items-center justify-between z-10"
-                      >
-                        <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                        <p className="text-[11px] font-black text-gray-900 tabular-nums">{dateRecords.length}</p>
-                      </div>
+                      <DesktopDateGroupHeader date={date} total={dateRecords.length} formatDate={formatDate} />
                       {sortedRecords.map((record, index) => {
                         const displayValues = getOrderDisplayValues({
                           sku: record.sku,

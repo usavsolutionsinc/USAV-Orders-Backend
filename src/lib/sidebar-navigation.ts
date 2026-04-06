@@ -13,6 +13,7 @@ import {
   User,
   Wrench,
   Zap,
+  RefreshCw,
 } from '@/components/Icons';
 
 export type SidebarRouteKey =
@@ -22,6 +23,7 @@ export type SidebarRouteKey =
   | 'receiving'
   | 'repair'
   | 'work-orders'
+  | 'replenish'
   | 'sku-stock'
   | 'tech'
   | 'packer'
@@ -57,6 +59,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'fba', label: 'FBA', href: '/fba', icon: Package, kind: 'main' },
   { id: 'repair', label: 'Repair', href: '/repair', icon: Tool, kind: 'main' },
   { id: 'work-orders', label: 'Work Orders', href: '/work-orders', icon: PackageCheck, kind: 'main' },
+  { id: 'replenish', label: 'Replenish', href: '/replenish', icon: RefreshCw, kind: 'main' },
   { id: 'receiving', label: 'Receiving', href: '/receiving', icon: ClipboardList, kind: 'station' },
   { id: 'tech', label: 'Technicians', href: '/tech?staffId=1', icon: Wrench, kind: 'station' },
   { id: 'packer', label: 'Packers', href: '/packer?staffId=4', icon: User, kind: 'station' },
@@ -85,6 +88,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
   if (pathname === '/repair' || pathname.startsWith('/repair/')) return 'repair';
   if (pathname === '/work-orders' || pathname.startsWith('/work-orders/')) return 'work-orders';
+  if (pathname === '/replenish' || pathname.startsWith('/replenish/')) return 'replenish';
   if (pathname === '/sku-stock' || pathname.startsWith('/sku-stock/')) return 'sku-stock';
   if (pathname === '/support' || pathname.startsWith('/support/')) return 'support';
   if (pathname === '/previous-quarters' || pathname.startsWith('/previous-quarters/')) return 'previous-quarters';

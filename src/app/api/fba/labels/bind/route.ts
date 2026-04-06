@@ -122,34 +122,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Roll up shipment counters and status.
+    // Auto-advance shipment status based on remaining item statuses.
     await client.query(
       `UPDATE fba_shipments
-       SET ready_item_count   = counts.ready_item_count,
-           packed_item_count  = counts.packed_item_count,
-           shipped_item_count = counts.shipped_item_count,
-           status             = CASE
-                                  WHEN counts.planned_item_count = 0
-                                    AND counts.ready_to_go_item_count = 0
-                                    THEN 'LABEL_ASSIGNED'::fba_shipment_status_enum
-                                  WHEN counts.planned_item_count = 0
-                                    THEN 'READY_TO_GO'::fba_shipment_status_enum
-                                  ELSE fba_shipments.status
-                                END,
-           updated_at         = NOW()
-       FROM (
-         SELECT
-           shipment_id,
-           COUNT(*) FILTER (WHERE status IN ('READY_TO_GO', 'LABEL_ASSIGNED', 'SHIPPED'))::int AS ready_item_count,
-           COUNT(*) FILTER (WHERE status IN ('LABEL_ASSIGNED', 'SHIPPED'))::int AS packed_item_count,
-           COUNT(*) FILTER (WHERE status = 'SHIPPED')::int AS shipped_item_count,
-           COUNT(*) FILTER (WHERE status = 'PLANNED')::int AS planned_item_count,
-           COUNT(*) FILTER (WHERE status = 'READY_TO_GO')::int AS ready_to_go_item_count
-         FROM fba_shipment_items
-         WHERE shipment_id = $1
-         GROUP BY shipment_id
-       ) counts
-       WHERE fba_shipments.id = counts.shipment_id`,
+       SET status = CASE
+                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
+                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'READY_TO_GO')
+                        THEN 'LABEL_ASSIGNED'::fba_shipment_status_enum
+                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
+                        THEN 'READY_TO_GO'::fba_shipment_status_enum
+                      ELSE status
+                    END,
+           updated_at = NOW()
+       WHERE id = $1`,
       [shipment_id]
     );
 

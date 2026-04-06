@@ -10,8 +10,10 @@ export async function GET(req: NextRequest) {
       .filter(Boolean) as any[];
     const page = Number(searchParams.get('page') || '1');
     const limit = Number(searchParams.get('limit') || '50');
+    const skuSearch = searchParams.get('sku') || null;
+    const sort = searchParams.get('sort') === 'newest' ? 'newest' as const : 'fifo' as const;
 
-    const payload = await listNeedToOrder({ statuses, page, limit });
+    const payload = await listNeedToOrder({ statuses, page, limit, skuSearch, sort });
     return NextResponse.json(payload);
   } catch (error: any) {
     return NextResponse.json(

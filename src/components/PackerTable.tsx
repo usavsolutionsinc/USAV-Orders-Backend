@@ -10,68 +10,40 @@ import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderCol
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { OverlaySearchBar } from './ui/OverlaySearchBar';
 import WeekHeader from './ui/WeekHeader';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, computeWeekRange } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { isFbaOrder } from '@/utils/order-platform';
-import { usePackerLogs, PackerRecord } from '@/hooks/usePackerLogs';
+import { type PackerRecord } from '@/hooks/usePackerLogs';
+import { usePackerTableController, isFbaPackerRecord } from '@/hooks/station/usePackerTableController';
 
 interface PackerTableProps {
   packedBy: number;
 }
 
-/** FBA / FNSKU pack rows: each activity log is its own row (matches TechTable — no tracking-key merge). */
-function isFbaPackerRecord(record: PackerRecord): boolean {
-  return (
-    isFbaOrder(record.order_id, record.account_source) ||
-    String(record.tracking_type || '').toUpperCase() === 'FNSKU'
-  );
-}
-
-function computeWeekRange(weekOffset: number) {
-  const todayPst = getCurrentPSTDateKey();
-  const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
-  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
-  const currentDay = now.getDay();
-  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
-  monday.setHours(0, 0, 0, 0);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  friday.setHours(23, 59, 59, 999);
-  return {
-    start: monday,
-    end: friday,
-    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
-    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
-  };
-}
 
 export function PackerTable({ packedBy }: PackerTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefersReducedMotion = useReducedMotion();
-  const [stickyDate, setStickyDate] = useState<string>('');
-  const [currentCount, setCurrentCount] = useState<number>(0);
-  const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [searchInput, setSearchInput] = useState(String(searchParams.get('search') || ''));
-  const scrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const counterColorClass = stationThemeColors[getStaffThemeById(packedBy)].text;
   const currentSearch = String(searchParams.get('search') || '');
   const searchOpen = searchParams.get('searchOpen') === '1';
   const showSearch = searchOpen || Boolean(currentSearch);
 
-  // Compute week range before calling the hook so it feeds into the query key.
-  const weekRange = computeWeekRange(weekOffset);
-  const { data: records = [], isLoading, isFetching } = usePackerLogs(packedBy, { weekOffset, weekRange });
-  const loading = isLoading && records.length === 0;
-  const isRefreshing = isFetching && !isLoading;
+  const {
+    weekOffset, setWeekOffset, weekRange,
+    visibleRecords, filteredGroupedRecords, orderedRecords,
+    loading, isRefreshing,
+    scrollRef, stickyDate, currentCount,
+  } = usePackerTableController({ staffId: packedBy, searchTerm: currentSearch });
+
+  const counterColorClass = stationThemeColors[getStaffThemeById(packedBy)].text;
 
   useEffect(() => {
     setSearchInput(currentSearch);
@@ -151,34 +123,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
 
   const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
 
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
-    for (let i = 0; i < headers.length; i++) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0');
-      } else {
-        break;
-      }
-    }
-    if (activeDate) setStickyDate(formatDate(activeDate));
-    if (activeCount) setCurrentCount(activeCount);
-  }, []);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      setTimeout(() => handleScroll(), 100);
-    }
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, records]);
-
   const updateSearch = (value: string, keepOpen = true) => {
     const nextParams = new URLSearchParams(searchParams.toString());
     nextParams.set('staffId', String(packedBy));
@@ -228,62 +172,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     return () => window.clearTimeout(timeoutId);
   }, [showSearch]);
 
-  // Deduplicate: latest record per tracking key — except FBA/FNSKU rows (each scan stays visible).
-  const seenTracking = new Map<string, PackerRecord>();
-  [...records].sort((a, b) => a.id - b.id).forEach((record) => {
-    if (isFbaPackerRecord(record)) {
-      seenTracking.set(`fba:${record.id}`, record);
-      return;
-    }
-    const key = (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
-    seenTracking.set(key, record);
-  });
-  const dedupedRecords = Array.from(seenTracking.values());
-  const normalizedSearch = currentSearch.trim().toLowerCase();
-  const visibleRecords = normalizedSearch
-    ? dedupedRecords.filter((record) => {
-        const haystack = [
-          record.product_title,
-          record.order_id,
-          record.shipping_tracking_number,
-          record.scan_ref,
-          record.sku,
-          record.condition,
-          record.account_source,
-        ]
-          .map((value) => String(value || '').toLowerCase())
-          .join(' ');
-        return haystack.includes(normalizedSearch);
-      })
-    : dedupedRecords;
-
-  // Group records by date
-  const groupedRecords: { [key: string]: PackerRecord[] } = {};
-  visibleRecords.forEach(record => {
-    if (!record.created_at) return;
-    let date = '';
-    try {
-      date = toPSTDateKey(record.created_at) || 'Unknown';
-    } catch (e) {
-      date = 'Unknown';
-    }
-    if (!groupedRecords[date]) groupedRecords[date] = [];
-    groupedRecords[date].push(record);
-  });
-
-  const filteredGroupedRecords = Object.fromEntries(
-    Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
-  );
-
-  const orderedRecords = Object.entries(filteredGroupedRecords)
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .flatMap(([, dateRecords]) =>
-      [...dateRecords].sort((a, b) => {
-        const timeA = new Date(a.created_at || 0).getTime();
-        const timeB = new Date(b.created_at || 0).getTime();
-        return timeB - timeA;
-      })
-    );
 
   useEffect(() => {
     const handleNavigateDetails = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {

@@ -8,6 +8,7 @@ import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { MobileShell } from '@/design-system/components/mobile/MobileShell';
 import { MobileStationPacking } from '../station/MobileStationPacking';
 import { MobilePackerTable } from './MobilePackerTable';
+import { normalizeTrackingKey } from '@/lib/tracking-format';
 import { MobilePageHeader } from '@/components/mobile/shared/MobilePageHeader';
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
 import { usePackerLogs } from '@/hooks/usePackerLogs';
@@ -45,7 +46,7 @@ function deduplicateByTracking(records: Array<{ shipping_tracking_number: string
       String(r.tracking_type || '').toUpperCase() === 'FNSKU' ||
       String(r.account_source || '').toLowerCase() === 'fba';
     if (isFba) return true;
-    const key = String(r.shipping_tracking_number || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const key = normalizeTrackingKey(r.shipping_tracking_number);
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;

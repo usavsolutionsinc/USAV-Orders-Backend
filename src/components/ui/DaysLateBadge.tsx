@@ -1,6 +1,6 @@
 'use client';
 
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { getDaysLateNumber } from '@/utils/date';
 
 type DaysLateVariant = 'full' | 'number';
 
@@ -11,27 +11,13 @@ interface DaysLateBadgeProps {
   className?: string;
 }
 
-function toDayIndex(dateKey: string): number {
-  const [year, month, day] = dateKey.split('-').map(Number);
-  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
-}
-
-function getDaysLateValue(shipByDate: string | null | undefined, fallbackDate?: string | null | undefined): number {
-  const shipByKey = toPSTDateKey(shipByDate) || toPSTDateKey(fallbackDate);
-  const todayKey = getCurrentPSTDateKey();
-  if (!shipByKey || !todayKey) return 0;
-
-  const delta = toDayIndex(todayKey) - toDayIndex(shipByKey);
-  return delta > 0 ? delta : 0;
-}
-
 export function DaysLateBadge({
   shipByDate,
   fallbackDate,
   variant = 'full',
   className = '',
 }: DaysLateBadgeProps) {
-  const daysLate = getDaysLateValue(shipByDate, fallbackDate);
+  const daysLate = getDaysLateNumber(shipByDate, fallbackDate);
 
   const tone =
     daysLate > 1

@@ -19,6 +19,11 @@ export function normalizeTrackingCanonical(input: string): string {
     .replace(/[^A-Z0-9]/g, '');
 }
 
+/** Null-safe alias of normalizeTrackingCanonical — used as a dedup/map key. */
+export function normalizeTrackingKey(value: string | null | undefined): string {
+  return normalizeTrackingCanonical(String(value || ''));
+}
+
 /**
  * Strip the USPS IMpb routing prefix (420 + ZIP/ZIP+4) from barcode scans.
  * Barcode scanners read the full IMpb which prepends 420+ZIP (5 or 9 digits)

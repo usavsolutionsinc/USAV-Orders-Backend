@@ -7,17 +7,17 @@ import { framerPresence, framerTransition, framerVariants, SkeletonList } from '
 import confetti from 'canvas-confetti';
 import { Package } from './Icons';
 import { TabSwitch } from './ui/TabSwitch';
-import { useUpNextData } from '@/hooks/useUpNextData';
 import { OrderCard } from './station/upnext/OrderCard';
 import { RepairCard } from './station/upnext/RepairCard';
 import { FbaItemCard } from './station/upnext/FbaItemCard';
 import { ReceivingAssignmentCard } from './station/upnext/ReceivingAssignmentCard';
 import { UpNextFilterBar } from './station/upnext/UpNextFilterBar';
 import { getTechStationLightChromeOutlineClass } from '@/utils/staff-colors';
-import { getOrderPlatformLabel } from '@/utils/order-platform';
 import { SLIDER_PRESETS, type HorizontalSliderItem } from './ui/HorizontalButtonSlider';
+import { QUICK_FILTER_ITEMS, SORT_FILTER_IDS, type UpNextTabId } from '@/utils/upnext-shared';
+import { useUpNextController } from '@/hooks/station/useUpNextController';
 
-type TabId = 'all' | 'orders' | 'repair' | 'fba' | 'stock' | 'receiving';
+type TabId = UpNextTabId;
 
 interface UpNextOrderProps {
   techId: string;
@@ -27,235 +27,28 @@ interface UpNextOrderProps {
   filterBarPortalRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-function isOutOfStock(order: { out_of_stock: string | null }): boolean {
-  return !!String(order.out_of_stock || '').trim();
-}
-
-function getRepairSortValue(deadlineAt: string | null | undefined, fallbackDateTime?: string | null | undefined): number {
-  const source = deadlineAt || fallbackDateTime;
-  if (!source) return Number.POSITIVE_INFINITY;
-  try {
-    const parsed = typeof source === 'string' && source.startsWith('"') ? JSON.parse(source) : source;
-    const value = typeof parsed === 'object' && parsed?.start ? parsed.start : parsed;
-    const timestamp = new Date(value).getTime();
-    return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
-  } catch {
-    return Number.POSITIVE_INFINITY;
-  }
-}
-
-const TAB_ORDER: TabId[] = ['all', 'orders', 'fba', 'repair', 'stock', 'receiving'];
-
-function matchesSearch(needle: string, fields: (string | null | undefined)[]): boolean {
-  const trimmed = needle.trim();
-  if (!trimmed) return true;
-  const tokens = trimmed.toLowerCase().split(/\s+/);
-  const haystack = fields.map((f) => (f || '').toLowerCase()).join(' ');
-  return tokens.every((t) => haystack.includes(t));
-}
-
-const SORT_FILTER_IDS = new Set(['must_go', 'newest', 'oldest']);
-
-const QUICK_FILTER_ITEMS: Record<TabId, HorizontalSliderItem[]> = {
-  all:       [SLIDER_PRESETS.mustGo, SLIDER_PRESETS.newest, SLIDER_PRESETS.oldest],
-  orders:    [SLIDER_PRESETS.all, SLIDER_PRESETS.amazon, SLIDER_PRESETS.ebay, SLIDER_PRESETS.ecwid],
-  fba:       [SLIDER_PRESETS.pending],
-  repair:    [SLIDER_PRESETS.repair],
-  stock:     [SLIDER_PRESETS.stock],
-  receiving: [SLIDER_PRESETS.receiving],
-};
 
 export default function UpNextOrder({ techId, onStart, onMissingParts, onAllCompleted, filterBarPortalRef }: UpNextOrderProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('all');
-  const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null);
-  const [showMissingPartsInput, setShowMissingPartsInput] = useState<number | null>(null);
-  const [missingPartsReason, setMissingPartsReason] = useState('');
-  const [searchText, setSearchText] = useState('');
-  const [quickFilter, setQuickFilter] = useState('must_go');
   const hasCelebratedRef = useRef(false);
 
-  const { allOrders, allRepairs, fbaItems, receivingItems, loading, allCompletedToday, fetchOrders } =
-    useUpNextData({ techId, onAllCompleted });
+  const ctrl = useUpNextController({ techId, onAllCompleted });
 
-  // Server omits orders when station_activity_logs ties to the shipment_id or when a TECH
-  // TRACKING_SCANNED / SERIAL_ADDED / FNSKU_SCANNED row matches this order's tracking
-  // fingerprint (same rule as /api/tech-logs). Client filter catches stale payloads.
-  const pendingVisibleOrders = allOrders.filter((order) => !order.has_tech_scan);
-  const stockOrders = pendingVisibleOrders.filter(isOutOfStock);
-  // Match the pending orders source data and only split out stock blockers here.
-  const nonStockOrders = pendingVisibleOrders.filter((order) => !isOutOfStock(order));
-  const sortedRepairs = [...allRepairs].sort(
-    (a, b) => getRepairSortValue(a.deadlineAt, a.dateTime) - getRepairSortValue(b.deadlineAt, b.dateTime)
-  );
-  const activeFbaItems = fbaItems.filter((i) => i.status !== 'SHIPPED');
-  const rawTabCounts: Record<TabId, number> = {
-    orders: nonStockOrders.length,
-    stock: stockOrders.length,
-    repair: sortedRepairs.length,
-    fba: activeFbaItems.length,
-    receiving: receivingItems.length,
-    all: nonStockOrders.length + sortedRepairs.length + activeFbaItems.length + receivingItems.length,
-  };
-  const filteredOrders = useMemo(() => {
-    let list = nonStockOrders;
-    if (quickFilter !== 'all' && !SORT_FILTER_IDS.has(quickFilter)) {
-      list = list.filter((o) => {
-        const plat = getOrderPlatformLabel(o.order_id || '', o.account_source).toLowerCase();
-        if (quickFilter === 'ecwid') return plat === 'ecwid' || (!plat.includes('amazon') && !plat.includes('ebay') && !plat.includes('walmart'));
-        return plat.includes(quickFilter);
-      });
-    }
-    if (searchText.trim()) {
-      list = list.filter((o) => matchesSearch(searchText, [o.product_title, o.order_id, o.shipping_tracking_number, o.sku, o.condition]));
-    }
-    return list;
-  }, [nonStockOrders, quickFilter, searchText]);
-
-  const filteredStockOrders = useMemo(() => {
-    if (!searchText.trim()) return stockOrders;
-    return stockOrders.filter((o) => matchesSearch(searchText, [o.product_title, o.order_id, o.shipping_tracking_number, o.sku, o.condition, o.out_of_stock]));
-  }, [stockOrders, searchText]);
-
-  const filteredRepairs = useMemo(() => {
-    let list = sortedRepairs;
-    if (searchText.trim()) {
-      list = list.filter((r) => matchesSearch(searchText, [r.productTitle, r.ticketNumber, r.serialNumber, r.sku, r.issue]));
-    }
-    return list;
-  }, [sortedRepairs, searchText]);
-
-  const filteredFbaItems = useMemo(() => {
-    let list = activeFbaItems;
-    if (quickFilter !== 'all') {
-      list = list.filter((i) => i.status === quickFilter);
-    }
-    if (searchText.trim()) {
-      list = list.filter((i) => matchesSearch(searchText, [i.product_title, i.fnsku, i.condition]));
-    }
-    return list;
-  }, [activeFbaItems, quickFilter, searchText]);
-
-  const filteredReceivingItems = useMemo(() => {
-    if (!searchText.trim()) return receivingItems;
-    return receivingItems.filter((i) => matchesSearch(searchText, [i.tracking_number, i.notes, ...(i.line_skus || [])]));
-  }, [receivingItems, searchText]);
-
-  const sortedOrders = useMemo(() => {
-    if (quickFilter === 'must_go') {
-      return [...filteredOrders].sort((a, b) => {
-        const da = a.ship_by_date ? new Date(a.ship_by_date).getTime() : Number.POSITIVE_INFINITY;
-        const db = b.ship_by_date ? new Date(b.ship_by_date).getTime() : Number.POSITIVE_INFINITY;
-        return da - db;
-      });
-    }
-    if (quickFilter === 'newest') {
-      return [...filteredOrders].sort((a, b) => {
-        const da = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const db = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return db - da;
-      });
-    }
-    if (quickFilter === 'oldest') {
-      return [...filteredOrders].sort((a, b) => {
-        const da = a.created_at ? new Date(a.created_at).getTime() : Number.POSITIVE_INFINITY;
-        const db = b.created_at ? new Date(b.created_at).getTime() : Number.POSITIVE_INFINITY;
-        return da - db;
-      });
-    }
-    return filteredOrders;
-  }, [filteredOrders, quickFilter]);
-
+  // Destructure controller for convenience
+  const {
+    effectiveTab, visibleTabs, selectTab, rawTabCounts,
+    searchText, setSearchText, quickFilter, setQuickFilter,
+    sortedOrders, filteredOrders, filteredStockOrders, filteredRepairs,
+    filteredFbaItems, filteredReceivingItems,
+    nonStockOrders, stockOrders,
+    loading, allCompletedToday, fetchOrders,
+    expandedItemKey, toggleExpandedItem,
+    showMissingPartsInput, setShowMissingPartsInput,
+    missingPartsReason, setMissingPartsReason,
+    lateCount, dueTodayCount, shouldShowStockSection, showNoCurrentOrdersBanner,
+  } = ctrl;
   const tabCounts = rawTabCounts;
   const stationTabChromeOutline = useMemo(() => getTechStationLightChromeOutlineClass(techId), [techId]);
-
-  type VisibleTab = {
-    id: TabId;
-    label: string;
-    count?: number;
-    color: 'blue' | 'green' | 'yellow' | 'orange' | 'purple' | 'gray' | 'red' | 'teal';
-  };
-  const visibleTabs: VisibleTab[] = useMemo(
-    () => [
-      { id: 'all', label: 'All', color: 'blue', count: rawTabCounts.all || undefined },
-      { id: 'orders', label: 'Orders', color: 'green', count: rawTabCounts.orders || undefined },
-      ...(rawTabCounts.fba > 0
-        ? [{ id: 'fba' as const, label: 'FBA', color: 'purple' as const, count: rawTabCounts.fba }]
-        : []),
-      ...(rawTabCounts.repair > 0
-        ? [{ id: 'repair' as const, label: 'Repair', color: 'orange' as const, count: rawTabCounts.repair }]
-        : []),
-      ...(rawTabCounts.stock > 0
-        ? [{ id: 'stock' as const, label: 'Stock', color: 'red' as const, count: rawTabCounts.stock }]
-        : []),
-      ...(rawTabCounts.receiving > 0
-        ? [{ id: 'receiving' as const, label: 'Receiving', color: 'teal' as const, count: rawTabCounts.receiving }]
-        : []),
-    ],
-    [
-      rawTabCounts.all,
-      rawTabCounts.orders,
-      rawTabCounts.fba,
-      rawTabCounts.repair,
-      rawTabCounts.stock,
-      rawTabCounts.receiving,
-    ],
-  );
-
-  const activeTabVisible = visibleTabs.some((tab) => tab.id === activeTab);
-  const effectiveTab     = activeTabVisible ? activeTab : visibleTabs[0]?.id || 'orders';
   const orders = nonStockOrders;
-  // Urgency breakdown for the summary bar (orders tab only)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const lateCount = filteredOrders.filter((o) => {
-    const d = o.ship_by_date ? new Date(o.ship_by_date) : null;
-    return d && d < today;
-  }).length;
-  const dueTodayCount = filteredOrders.filter((o) => {
-    const d = o.ship_by_date ? new Date(o.ship_by_date) : null;
-    if (!d) return false;
-    d.setHours(0, 0, 0, 0);
-    return d.getTime() === today.getTime();
-  }).length;
-  const selectTab = useCallback(
-    (next: TabId) => {
-      setActiveTab(next);
-    },
-    [],
-  );
-  const shouldShowStockSection = stockOrders.length > 0 && effectiveTab !== 'stock';
-  const showNoCurrentOrdersBanner = allCompletedToday && filteredOrders.length === 0 && filteredStockOrders.length === 0;
-
-  useEffect(() => {
-    if (activeTabVisible || effectiveTab === activeTab) return;
-    selectTab(effectiveTab);
-  }, [activeTabVisible, effectiveTab, activeTab, selectTab]);
-
-  useEffect(() => {
-    setExpandedItemKey(null);
-    setShowMissingPartsInput(null);
-    setMissingPartsReason('');
-    setSearchText('');
-    setQuickFilter(QUICK_FILTER_ITEMS[effectiveTab]?.[0]?.id ?? 'all');
-  }, [effectiveTab]);
-
-  useEffect(() => {
-    // Only auto-switch if the current tab is empty. For non-order tabs (repair/fba/receiving)
-    // we use tabCounts directly; for order-bucket tabs we fall through the same path.
-    if (effectiveTab === 'all' || effectiveTab === 'orders') return;
-    if (tabCounts[effectiveTab] > 0) return;
-    const next = TAB_ORDER.find((id) => tabCounts[id] > 0);
-    if (next && next !== activeTab) selectTab(next);
-  }, [
-    effectiveTab,
-    activeTab,
-    tabCounts.orders,
-    tabCounts.repair,
-    tabCounts.fba,
-    tabCounts.stock,
-    tabCounts.receiving,
-    selectTab,
-  ]);
 
   useEffect(() => {
     const isCompletionView = (effectiveTab === 'orders' || effectiveTab === 'all') && showNoCurrentOrdersBanner;
@@ -302,8 +95,8 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
     }
   };
 
-  const toggleExpandedItem = (key: string) => {
-    setExpandedItemKey((current) => current === key ? null : key);
+  const handleToggleExpand = (key: string) => {
+    toggleExpandedItem(key);
     if (showMissingPartsInput !== null) {
       setShowMissingPartsInput(null);
       setMissingPartsReason('');
@@ -320,14 +113,14 @@ export default function UpNextOrder({ techId, onStart, onMissingParts, onAllComp
       missingPartsReason={missingPartsReason}
       onStart={handleStart}
       onMissingPartsToggle={(id) => {
-        setExpandedItemKey(key || `order-${order.id}`);
+        if (expandedItemKey !== (key || `order-${order.id}`)) toggleExpandedItem(key || `order-${order.id}`);
         setShowMissingPartsInput(showMissingPartsInput === id ? null : id);
       }}
       onMissingPartsReasonChange={setMissingPartsReason}
       onMissingPartsSubmit={handleMissingParts}
       onMissingPartsCancel={() => setShowMissingPartsInput(null)}
       isExpanded={expandedItemKey === (key || `order-${order.id}`)}
-      onToggleExpand={() => toggleExpandedItem(key || `order-${order.id}`)}
+      onToggleExpand={() => handleToggleExpand(key || `order-${order.id}`)}
     />
   );
 

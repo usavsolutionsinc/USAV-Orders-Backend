@@ -9,7 +9,6 @@ import {
   cardTitle,
   fieldLabel,
   dataValue,
-  chipText,
   CardShell,
   ChevronToggle,
   DetailGrid,
@@ -18,9 +17,8 @@ import {
   ExternalLinkButton,
   SkeletonOrderCard,
 } from '@/design-system';
-import { ExternalLink, Play, Settings } from '@/components/Icons';
+import { Play, Settings } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
-import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
@@ -37,6 +35,7 @@ import {
 import { useUpNextCard } from '@/hooks/station/useUpNextCard';
 import type { Order } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';
+import { UpNextHeaderExternalLinkChip } from './UpNextHeaderExternalLinkChip';
 
 interface OrderCardProps {
   order: Order;
@@ -73,6 +72,7 @@ export function OrderCard({
     showMissingPartsInput,
     onMissingPartsReasonChange,
   });
+  const externalItemUrl = card.getExternalUrlByItemNumber(card.itemNumberValue);
 
   return (
     <>
@@ -95,18 +95,12 @@ export function OrderCard({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                card.openExternalByItemNumber(card.itemNumberValue);
-              }}
-              disabled={!card.getExternalUrlByItemNumber(card.itemNumberValue)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-2 text-gray-900 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-900 transition-colors"
-            >
-              <span className={`${chipText} leading-none translate-y-px`}>#{getOrderIdLast4(order.order_id)}</span>
-              <ExternalLink className="w-3.5 h-3.5 text-blue-300" />
-            </button>
+            <UpNextHeaderExternalLinkChip
+              label={`#${getOrderIdLast4(order.order_id)}`}
+              canOpen={!!externalItemUrl}
+              onOpen={() => card.openExternalByItemNumber(card.itemNumberValue)}
+              ariaLabel="Open order in external page"
+            />
             <ChevronToggle isExpanded={isExpanded} />
           </div>
         </div>

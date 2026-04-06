@@ -8,7 +8,6 @@ import {
   cardTitle,
   fieldLabel,
   dataValue,
-  chipText,
   CardShell,
   ChevronToggle,
   DetailGrid,
@@ -16,13 +15,13 @@ import {
 } from '@/design-system';
 import { Check, Settings } from '@/components/Icons';
 import { OutOfStockField } from '@/components/ui/OutOfStockField';
-import { PlatformExternalChip } from '@/components/ui/PlatformExternalChip';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { WorkOrderAssignmentCard } from '@/components/work-orders/WorkOrderAssignmentCard';
 import { getDaysLateTone } from '@/utils/upnext-helpers';
 import { useUpNextRepairCard } from '@/hooks/station/useUpNextRepairCard';
 import type { RepairQueueItem } from './upnext-types';
 import { UpNextActionButton } from './UpNextActionButton';
+import { UpNextHeaderExternalLinkChip } from './UpNextHeaderExternalLinkChip';
 
 interface RepairCardProps {
   repair: RepairQueueItem;
@@ -35,6 +34,7 @@ interface RepairCardProps {
 export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefresh }: RepairCardProps) {
   const card = useUpNextRepairCard({ repair, techId, onRefresh });
   const stopProp = (e: React.MouseEvent) => e.stopPropagation();
+  const externalSkuUrl = card.getExternalUrlByItemNumber(card.skuValue);
 
   return (
     <>
@@ -61,14 +61,11 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`${chipText} text-gray-900 px-1.5 py-0.5 rounded border border-gray-300`}>
-              #{card.ticketShort}
-            </span>
-            <PlatformExternalChip
-              orderId={card.skuValue}
-              accountSource={null}
-              canOpen={!!card.getExternalUrlByItemNumber(card.skuValue)}
+            <UpNextHeaderExternalLinkChip
+              label={`#${card.ticketShort}`}
+              canOpen={!!externalSkuUrl}
               onOpen={() => card.openExternalByItemNumber(card.skuValue)}
+              ariaLabel="Open repair item in external page"
             />
             <ChevronToggle isExpanded={isExpanded} tone="orange" />
           </div>

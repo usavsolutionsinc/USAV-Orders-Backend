@@ -4,7 +4,7 @@ import React from 'react';
 import { Package, AlertTriangle, Settings, ExternalLink } from '@/components/Icons';
 import { ShipByDate } from '@/components/ui/ShipByDate';
 import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { getDaysLateNumber, getDaysLateTone } from '@/utils/date';
 import { getLast4 } from '@/components/ui/CopyChip';
 import type { ActivePackingOrder, ActiveFbaScan } from './MobileStationPacking';
 
@@ -82,22 +82,6 @@ function stripConditionPrefix(title: string | null | undefined, condition: strin
   return t;
 }
 
-function getDaysLate(shipByDate?: string, createdAt?: string) {
-  const shipByKey = toPSTDateKey(shipByDate) || toPSTDateKey(createdAt);
-  const todayKey = getCurrentPSTDateKey();
-  if (!shipByKey || !todayKey) return 0;
-  const [sy, sm, sd] = shipByKey.split('-').map(Number);
-  const [ty, tm, td] = todayKey.split('-').map(Number);
-  const shipByIndex = Math.floor(Date.UTC(sy, sm - 1, sd) / 86400000);
-  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
-  return Math.max(0, todayIndex - shipByIndex);
-}
-
-function getDaysLateTone(daysLate: number) {
-  if (daysLate > 1) return 'text-red-600';
-  if (daysLate === 1) return 'text-yellow-600';
-  return 'text-emerald-600';
-}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -191,7 +175,7 @@ export function MobilePackingConfirmCard({
   // ── Order / Repair / Exception variant ──
   if (!order) return null;
 
-  const daysLate = getDaysLate(order.shipByDate, order.createdAt);
+  const daysLate = getDaysLateNumber(order.shipByDate, order.createdAt);
   const displayShipBy = order.shipByDate || order.createdAt || null;
   const quantity = Math.max(1, order.qty);
 

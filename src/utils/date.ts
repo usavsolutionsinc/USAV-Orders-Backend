@@ -351,3 +351,74 @@ export function formatMonthDay(dateString: string | null | undefined): string | 
   const day = parsed.getDate();
   return `${month}/${day}`;
 }
+
+// ─── Days-late helpers ──────────────────────────────────────────────────────
+
+/**
+ * Returns how many days past the deadline (0 if not late or no date).
+ * Accepts an optional fallback date (e.g. created_at when ship_by is missing).
+ */
+export function getDaysLateNumber(deadlineAt: string | null | undefined, fallbackDate?: string | null): number {
+  const deadlineKey = toPSTDateKey(deadlineAt) || toPSTDateKey(fallbackDate);
+  const todayKey = getCurrentPSTDateKey();
+  if (!deadlineKey || !todayKey) return 0;
+  const [dy, dm, dd] = deadlineKey.split('-').map(Number);
+  const [ty, tm, td] = todayKey.split('-').map(Number);
+  const deadlineIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
+  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
+  return Math.max(0, todayIndex - deadlineIndex);
+}
+
+/**
+ * Same as getDaysLateNumber but returns null when no deadline is provided.
+ * Useful when callers need to distinguish "no deadline" from "0 days late".
+ */
+export function getDaysLateNullable(deadlineAt: string | null | undefined): number | null {
+  const deadlineKey = toPSTDateKey(deadlineAt);
+  if (!deadlineKey) return null;
+  const todayKey = getCurrentPSTDateKey();
+  if (!todayKey) return null;
+  const [dy, dm, dd] = deadlineKey.split('-').map(Number);
+  const [ty, tm, td] = todayKey.split('-').map(Number);
+  const deadlineIndex = Math.floor(Date.UTC(dy, dm - 1, dd) / 86400000);
+  const todayIndex = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
+  return Math.max(0, todayIndex - deadlineIndex);
+}
+
+/** Tailwind text-color class based on days late. Accepts null for "no deadline" styling. */
+export function getDaysLateTone(daysLate: number | null): string {
+  if (daysLate === null) return 'text-gray-500';
+  if (daysLate > 1) return 'text-red-600';
+  if (daysLate === 1) return 'text-yellow-600';
+  return 'text-emerald-600';
+}
+
+// ─── Week range helpers ─────────────────────────────────────────────────────
+
+export interface WeekRange {
+  start: Date;
+  end: Date;
+  startStr: string;
+  endStr: string;
+}
+
+/** Compute Monday–Friday date range for a given week offset (0 = current week, 1 = last week, etc.). */
+export function computeWeekRange(weekOffset: number): WeekRange {
+  const todayPst = getCurrentPSTDateKey();
+  const [pstYear, pstMonth, pstDay] = todayPst.split('-').map(Number);
+  const now = new Date(pstYear, (pstMonth || 1) - 1, pstDay || 1);
+  const currentDay = now.getDay();
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday - weekOffset * 7);
+  monday.setHours(0, 0, 0, 0);
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  friday.setHours(23, 59, 59, 999);
+  return {
+    start: monday,
+    end: friday,
+    startStr: `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`,
+    endStr: `${friday.getFullYear()}-${String(friday.getMonth() + 1).padStart(2, '0')}-${String(friday.getDate()).padStart(2, '0')}`,
+  };
+}

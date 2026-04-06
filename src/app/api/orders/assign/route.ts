@@ -128,23 +128,41 @@ async function upsertOrderTracking(
   shippingTrackingNumber: string | null | undefined,
   client: any
 ) {
+  const existingOrders = await client.query(
+    `SELECT id, shipment_id
+     FROM orders
+     WHERE id = ANY($1::int[])
+     ORDER BY id ASC`,
+    [orderIds]
+  );
+
   const rawTracking = String(shippingTrackingNumber || '').trim();
 
   if (!rawTracking) {
-    await client.query(
-      `UPDATE orders
-       SET shipment_id = NULL
-       WHERE id = ANY($1::int[])`,
-      [orderIds]
-    );
-    try {
+    for (const row of existingOrders.rows) {
+      const orderId = Number(row?.id);
+      const shipmentId = Number(row?.shipment_id);
+      if (!Number.isFinite(orderId) || orderId <= 0) continue;
+
       await client.query(
-        `DELETE FROM order_shipment_links
-         WHERE order_row_id = ANY($1::int[])`,
-        [orderIds]
+        `UPDATE orders
+         SET shipment_id = NULL
+         WHERE id = $1`,
+        [orderId]
       );
-    } catch (error) {
-      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+
+      if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
+
+      try {
+        await client.query(
+          `DELETE FROM order_shipment_links
+           WHERE order_row_id = $1
+             AND shipment_id = $2`,
+          [orderId, shipmentId]
+        );
+      } catch (error) {
+        if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+      }
     }
     return;
   }
@@ -159,14 +177,6 @@ async function upsertOrderTracking(
   const isUnknownCarrier = !detectedCarrier;
   const unknownCarrierMessage =
     'Carrier detection unavailable for this tracking format; manual tracking only.';
-
-  const existingOrders = await client.query(
-    `SELECT id, shipment_id
-     FROM orders
-     WHERE id = ANY($1::int[])
-     ORDER BY id ASC`,
-    [orderIds]
-  );
 
   const currentShipmentIds: number[] = Array.from(
     new Set<number>(
@@ -411,6 +421,172 @@ async function updateShipmentTrackingById(
   );
 }
 
+async function createAdditionalShipmentLink(
+  orderIds: number[],
+  shippingTrackingNumber: string,
+  client: any,
+) {
+  const rawTracking = String(shippingTrackingNumber || '').trim();
+  if (!rawTracking) throw new Error('Tracking number is required');
+
+  const normalizedTracking = normalizeTrackingNumber(rawTracking);
+  if (!normalizedTracking) throw new Error('Tracking number is invalid');
+
+  const existingShipment = await client.query(
+    `SELECT id
+     FROM shipping_tracking_numbers
+     WHERE tracking_number_normalized = $1
+     LIMIT 1`,
+    [normalizedTracking],
+  );
+
+  let shipmentId: number | null = null;
+
+  if ((existingShipment.rowCount ?? 0) > 0) {
+    shipmentId = Number(existingShipment.rows[0]?.id ?? 0) || null;
+    if (shipmentId) {
+      const ownershipCheck = await client.query(
+        `SELECT 1
+         FROM orders o
+         LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
+         WHERE o.id = ANY($1::int[])
+           AND (o.shipment_id = $2 OR osl.shipment_id = $2)
+         LIMIT 1`,
+        [orderIds, shipmentId],
+      );
+      if ((ownershipCheck.rowCount ?? 0) === 0) {
+        throw new Error('Tracking number already exists on another shipment');
+      }
+
+      await updateShipmentTrackingById(orderIds, shipmentId, rawTracking, client);
+    }
+  } else {
+    const detectedCarrier = detectCarrier(normalizedTracking);
+    const carrierForStorage = detectedCarrier ?? 'UNKNOWN';
+    const isUnknownCarrier = !detectedCarrier;
+    const unknownCarrierMessage =
+      'Carrier detection unavailable for this tracking format; manual tracking only.';
+
+    const insertedShipment = await client.query(
+      `INSERT INTO shipping_tracking_numbers
+         (
+           tracking_number_raw,
+           tracking_number_normalized,
+           carrier,
+           source_system,
+           next_check_at,
+           latest_status_category,
+           is_terminal,
+           last_error_code,
+           last_error_message
+         )
+       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', $4, $5, $6, $7, $8)
+       ON CONFLICT (tracking_number_normalized) DO UPDATE
+         SET tracking_number_raw = EXCLUDED.tracking_number_raw,
+             carrier = EXCLUDED.carrier,
+             next_check_at = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN NULL
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NOW()
+               ELSE shipping_tracking_numbers.next_check_at
+             END,
+             latest_status_category = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN 'UNKNOWN'
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.latest_status_category
+             END,
+             is_terminal = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN true
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN false
+               ELSE shipping_tracking_numbers.is_terminal
+             END,
+             last_error_code = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN 'UNKNOWN_CARRIER'
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.last_error_code
+             END,
+             last_error_message = CASE
+               WHEN EXCLUDED.carrier = 'UNKNOWN' THEN EXCLUDED.last_error_message
+               WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
+               ELSE shipping_tracking_numbers.last_error_message
+             END,
+             updated_at = NOW()
+       RETURNING id`,
+      [
+        rawTracking,
+        normalizedTracking,
+        carrierForStorage,
+        isUnknownCarrier ? null : new Date(),
+        isUnknownCarrier ? 'UNKNOWN' : null,
+        isUnknownCarrier,
+        isUnknownCarrier ? 'UNKNOWN_CARRIER' : null,
+        isUnknownCarrier ? unknownCarrierMessage : null,
+      ]
+    );
+    shipmentId = Number(insertedShipment.rows[0]?.id ?? 0) || null;
+  }
+
+  if (!shipmentId) throw new Error('Failed to create tracking link');
+
+  try {
+    await client.query(
+      `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
+       SELECT UNNEST($1::int[]), $2::bigint, false, 'orders.assign'
+       ON CONFLICT (order_row_id, shipment_id) DO UPDATE
+         SET is_primary = false,
+             source = EXCLUDED.source,
+             updated_at = NOW()`,
+      [orderIds, shipmentId],
+    );
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  }
+}
+
+async function deleteShipmentTrackingLink(
+  orderIds: number[],
+  shipmentId: number,
+  client: any,
+) {
+  if (!Number.isFinite(shipmentId) || shipmentId <= 0) {
+    throw new Error('Shipment id is required');
+  }
+
+  const primaryOrders = await client.query(
+    `SELECT id
+     FROM orders
+     WHERE id = ANY($1::int[])
+       AND shipment_id = $2`,
+    [orderIds, shipmentId],
+  );
+
+  let deletedLinks = 0;
+  try {
+    const result = await client.query(
+      `DELETE FROM order_shipment_links
+       WHERE order_row_id = ANY($1::int[])
+         AND shipment_id = $2`,
+      [orderIds, shipmentId],
+    );
+    deletedLinks = result.rowCount ?? 0;
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  }
+
+  if ((primaryOrders.rowCount ?? 0) > 0) {
+    await client.query(
+      `UPDATE orders
+       SET shipment_id = NULL
+       WHERE id = ANY($1::int[])
+         AND shipment_id = $2`,
+      [orderIds, shipmentId],
+    );
+  }
+
+  if ((primaryOrders.rowCount ?? 0) === 0 && deletedLinks === 0) {
+    throw new Error('Shipment is not linked to this order');
+  }
+}
+
 /**
  * POST /api/orders/assign
  * Assigns tech and/or packer to one or more orders via work_assignments.
@@ -430,6 +606,8 @@ export async function POST(req: NextRequest) {
       notes,
       shippingTrackingNumber,
       trackingLinkEdits,
+      trackingLinkCreates,
+      trackingLinkDeletes,
       itemNumber,
       condition,
       quantity,
@@ -490,6 +668,22 @@ export async function POST(req: NextRequest) {
           if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
           if (!nextTracking) continue;
           await updateShipmentTrackingById(idsToUpdate, shipmentId, nextTracking, client);
+        }
+      }
+
+      if (Array.isArray(trackingLinkCreates) && trackingLinkCreates.length > 0) {
+        for (const create of trackingLinkCreates) {
+          const nextTracking = String(create?.shippingTrackingNumber || '').trim();
+          if (!nextTracking) continue;
+          await createAdditionalShipmentLink(idsToUpdate, nextTracking, client);
+        }
+      }
+
+      if (Array.isArray(trackingLinkDeletes) && trackingLinkDeletes.length > 0) {
+        for (const removal of trackingLinkDeletes) {
+          const shipmentId = Number(removal?.shipmentId);
+          if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
+          await deleteShipmentTrackingLink(idsToUpdate, shipmentId, client);
         }
       }
 
@@ -562,6 +756,8 @@ export async function POST(req: NextRequest) {
       if (notes !== undefined) changedFields.notes = notes;
       if (shippingTrackingNumber !== undefined) changedFields.shippingTrackingNumber = shippingTrackingNumber;
       if (Array.isArray(trackingLinkEdits) && trackingLinkEdits.length > 0) changedFields.trackingLinkEdits = trackingLinkEdits;
+      if (Array.isArray(trackingLinkCreates) && trackingLinkCreates.length > 0) changedFields.trackingLinkCreates = trackingLinkCreates;
+      if (Array.isArray(trackingLinkDeletes) && trackingLinkDeletes.length > 0) changedFields.trackingLinkDeletes = trackingLinkDeletes;
       if (itemNumber !== undefined) changedFields.itemNumber = itemNumber;
       if (condition !== undefined) changedFields.condition = condition;
       if (quantity !== undefined) changedFields.quantity = quantity;

@@ -82,7 +82,6 @@ export async function GET(request: NextRequest) {
          fs.status            AS shipment_status,
          fs.destination_fc,
          COALESCE(
-           fsi.product_title,
            ff.product_title,
            fsi.fnsku
          ) AS display_title

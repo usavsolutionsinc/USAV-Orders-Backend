@@ -101,16 +101,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 6. Update shipped_item_count cache on each shipment ───────────────────
+    // ── 6. Touch updated_at on each affected shipment ──────────────────────────
     for (const shipId of shipmentIds) {
       await client.query(
-        `UPDATE fba_shipments
-         SET shipped_item_count = (
-               SELECT COUNT(*) FROM fba_shipment_items
-               WHERE shipment_id = $1 AND status = 'SHIPPED'
-             ),
-             updated_at = NOW()
-         WHERE id = $1`,
+        `UPDATE fba_shipments SET updated_at = NOW() WHERE id = $1`,
         [shipId]
       );
     }

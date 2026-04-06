@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useOrderAssignment } from '@/hooks';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
@@ -32,7 +31,6 @@ export function ProductDetailsSection({
 }: {
   shipped: ShippedOrder;
 }) {
-  const hasOutOfStock = !!String((shipped as any).out_of_stock || '').trim();
   const [conditionValue, setConditionValue] = useState<ConditionValue>(normalizeCondition(shipped.condition));
   const [isSavingCondition, setIsSavingCondition] = useState(false);
   const orderAssignmentMutation = useOrderAssignment();
@@ -67,8 +65,7 @@ export function ProductDetailsSection({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center gap-2">
-        {hasOutOfStock && <AlertTriangle className="w-3.5 h-3.5 text-red-600" />}
+      <div className="flex items-center">
         <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Product Details</h3>
       </div>
 

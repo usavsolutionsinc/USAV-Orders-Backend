@@ -24,3 +24,5 @@ export * from './Skeletons';
 export * from './ResponsiveShell';
 export * from './desktop';
 export * from './mobile';
+export * from './PlatformBadge';
+export * from './StaffBadge';

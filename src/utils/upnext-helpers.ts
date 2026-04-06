@@ -1,4 +1,4 @@
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { getCurrentPSTDateKey, toPSTDateKey, getDaysLateNumber, getDaysLateTone } from '@/utils/date';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { Order, RepairQueueItem, FBAQueueItem } from '@/components/station/upnext/upnext-types';
 
@@ -32,22 +32,8 @@ export function getDisplayShipByDate(order: { ship_by_date?: string | null; crea
   return isInvalid ? createdAtRaw || null : shipByRaw;
 }
 
-export function getDaysLateNumber(shipByDate: string | null | undefined, fallbackDate?: string | null) {
-  const shipByKey = toPSTDateKey(shipByDate) || toPSTDateKey(fallbackDate);
-  const todayKey  = getCurrentPSTDateKey();
-  if (!shipByKey || !todayKey) return 0;
-  const [sy, sm, sd] = shipByKey.split('-').map(Number);
-  const [ty, tm, td] = todayKey.split('-').map(Number);
-  const shipByIndex = Math.floor(Date.UTC(sy, sm - 1, sd) / 86400000);
-  const todayIndex  = Math.floor(Date.UTC(ty, tm - 1, td) / 86400000);
-  return Math.max(0, todayIndex - shipByIndex);
-}
-
-export function getDaysLateTone(daysLate: number) {
-  if (daysLate > 1) return 'text-red-600';
-  if (daysLate === 1) return 'text-yellow-600';
-  return 'text-emerald-600';
-}
+// Re-exported from @/utils/date — canonical source of truth
+export { getDaysLateNumber, getDaysLateTone };
 
 // ─── Condition helpers ──────────────────────────────────────────────────────
 

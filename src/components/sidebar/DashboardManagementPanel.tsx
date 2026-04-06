@@ -74,7 +74,11 @@ export function DashboardManagementPanel({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isTransferring, setIsTransferring] = useState(false);
+  type TransferPhase = 'idle' | 'fetching' | 'refreshing' | 'done';
+  const [transferPhase, setTransferPhase] = useState<TransferPhase>('idle');
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isTransferring = transferPhase === 'fetching' || transferPhase === 'refreshing';
   const [manualSheetName, setManualSheetName] = useState('');
   const [status, setStatus] = useState<{
     type: 'success' | 'error';
@@ -244,8 +248,12 @@ export function DashboardManagementPanel({
   };
 
   const handleTransfer = async () => {
-    setIsTransferring(true);
+    setTransferPhase('fetching');
     setStatus(null);
+    setElapsedMs(0);
+    const t0 = Date.now();
+    elapsedRef.current = setInterval(() => setElapsedMs(Date.now() - t0), 100);
+
     try {
       const res = await fetch('/api/google-sheets/transfer-orders', {
         method: 'POST',
@@ -255,7 +263,9 @@ export function DashboardManagementPanel({
         }),
       });
       const data = await res.json();
+
       if (data.success) {
+        setTransferPhase('refreshing');
         const inserted = Number(data.insertedOrders || 0);
         const updated = Number(data.updatedOrdersFields || 0);
         const exceptionsResolved = Number(data.exceptionsResolved || 0);
@@ -287,7 +297,8 @@ export function DashboardManagementPanel({
     } catch (_error) {
       setStatus({ type: 'error', message: 'Network error occurred' });
     } finally {
-      setIsTransferring(false);
+      if (elapsedRef.current) clearInterval(elapsedRef.current);
+      setTransferPhase('idle');
     }
   };
 
@@ -413,11 +424,116 @@ export function DashboardManagementPanel({
                 <button
                   onClick={handleTransfer}
                   disabled={isTransferring}
-                  className={`w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white rounded-xl ${sectionLabel} shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2`}
+                  className={`w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl ${sectionLabel} shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2`}
                 >
                   {isTransferring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                  Import Latest Orders
+                  {isTransferring ? 'Importing...' : 'Import Latest Orders'}
                 </button>
+
+                {/* Live progress tracker */}
+                <AnimatePresence>
+                  {isTransferring ? (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ type: 'spring', damping: 24, stiffness: 300 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="rounded-xl border border-blue-100 bg-blue-50/50 px-3 py-3 space-y-2.5">
+                        {/* Elapsed timer */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                            <span className={`${sectionLabel} text-blue-700`}>
+                              {transferPhase === 'refreshing' ? 'Refreshing dashboard' : 'Importing orders'}
+                            </span>
+                          </div>
+                          <motion.span
+                            key={Math.floor(elapsedMs / 1000)}
+                            initial={{ opacity: 0.5, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-[11px] font-mono font-bold text-blue-500 tabular-nums"
+                          >
+                            {(elapsedMs / 1000).toFixed(1)}s
+                          </motion.span>
+                        </div>
+
+                        {/* Animated task descriptions */}
+                        <div className="space-y-1">
+                          {transferPhase === 'fetching' ? (
+                            <>
+                              {[
+                                { threshold: 0, label: 'Connecting to Google Sheets API' },
+                                { threshold: 800, label: 'Reading spreadsheet data' },
+                                { threshold: 2000, label: 'Matching orders & resolving tracking' },
+                                { threshold: 4000, label: 'Syncing changes to database' },
+                                { threshold: 6000, label: 'Resolving order exceptions' },
+                              ].map(({ threshold, label }, i, arr) => {
+                                const nextThreshold = arr[i + 1]?.threshold ?? Infinity;
+                                const isActive = elapsedMs >= threshold && elapsedMs < nextThreshold;
+                                const isComplete = elapsedMs >= nextThreshold;
+
+                                return (
+                                  <motion.div
+                                    key={label}
+                                    initial={{ opacity: 0, x: -6 }}
+                                    animate={{
+                                      opacity: elapsedMs >= threshold ? 1 : 0.3,
+                                      x: elapsedMs >= threshold ? 0 : -6,
+                                    }}
+                                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                                    className="flex items-center gap-2"
+                                  >
+                                    <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                                      {isComplete ? (
+                                        <motion.div
+                                          initial={{ scale: 0 }}
+                                          animate={{ scale: 1 }}
+                                          transition={{ type: 'spring', damping: 12, stiffness: 300 }}
+                                        >
+                                          <Check className="w-3 h-3 text-blue-600" />
+                                        </motion.div>
+                                      ) : isActive ? (
+                                        <Loader2 className="w-3 h-3 text-blue-600 animate-spin" />
+                                      ) : (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                                      )}
+                                    </div>
+                                    <span className={`text-[10px] font-semibold ${
+                                      isActive ? 'text-blue-700' : isComplete ? 'text-blue-500' : 'text-gray-400'
+                                    }`}>
+                                      {label}
+                                    </span>
+                                  </motion.div>
+                                );
+                              })}
+                            </>
+                          ) : (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className="flex items-center gap-2"
+                            >
+                              <Loader2 className="w-3 h-3 text-blue-600 animate-spin shrink-0" />
+                              <span className="text-[10px] font-semibold text-blue-700">Updating dashboard views</span>
+                            </motion.div>
+                          )}
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="h-1 rounded-full bg-blue-100 overflow-hidden">
+                          <motion.div
+                            className="h-full rounded-full bg-blue-500"
+                            initial={{ width: '0%' }}
+                            animate={{ width: transferPhase === 'refreshing' ? '95%' : `${Math.min(90, (elapsedMs / 80))}%` }}
+                            transition={{ ease: 'easeOut', duration: 0.3 }}
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
 
                 {showNextUnassignedButton ? (
                   <button

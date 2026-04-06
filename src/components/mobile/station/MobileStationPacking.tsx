@@ -11,7 +11,6 @@ import { useStationTheme } from '@/hooks/useStationTheme';
 import { useLast8TrackingSearch } from '@/hooks/useLast8TrackingSearch';
 import { formatPSTTimestamp } from '@/utils/date';
 import StationGoalBar from '@/components/station/StationGoalBar';
-import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { detectStationScanType } from '@/lib/station-scan-routing';
 import type { StationScanType } from '@/lib/station-scan-routing';
 import { cn } from '@/utils/_cn';
@@ -25,169 +24,17 @@ import { MobilePackingConfirmCard } from './MobilePackingConfirmCard';
 import { MobilePackingPhotoStep } from './MobilePackingPhotoStep';
 import { MobilePackingReviewStep } from './MobilePackingReviewStep';
 import { requestCameraPermission } from '@/hooks/useCamera';
+import {
+  wizardReducer,
+  initialWizardState,
+  type CapturedPhoto,
+  type ActivePackingOrder,
+  type ActiveFbaScan,
+} from '@/hooks/station/packingWizardReducer';
+import { useMobilePackingLookup } from '@/hooks/station/useMobilePackingLookup';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-export interface ActivePackingOrder {
-  orderId: string;
-  productTitle: string;
-  qty: number;
-  condition: string;
-  tracking: string;
-  sku?: string;
-  itemNumber?: string;
-  shipByDate?: string;
-  createdAt?: string;
-}
-
-export interface ActiveFbaScan {
-  fnsku: string;
-  productTitle: string;
-  shipmentRef: string | null;
-  plannedQty: number;
-  combinedPackScannedQty: number;
-  isNew: boolean;
-}
-
-export interface CapturedPhoto {
-  previewUrl: string;
-  blobUrl: string;
-  photoId: number | null;
-  index: number;
-}
-
-type PackingWizardStep = 'scan' | 'lookup' | 'confirm' | 'photos' | 'review' | 'success';
-
-type OrderVariant = 'order' | 'fba' | 'repair' | 'exception';
-
-interface PackingWizardState {
-  step: PackingWizardStep;
-  scannedValue: string | null;
-  scannedType: StationScanType | null;
-  resolvedOrder: ActivePackingOrder | null;
-  resolvedFba: ActiveFbaScan | null;
-  orderVariant: OrderVariant;
-  packerLogId: number | null;
-  resolvedScanType: string | null;
-  capturedPhotos: CapturedPhoto[];
-  isLoading: boolean;
-  errorMessage: string | null;
-}
-
-type WizardAction =
-  | { type: 'SCAN_CONFIRMED'; value: string; scanType: StationScanType }
-  | { type: 'LOOKUP_START' }
-  | { type: 'LOOKUP_ORDER_FOUND'; order: ActivePackingOrder; packerLogId: number | null; resolvedScanType: string; variant: OrderVariant }
-  | { type: 'LOOKUP_FBA_FOUND'; fba: ActiveFbaScan; packerLogId: number | null }
-  | { type: 'LOOKUP_EXCEPTION'; order: ActivePackingOrder; packerLogId: number | null }
-  | { type: 'LOOKUP_ERROR'; message: string }
-  | { type: 'CONFIRM_YES' }
-  | { type: 'CONFIRM_NO' }
-  | { type: 'PHOTO_ADDED'; photo: CapturedPhoto }
-  | { type: 'PHOTO_REMOVED'; index: number }
-  | { type: 'PHOTOS_DONE' }
-  | { type: 'PHOTOS_SKIP' }
-  | { type: 'COMPLETE_START' }
-  | { type: 'COMPLETE_SUCCESS' }
-  | { type: 'COMPLETE_ERROR'; message: string }
-  | { type: 'BACK' }
-  | { type: 'RESET' };
-
-const initialState: PackingWizardState = {
-  step: 'scan',
-  scannedValue: null,
-  scannedType: null,
-  resolvedOrder: null,
-  resolvedFba: null,
-  orderVariant: 'order',
-  packerLogId: null,
-  resolvedScanType: null,
-  capturedPhotos: [],
-  isLoading: false,
-  errorMessage: null,
-};
-
-function wizardReducer(state: PackingWizardState, action: WizardAction): PackingWizardState {
-  switch (action.type) {
-    case 'SCAN_CONFIRMED':
-      return {
-        ...initialState,
-        step: 'lookup',
-        scannedValue: action.value,
-        scannedType: action.scanType,
-        isLoading: true,
-      };
-    case 'LOOKUP_START':
-      return { ...state, isLoading: true, errorMessage: null };
-    case 'LOOKUP_ORDER_FOUND':
-      return {
-        ...state,
-        step: 'confirm',
-        isLoading: false,
-        resolvedOrder: action.order,
-        resolvedFba: null,
-        packerLogId: action.packerLogId,
-        resolvedScanType: action.resolvedScanType,
-        orderVariant: action.variant,
-      };
-    case 'LOOKUP_FBA_FOUND':
-      return {
-        ...state,
-        step: 'confirm',
-        isLoading: false,
-        resolvedFba: action.fba,
-        resolvedOrder: null,
-        packerLogId: action.packerLogId,
-        resolvedScanType: 'FBA',
-        orderVariant: 'fba',
-      };
-    case 'LOOKUP_EXCEPTION':
-      return {
-        ...state,
-        step: 'confirm',
-        isLoading: false,
-        resolvedOrder: action.order,
-        resolvedFba: null,
-        packerLogId: action.packerLogId,
-        resolvedScanType: 'ORDERS',
-        orderVariant: 'exception',
-      };
-    case 'LOOKUP_ERROR':
-      return { ...state, step: 'scan', isLoading: false, errorMessage: action.message };
-    case 'CONFIRM_YES':
-      return { ...state, step: 'photos', capturedPhotos: [] };
-    case 'CONFIRM_NO':
-      return { ...initialState };
-    case 'PHOTO_ADDED':
-      return { ...state, capturedPhotos: [...state.capturedPhotos, action.photo] };
-    case 'PHOTO_REMOVED':
-      return { ...state, capturedPhotos: state.capturedPhotos.filter((_, i) => i !== action.index) };
-    case 'PHOTOS_DONE':
-    case 'PHOTOS_SKIP':
-      return { ...state, step: 'review' };
-    case 'COMPLETE_START':
-      return { ...state, isLoading: true, errorMessage: null };
-    case 'COMPLETE_SUCCESS':
-      return { ...state, step: 'success', isLoading: false };
-    case 'COMPLETE_ERROR':
-      return { ...state, isLoading: false, errorMessage: action.message };
-    case 'BACK': {
-      const backMap: Record<PackingWizardStep, PackingWizardStep> = {
-        scan: 'scan',
-        lookup: 'scan',
-        confirm: 'scan',
-        photos: 'confirm',
-        review: 'photos',
-        success: 'scan',
-      };
-      return { ...state, step: backMap[state.step], errorMessage: null };
-    }
-    case 'RESET':
-      return { ...initialState };
-    default:
-      return state;
-  }
-}
+// Re-export types for consumers (e.g. MobilePackingConfirmCard)
+export type { ActivePackingOrder, ActiveFbaScan, CapturedPhoto } from '@/hooks/station/packingWizardReducer';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -224,7 +71,7 @@ export function MobileStationPacking({
   suppressShellToolbar = false,
   shellClassName,
 }: MobileStationPackingProps) {
-  const [state, dispatch] = useReducer(wizardReducer, initialState);
+  const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
   const [inputValue, setInputValue] = useState('');
   const [scanSheetOpen, setScanSheetOpen] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -241,128 +88,7 @@ export function MobileStationPacking({
 
   const { theme: themeColor } = useStationTheme({ staffId });
   const { normalizeTracking } = useLast8TrackingSearch();
-
-  // ── Step 2: Order Lookup ───────────────────────────────────────────────────
-
-  const handleLookup = useCallback(async (scanValue: string, scanType: StationScanType) => {
-    dispatch({ type: 'SCAN_CONFIRMED', value: scanValue, scanType });
-
-    try {
-      // ── FBA path: FNSKU detected ──
-      if (scanType === 'FNSKU' || looksLikeFnsku(scanValue)) {
-        const res = await fetch('/api/fba/items/scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fnsku: scanValue, staff_id: Number(userId), station: 'PACK_STATION' }),
-        });
-        const data = await res.json();
-
-        if (!res.ok) {
-          dispatch({ type: 'LOOKUP_ERROR', message: data?.error || 'FBA scan failed' });
-          return;
-        }
-
-        dispatch({
-          type: 'LOOKUP_FBA_FOUND',
-          fba: {
-            fnsku: data.fnsku,
-            productTitle: data.product_title || scanValue,
-            shipmentRef: data.shipment_ref || null,
-            plannedQty: Number(data.planned_qty ?? data.expected_qty ?? 0),
-            combinedPackScannedQty: Number(data.combined_pack_scanned_qty ?? data.actual_qty ?? 0),
-            isNew: !!data.is_new || !!data.auto_added_to_plan,
-          },
-          packerLogId: data.packerLogId ?? data.packer_log_id ?? null,
-        });
-        return;
-      }
-
-      // ── Regular packing path ──
-      const isTrackingInput = !scanValue.includes(':') && !/^(clean|fba-)/i.test(scanValue);
-      const normalizedScan = isTrackingInput ? normalizeTracking(scanValue) : scanValue;
-
-      const res = await fetch('/api/packing-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trackingNumber: normalizedScan,
-          photos: [],
-          packerId: String(userId),
-          packerName: userName,
-          createdAt: formatPSTTimestamp(),
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        dispatch({ type: 'LOOKUP_ERROR', message: data?.error || 'Failed to save packing scan' });
-        return;
-      }
-
-      const resolvedScanType = String(data?.trackingType || '').trim() || 'ORDERS';
-      const packerLogId = data.packerRecord?.id ?? null;
-
-      // Dispatch events for the packer table
-      if (packerLogId) {
-        window.dispatchEvent(new CustomEvent('packer-log-added', { detail: data.packerRecord }));
-      }
-
-      if (resolvedScanType === 'FBA' && data?.fba) {
-        dispatch({
-          type: 'LOOKUP_FBA_FOUND',
-          fba: {
-            fnsku: String(data.fba.fnskus || '').split(',')[0]?.trim() || '',
-            productTitle: String(data?.productTitle || '').trim() || 'FBA Shipment',
-            shipmentRef: data.fba.shipment_ref || null,
-            plannedQty: Number(data.fba.total_qty ?? 0),
-            combinedPackScannedQty: Number(data.fba.total_qty ?? 0),
-            isNew: false,
-          },
-          packerLogId,
-        });
-      } else if (data?.orderFound === false || data?.isException) {
-        // Exception path — no matching order found
-        dispatch({
-          type: 'LOOKUP_EXCEPTION',
-          order: {
-            orderId: String(data?.orderId || '').trim(),
-            productTitle: String(data?.productTitle || '').trim() || 'Unknown — Exception',
-            qty: 1,
-            condition: 'N/A',
-            tracking: String(data?.shippingTrackingNumber || scanValue).trim(),
-            sku: data?.sku || '',
-            itemNumber: data?.itemNumber || '',
-            shipByDate: data?.shipByDate || '',
-            createdAt: data?.createdAt || '',
-          },
-          packerLogId,
-        });
-      } else {
-        // Standard order found
-        const variant: OrderVariant =
-          /^RS-/i.test(String(data?.orderId || '')) ? 'repair' : 'order';
-        dispatch({
-          type: 'LOOKUP_ORDER_FOUND',
-          order: {
-            orderId: String(data?.orderId || '').trim(),
-            productTitle: String(data?.productTitle || '').trim() || 'Unknown product',
-            qty: Math.max(1, Number(data?.qty ?? data?.quantity ?? data?.orderQty ?? 1) || 1),
-            condition: String(data?.condition || '').trim() || 'N/A',
-            tracking: String(data?.shippingTrackingNumber || scanValue).trim(),
-            sku: String(data?.sku || '').trim(),
-            itemNumber: String(data?.itemNumber || '').trim(),
-            shipByDate: data?.shipByDate || '',
-            createdAt: data?.createdAt || '',
-          },
-          packerLogId,
-          resolvedScanType,
-          variant,
-        });
-      }
-    } catch (err: any) {
-      dispatch({ type: 'LOOKUP_ERROR', message: err?.message || 'Scan failed' });
-    }
-  }, [userId, userName, normalizeTracking]);
+  const { handleLookup } = useMobilePackingLookup({ userId, userName, normalizeTracking, dispatch });
 
   // ── Manual input submit (typed/pasted tracking) ────────────────────────────
 

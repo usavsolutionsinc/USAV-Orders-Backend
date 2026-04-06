@@ -322,11 +322,12 @@ async function runUiFlow(snapshot) {
     const skuPayload = await skuResponse.json();
     assert.equal(skuResponse.ok(), true, `SKU scan HTTP failed: ${skuResponse.status()} ${JSON.stringify(skuPayload)}`);
     assert.equal(skuPayload?.success, true, `SKU scan failed: ${JSON.stringify(skuPayload)}`);
+    await waitForBodyText(page, 'STORAGE SKUS');
+    await waitForBodyText(page, 'SCANNED SERIALS');
     for (const serial of snapshot.skuSerials) {
       await waitForBodyText(page, serial);
     }
     await waitForBodyText(page, snapshot.skuStatic);
-    await waitForBodyText(page, 'SKU MATCHED');
 
     assert.equal(pageErrors.length, 0, `Page errors detected:\n${pageErrors.map((error) => error.message).join('\n')}`);
   } finally {

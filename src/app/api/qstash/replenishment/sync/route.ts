@@ -6,12 +6,20 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
+  // Allow QStash-origin (scheduled cron) or same-origin manual trigger from /replenish sidebar
   if (!isQStashOrigin(request.headers)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const origin = request.headers.get('origin') || '';
+    const host = request.headers.get('host') || '';
+    const isSameOrigin = origin.includes(host) || origin.includes('localhost');
+    if (!isSameOrigin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   try {
+    console.log('[qstash/replenishment/sync] Starting sync...');
     await runReplenishmentSync();
+    console.log('[qstash/replenishment/sync] Sync completed');
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('[qstash/replenishment/sync]', error);
