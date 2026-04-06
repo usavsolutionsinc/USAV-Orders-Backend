@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
+import { isQStashOrigin } from '@/lib/qstash';
 import { InventorySyncService } from '@/services/InventorySyncService';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-async function handleZohoItemSync(request: NextRequest) {
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const mode = String(body.type ?? 'incremental').trim().toLowerCase() === 'full' ? 'full' : 'incremental';
   try {
@@ -26,8 +30,6 @@ async function handleZohoItemSync(request: NextRequest) {
     );
   }
 }
-
-export const POST = verifySignatureAppRouter(handleZohoItemSync);
 
 export async function GET() {
   return NextResponse.json({ ok: true, queue: 'qstash', job: 'zoho-items-sync' });

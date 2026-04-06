@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
+import { isQStashOrigin } from '@/lib/qstash';
 import { runIdempotencyCleanup } from '@/lib/jobs/idempotency-cleanup';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-async function handleCleanup(_request: NextRequest) {
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const result = await runIdempotencyCleanup();
     console.log(`[idempotency-cleanup] deleted ${result.deletedRows} rows in ${result.durationMs}ms`);
@@ -18,8 +22,6 @@ async function handleCleanup(_request: NextRequest) {
     );
   }
 }
-
-export const POST = verifySignatureAppRouter(handleCleanup);
 
 export async function GET() {
   return NextResponse.json({ ok: true, queue: 'qstash', job: 'idempotency-cleanup' });

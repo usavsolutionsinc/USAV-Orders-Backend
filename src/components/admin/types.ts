@@ -7,6 +7,24 @@ export interface Staff {
   created_at?: string | null;
 }
 
+export type StaffAvailabilityRuleType = 'weekday_allowed' | 'date_block' | 'date_allow';
+
+export interface StaffAvailabilityRule {
+  id: number;
+  staffId: number;
+  ruleType: StaffAvailabilityRuleType;
+  dayOfWeek: number | null;
+  isAllowed: boolean;
+  effectiveStartDate: string | null;
+  effectiveEndDate: string | null;
+  priority: number;
+  reason: string | null;
+  createdByStaffId: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
 export interface Order {
   id: number;
   ship_by_date: string | null;

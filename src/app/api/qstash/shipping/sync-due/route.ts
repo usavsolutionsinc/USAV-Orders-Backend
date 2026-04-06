@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
+import { isQStashOrigin } from '@/lib/qstash';
 import { runShippingSyncDueJob, type ShippingSyncDuePayload } from '@/lib/jobs/shipping-sync-due';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-async function handleSyncDue(request: NextRequest) {
+export async function POST(request: NextRequest) {
+  if (!isQStashOrigin(request.headers)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const payload = (await request.json().catch(() => ({}))) as ShippingSyncDuePayload;
   try {
     return NextResponse.json(await runShippingSyncDueJob(payload));
@@ -17,8 +21,6 @@ async function handleSyncDue(request: NextRequest) {
     );
   }
 }
-
-export const POST = verifySignatureAppRouter(handleSyncDue);
 
 export async function GET() {
   return NextResponse.json({ ok: true, queue: 'qstash', job: 'shipping-sync-due' });

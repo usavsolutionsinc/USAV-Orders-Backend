@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isQStashOrigin } from '@/lib/qstash';
 import {
   GoogleSheetsTransferOrdersJobError,
   runGoogleSheetsTransferOrders,
@@ -7,24 +8,8 @@ import {
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-function isQStashOrigin(request: NextRequest): boolean {
-  // QStash always sends the upstash-signature header — use its presence as
-  // proof the request came through the QStash pipeline. The QSTASH_TOKEN env
-  // var acts as a shared secret: if it matches, the caller is authorised.
-  const signature = request.headers.get('upstash-signature');
-  if (signature) return true;
-
-  // Fallback: allow calls that include the QSTASH_TOKEN as a bearer token
-  // (e.g. manual curl tests or the bootstrap script).
-  const authHeader = request.headers.get('authorization');
-  const token = process.env.QSTASH_TOKEN;
-  if (token && authHeader === `Bearer ${token}`) return true;
-
-  return false;
-}
-
 export async function POST(request: NextRequest) {
-  if (!isQStashOrigin(request)) {
+  if (!isQStashOrigin(request.headers)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

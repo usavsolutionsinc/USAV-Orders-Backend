@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import type { Staff } from './types';
+import type { Staff, StaffAvailabilityRule } from './types';
 import { toast } from '@/lib/toast';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { getStaffChannelName } from '@/lib/realtime/channels';
@@ -14,6 +14,7 @@ import { sectionLabel, tableHeader, dataValue } from '@/design-system/tokens/typ
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import {
   STAFF_SCHEDULE_TIMEZONE,
+  STAFF_WEEKDAY_LABELS,
   type StaffDayOfWeek,
   getCurrentStaffDayOfWeek,
   getStaffWeekdayLabel,
@@ -33,6 +34,29 @@ interface StaffScheduleResponse {
   timezone: string;
   today_day_of_week: number;
   schedules: StaffScheduleRow[];
+}
+
+interface StaffWeekScheduleRow {
+  staffId: number;
+  name: string;
+  role: string;
+  active: boolean;
+  dayOfWeek: number;
+  scheduleDate: string;
+  templateIsScheduled: boolean | null;
+  planIsScheduled: boolean | null;
+  overrideIsScheduled: boolean | null;
+  allowedByRule: boolean;
+  effectiveIsScheduled: boolean;
+}
+
+interface StaffWeekScheduleResponse {
+  weekStartDate: string;
+  rows: StaffWeekScheduleRow[];
+}
+
+interface StaffAvailabilityRulesResponse {
+  rules: StaffAvailabilityRule[];
 }
 
 interface StaffScheduleUpdatePayload {
@@ -60,8 +84,108 @@ interface StaffWeekCopyPayload {
   includeInactive?: boolean;
 }
 
+interface AvailabilityRuleDraft {
+  isAllowed: boolean;
+  reason: string;
+  effectiveStartDate: string;
+  effectiveEndDate: string;
+}
+
+interface AvailabilityEditorTarget {
+  staffId: number;
+  dayOfWeek: StaffDayOfWeek;
+}
+
+interface WeekdayRuleBucket {
+  primaryRule: StaffAvailabilityRule | null;
+  extraRulesCount: number;
+  displayedIsAllowed: boolean;
+}
+
 type ScheduleMap = Record<number, Record<string, boolean>>;
 type PendingScheduleMap = Record<string, { staffId: number; dayOfWeek: StaffDayOfWeek; scheduleDate: string; previous: boolean; next: boolean; timerId: ReturnType<typeof setTimeout> }>;
+type WeekdayRuleMap = Record<number, Partial<Record<StaffDayOfWeek, WeekdayRuleBucket>>>;
+type WeekScheduleDetailMap = Record<number, Record<string, StaffWeekScheduleRow>>;
+
+const DEFAULT_AVAILABILITY_DRAFT: AvailabilityRuleDraft = {
+  isAllowed: true,
+  reason: '',
+  effectiveStartDate: '',
+  effectiveEndDate: '',
+};
+
+function createAvailabilityDraft(rule: StaffAvailabilityRule | null): AvailabilityRuleDraft {
+  if (!rule) return { ...DEFAULT_AVAILABILITY_DRAFT };
+  return {
+    isAllowed: Boolean(rule.isAllowed),
+    reason: rule.reason || '',
+    effectiveStartDate: rule.effectiveStartDate || '',
+    effectiveEndDate: rule.effectiveEndDate || '',
+  };
+}
+
+function getPrimaryWeekdayRule(rules: StaffAvailabilityRule[]): StaffAvailabilityRule | null {
+  if (!rules.length) return null;
+  const sorted = [...rules].sort((a, b) => {
+    const aWindowed = a.effectiveStartDate != null || a.effectiveEndDate != null;
+    const bWindowed = b.effectiveStartDate != null || b.effectiveEndDate != null;
+    if (aWindowed !== bWindowed) return aWindowed ? 1 : -1;
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return a.id - b.id;
+  });
+  return sorted[0] || null;
+}
+
+function buildWeekdayRuleMap(rules: StaffAvailabilityRule[]): WeekdayRuleMap {
+  const grouped: Record<number, Partial<Record<StaffDayOfWeek, StaffAvailabilityRule[]>>> = {};
+
+  for (const rule of rules) {
+    if (rule.ruleType !== 'weekday_allowed' || rule.dayOfWeek == null) continue;
+    const dayOfWeek = rule.dayOfWeek as StaffDayOfWeek;
+    if (!grouped[rule.staffId]) grouped[rule.staffId] = {};
+    if (!grouped[rule.staffId][dayOfWeek]) grouped[rule.staffId][dayOfWeek] = [];
+    grouped[rule.staffId][dayOfWeek]!.push(rule);
+  }
+
+  const result: WeekdayRuleMap = {};
+  for (const [staffIdRaw, dayMap] of Object.entries(grouped)) {
+    const staffId = Number(staffIdRaw);
+    result[staffId] = {};
+    for (const [dayOfWeekRaw, dayRules] of Object.entries(dayMap)) {
+      const dayOfWeek = Number(dayOfWeekRaw) as StaffDayOfWeek;
+      const primaryRule = getPrimaryWeekdayRule(dayRules || []);
+      result[staffId][dayOfWeek] = {
+        primaryRule,
+        extraRulesCount: Math.max(0, (dayRules?.length || 0) - (primaryRule ? 1 : 0)),
+        displayedIsAllowed: primaryRule ? Boolean(primaryRule.isAllowed) : true,
+      };
+    }
+  }
+
+  return result;
+}
+
+function buildWeekScheduleDetailMap(rows: StaffWeekScheduleRow[]): WeekScheduleDetailMap {
+  const map: WeekScheduleDetailMap = {};
+  for (const row of rows) {
+    if (!map[row.staffId]) map[row.staffId] = {};
+    map[row.staffId][row.scheduleDate] = row;
+  }
+  return map;
+}
+
+function getPlannedScheduleState(row: StaffWeekScheduleRow | null | undefined): boolean {
+  if (!row) return true;
+  if (row.overrideIsScheduled != null) return row.overrideIsScheduled;
+  if (row.planIsScheduled != null) return row.planIsScheduled;
+  if (row.templateIsScheduled != null) return row.templateIsScheduled;
+  return true;
+}
+
+function toNullableDateInput(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
 
 export function StaffManagementTab() {
   const searchParams = useSearchParams();
@@ -78,9 +202,21 @@ export function StaffManagementTab() {
   const [savingScheduleKey, setSavingScheduleKey] = useState<string | null>(null);
   const [optimisticScheduleMap, setOptimisticScheduleMap] = useState<ScheduleMap>({});
   const [pendingScheduleMap, setPendingScheduleMap] = useState<PendingScheduleMap>({});
-  const pendingScheduleMapRef = useRef<PendingScheduleMap>({});
   const [calendarExpanded, setCalendarExpanded] = useState(true);
+  const [availabilityEditor, setAvailabilityEditor] = useState<AvailabilityEditorTarget | null>(null);
+  const [availabilityDraft, setAvailabilityDraft] = useState<AvailabilityRuleDraft>({ ...DEFAULT_AVAILABILITY_DRAFT });
+  const pendingScheduleMapRef = useRef<PendingScheduleMap>({});
+  const availabilitySectionRef = useRef<HTMLDivElement | null>(null);
   const staffChannelName = getStaffChannelName();
+
+  const thisWeekDays = useMemo(() => getCurrentBusinessWeekDays(), []);
+  const nextBusinessDays = useMemo(() => getNextBusinessDays(5), []);
+  const allWeekDays = useMemo(
+    () => STAFF_WEEKDAY_LABELS.map((label, index) => ({ label, dayOfWeek: index as StaffDayOfWeek })),
+    []
+  );
+  const thisWeekStartDate = thisWeekDays[0]?.date || '';
+  const nextWeekStartDate = nextBusinessDays[0]?.date || '';
 
   const { data: staff = [] } = useQuery<Staff[]>({
     queryKey: ['staff'],
@@ -92,14 +228,42 @@ export function StaffManagementTab() {
   });
 
   const { data: scheduleResponse } = useQuery<StaffScheduleResponse>({
-    queryKey: ['staff-schedule', 'this-week'],
+    queryKey: ['staff-schedule', 'range', thisWeekStartDate, nextBusinessDays[nextBusinessDays.length - 1]?.date || ''],
+    enabled: Boolean(thisWeekStartDate && nextBusinessDays[nextBusinessDays.length - 1]?.date),
     queryFn: async () => {
-      const weekDays = getCurrentBusinessWeekDays();
-      const nextDays = getNextBusinessDays(5);
-      const startDate = weekDays[0]?.date;
-      const endDate = nextDays[nextDays.length - 1]?.date;
-      const res = await fetch(`/api/staff/schedule?includeInactive=true&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`);
+      const startDate = thisWeekStartDate;
+      const endDate = nextBusinessDays[nextBusinessDays.length - 1]?.date;
+      const res = await fetch(`/api/staff/schedule?includeInactive=true&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate || '')}`);
       if (!res.ok) throw new Error('Failed to fetch staff schedule');
+      return res.json();
+    },
+  });
+
+  const { data: currentWeekResponse } = useQuery<StaffWeekScheduleResponse>({
+    queryKey: ['staff-schedule', 'week', thisWeekStartDate],
+    enabled: Boolean(thisWeekStartDate),
+    queryFn: async () => {
+      const res = await fetch(`/api/staff/schedule/week?weekStart=${encodeURIComponent(thisWeekStartDate)}&includeInactive=true`);
+      if (!res.ok) throw new Error('Failed to fetch current week schedule details');
+      return res.json();
+    },
+  });
+
+  const { data: nextWeekResponse } = useQuery<StaffWeekScheduleResponse>({
+    queryKey: ['staff-schedule', 'week', nextWeekStartDate],
+    enabled: Boolean(nextWeekStartDate),
+    queryFn: async () => {
+      const res = await fetch(`/api/staff/schedule/week?weekStart=${encodeURIComponent(nextWeekStartDate)}&includeInactive=true`);
+      if (!res.ok) throw new Error('Failed to fetch next week schedule details');
+      return res.json();
+    },
+  });
+
+  const { data: availabilityRulesResponse } = useQuery<StaffAvailabilityRulesResponse>({
+    queryKey: ['staff-availability-rules'],
+    queryFn: async () => {
+      const res = await fetch('/api/staff/availability-rules');
+      if (!res.ok) throw new Error('Failed to fetch availability rules');
       return res.json();
     },
   });
@@ -254,6 +418,67 @@ export function StaffManagementTab() {
     },
   });
 
+  const upsertAvailabilityRuleMutation = useMutation({
+    mutationFn: async (data: {
+      id?: number;
+      staffId: number;
+      dayOfWeek: StaffDayOfWeek;
+      isAllowed: boolean;
+      reason?: string | null;
+      effectiveStartDate?: string | null;
+      effectiveEndDate?: string | null;
+    }) => {
+      const res = await fetch('/api/staff/availability-rules', {
+        method: data.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: data.id,
+          staffId: data.staffId,
+          ruleType: 'weekday_allowed',
+          dayOfWeek: data.dayOfWeek,
+          isAllowed: data.isAllowed,
+          reason: data.reason ?? null,
+          effectiveStartDate: data.effectiveStartDate ?? null,
+          effectiveEndDate: data.effectiveEndDate ?? null,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.details || payload?.error || 'Failed to save availability rule');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff-availability-rules'] });
+      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      toast.success('Availability rule saved');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to save availability rule');
+    },
+  });
+
+  const deleteAvailabilityRuleMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/staff/availability-rules?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.details || payload?.error || 'Failed to delete availability rule');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff-availability-rules'] });
+      queryClient.invalidateQueries({ queryKey: ['staff-schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      toast.success('Availability rule removed');
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to delete availability rule');
+    },
+  });
+
   const startEditStaff = (member: Staff) => {
     setEditingStaffId(member.id);
     setEditName(member.name || '');
@@ -283,10 +508,20 @@ export function StaffManagementTab() {
     queryClient.invalidateQueries({ queryKey: ['staff'] });
   }, true);
 
-  const thisWeekDays = useMemo(() => getCurrentBusinessWeekDays(), []);
-  const nextBusinessDays = useMemo(() => getNextBusinessDays(5), []);
-  const thisWeekStartDate = thisWeekDays[0]?.date || '';
-  const nextWeekStartDate = nextBusinessDays[0]?.date || '';
+  const availabilityRuleMap = useMemo(
+    () => buildWeekdayRuleMap(availabilityRulesResponse?.rules || []),
+    [availabilityRulesResponse?.rules]
+  );
+
+  const currentWeekDetailMap = useMemo(
+    () => buildWeekScheduleDetailMap(currentWeekResponse?.rows || []),
+    [currentWeekResponse?.rows]
+  );
+
+  const nextWeekDetailMap = useMemo(
+    () => buildWeekScheduleDetailMap(nextWeekResponse?.rows || []),
+    [nextWeekResponse?.rows]
+  );
 
   const searchTerm = (searchParams.get('search') || '').trim().toLowerCase();
   const staffView = searchParams.get('staffView') || 'all';
@@ -330,7 +565,7 @@ export function StaffManagementTab() {
     }
 
     return map;
-  }, [scheduleResponse?.schedules, staff, thisWeekDays, nextBusinessDays]);
+  }, [nextBusinessDays, scheduleResponse?.schedules, staff, thisWeekDays]);
 
   const todayDay = Number.isFinite(Number(scheduleResponse?.today_day_of_week))
     ? Number(scheduleResponse?.today_day_of_week)
@@ -340,11 +575,51 @@ export function StaffManagementTab() {
   const timezoneLabel = scheduleResponse?.timezone || STAFF_SCHEDULE_TIMEZONE;
   const todayDateKey = getCurrentPSTDateKey();
 
+  const getWeekdayRuleBucket = (staffId: number, dayOfWeek: StaffDayOfWeek): WeekdayRuleBucket => {
+    return availabilityRuleMap[staffId]?.[dayOfWeek] || {
+      primaryRule: null,
+      extraRulesCount: 0,
+      displayedIsAllowed: true,
+    };
+  };
+
   const getIsScheduled = (staffId: number, scheduleDate: string) => {
     const optimistic = optimisticScheduleMap[staffId]?.[scheduleDate];
     if (optimistic !== undefined) return optimistic;
     return scheduleMap[staffId]?.[scheduleDate] ?? true;
   };
+
+  const getWeekDetail = (staffId: number, scheduleDate: string, weekScope: 'current' | 'next') => {
+    return weekScope === 'current'
+      ? currentWeekDetailMap[staffId]?.[scheduleDate]
+      : nextWeekDetailMap[staffId]?.[scheduleDate];
+  };
+
+  const getScheduleCellMeta = (
+    staffId: number,
+    scheduleDate: string,
+    dayOfWeek: StaffDayOfWeek,
+    weekScope: 'current' | 'next'
+  ) => {
+    const detail = getWeekDetail(staffId, scheduleDate, weekScope);
+    const isScheduled = getIsScheduled(staffId, scheduleDate);
+    const blockedByRule = detail ? !detail.allowedByRule : !getWeekdayRuleBucket(staffId, dayOfWeek).displayedIsAllowed;
+    const hasConflict = blockedByRule && getPlannedScheduleState(detail);
+    return { detail, isScheduled, blockedByRule, hasConflict };
+  };
+
+  const selectedAvailabilityBucket = availabilityEditor
+    ? getWeekdayRuleBucket(availabilityEditor.staffId, availabilityEditor.dayOfWeek)
+    : null;
+  const selectedAvailabilityRule = selectedAvailabilityBucket?.primaryRule || null;
+  const selectedAvailabilityStaff = availabilityEditor
+    ? staff.find((member) => member.id === availabilityEditor.staffId) || null
+    : null;
+
+  useEffect(() => {
+    if (!availabilityEditor) return;
+    setAvailabilityDraft(createAvailabilityDraft(selectedAvailabilityRule));
+  }, [availabilityEditor, selectedAvailabilityRule]);
 
   const summary = useMemo(() => {
     return filteredStaff.reduce(
@@ -363,7 +638,7 @@ export function StaffManagementTab() {
       },
       { total: 0, active: 0, inactive: 0, technicians: 0, packers: 0, presentToday: 0, offToday: 0 }
     );
-  }, [filteredStaff, todayDay, scheduleMap, isBusinessDayToday, todayDateKey]);
+  }, [filteredStaff, isBusinessDayToday, scheduleMap, todayDateKey]);
 
   const clearPendingSchedule = (key: string) => {
     setPendingScheduleMap((prev) => {
@@ -388,6 +663,18 @@ export function StaffManagementTab() {
 
   const rollbackOptimisticSchedule = (staffId: number, scheduleDate: string, isScheduled: boolean) => {
     applyOptimisticSchedule(staffId, scheduleDate, isScheduled);
+  };
+
+  const openAvailabilityEditorForDay = (staffId: number, dayOfWeek: StaffDayOfWeek) => {
+    setAvailabilityEditor({ staffId, dayOfWeek });
+    requestAnimationFrame(() => {
+      availabilitySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const handleBlockedScheduleCell = (staffId: number, dayOfWeek: StaffDayOfWeek, scheduleDate: string) => {
+    openAvailabilityEditorForDay(staffId, dayOfWeek);
+    toast.message(`Blocked by availability rule for ${scheduleDate}`);
   };
 
   const flushSingleScheduleUpdate = (
@@ -489,6 +776,49 @@ export function StaffManagementTab() {
           toast.error(error?.message || 'Failed to update next week schedule');
         },
       }
+    );
+  };
+
+  const saveAvailabilityRule = (
+    staffId: number,
+    dayOfWeek: StaffDayOfWeek,
+    draft: AvailabilityRuleDraft,
+    existingRule: StaffAvailabilityRule | null,
+    options?: { silentNoop?: boolean }
+  ) => {
+    const trimmedReason = draft.reason.trim();
+    const effectiveStartDate = toNullableDateInput(draft.effectiveStartDate);
+    const effectiveEndDate = toNullableDateInput(draft.effectiveEndDate);
+
+    if (!existingRule && draft.isAllowed && !trimmedReason && !effectiveStartDate && !effectiveEndDate) {
+      if (!options?.silentNoop) toast.message('Already allowed by default');
+      return;
+    }
+
+    upsertAvailabilityRuleMutation.mutate({
+      id: existingRule?.id,
+      staffId,
+      dayOfWeek,
+      isAllowed: draft.isAllowed,
+      reason: trimmedReason || null,
+      effectiveStartDate,
+      effectiveEndDate,
+    });
+  };
+
+  const toggleAvailabilityAllowed = (staffId: number, dayOfWeek: StaffDayOfWeek, nextAllowed: boolean) => {
+    const bucket = getWeekdayRuleBucket(staffId, dayOfWeek);
+    saveAvailabilityRule(
+      staffId,
+      dayOfWeek,
+      {
+        isAllowed: nextAllowed,
+        reason: bucket.primaryRule?.reason || '',
+        effectiveStartDate: bucket.primaryRule?.effectiveStartDate || '',
+        effectiveEndDate: bucket.primaryRule?.effectiveEndDate || '',
+      },
+      bucket.primaryRule,
+      { silentNoop: true }
     );
   };
 
@@ -616,6 +946,193 @@ export function StaffManagementTab() {
           <SummaryCell label="Scheduled Today" value={summary.presentToday} tone="emerald" />
         </div>
 
+        <div ref={availabilitySectionRef} className="mb-6">
+          <div className={`${sectionLabel} mb-2 flex items-center justify-between`}>
+            <span>Availability Rules</span>
+            <span>Permission to work by weekday</span>
+          </div>
+
+          {availabilityEditor && selectedAvailabilityStaff && (
+            <div className="mb-3 border border-amber-200 bg-amber-50/60 px-4 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 pb-3">
+                <div>
+                  <p className={`${sectionLabel} text-amber-900`}>Editing Availability</p>
+                  <p className={`${dataValue} mt-1 text-amber-950`}>
+                    {selectedAvailabilityStaff.name} • {getStaffWeekdayLabel(availabilityEditor.dayOfWeek)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAvailabilityEditor(null)}
+                  className={`${tableHeader} h-8 border border-amber-300 px-3 text-amber-800 hover:bg-amber-100`}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <label className="space-y-1">
+                  <span className={`block ${sectionLabel}`}>State</span>
+                  <select
+                    value={availabilityDraft.isAllowed ? 'allowed' : 'blocked'}
+                    onChange={(e) => setAvailabilityDraft((prev) => ({ ...prev, isAllowed: e.target.value === 'allowed' }))}
+                    className="h-9 w-full border border-amber-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-amber-400"
+                  >
+                    <option value="allowed">Allowed</option>
+                    <option value="blocked">Blocked</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className={`block ${sectionLabel}`}>Start Date</span>
+                  <input
+                    type="date"
+                    value={availabilityDraft.effectiveStartDate}
+                    onChange={(e) => setAvailabilityDraft((prev) => ({ ...prev, effectiveStartDate: e.target.value }))}
+                    className="h-9 w-full border border-amber-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-amber-400"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className={`block ${sectionLabel}`}>End Date</span>
+                  <input
+                    type="date"
+                    value={availabilityDraft.effectiveEndDate}
+                    onChange={(e) => setAvailabilityDraft((prev) => ({ ...prev, effectiveEndDate: e.target.value }))}
+                    className="h-9 w-full border border-amber-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-amber-400"
+                  />
+                </label>
+                <label className="space-y-1 md:col-span-1">
+                  <span className={`block ${sectionLabel}`}>Reason</span>
+                  <input
+                    type="text"
+                    value={availabilityDraft.reason}
+                    onChange={(e) => setAvailabilityDraft((prev) => ({ ...prev, reason: e.target.value }))}
+                    className="h-9 w-full border border-amber-200 bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-amber-400"
+                    placeholder="Optional note"
+                  />
+                </label>
+              </div>
+
+              <div className={`${tableHeader} mt-3 flex flex-wrap items-center gap-3 text-amber-900`}>
+                <span>
+                  {selectedAvailabilityRule
+                    ? 'Editing existing weekday rule'
+                    : 'No explicit rule exists. Allowed state is inherited by default.'}
+                </span>
+                {selectedAvailabilityBucket?.extraRulesCount ? (
+                  <span>{selectedAvailabilityBucket.extraRulesCount} additional windowed rule(s) exist for this weekday.</span>
+                ) : null}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={upsertAvailabilityRuleMutation.isPending}
+                  onClick={() => saveAvailabilityRule(availabilityEditor.staffId, availabilityEditor.dayOfWeek, availabilityDraft, selectedAvailabilityRule)}
+                  className={`${sectionLabel} h-9 border border-amber-800 bg-amber-800 px-4 text-white hover:bg-amber-900 disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  {selectedAvailabilityRule ? 'Save Rule' : 'Create Rule'}
+                </button>
+                {selectedAvailabilityRule && (
+                  <button
+                    type="button"
+                    disabled={deleteAvailabilityRuleMutation.isPending}
+                    onClick={() => deleteAvailabilityRuleMutation.mutate(selectedAvailabilityRule.id)}
+                    className={`${sectionLabel} h-9 border border-red-300 bg-white px-4 text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    Delete Rule
+                  </button>
+                )}
+                {!selectedAvailabilityRule && (
+                  <button
+                    type="button"
+                    onClick={() => setAvailabilityDraft({ ...DEFAULT_AVAILABILITY_DRAFT })}
+                    className={`${sectionLabel} h-9 border border-gray-300 bg-white px-4 text-gray-700 hover:bg-gray-50`}
+                  >
+                    Reset Draft
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto border border-gray-200 bg-white">
+            <div className="min-w-[1240px]">
+              <div className="grid grid-cols-[minmax(320px,1fr)_repeat(7,minmax(120px,1fr))] items-center border-b border-gray-200 bg-gray-50 px-4 py-2.5">
+                <span className={tableHeader}>Staff</span>
+                {allWeekDays.map((day) => (
+                  <span key={`availability-${day.dayOfWeek}`} className={`${tableHeader} text-center`}>
+                    {day.label}
+                  </span>
+                ))}
+              </div>
+
+              {filteredStaff.map((member) => (
+                <div
+                  key={`availability-row-${member.id}`}
+                  className={`grid grid-cols-[minmax(320px,1fr)_repeat(7,minmax(120px,1fr))] items-start border-b border-gray-100 px-4 py-3 ${
+                    member.active ? 'bg-white' : 'bg-gray-50 text-gray-500'
+                  }`}
+                >
+                  <div className="min-w-0 pr-3">
+                    <p className={`${dataValue} truncate uppercase tracking-[0.02em]`}>
+                      {member.name}
+                    </p>
+                    <div className={`${tableHeader} mt-0.5 flex items-center gap-2`}>
+                      <span>{member.role}</span>
+                      {member.employee_id ? <span>ID {member.employee_id}</span> : null}
+                      <span>{member.active ? 'Active' : 'Inactive'}</span>
+                    </div>
+                  </div>
+
+                  {allWeekDays.map((day) => {
+                    const bucket = getWeekdayRuleBucket(member.id, day.dayOfWeek);
+                    const isSelected = availabilityEditor?.staffId === member.id && availabilityEditor.dayOfWeek === day.dayOfWeek;
+                    const titleParts = [
+                      `${member.name} • ${day.label}`,
+                      bucket.primaryRule ? `Rule #${bucket.primaryRule.id}` : 'Default allow',
+                      bucket.extraRulesCount ? `+${bucket.extraRulesCount} extra windowed rule(s)` : '',
+                    ].filter(Boolean);
+
+                    return (
+                      <div key={`availability-cell-${member.id}-${day.dayOfWeek}`} className="px-1 text-center">
+                        <button
+                          type="button"
+                          disabled={!member.active || upsertAvailabilityRuleMutation.isPending}
+                          onClick={() => toggleAvailabilityAllowed(member.id, day.dayOfWeek, !bucket.displayedIsAllowed)}
+                          title={titleParts.join(' • ')}
+                          className={[
+                            `${tableHeader} h-8 w-full border transition-colors`,
+                            bucket.displayedIsAllowed
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-red-200 bg-red-50 text-red-700',
+                            isSelected ? 'ring-1 ring-amber-500' : '',
+                            !member.active ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
+                          ].join(' ')}
+                        >
+                          {bucket.displayedIsAllowed ? 'Allowed' : 'Blocked'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!member.active}
+                          onClick={() => openAvailabilityEditorForDay(member.id, day.dayOfWeek)}
+                          className={`${tableHeader} mt-1 text-[10px] ${member.active ? 'text-gray-600 hover:text-gray-900' : 'text-gray-400'}`}
+                        >
+                          Edit
+                        </button>
+                        {bucket.extraRulesCount > 0 && (
+                          <div className="mt-1 text-[10px] font-bold text-amber-700">
+                            +{bucket.extraRulesCount} window
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -734,8 +1251,8 @@ export function StaffManagementTab() {
                       <button
                         type="button"
                         onClick={() => deleteStaffMutation.mutate(member.id)}
-                      className={`${sectionLabel} h-9 border border-red-300 px-4 text-red-700 hover:bg-red-50`}
-                    >
+                        className={`${sectionLabel} h-9 border border-red-300 px-4 text-red-700 hover:bg-red-50`}
+                      >
                         Deactivate Staff
                       </button>
                     </div>
@@ -762,7 +1279,7 @@ export function StaffManagementTab() {
                   </div>
 
                   {thisWeekDays.map((day) => {
-                    const isScheduled = getIsScheduled(member.id, day.date);
+                    const { isScheduled, blockedByRule, hasConflict } = getScheduleCellMeta(member.id, day.date, day.dayOfWeek, 'current');
                     const isToday = day.date === todayDateKey;
                     const buttonKey = `${member.id}:${day.date}`;
                     const isDisabled = !member.active || savingScheduleKey === buttonKey;
@@ -771,21 +1288,31 @@ export function StaffManagementTab() {
                       <button
                         key={`${member.id}-${day.date}`}
                         type="button"
-                        onClick={() => toggleSchedule(member.id, day.dayOfWeek, day.date, Boolean(member.active))}
+                        onClick={() => {
+                          if (blockedByRule) {
+                            handleBlockedScheduleCell(member.id, day.dayOfWeek, day.date);
+                            return;
+                          }
+                          toggleSchedule(member.id, day.dayOfWeek, day.date, Boolean(member.active));
+                        }}
                         disabled={isDisabled}
                         className={[
                           `mx-1 h-8 border ${tableHeader} transition-colors`,
-                          isScheduled
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                            : 'border-gray-200 bg-gray-50 text-gray-500',
+                          hasConflict
+                            ? 'border-amber-300 bg-amber-50 text-amber-800'
+                            : blockedByRule
+                              ? 'border-red-200 bg-red-50 text-red-700'
+                              : isScheduled
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-gray-200 bg-gray-50 text-gray-500',
                           isToday ? 'outline outline-1 outline-gray-900/30' : '',
                           isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
                         ].join(' ')}
                         aria-pressed={isScheduled}
-                        aria-label={`${member.name} ${day.label} ${member.active ? (isScheduled ? 'scheduled' : 'off') : 'inactive'}`}
-                        title={`${member.name} • ${day.label} ${day.date}`}
+                        aria-label={`${member.name} ${day.label} ${member.active ? (blockedByRule ? 'blocked' : isScheduled ? 'scheduled' : 'off') : 'inactive'}`}
+                        title={`${member.name} • ${day.label} ${day.date}${blockedByRule ? ' • blocked by availability rule' : ''}`}
                       >
-                        {isScheduled ? 'On' : 'Off'}
+                        {hasConflict ? 'Conflict' : blockedByRule ? 'Blocked' : isScheduled ? 'On' : 'Off'}
                       </button>
                     );
                   })}
@@ -871,7 +1398,7 @@ export function StaffManagementTab() {
                       {member.name}
                     </p>
                     {nextBusinessDays.map((day) => {
-                      const isScheduled = member.active ? getIsScheduled(member.id, day.date) : false;
+                      const { isScheduled, blockedByRule, hasConflict } = getScheduleCellMeta(member.id, day.date, day.dayOfWeek, 'next');
                       const buttonKey = `${member.id}:${day.date}`;
                       const isDisabled = !member.active || savingScheduleKey === buttonKey || updateWeekScheduleMutation.isPending;
                       return (
@@ -879,18 +1406,31 @@ export function StaffManagementTab() {
                           type="button"
                           key={`upcoming-${member.id}-${day.date}`}
                           disabled={isDisabled}
-                          onClick={() => toggleNextWeekSchedule(member.id, day.dayOfWeek, day.date, Boolean(member.active))}
+                          onClick={() => {
+                            if (blockedByRule) {
+                              handleBlockedScheduleCell(member.id, day.dayOfWeek, day.date);
+                              return;
+                            }
+                            toggleNextWeekSchedule(member.id, day.dayOfWeek, day.date, Boolean(member.active));
+                          }}
                           className={[
                             `${tableHeader} mx-2 h-7 border text-center leading-7 transition-colors`,
-                            member.active
-                              ? (isScheduled ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-gray-50 text-gray-500')
-                              : 'border-gray-200 bg-gray-100 text-gray-400',
+                            !member.active
+                              ? 'border-gray-200 bg-gray-100 text-gray-400'
+                              : hasConflict
+                                ? 'border-amber-300 bg-amber-50 text-amber-800'
+                                : blockedByRule
+                                  ? 'border-red-200 bg-red-50 text-red-700'
+                                  : isScheduled
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    : 'border-gray-200 bg-gray-50 text-gray-500',
                             isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
                           ].join(' ')}
                           aria-pressed={isScheduled}
-                          aria-label={`${member.name} next week ${day.label} ${member.active ? (isScheduled ? 'scheduled' : 'off') : 'inactive'}`}
+                          aria-label={`${member.name} next week ${day.label} ${member.active ? (blockedByRule ? 'blocked' : isScheduled ? 'scheduled' : 'off') : 'inactive'}`}
+                          title={`${member.name} • ${day.label} ${day.date}${blockedByRule ? ' • blocked by availability rule' : ''}`}
                         >
-                          {member.active ? (isScheduled ? 'On' : 'Off') : 'Inactive'}
+                          {!member.active ? 'Inactive' : hasConflict ? 'Conflict' : blockedByRule ? 'Blocked' : isScheduled ? 'On' : 'Off'}
                         </button>
                       );
                     })}
