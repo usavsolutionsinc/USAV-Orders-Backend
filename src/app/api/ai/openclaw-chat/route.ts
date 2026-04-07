@@ -16,6 +16,10 @@ type OpenClawChatBody = {
 const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || '';
 const OPENCLAW_USAV_TOKEN = process.env.OPENCLAW_USAV_TOKEN || '';
 
+// Mac LM Studio with Qwen3-32B — used for Bose manual synthesis and as primary fallback
+const MAC_LM_STUDIO_URL = process.env.MAC_LM_STUDIO_URL || 'http://100.64.38.223:8080';
+const MAC_LM_STUDIO_MODEL = process.env.MAC_LM_STUDIO_MODEL || 'qwen/qwen3-32b';
+
 export async function POST(req: NextRequest) {
   const rate = checkRateLimit({
     headers: req.headers,
@@ -70,7 +74,7 @@ export async function POST(req: NextRequest) {
     const intents = detectIntents(trimmedMessage);
     const params = extractParams(trimmedMessage, intents);
 
-    // 2b. Bose manual RAG intercept — routes to NemoClaw → Prometheus Mac Qwen2.5-32B
+    // 2b. Bose manual RAG intercept — routes to NemoClaw if available
     if (intents.includes('bose_manual')) {
       try {
         const ragResult = await queryNemoClawRag(trimmedMessage);
@@ -117,7 +121,7 @@ export async function POST(req: NextRequest) {
         }
       } catch (ragErr: any) {
         console.warn('[openclaw-chat] NemoClaw RAG failed (non-fatal), falling through:', ragErr?.message);
-        // Fall through to OpenClaw / Ollama
+        // Fall through to Mac LM Studio / OpenClaw / Ollama
       }
     }
 
@@ -140,7 +144,60 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Try OpenClaw Gateway
+    // 3. Try Mac LM Studio (Qwen3-32B) — fast, powerful, local network
+    try {
+      const macRes = await fetch(`${MAC_LM_STUDIO_URL}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer lm-studio',
+        },
+        body: JSON.stringify({
+          model: MAC_LM_STUDIO_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are the USAV Ops Assistant specializing in Bose product repair and warehouse operations. ' +
+                'Answer questions about Bose speakers, amplifiers, receivers, and audio equipment repair. ' +
+                'Provide specific part numbers, troubleshooting steps, and repair procedures when possible. ' +
+                'Be concise and practical.',
+            },
+            { role: 'user', content: enrichedMessage },
+          ],
+          stream: false,
+          temperature: 0.3,
+          max_tokens: 2048,
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+
+      if (macRes.ok) {
+        const data = await macRes.json();
+        const rawReply = data?.choices?.[0]?.message?.content || 'No response received.';
+        // Strip Qwen3 <think>...</think> reasoning blocks if present
+        const reply = rawReply.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || rawReply;
+
+        console.info('[openclaw-chat] Mac LM Studio answered', {
+          model: MAC_LM_STUDIO_MODEL,
+          chars: reply.length,
+        });
+
+        const payload: AiChatRouteResponse = {
+          reply: String(reply).trim(),
+          sessionId,
+          mode: localResolution?.analysis ? 'hybrid' : 'assistant',
+          analysis: localResolution?.analysis ?? null,
+        };
+        return NextResponse.json(payload);
+      }
+
+      console.warn('[openclaw-chat] Mac LM Studio returned non-OK:', macRes.status);
+    } catch (err: any) {
+      console.warn('[openclaw-chat] Mac LM Studio unreachable, trying OpenClaw:', err?.message);
+    }
+
+    // 4. Try OpenClaw Gateway (local Qwen3:8b)
     if (OPENCLAW_GATEWAY_URL && OPENCLAW_USAV_TOKEN) {
       try {
         const openclawRes = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
@@ -167,13 +224,18 @@ export async function POST(req: NextRequest) {
             data?.reply ||
             'No response received.';
 
-          const payload: AiChatRouteResponse = {
-            reply: String(reply).trim(),
-            sessionId,
-            mode: localResolution?.analysis ? 'hybrid' : 'assistant',
-            analysis: localResolution?.analysis ?? null,
-          };
-          return NextResponse.json(payload);
+          // Check for timeout messages from the gateway
+          if (reply.includes('timed out') || reply.includes('Request timed out')) {
+            console.warn('[openclaw-chat] OpenClaw gateway timed out internally');
+          } else {
+            const payload: AiChatRouteResponse = {
+              reply: String(reply).trim(),
+              sessionId,
+              mode: localResolution?.analysis ? 'hybrid' : 'assistant',
+              analysis: localResolution?.analysis ?? null,
+            };
+            return NextResponse.json(payload);
+          }
         }
 
         console.warn('[openclaw-chat] Gateway returned non-OK:', openclawRes.status);
@@ -182,15 +244,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Fallback: existing /api/ai/chat endpoint (Ollama direct)
+    // 5. Fallback: local Ollama via /api/ai/chat
+    // NOTE: /api/ai/chat expects { query } not { message }
     try {
       const fallbackRes = await fetch(
         new URL('/api/ai/chat', req.nextUrl.origin).toString(),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, message: enrichedMessage }),
-          signal: AbortSignal.timeout(30_000),
+          body: JSON.stringify({
+            sessionId,
+            query: enrichedMessage,
+            messages: [{ role: 'user', content: enrichedMessage }],
+          }),
+          signal: AbortSignal.timeout(60_000),
         }
       );
 
@@ -204,8 +271,8 @@ export async function POST(req: NextRequest) {
       }
 
       const payload: AiChatRouteResponse = {
-        reply: String(fallbackData.reply || '').trim() || 'No response received.',
-        sessionId: fallbackData.session_id ?? sessionId,
+        reply: String(fallbackData.response || fallbackData.reply || '').trim() || 'No response received.',
+        sessionId: fallbackData.sessionId ?? sessionId,
         mode: localResolution?.analysis ? 'hybrid' : 'assistant',
         analysis: localResolution?.analysis ?? null,
       };
@@ -214,7 +281,7 @@ export async function POST(req: NextRequest) {
     } catch (fallbackErr: any) {
       console.error('[openclaw-chat] Fallback also failed:', fallbackErr?.message);
       return NextResponse.json(
-        { error: 'Both OpenClaw and fallback backends are unavailable' },
+        { error: 'All AI backends are unavailable. Check Mac LM Studio, OpenClaw, and Ollama.' },
         { status: 503 }
       );
     }
@@ -222,7 +289,7 @@ export async function POST(req: NextRequest) {
     console.error('[openclaw-chat] Error:', err?.message);
     return NextResponse.json(
       { error: err?.message ?? 'Chat request failed' },
-      { status: 503 }
+      { status: 503 },
     );
   }
 }
