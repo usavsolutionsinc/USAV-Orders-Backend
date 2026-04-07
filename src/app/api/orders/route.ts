@@ -355,7 +355,7 @@ export async function GET(req: NextRequest) {
         stn.latest_status_description,
         stn.latest_status_category,
         ${shippedByCarrierOrLatestStatusSql} AS is_shipped,
-        o.created_at,
+        to_char(timezone('America/Los_Angeles', o.created_at), 'YYYY-MM-DD HH24:MI:SS') AS created_at,
         wa_t.assigned_tech_id   AS tester_id,
         wa_p.assigned_packer_id AS packer_id,
         pl_latest.packed_at,

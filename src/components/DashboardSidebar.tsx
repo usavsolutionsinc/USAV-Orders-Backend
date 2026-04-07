@@ -12,9 +12,10 @@ import BarcodeSidebar from '@/components/BarcodeSidebar';
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
 import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
+import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
-import { ManualsSidebar } from '@/components/manuals/ManualsSidebar';
+import { ManualsCombinedSidebar } from '@/components/manuals/ManualsCombinedSidebar';
 import { SidebarTabSwitchChrome, TabSwitch } from '@/components/ui/TabSwitch';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
@@ -61,6 +62,7 @@ function getSidebarTitle(pathname: string | null) {
     fba: 'FBA',
     receiving: 'Receiving',
     repair: 'Repair',
+    'walk-in': 'Walk-In',
     'work-orders': 'Work Orders',
     replenish: 'Replenish',
     'sku-stock': 'Sku Stock',
@@ -325,9 +327,10 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
   if (routeKey === 'replenish') return <ReplenishSidebarPanel />;
   if (routeKey === 'sku-stock') return <BarcodeSidebar embedded />;
-  if (routeKey === 'repair') return <RepairSidebarPanel embedded hideSectionHeader />;
+  if (routeKey === 'walk-in') return <WalkInSidebarPanel embedded hideSectionHeader />;
+  if (routeKey === 'repair') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;
-  if (routeKey === 'manuals') return <ManualsSidebar />;
+  if (routeKey === 'manuals') return <ManualsCombinedSidebar />;
 
   if (routeKey === 'tech') {
     const techId = searchParams.get('staffId') || getPathStaffId(pathname, 'tech') || '1';
@@ -394,10 +397,8 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
     routeKey === 'dashboard' ? getDashboardOrderViewFromSearch(searchParams) : null;
   const dashboardOpenOrderId =
     routeKey === 'dashboard' ? parseDashboardOpenOrderId(searchParams.get('openOrderId')) : null;
-  const collapseDesktopSidebar =
-    routeKey === 'dashboard'
-      ? dashboardOpenOrderId != null && dashboardOrderView !== 'shipped'
-      : stationDetailsOpen;
+  // Details panel is a fixed overlay (z-[100]) — never collapse the sidebar for it.
+  const collapseDesktopSidebar = false;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
   const [showHomeNavigation, setShowHomeNavigation] = useState(false);

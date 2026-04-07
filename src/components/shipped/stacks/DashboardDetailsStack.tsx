@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Check } from '@/components/Icons';
-import { motion } from 'framer-motion';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { toPSTDateKey } from '@/utils/date';
@@ -163,37 +162,11 @@ export function DashboardDetailsStack({
     }
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-        delayChildren: 0.05,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 15, filter: 'blur(4px)' },
-    visible: { 
-      opacity: 1, 
-      y: 0, 
-      filter: 'blur(0px)',
-      transition: { type: 'spring', damping: 25, stiffness: 350, mass: 0.5 } 
-    },
-  };
-
   return (
-    <motion.div 
-      initial="hidden"
-      animate="visible"
-      variants={containerVariants}
-      className="pb-8 pt-4 space-y-4"
-    >
+    <div className="pb-8 pt-4 space-y-4">
       {actionBar ? <PanelActionBar {...actionBar} actions={panelActions} /> : null}
 
-      <motion.section variants={itemVariants} className="mx-8 space-y-2">
+      <section className="mx-8 space-y-2">
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
             <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
@@ -265,9 +238,9 @@ export function DashboardDetailsStack({
             </div>
           </div>
         )}
-      </motion.section>
+      </section>
 
-      <motion.div variants={itemVariants}>
+      <div>
         <ShippedDetailsPanelContent
           shipped={{
             ...shipped,
@@ -298,9 +271,9 @@ export function DashboardDetailsStack({
           showTestingInformation={false}
           showReturnInformation={showReturnInformation}
         />
-      </motion.div>
+      </div>
 
-      <motion.section variants={itemVariants} className="mx-8 pt-2 space-y-2">
+      <section className="mx-8 pt-2 space-y-2">
         <button
           type="button"
           onClick={() => dispatchOpenShippingEditCard([shipped], 0)}
@@ -315,7 +288,7 @@ export function DashboardDetailsStack({
           trackingType={shipped.tracking_type}
           onDeleted={() => onUpdate?.()}
         />
-      </motion.section>
-    </motion.div>
+      </section>
+    </div>
   );
 }

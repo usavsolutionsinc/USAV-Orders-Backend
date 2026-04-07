@@ -1,6 +1,7 @@
 import { db } from '@/lib/drizzle/db';
 import { itemLocationStock, items, zohoLocations } from '@/lib/drizzle/schema';
 import { asc, eq, inArray, sql } from 'drizzle-orm';
+import { syncSkuCatalogFromItems } from '@/lib/neon/sku-catalog-queries';
 
 export interface PaginationParams {
   limit?: number;
@@ -116,6 +117,22 @@ export class DrizzleItemRepository implements ItemRepository {
         updatedAt: sql`now()`,
       },
     });
+
+    // Sync upserted items into sku_catalog hub
+    try {
+      await syncSkuCatalogFromItems(
+        rows.map((r) => ({
+          sku: r.sku,
+          name: r.name,
+          upc: r.upc,
+          ean: r.ean,
+          image_url: r.imageUrl,
+          status: r.status,
+        })),
+      );
+    } catch (err) {
+      console.error('[itemRepository] sku_catalog sync failed (non-blocking):', err);
+    }
   }
 
   async listActive(pagination: PaginationParams) {

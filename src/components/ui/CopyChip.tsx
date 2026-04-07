@@ -132,7 +132,7 @@ export function CopyChip({
   return (
     <div
       ref={chipRef}
-      className={`relative px-1.5 ${width}`}
+      className={`relative flex justify-start px-1.5 ${width}`}
       onMouseEnter={openTooltip}
       onMouseLeave={closeTooltip}
     >
@@ -143,10 +143,10 @@ export function CopyChip({
         onBlur={closeTooltipImmediate}
         disabled={isDisabled}
         title={!tooltipCtx && canCopy ? normalizedValue : undefined}
-        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95 disabled:opacity-30"
+        className="inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95 disabled:opacity-30"
       >
         {icon ? <span className={`shrink-0 ${iconClass ?? ''}`}>{icon}</span> : null}
-        <span className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 min-w-0 text-left ${displayOverflowClass} ${underlineClass}`}>
+        <span className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 flex-1 min-w-0 text-left ${displayOverflowClass} ${underlineClass}`}>
           {normalizedDisplay || '---'}
         </span>
       </button>
@@ -183,13 +183,23 @@ export const TrackingChip = ({ value, display }: { value: string; display: strin
 );
 
 /** Device / unit serial number. Emerald / Barcode icon. */
-export const SerialChip = ({ value, display }: { value: string; display: string }) => (
+export const SerialChip = ({
+  value,
+  display,
+  width = 'w-[63px]',
+}: {
+  value: string;
+  display: string;
+  width?: string;
+}) => (
   <CopyChip
     value={value}
-    display={isEmptyDisplayValue(display) ? 'SERIAL' : display}
+    display={isEmptyDisplayValue(display) ? 'SERIAL' : getLast6Serial(display)}
     icon={<Barcode className="h-4 w-4 shrink-0" />}
     underlineClass="border-emerald-500"
     iconClass="text-emerald-500"
+    width="w-[63px] shrink-0"
+    truncateDisplay={false}
   />
 );
 

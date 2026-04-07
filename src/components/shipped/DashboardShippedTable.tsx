@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
 import { MobileDateGroupHeader } from '@/components/mobile/MobileDateGroupHeader';
+import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
@@ -22,9 +22,7 @@ import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/sourc
 import { normalizeShippedSearchField, type ShippedSearchField } from '@/lib/shipped-search';
 import {
   readShippedFilterPreference,
-  readShippedWeekOffsetPreference,
   writeShippedFilterPreference,
-  writeShippedWeekOffsetPreference,
 } from '@/utils/dashboard-preferences';
 
 // FBA records are identified by scan_ref matching Amazon's FBA shipment ID format
@@ -103,10 +101,10 @@ export function DashboardShippedTable({
     if (weekOffsetParam != null) {
       return Math.max(0, Number.parseInt(weekOffsetParam || '0', 10) || 0);
     }
-    return readShippedWeekOffsetPreference() ?? 0;
+    return 0;
   }, [weekOffsetParam]);
   const weekRange = getWeekRangeForOffset(weekOffset);
-  const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
+  const formatDate = useCallback((dateStr: string) => formatDateWithOrdinal(dateStr), []);
 
   const queryKey = ['dashboard-table', 'shipped', { weekStart: weekRange.startStr, weekEnd: weekRange.endStr, packedBy, testedBy, shippedFilter }] as const;
 
@@ -131,10 +129,6 @@ export function DashboardShippedTable({
       shippedFilter === 'orders' || shippedFilter === 'sku' || shippedFilter === 'fba' ? shippedFilter : 'all'
     );
   }, [shippedFilter]);
-
-  useEffect(() => {
-    writeShippedWeekOffsetPreference(weekOffset);
-  }, [weekOffset]);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -188,7 +182,7 @@ export function DashboardShippedTable({
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
   };
 
-  const rawRecords = query.data || [];
+  const rawRecords = useMemo(() => query.data || [], [query.data]);
   const normalizedSearch = search.trim().toLowerCase();
 
   const toDetailRecord = useCallback((record: PackerRecord): ShippedOrder => ({
@@ -267,16 +261,19 @@ export function DashboardShippedTable({
     fnsku_log_id: record.fnsku_log_id ?? null,
   } as PackerRecord), []);
 
-  const seenTracking = new Map<string, PackerRecord>();
-  [...rawRecords].sort((a, b) => a.id - b.id).forEach((record) => {
-    const orderKey = String(record.order_id || '').trim();
-    const key = orderKey || (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
-    seenTracking.set(key, record);
-  });
-  const dedupedRecords = Array.from(seenTracking.values());
+  const dedupedRecords = useMemo(() => {
+    const seen = new Map<string, PackerRecord>();
+    [...rawRecords].sort((a, b) => a.id - b.id).forEach((record) => {
+      const orderKey = String(record.order_id || '').trim();
+      const key = orderKey || (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
+      seen.set(key, record);
+    });
+    return Array.from(seen.values());
+  }, [rawRecords]);
+
   // Client-side guard — server already filters by shippedFilter, but this prevents
   // stale cached records from a prior filter mode appearing while the new fetch loads.
-  const typeFilteredRecords =
+  const typeFilteredRecords = useMemo(() =>
     shippedFilter === 'fba'
       ? dedupedRecords.filter(isFbaPackerRecord)
       : shippedFilter === 'orders'
@@ -288,8 +285,12 @@ export function DashboardShippedTable({
               // that no longer have a linked orders row (e.g. after hard delete).
               if (isFbaPackerRecord(r) || isSkuPackerRecord(r)) return true;
               return hasLinkedOrder(r);
-            });
-  const filteredRecords = normalizedSearch
+            }),
+    [dedupedRecords, shippedFilter],
+  );
+
+  const filteredRecords = useMemo(() =>
+    normalizedSearch
       ? typeFilteredRecords.filter((record) => {
         const haystackByField: Record<ShippedSearchField, Array<unknown>> = {
           all: [
@@ -314,9 +315,14 @@ export function DashboardShippedTable({
         }
         return values.join(' ').includes(normalizedSearch);
       })
-    : typeFilteredRecords;
+    : typeFilteredRecords,
+    [normalizedSearch, shippedSearchField, typeFilteredRecords],
+  );
 
-  const records = filteredRecords.length > 0 ? filteredRecords : searchFallbackRecords;
+  const records = useMemo(
+    () => filteredRecords.length > 0 ? filteredRecords : searchFallbackRecords,
+    [filteredRecords, searchFallbackRecords],
+  );
 
   useEffect(() => {
     if (!normalizedSearch) {
@@ -401,25 +407,31 @@ export function DashboardShippedTable({
     setSelectedDetailId(detailId);
   }, [getDetailId, selectedDetailId, toDetailRecord]);
 
-  const groupedRecords: Record<string, PackerRecord[]> = {};
-  records.forEach((record) => {
-    const dateSource = record.created_at;
-    if (!dateSource || dateSource === '1') return;
+  const groupedRecords = useMemo(() => {
+    const groups: Record<string, PackerRecord[]> = {};
+    records.forEach((record) => {
+      const dateSource = record.created_at;
+      if (!dateSource || dateSource === '1') return;
 
-    let date = '';
-    try {
-      date = toPSTDateKey(String(dateSource)) || 'Unknown';
-    } catch {
-      date = 'Unknown';
-    }
+      let date = '';
+      try {
+        date = toPSTDateKey(String(dateSource)) || 'Unknown';
+      } catch {
+        date = 'Unknown';
+      }
 
-    if (!groupedRecords[date]) groupedRecords[date] = [];
-    groupedRecords[date].push(record);
-  });
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(record);
+    });
+    return groups;
+  }, [records]);
 
-  const orderedRecords = Object.entries(groupedRecords)
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .flatMap(([, dayRecords]) =>
+  const sortedGroupedEntries = useMemo(
+    () => Object.entries(groupedRecords).sort((a, b) => b[0].localeCompare(a[0])),
+    [groupedRecords]
+  );
+
+  const orderedRecords = sortedGroupedEntries.flatMap(([, dayRecords]) =>
       [...dayRecords].sort((a, b) => {
         const timeA = new Date(a.created_at || 0).getTime();
         const timeB = new Date(b.created_at || 0).getTime();
@@ -449,28 +461,53 @@ export function DashboardShippedTable({
     };
   }, [getDetailId, orderedRecords, selectedDetailId, toDetailRecord]);
 
+  const scrollRafRef = useRef(0);
   const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      if (!scrollRef.current) return;
+      const { scrollTop } = scrollRef.current;
+      const headers = scrollRef.current.querySelectorAll('[data-day-header]');
+      let activeDate = '';
+      let activeCount = 0;
 
-    for (let i = 0; i < headers.length; i += 1) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
-      } else {
-        break;
+      for (let i = 0; i < headers.length; i += 1) {
+        const header = headers[i] as HTMLElement;
+        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
+          activeDate = header.getAttribute('data-date') || '';
+          activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
+        } else {
+          break;
+        }
       }
+
+      if (activeDate) {
+        setStickyDate(formatDate(activeDate));
+        setCurrentCount(activeCount);
+      } else if (sortedGroupedEntries.length > 0) {
+        setStickyDate(formatDate(sortedGroupedEntries[0][0]));
+        setCurrentCount(sortedGroupedEntries[0][1].length);
+      }
+    });
+  }, [formatDate, sortedGroupedEntries]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (container) container.scrollTop = 0;
+    if (sortedGroupedEntries.length > 0) {
+      setStickyDate(formatDate(sortedGroupedEntries[0][0]));
+      setCurrentCount(sortedGroupedEntries[0][1].length);
+      return;
     }
 
-    if (activeDate) {
-      setStickyDate(formatDate(activeDate));
-      setCurrentCount(activeCount);
-    }
-  }, []);
+    setStickyDate(
+      weekOffset > 0
+        ? `${formatDate(weekRange.startStr)} - ${formatDate(weekRange.endStr)}`
+        : formatDate(getCurrentPSTDateKey())
+    );
+    setCurrentCount(0);
+  }, [formatDate, sortedGroupedEntries, weekOffset, weekRange.endStr, weekRange.startStr]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -479,10 +516,13 @@ export function DashboardShippedTable({
       window.setTimeout(() => handleScroll(), 100);
     }
     return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, records]);
+  }, [handleScroll]);
 
   const totalCount = Object.values(groupedRecords).reduce((sum, dayRecords) => sum + dayRecords.length, 0);
-  const fallbackDate = formatDate(getCurrentPSTDateKey());
+  const fallbackDate =
+    weekOffset > 0
+      ? `${formatDate(weekRange.startStr)} - ${formatDate(weekRange.endStr)}`
+      : formatDate(getCurrentPSTDateKey());
   const normalizePersonName = (value: unknown): string => {
     const text = String(value ?? '')
       .replace(/^tech:\s*/i, '')
@@ -526,18 +566,10 @@ export function DashboardShippedTable({
               stickyDate={stickyDate}
               fallbackDate={fallbackDate}
               count={currentCount || totalCount}
-              countClassName={
-                embedded && testedBy != null
-                  ? getStaffTextColor(testedBy) ?? 'text-blue-700'
-                  : 'text-blue-700'
-              }
               weekRange={weekRange}
               weekOffset={weekOffset}
               onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
               onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
-              formatDate={formatDate}
-              showWeekControls
-              highContrast={!embedded}
             />
           )}
 
@@ -560,9 +592,7 @@ export function DashboardShippedTable({
               </div>
             ) : (
               <div className="flex flex-col w-full">
-                {Object.entries(groupedRecords)
-                  .sort((a, b) => b[0].localeCompare(a[0]))
-                  .map(([date, dayRecords]) => {
+                {sortedGroupedEntries.map(([date, dayRecords]) => {
                     const sortedRecords = [...dayRecords].sort((a, b) => {
                       const timeA = new Date(a.created_at || 0).getTime();
                       const timeB = new Date(b.created_at || 0).getTime();
@@ -571,16 +601,17 @@ export function DashboardShippedTable({
 
                     return (
                       <div key={date} className="flex flex-col">
-                        <MobileDateGroupHeader
-                          date={date}
-                          total={dayRecords.length}
-                          formatDate={formatDate}
-                          countClassName={
-                            testedBy != null
-                              ? getStaffTextColor(testedBy)
-                              : undefined
-                          }
-                        />
+                        {embedded ? (
+                          <MobileDateGroupHeader
+                            date={date}
+                            total={dayRecords.length}
+                          />
+                        ) : (
+                          <DateGroupHeader
+                            date={date}
+                            total={dayRecords.length}
+                          />
+                        )}
                         {sortedRecords.map((record, index) => {
                           const detail = toDetailRecord(record);
                           const displayValues = getOrderDisplayValues({
@@ -619,9 +650,7 @@ export function DashboardShippedTable({
                               : getLast6Serial(serialValue);
 
                           return (
-                            <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
+                            <div
                               key={record.id}
                               onClick={() => handleRowClick(record)}
                               onKeyDown={(event) => {
@@ -635,7 +664,7 @@ export function DashboardShippedTable({
                               aria-pressed={selectedDetailId === detail.id}
                               aria-label={`Open shipped order ${record.order_id || record.id}`}
                               data-order-row-id={String(record.order_row_id || record.id)}
-                              className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
+                              className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-colors border-b border-gray-50 cursor-pointer hover:bg-blue-50/50 ${
                                 selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                               }`}
                             >
@@ -666,7 +695,7 @@ export function DashboardShippedTable({
                                 </div>
                               </div>
 
-                              <div className="flex items-center shrink-0">
+                              <div className="flex items-center shrink-0 pr-2">
                                 {rowIsFba ? (
                                   <>
                                     <FnskuChip value={fnskuValue} />
@@ -689,7 +718,7 @@ export function DashboardShippedTable({
                                   </>
                                 )}
                               </div>
-                            </motion.div>
+                            </div>
                           );
                         })}
                       </div>

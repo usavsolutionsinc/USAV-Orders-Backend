@@ -102,7 +102,7 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
       {/* Price Section */}
       <div className="mb-6">
         <p className="text-lg font-medium mb-2">
-          <span className="font-bold">${price}</span> - Price Paid at Pick-up
+          <span className="font-bold text-emerald-600">${price}</span> - Price Paid at Pick-up
         </p>
         <p className="text-base font-medium">
           Card / Cash - Payment Method

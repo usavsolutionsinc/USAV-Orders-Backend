@@ -67,7 +67,8 @@ export type WizardAction =
   | { type: 'COMPLETE_SUCCESS' }
   | { type: 'COMPLETE_ERROR'; message: string }
   | { type: 'BACK' }
-  | { type: 'RESET' };
+  | { type: 'RESET' }
+  | { type: 'SCAN_SHEET_ORDER_CONFIRMED'; order: ActivePackingOrder | null; fba: ActiveFbaScan | null; variant: OrderVariant; packerLogId: number | null; scanType: string; scannedValue: string };
 
 export const initialWizardState: PackingWizardState = {
   step: 'scan',
@@ -160,6 +161,18 @@ export function wizardReducer(state: PackingWizardState, action: WizardAction): 
     }
     case 'RESET':
       return { ...initialWizardState };
+    case 'SCAN_SHEET_ORDER_CONFIRMED':
+      return {
+        ...initialWizardState,
+        step: 'photos',
+        scannedValue: action.scannedValue,
+        resolvedOrder: action.order,
+        resolvedFba: action.fba,
+        orderVariant: action.variant,
+        packerLogId: action.packerLogId,
+        resolvedScanType: action.scanType,
+        capturedPhotos: [],
+      };
     default:
       return state;
   }

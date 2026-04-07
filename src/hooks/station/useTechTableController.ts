@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { computeWeekRange } from '@/utils/date';
+import { computeWeekRange, formatDateWithOrdinal } from '@/utils/date';
 import { toPSTDateKey } from '@/utils/date';
 import { normalizeTrackingKey } from '@/lib/tracking-format';
 import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
@@ -193,7 +193,7 @@ export function useTechTableController({ staffId }: UseTechTableControllerOption
         break;
       }
     }
-    if (activeDate) setStickyDate(activeDate);
+    if (activeDate) setStickyDate(formatDateWithOrdinal(activeDate));
     if (activeCount) setCurrentCount(activeCount);
   }, []);
 

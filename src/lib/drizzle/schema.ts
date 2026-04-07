@@ -589,6 +589,8 @@ export const orders = pgTable('orders', {
   accountSource: text('account_source'),
   orderDate: timestamp('order_date', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  /** FK to sku_catalog — central product hub */
+  skuCatalogId: integer('sku_catalog_id'),
 });
 
 // Multi-shipment links per order row. Keeps orders.shipment_id as canonical
@@ -883,6 +885,8 @@ export const fbaFnskus = pgTable('fba_fnskus', {
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** FK to sku_catalog — central product hub */
+  skuCatalogId: integer('sku_catalog_id'),
 });
 
 export const fbaShipments = pgTable('fba_shipments', {
@@ -1207,3 +1211,74 @@ export type PipelineTask = typeof pipelineTasks.$inferSelect;
 export type NewPipelineTask = typeof pipelineTasks.$inferInsert;
 export type PipelineCycle = typeof pipelineCycles.$inferSelect;
 export type NewPipelineCycle = typeof pipelineCycles.$inferInsert;
+
+// ─── SKU Catalog Hub ─────────────────────────────────────────────────────────
+
+export const skuCatalog = pgTable('sku_catalog', {
+  id: serial('id').primaryKey(),
+  sku: text('sku').notNull().unique(),
+  productTitle: text('product_title').notNull(),
+  category: text('category'),
+  upc: text('upc'),
+  ean: text('ean'),
+  imageUrl: text('image_url'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const skuPlatformIds = pgTable('sku_platform_ids', {
+  id: serial('id').primaryKey(),
+  skuCatalogId: integer('sku_catalog_id').notNull().references(() => skuCatalog.id, { onDelete: 'cascade' }),
+  platform: text('platform').notNull(),
+  platformSku: text('platform_sku'),
+  platformItemId: text('platform_item_id'),
+  accountName: text('account_name'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const skuKitParts = pgTable('sku_kit_parts', {
+  id: serial('id').primaryKey(),
+  skuCatalogId: integer('sku_catalog_id').notNull().references(() => skuCatalog.id, { onDelete: 'cascade' }),
+  componentName: text('component_name').notNull(),
+  componentType: text('component_type').notNull().default('PART'),
+  qtyRequired: integer('qty_required').notNull().default(1),
+  requiredFor: text('required_for').array(),
+  isCritical: boolean('is_critical').notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
+export const qcCheckTemplates = pgTable('qc_check_templates', {
+  id: serial('id').primaryKey(),
+  skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'cascade' }),
+  category: text('category'),
+  stepLabel: text('step_label').notNull(),
+  stepType: text('step_type').notNull().default('PASS_FAIL'),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
+export const techVerifications = pgTable('tech_verifications', {
+  id: serial('id').primaryKey(),
+  sourceKind: text('source_kind').notNull(),
+  sourceRowId: integer('source_row_id').notNull(),
+  skuCatalogId: integer('sku_catalog_id').notNull().references(() => skuCatalog.id),
+  stepType: text('step_type').notNull(),
+  stepId: integer('step_id').notNull(),
+  passed: boolean('passed'),
+  verifiedBy: integer('verified_by'),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull().defaultNow(),
+  notes: text('notes'),
+});
+
+// SKU Catalog type exports
+export type SkuCatalog = typeof skuCatalog.$inferSelect;
+export type NewSkuCatalog = typeof skuCatalog.$inferInsert;
+export type SkuPlatformId = typeof skuPlatformIds.$inferSelect;
+export type NewSkuPlatformId = typeof skuPlatformIds.$inferInsert;
+export type SkuKitPart = typeof skuKitParts.$inferSelect;
+export type NewSkuKitPart = typeof skuKitParts.$inferInsert;
+export type QcCheckTemplate = typeof qcCheckTemplates.$inferSelect;
+export type NewQcCheckTemplate = typeof qcCheckTemplates.$inferInsert;
+export type TechVerification = typeof techVerifications.$inferSelect;
+export type NewTechVerification = typeof techVerifications.$inferInsert;

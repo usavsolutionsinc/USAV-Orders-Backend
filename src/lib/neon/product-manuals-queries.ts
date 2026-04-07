@@ -18,6 +18,7 @@ export interface ProductManual {
   is_active: boolean;
   updated_at: string | null;
   created_at: string | null;
+  sku_catalog_id: number | null;
 }
 
 export interface UpsertProductManualParams {

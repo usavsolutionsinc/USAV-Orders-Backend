@@ -186,6 +186,31 @@ async function upsertOrderTracking(
     )
   );
 
+  // When orders.shipment_id is NULL the tracking may still be linked via
+  // order_shipment_links (e.g. imported by the Google Sheets job).  Look up
+  // the primary link so we UPDATE that shipment row instead of inserting a
+  // duplicate.
+  if (currentShipmentIds.length === 0) {
+    try {
+      const primaryLink = await client.query(
+        `SELECT shipment_id
+         FROM order_shipment_links
+         WHERE order_row_id = ANY($1::int[]) AND is_primary = true
+         ORDER BY updated_at DESC NULLS LAST
+         LIMIT 1`,
+        [orderIds]
+      );
+      if (primaryLink.rows.length > 0) {
+        const linkShipmentId = Number(primaryLink.rows[0].shipment_id);
+        if (Number.isFinite(linkShipmentId) && linkShipmentId > 0) {
+          currentShipmentIds.push(linkShipmentId);
+        }
+      }
+    } catch (error) {
+      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+    }
+  }
+
   const duplicateShipment = await client.query(
     `SELECT id
      FROM shipping_tracking_numbers
@@ -425,7 +450,7 @@ async function createAdditionalShipmentLink(
   orderIds: number[],
   shippingTrackingNumber: string,
   client: any,
-) {
+): Promise<number> {
   const rawTracking = String(shippingTrackingNumber || '').trim();
   if (!rawTracking) throw new Error('Tracking number is required');
 
@@ -540,6 +565,8 @@ async function createAdditionalShipmentLink(
   } catch (error) {
     if (!isMissingOrderShipmentLinksRelation(error)) throw error;
   }
+
+  return shipmentId;
 }
 
 async function deleteShipmentTrackingLink(
@@ -608,6 +635,7 @@ export async function POST(req: NextRequest) {
       trackingLinkEdits,
       trackingLinkCreates,
       trackingLinkDeletes,
+      setPrimaryShipmentId,
       itemNumber,
       condition,
       quantity,
@@ -671,11 +699,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const createdShipmentIds: number[] = [];
       if (Array.isArray(trackingLinkCreates) && trackingLinkCreates.length > 0) {
         for (const create of trackingLinkCreates) {
           const nextTracking = String(create?.shippingTrackingNumber || '').trim();
           if (!nextTracking) continue;
-          await createAdditionalShipmentLink(idsToUpdate, nextTracking, client);
+          const createdId = await createAdditionalShipmentLink(idsToUpdate, nextTracking, client);
+          createdShipmentIds.push(createdId);
         }
       }
 
@@ -684,6 +714,48 @@ export async function POST(req: NextRequest) {
           const shipmentId = Number(removal?.shipmentId);
           if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
           await deleteShipmentTrackingLink(idsToUpdate, shipmentId, client);
+        }
+      }
+
+      // ── 2b′. Ensure orders.shipment_id points to a valid shipment ────────
+      // Resolve which shipment id should be canonical: explicit from the
+      // client, or the first newly-created one when the order had none.
+      let resolvedPrimaryId: number | null = null;
+      const explicitPrimary = Number(setPrimaryShipmentId);
+      if (Number.isFinite(explicitPrimary) && explicitPrimary > 0) {
+        resolvedPrimaryId = explicitPrimary;
+      } else if (createdShipmentIds.length > 0) {
+        // Frontend couldn't provide the id because it didn't exist yet.
+        // Check whether orders.shipment_id is still NULL; if so, adopt the
+        // first newly-created shipment.
+        const nullCheck = await client.query(
+          `SELECT id FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NULL LIMIT 1`,
+          [idsToUpdate]
+        );
+        if ((nullCheck.rowCount ?? 0) > 0) {
+          resolvedPrimaryId = createdShipmentIds[0];
+        }
+      }
+
+      if (resolvedPrimaryId) {
+        await client.query(
+          `UPDATE orders SET shipment_id = $1 WHERE id = ANY($2::int[])`,
+          [resolvedPrimaryId, idsToUpdate]
+        );
+        try {
+          await client.query(
+            `UPDATE order_shipment_links SET is_primary = false WHERE order_row_id = ANY($1::int[])`,
+            [idsToUpdate]
+          );
+          await client.query(
+            `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
+             SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign'
+             ON CONFLICT (order_row_id, shipment_id) DO UPDATE
+               SET is_primary = true, source = 'orders.assign', updated_at = NOW()`,
+            [idsToUpdate, resolvedPrimaryId]
+          );
+        } catch (error) {
+          if (!isMissingOrderShipmentLinksRelation(error)) throw error;
         }
       }
 

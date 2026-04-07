@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
+import { SkeletonList } from '@/design-system';
 import { Loader2 } from './Icons';
 import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, PlatformChip, getLast4, getLast6Serial } from './ui/CopyChip';
 import { DesktopDateGroupHeader } from './ui/DesktopDateGroupHeader';
@@ -206,12 +205,10 @@ export function TechTable({ testedBy }: TechTableProps) {
           stickyDate={stickyDate}
           fallbackDate={formatHeaderDate()}
           count={currentCount || getWeekCount()}
-          countClassName={weekHeaderCountClass}
           weekRange={weekRange}
           weekOffset={weekOffset}
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
           onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
-          formatDate={formatDate}
         />
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {Object.keys(filteredGroupedRecords).length === 0 ? (
@@ -230,7 +227,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                   });
                   return (
                     <div key={date} className="flex flex-col">
-                      <DesktopDateGroupHeader date={date} total={dateRecords.length} formatDate={formatDate} />
+                      <DesktopDateGroupHeader date={date} total={dateRecords.length} />
                       {sortedRecords.map((record, index) => {
                         const displayValues = getOrderDisplayValues({
                           sku: record.sku,
@@ -259,14 +256,10 @@ export function TechTable({ testedBy }: TechTableProps) {
                           accountSource: record.account_source,
                         });
                         return (
-                          <motion.div
-                            {...framerPresence.tableRow}
-                            transition={framerTransition.tableRowMount}
-                            whileHover={{ x: 2 }}
-                            whileTap={{ scale: 0.998 }}
+                          <div
                             key={getRowKey(record)}
                             onClick={() => openDetails(record)}
-                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-all border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-colors border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${
                               index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
                             }`}
                           >
@@ -322,7 +315,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                                 );
                               })()}
                             </div>
-                          </motion.div>
+                          </div>
                         );
                       })}
                     </div>

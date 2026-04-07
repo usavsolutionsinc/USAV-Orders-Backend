@@ -1,5 +1,6 @@
 export { RepairIntakeForm } from './RepairIntakeForm';
 export { ProductSelector } from './ProductSelector';
+export type { SelectedItem } from './ProductSelector';
 export { ReasonSelector } from './ReasonSelector';
 export { CustomerInfoForm } from './CustomerInfoForm';
 export { RepairTable } from './RepairTable';

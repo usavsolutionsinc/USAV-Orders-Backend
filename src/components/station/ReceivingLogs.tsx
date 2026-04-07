@@ -269,12 +269,10 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                 stickyDate={stickyDate}
                 fallbackDate={sortedEntries.length > 0 ? formatDate(sortedEntries[0][0]) : formatDate(getCurrentPSTDateKey())}
                 count={currentCount || getWeekCount()}
-                countClassName="text-blue-600"
                 weekRange={weekRange}
                 weekOffset={weekOffset}
                 onPrevWeek={() => setWeekOffset(weekOffset + 1)}
                 onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
-                formatDate={formatDate}
                 rightSlot={
                     isFetching && !isLoading ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
@@ -297,7 +295,7 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
                     <div className="flex flex-col">
                         {sortedEntries.map(([date, logs]) => (
                             <div key={date} className="flex flex-col">
-                                <DateGroupHeader date={date} total={groupedTotals[date] || 0} formatDate={formatDate} />
+                                <DateGroupHeader date={date} total={groupedTotals[date] || 0} />
                                 {logs.map((log, index) => (
                                     <motion.div
                                         initial={{ opacity: 0 }}

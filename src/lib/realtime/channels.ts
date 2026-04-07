@@ -69,6 +69,15 @@ export const getDashboardChannelName = () =>
     DEFAULT_DASHBOARD_CHANNEL
   );
 
+export const DEFAULT_WALKIN_CHANNEL = 'walkin:changes';
+
+export const getWalkInChannelName = () =>
+  normalizeChannelName(
+    process.env.ABLY_CHANNEL_WALKIN_CHANGES ||
+      process.env.NEXT_PUBLIC_ABLY_CHANNEL_WALKIN_CHANGES,
+    DEFAULT_WALKIN_CHANNEL
+  );
+
 export const getDbChannelPrefix = () =>
   normalizeChannelName(
     process.env.ABLY_CHANNEL_DB_PREFIX ||

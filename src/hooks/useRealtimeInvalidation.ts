@@ -1,23 +1,26 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { getOrdersChannelName, getRepairsChannelName, getStationChannelName } from '@/lib/realtime/channels';
+import { getOrdersChannelName, getRepairsChannelName, getStationChannelName, getWalkInChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
 
 const ORDERS_CHANNEL = getOrdersChannelName();
 const REPAIRS_CHANNEL = getRepairsChannelName();
 const STATION_CHANNEL = getStationChannelName();
+const WALKIN_CHANNEL = getWalkInChannelName();
 
 interface UseRealtimeInvalidationOptions {
   dashboard?: boolean;
   repair?: boolean;
   receiving?: boolean;
+  walkIn?: boolean;
 }
 
 export function useRealtimeInvalidation({
   dashboard = false,
   repair = false,
   receiving = false,
+  walkIn = false,
 }: UseRealtimeInvalidationOptions = {}) {
   const queryClient = useQueryClient();
 
@@ -97,5 +100,14 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['receiving-lines'] });
     },
     receiving,
+  );
+
+  useAblyChannel(
+    WALKIN_CHANNEL,
+    'sale.completed',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['walk-in-sales'] });
+    },
+    walkIn,
   );
 }

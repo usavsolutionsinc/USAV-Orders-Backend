@@ -3,8 +3,7 @@
 import { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from '../Icons';
 import { mainStickyHeaderClass } from '@/components/layout/header-shell';
-import { getCurrentPSTDateKey } from '@/utils/date';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { formatDateWithOrdinal, getCurrentPSTDateKey } from '@/utils/date';
 
 /** Inner row for the week strip — use for sticky day/group rows so they align with WeekHeader. */
 export const weekHeaderInnerRowClass =
@@ -21,9 +20,13 @@ export const weekDayGroupBandClass =
 export const weekDayGroupDateClass =
   'text-[11px] font-black uppercase tracking-[0.2em] text-gray-700';
 
-/** Count in a day-group row (add `countClassName` from staff theme for accent parity with WeekHeader). */
+/** Count in a day-group row. */
 export const weekDayGroupCountClass =
   'text-[11px] font-black tabular-nums text-gray-900';
+
+/** Desktop high-contrast date label for bright dashboard headers and matching day-group rows. */
+export const weekHeaderHighContrastDateClass =
+  'text-sm font-black uppercase tracking-widest text-gray-900';
 
 interface WeekRange {
   startStr: string;
@@ -34,41 +37,29 @@ interface WeekHeaderProps {
   stickyDate: string;
   fallbackDate: string;
   count: number;
-  countClassName: string;
   leftSlot?: ReactNode;
   weekRange?: WeekRange;
   weekOffset?: number;
   onPrevWeek?: () => void;
   onNextWeek?: () => void;
-  formatDate: (dateStr: string) => string;
   rightSlot?: ReactNode;
-  showWeekControls?: boolean;
-  /** When false, omits the sticky count after the date. */
-  showCount?: boolean;
-  /** Stronger type and control chrome for bright rooms / glare (e.g. dashboard shipped view). */
-  highContrast?: boolean;
 }
 
 export default function WeekHeader({
   stickyDate,
   fallbackDate,
   count,
-  countClassName,
   leftSlot,
   weekRange,
   weekOffset = 0,
   onPrevWeek,
   onNextWeek,
-  formatDate,
   rightSlot,
-  showWeekControls = true,
-  showCount = true,
-  highContrast = false,
 }: WeekHeaderProps) {
   const getTodayPSTDisplay = () => {
     try {
       const today = getCurrentPSTDateKey();
-      return today ? formatDate(today) : fallbackDate;
+      return today ? formatDateWithOrdinal(today) : fallbackDate;
     } catch {
       return fallbackDate;
     }
@@ -77,7 +68,7 @@ export default function WeekHeader({
   const formattedTodayPST = (() => {
     try {
       const today = getCurrentPSTDateKey();
-      return today ? formatDate(today) : '';
+      return today ? formatDateWithOrdinal(today) : '';
     } catch {
       return '';
     }
@@ -87,61 +78,38 @@ export default function WeekHeader({
   const stickyDateLabel =
     formattedTodayPST && dateLineDisplay === formattedTodayPST ? 'Today' : dateLineDisplay;
 
-  const dateTextClass = highContrast
-    ? `text-sm font-black uppercase tracking-widest text-gray-900`
-    : `text-[11px] font-black uppercase tracking-[0.2em] text-gray-900`;
-
-  const countTextClass = highContrast
-    ? `font-dm-sans text-sm font-semibold tabular-nums ${countClassName}`
-    : `font-dm-sans text-[11px] font-semibold tabular-nums ${countClassName}`;
-
-  const dashClass = highContrast ? 'shrink-0 text-sm text-neutral-500' : 'shrink-0 text-[11px] text-gray-500';
-
   return (
     <div className={mainStickyHeaderClass}>
       <div className={weekHeaderInnerRowClass}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}
-          <p className={`min-w-0 truncate ${dateTextClass}`}>{stickyDateLabel}</p>
-          {showCount ? <p className={`shrink-0 ${countTextClass}`}>{count}</p> : null}
+          <p className={`min-w-0 truncate ${weekHeaderHighContrastDateClass}`}>{stickyDateLabel}</p>
+          <p className="shrink-0 font-dm-sans text-sm font-semibold tabular-nums text-blue-700">{count}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {rightSlot ? (
             rightSlot
-          ) : showWeekControls && weekRange && onPrevWeek && onNextWeek ? (
-            <div className={`flex items-center ${highContrast ? 'gap-1.5' : 'gap-1'}`}>
-              <span
-                className={highContrast
-                  ? 'text-[11px] font-black uppercase tracking-widest text-neutral-900'
-                  : `${sectionLabel}`
-                }
-              >
-                {formatDate(weekRange.startStr)} - {formatDate(weekRange.endStr)}
+          ) : weekRange && onPrevWeek && onNextWeek ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-black uppercase tracking-widest text-neutral-900">
+                {formatDateWithOrdinal(weekRange.startStr)} - {formatDateWithOrdinal(weekRange.endStr)}
               </span>
               <button
                 onClick={onPrevWeek}
                 type="button"
-                className={
-                  highContrast
-                    ? 'rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500'
-                    : 'rounded p-1 transition-colors hover:bg-gray-100'
-                }
+                className="rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500"
                 title="Previous week"
               >
-                <ChevronLeft className={highContrast ? 'h-5 w-5' : 'h-4 w-4 text-gray-600'} />
+                <ChevronLeft className="h-5 w-5" />
               </button>
               <button
                 onClick={onNextWeek}
                 type="button"
                 disabled={weekOffset === 0}
-                className={
-                  highContrast
-                    ? 'rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100'
-                    : 'rounded p-1 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30'
-                }
+                className="rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100"
                 title="Next week"
               >
-                <ChevronRight className={highContrast ? 'h-5 w-5' : 'h-4 w-4 text-gray-600'} />
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
           ) : null}

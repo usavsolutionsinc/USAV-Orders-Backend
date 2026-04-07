@@ -1,34 +1,18 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { RepairTable } from '@/components/repair';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
-
-function RepairPageContent() {
-    const searchParams = useSearchParams();
-    const rawTab = searchParams.get('tab');
-    const activeTab = rawTab === 'incoming' ? 'incoming' : rawTab === 'done' ? 'done' : 'active';
-    useRealtimeInvalidation({ repair: true });
-    
-    return (
-        <div className="flex h-full w-full bg-white">
-            <div className="flex-1 flex flex-col min-w-0">
-                <RepairTable filter={activeTab} />
-            </div>
-        </div>
-    );
-}
-
-export default function RepairPage() {
-    return (
-        <Suspense fallback={
-            <div className="flex h-full w-full items-center justify-center bg-gray-50">
-                <LoadingSpinner size="lg" className="text-blue-600" />
-            </div>
-        }>
-            <RepairPageContent />
-        </Suspense>
-    );
+/**
+ * Legacy /repair route — redirects to /walk-in?mode=repairs.
+ * Preserves tab and search params.
+ */
+export default function RepairPage({
+    searchParams,
+}: {
+    searchParams: { [key: string]: string | string[] | undefined };
+}) {
+    const params = new URLSearchParams();
+    params.set('mode', 'repairs');
+    for (const [key, value] of Object.entries(searchParams || {})) {
+        if (typeof value === 'string') params.set(key, value);
+    }
+    redirect(`/walk-in?${params.toString()}`);
 }

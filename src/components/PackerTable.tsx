@@ -227,12 +227,10 @@ export function PackerTable({ packedBy }: PackerTableProps) {
           stickyDate={stickyDate}
           fallbackDate={formatHeaderDate()}
           count={currentCount || getWeekCount()}
-          countClassName={counterColorClass}
           weekRange={weekRange}
           weekOffset={weekOffset}
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
           onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
-          formatDate={formatDate}
         />
         <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {Object.keys(filteredGroupedRecords).length === 0 ? (

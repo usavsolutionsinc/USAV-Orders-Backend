@@ -17,12 +17,13 @@ import { cn } from '@/utils/_cn';
 import { MobileShell, type MobileShellProps } from '@/design-system/components/mobile/MobileShell';
 import { MobileBoxedNavChevron } from '@/design-system/components/mobile';
 import { MobileBottomActionBar } from '@/design-system/components/mobile/MobileBottomActionBar';
-import { MobileScanSheet } from '@/design-system/components/mobile/MobileScanSheet';
+import { MobilePackerScanSheet } from './MobilePackerScanSheet';
 import { MobileQueueFilterSheet } from '@/components/mobile/overlays/MobileQueueFilterSheet';
 import { SLIDER_PRESETS, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { MobilePackingConfirmCard } from './MobilePackingConfirmCard';
 import { MobilePackingPhotoStep } from './MobilePackingPhotoStep';
 import { MobilePackingReviewStep } from './MobilePackingReviewStep';
+import { MobileLastOrderCard } from './MobileLastOrderCard';
 import { requestCameraPermission } from '@/hooks/useCamera';
 import {
   wizardReducer,
@@ -74,6 +75,7 @@ export function MobileStationPacking({
   const [state, dispatch] = useReducer(wizardReducer, initialWizardState);
   const [inputValue, setInputValue] = useState('');
   const [scanSheetOpen, setScanSheetOpen] = useState(false);
+  const [lastOrderRefreshKey, setLastOrderRefreshKey] = useState(0);
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [queueFilterSheetOpen, setQueueFilterSheetOpen] = useState(false);
   const [packQueueSearch, setPackQueueSearch] = useState('');
@@ -100,14 +102,29 @@ export function MobileStationPacking({
     await handleLookup(scan, detectStationScanType(scan));
   }, [inputValue, state.isLoading, handleLookup]);
 
-  // ── Scan sheet confirmed ───────────────────────────────────────────────────
+  // ── Packer scan sheet confirmed (lookup + confirm handled inline) ────────
 
-  const handleScanConfirmed = useCallback(
-    (value: string, type: StationScanType) => {
+  const handlePackerScanConfirmed = useCallback(
+    (result: {
+      order: import('@/hooks/station/packingWizardReducer').ActivePackingOrder | null;
+      fba: import('@/hooks/station/packingWizardReducer').ActiveFbaScan | null;
+      variant: import('@/hooks/station/packingWizardReducer').OrderVariant;
+      packerLogId: number | null;
+      scanType: string;
+      scannedValue: string;
+    }) => {
       setScanSheetOpen(false);
-      handleLookup(value, type);
+      dispatch({
+        type: 'SCAN_SHEET_ORDER_CONFIRMED',
+        order: result.order,
+        fba: result.fba,
+        variant: result.variant,
+        packerLogId: result.packerLogId,
+        scanType: result.scanType,
+        scannedValue: result.scannedValue,
+      });
     },
-    [handleLookup],
+    [],
   );
 
   const handleOpenScanSheet = useCallback(() => {
@@ -167,6 +184,7 @@ export function MobileStationPacking({
 
   const handleSuccessFinished = useCallback(() => {
     dispatch({ type: 'RESET' });
+    setLastOrderRefreshKey((k) => k + 1);
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
@@ -261,6 +279,13 @@ export function MobileStationPacking({
                   goal={goal}
                   label="PACKED"
                   theme={themeColor}
+                />
+
+                {/* Last packed order — quick review + photo edit */}
+                <MobileLastOrderCard
+                  staffId={staffId}
+                  packerId={userId}
+                  refreshKey={lastOrderRefreshKey}
                 />
 
                 {/* Error banner from previous attempt */}
@@ -427,13 +452,13 @@ export function MobileStationPacking({
         placeholder="Search recent activity…"
       />
 
-      {/* ── Camera scan sheet ── */}
-      <MobileScanSheet
+      {/* ── Packer scan sheet (scan + lookup + confirm in one flow) ── */}
+      <MobilePackerScanSheet
         isOpen={scanSheetOpen}
         onClose={() => setScanSheetOpen(false)}
-        onScanConfirmed={(value, type) => handleScanConfirmed(value, type)}
-        manualMode={null}
-        onModeChange={() => {}}
+        onConfirmed={handlePackerScanConfirmed}
+        userId={userId}
+        userName={userName}
       />
     </>
   );

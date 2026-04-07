@@ -747,12 +747,16 @@ interface ShippingInformationSectionProps {
   prepackedSku?: PrepackedSkuInfo | null;
 }
 
+type TrackingDraftRow = {
+  shipmentId: number | null;
+  tracking: string;
+};
+
 type ShippingInfoEditDraft = {
   shipByDate: string;
-  trackingNumber: string;
   orderNumber: string;
   itemNumber: string;
-  additionalTrackingRows: Array<{ shipmentId: number | null; tracking: string }>;
+  trackingRows: TrackingDraftRow[];
   serialRows: string[];
 };
 
@@ -860,67 +864,69 @@ function ShippingInfoEditModal({
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Tracking Numbers</p>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <PasteableDraftInput
-                        value={draft.trackingNumber}
-                        onChange={(value) => setDraft((current) => ({ ...current, trackingNumber: value }))}
-                        onPaste={async () => {
-                          try {
-                            const text = await navigator.clipboard.readText();
-                            if (!text.trim()) return;
-                            setDraft((current) => ({ ...current, trackingNumber: text.trim().toUpperCase() }));
-                          } catch {}
-                        }}
-                        placeholder="Primary tracking number"
-                        ariaLabel="Paste primary tracking number"
-                        title="Paste primary tracking number"
-                      />
+                  {draft.trackingRows.map((row, index) => (
+                    <div key={`tracking-${row.shipmentId ?? 'new'}-${index}`} className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <PasteableDraftInput
+                          value={row.tracking}
+                          onChange={(value) => {
+                            setDraft((current) => ({
+                              ...current,
+                              trackingRows: current.trackingRows.map((entry, i) =>
+                                i === index ? { ...entry, tracking: value } : entry
+                              ),
+                            }));
+                          }}
+                          onPaste={async () => {
+                            try {
+                              const text = await navigator.clipboard.readText();
+                              if (!text.trim()) return;
+                              const pasted = text.trim().toUpperCase();
+                              setDraft((current) => ({
+                                ...current,
+                                trackingRows: current.trackingRows.map((entry, i) =>
+                                  i === index ? { ...entry, tracking: pasted } : entry
+                                ),
+                              }));
+                            } catch {}
+                          }}
+                          placeholder={`Tracking Number ${index + 1}`}
+                          ariaLabel={`Paste tracking number ${index + 1}`}
+                          title="Paste tracking number"
+                        />
+                      </div>
+                      {index === 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraft((current) => ({
+                              ...current,
+                              trackingRows: [...current.trackingRows, { shipmentId: null, tracking: '' }],
+                            }));
+                          }}
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
+                          aria-label="Add tracking number"
+                          title="Add tracking number"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDraft((current) => ({
+                              ...current,
+                              trackingRows: current.trackingRows.filter((_, i) => i !== index),
+                            }));
+                          }}
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-400 transition-colors hover:border-red-300 hover:text-red-600"
+                          aria-label="Remove tracking number"
+                          title="Remove tracking number"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraft((current) => ({
-                          ...current,
-                          additionalTrackingRows: [...current.additionalTrackingRows, { shipmentId: null, tracking: '' }],
-                        }));
-                      }}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
-                      aria-label="Add tracking number"
-                      title="Add tracking number"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {draft.additionalTrackingRows.map((row, index) => (
-                    <PasteableDraftInput
-                      key={`${row.shipmentId ?? 'new'}-${index}`}
-                      value={row.tracking}
-                      onChange={(value) => {
-                        setDraft((current) => ({
-                          ...current,
-                          additionalTrackingRows: current.additionalTrackingRows.map((entry, entryIndex) =>
-                            entryIndex === index ? { ...entry, tracking: value } : entry
-                          ),
-                        }));
-                      }}
-                      onPaste={async () => {
-                        try {
-                          const text = await navigator.clipboard.readText();
-                          if (!text.trim()) return;
-                          const pasted = text.trim().toUpperCase();
-                          setDraft((current) => ({
-                            ...current,
-                            additionalTrackingRows: current.additionalTrackingRows.map((entry, entryIndex) =>
-                              entryIndex === index ? { ...entry, tracking: pasted } : entry
-                            ),
-                          }));
-                        } catch {}
-                      }}
-                      placeholder={`Tracking Number ${index + 2}`}
-                      ariaLabel={`Paste tracking number ${index + 2}`}
-                      title="Paste tracking number"
-                    />
                   ))}
                 </div>
               </div>
@@ -930,54 +936,9 @@ function ShippingInfoEditModal({
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Serial Numbers</p>
                 </div>
                 <div className="space-y-2">
-                  {draft.serialRows.length > 0 ? draft.serialRows.map((row, index) => (
-                    index === 0 ? (
-                      <div key={`serial-${index}`} className="flex items-center gap-2">
-                        <div className="min-w-0 flex-1">
-                          <PasteableDraftInput
-                            value={row}
-                            onChange={(value) => {
-                              setDraft((current) => ({
-                                ...current,
-                                serialRows: current.serialRows.map((entry, entryIndex) => (
-                                  entryIndex === index ? value.toUpperCase() : entry
-                                )),
-                              }));
-                            }}
-                            onPaste={async () => {
-                              try {
-                                const text = await navigator.clipboard.readText();
-                                if (!text.trim()) return;
-                                const pasted = text.trim().toUpperCase();
-                                setDraft((current) => ({
-                                  ...current,
-                                  serialRows: current.serialRows.map((entry, entryIndex) => (
-                                    entryIndex === index ? pasted : entry
-                                  )),
-                                }));
-                              } catch {}
-                            }}
-                            placeholder={`Serial ${index + 1}`}
-                            inputClassName="font-mono"
-                            ariaLabel={`Paste serial ${index + 1}`}
-                            title="Paste serial"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDraft((current) => ({ ...current, serialRows: [...current.serialRows, ''] }));
-                          }}
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
-                          aria-label="Add serial number"
-                          title="Add serial number"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
+                  {(draft.serialRows.length > 0 ? draft.serialRows : ['']).map((row, index) => {
+                    const input = (
                       <PasteableDraftInput
-                        key={`serial-${index}`}
                         value={row}
                         onChange={(value) => {
                           setDraft((current) => ({
@@ -994,9 +955,9 @@ function ShippingInfoEditModal({
                             const pasted = text.trim().toUpperCase();
                             setDraft((current) => ({
                               ...current,
-                              serialRows: current.serialRows.map((entry, entryIndex) => (
-                                entryIndex === index ? pasted : entry
-                              )),
+                              serialRows: current.serialRows.length > 0
+                                ? current.serialRows.map((entry, entryIndex) => (entryIndex === index ? pasted : entry))
+                                : [pasted],
                             }));
                           } catch {}
                         }}
@@ -1005,25 +966,32 @@ function ShippingInfoEditModal({
                         ariaLabel={`Paste serial ${index + 1}`}
                         title="Paste serial"
                       />
-                    )
-                  )) : (
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-10 min-w-0 flex-1 items-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-400">
-                        No serials yet.
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDraft((current) => ({ ...current, serialRows: [''] }));
-                        }}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
-                        aria-label="Add serial number"
-                        title="Add serial number"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )}
+                    );
+
+                    if (index === 0) {
+                      return (
+                        <div key={`serial-${index}`} className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">{input}</div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDraft((current) => ({
+                                ...current,
+                                serialRows: current.serialRows.length > 0 ? [...current.serialRows, ''] : [''],
+                              }));
+                            }}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
+                            aria-label="Add serial number"
+                            title="Add serial number"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return <div key={`serial-${index}`}>{input}</div>;
+                  })}
                 </div>
               </div>
 
@@ -1108,10 +1076,9 @@ export function ShippingInformationSection({
   }, [internalFieldSave, internalOrderNumber, internalItemNumber, internalTrackingNumber]);
   const [editDraft, setEditDraft] = useState<ShippingInfoEditDraft>({
     shipByDate: '',
-    trackingNumber: '',
     orderNumber: '',
     itemNumber: '',
-    additionalTrackingRows: [],
+    trackingRows: [],
     serialRows: [],
   });
 
@@ -1245,35 +1212,6 @@ export function ShippingInformationSection({
     }
   };
 
-  const createLinkedTracking = async (nextTracking: string) => {
-    const orderId = Number((shipped as any).id);
-    if (!Number.isFinite(orderId) || orderId <= 0) return;
-    const trimmed = String(nextTracking || '').trim();
-    if (!trimmed) return;
-    try {
-      const res = await fetch('/api/orders/assign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          trackingLinkCreates: [
-            {
-              shippingTrackingNumber: trimmed,
-            },
-          ],
-        }),
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        throw new Error(String(payload?.details || payload?.error || 'Failed to add tracking'));
-      }
-      onUpdate?.();
-    } catch (error: any) {
-      console.error(error);
-      throw new Error(error?.message || 'Failed to add tracking');
-    }
-  };
-
   const syncOrderExceptions = async () => {
     const res = await fetch('/api/orders-exceptions/sync', {
       method: 'POST',
@@ -1286,21 +1224,28 @@ export function ShippingInformationSection({
   };
 
   const openEditModal = useCallback(() => {
+    const primaryShipmentId = shipped.shipment_id != null ? Number(shipped.shipment_id) : null;
+    const validPrimaryShipmentId = primaryShipmentId != null && Number.isFinite(primaryShipmentId) && primaryShipmentId > 0
+      ? primaryShipmentId
+      : null;
+
     setEditDraft({
       shipByDate: normalizeShipByDraft(ef.shipByDate),
-      trackingNumber: ef.trackingNumber,
       orderNumber: ef.orderNumber,
       itemNumber: ef.itemNumber,
-      additionalTrackingRows: additionalTrackingRows.map((row) => ({
-        shipmentId: row.shipmentId,
-        tracking: row.tracking,
-      })),
+      trackingRows: [
+        { shipmentId: validPrimaryShipmentId, tracking: ef.trackingNumber },
+        ...additionalTrackingRows.map((row) => ({
+          shipmentId: row.shipmentId,
+          tracking: row.tracking,
+        })),
+      ],
       serialRows: serialNumberRows.length > 0 ? serialNumberRows.map((row) => row.toUpperCase()) : [''],
     });
     setEditModalError(null);
     setIsEditModalSaveSuccess(false);
     setIsEditModalOpen(true);
-  }, [additionalTrackingRows, ef.itemNumber, ef.orderNumber, ef.shipByDate, ef.trackingNumber, serialNumberRows]);
+  }, [additionalTrackingRows, ef.itemNumber, ef.orderNumber, ef.shipByDate, ef.trackingNumber, serialNumberRows, shipped.shipment_id]);
 
   const saveSerialRowsFromModal = useCallback(async (serials: string[], trackingOverride?: string) => {
     const trackingNumber = String(trackingOverride || shipped.shipping_tracking_number || '').trim();
@@ -1348,59 +1293,83 @@ export function ShippingInformationSection({
     setIsEditModalSaveSuccess(false);
     setEditModalError(null);
     try {
+      const currentOrderId = Number((shipped as any).id);
+
+      // ── 1. Save non-tracking order fields ────────────────────────────────
+      // Pass ORIGINAL tracking so saveInlineFields skips the tracking path;
+      // tracking is handled entirely through the unified pipeline below.
       await internalFieldSave.saveInlineFields(
         editDraft.orderNumber,
         editDraft.itemNumber,
-        editDraft.trackingNumber,
+        ef.trackingNumber,
       );
 
       if (normalizeShipByDraft(editDraft.shipByDate) !== normalizeShipByDraft(ef.shipByDate)) {
         await internalFieldSave.saveShipByDate(editDraft.shipByDate);
       }
 
-      let trackingChanged = normalizeTrackingKey(editDraft.trackingNumber) !== normalizeTrackingKey(ef.trackingNumber);
+      // ── 2. Diff tracking rows → edits / creates / deletes ────────────────
+      // Build a map of all previously-known shipmentId → tracking from the
+      // original data (primary + additional).
+      const primaryShipmentId = shipped.shipment_id != null ? Number(shipped.shipment_id) : null;
+      const validPrimaryShipmentId =
+        primaryShipmentId != null && Number.isFinite(primaryShipmentId) && primaryShipmentId > 0
+          ? primaryShipmentId
+          : null;
 
-      const previousLinkedRowsById = new Map(
-        additionalTrackingRows
-          .filter((row) => Number.isFinite(Number(row.shipmentId)) && Number(row.shipmentId) > 0)
-          .map((row) => [Number(row.shipmentId), String(row.tracking || '').trim()])
-      );
+      const previousRowsById = new Map<number, string>();
+      if (validPrimaryShipmentId) {
+        previousRowsById.set(validPrimaryShipmentId, String(ef.trackingNumber || '').trim());
+      }
+      for (const row of additionalTrackingRows) {
+        const sid = Number(row.shipmentId);
+        if (Number.isFinite(sid) && sid > 0) {
+          previousRowsById.set(sid, String(row.tracking || '').trim());
+        }
+      }
+
       const nextSeenShipmentIds = new Set<number>();
       const trackingLinkDeletes: Array<{ shipmentId: number }> = [];
       const trackingLinkEdits: Array<{ shipmentId: number; shippingTrackingNumber: string }> = [];
       const trackingLinkCreates: Array<{ shippingTrackingNumber: string }> = [];
 
-      for (const nextRow of editDraft.additionalTrackingRows) {
+      for (const nextRow of editDraft.trackingRows) {
         const shipmentId = Number(nextRow.shipmentId);
         const nextTracking = String(nextRow.tracking || '').trim();
 
         if (Number.isFinite(shipmentId) && shipmentId > 0) {
           nextSeenShipmentIds.add(shipmentId);
-          const prevTracking = String(previousLinkedRowsById.get(shipmentId) || '').trim();
           if (!nextTracking) {
             trackingLinkDeletes.push({ shipmentId });
             continue;
           }
+          const prevTracking = String(previousRowsById.get(shipmentId) || '').trim();
           if (nextTracking !== prevTracking) {
-            trackingLinkEdits.push({
-              shipmentId,
-              shippingTrackingNumber: nextTracking,
-            });
+            trackingLinkEdits.push({ shipmentId, shippingTrackingNumber: nextTracking });
           }
           continue;
         }
 
+        // New row without a shipmentId → create
         if (nextTracking) {
           trackingLinkCreates.push({ shippingTrackingNumber: nextTracking });
         }
       }
 
-      for (const shipmentId of previousLinkedRowsById.keys()) {
+      // Rows in the original that disappeared from the draft → delete
+      for (const shipmentId of previousRowsById.keys()) {
         if (!nextSeenShipmentIds.has(shipmentId)) {
           trackingLinkDeletes.push({ shipmentId });
         }
       }
 
+      // The first row's shipmentId becomes orders.shipment_id (for query join compatibility).
+      const firstRowShipmentId = editDraft.trackingRows[0]?.shipmentId ?? null;
+      const setPrimaryId = Number.isFinite(Number(firstRowShipmentId)) && Number(firstRowShipmentId) > 0
+        ? Number(firstRowShipmentId)
+        : null;
+
+      let trackingChanged = false;
       if (
         trackingLinkDeletes.length > 0
         || trackingLinkEdits.length > 0
@@ -1410,10 +1379,11 @@ export function ShippingInformationSection({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            orderId: Number((shipped as any).id),
+            orderId: currentOrderId,
             trackingLinkDeletes,
             trackingLinkEdits,
             trackingLinkCreates,
+            setPrimaryShipmentId: setPrimaryId,
           }),
         });
 
@@ -1425,23 +1395,25 @@ export function ShippingInformationSection({
         trackingChanged = true;
       }
 
+      // ── 3. Save serial numbers ────────────────────────────────────────────
       const nextSerialRows = editDraft.serialRows
         .map((row) => row.trim().toUpperCase())
         .filter(Boolean);
       const currentSerialRows = serialNumberRows.map((row) => row.trim().toUpperCase()).filter(Boolean);
+      const primaryTrackingDraft = editDraft.trackingRows[0]?.tracking || '';
       if (nextSerialRows.join(', ') !== currentSerialRows.join(', ')) {
-        await saveSerialRowsFromModal(nextSerialRows, editDraft.trackingNumber);
+        await saveSerialRowsFromModal(nextSerialRows, primaryTrackingDraft);
       }
 
-      // Only reflect the draft into local/parent field state after the writes succeed.
+      // ── 4. Reflect draft into local component state ───────────────────────
       if (editDraft.orderNumber !== ef.orderNumber) {
         ef.onOrderNumberChange(editDraft.orderNumber);
       }
       if (editDraft.itemNumber !== ef.itemNumber) {
         ef.onItemNumberChange(editDraft.itemNumber);
       }
-      if (editDraft.trackingNumber !== ef.trackingNumber) {
-        ef.onTrackingNumberChange(editDraft.trackingNumber);
+      if (primaryTrackingDraft !== ef.trackingNumber) {
+        ef.onTrackingNumberChange(primaryTrackingDraft);
       }
       if (editDraft.shipByDate !== ef.shipByDate) {
         ef.onShipByDateChange(editDraft.shipByDate);
@@ -1449,7 +1421,8 @@ export function ShippingInformationSection({
 
       setLinkedTrackingDrafts((prev) => {
         const next = { ...prev };
-        editDraft.additionalTrackingRows.forEach((row, index) => {
+        editDraft.trackingRows.forEach((row, index) => {
+          if (index === 0) return; // first row syncs via ef.onTrackingNumberChange
           const key = `${row.shipmentId ?? 'none'}:${index}`;
           next[key] = row.tracking;
         });
@@ -1457,6 +1430,14 @@ export function ShippingInformationSection({
       });
 
       setIsEditModalSaveSuccess(true);
+
+      // Bust all cached order views so the details panel, tables, and
+      // dashboard all refetch with the updated tracking numbers.
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
+      queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table'] });
+
       onUpdate?.();
 
       await new Promise((resolve) => window.setTimeout(resolve, 650));
@@ -1481,10 +1462,11 @@ export function ShippingInformationSection({
     ef,
     internalFieldSave,
     onUpdate,
-    createLinkedTracking,
-    saveLinkedTracking,
+    queryClient,
     saveSerialRowsFromModal,
     serialNumberRows,
+    shipped.id,
+    shipped.shipment_id,
     syncOrderExceptions,
   ]);
 

@@ -11,6 +11,8 @@ export interface SignatureData {
 interface SignaturePadProps {
   onSignatureChange: (data: SignatureData | null) => void;
   label?: string;
+  /** When true, the pad fills its parent height instead of using a fixed height */
+  fillHeight?: boolean;
 }
 
 const PAD_HEIGHT = 200;
@@ -30,7 +32,7 @@ function scaleCanvas(canvas: HTMLCanvasElement) {
   if (ctx) ctx.scale(ratio, ratio);
 }
 
-export function SignaturePad({ onSignatureChange, label = 'Customer Signature' }: SignaturePadProps) {
+export function SignaturePad({ onSignatureChange, label = 'Customer Signature', fillHeight }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const padRef = useRef<SignaturePadLib | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,49 +44,65 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature' }
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    scaleCanvas(canvas);
-
-    const pad = new SignaturePadLib(canvas, {
-      minWidth: 0.5,
-      maxWidth: 2.5,
-      penColor: 'black',
-      velocityFilterWeight: 0.7,
-    });
-    padRef.current = pad;
-
-    pad.addEventListener('endStroke', () => {
-      // Require at least 2 strokes or meaningful length
-      const data = pad.toData();
-      const totalPoints = data.reduce((sum, group) => sum + group.points.length, 0);
-      if (data.length >= 1 && totalPoints >= 5) {
-        setSigned(true);
-        onSignatureChange({
-          strokes: data,
-          dataUrl: pad.toDataURL('image/png'),
-        });
-      } else {
-        setSigned(false);
-        onSignatureChange(null);
-      }
-    });
-
-    // Debounced resize — preserves stroke data
+    let pad: SignaturePadLib | null = null;
     let resizeTimer: ReturnType<typeof setTimeout>;
+
+    const initPad = () => {
+      if (pad) return; // already initialised
+      const w = canvas.offsetWidth;
+      const h = canvas.offsetHeight;
+      if (w === 0 || h === 0) return; // layout not ready yet
+
+      scaleCanvas(canvas);
+
+      pad = new SignaturePadLib(canvas, {
+        minWidth: 0.5,
+        maxWidth: 2.5,
+        penColor: 'black',
+        velocityFilterWeight: 0.7,
+      });
+      padRef.current = pad;
+
+      pad.addEventListener('endStroke', () => {
+        if (!pad) return;
+        const data = pad.toData();
+        const totalPoints = data.reduce((sum, group) => sum + group.points.length, 0);
+        if (data.length >= 1 && totalPoints >= 5) {
+          setSigned(true);
+          onSignatureChange({
+            strokes: data,
+            dataUrl: pad.toDataURL('image/png'),
+          });
+        } else {
+          setSigned(false);
+          onSignatureChange(null);
+        }
+      });
+    };
+
+    // Debounced resize — also handles deferred init when layout is ready
     const ro = new ResizeObserver(() => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
+        if (!pad) {
+          initPad();
+          return;
+        }
         const strokeData = pad.toData();
         scaleCanvas(canvas);
         pad.clear();
         if (strokeData.length > 0) pad.fromData(strokeData);
-      }, 150);
+      }, 50);
     });
     ro.observe(container);
+
+    // Try immediate init (works when container already has size)
+    initPad();
 
     return () => {
       clearTimeout(resizeTimer);
       ro.disconnect();
-      pad.off();
+      if (pad) pad.off();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -96,21 +114,19 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature' }
   }, [onSignatureChange]);
 
   return (
-    <div className="space-y-2">
+    <div className={fillHeight ? 'flex h-full flex-col gap-2' : 'space-y-2'}>
       {/* Label row */}
       <div className="flex items-center justify-between">
         <label className="block text-[9px] font-black uppercase tracking-[0.15em] text-gray-500">
           {label}
         </label>
         <div className="flex items-center gap-3">
-          {signed && (
-            <span className="flex items-center gap-1.5 text-[9px] font-black text-orange-600 uppercase tracking-wide bg-orange-50 px-2 py-1 border border-orange-200">
+            <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wide px-2 py-1 border transition-opacity ${signed ? 'text-orange-600 bg-orange-50 border-orange-200' : 'opacity-0 border-transparent'}`}>
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               Signed
             </span>
-          )}
           <button
             type="button"
             onClick={handleClear}
@@ -124,8 +140,8 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature' }
       {/* Canvas area */}
       <div
         ref={containerRef}
-        className="relative border-2 border-gray-900 bg-white overflow-hidden"
-        style={{ height: PAD_HEIGHT }}
+        className={`relative border-2 border-gray-900 bg-white overflow-hidden ${fillHeight ? 'flex-1 min-h-0' : ''}`}
+        style={fillHeight ? undefined : { height: PAD_HEIGHT }}
       >
         <canvas
           ref={canvasRef}

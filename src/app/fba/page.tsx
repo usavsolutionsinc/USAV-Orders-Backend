@@ -213,9 +213,6 @@ function FbaPageContent() {
               stickyDate={todayKey}
               fallbackDate="FBA Board"
               count={visibleCount}
-              countClassName={stationThemeColors[stationTheme].text}
-              formatDate={formatDateWithOrdinal}
-              showWeekControls={activeTab !== 'shipped'}
               weekRange={weekRange}
               weekOffset={weekOffset}
               onPrevWeek={() => setWeekOffset((o) => o - 1)}

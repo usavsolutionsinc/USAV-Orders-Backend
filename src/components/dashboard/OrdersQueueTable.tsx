@@ -429,18 +429,14 @@ export function OrdersQueueTable({
             stickyDate={stickyDate}
             fallbackDate={fallbackDate}
             count={currentCount || totalCount}
-            countClassName="text-blue-600"
-            showCount={false}
             weekRange={weekRange}
             weekOffset={weekOffset}
             onPrevWeek={onPrevWeek}
             onNextWeek={onNextWeek}
-            formatDate={formatDate}
-            showWeekControls={showWeekControls}
             rightSlot={
-              showWeekControls
-                ? undefined
-                : <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
+              !showWeekControls
+                ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
+                : undefined
             }
           />
         )}
@@ -484,7 +480,7 @@ export function OrdersQueueTable({
 
                   return (
                     <div key={date} className="flex flex-col">
-                      <DateGroupHeader date={date} total={dayRecords.length} formatDate={formatDate} />
+                      <DateGroupHeader date={date} total={dayRecords.length} />
                       {sortedRecords.map((record, index) => {
                         const r = record as QueueRowRecord;
                         const testerName = useWaForDisplay

@@ -79,7 +79,7 @@ function ManualRow({
   );
 }
 
-export function ManualsSidebar() {
+export function ManualsSidebar({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [localSearch, setLocalSearch] = useState(searchParams.get('q') || '');
@@ -145,17 +145,19 @@ export function ManualsSidebar() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
-        <SearchBar
-          value={localSearch}
-          onChange={handleSearchChange}
-          onClear={() => handleSearchChange('')}
-          placeholder="Search product name..."
-          variant="blue"
-          size="compact"
-          isSearching={isLoading}
-        />
-      </div>
+      {!embedded && (
+        <div className={`${sidebarHeaderBandClass} ${sidebarHeaderRowClass}`}>
+          <SearchBar
+            value={localSearch}
+            onChange={handleSearchChange}
+            onClear={() => handleSearchChange('')}
+            placeholder="Search product name..."
+            variant="blue"
+            size="compact"
+            isSearching={isLoading}
+          />
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
         {isLoading && manuals.length === 0 ? (

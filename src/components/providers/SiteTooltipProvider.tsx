@@ -66,9 +66,8 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
     (args: { anchorId: string; value: string; getRect: () => DOMRect | null }) => {
       clearCloseTimer();
       placementRetryRef.current = 0;
-      const wasOpen = activeAnchorIdRef.current != null;
       activeAnchorIdRef.current = args.anchorId;
-      if (!wasOpen) setTooltipPosition(null);
+      setTooltipPosition(null);
       setSession({
         anchorId: args.anchorId,
         value: args.value,
@@ -135,7 +134,13 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
   const updateTooltipPosition = useCallback(() => {
     if (!session || !tooltipRef.current) return;
     const chipRect = session.getRect();
-    if (!chipRect) return;
+    if (!chipRect || chipRect.width < 2 || chipRect.height < 2) {
+      if (placementRetryRef.current < MAX_PLACEMENT_RETRIES) {
+        placementRetryRef.current += 1;
+        window.requestAnimationFrame(() => updateTooltipPosition());
+      }
+      return;
+    }
 
     const tooltipEl = tooltipRef.current;
     const tooltipRect = tooltipEl.getBoundingClientRect();
@@ -235,8 +240,8 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
             <div
               ref={tooltipRef}
               style={{
-                top: tooltipPosition?.top ?? 0,
-                left: tooltipPosition?.left ?? 0,
+                top: tooltipPosition?.top ?? -9999,
+                left: tooltipPosition?.left ?? -9999,
                 visibility: placementReady ? 'visible' : 'hidden',
                 opacity: placementReady ? 1 : 0,
                 transition: 'opacity 0.15s ease-out',

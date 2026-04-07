@@ -170,12 +170,10 @@ export function MobileTechTable({
         stickyDate={stickyDate}
         fallbackDate={formatDateWithOrdinal(getCurrentPSTDateKey())}
         count={currentCount || getWeekCount()}
-        countClassName={weekHeaderCountClass}
         weekRange={weekRange}
         weekOffset={weekOffset}
         onPrevWeek={() => setWeekOffset((current) => current + 1)}
         onNextWeek={() => setWeekOffset((current) => Math.max(0, current - 1))}
-        formatDate={formatDateWithOrdinal}
       />
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain no-scrollbar">

@@ -1,14 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type BarcodeScanStatus = 'idle' | 'scanning' | 'paused' | 'error';
 
 export interface UseBarcodeScanner {
-  /** Attach to a <div> — html5-qrcode renders its camera feed inside. */
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  /** Attach to a <video autoPlay playsInline muted /> — ZXing renders its camera feed here. */
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   /** Last decoded barcode string (null until first decode). */
   lastScannedValue: string | null;
   /** Current scan lifecycle phase. */
@@ -29,56 +29,52 @@ export interface UseBarcodeScanner {
   isScanning: boolean;
   /** Error message if camera fails to start. */
   error: string | null;
+  /** Toggle torch/flashlight if available. */
+  toggleTorch: () => void;
+  /** Whether torch is currently on. */
+  torchOn: boolean;
 }
 
 interface UseBarcodeOptions {
-  /** Frames per second for decode attempts. Default: 10. */
-  fps?: number;
   /** Dedup window in ms — same value within this window is suppressed. Default: 2000. */
   dedupMs?: number;
   /** Cooldown after acceptScan() in ms. Default: 1500. */
   acceptCooldownMs?: number;
 }
 
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-// Barcode formats found on shipping labels, serial stickers, and product barcodes.
-// Imported dynamically to avoid SSR issues with the html5-qrcode library.
-const SUPPORTED_FORMAT_IDS = [
-  0,  // QR_CODE
-  2,  // CODABAR
-  3,  // CODE_39
-  5,  // CODE_128
-  6,  // DATA_MATRIX
-  8,  // ITF
-  9,  // EAN_13
-  10, // EAN_8
-  14, // UPC_A
-  15, // UPC_E
-];
+// IScannerControls type from @zxing/browser
+interface ScannerControls {
+  stop: () => void;
+  switchTorch?: (onOff: boolean) => Promise<void>;
+}
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
 /**
- * Universal barcode scanner hook wrapping `html5-qrcode`.
+ * Universal barcode scanner hook powered by `@zxing/browser`.
  *
- * The hook's `containerRef` div is the camera viewfinder — `html5-qrcode`
- * renders its own `<video>` element inside. Overlay your viewfinder UI
- * (corner markers, status ring) on top with absolute positioning.
+ * Attach `videoRef` to a `<video autoPlay playsInline muted />` element.
+ * ZXing manages the camera stream and runs continuous barcode decoding.
  *
- * Does NOT import classification logic — only decodes raw text from barcodes.
+ * Supported formats: QR, Code 128, Code 39, Codabar, Data Matrix, ITF,
+ * EAN-13, EAN-8, UPC-A, UPC-E — covers shipping labels, serial stickers,
+ * and product barcodes.
  */
 export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeScanner {
-  const { fps = 10, dedupMs = 2000, acceptCooldownMs = 1500 } = options;
+  const { dedupMs = 2000, acceptCooldownMs = 1500 } = options;
 
-  const uniqueId = useId().replace(/:/g, '');
-  const elementId = `html5qr-${uniqueId}`;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controlsRef = useRef<ScannerControls | null>(null);
+  const pausedRef = useRef(false);
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const instanceRef = useRef<any>(null); // Html5Qrcode instance
   const [scanStatus, setScanStatus] = useState<BarcodeScanStatus>('idle');
   const [lastScannedValue, setLastScannedValue] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+
+  // Dedup + cooldown refs
+  const lastDecodedRef = useRef<{ value: string; timestamp: number } | null>(null);
+  const cooldownUntilRef = useRef<number>(0);
 
   const log = useCallback((msg: string) => {
     if (typeof window !== 'undefined' && !(window as any).__USAV_CAMERA_DEBUG) return;
@@ -86,169 +82,105 @@ export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeSc
     console.debug(`[useBarcodeScanner ${ts}] ${msg}`);
   }, []);
 
-  // Dedup + cooldown refs
-  const lastDecodedRef = useRef<{ value: string; timestamp: number } | null>(null);
-  const cooldownUntilRef = useRef<number>(0);
-
   // ── Start scanning ──
 
   const startScanning = useCallback(async () => {
     log('startScanning called');
 
-    // Check API availability
-    const hasMediaDevices = !!navigator.mediaDevices;
-    const hasGetUserMedia = !!(navigator.mediaDevices?.getUserMedia);
-    const isSecureOrigin = location.protocol === 'https:'
-      || location.hostname === 'localhost'
-      || location.hostname === '127.0.0.1';
-    log(`mediaDevices: ${hasMediaDevices}, getUserMedia: ${hasGetUserMedia}`);
-    log(`userAgent: ${navigator.userAgent.slice(0, 80)}`);
-    log(`protocol: ${location.protocol}, host: ${location.host}`);
-    log(`standalone: ${('standalone' in navigator && (navigator as any).standalone) || window.matchMedia('(display-mode: standalone)').matches}`);
+    const isSecureOrigin =
+      location.protocol === 'https:' ||
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1';
 
-    if (!hasGetUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setScanStatus('error');
       setError(
         isSecureOrigin
           ? 'Camera API unavailable in this browser.'
-          : 'Camera access requires HTTPS or localhost. Safari will not prompt on an insecure dev URL.',
+          : 'Camera access requires HTTPS or localhost.',
       );
       return;
     }
 
-    // Clean up any previous failed instance before retrying
-    if (instanceRef.current) {
-      log('Cleaning up previous instance');
-      try {
-        if (instanceRef.current.isScanning) await instanceRef.current.stop();
-        instanceRef.current.clear();
-      } catch { /* best-effort */ }
-      instanceRef.current = null;
+    // Stop any prior session
+    if (controlsRef.current) {
+      controlsRef.current.stop();
+      controlsRef.current = null;
     }
 
-    const container = containerRef.current;
-    if (!container) { log('ERROR: no container ref'); return; }
-
-    // Remove stale mount div and create fresh (html5-qrcode leaves artifacts on error)
-    const stale = container.querySelector(`#${elementId}`);
-    if (stale) { stale.remove(); log('Removed stale mount div'); }
-
-    const mountDiv = document.createElement('div');
-    mountDiv.id = elementId;
-    mountDiv.style.width = '100%';
-    mountDiv.style.height = '100%';
-    container.appendChild(mountDiv);
-    log('Mount div created');
+    const video = videoRef.current;
+    if (!video) {
+      log('ERROR: no video ref');
+      return;
+    }
 
     try {
-      // Dynamic import to avoid SSR crashes
-      log('Importing html5-qrcode...');
-      const { Html5Qrcode } = await import('html5-qrcode');
-      log('html5-qrcode imported OK');
+      log('Importing @zxing/browser...');
+      const { BrowserMultiFormatReader } = await import('@zxing/browser');
+      const { BarcodeFormat, DecodeHintType } = await import('@zxing/library');
 
-      const createScanner = () => new Html5Qrcode(elementId, {
-        formatsToSupport: SUPPORTED_FORMAT_IDS as any,
-        useBarCodeDetectorIfSupported: true,
-        verbose: false,
-      });
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.QR_CODE,
+        BarcodeFormat.CODABAR,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.DATA_MATRIX,
+        BarcodeFormat.ITF,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+      ]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
 
-      const scanConfig = {
-        fps,
-        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
-          width: Math.floor(viewfinderWidth * 0.85),
-          height: Math.floor(viewfinderHeight * 0.7),
-        }),
-        disableFlip: false,
-      };
-
-      const onDecoded = (decodedText: string) => {
-        const now = Date.now();
-
-        if (now < cooldownUntilRef.current) return;
-
-        const last = lastDecodedRef.current;
-        if (last && last.value === decodedText && now - last.timestamp < dedupMs) {
-          return;
-        }
-
-        lastDecodedRef.current = { value: decodedText, timestamp: now };
-        setLastScannedValue(decodedText);
-      };
-
-      const startAttempts: Array<{ label: string; cameraIdOrConfig: string | { facingMode: 'environment' | 'user' } }> = [
-        { label: 'rear camera', cameraIdOrConfig: { facingMode: 'environment' } },
-        { label: 'front camera', cameraIdOrConfig: { facingMode: 'user' } },
-      ];
-
-      try {
-        const cameras = await Html5Qrcode.getCameras();
-        if (cameras[0]?.id) {
-          startAttempts.push({ label: 'first available camera', cameraIdOrConfig: cameras[0].id });
-        }
-      } catch (cameraListErr: any) {
-        log(`getCameras failed: ${cameraListErr?.message || cameraListErr}`);
-      }
+      const reader = new BrowserMultiFormatReader(hints);
+      log('ZXing reader created');
 
       setScanStatus('scanning');
       setError(null);
+      pausedRef.current = false;
 
-      let lastStartError: any = null;
-      for (const attempt of startAttempts) {
-        const qr = createScanner();
-        instanceRef.current = qr;
-        log(`Calling qr.start(${attempt.label})...`);
+      // decodeFromVideoDevice handles camera acquisition + continuous decode loop.
+      // Pass undefined as deviceId to let it pick the best available camera.
+      const controls = await reader.decodeFromVideoDevice(
+        undefined,
+        video,
+        (result, _err) => {
+          if (pausedRef.current) return;
+          if (!result) return; // no barcode in this frame
 
-        try {
-          await qr.start(
-            attempt.cameraIdOrConfig,
-            scanConfig,
-            onDecoded,
-            () => {},
-          );
-          log(`qr.start() succeeded via ${attempt.label}`);
-          return;
-        } catch (attemptErr: any) {
-          lastStartError = attemptErr;
-          const attemptName = attemptErr?.name || '';
-          const attemptMsg = String(attemptErr?.message || '').toLowerCase();
-          log(`qr.start(${attempt.label}) failed: ${attemptName} ${String(attemptErr?.message || '').slice(0, 120)}`);
+          const decodedText = result.getText();
+          const now = Date.now();
 
-          try {
-            qr.clear();
-          } catch {
-            // Best-effort cleanup before next attempt
-          }
-          instanceRef.current = null;
+          // Cooldown check
+          if (now < cooldownUntilRef.current) return;
 
-          const unrecoverable =
-            attemptName === 'NotAllowedError' ||
-            attemptName === 'PermissionDeniedError' ||
-            attemptMsg.includes('permission') ||
-            attemptMsg.includes('not allowed') ||
-            attemptMsg.includes('secure context') ||
-            attemptMsg.includes('https or localhost');
+          // Dedup check
+          const last = lastDecodedRef.current;
+          if (last && last.value === decodedText && now - last.timestamp < dedupMs) return;
 
-          if (unrecoverable) break;
-        }
-      }
+          log(`Decoded: ${decodedText}`);
+          lastDecodedRef.current = { value: decodedText, timestamp: now };
+          setLastScannedValue(decodedText);
+        },
+      );
 
-      throw lastStartError || new Error('Camera unavailable');
+      controlsRef.current = controls;
+      log('Scanning started');
     } catch (err: any) {
       setScanStatus('error');
-      instanceRef.current = null;
+      controlsRef.current = null;
 
       const errName = err?.name || '';
       const errMsg = String(err?.message || '').toLowerCase();
       log(`ERROR: name=${errName} msg=${err?.message?.slice(0, 120)}`);
 
-      if (!isSecureOrigin || errMsg.includes('secure context') || errMsg.includes('https or localhost')) {
-        setError('Camera access requires HTTPS or localhost. If mobile Safari is on http://<your-ip>:3000, it will not show a permission prompt.');
-      } else if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError'
-          || errMsg.includes('permission') || errMsg.includes('not allowed')) {
-        setError(
-          'Camera permission denied. On Safari: Settings → Safari → Camera → Allow. Then reload the page.',
-        );
-      } else if (errName === 'NotReadableError' || errMsg.includes('could not start video source')) {
+      if (!isSecureOrigin || errMsg.includes('secure context') || errMsg.includes('https')) {
+        setError('Camera access requires HTTPS or localhost. Safari will not prompt on an insecure dev URL.');
+      } else if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError' || errMsg.includes('permission')) {
+        setError('Camera permission denied. On Safari: Settings → Safari → Camera → Allow. Then reload.');
+      } else if (errName === 'NotReadableError' || errMsg.includes('could not start video')) {
         setError('Camera is busy or blocked by another app or browser tab.');
       } else if (errName === 'NotFoundError' || errMsg.includes('no camera') || errMsg.includes('not found')) {
         setError('No camera found on this device.');
@@ -256,45 +188,36 @@ export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeSc
         setError(err?.message || 'Camera unavailable');
       }
     }
-  }, [elementId, fps, dedupMs]);
+  }, [log, dedupMs]);
 
   // ── Stop scanning ──
 
   const stopScanning = useCallback(async () => {
-    const qr = instanceRef.current;
-    if (!qr) return;
-    try {
-      if (qr.isScanning) await qr.stop();
-      qr.clear();
-    } catch {
-      // Already stopped
+    if (controlsRef.current) {
+      controlsRef.current.stop();
+      controlsRef.current = null;
     }
-    instanceRef.current = null;
+    // Also stop any leftover tracks on the video element
+    const video = videoRef.current;
+    if (video?.srcObject) {
+      (video.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
+    }
+    pausedRef.current = false;
+    setTorchOn(false);
     setScanStatus('idle');
   }, []);
 
   // ── Pause / Resume ──
 
   const pauseScanning = useCallback(() => {
-    const qr = instanceRef.current;
-    if (!qr) return;
-    try {
-      qr.pause(true); // true = pause video too
-      setScanStatus('paused');
-    } catch {
-      // Not in scannable state
-    }
+    pausedRef.current = true;
+    setScanStatus('paused');
   }, []);
 
   const resumeScanning = useCallback(() => {
-    const qr = instanceRef.current;
-    if (!qr) return;
-    try {
-      qr.resume();
-      setScanStatus('scanning');
-    } catch {
-      // Not in pausable state
-    }
+    pausedRef.current = false;
+    setScanStatus('scanning');
   }, []);
 
   // ── Accept / Reset ──
@@ -308,25 +231,43 @@ export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeSc
     lastDecodedRef.current = null;
   }, []);
 
+  // ── Torch ──
+
+  const toggleTorch = useCallback(() => {
+    const controls = controlsRef.current;
+    if (!controls?.switchTorch) {
+      // Fallback: try applying constraints directly to the video track
+      const video = videoRef.current;
+      const track = (video?.srcObject as MediaStream)?.getVideoTracks()[0];
+      if (!track) return;
+      const caps = track.getCapabilities?.() as any;
+      if (!caps?.torch) return;
+      const newState = !torchOn;
+      (track as any).applyConstraints({ advanced: [{ torch: newState }] })
+        .then(() => setTorchOn(newState))
+        .catch(() => {});
+      return;
+    }
+
+    const newState = !torchOn;
+    controls.switchTorch(newState)
+      .then(() => setTorchOn(newState))
+      .catch(() => {});
+  }, [torchOn]);
+
   // ── Cleanup on unmount ──
 
   useEffect(() => {
     return () => {
-      const qr = instanceRef.current;
-      if (qr) {
-        try {
-          if (qr.isScanning) qr.stop().then(() => qr.clear()).catch(() => {});
-          else qr.clear();
-        } catch {
-          // Best-effort cleanup
-        }
-        instanceRef.current = null;
+      if (controlsRef.current) {
+        controlsRef.current.stop();
+        controlsRef.current = null;
       }
     };
   }, []);
 
   return {
-    containerRef,
+    videoRef,
     lastScannedValue,
     scanStatus,
     startScanning,
@@ -337,5 +278,7 @@ export function useBarcodeScanner(options: UseBarcodeOptions = {}): UseBarcodeSc
     resetLastScan,
     isScanning: scanStatus === 'scanning',
     error,
+    toggleTorch,
+    torchOn,
   };
 }

@@ -5,17 +5,13 @@ import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
 interface DateGroupHeaderProps {
   date: string;
   total: number;
-  formatDate: (date: string) => string;
-  countClassName?: string;
 }
 
-export function DateGroupHeader({ date, total, formatDate, countClassName }: DateGroupHeaderProps) {
+export function DateGroupHeader({ date, total }: DateGroupHeaderProps) {
   return (
     <DesktopDateGroupHeader
       date={date}
       total={total}
-      formatDate={formatDate}
-      countClassName={countClassName}
     />
   );
 }

@@ -148,12 +148,10 @@ export function MobilePackerTable({
         stickyDate={stickyDate}
         fallbackDate={formatDateWithOrdinal(getCurrentPSTDateKey())}
         count={currentCount || getWeekCount()}
-        countClassName={weekHeaderCountClass}
         weekRange={weekRange}
         weekOffset={weekOffset}
         onPrevWeek={() => setWeekOffset((c) => c + 1)}
         onNextWeek={() => setWeekOffset((c) => Math.max(0, c - 1))}
-        formatDate={formatDateWithOrdinal}
       />
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain no-scrollbar">

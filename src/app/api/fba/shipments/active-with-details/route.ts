@@ -28,10 +28,12 @@ export async function GET(request: NextRequest) {
         WHERE status IN ('PLANNED', 'READY_TO_GO', 'LABEL_ASSIGNED')
         UNION ALL
         -- Recently shipped (limited)
-        SELECT id, 1 AS sort_bucket FROM fba_shipments
-        WHERE status = 'SHIPPED'
-        ORDER BY updated_at DESC
-        LIMIT $1
+        SELECT id, 1 AS sort_bucket FROM (
+          SELECT id, updated_at FROM fba_shipments
+          WHERE status = 'SHIPPED'
+          ORDER BY updated_at DESC
+          LIMIT $1
+        ) shipped_sub
       )
       SELECT
         fs.id,

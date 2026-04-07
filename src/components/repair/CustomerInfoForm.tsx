@@ -120,7 +120,7 @@ export function CustomerInfoForm({
                         <button
                             type="button"
                             onClick={addSerialNumber}
-                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-orange-600 hover:text-orange-700 transition-colors"
+                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-600 hover:text-emerald-700 transition-colors"
                         >
                             <Plus className="h-3 w-3" />
                             Add
@@ -155,14 +155,14 @@ export function CustomerInfoForm({
             </SidebarIntakeFormField>
 
             <SidebarIntakeFormField label="Price" required>
-                <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-transparent transition-all">
+                <div className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent transition-all">
                     <span className="flex items-center justify-center border-r border-gray-200 px-4 py-3 text-lg font-black text-gray-400">$</span>
                     <input
                         type="text"
                         value={price}
                         onChange={(e) => onPriceChange(e.target.value)}
                         placeholder="130"
-                        className="flex-1 bg-transparent px-4 py-3 text-sm font-black text-orange-600 outline-none placeholder:font-normal placeholder:text-gray-300"
+                        className="flex-1 bg-transparent px-4 py-3 text-sm font-black text-emerald-600 outline-none placeholder:font-normal placeholder:text-gray-300"
                         required
                     />
                 </div>

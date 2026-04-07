@@ -234,24 +234,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
           </div>
         ) : null}
 
-        <SidebarTabSwitchChrome>
-          <TabSwitch
-            tabs={[
-              { id: 'incoming', label: 'Incoming', color: 'orange' },
-              { id: 'active', label: 'Active', color: 'orange' },
-              { id: 'done', label: 'Done', color: 'orange' },
-            ]}
-            activeTab={activeTab}
-            highContrast
-            onTabChange={(tab) =>
-              updateParams((params) => {
-                if (tab === 'active') params.delete('tab');
-                else params.set('tab', tab);
-              })
-            }
-          />
-        </SidebarTabSwitchChrome>
-
         <div className="border-b border-gray-100 px-4 py-3">
           <SearchBar
             value={searchValue}
@@ -284,6 +266,24 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
             }
           />
         </div>
+
+        <SidebarTabSwitchChrome>
+          <TabSwitch
+            tabs={[
+              { id: 'incoming', label: 'Incoming', color: 'orange' },
+              { id: 'active', label: 'Active', color: 'orange' },
+              { id: 'done', label: 'Done', color: 'orange' },
+            ]}
+            activeTab={activeTab}
+            highContrast
+            onTabChange={(tab) =>
+              updateParams((params) => {
+                if (tab === 'active') params.delete('tab');
+                else params.set('tab', tab);
+              })
+            }
+          />
+        </SidebarTabSwitchChrome>
       </div>
 
       <div className="relative flex-1 overflow-y-auto px-4 py-4">

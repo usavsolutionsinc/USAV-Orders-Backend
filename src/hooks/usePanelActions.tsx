@@ -8,7 +8,7 @@ import {
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
-export type PanelEntityType = 'order' | 'work_order' | 'fba_item' | 'repair';
+export type PanelEntityType = 'order' | 'work_order' | 'fba_item' | 'repair' | 'walk_in_sale';
 
 export interface PanelAction {
   key: string;
@@ -37,7 +37,8 @@ const ENTITY_ACTION_KEYS: Record<PanelEntityType, string[]> = {
   order:      ['goals', 'status', 'out_of_stock', 'notes'],
   work_order: ['goals', 'status', 'out_of_stock', 'notes'],
   fba_item:   ['goals', 'notes'],
-  repair:     ['notes'],
+  repair:         ['notes'],
+  walk_in_sale:   ['notes'],
 };
 
 /* ── Hook ──────────────────────────────────────────────────────────── */

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeIdentifier } from '@/lib/product-manuals';
+import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 
 function buildDocUrls(googleFileId: string) {
   return {
@@ -14,37 +15,66 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const itemNumber = String(searchParams.get('itemNumber') || '');
+    const sku = String(searchParams.get('sku') || '');
 
     const normalizedItemNumber = normalizeIdentifier(itemNumber);
 
-    if (!normalizedItemNumber) {
+    if (!normalizedItemNumber && !sku.trim()) {
       return NextResponse.json(
-        { success: false, found: false, error: 'itemNumber is required' },
+        { success: false, found: false, error: 'itemNumber or sku is required' },
         { status: 400 }
       );
     }
 
-    const result = await pool.query(
-      `SELECT
-         id,
-         item_number,
-         product_title,
-         display_name,
-         google_file_id,
-         type,
-         updated_at
-       FROM product_manuals
-       WHERE is_active = TRUE
-         AND regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $1
-       ORDER BY updated_at DESC`,
-      [normalizedItemNumber]
-    );
+    // ── Hub-first: resolve through sku_catalog ──────────────────────────────
+    const skuCatalogId = await resolveSkuCatalogId(sku || null, itemNumber || null);
 
-    if (result.rows.length === 0) {
+    let rows: any[] = [];
+
+    if (skuCatalogId) {
+      const hubResult = await pool.query(
+        `SELECT
+           id,
+           item_number,
+           product_title,
+           display_name,
+           google_file_id,
+           type,
+           updated_at
+         FROM product_manuals
+         WHERE is_active = TRUE
+           AND sku_catalog_id = $1
+         ORDER BY updated_at DESC`,
+        [skuCatalogId]
+      );
+      rows = hubResult.rows;
+    }
+
+    // ── Fallback: legacy item_number match for un-migrated records ──────────
+    if (rows.length === 0 && normalizedItemNumber) {
+      const fallbackResult = await pool.query(
+        `SELECT
+           id,
+           item_number,
+           product_title,
+           display_name,
+           google_file_id,
+           type,
+           updated_at
+         FROM product_manuals
+         WHERE is_active = TRUE
+           AND regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $1
+         ORDER BY updated_at DESC`,
+        [normalizedItemNumber]
+      );
+      rows = fallbackResult.rows;
+    }
+
+    if (rows.length === 0) {
       return NextResponse.json({ success: true, found: false, manuals: [] });
     }
 
-    const manuals = result.rows.map((row) => ({
+    const manuals = rows.map((row) => ({
       id: row.id,
       sku: null,
       itemNumber: row.item_number || null,
@@ -52,7 +82,7 @@ export async function GET(req: NextRequest) {
       displayName: row.display_name || null,
       googleFileId: row.google_file_id,
       type: row.type || null,
-      matchedBy: 'item_number' as const,
+      matchedBy: skuCatalogId && rows === rows ? 'sku_catalog' as const : 'item_number' as const,
       updatedAt: row.updated_at,
       ...buildDocUrls(row.google_file_id),
     }));

@@ -1,4 +1,5 @@
 import pool from '@/lib/db';
+import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const ECWID_PAGE_LIMIT = 100;
@@ -90,6 +91,8 @@ export async function upsertProductManual(params: {
   status?: 'unassigned' | 'assigned' | 'archived' | null;
   assignedBy?: string | null;
   type?: string | null;
+  skuCatalogId?: number | null;
+  sku?: string | null;
 }): Promise<LegacyProductManualRecord> {
   const itemNumber = normalizeIdentifier(String(params.itemNumber || '')) || null;
   const productTitle = String(params.productTitle || '').trim() || null;
@@ -112,6 +115,17 @@ export async function upsertProductManual(params: {
   }
   if (!googleDocId && !relativePath) {
     throw new Error('Valid Google Doc ID/URL or relativePath is required');
+  }
+
+  // Resolve sku_catalog_id from provided value, SKU, or item number
+  let skuCatalogId = params.skuCatalogId ?? null;
+  if (!skuCatalogId) {
+    try {
+      skuCatalogId = await resolveSkuCatalogId(
+        params.sku?.trim() || null,
+        itemNumber || null,
+      );
+    } catch { /* non-critical — proceed without */ }
   }
 
   const client = await pool.connect();
@@ -156,11 +170,12 @@ export async function upsertProductManual(params: {
              assigned_at = CASE WHEN $11 = 'assigned' THEN COALESCE(assigned_at, NOW()) ELSE NULL END,
              assigned_by = $12,
              type = $13,
+             sku_catalog_id = COALESCE($14, sku_catalog_id),
              is_active = TRUE,
              updated_at = NOW()
          WHERE id = $1
          RETURNING id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at`,
-        [existing.rows[0].id, null, itemNumber, productTitle, displayName, googleDocId, sourceUrl, relativePath, folderPath, fileName, status, params.assignedBy ?? null, type],
+        [existing.rows[0].id, null, itemNumber, productTitle, displayName, googleDocId, sourceUrl, relativePath, folderPath, fileName, status, params.assignedBy ?? null, type, skuCatalogId],
       );
 
       await client.query('COMMIT');
@@ -169,10 +184,10 @@ export async function upsertProductManual(params: {
 
     const inserted = await client.query(
       `INSERT INTO product_manuals
-        (sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10 = 'assigned' THEN NOW() ELSE NULL END, $11, $12, TRUE, NOW())
+        (sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at, sku_catalog_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CASE WHEN $10 = 'assigned' THEN NOW() ELSE NULL END, $11, $12, TRUE, NOW(), $13)
        RETURNING id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at`,
-      [null, itemNumber, productTitle, displayName, googleDocId, sourceUrl, relativePath, folderPath, fileName, status, params.assignedBy ?? null, type]
+      [null, itemNumber, productTitle, displayName, googleDocId, sourceUrl, relativePath, folderPath, fileName, status, params.assignedBy ?? null, type, skuCatalogId]
     );
 
     await client.query('COMMIT');

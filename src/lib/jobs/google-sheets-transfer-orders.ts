@@ -4,6 +4,8 @@ import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { invalidateOrderViews } from '@/lib/orders/invalidation';
+import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { publishOrderChanged } from '@/lib/realtime/publish';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { desc, eq, inArray } from 'drizzle-orm';
@@ -501,6 +503,7 @@ export async function runGoogleSheetsTransferOrders(
       const sheetSku = String(row[colIndices.usavSku] || '').trim();
       const sheetCondition = String(row[colIndices.condition] || '').trim();
       const sheetNotes = String(row[colIndices.note] || '').trim();
+      const sheetPlatform = String(row[colIndices.platform] || '').trim();
       const matchedCustomer = orderId ? latestCustomerByOrderId.get(orderId) : undefined;
       const matchedCustomerId = matchedCustomer ? Number(matchedCustomer.id) : Number.NaN;
       const customerId = Number.isFinite(matchedCustomerId) ? matchedCustomerId : null;
@@ -576,6 +579,7 @@ export async function runGoogleSheetsTransferOrders(
           updatedOrdersTracking++;
         }
         if (orderToKeep.customerId == null && customerId) updateValues.customerId = customerId;
+        if (isBlank((orderToKeep as any).accountSource) && sheetPlatform) updateValues.accountSource = sheetPlatform;
 
         const compactedUpdateValues = compactUpdateValues(updateValues);
         if (Object.keys(compactedUpdateValues).length > 0) {
@@ -608,6 +612,7 @@ export async function runGoogleSheetsTransferOrders(
             status: 'unassigned',
             statusHistory: [],
             customerId,
+            accountSource: sheetPlatform || '',
           },
         });
       }
@@ -667,16 +672,29 @@ export async function runGoogleSheetsTransferOrders(
       );
     }
 
-    // Use the shared post-commit invalidation path so manual, queued, and
-    // scheduled transfers all refresh the same cached order views.
+    // Always bust the cached order views and notify clients via Ably so the
+    // dashboard refreshes on every successful cron delivery — even when no
+    // new orders were inserted or fields updated.
     const affectedOrderIds = [
       ...insertedOrderIds,
       ...ordersToBackfill.map((e) => e.id),
       ...ordersToDelete,
     ];
-    if (affectedOrderIds.length > 0) {
-      await invalidateOrderViews({
-        orderIds: affectedOrderIds,
+
+    // Collect all processed order DB IDs (including unchanged ones) so we can
+    // always broadcast a meaningful notification to clients.
+    const allProcessedOrderIds = [
+      ...affectedOrderIds,
+      ...Array.from(latestOrderByOrderId.values()).map((o) => o.id),
+    ];
+    const uniqueProcessedIds = Array.from(
+      new Set(allProcessedOrderIds.filter((id) => Number.isFinite(id) && id > 0))
+    );
+
+    await invalidateCacheTags(['orders']);
+    if (uniqueProcessedIds.length > 0) {
+      await publishOrderChanged({
+        orderIds: uniqueProcessedIds,
         source: 'google-sheets-transfer-orders',
       });
     }

@@ -49,3 +49,20 @@ export function getSkuNumber(sku: string): number {
     const match = sku.match(/\d+/);
     return match ? parseInt(match[0], 10) : 0;
 }
+
+/**
+ * Check if a SKU is a Repair Service item (ends with -RS, case-insensitive).
+ * Also matches variant patterns like -RS-1, -RS-2.
+ */
+export function isRepairSku(sku: string | null | undefined): boolean {
+    const s = String(sku || '').trim().toUpperCase();
+    return s.endsWith('-RS') || /\-RS-\d+$/.test(s);
+}
+
+/**
+ * Strip the -RS suffix from a repair SKU to get the base product SKU.
+ * e.g. "1810-RS-1" → "1810", "244021Q-RS" → "244021Q"
+ */
+export function getSkuBase(sku: string): string {
+    return sku.trim().replace(/-RS(-\d+)?$/i, '');
+}

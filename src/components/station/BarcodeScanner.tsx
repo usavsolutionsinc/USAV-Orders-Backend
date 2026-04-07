@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { X, ScanLine } from 'lucide-react';
 import { StationDrawer } from './StationDrawer';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 
 interface BarcodeScannerProps {
   isOpen: boolean;
@@ -10,66 +11,35 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
-const SCANNER_ELEMENT_ID = 'usav-barcode-reader';
-
 export function BarcodeScanner({ isOpen, onScan, onClose }: BarcodeScannerProps) {
-  const scannerRef = useRef<InstanceType<typeof import('html5-qrcode').Html5QrcodeScanner> | null>(null);
+  const scanner = useBarcodeScanner({ dedupMs: 2000 });
 
-  const stopScanner = useCallback(() => {
-    if (scannerRef.current) {
-      scannerRef.current.clear().catch(() => {});
-      scannerRef.current = null;
-    }
-  }, []);
-
+  // Start/stop with drawer lifecycle
   useEffect(() => {
-    if (!isOpen) {
-      stopScanner();
-      return;
+    if (isOpen) {
+      void scanner.startScanning();
+    } else {
+      void scanner.stopScanning();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
-    let mounted = true;
+  // Forward decoded value to parent
+  useEffect(() => {
+    if (scanner.lastScannedValue) {
+      const value = scanner.lastScannedValue.trim();
+      scanner.acceptScan();
+      scanner.resetLastScan();
+      void scanner.stopScanning();
+      onScan(value);
+      onClose();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanner.lastScannedValue]);
 
-    import('html5-qrcode').then(({ Html5QrcodeScanner }) => {
-      if (!mounted || !document.getElementById(SCANNER_ELEMENT_ID)) return;
-
-      const scanner = new Html5QrcodeScanner(
-        SCANNER_ELEMENT_ID,
-        {
-          fps: 15,
-          qrbox: { width: 260, height: 120 },
-          aspectRatio: 1.5,
-          showTorchButtonIfSupported: true,
-          showZoomSliderIfSupported: false,
-          defaultZoomValueIfSupported: 2,
-          rememberLastUsedCamera: true,
-          videoConstraints: { facingMode: 'environment' },
-        },
-        /* verbose */ false,
-      );
-
-      scanner.render(
-        (decodedText) => {
-          stopScanner();
-          onScan(decodedText.trim());
-          onClose();
-        },
-        (error) => {
-          // Suppress not-found frames — normal during scan
-          if (!error.includes('No MultiFormat Readers')) {
-            console.warn('BarcodeScanner:', error);
-          }
-        },
-      );
-
-      scannerRef.current = scanner;
-    });
-
-    return () => {
-      mounted = false;
-      stopScanner();
-    };
-  }, [isOpen, onScan, onClose, stopScanner]);
+  const handleRetry = useCallback(() => {
+    void scanner.startScanning();
+  }, [scanner]);
 
   return (
     <StationDrawer isOpen={isOpen} onClose={onClose} side="bottom">
@@ -91,16 +61,63 @@ export function BarcodeScanner({ isOpen, onScan, onClose }: BarcodeScannerProps)
           </button>
         </div>
 
-        {/* Scanner mount point */}
-        <div
-          id={SCANNER_ELEMENT_ID}
-          className="rounded-station overflow-hidden [&_video]:rounded-station [&_#html5-qrcode-button-camera-permission]:hidden"
-        />
+        {/* Scanner video feed */}
+        <div className="relative rounded-station overflow-hidden bg-black aspect-[3/2]">
+          <video
+            ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+          />
 
-        {/* Manual entry hint */}
-        <p className="mt-3 text-center text-xs text-gray-400 font-sans">
-          Or type the code in the scan bar and press Return
-        </p>
+          {/* Viewfinder overlay */}
+          {scanner.isScanning && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-[80%] h-[60%] border-2 border-white/40 rounded-lg">
+                <span className="absolute top-0 left-0 h-4 w-4 border-t-2 border-l-2 border-white rounded-tl" />
+                <span className="absolute top-0 right-0 h-4 w-4 border-t-2 border-r-2 border-white rounded-tr" />
+                <span className="absolute bottom-0 left-0 h-4 w-4 border-b-2 border-l-2 border-white rounded-bl" />
+                <span className="absolute bottom-0 right-0 h-4 w-4 border-b-2 border-r-2 border-white rounded-br" />
+              </div>
+            </div>
+          )}
+
+          {/* Error state */}
+          {scanner.scanStatus === 'error' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 px-4 text-center">
+              <p className="text-xs text-gray-400 mb-3">{scanner.error || 'Camera unavailable'}</p>
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="text-xs font-bold text-blue-400 active:text-blue-300"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Torch toggle + manual entry hint */}
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-gray-400 font-sans">
+            Or type the code in the scan bar and press Return
+          </p>
+          {scanner.isScanning && (
+            <button
+              type="button"
+              onClick={() => scanner.toggleTorch()}
+              className={`ml-2 h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center transition-colors ${
+                scanner.torchOn ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400'
+              }`}
+              aria-label="Toggle flashlight"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </StationDrawer>
   );

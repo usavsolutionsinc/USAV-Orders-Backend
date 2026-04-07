@@ -77,7 +77,7 @@ export function MobileScanSheet({
   const [manualValue, setManualValue] = useState('');
   const manualInputRef = useRef<HTMLInputElement>(null);
 
-  const scanner = useBarcodeScanner({ fps: 10 });
+  const scanner = useBarcodeScanner({ dedupMs: 2000 });
 
   // ── Classify a scanned/typed value ──
 
@@ -222,11 +222,13 @@ export function MobileScanSheet({
 
           {/* ── Camera viewfinder ── */}
           <div className="flex-1 relative overflow-hidden">
-            {/* Keep the scanner mount point in the DOM even before startScanning()
-               so Safari tap-start has a live container ref to attach to. */}
-            <div
-              ref={scanner.containerRef as React.RefObject<HTMLDivElement>}
-              className={`pointer-events-none absolute inset-0 w-full h-full [&_video]:pointer-events-none [&_video]:object-cover [&_video]:w-full [&_video]:h-full ${
+            {/* Video element for ZXing barcode decoding */}
+            <video
+              ref={scanner.videoRef as React.RefObject<HTMLVideoElement>}
+              autoPlay
+              playsInline
+              muted
+              className={`pointer-events-none absolute inset-0 w-full h-full object-cover ${
                 scanner.scanStatus === 'scanning' || scanner.scanStatus === 'paused' ? 'opacity-100' : 'opacity-0'
               }`}
             />
@@ -302,6 +304,21 @@ export function MobileScanSheet({
                 transition={{ delay: 0.1, duration: 0.2 }}
                 className="absolute bottom-4 inset-x-0 px-4"
               >
+                {/* Torch toggle */}
+                <div className="flex justify-center mb-3">
+                  <button
+                    type="button"
+                    onClick={() => scanner.toggleTorch()}
+                    className={`h-10 w-10 rounded-full flex items-center justify-center transition-colors ${
+                      scanner.torchOn ? 'bg-yellow-400/30 text-yellow-300 border border-yellow-400/50' : 'bg-white/10 text-white/60 border border-white/20'
+                    }`}
+                    aria-label={scanner.torchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </button>
+                </div>
                 <div className="flex items-center justify-center gap-2 overflow-x-auto no-scrollbar">
                   {MODE_PILLS.map(({ mode, label, activeClass }) => {
                     const isActive = manualMode === mode;

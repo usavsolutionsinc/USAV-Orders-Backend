@@ -7,19 +7,16 @@ import {
   weekDayGroupDateClass,
   weekDayGroupCountClass,
 } from '@/components/ui/WeekHeader';
+import { formatDateWithOrdinal } from '@/utils/date';
 
 interface MobileDateGroupHeaderProps {
   date: string;
   total: number;
-  formatDate: (date: string) => string;
-  countClassName?: string;
 }
 
 export function MobileDateGroupHeader({
   date,
   total,
-  formatDate,
-  countClassName,
 }: MobileDateGroupHeaderProps) {
   return (
     <div
@@ -28,8 +25,8 @@ export function MobileDateGroupHeader({
       data-count={total}
       className={cn(weekHeaderInnerRowClass, weekDayGroupBandClass)}
     >
-      <p className={weekDayGroupDateClass}>{formatDate(date)}</p>
-      <p className={cn(weekDayGroupCountClass, countClassName)}>{total}</p>
+      <p className={weekDayGroupDateClass}>{formatDateWithOrdinal(date)}</p>
+      <p className={weekDayGroupCountClass}>{total}</p>
     </div>
   );
 }

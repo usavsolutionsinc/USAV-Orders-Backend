@@ -17,6 +17,11 @@ interface ProductSelectorProps {
   onSelect: (product: ProductSelection) => void;
   selectedProduct: ProductSelection | null;
   onPriceChange?: (price: string) => void;
+  /** When true, the component fills its parent height using flex layout */
+  fillHeight?: boolean;
+  /** Controlled selected items — state lives in parent */
+  selectedItems?: SelectedItem[];
+  onSelectedItemsChange?: (items: SelectedItem[]) => void;
 }
 
 interface CategoryNode {
@@ -39,7 +44,7 @@ interface EcwidProduct {
   inStock: boolean;
 }
 
-interface SelectedItem {
+export interface SelectedItem {
   id: string;
   name: string;
   price: number | null;
@@ -68,7 +73,10 @@ interface ProductsResponse {
 const BREADCRUMB_START_LABEL = 'Start';
 const PRODUCT_PAGE_SIZE = 10;
 
-export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: ProductSelectorProps) {
+export function ProductSelector({
+  onSelect, selectedProduct, onPriceChange, fillHeight,
+  selectedItems: controlledItems, onSelectedItemsChange,
+}: ProductSelectorProps) {
   const blueInputClass = getSidebarIntakeInputClass('blue');
   const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [products, setProducts] = useState<EcwidProduct[]>([]);
@@ -79,7 +87,13 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+  const [internalItems, setInternalItems] = useState<SelectedItem[]>([]);
+  const selectedItems = controlledItems ?? internalItems;
+  const setSelectedItems = (updater: SelectedItem[] | ((prev: SelectedItem[]) => SelectedItem[])) => {
+    const next = typeof updater === 'function' ? updater(selectedItems) : updater;
+    if (onSelectedItemsChange) onSelectedItemsChange(next);
+    else setInternalItems(next);
+  };
   const [otherModelText, setOtherModelText] = useState('');
   const [showOther, setShowOther] = useState(false);
   const [showAllProducts, setShowAllProducts] = useState(false);
@@ -248,13 +262,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
   const loading = loadingCategories;
 
   return (
-    <div className="space-y-4">
-
-      {/* Header */}
-      <div>
-        <p className={SIDEBAR_INTAKE_LABEL_CLASS}>Select Products</p>
-        <p className="mt-0.5 text-[10px] font-semibold text-gray-500">Browse {rootName}</p>
-      </div>
+    <div className={fillHeight ? 'flex h-full flex-col gap-4' : 'space-y-4'}>
 
       {/* Search + Back */}
       <div className="flex items-center gap-2">
@@ -285,6 +293,45 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
+      </div>
+
+      {/* Manual Entry + SKU pairing */}
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setShowOther((prev) => !prev)}
+          className={`w-full rounded-xl p-3.5 text-left transition-all ${
+            selectedProduct?.type === 'Other'
+              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+              : 'border border-gray-200 bg-gray-50 text-gray-900 hover:border-blue-300 hover:bg-blue-50'
+          }`}
+        >
+          <div className="text-xs font-bold uppercase tracking-wide">Other -- Manual Entry</div>
+          {selectedProduct?.type === 'Other' && (
+            <div className="mt-1 truncate text-[10px] font-semibold opacity-90">{selectedProduct.model}</div>
+          )}
+        </button>
+
+        {showOther && (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={otherModelText}
+              onChange={(e) => setOtherModelText(e.target.value)}
+              placeholder="Enter product name..."
+              className={`flex-1 ${blueInputClass}`}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleOtherSubmit(); }}
+            />
+            <button
+              type="button"
+              onClick={handleOtherSubmit}
+              disabled={!otherModelText.trim()}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+            >
+              Add
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Breadcrumbs */}
@@ -334,7 +381,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
 
       {/* Content */}
       {!loading && !error && (
-        <div className="max-h-[50vh] space-y-4 overflow-y-auto pr-1">
+        <div className={`${fillHeight ? 'flex-1' : 'max-h-[50vh]'} space-y-4 overflow-y-auto pr-1`}>
 
           {/* Sub-categories */}
           {!showAllProducts && filteredCategories.length > 0 && (
@@ -470,15 +517,7 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
       {/* Selected items tray */}
       {selectedItems.length > 0 && (
         <div className="overflow-hidden rounded-xl bg-blue-600 p-3 shadow-lg shadow-blue-500/20">
-          <div className="flex items-center justify-between">
-            <p className="text-[9px] font-black uppercase tracking-[0.15em] text-blue-100">
-              Selected ({selectedItems.length})
-            </p>
-            <p className="text-xs font-black text-white">
-              ${totalPriceOf(selectedItems).toFixed(2)}
-            </p>
-          </div>
-          <div className="mt-2 space-y-1.5">
+          <div className="space-y-1.5">
             {selectedItems.map((item) => (
               <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
                 <div className="min-w-0 flex-1">
@@ -505,44 +544,6 @@ export function ProductSelector({ onSelect, selectedProduct, onPriceChange }: Pr
         </div>
       )}
 
-      {/* Other / Manual Entry */}
-      <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => setShowOther((prev) => !prev)}
-          className={`w-full rounded-xl p-3.5 text-left transition-all ${
-            selectedProduct?.type === 'Other'
-              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-              : 'border border-gray-200 bg-gray-50 text-gray-900 hover:border-blue-300 hover:bg-blue-50'
-          }`}
-        >
-          <div className="text-xs font-bold uppercase tracking-wide">Other -- Manual Entry</div>
-          {selectedProduct?.type === 'Other' && (
-            <div className="mt-1 truncate text-[10px] font-semibold opacity-90">{selectedProduct.model}</div>
-          )}
-        </button>
-
-        {showOther && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={otherModelText}
-              onChange={(e) => setOtherModelText(e.target.value)}
-              placeholder="Enter product name..."
-              className={`flex-1 ${blueInputClass}`}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleOtherSubmit(); }}
-            />
-            <button
-              type="button"
-              onClick={handleOtherSubmit}
-              disabled={!otherModelText.trim()}
-              className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
-            >
-              Add
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

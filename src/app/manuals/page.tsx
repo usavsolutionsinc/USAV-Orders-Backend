@@ -5,6 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { FileText, ExternalLink } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import { formatMediumDate } from '@/utils/_date';
+import { SkuPairingProductTable } from '@/components/manuals/SkuPairingProductTable';
+import { SkuPairingDetail } from '@/components/manuals/SkuPairingPanel';
 
 interface ProductManual {
   id: number;
@@ -17,10 +19,14 @@ interface ProductManual {
   updated_at: string | null;
 }
 
+type ViewMode = 'manuals' | 'sku-pairing';
+
 function buildManualsHref(pathname: string, params: URLSearchParams) {
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
+
+// ─── Manual Detail Panel ─────────────────────────────────────────────────────
 
 function ManualDetailPanel({ manual, onClose }: { manual: ProductManual; onClose: () => void }) {
   const title = manual.display_name || manual.product_title || manual.item_number || `Manual #${manual.id}`;
@@ -93,6 +99,8 @@ function ManualDetailPanel({ manual, onClose }: { manual: ProductManual; onClose
   );
 }
 
+// ─── Manuals Table ───────────────────────────────────────────────────────────
+
 function ManualsTable({ manuals, selectedId, onSelect }: {
   manuals: ProductManual[];
   selectedId: number | null;
@@ -144,12 +152,12 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
               >
                 <td className="px-4 py-3">
                   <span className={`text-[11px] font-black tracking-tight ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
-                    {manual.display_name || manual.product_title || <span className="text-gray-500 font-semibold">—</span>}
+                    {manual.display_name || manual.product_title || <span className="text-gray-500 font-semibold">&mdash;</span>}
                   </span>
                 </td>
                 <td className="px-4 py-3">
                   <span className="text-[10px] font-bold text-gray-500 font-mono">
-                    {manual.item_number || <span className="text-gray-500">—</span>}
+                    {manual.item_number || <span className="text-gray-500">&mdash;</span>}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -158,7 +166,7 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
                       {manual.type}
                     </span>
                   ) : (
-                    <span className="text-gray-500 text-[10px]">—</span>
+                    <span className="text-gray-500 text-[10px]">&mdash;</span>
                   )}
                 </td>
                 <td className="px-4 py-3">
@@ -177,7 +185,7 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
                       Open
                     </a>
                   ) : (
-                    <span className="text-gray-500 text-[10px]">—</span>
+                    <span className="text-gray-500 text-[10px]">&mdash;</span>
                   )}
                 </td>
               </tr>
@@ -189,7 +197,9 @@ function ManualsTable({ manuals, selectedId, onSelect }: {
   );
 }
 
-function ManualsPageContent() {
+// ─── Manuals View ────────────────────────────────────────────────────────────
+
+function ManualsView() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -238,10 +248,8 @@ function ManualsPageContent() {
       setSelectedManual(null);
       return;
     }
-
     const found = manuals.find((manual) => manual.id === selectedId) || null;
     setSelectedManual(found);
-
     if (!isLoading && !found) {
       const params = new URLSearchParams(searchParams.toString());
       if (params.has('id')) {
@@ -272,28 +280,25 @@ function ManualsPageContent() {
   };
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-gray-50">
+    <div className="flex h-full w-full overflow-hidden">
       <div className={`flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${selectedManual ? 'flex-1' : 'w-full'}`}>
-        {/* Page header */}
         <div className={mainStickyHeaderClass}>
           <div className={`${mainStickyHeaderShellRowClass} px-6`}>
             <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Product Manuals</p>
             <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
-              <span>{isLoading ? 'Loading…' : `${manuals.length} result${manuals.length !== 1 ? 's' : ''}`}</span>
+              <span>{isLoading ? 'Loading...' : `${manuals.length} result${manuals.length !== 1 ? 's' : ''}`}</span>
               {query ? (
                 <span className="max-w-[180px] truncate text-blue-600">&ldquo;{query}&rdquo;</span>
               ) : null}
             </div>
           </div>
         </div>
-
-        {/* Table */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="text-center space-y-3">
                 <div className="h-10 w-10 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Loading manuals…</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Loading manuals...</p>
               </div>
             </div>
           ) : loadError ? (
@@ -310,21 +315,75 @@ function ManualsPageContent() {
               </div>
             </div>
           ) : (
-            <ManualsTable
-              manuals={manuals}
-              selectedId={selectedManual?.id ?? null}
-              onSelect={handleSelect}
-            />
+            <ManualsTable manuals={manuals} selectedId={selectedManual?.id ?? null} onSelect={handleSelect} />
           )}
         </div>
       </div>
-
-      {/* Detail panel */}
       {selectedManual && (
         <div className="w-[520px] flex-shrink-0 border-l border-gray-200 overflow-hidden">
           <ManualDetailPanel manual={selectedManual} onClose={handleCloseDetails} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── SKU Pairing View ────────────────────────────────────────────────────────
+
+interface UnpairedItem {
+  item_number: string;
+  account_source: string | null;
+  product_title: string | null;
+  sku: string | null;
+  order_count: number;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+function SkuPairingView() {
+  const [selectedItem, setSelectedItem] = useState<UnpairedItem | null>(null);
+
+  // Listen for sidebar item selection events
+  useEffect(() => {
+    const handleSidebarSelect = (e: CustomEvent<UnpairedItem | null>) => {
+      setSelectedItem(e.detail);
+    };
+    window.addEventListener('sku-pairing-select-item' as any, handleSidebarSelect as any);
+    return () => window.removeEventListener('sku-pairing-select-item' as any, handleSidebarSelect as any);
+  }, []);
+
+  return (
+    <div className="flex h-full w-full overflow-hidden">
+      {/* Main table */}
+      <div className={`flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${selectedItem ? 'flex-1' : 'w-full'}`}>
+        <SkuPairingProductTable selectedItem={selectedItem} />
+      </div>
+
+      {/* Detail panel */}
+      {selectedItem && (
+        <div className="w-[420px] flex-shrink-0 border-l border-gray-200 overflow-hidden">
+          <SkuPairingDetail
+            item={selectedItem}
+            onClose={() => setSelectedItem(null)}
+            onPaired={() => setSelectedItem(null)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Page Content ────────────────────────────────────────────────────────────
+
+function ManualsPageContent() {
+  const searchParams = useSearchParams();
+  const viewMode: ViewMode = searchParams.get('view') === 'sku-pairing' ? 'sku-pairing' : 'manuals';
+
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden bg-gray-50">
+      <div className="flex-1 overflow-hidden">
+        {viewMode === 'manuals' ? <ManualsView /> : <SkuPairingView />}
+      </div>
     </div>
   );
 }
