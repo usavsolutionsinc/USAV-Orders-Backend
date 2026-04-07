@@ -80,14 +80,14 @@ function getSidebarTitle(pathname: string | null) {
 // ---------------------------------------------------------------------------
 function AiSidebarPanel() {
   const [connectionOk, setConnectionOk] = useState<boolean | null>(null);
-  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
+  const [backendInfo, setBackendInfo] = useState<string | null>(null);
 
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/ai/tunnel-health');
+      const res = await fetch('/api/ai/openclaw-health');
       const data = await res.json();
       setConnectionOk(!!data.ok);
-      setTunnelUrl(data.tunnel_url ?? null);
+      setBackendInfo(data.ok ? `${data.backend} · ${data.model}` : null);
     } catch {
       setConnectionOk(false);
     }
@@ -113,7 +113,7 @@ function AiSidebarPanel() {
           </div>
           <div>
             <p className={`${sectionLabel} text-gray-900`}>AI Assistant</p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-gray-500">Ollama via Tunnel</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-gray-500">OpenClaw Gateway</p>
           </div>
         </div>
 
@@ -140,9 +140,9 @@ function AiSidebarPanel() {
           </span>
         </div>
 
-        {tunnelUrl && (
-          <p className="mt-2 text-[9px] font-semibold text-gray-500 truncate" title={tunnelUrl}>
-            {tunnelUrl}
+        {backendInfo && (
+          <p className="mt-2 text-[9px] font-semibold text-gray-500 truncate" title={backendInfo}>
+            {backendInfo}
           </p>
         )}
       </div>
@@ -169,8 +169,8 @@ function AiSidebarPanel() {
       <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
         <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-1.5">How it works</p>
         <p className="text-[10px] font-semibold leading-relaxed text-gray-500">
-          Messages are proxied through this server to the home computer running
-          Ollama over a Cloudflare tunnel. The tunnel URL is read from the database.
+          Messages route through OpenClaw Gateway (Qwen3:8b) for warehouse ops,
+          NemoClaw RAG for Bose manuals, and Ollama as fallback.
         </p>
       </div>
     </div>

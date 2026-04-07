@@ -26,6 +26,7 @@ interface ChatMessage {
   error?: boolean;
   analysis?: AiStructuredAnswer | null;
   mode?: AiChatMode;
+  fallback?: boolean;
 }
 
 type ConnectionStatus = 'checking' | 'online' | 'offline';
@@ -34,6 +35,14 @@ const STARTER_PROMPTS = [
   'How many orders were shipped last week and by who?',
   'Show this week shipped orders by tester',
   'Which shipped orders last week are missing a tester?',
+  'What FBA shipments are currently open?',
+];
+
+const BOSE_MANUAL_PROMPTS = [
+  'How do I disassemble a Bose 251 speaker?',
+  'What are the specs for the Bose Acoustimass 5?',
+  'Show the part list for the Bose 301 Series V',
+  'Bose Wave Radio III troubleshooting',
 ];
 
 let msgCounter = 0;
@@ -68,19 +77,20 @@ function BotIcon({ className = 'w-4 h-4' }: { className?: string }) {
 }
 
 function statusLabel(status: ConnectionStatus) {
-  if (status === 'online') return 'Model Connected';
-  if (status === 'offline') return 'Model Offline';
-  return 'Checking Model';
+  if (status === 'online') return 'OpenClaw Connected';
+  if (status === 'offline') return 'OpenClaw Offline (Fallback Active)';
+  return 'Checking Gateway';
 }
 
-function modeLabel(mode: AiChatMode | undefined) {
+function modeLabel(mode: AiChatMode | undefined, fallback?: boolean) {
   if (mode === 'local_ops') return 'Local Ops Query';
-  if (mode === 'hybrid') return 'Hybrid Answer';
-  return 'Assistant';
+  if (mode === 'rag') return 'Bose Manual RAG';
+  if (mode === 'hybrid') return fallback ? 'Hybrid (Fallback)' : 'Hybrid';
+  return fallback ? 'Ollama Fallback' : 'OpenClaw';
 }
 
-export default function AiChatPanel() {
-  const [sessionId, setSessionId] = useState<string | null>(null);
+export default function AiChatTab() {
+  const [sessionId] = useState<string>(() => `oc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -90,53 +100,34 @@ export default function AiChatPanel() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const healthIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const createSession = useCallback(async () => {
-    setSessionId(null);
-    try {
-      const res = await fetch('/api/ai/openclaw-session', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok && data.session_id) {
-        setSessionId(data.session_id);
-      } else {
-        console.error('[AiChatPanel] Failed to create session:', data?.error);
-      }
-    } catch (err) {
-      console.error('[AiChatPanel] Session fetch error:', err);
-    }
-  }, []);
-
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/ai/openclaw-health');
-      const data = await res.json();
-      setConnectionStatus(data.ok ? 'online' : 'offline');
+      const res = await fetch('/api/ai/openclaw-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: 'health-check', message: 'ping' }),
+        signal: AbortSignal.timeout(5_000),
+      });
+      // If we get any response (even 4xx from bad input), the route is reachable
+      setConnectionStatus(res.ok || res.status === 400 ? 'online' : 'offline');
     } catch {
       setConnectionStatus('offline');
     }
   }, []);
 
-  const startNewChat = useCallback(async () => {
+  const startNewChat = useCallback(() => {
     setMessages([]);
     setInput('');
-    await createSession();
     textareaRef.current?.focus();
-  }, [createSession]);
+  }, []);
 
   useEffect(() => {
-    createSession();
     checkHealth();
-    healthIntervalRef.current = setInterval(checkHealth, 30_000);
-
+    healthIntervalRef.current = setInterval(checkHealth, 60_000);
     return () => {
       if (healthIntervalRef.current) clearInterval(healthIntervalRef.current);
     };
-  }, [createSession, checkHealth]);
-
-  useEffect(() => {
-    const handler = () => startNewChat();
-    window.addEventListener('ai-new-chat', handler);
-    return () => window.removeEventListener('ai-new-chat', handler);
-  }, [startNewChat]);
+  }, [checkHealth]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -151,7 +142,7 @@ export default function AiChatPanel() {
 
   const sendMessage = useCallback(async (rawText?: string) => {
     const text = String(rawText ?? input).trim();
-    if (!text || isLoading || !sessionId) return;
+    if (!text || isLoading) return;
 
     const userMsg: ChatMessage = {
       id: nextId(),
@@ -170,7 +161,7 @@ export default function AiChatPanel() {
         body: JSON.stringify({ sessionId, message: text }),
       });
 
-      const data = (await res.json()) as Partial<AiChatRouteResponse> & { error?: string };
+      const data = (await res.json()) as Partial<AiChatRouteResponse> & { error?: string; fallback?: boolean };
 
       if (!res.ok) {
         setMessages((prev) => [
@@ -193,6 +184,7 @@ export default function AiChatPanel() {
             ts: Date.now(),
             analysis: data.analysis ?? null,
             mode: data.mode,
+            fallback: !!data.fallback,
           },
         ]);
       }
@@ -224,7 +216,7 @@ export default function AiChatPanel() {
     void sendMessage(prompt);
   }, [sendMessage]);
 
-  const canSend = !!input.trim() && !isLoading && !!sessionId;
+  const canSend = !!input.trim() && !isLoading;
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden bg-[#fbfbfa] text-gray-900">
@@ -237,14 +229,14 @@ export default function AiChatPanel() {
             <div className="min-w-0">
               <p className={sectionLabel}>USAV Ops Assistant</p>
               <p className="truncate text-[13px] font-medium text-gray-700">
-                Deterministic shipped-order summaries plus general AI responses
+                Powered by OpenClaw Gateway
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <div className="hidden border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-medium text-gray-600 md:block">
-              PST week ranges
+              USAV Scoped
             </div>
             <button
               type="button"
@@ -270,14 +262,14 @@ export default function AiChatPanel() {
           </div>
           <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
             <Database className="h-4 w-4 text-gray-500" />
-            <span>Local shipped summaries use app-side order data</span>
+            <span>USAV warehouse data only — no personal/finance access</span>
           </div>
           <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
             <Clock className="h-4 w-4 text-gray-500" />
             <span>
               {connectionStatus === 'offline'
-                ? 'Model backend can be offline while shipped metrics still work'
-                : 'General questions still route through the model backend'}
+                ? 'Falls back to local Ollama when OpenClaw is unreachable'
+                : 'Routes through OpenClaw Gateway with USAV scope'}
             </span>
           </div>
         </div>
@@ -290,36 +282,48 @@ export default function AiChatPanel() {
               <section className="space-y-4 border border-gray-200 bg-white p-5">
                 <div className={`flex items-center gap-2 ${sectionLabel}`}>
                   <PackageCheck className="h-4 w-4 text-gray-500" />
-                  Reliable Ops Questions
+                  USAV Warehouse Assistant
                 </div>
                 <h1 className="text-[24px] font-semibold tracking-tight text-gray-900">
-                  Ask shipped-count questions in plain English and get the exact timeframe back.
+                  Ask about orders, shipping, staff, FBA, repairs, inventory, or Bose service manuals.
                 </h1>
                 <p className="max-w-2xl text-[13px] leading-7 text-gray-600">
-                  The panel now handles shipped-order summaries locally against the same shipped-order data used by the dashboard.
-                  For prompts like shipped counts by packer or tester, it returns the total, the operator breakdown, the source tables,
-                  and a direct link back to the shipped view.
+                  This assistant routes through the OpenClaw Gateway with strict USAV scope.
+                  Shipped-count summaries resolve locally. Bose manual queries go through
+                  NemoClaw RAG for service manual lookup.
                 </p>
                 <AiPromptChips prompts={STARTER_PROMPTS} onSelect={handlePromptSelect} />
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <div className={`mb-2 ${sectionLabel}`}>BOSE SERVICE MANUALS</div>
+                  <AiPromptChips prompts={BOSE_MANUAL_PROMPTS} onSelect={handlePromptSelect} />
+                </div>
               </section>
 
               <section className="space-y-3 border border-gray-200 bg-white p-5">
                 <div className={`flex items-center gap-2 ${sectionLabel}`}>
                   <Database className="h-4 w-4 text-gray-500" />
-                  What The Panel Uses
+                  What This Assistant Can Access
                 </div>
                 <div className="space-y-3 text-[12px] leading-6 text-gray-600">
                   <div className="border-b border-gray-100 pb-3">
-                    <p className="font-medium text-gray-900">Shipped summaries</p>
-                    <p>`shipping_tracking_numbers`, `packer_logs`, and `work_assignments`</p>
+                    <p className="font-medium text-gray-900">Orders & Shipping</p>
+                    <p>Orders, tracking numbers, packer logs, station activity</p>
                   </div>
                   <div className="border-b border-gray-100 pb-3">
-                    <p className="font-medium text-gray-900">Timeframes</p>
-                    <p>PST-aware date ranges with exact start and end dates shown in every answer</p>
+                    <p className="font-medium text-gray-900">Staff & Scheduling</p>
+                    <p>Staff roster, work assignments, weekly schedule</p>
+                  </div>
+                  <div className="border-b border-gray-100 pb-3">
+                    <p className="font-medium text-gray-900">FBA & Inventory</p>
+                    <p>FBA shipments, FNSKUs, items, locations, stock levels</p>
+                  </div>
+                  <div className="border-b border-gray-100 pb-3">
+                    <p className="font-medium text-gray-900">Repairs & Receiving</p>
+                    <p>Repair tickets, receiving logs, exception tracking</p>
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">Fallback behavior</p>
-                    <p>General questions still use the AI backend. Structured shipping metrics do not need the model backend to answer.</p>
+                    <p className="font-medium text-gray-900">Bose Service Manuals</p>
+                    <p>480+ product manuals — specs, procedures, parts, troubleshooting</p>
                   </div>
                 </div>
               </section>
@@ -359,7 +363,7 @@ export default function AiChatPanel() {
                   <AiAnswerCard
                     analysis={msg.analysis}
                     content={msg.content}
-                    modeLabel={modeLabel(msg.mode)}
+                    modeLabel={modeLabel(msg.mode, msg.fallback)}
                     timestampLabel={timestampLabel}
                     onFollowUp={handlePromptSelect}
                   />
@@ -375,8 +379,8 @@ export default function AiChatPanel() {
                     <p className={sectionLabel}>Working</p>
                     <p className="mt-1 text-[12px] text-gray-600">
                       {connectionStatus === 'offline'
-                        ? 'Running local ops query or waiting for model backend'
-                        : 'Preparing the answer'}
+                        ? 'Running local ops query or using Ollama fallback'
+                        : 'Routing through OpenClaw Gateway'}
                     </p>
                   </div>
                 </div>
@@ -398,13 +402,11 @@ export default function AiChatPanel() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
-                !sessionId
-                  ? 'Starting session…'
-                  : connectionStatus === 'offline'
-                    ? 'Ask a shipped-count question or wait for the model backend…'
-                    : 'Ask about shipped counts, staff breakdowns, or general ops questions…'
+                connectionStatus === 'offline'
+                  ? 'Ask a warehouse ops question (fallback mode)...'
+                  : 'Ask about orders, shipping, staff, FBA, Bose manuals...'
               }
-              disabled={!sessionId || isLoading}
+              disabled={isLoading}
               className="min-h-[24px] flex-1 resize-none bg-transparent text-[13px] leading-6 text-gray-800 placeholder-gray-400 focus:outline-none disabled:cursor-not-allowed"
               style={{ maxHeight: '160px' }}
             />
@@ -420,8 +422,10 @@ export default function AiChatPanel() {
           </div>
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
-            <span>Shift+Enter for new line. Deterministic shipped summaries use PST date ranges and local app data.</span>
-            <span>{connectionStatus === 'offline' ? 'Model backend offline' : 'Model backend online'}</span>
+            <span>Shift+Enter for new line. USAV-scoped queries only.</span>
+            <span>
+              {connectionStatus === 'offline' ? 'Fallback: Ollama' : 'Powered by OpenClaw'}
+            </span>
           </div>
         </div>
       </div>

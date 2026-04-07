@@ -8,7 +8,8 @@ export type IntentDomain =
   | 'receiving'
   | 'fba'
   | 'inventory'
-  | 'exceptions';
+  | 'exceptions'
+  | 'bose_manual';
 
 export type IntentParams = {
   staffName?: string;
@@ -17,6 +18,8 @@ export type IntentParams = {
   sku?: string;
   ticketNumber?: string;
   repairStatus?: string;
+  rawQuery?: string;
+  modelNumber?: string;
 };
 
 const DOMAIN_RULES: Array<{
@@ -121,6 +124,42 @@ const DOMAIN_RULES: Array<{
       /\bopen exception(s)?\b/i,
     ],
   },
+  {
+    domain: 'bose_manual',
+    patterns: [
+      // Product names
+      /\bbose\b/i,
+      /\bacoustimass\b/i,
+      /\blifestyle\b/i,
+      /\bsoundtouch\b/i,
+      /\bsounddock\b/i,
+      /\bsoundlink\b/i,
+      /\bwave\s*radio\b/i,
+      /\bfreespace\b/i,
+      /\broommate\b/i,
+      // Repair language
+      /\bschematic(s)?\b/i,
+      /\bwiring\s*diagram\b/i,
+      /\bdisassembl(y|e)\b/i,
+      /\breassembl(y|e)\b/i,
+      /\btroubleshooting\b/i,
+      // Component terms
+      /\bwoofer\b/i,
+      /\btweeter\b/i,
+      /\bcrossover\b/i,
+      /\bamplifier\b/i,
+      /\bspeaker\b/i,
+      // Doc terms
+      /\bservice\s*manual\b/i,
+      /\bspecification(s)?\b/i,
+      /\bpart\s*number\b/i,
+      /\bpart\s*list\b/i,
+      /\bimpedance\b/i,
+      /\bpower\s*handling\b/i,
+      // Model patterns (e.g. "251", "301 Series V")
+      /\b\d{3,4}\s*(series)?\b/i,
+    ],
+  },
 ];
 
 const STAFF_QUESTION_HINTS = [
@@ -207,6 +246,16 @@ export function extractParams(message: string, intents: IntentDomain[]): IntentP
     if (pattern.test(text)) {
       params.repairStatus = value;
       break;
+    }
+  }
+
+  if (intents.includes('bose_manual')) {
+    params.rawQuery = text;
+    const modelMatch =
+      text.match(/\bbose\s+(\d{2,4}[A-Z]?(?:\s*series\s*[IVX\d]+)?)/i) ||
+      text.match(/\b(acoustimass|lifestyle|soundtouch|sounddock|soundlink|wave\s*radio|freespace|roommate)\s*(\d{0,4})/i);
+    if (modelMatch) {
+      params.modelNumber = (modelMatch[1] + (modelMatch[2] || '')).trim();
     }
   }
 

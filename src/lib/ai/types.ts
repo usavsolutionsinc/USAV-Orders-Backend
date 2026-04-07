@@ -1,6 +1,6 @@
 export type AiConfidence = 'high' | 'medium' | 'low';
 
-export type AiChatMode = 'assistant' | 'hybrid' | 'local_ops';
+export type AiChatMode = 'assistant' | 'hybrid' | 'local_ops' | 'rag';
 
 export interface AiTimeframe {
   kind: 'today' | 'yesterday' | 'this_week' | 'last_week';
@@ -46,7 +46,7 @@ export interface AiActionLink {
 }
 
 export interface AiStructuredAnswer {
-  kind: 'shipping_summary' | 'notice';
+  kind: 'shipping_summary' | 'notice' | 'repair_diagnostics';
   title: string;
   summary: string;
   confidence: AiConfidence;
