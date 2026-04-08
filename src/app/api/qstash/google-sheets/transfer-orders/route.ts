@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const result = await runGoogleSheetsTransferOrders(body.manualSheetName);
+    const result = await runGoogleSheetsTransferOrders(body.manualSheetName, 'all');
 
     // Immediately resolve any open exceptions that now match newly imported orders
     let exceptionsResolved = 0;

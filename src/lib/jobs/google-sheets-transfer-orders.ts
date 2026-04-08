@@ -173,105 +173,120 @@ function pickLatestByKey<T extends { createdAt: Date | null }>(
   return result;
 }
 
+export type TransferOrdersSource = 'sheets' | 'ecwid' | 'all';
+
 export async function runGoogleSheetsTransferOrders(
-  manualSheetName?: string
+  manualSheetName?: string,
+  source: TransferOrdersSource = 'all',
 ): Promise<GoogleSheetsTransferOrdersJobResult> {
   const startedAt = Date.now();
 
   try {
-    const auth = getGoogleAuth();
-    const sheets = googleSheets({ version: 'v4', auth });
-
-    const sourceSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SOURCE_SPREADSHEET_ID });
-
-    let targetTabName: string;
-
-    if (manualSheetName && manualSheetName.trim() !== '') {
-      const sourceTabs = sourceSpreadsheet.data.sheets || [];
-      const manualTab = sourceTabs.find((sheet) => sheet.properties?.title === manualSheetName.trim());
-
-      if (!manualTab) {
-        fail(404, `Sheet tab "${manualSheetName}" not found in source spreadsheet`);
-      }
-
-      targetTabName = manualSheetName.trim();
-    } else {
-      const sourceTabs = sourceSpreadsheet.data.sheets || [];
-      const dateTabs = sourceTabs
-        .map((sheet) => sheet.properties?.title || '')
-        .filter((title) => title.startsWith('Sheet_'))
-        .map((title) => {
-          const parts = title.split('_');
-          if (parts.length < 4) return { title, date: new Date(0) };
-          const mm = parseInt(parts[1], 10);
-          const dd = parseInt(parts[2], 10);
-          const yyyy = parseInt(parts[3], 10);
-          return { title, date: new Date(yyyy, mm - 1, dd) };
-        })
-        .sort((a, b) => b.date.getTime() - a.date.getTime());
-
-      if (dateTabs.length === 0) {
-        fail(404, 'No valid sheet tabs found in source');
-      }
-
-      targetTabName = dateTabs[0].title;
-    }
-
-    const sourceDataResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: SOURCE_SPREADSHEET_ID,
-      range: `${targetTabName}!A1:Z`,
-    });
-
-    const sourceRows = sourceDataResponse.data.values || [];
-    if (sourceRows.length < 2) {
-      fail(404, 'No data found in source tab');
-    }
-
-    const headerRow = sourceRows[0];
-    const colIndices = {
-      shipByDate: findHeaderIndex(headerRow, ['Ship by date']),
-      orderNumber: findHeaderIndex(headerRow, ['Order Number', 'Order - Number']),
-      itemNumber: findHeaderIndex(headerRow, ['Item Number']),
-      itemTitle: findHeaderIndex(headerRow, ['Item title', 'Item Title']),
-      quantity: findHeaderIndex(headerRow, ['Quantity']),
-      usavSku: findHeaderIndex(headerRow, ['USAV SKU']),
-      condition: findHeaderIndex(headerRow, ['Condition']),
-      tracking: findHeaderIndex(headerRow, ['Tracking', 'Shipment - Tracking Number']),
-      note: findHeaderIndex(headerRow, ['Note', 'Notes']),
-      platform: findHeaderIndex(headerRow, ['Platform', 'Account Source', 'Channel']),
+    // ─── Source-aware data fetching ────────────────────────────────────
+    // Fixed column indices used when there is no sheet header row (ecwid-only mode)
+    const FIXED_COL_INDICES = {
+      shipByDate: 0, orderNumber: 1, itemNumber: 2, itemTitle: 3,
+      quantity: 4, usavSku: 5, condition: 6, tracking: 7, note: 8, platform: 9,
     };
 
-    const missingCols = Object.entries(colIndices)
-      .filter(([_, index]) => index === -1)
-      .map(([name]) => name);
+    let colIndices = FIXED_COL_INDICES;
+    let targetTabName = source === 'ecwid' ? '(ecwid-api)' : '';
+    let eligibleSourceRows: any[][] = [];
+    let ecwidApiRows = 0;
+    let sheetTotalRows = 0;
 
-    if (missingCols.length > 0) {
-      fail(400, `Missing columns in source: ${missingCols.join(', ')}`);
+    // ─── Google Sheets fetch (source: 'sheets' | 'all') ──────────────
+    if (source !== 'ecwid') {
+      const auth = getGoogleAuth();
+      const sheets = googleSheets({ version: 'v4', auth });
+      const sourceSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SOURCE_SPREADSHEET_ID });
+
+      if (manualSheetName && manualSheetName.trim() !== '') {
+        const sourceTabs = sourceSpreadsheet.data.sheets || [];
+        const manualTab = sourceTabs.find((sheet) => sheet.properties?.title === manualSheetName.trim());
+        if (!manualTab) {
+          fail(404, `Sheet tab "${manualSheetName}" not found in source spreadsheet`);
+        }
+        targetTabName = manualSheetName.trim();
+      } else {
+        const sourceTabs = sourceSpreadsheet.data.sheets || [];
+        const dateTabs = sourceTabs
+          .map((sheet) => sheet.properties?.title || '')
+          .filter((title) => title.startsWith('Sheet_'))
+          .map((title) => {
+            const parts = title.split('_');
+            if (parts.length < 4) return { title, date: new Date(0) };
+            const mm = parseInt(parts[1], 10);
+            const dd = parseInt(parts[2], 10);
+            const yyyy = parseInt(parts[3], 10);
+            return { title, date: new Date(yyyy, mm - 1, dd) };
+          })
+          .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+        if (dateTabs.length === 0) {
+          fail(404, 'No valid sheet tabs found in source');
+        }
+        targetTabName = dateTabs[0].title;
+      }
+
+      const sourceDataResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: SOURCE_SPREADSHEET_ID,
+        range: `${targetTabName}!A1:Z`,
+      });
+
+      const sourceRows = sourceDataResponse.data.values || [];
+      if (sourceRows.length < 2) {
+        fail(404, 'No data found in source tab');
+      }
+
+      const headerRow = sourceRows[0];
+      colIndices = {
+        shipByDate: findHeaderIndex(headerRow, ['Ship by date']),
+        orderNumber: findHeaderIndex(headerRow, ['Order Number', 'Order - Number']),
+        itemNumber: findHeaderIndex(headerRow, ['Item Number']),
+        itemTitle: findHeaderIndex(headerRow, ['Item title', 'Item Title']),
+        quantity: findHeaderIndex(headerRow, ['Quantity']),
+        usavSku: findHeaderIndex(headerRow, ['USAV SKU']),
+        condition: findHeaderIndex(headerRow, ['Condition']),
+        tracking: findHeaderIndex(headerRow, ['Tracking', 'Shipment - Tracking Number']),
+        note: findHeaderIndex(headerRow, ['Note', 'Notes']),
+        platform: findHeaderIndex(headerRow, ['Platform', 'Account Source', 'Channel']),
+      };
+
+      const missingCols = Object.entries(colIndices)
+        .filter(([_, index]) => index === -1)
+        .map(([name]) => name);
+
+      if (missingCols.length > 0) {
+        fail(400, `Missing columns in source: ${missingCols.join(', ')}`);
+      }
+
+      sheetTotalRows = sourceRows.length - 1;
+      eligibleSourceRows = sourceRows.slice(1).filter((row) => {
+        const orderId = String(row[colIndices.orderNumber] || '').trim();
+        const platform = colIndices.platform >= 0
+          ? String(row[colIndices.platform] || '').trim()
+          : '';
+        if (!orderId) return false;
+        if (colIndices.platform >= 0 && !platform) return false;
+        // Ecwid orders are now fetched directly from the Ecwid API — skip them in the sheet.
+        if (platform.toLowerCase() === 'ecwid') return false;
+        return true;
+      });
     }
 
-    let eligibleSourceRows = sourceRows.slice(1).filter((row) => {
-      const orderId = String(row[colIndices.orderNumber] || '').trim();
-      const platform = colIndices.platform >= 0
-        ? String(row[colIndices.platform] || '').trim()
-        : '';
-      if (!orderId) return false;
-      if (colIndices.platform >= 0 && !platform) return false;
-      // Ecwid orders are now fetched directly from the Ecwid API — skip them in the sheet.
-      if (platform.toLowerCase() === 'ecwid') return false;
-      return true;
-    });
-
-    // Fetch Ecwid orders directly from the API and merge into the pipeline
-    let ecwidApiRows = 0;
-    try {
-      const ecwidRows = await fetchEcwidTransferRows(colIndices);
-      ecwidApiRows = ecwidRows.length;
-      if (ecwidRows.length > 0) {
-        eligibleSourceRows = [...eligibleSourceRows, ...ecwidRows];
+    // ─── Ecwid API fetch (source: 'ecwid' | 'all') ───────────────────
+    if (source !== 'sheets') {
+      try {
+        const ecwidRows = await fetchEcwidTransferRows(colIndices);
+        ecwidApiRows = ecwidRows.length;
+        if (ecwidRows.length > 0) {
+          eligibleSourceRows = [...eligibleSourceRows, ...ecwidRows];
+        }
+        console.log(`[transfer-orders] Fetched ${ecwidApiRows} Ecwid API rows (source=${source})`);
+      } catch (err: any) {
+        console.error('[transfer-orders] Ecwid API fetch failed (non-fatal):', err?.message);
       }
-      console.log(`[google-sheets-transfer-orders] Merged ${ecwidApiRows} Ecwid API rows`);
-    } catch (err: any) {
-      console.error('[google-sheets-transfer-orders] Ecwid API fetch failed (non-fatal):', err?.message);
     }
 
     if (eligibleSourceRows.length === 0) {
@@ -287,7 +302,7 @@ export async function runGoogleSheetsTransferOrders(
         unmatchedCustomers: 0,
         tabName: targetTabName,
         ecwidApiRows,
-        skippedRows: sourceRows.length - 1,
+        skippedRows: sheetTotalRows,
         durationMs: Date.now() - startedAt,
       };
     }

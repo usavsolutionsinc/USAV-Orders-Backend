@@ -439,11 +439,19 @@ export function FavoritesWorkspaceSection({
                     <p className={`text-[11px] font-black leading-snug tracking-tight ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>
                       {product.name}
                     </p>
-                    {/* Row 2 — SKU · price */}
-                    <p className={`mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${isSelected ? 'text-blue-500' : 'text-gray-500'}`}>
-                      {product.sku || 'No SKU'}
-                      {product.price != null ? <span className={`ml-1.5 ${isSelected ? 'text-blue-600' : 'text-emerald-600'}`}> · ${product.price.toFixed(2)}</span> : null}
-                    </p>
+                    {/* Row 2 — price (green), SKU immediately to the right */}
+                    <div className="mt-0.5 flex w-full min-w-0 items-center justify-start gap-2">
+                      <span className="shrink-0 text-[10px] font-bold tabular-nums text-emerald-600">
+                        {product.price != null ? `$${product.price.toFixed(2)}` : ''}
+                      </span>
+                      <span
+                        className={`min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.14em] ${
+                          isSelected ? 'text-blue-500' : 'text-gray-500'
+                        }`}
+                      >
+                        {product.sku || 'No SKU'}
+                      </span>
+                    </div>
                   </div>
                 </button>
               );
@@ -460,10 +468,14 @@ export function FavoritesWorkspaceSection({
       {selectedProduct && (
         <div className="rounded-xl border border-blue-200 bg-white px-3 py-2">
           <p className="text-[11px] font-black leading-snug text-blue-900">{selectedProduct.name}</p>
-          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-blue-500">
-            {selectedProduct.sku || 'No SKU'}
-            {selectedProduct.price != null ? <span className="ml-1.5 text-emerald-600"> · ${selectedProduct.price.toFixed(2)}</span> : null}
-          </p>
+          <div className="mt-0.5 flex w-full min-w-0 items-center justify-start gap-2">
+            <span className="shrink-0 text-[10px] font-bold tabular-nums text-emerald-600">
+              {selectedProduct.price != null ? `$${selectedProduct.price.toFixed(2)}` : ''}
+            </span>
+            <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-blue-500">
+              {selectedProduct.sku || 'No SKU'}
+            </span>
+          </div>
         </div>
       )}
 
@@ -657,10 +669,18 @@ export function FavoritesWorkspaceSection({
 
                   <div className={`${inlineRows ? 'mt-0.5 gap-1' : 'mt-1 gap-2'} flex items-start`}>
                     <div className="min-w-0 flex-1">
-                      <p className={`${inlineRows ? 'text-[8px] tracking-[0.12em]' : 'text-[10px] tracking-[0.16em]'} font-bold uppercase text-gray-500`}>
-                        {favorite.sku || 'No SKU'}
-                        {favorite.defaultPrice ? ` · $${favorite.defaultPrice}` : ''}
-                      </p>
+                      <div
+                        className={`flex w-full min-w-0 items-center justify-start gap-2 font-bold ${
+                          inlineRows ? 'text-[8px] tracking-[0.12em]' : 'text-[10px] tracking-[0.16em]'
+                        }`}
+                      >
+                        <span className="shrink-0 tabular-nums text-emerald-600">
+                          {favorite.defaultPrice ? `$${favorite.defaultPrice}` : ''}
+                        </span>
+                        <span className="min-w-0 truncate uppercase text-gray-500">
+                          {favorite.sku || 'No SKU'}
+                        </span>
+                      </div>
                       {favorite.issueTemplate ? (
                         <p className={`${inlineRows ? 'mt-0 text-[8px]' : 'mt-0.5 text-[10px]'} font-semibold uppercase tracking-[0.14em] text-gray-500`}>
                           {favorite.issueTemplate}

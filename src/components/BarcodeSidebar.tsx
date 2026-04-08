@@ -94,7 +94,7 @@ export default function BarcodeSidebar({ embedded = false }: BarcodeSidebarProps
 
     const content = (
         <motion.div initial="hidden" animate="visible" variants={containerVariants} className="h-full flex flex-col overflow-hidden">
-            <motion.div variants={itemVariants} className="border-b border-gray-200 bg-white">
+            <motion.div variants={itemVariants} className="relative z-50 border-b border-gray-200 bg-white">
                 <ViewDropdown
                     options={[
                         { value: 'sku_stock', label: 'SKU STOCK' },

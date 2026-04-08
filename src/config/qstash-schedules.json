@@ -45,28 +45,6 @@
     "label": "google-sheets-transfer-orders"
   },
   {
-    "scheduleId": "ebay-sync-exceptions-quarter-hour",
-    "cron": "10,25,40,55 * * * *",
-    "path": "/api/qstash/ebay/sync",
-    "body": {
-      "reconcileExceptions": true
-    },
-    "retries": 3,
-    "timeout": 300,
-    "label": "ebay-sync"
-  },
-  {
-    "scheduleId": "zoho-items-incremental-every-5m",
-    "cron": "*/5 * * * *",
-    "path": "/api/qstash/zoho/items/sync",
-    "body": {
-      "type": "incremental"
-    },
-    "retries": 3,
-    "timeout": 300,
-    "label": "zoho-items-sync"
-  },
-  {
     "scheduleId": "zoho-purchase-orders-half-hour",
     "cron": "20,50 * * * *",
     "path": "/api/zoho/purchase-orders/sync",

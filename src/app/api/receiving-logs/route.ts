@@ -9,8 +9,9 @@ async function checkReceivingTableExists(): Promise<boolean> {
     const check = await pool.query(
         `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'receiving') AS exists`
     );
-    _receivingTableExists = check.rows[0]?.exists ?? false;
-    return _receivingTableExists;
+    const exists = check.rows[0]?.exists ?? false;
+    _receivingTableExists = exists;
+    return exists;
 }
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';

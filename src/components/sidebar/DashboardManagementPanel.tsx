@@ -74,12 +74,18 @@ export function DashboardManagementPanel({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  type TransferPhase = 'idle' | 'fetching' | 'refreshing' | 'done';
-  const [transferPhase, setTransferPhase] = useState<TransferPhase>('idle');
+  type TaskStatus = 'idle' | 'running' | 'done' | 'error';
+  type TaskState = { status: TaskStatus; summary?: string };
+  const [sheetsTask, setSheetsTask] = useState<TaskState>({ status: 'idle' });
+  const [ecwidTask, setEcwidTask] = useState<TaskState>({ status: 'idle' });
+  const [exceptionsTask, setExceptionsTask] = useState<TaskState>({ status: 'idle' });
   const [elapsedMs, setElapsedMs] = useState(0);
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const isTransferring = transferPhase === 'fetching' || transferPhase === 'refreshing';
+  const isTransferring =
+    sheetsTask.status === 'running' ||
+    ecwidTask.status === 'running' ||
+    exceptionsTask.status === 'running';
   const [manualSheetName, setManualSheetName] = useState('');
   const [status, setStatus] = useState<{
     type: 'success' | 'error';
@@ -90,6 +96,7 @@ export function DashboardManagementPanel({
       updated?: number;
       processedRows?: number;
       exceptionsResolved?: number;
+      ecwidInserted?: number;
       durationMs?: number;
     };
   } | null>(null);
@@ -252,67 +259,122 @@ export function DashboardManagementPanel({
     abortRef.current?.abort();
     abortRef.current = null;
     if (elapsedRef.current) clearInterval(elapsedRef.current);
-    setTransferPhase('idle');
+    setSheetsTask({ status: 'idle' });
+    setEcwidTask({ status: 'idle' });
+    setExceptionsTask({ status: 'idle' });
     setStatus({ type: 'error', message: 'Import cancelled' });
   };
 
   const handleTransfer = async () => {
     const controller = new AbortController();
     abortRef.current = controller;
-    setTransferPhase('fetching');
+    setSheetsTask({ status: 'running' });
+    setEcwidTask({ status: 'running' });
+    setExceptionsTask({ status: 'running' });
     setStatus(null);
     setElapsedMs(0);
     const t0 = Date.now();
     elapsedRef.current = setInterval(() => setElapsedMs(Date.now() - t0), 100);
 
     try {
-      const res = await fetch('/api/google-sheets/transfer-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          manualSheetName: manualSheetName.trim() || undefined,
+      const [sheetsResult, ecwidResult, exceptionsResult] = await Promise.allSettled([
+        // Google Sheets (non-ecwid platforms)
+        fetch('/api/google-sheets/transfer-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ manualSheetName: manualSheetName.trim() || undefined }),
+          signal: controller.signal,
+        }).then((r) => r.json()).then((data) => {
+          const ins = Number(data.insertedOrders || 0);
+          const upd = Number(data.updatedOrdersFields || 0);
+          const parts = [ins && `${ins} inserted`, upd && `${upd} updated`].filter(Boolean);
+          setSheetsTask({
+            status: data.success ? 'done' : 'error',
+            summary: data.success
+              ? (parts.length > 0 ? parts.join(', ') : 'Up to date')
+              : (data.error || 'Failed'),
+          });
+          return data;
         }),
-        signal: controller.signal,
-      });
-      const data = await res.json();
+        // Ecwid direct API
+        fetch('/api/ecwid/transfer-orders', {
+          method: 'POST',
+          signal: controller.signal,
+        }).then((r) => r.json()).then((data) => {
+          const ins = Number(data.insertedOrders || 0);
+          const upd = Number(data.updatedOrdersFields || 0);
+          const parts = [ins && `${ins} inserted`, upd && `${upd} updated`].filter(Boolean);
+          setEcwidTask({
+            status: data.success ? 'done' : 'error',
+            summary: data.success
+              ? (parts.length > 0 ? parts.join(', ') : 'Up to date')
+              : (data.error || 'Failed'),
+          });
+          return data;
+        }),
+        // Order exceptions sync
+        fetch('/api/orders-exceptions/sync', {
+          method: 'POST',
+          signal: controller.signal,
+        }).then((r) => r.json()).then((data) => {
+          const matched = Number(data.matched || 0);
+          setExceptionsTask({
+            status: data.success ? 'done' : 'error',
+            summary: data.success
+              ? (matched > 0 ? `${matched} resolved` : 'None pending')
+              : (data.error || 'Failed'),
+          });
+          return data;
+        }),
+      ]);
 
-      if (data.success) {
-        setTransferPhase('refreshing');
-        const inserted = Number(data.insertedOrders || 0);
-        const updated = Number(data.updatedOrdersFields || 0);
-        const exceptionsResolved = Number(data.exceptionsResolved || 0);
-        const parts = [];
-        if (inserted > 0) parts.push(`${inserted} inserted`);
-        if (updated > 0) parts.push(`${updated} updated`);
-        const message = parts.length > 0 ? `Orders synced: ${parts.join(', ')}` : 'Orders already up to date';
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' }),
-          queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'], refetchType: 'active' }),
-          queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'], refetchType: 'active' }),
-          queryClient.invalidateQueries({ queryKey: ['shipped-table'], refetchType: 'active' }),
-        ]);
-        setStatus({
-          type: 'success',
-          message,
-          details: {
-            tabName: data.tabName,
-            inserted,
-            updated,
-            processedRows: Number(data.processedRows || 0),
-            exceptionsResolved,
-            durationMs: Number(data.durationMs || 0),
-          },
-        });
-      } else {
-        setStatus({ type: 'error', message: data.error || 'Transfer failed' });
-      }
+      // Aggregate results for the status banner
+      const sheetsData = sheetsResult.status === 'fulfilled' ? sheetsResult.value : null;
+      const ecwidData = ecwidResult.status === 'fulfilled' ? ecwidResult.value : null;
+      const exceptionsData = exceptionsResult.status === 'fulfilled' ? exceptionsResult.value : null;
+
+      const totalInserted = Number(sheetsData?.insertedOrders || 0) + Number(ecwidData?.insertedOrders || 0);
+      const totalUpdated = Number(sheetsData?.updatedOrdersFields || 0) + Number(ecwidData?.updatedOrdersFields || 0);
+      const exceptionsResolved = Number(exceptionsData?.matched || 0);
+
+      // Handle task-level errors from rejected promises
+      if (sheetsResult.status === 'rejected') setSheetsTask({ status: 'error', summary: 'Network error' });
+      if (ecwidResult.status === 'rejected') setEcwidTask({ status: 'error', summary: 'Network error' });
+      if (exceptionsResult.status === 'rejected') setExceptionsTask({ status: 'error', summary: 'Network error' });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'], refetchType: 'active' }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'], refetchType: 'active' }),
+        queryClient.invalidateQueries({ queryKey: ['shipped-table'], refetchType: 'active' }),
+      ]);
+
+      const anyFailed = [sheetsResult, ecwidResult, exceptionsResult].some(
+        (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value?.success),
+      );
+      const parts = [];
+      if (totalInserted > 0) parts.push(`${totalInserted} inserted`);
+      if (totalUpdated > 0) parts.push(`${totalUpdated} updated`);
+
+      setStatus({
+        type: anyFailed ? 'error' : 'success',
+        message: parts.length > 0 ? `Orders synced: ${parts.join(', ')}` : 'Orders already up to date',
+        details: {
+          tabName: sheetsData?.tabName,
+          inserted: totalInserted,
+          updated: totalUpdated,
+          processedRows: Number(sheetsData?.processedRows || 0) + Number(ecwidData?.processedRows || 0),
+          exceptionsResolved,
+          ecwidInserted: Number(ecwidData?.insertedOrders || 0),
+          durationMs: Date.now() - t0,
+        },
+      });
     } catch (_error: any) {
       if (_error?.name === 'AbortError') return;
       setStatus({ type: 'error', message: 'Network error occurred' });
     } finally {
       abortRef.current = null;
       if (elapsedRef.current) clearInterval(elapsedRef.current);
-      setTransferPhase('idle');
     }
   };
 
@@ -453,9 +515,9 @@ export function DashboardManagementPanel({
                   </button>
                 )}
 
-                {/* Live progress tracker */}
+                {/* Live progress tracker — 3 parallel tasks */}
                 <AnimatePresence>
-                  {isTransferring ? (
+                  {isTransferring || (sheetsTask.status !== 'idle' && ecwidTask.status !== 'idle') ? (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
@@ -467,9 +529,13 @@ export function DashboardManagementPanel({
                         {/* Elapsed timer */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                            {isTransferring ? (
+                              <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5 text-blue-600" />
+                            )}
                             <span className={`${sectionLabel} text-blue-700`}>
-                              {transferPhase === 'refreshing' ? 'Refreshing dashboard' : 'Importing orders'}
+                              {isTransferring ? 'Importing orders' : 'Import complete'}
                             </span>
                           </div>
                           <motion.span
@@ -482,67 +548,58 @@ export function DashboardManagementPanel({
                           </motion.span>
                         </div>
 
-                        {/* Animated task descriptions */}
-                        <div className="space-y-1">
-                          {transferPhase === 'fetching' || transferPhase === 'refreshing' ? (
-                            <>
-                              {[
-                                { threshold: 0, label: 'Connecting to Google Sheets API' },
-                                { threshold: 800, label: 'Reading spreadsheet data' },
-                                { threshold: 2000, label: 'Matching orders & resolving tracking' },
-                                { threshold: 4000, label: 'Syncing changes to database' },
-                                { threshold: 6000, label: 'Resolving order exceptions' },
-                              ].map(({ threshold, label }, i, arr) => {
-                                const nextThreshold = arr[i + 1]?.threshold ?? Infinity;
-                                const fetchDone = transferPhase === 'refreshing';
-                                const isActive = !fetchDone && elapsedMs >= threshold && elapsedMs < nextThreshold;
-                                const isComplete = fetchDone || elapsedMs >= nextThreshold;
-
-                                return (
-                                  <motion.div
-                                    key={label}
-                                    initial={{ opacity: 0, x: -6 }}
-                                    animate={{
-                                      opacity: elapsedMs >= threshold ? 1 : 0.3,
-                                      x: elapsedMs >= threshold ? 0 : -6,
-                                    }}
-                                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                                    className="flex items-center gap-2"
-                                  >
-                                    <div className="w-4 h-4 flex items-center justify-center shrink-0">
-                                      {isComplete ? (
-                                        <motion.div
-                                          initial={{ scale: 0 }}
-                                          animate={{ scale: 1 }}
-                                          transition={{ type: 'spring', damping: 12, stiffness: 300 }}
-                                        >
-                                          <Check className="w-3 h-3 text-blue-600" />
-                                        </motion.div>
-                                      ) : isActive ? (
-                                        <Loader2 className="w-3 h-3 text-blue-600 animate-spin" />
-                                      ) : (
-                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                                      )}
-                                    </div>
-                                    <span className={`text-[10px] font-semibold ${
-                                      isActive ? 'text-blue-700' : isComplete ? 'text-blue-500' : 'text-gray-400'
-                                    }`}>
-                                      {label}
-                                    </span>
-                                  </motion.div>
-                                );
-                              })}
-                            </>
-                          ) : (
+                        {/* Task rows */}
+                        <div className="space-y-1.5">
+                          {([
+                            { label: 'Google Sheets import', task: sheetsTask },
+                            { label: 'Ecwid direct orders', task: ecwidTask },
+                            { label: 'Resolve exceptions', task: exceptionsTask },
+                          ] as const).map(({ label, task }) => (
                             <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
+                              key={label}
+                              initial={{ opacity: 0, x: -6 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
                               className="flex items-center gap-2"
                             >
-                              <Loader2 className="w-3 h-3 text-blue-600 animate-spin shrink-0" />
-                              <span className="text-[10px] font-semibold text-blue-700">Updating dashboard views</span>
+                              <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                                {task.status === 'done' ? (
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: 'spring', damping: 12, stiffness: 300 }}
+                                  >
+                                    <Check className="w-3 h-3 text-blue-600" />
+                                  </motion.div>
+                                ) : task.status === 'error' ? (
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1 }}
+                                    transition={{ type: 'spring', damping: 12, stiffness: 300 }}
+                                  >
+                                    <AlertTriangle className="w-3 h-3 text-red-500" />
+                                  </motion.div>
+                                ) : task.status === 'running' ? (
+                                  <Loader2 className="w-3 h-3 text-blue-600 animate-spin" />
+                                ) : (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                                )}
+                              </div>
+                              <span className={`text-[10px] font-semibold ${
+                                task.status === 'running' ? 'text-blue-700'
+                                  : task.status === 'done' ? 'text-blue-500'
+                                  : task.status === 'error' ? 'text-red-500'
+                                  : 'text-gray-400'
+                              }`}>
+                                {label}
+                              </span>
+                              {task.summary && task.status !== 'running' && (
+                                <span className="text-[9px] font-medium text-gray-400 ml-auto truncate max-w-[120px]">
+                                  {task.summary}
+                                </span>
+                              )}
                             </motion.div>
-                          )}
+                          ))}
                         </div>
 
                         {/* Progress bar */}
@@ -550,7 +607,13 @@ export function DashboardManagementPanel({
                           <motion.div
                             className="h-full rounded-full bg-blue-500"
                             initial={{ width: '0%' }}
-                            animate={{ width: transferPhase === 'refreshing' ? '95%' : `${Math.min(90, (elapsedMs / 80))}%` }}
+                            animate={{
+                              width: `${Math.round(
+                                ([sheetsTask, ecwidTask, exceptionsTask].filter(
+                                  (t) => t.status === 'done' || t.status === 'error',
+                                ).length / 3) * 100,
+                              )}%`,
+                            }}
                             transition={{ ease: 'easeOut', duration: 0.3 }}
                           />
                         </div>
