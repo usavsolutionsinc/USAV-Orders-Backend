@@ -9,7 +9,16 @@ import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
-import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, getLast4, getLast6Serial } from '@/components/ui/CopyChip';
+import {
+  FnskuChip,
+  OrderIdChip,
+  OrderIdChipPlaceholder,
+  TrackingOrSkuScanChip,
+  SerialChip,
+  PlatformChip,
+  getLast4,
+  getLast6Serial,
+} from '@/components/ui/CopyChip';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -18,7 +27,9 @@ import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails, getOpenShippedDetailsPayload } from '@/utils/events';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { getOrderDisplayValues } from '@/utils/order-display';
-import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
+import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { normalizeShippedSearchField, type ShippedSearchField } from '@/lib/shipped-search';
 import {
   readShippedFilterPreference,
@@ -281,9 +292,9 @@ export function DashboardShippedTable({
         : shippedFilter === 'sku'
           ? dedupedRecords.filter(isSkuPackerRecord)
           : dedupedRecords.filter((r) => {
-              // "all" includes orders + SKU + FBA, but exclude orphaned order logs
-              // that no longer have a linked orders row (e.g. after hard delete).
-              if (isFbaPackerRecord(r) || isSkuPackerRecord(r)) return true;
+              // "all" = actually shipped: orders + FBA. SKU-only rows are prepacked (not shipped) — use SKU tab.
+              if (isSkuPackerRecord(r)) return false;
+              if (isFbaPackerRecord(r)) return true;
               return hasLinkedOrder(r);
             }),
     [dedupedRecords, shippedFilter],
@@ -648,6 +659,24 @@ export function DashboardShippedTable({
                             isEmptyDisplayValue(serialValue) || serialValue === '---'
                               ? 'SERIAL'
                               : getLast6Serial(serialValue);
+                          const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
+                          const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
+                          const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
+                          const scanForSku =
+                            String((record as { scan_ref?: string | null }).scan_ref || '').trim() ||
+                            String(record.shipping_tracking_number || '').trim();
+                          const productPageUrl = getExternalUrlByItemNumber(
+                            String(record.item_number || '').trim() || skuScanPrefixBeforeColon(scanForSku),
+                          );
+                          const hideOrderIdChip = isSkuSourceRecord({
+                            orderId: record.order_id,
+                            accountSource: record.account_source,
+                            trackingType: record.tracking_type,
+                            scanRef:
+                              String((record as { scan_ref?: string | null }).scan_ref || '').trim() ||
+                              record.shipping_tracking_number ||
+                              null,
+                          });
 
                           return (
                             <div
@@ -695,7 +724,7 @@ export function DashboardShippedTable({
                                 </div>
                               </div>
 
-                              <div className="flex items-center shrink-0 pr-2">
+                              <div className="flex shrink-0 items-center gap-0.5 pr-2">
                                 {rowIsFba ? (
                                   <>
                                     <FnskuChip value={fnskuValue} />
@@ -703,14 +732,25 @@ export function DashboardShippedTable({
                                   </>
                                 ) : (
                                   <>
-                                    <OrderIdChip
-                                      value={record.order_id || ''}
-                                      display={getLast4(record.order_id)}
-                                    />
-                                    <TrackingChip
-                                      value={record.shipping_tracking_number || ''}
-                                      display={getLast4(record.shipping_tracking_number)}
-                                    />
+                                    {platformLabel && !orderIsFbaMeta ? (
+                                      <PlatformChip
+                                        label={platformLabel}
+                                        underlineClass={getOrderPlatformBorderColor(platformLabel)}
+                                        iconClass={productPageUrl ? platformColor : 'text-gray-500'}
+                                        onClick={() => {
+                                          if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
+                                        }}
+                                      />
+                                    ) : null}
+                                    {!hideOrderIdChip ? (
+                                      <OrderIdChip
+                                        value={record.order_id || ''}
+                                        display={getLast4(record.order_id)}
+                                      />
+                                    ) : (
+                                      <OrderIdChipPlaceholder />
+                                    )}
+                                    <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
                                     <SerialChip
                                       value={serialValue}
                                       display={serialDisplay}

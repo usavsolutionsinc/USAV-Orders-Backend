@@ -5,17 +5,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
 import { Loader2, Search } from './Icons';
-import { FnskuChip, OrderIdChip, TrackingChip, PlatformChip, getLast4 } from './ui/CopyChip';
+import { FnskuChip, OrderIdChip, OrderIdChipPlaceholder, TrackingOrSkuScanChip, PlatformChip, getLast4 } from './ui/CopyChip';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
-import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import { OverlaySearchBar } from './ui/OverlaySearchBar';
 import WeekHeader from './ui/WeekHeader';
+import { DesktopDateGroupHeader } from './ui/DesktopDateGroupHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, computeWeekRange } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { isFbaOrder } from '@/utils/order-platform';
 import { type PackerRecord } from '@/hooks/usePackerLogs';
 import { usePackerTableController, isFbaPackerRecord } from '@/hooks/station/usePackerTableController';
@@ -249,15 +250,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                   });
                   return (
                     <div key={date} className="flex flex-col">
-                      <div
-                        data-day-header
-                        data-date={date}
-                        data-count={dateRecords.length}
-                        className="bg-gray-50/80 border-y border-gray-300 px-2 py-1 flex items-center justify-between z-10"
-                      >
-                        <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                        <p className="text-[11px] font-black text-gray-900 tabular-nums">{dateRecords.length}</p>
-                      </div>
+                      <DesktopDateGroupHeader date={date} total={dateRecords.length} />
                       {sortedRecords.map((record, index) => {
                         const displayValues = getOrderDisplayValues({
                           sku: record.sku,
@@ -268,6 +261,12 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                         const fnskuValue = String(record.scan_ref || '').trim();
                         const showFnskuChip = rowIsFba && Boolean(fnskuValue);
                         const dotType = getSourceDotType({
+                          orderId: record.order_id,
+                          accountSource: record.account_source,
+                          trackingType: record.tracking_type,
+                          scanRef: record.scan_ref,
+                        });
+                        const hideOrderIdChip = isSkuSourceRecord({
                           orderId: record.order_id,
                           accountSource: record.account_source,
                           trackingType: record.tracking_type,
@@ -306,27 +305,31 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                                 <FnskuChip value={fnskuValue} />
                               ) : (() => {
                                 const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
+                                const scanForSku = String(record.scan_ref || record.shipping_tracking_number || '');
+                                const productUrl = getExternalUrlByItemNumber(
+                                  String(record.item_number || '').trim() || skuScanPrefixBeforeColon(scanForSku),
+                                );
                                 return (
                                   <>
                                     {plat ? (
                                       <PlatformChip
                                         label={plat}
                                         underlineClass={getOrderPlatformBorderColor(plat)}
-                                        iconClass={record.item_number ? getOrderPlatformColor(plat) : 'text-gray-500'}
+                                        iconClass={productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
                                         onClick={() => {
-                                          const url = getExternalUrlByItemNumber(record.item_number);
-                                          if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                          if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
                                         }}
                                       />
                                     ) : null}
-                                    <OrderIdChip
-                                      value={record.order_id || ''}
-                                      display={getLast4(record.order_id)}
-                                    />
-                                    <TrackingChip
-                                      value={record.shipping_tracking_number || ''}
-                                      display={getLast4(record.shipping_tracking_number)}
-                                    />
+                                    {!hideOrderIdChip ? (
+                                      <OrderIdChip
+                                        value={record.order_id || ''}
+                                        display={getLast4(record.order_id)}
+                                      />
+                                    ) : (
+                                      <OrderIdChipPlaceholder />
+                                    )}
+                                    <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
                                   </>
                                 );
                               })()}

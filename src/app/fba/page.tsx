@@ -10,13 +10,12 @@ import { FbaCreatePlanModal } from '@/components/fba/FbaCreatePlanModal';
 import { FbaLoadingState, FbaErrorState } from '@/components/fba/FbaStateShells';
 import { FbaBoardTable, type FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaBoardDetailPanel } from '@/components/fba/FbaBoardDetailPanel';
-import WeekHeader from '@/components/ui/WeekHeader';
 import StationFba from '@/components/station/StationFba';
 import { stationThemeColors } from '@/utils/staff-colors';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { usePersistedStaffId } from '@/hooks/usePersistedStaffId';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_BOARD_REMOVE_ITEMS } from '@/lib/fba/events';
 
 type Tab = 'combine' | 'shipped';
@@ -209,21 +208,6 @@ function FbaPageContent() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-zinc-200/80 bg-white">
         <StationFba embedded>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <WeekHeader
-              stickyDate={todayKey}
-              fallbackDate="FBA Board"
-              count={visibleCount}
-              weekRange={weekRange}
-              weekOffset={weekOffset}
-              onPrevWeek={() => setWeekOffset((o) => o - 1)}
-              onNextWeek={() => setWeekOffset((o) => Math.min(0, o + 1))}
-              rightSlot={activeTab === 'shipped' ? (
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                  {TAB_LABELS[activeTab]}
-                </span>
-              ) : undefined}
-            />
-
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
               {error ? (
                 <FbaErrorState message={error} onRetry={fetchBoard} theme={stationTheme} />
@@ -240,6 +224,10 @@ function FbaPageContent() {
                   stationTheme={stationTheme}
                   emptyMessage={searchQuery ? 'No items match this FNSKU' : 'No pending FBA items'}
                   onDetailOpen={setDetailItem}
+                  weekRange={weekRange}
+                  weekOffset={weekOffset}
+                  onPrevWeek={() => setWeekOffset((o) => o - 1)}
+                  onNextWeek={() => setWeekOffset((o) => Math.min(0, o + 1))}
                 />
               )}
 

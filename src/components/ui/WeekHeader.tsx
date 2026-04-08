@@ -74,7 +74,8 @@ export default function WeekHeader({
     }
   })();
 
-  const dateLineDisplay = stickyDate || getTodayPSTDisplay();
+  const formattedStickyDate = stickyDate ? formatDateWithOrdinal(stickyDate) : '';
+  const dateLineDisplay = formattedStickyDate || getTodayPSTDisplay();
   const stickyDateLabel =
     formattedTodayPST && dateLineDisplay === formattedTodayPST ? 'Today' : dateLineDisplay;
 

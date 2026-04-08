@@ -6,8 +6,10 @@
  *
  * Hard rule: chip variants are semantically bound to data types:
  * - TrackingChip  → Blue  (carrier shipping tracking)
+ * - SkuScanRefChip / TrackingOrSkuScanChip → Yellow when value contains `:` (SKU code in tracking column)
  * - FnskuChip     → Purple (Amazon FNSKU)
  * - SerialChip    → Emerald (device serial numbers)
+ * - SkuSerialChip → Yellow / pencil (`sku` table–sourced serials)
  * - OrderIdChip   → Gray (internal order IDs)
  * - TicketChip    → Orange (repair/support ticket IDs)
  * - SourceOrderChip → Gray (external platform order numbers)
@@ -17,9 +19,14 @@
 export {
   CopyChip,
   TrackingChip,
+  SkuScanRefChip,
+  TrackingOrSkuScanChip,
+  isSkuFormattedScanRef,
   FnskuChip,
   SerialChip,
+  SkuSerialChip,
   OrderIdChip,
+  OrderIdChipPlaceholder,
   TicketChip,
   SourceOrderChip,
   PlatformChip,

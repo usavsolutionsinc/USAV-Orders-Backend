@@ -30,6 +30,11 @@ export function getSourceDotType(params: {
   return 'orders';
 }
 
+/** True when {@link getSourceDotType} is `sku` (SKU scan path — hide internal order-id chip in row chrome). */
+export function isSkuSourceRecord(params: Parameters<typeof getSourceDotType>[0]): boolean {
+  return getSourceDotType(params) === 'sku';
+}
+
 /** Tailwind background class for each dot type. */
 export const SOURCE_DOT_BG: Record<SourceDotType, string> = {
   fba: 'bg-purple-500',

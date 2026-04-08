@@ -6,12 +6,12 @@ import { framerPresence, framerTransition } from '@/design-system/foundations/mo
 import { sectionLabel, fieldLabel, SkeletonList } from '@/design-system';
 import { Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
-import { OrderIdChip, TrackingChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
+import { OrderIdChip, OrderIdChipPlaceholder, TrackingOrSkuScanChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
 import { PasteTrackingButton } from '@/components/ui/PasteTrackingButton';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { getStaffTextColor } from '@/design-system/components/StaffBadge';
-import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, getDaysLateNullable, getDaysLateTone } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -19,6 +19,7 @@ import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { getOpenShippedDetailsPayload } from '@/utils/events';
+import { isSkuSourceRecord } from '@/utils/source-dot';
 
 
 function normalizePersonName(value: unknown): string {
@@ -75,9 +76,21 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
     (record.tracking_number as string | undefined) ||
     record.shipping_tracking_number ||
     '';
+  const scanRefFromRecord = (record as QueueRowRecord & { scan_ref?: unknown }).scan_ref;
+  const scanRefForSku =
+    (typeof scanRefFromRecord === 'string' && scanRefFromRecord ? scanRefFromRecord : null) ?? trackingRaw;
+  const hideOrderIdChip = isSkuSourceRecord({
+    orderId: record.order_id,
+    accountSource: record.account_source,
+    trackingType: record.tracking_type,
+    scanRef: scanRefForSku,
+  });
   const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
   const isFba = isFbaOrder(record.order_id, record.account_source);
   const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
+  const productPageUrl = getExternalUrlByItemNumber(
+    String(record.item_number || '').trim() || skuScanPrefixBeforeColon(trackingRaw),
+  );
 
   return (
     <motion.div
@@ -141,21 +154,24 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
         </div>
       </div>
 
-      <div className="flex items-center shrink-0">
+      <div className="flex shrink-0 items-center gap-0.5">
         {platformLabel && !isFba ? (
           <PlatformChip
             label={platformLabel}
             underlineClass={platformLabel ? getOrderPlatformBorderColor(platformLabel) : ''}
-            iconClass={record.item_number ? platformColor : 'text-gray-500'}
+            iconClass={productPageUrl ? platformColor : 'text-gray-500'}
             onClick={() => {
-              const url = getExternalUrlByItemNumber(record.item_number);
-              if (url) window.open(url, '_blank', 'noopener,noreferrer');
+              if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
             }}
           />
         ) : null}
-        <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
+        {!hideOrderIdChip ? (
+          <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
+        ) : (
+          <OrderIdChipPlaceholder />
+        )}
         {trackingRaw
-          ? <TrackingChip value={trackingRaw} display={getLast4(trackingRaw)} />
+          ? <TrackingOrSkuScanChip value={trackingRaw} />
           : <PasteTrackingButton orderId={Number(record.id)} />
         }
       </div>
@@ -179,7 +195,9 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.record.order_id !== next.record.order_id) return false;
   if (prev.record.quantity !== next.record.quantity) return false;
   if (prev.record.account_source !== next.record.account_source) return false;
+  if (prev.record.tracking_type !== next.record.tracking_type) return false;
   if (prev.record.item_number !== next.record.item_number) return false;
+  if (prev.record.sku !== next.record.sku) return false;
   const prevTr =
     (prev.record.tracking_number as string | undefined) || prev.record.shipping_tracking_number || '';
   const nextTr =

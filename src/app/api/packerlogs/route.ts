@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { db } from '@/lib/drizzle/db';
 import { packerLogs } from '@/lib/drizzle/schema';
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const packerId = searchParams.get('packerId') || searchParams.get('packedBy');
     const testedBy = searchParams.get('testedBy');
-    const limit = parseInt(searchParams.get('limit') || '5000');
+    const limit = parseInt(searchParams.get('limit') || '500');
     const offset = parseInt(searchParams.get('offset') || '0');
     const weekStart = searchParams.get('weekStart') || '';
     const weekEnd = searchParams.get('weekEnd') || '';
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=30` };
 
     try {
-        const cached = await getCachedJson<any[]>('api:packing-logs', cacheLookup);
+        const cached = await getCachedJson<any[]>('api:packing-logs-v3', cacheLookup);
         if (cached) {
             return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
         }
@@ -112,30 +112,14 @@ export async function GET(req: NextRequest) {
                            WHEN 'PACK_COMPLETED' THEN 'ORDERS'
                            ELSE 'SCAN'
                          END) AS tracking_type,
-                COALESCE(
-                    (SELECT json_agg(json_build_object('url', p.url, 'uploadedAt', p.created_at) ORDER BY p.created_at)
-                     FROM photos p
-                     WHERE p.entity_type = 'PACKER_LOG' AND p.entity_id = sal.packer_log_id),
-                    '[]'::json
-                ) AS packer_photos_url,
+                NULL::json AS packer_photos_url,
                 o.id AS order_row_id,
                 o.shipment_id,
                 o.order_id,
                 COALESCE(o.account_source, CASE WHEN sal.fnsku IS NOT NULL THEN 'fba' ELSE null END) AS account_source,
                 COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
                 COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
-                COALESCE(
-                    (
-                        SELECT ss.product_title
-                        FROM sku_stock ss
-                        WHERE POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
-                          AND regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
-                              regexp_replace(UPPER(TRIM(split_part(sal.scan_ref, ':', 1))), '^0+', '')
-                        LIMIT 1
-                    ),
-                    ff.product_title,
-                    o.product_title
-                ) AS product_title,
+                COALESCE(ff.product_title, o.product_title) AS product_title,
                 to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_by_date,
                 to_char(wa_deadline.deadline_at, 'YYYY-MM-DD HH24:MI:SS') AS deadline_at,
                 o.item_number,
@@ -153,7 +137,11 @@ export async function GET(req: NextRequest) {
                 ) AS sku,
                 COALESCE(o.notes, '') AS notes,
                 COALESCE(o.status_history, '[]'::jsonb) AS status_history,
-                COALESCE(test_data.serial_number, '') AS serial_number,
+                COALESCE(
+                    NULLIF(TRIM(COALESCE(test_data.serial_number, '')), ''),
+                    NULLIF(TRIM(COALESCE(sku_lookup.sku_table_serial, '')), '')
+                ) AS serial_number,
+                sku_lookup.sku_table_id AS sku_table_id,
                 wa_t.assigned_tech_id AS tester_id,
                 test_data.tested_by,
                 test_data.test_date_time,
@@ -163,6 +151,33 @@ export async function GET(req: NextRequest) {
                 (NULLIF(TRIM(sal.metadata->>'fnsku_log_id'), ''))::bigint AS fnsku_log_id
             FROM station_activity_logs sal
             LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id
+            LEFT JOIN LATERAL (
+                SELECT sk.id AS sku_table_id, sk.serial_number AS sku_table_serial
+                FROM sku sk
+                WHERE sk.static_sku IS NOT NULL AND BTRIM(sk.static_sku) <> ''
+                  AND (
+                      (sal.shipment_id IS NOT NULL AND sk.shipment_id = sal.shipment_id)
+                      OR BTRIM(sk.static_sku) = BTRIM(COALESCE(sal.scan_ref, ''))
+                      OR (
+                        NULLIF(TRIM(sal.metadata->>'sku'), '') IS NOT NULL
+                        AND BTRIM(sk.static_sku) = BTRIM(sal.metadata->>'sku')
+                      )
+                      OR (
+                        POSITION(':' IN COALESCE(sal.scan_ref, '')) > 0
+                        AND (
+                            BTRIM(sk.static_sku) = BTRIM(split_part(sal.scan_ref, ':', 1))
+                            OR BTRIM(sk.static_sku) = BTRIM(sal.scan_ref)
+                            OR regexp_replace(UPPER(TRIM(COALESCE(sk.static_sku, ''))), '^0+', '') =
+                               regexp_replace(UPPER(TRIM(split_part(sal.scan_ref, ':', 1))), '^0+', '')
+                        )
+                      )
+                  )
+                ORDER BY
+                  CASE WHEN sal.shipment_id IS NOT NULL AND sk.shipment_id = sal.shipment_id THEN 0 ELSE 1 END,
+                  sk.updated_at DESC NULLS LAST,
+                  sk.id DESC
+                LIMIT 1
+            ) sku_lookup ON TRUE
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
             LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
             LEFT JOIN staff packed_staff ON packed_staff.id = sal.staff_id
@@ -286,8 +301,32 @@ export async function GET(req: NextRequest) {
             { retries: 3, delayMs: 1000 }
         );
 
-        await setCachedJson('api:packing-logs', cacheLookup, result.rows, cacheTTL, ['packing-logs']);
-        return NextResponse.json(result.rows, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
+        // Batch-fetch photos in one query instead of N correlated subqueries
+        const packerLogIds = result.rows
+            .map((r: any) => r.packer_log_id)
+            .filter((id: any) => id != null);
+
+        let photosMap: Record<number, any[]> = {};
+        if (packerLogIds.length > 0) {
+            const photosResult = await pool.query(
+                `SELECT entity_id, json_agg(json_build_object('url', url, 'uploadedAt', created_at) ORDER BY created_at) AS photos
+                 FROM photos
+                 WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1)
+                 GROUP BY entity_id`,
+                [packerLogIds]
+            );
+            for (const row of photosResult.rows) {
+                photosMap[row.entity_id] = row.photos;
+            }
+        }
+
+        const rows = result.rows.map((r: any) => ({
+            ...r,
+            packer_photos_url: photosMap[r.packer_log_id] ?? [],
+        }));
+
+        after(() => setCachedJson('api:packing-logs-v3', cacheLookup, rows, cacheTTL, ['packing-logs']));
+        return NextResponse.json(rows, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     } catch (error: any) {
         console.error('Error fetching packer logs:', error);
         return NextResponse.json({ error: 'Failed to fetch logs', details: error.message }, { status: 500 });

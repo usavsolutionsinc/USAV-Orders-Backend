@@ -78,6 +78,7 @@ export function DashboardManagementPanel({
   const [transferPhase, setTransferPhase] = useState<TransferPhase>('idle');
   const [elapsedMs, setElapsedMs] = useState(0);
   const elapsedRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const isTransferring = transferPhase === 'fetching' || transferPhase === 'refreshing';
   const [manualSheetName, setManualSheetName] = useState('');
   const [status, setStatus] = useState<{
@@ -247,7 +248,17 @@ export function DashboardManagementPanel({
     router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
   };
 
+  const handleCancelTransfer = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (elapsedRef.current) clearInterval(elapsedRef.current);
+    setTransferPhase('idle');
+    setStatus({ type: 'error', message: 'Import cancelled' });
+  };
+
   const handleTransfer = async () => {
+    const controller = new AbortController();
+    abortRef.current = controller;
     setTransferPhase('fetching');
     setStatus(null);
     setElapsedMs(0);
@@ -261,6 +272,7 @@ export function DashboardManagementPanel({
         body: JSON.stringify({
           manualSheetName: manualSheetName.trim() || undefined,
         }),
+        signal: controller.signal,
       });
       const data = await res.json();
 
@@ -294,9 +306,11 @@ export function DashboardManagementPanel({
       } else {
         setStatus({ type: 'error', message: data.error || 'Transfer failed' });
       }
-    } catch (_error) {
+    } catch (_error: any) {
+      if (_error?.name === 'AbortError') return;
       setStatus({ type: 'error', message: 'Network error occurred' });
     } finally {
+      abortRef.current = null;
       if (elapsedRef.current) clearInterval(elapsedRef.current);
       setTransferPhase('idle');
     }
@@ -421,14 +435,23 @@ export function DashboardManagementPanel({
                   />
                 </div>
 
-                <button
-                  onClick={handleTransfer}
-                  disabled={isTransferring}
-                  className={`w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl ${sectionLabel} shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2`}
-                >
-                  {isTransferring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                  {isTransferring ? 'Importing...' : 'Import Latest Orders'}
-                </button>
+                {isTransferring ? (
+                  <button
+                    onClick={handleCancelTransfer}
+                    className={`w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl ${sectionLabel} shadow-lg shadow-red-500/10 transition-all active:scale-95 flex items-center justify-center gap-2`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Cancel Import
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleTransfer}
+                    className={`w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl ${sectionLabel} shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2`}
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    Import Latest Orders
+                  </button>
+                )}
 
                 {/* Live progress tracker */}
                 <AnimatePresence>
@@ -461,7 +484,7 @@ export function DashboardManagementPanel({
 
                         {/* Animated task descriptions */}
                         <div className="space-y-1">
-                          {transferPhase === 'fetching' ? (
+                          {transferPhase === 'fetching' || transferPhase === 'refreshing' ? (
                             <>
                               {[
                                 { threshold: 0, label: 'Connecting to Google Sheets API' },
@@ -471,8 +494,9 @@ export function DashboardManagementPanel({
                                 { threshold: 6000, label: 'Resolving order exceptions' },
                               ].map(({ threshold, label }, i, arr) => {
                                 const nextThreshold = arr[i + 1]?.threshold ?? Infinity;
-                                const isActive = elapsedMs >= threshold && elapsedMs < nextThreshold;
-                                const isComplete = elapsedMs >= nextThreshold;
+                                const fetchDone = transferPhase === 'refreshing';
+                                const isActive = !fetchDone && elapsedMs >= threshold && elapsedMs < nextThreshold;
+                                const isComplete = fetchDone || elapsedMs >= nextThreshold;
 
                                 return (
                                   <motion.div

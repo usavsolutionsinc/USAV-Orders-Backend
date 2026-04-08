@@ -42,6 +42,8 @@ export interface TechRecord {
   /** Derived from shipping_tracking_numbers carrier status */
   is_shipped?: boolean;
   shipment_status?: string | null;
+  /** True when any `tech_serial_numbers` row for this SAL used `source_sku_id` (SKU_PULL from `sku` table). */
+  has_sku_serial_source?: boolean | null;
 }
 
 export interface UseTechLogsOptions {

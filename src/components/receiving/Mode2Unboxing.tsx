@@ -86,12 +86,31 @@ const RETURN_PLATFORM_OPTIONS = [
 
 function usePendingEntries() {
     return useQuery<ReceivingLog[]>({
-        queryKey: ['receiving-logs', 'pending-unboxing'],
+        queryKey: ['receiving-pending-unboxing'],
         queryFn: async () => {
-            const res = await fetch('/api/receiving-logs?limit=200&offset=0');
-            if (!res.ok) throw new Error('Failed to fetch logs');
-            const data: ReceivingLog[] = await res.json();
-            return data.filter((l) => !l.qa_status || l.qa_status === 'PENDING');
+            const res = await fetch('/api/receiving/pending-unboxing?limit=100&status=ARRIVED,MATCHED');
+            if (!res.ok) throw new Error('Failed to fetch pending entries');
+            const data: { pending: Array<{
+                receiving_id: number;
+                tracking_number: string | null;
+                carrier: string | null;
+                received_at: string | null;
+                qa_status: string;
+                unboxed_at: string | null;
+                zoho_purchase_receive_id: string | null;
+                line_count: number;
+                has_test_items: boolean;
+            }> } = await res.json();
+            // Map to ReceivingLog shape for the classification panel
+            return data.pending.map((p) => ({
+                id: String(p.receiving_id),
+                timestamp: p.received_at || '',
+                tracking: p.tracking_number || '',
+                status: p.carrier || 'Unknown',
+                qa_status: p.qa_status || 'PENDING',
+                needs_test: p.has_test_items,
+                zoho_purchase_receive_id: p.zoho_purchase_receive_id,
+            }));
         },
         staleTime: 45_000,
         refetchInterval: 60_000,
@@ -281,6 +300,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
             }
 
             setSaveSuccess(true);
+            queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
             queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
             window.dispatchEvent(new CustomEvent('usav-refresh-data'));
 

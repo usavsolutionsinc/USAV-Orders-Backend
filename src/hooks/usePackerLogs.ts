@@ -43,6 +43,8 @@ export interface PackerRecord {
   packer_photos_url: any[];
   fnsku?: string | null;
   fnsku_log_id?: number | null;
+  /** Matched `sku.id` when serial was resolved from the `sku` table (SKU pack scan_ref). */
+  sku_table_id?: number | null;
 }
 
 export interface UsePackerLogsOptions {

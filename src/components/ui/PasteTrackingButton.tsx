@@ -41,7 +41,7 @@ export function PasteTrackingButton({ orderId }: { orderId: number }) {
     'border-blue-500';
 
   return (
-    <div className="relative w-fit max-w-full">
+    <div className="relative flex w-fit max-w-full items-center justify-start px-1.5">
       <button
         type="button"
         onClick={handlePaste}

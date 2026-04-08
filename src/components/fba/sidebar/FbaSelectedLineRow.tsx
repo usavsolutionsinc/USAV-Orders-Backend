@@ -68,8 +68,6 @@ export function FbaSelectedLineRow({
           }}
           className={[
             'flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-600 transition-colors',
-            // CopyChip’s underline + pb sits lower than a plain icon; nudge pencil up to align optically
-            '-translate-y-1',
             onEditDetails
               ? 'hover:bg-gray-100 hover:text-gray-900'
               : 'pointer-events-none cursor-default',

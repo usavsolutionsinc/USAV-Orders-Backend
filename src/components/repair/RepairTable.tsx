@@ -8,10 +8,13 @@ import { Search, X, Printer, DollarSign } from '../Icons';
 import { SourceOrderChip, TicketChip } from '../ui/CopyChip';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
-import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
+import { mainStickyHeaderClass } from '@/components/layout/header-shell';
+import { weekHeaderInnerRowClass } from '@/components/ui/WeekHeader';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { useRepairsTable } from '@/hooks/useRepairs';
 import { formatPhoneNumber } from '@/utils/phone';
+import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { DesktopDateGroupHeader } from '../ui/DesktopDateGroupHeader';
 
 interface RepairTableProps {
   filter: RepairTab;
@@ -30,31 +33,6 @@ export function RepairTable({ filter }: RepairTableProps) {
 
   const { data: repairs = [], isLoading: loading } = useRepairsTable(search, filter);
 
-  const getOrdinal = (n: number) => {
-    const s = ["th", "st", "nd", "rd"];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  };
-
-  const formatDate = (dateStr: string) => {
-    try {
-      if (!dateStr) return 'Unknown';
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-      const months = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
-      const dayName = days[date.getDay()];
-      const monthName = months[date.getMonth()];
-      const dayNum = date.getDate();
-      return `${dayName}, ${monthName} ${getOrdinal(dayNum)}`;
-    } catch (e) { return dateStr; }
-  };
-
-  const formatHeaderDate = () => {
-    const now = new Date();
-    return formatDate(now.toISOString());
-  };
-
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollTop } = scrollRef.current;
@@ -70,7 +48,7 @@ export function RepairTable({ filter }: RepairTableProps) {
         break;
       }
     }
-    if (activeDate) setStickyDate(formatDate(activeDate));
+    if (activeDate) setStickyDate(formatDateWithOrdinal(activeDate));
     if (activeCount) setCurrentCount(activeCount);
   }, []);
 
@@ -169,14 +147,14 @@ export function RepairTable({ filter }: RepairTableProps) {
     if (!record.created_at) return;
     let date = '';
     try {
-      date = new Date(record.created_at).toISOString().split('T')[0];
-    } catch (e) { date = 'Unknown'; }
+      date = toPSTDateKey(String(record.created_at)) || 'Unknown';
+    } catch { date = 'Unknown'; }
     if (!groupedRepairs[date]) groupedRepairs[date] = [];
     groupedRepairs[date].push(record);
   });
 
   const getTodayCount = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getCurrentPSTDateKey();
     return groupedRepairs[today]?.length || 0;
   };
 
@@ -202,14 +180,13 @@ export function RepairTable({ filter }: RepairTableProps) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className={mainStickyHeaderClass}>
-          <div className={mainStickyHeaderRowClass}>
+          <div className={weekHeaderInnerRowClass}>
           <div className="flex items-center gap-2">
-            <p className="text-[11px] font-black text-gray-900 tracking-tight">
-              {stickyDate || formatHeaderDate()}
+            <p className="min-w-0 truncate text-sm font-black uppercase tracking-widest text-gray-900">
+              {stickyDate || formatDateWithOrdinal(getCurrentPSTDateKey())}
             </p>
-            <div className="h-2 w-px bg-gray-200" />
-            <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest">
-              Count: {currentCount || getTodayCount()}
+            <p className="shrink-0 font-dm-sans text-sm font-semibold tabular-nums text-blue-700">
+              {currentCount || getTodayCount()}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -267,15 +244,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([date, records]) => (
                   <div key={date} className="flex flex-col">
-                    <div
-                      data-day-header
-                      data-date={date}
-                      data-count={records.length}
-                      className="bg-gray-50/80 border-y border-gray-100 px-2 py-1 flex items-center justify-between z-10"
-                    >
-                      <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">{formatDate(date)}</p>
-                      <p className="text-[11px] font-black text-gray-500 uppercase">Total: {records.length} Units</p>
-                    </div>
+                    <DesktopDateGroupHeader date={date} total={records.length} />
                     {records.map((repair, index) => (
                       <motion.div
                         {...framerPresence.tableRow}

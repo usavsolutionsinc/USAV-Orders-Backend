@@ -248,9 +248,7 @@ export function ShippedDetailsPanel({
           normalizedTrackingType === 'FNSKU' ||
           normalizedTrackingType === 'SKU' ||
           normalizedTrackingType === 'SCAN' ||
-          isLikelyActivityLogRow ||
-          activityLogId != null ||
-          packerLogId != null;
+          isLikelyActivityLogRow;
 
         if (shouldDeletePackingLog) {
           await deleteOrderMutation.mutateAsync({

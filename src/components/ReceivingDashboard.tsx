@@ -70,7 +70,10 @@ export default function ReceivingDashboard() {
                         }}
                         onDeleted={(_id) => {
                             setSelectedLog(null);
-                            queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
+                            // receiving-logs cache is updated surgically via the
+                            // 'receiving-entry-deleted' event in ReceivingLogs —
+                            // invalidating here races with the refetch and can
+                            // restore the just-deleted row.
                             queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
                             queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
                         }}

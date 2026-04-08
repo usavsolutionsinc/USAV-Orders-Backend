@@ -1,6 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
-import { resolveReceivingSchema } from '@/utils/receiving-schema';
+
+// Module-level singleton — the `receiving` table is never dropped at runtime,
+// so we only need to check once per Fluid instance lifetime.
+let _receivingTableExists: boolean | null = null;
+async function checkReceivingTableExists(): Promise<boolean> {
+    if (_receivingTableExists !== null) return _receivingTableExists;
+    const check = await pool.query(
+        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'receiving') AS exists`
+    );
+    _receivingTableExists = check.rows[0]?.exists ?? false;
+    return _receivingTableExists;
+}
+import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
 import { getCurrentPSTDateKey } from '@/utils/date';
@@ -17,7 +29,7 @@ export async function GET(request: NextRequest) {
         const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd, needsTestParam });
 
         const today = getCurrentPSTDateKey();
-        const cacheTTL = weekEnd && weekEnd < today ? 86400 : 30;
+        const cacheTTL = weekEnd && weekEnd < today ? 86400 : 60;
         const CACHE_HEADERS = { 'Cache-Control': `private, max-age=${cacheTTL}, stale-while-revalidate=15` };
 
         const cached = await getCachedJson<any[]>('api:receiving-logs', cacheLookup);
@@ -25,24 +37,12 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(cached, { headers: { 'x-cache': 'HIT', ...CACHE_HEADERS } });
         }
 
-        const tableCheck = await pool.query(
-            `SELECT EXISTS (
-                SELECT FROM information_schema.tables
-                WHERE table_name = 'receiving'
-            ) AS exists`
-        );
-        if (!tableCheck.rows[0]?.exists) {
+        if (!(await checkReceivingTableExists())) {
             return NextResponse.json([], { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
         }
 
-        const { dateColumn, hasQuantity } = await resolveReceivingSchema();
+        const { columns: availableColumns, dateColumn, hasQuantity } = await getReceivingSchema();
         const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
-        const columnsRes = await pool.query(
-            `SELECT column_name
-             FROM information_schema.columns
-             WHERE table_name = 'receiving'`
-        );
-        const availableColumns = new Set<string>(columnsRes.rows.map((r: any) => String(r.column_name)));
         const hasColumn = (name: string) => availableColumns.has(name);
 
         const selectFields: string[] = [
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
             zoho_warehouse_id: log.zoho_warehouse_id || null,
         }));
 
-        await setCachedJson('api:receiving-logs', cacheLookup, formattedLogs, cacheTTL, ['receiving-logs']);
+        after(() => setCachedJson('api:receiving-logs', cacheLookup, formattedLogs, cacheTTL, ['receiving-logs']));
         return NextResponse.json(formattedLogs, { headers: { 'x-cache': 'MISS', ...CACHE_HEADERS } });
     } catch (error: any) {
         console.error('Error fetching receiving logs:', error);
@@ -159,7 +159,7 @@ export async function DELETE(request: NextRequest) {
             );
         }
 
-        await invalidateCacheTags(['receiving-logs']);
+        await invalidateCacheTags(['receiving-logs', 'pending-unboxing']);
         await publishReceivingLogChanged({ action: 'delete', rowId: String(id), source: 'receiving-logs.delete' });
         return NextResponse.json({ success: true, id });
     } catch (error: any) {
@@ -203,13 +203,7 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'Valid id is required' }, { status: 400 });
         }
 
-        const { hasQuantity } = await resolveReceivingSchema();
-        const columnsRes = await pool.query(
-            `SELECT column_name
-             FROM information_schema.columns
-             WHERE table_name = 'receiving'`
-        );
-        const availableColumns = new Set<string>(columnsRes.rows.map((r: any) => String(r.column_name)));
+        const { columns: availableColumns, hasQuantity } = await getReceivingSchema();
 
         const updates: string[] = [];
         const values: any[] = [];
@@ -372,7 +366,7 @@ export async function PATCH(request: NextRequest) {
             }
         }
 
-        await invalidateCacheTags(['receiving-logs']);
+        await invalidateCacheTags(['receiving-logs', 'pending-unboxing']);
         await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-logs.patch' });
         return NextResponse.json({ success: true, id });
     } catch (error: any) {

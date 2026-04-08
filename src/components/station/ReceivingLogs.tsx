@@ -96,55 +96,70 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
         refetchOnWindowFocus: false,
     });
 
-    // Surgical insert: prepend the single new record without any network request.
-    // The server already updated its Redis cache entry for this week, so the
-    // TanStack Query cache and server are kept in sync without a full re-fetch.
+    // ── Surgical cache helpers ──────────────────────────────────────
+    // Modify the React Query cache directly so the UI updates instantly
+    // without waiting for a network round-trip.
+    const currentWeekKey = useMemo(() => {
+        const cw = computeWeekRange(0);
+        return ['receiving-logs', { weekStart: cw.startStr, weekEnd: cw.endStr }] as const;
+    }, []);
+
+    const insertIntoCache = useCallback((record: ReceivingLog) => {
+        queryClient.setQueryData<ReceivingLog[]>(currentWeekKey, (prev) => {
+            if (!prev) return [record];
+            if (prev.some((r) => r.id === record.id)) return prev;
+            return [record, ...prev];
+        });
+    }, [queryClient, currentWeekKey]);
+
+    const removeFromCache = useCallback((id: string) => {
+        // Remove from ALL week caches (we don't know which week the entry was in)
+        queryClient.setQueriesData<ReceivingLog[]>(
+            { queryKey: ['receiving-logs'] },
+            (prev) => prev ? prev.filter((r) => r.id !== id) : prev,
+        );
+    }, [queryClient]);
+
+    // ── Event: new entry added (from Mode1BulkScan or sidebar scan) ──
     useEffect(() => {
-        const handleNewEntry = (e: any) => {
+        const handler = (e: any) => {
             const record = e?.detail as ReceivingLog | null;
             if (!record?.id) return;
-
-            // Target the current week's cache key (new entries are always "now").
-            const currentWeek = computeWeekRange(0);
-            queryClient.setQueryData<ReceivingLog[]>(
-                ['receiving-logs', { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
-                (prev) => {
-                    if (!prev) return undefined; // cache not yet populated — skip
-                    if (prev.some((r) => r.id === record.id)) return prev; // dedup
-                    return [record, ...prev];
-                },
-            );
+            insertIntoCache(record);
         };
-        window.addEventListener('receiving-entry-added', handleNewEntry);
-        return () => window.removeEventListener('receiving-entry-added', handleNewEntry);
-    }, [queryClient]);
+        window.addEventListener('receiving-entry-added', handler);
+        return () => window.removeEventListener('receiving-entry-added', handler);
+    }, [insertIntoCache]);
 
-    // Full invalidation for edits, deletes, and any other external data changes.
-    // New entries are handled above via setQueryData so they skip this path.
+    // ── Event: entry deleted ──
     useEffect(() => {
-        const handleRefresh = () => {
+        const handler = (e: any) => {
+            const id = String((e as CustomEvent)?.detail ?? '');
+            if (id) removeFromCache(id);
+        };
+        window.addEventListener('receiving-entry-deleted', handler);
+        return () => window.removeEventListener('receiving-entry-deleted', handler);
+    }, [removeFromCache]);
+
+    // ── Event: generic refresh (edits, external changes) ──
+    useEffect(() => {
+        const handler = () => {
             queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
         };
-        window.addEventListener('usav-refresh-data', handleRefresh);
-        return () => window.removeEventListener('usav-refresh-data', handleRefresh);
+        window.addEventListener('usav-refresh-data', handler);
+        return () => window.removeEventListener('usav-refresh-data', handler);
     }, [queryClient]);
 
-    // Ably: cross-session live updates (mobile or other browser tabs).
+    // ── Ably: cross-session live updates (mobile, other tabs) ──
     useAblyChannel(
         STATION_CHANNEL,
         'receiving-log.changed',
         (msg: any) => {
-            const { action, row } = msg?.data ?? {};
+            const { action, rowId, row } = msg?.data ?? {};
             if (action === 'insert' && row) {
-                const currentWeek = computeWeekRange(0);
-                queryClient.setQueryData<ReceivingLog[]>(
-                    ['receiving-logs', { weekStart: currentWeek.startStr, weekEnd: currentWeek.endStr }],
-                    (prev) => {
-                        if (!prev) return undefined;
-                        if (prev.some((r) => r.id === (row as ReceivingLog).id)) return prev;
-                        return [row as ReceivingLog, ...prev];
-                    },
-                );
+                insertIntoCache(row as ReceivingLog);
+            } else if (action === 'delete' && rowId) {
+                removeFromCache(String(rowId));
             } else {
                 queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
             }

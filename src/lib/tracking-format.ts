@@ -107,39 +107,28 @@ export function hasNumbers(str: string): boolean {
 
 // ─── Carrier detection ──────────────────────────────────────────────────────
 //
-// Single implementation used everywhere. Patterns ordered from most-specific
-// to broadest to prevent false positives.
+// Delegates to the canonical pattern list in utils/carrier-patterns.ts.
+// This keeps one set of patterns shared with scan-resolver.ts.
+
+import { detectCarrierFromTracking, toDisplayCarrier } from '@/utils/carrier-patterns';
 
 /**
- * Detect carrier from a normalized (uppercase, alphanumeric-only) tracking number.
- * Uses prefix-based heuristics covering UPS, FedEx, USPS, DHL, Amazon.
+ * Detect carrier from a tracking number string.
+ * Returns a display-friendly carrier name (UPS, FedEx, USPS, DHL, Amazon, Unknown).
  */
 export function detectCarrier(tracking: string): Carrier {
-  const t = normalizeTrackingCanonical(tracking);
-  if (!t) return 'Unknown';
-
-  // UPS: 1Z + 16 alphanumeric
-  if (/^1Z[A-Z0-9]{16}$/.test(t)) return 'UPS';
-
-  // FedEx: 9621 long labels (33-34 digits)
-  if (/^9621\d{29,30}$/.test(t)) return 'FedEx';
-  // FedEx: 399 prefix (12 digits)
-  if (/^399\d{9}$/.test(t)) return 'FedEx';
-  // FedEx: 96+20, 1[4-9]+14, or pure 12/15/20 digits
-  if (/^(96\d{20}|1[456789]\d{14}|\d{20}|\d{15}|\d{12})$/.test(t)) return 'FedEx';
-
-  // USPS: IMpb starting 92/93/94/95 (20-22 digits) or generic 9+15-21
-  if (/^(9[2345]\d{18,20}|9\d{15,21}|\d{20,22})$/.test(t)) return 'USPS';
-
-  // DHL eCommerce: JD + 18 digits
-  if (/^JD\d{18}$/.test(t)) return 'DHL';
-  // DHL: JJD prefix
-  if (/^JJD/.test(t)) return 'DHL';
-
-  // Amazon Logistics: TBA + 12 digits
-  if (/^TBA\d{12}$/.test(t)) return 'AMAZON';
-
-  return 'Unknown';
+  const code = detectCarrierFromTracking(tracking);
+  if (!code) return 'Unknown';
+  const display = toDisplayCarrier(code);
+  // Map display names back to the Carrier union for backward compatibility
+  switch (display) {
+    case 'UPS':       return 'UPS';
+    case 'FedEx':     return 'FedEx';
+    case 'USPS':      return 'USPS';
+    case 'DHL':       return 'DHL';
+    case 'Amazon':    return 'AMAZON';
+    default:          return display as Carrier;
+  }
 }
 
 /** Convenience alias matching the old utils/tracking.ts API name. */

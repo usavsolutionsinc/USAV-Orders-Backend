@@ -7,9 +7,10 @@
  */
 import React, { MouseEvent, useCallback, useEffect, useId, useRef } from 'react';
 import { isEmptyDisplayValue } from '@/utils/empty-display-value';
-import { Check, Copy, MapPin, Barcode, Settings, Package, ExternalLink } from '../Icons';
+import { Check, Copy, MapPin, Barcode, Settings, Package, ExternalLink, Pencil } from '../Icons';
 import { monoValue } from '@/design-system/tokens/typography/presets';
 import { useSiteTooltipOptional, type SiteTooltipContextValue } from '@/components/providers/SiteTooltipProvider';
+import { skuScanPrefixBeforeColon, getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 
 // --- Helpers ---
 
@@ -32,6 +33,15 @@ export function getLast6Serial(value: string | null | undefined): string {
   const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
   const last = parts.length > 0 ? parts[parts.length - 1] : '';
   return last.length > 6 ? last.slice(-6) : last || '---';
+}
+
+/**
+ * Pack/tech "tracking" fields sometimes hold a static SKU code (`PROD:qty`, `:tag`) rather than a carrier number.
+ * Those must use the SKU chip, not {@link TrackingChip}.
+ */
+export function isSkuFormattedScanRef(value: string | null | undefined): boolean {
+  const raw = normalizeCopyText(value);
+  return raw.includes(':');
 }
 
 // --- Icons ---
@@ -65,6 +75,11 @@ export interface CopyChipProps {
   width?: string;
   disableCopy?: boolean;
   truncateDisplay?: boolean;
+  /**
+   * When true, the label sizes to its text (underline matches full string) and the button is `w-auto`.
+   * Use for chips like serial numbers that must grow past a min width without shrinking the glyphs.
+   */
+  fitDisplayWidth?: boolean;
 }
 
 export function CopyChip({
@@ -76,6 +91,7 @@ export function CopyChip({
   width = 'w-fit max-w-full',
   disableCopy = false,
   truncateDisplay = true,
+  fitDisplayWidth = false,
 }: CopyChipProps) {
   const anchorId = useId();
   const chipRef = useRef<HTMLDivElement | null>(null);
@@ -132,7 +148,7 @@ export function CopyChip({
   return (
     <div
       ref={chipRef}
-      className={`relative flex justify-start px-1.5 ${width}`}
+      className={`relative flex items-center justify-start px-1.5 ${width}`}
       onMouseEnter={openTooltip}
       onMouseLeave={closeTooltip}
     >
@@ -143,10 +159,18 @@ export function CopyChip({
         onBlur={closeTooltipImmediate}
         disabled={isDisabled}
         title={!tooltipCtx && canCopy ? normalizedValue : undefined}
-        className="inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95 disabled:opacity-30"
+        className={
+          fitDisplayWidth
+            ? 'inline-flex w-auto max-w-full items-center justify-start gap-0.5 py-0 bg-white text-left text-black transition-all active:scale-95 disabled:opacity-30'
+            : 'inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-white text-left text-black transition-all active:scale-95 disabled:opacity-30'
+        }
       >
         {icon ? <span className={`shrink-0 ${iconClass ?? ''}`}>{icon}</span> : null}
-        <span className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 flex-1 min-w-0 text-left ${displayOverflowClass} ${underlineClass}`}>
+        <span
+          className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${underlineClass} ${
+            fitDisplayWidth ? 'min-w-0 shrink-0' : 'min-w-0 flex-1'
+          }`}
+        >
           {normalizedDisplay || '---'}
         </span>
       </button>
@@ -168,6 +192,18 @@ export const OrderIdChip = ({ value, display }: { value: string; display: string
 );
 
 /**
+ * Reserves the same width as {@link OrderIdChip} when the real chip is omitted (e.g. SKU rows).
+ * Keeps platform / tracking columns aligned with order-id rows.
+ */
+export function OrderIdChipPlaceholder() {
+  return (
+    <span className="pointer-events-none inline-flex shrink-0 select-none invisible" aria-hidden>
+      <OrderIdChip value="0000" display="0000" />
+    </span>
+  );
+}
+
+/**
  * Carrier shipping tracking number. Blue / MapPin icon.
  * DESIGN SYSTEM RULE: Use ONLY for outbound carrier tracking numbers (UPS, FedEx, USPS…).
  * Do NOT use FNSKU codes — use FnskuChip (purple/Package) for those.
@@ -178,18 +214,62 @@ export const TrackingChip = ({ value, display }: { value: string; display: strin
     display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
     icon={<MapPin className="h-4 w-4 shrink-0" />}
     underlineClass="border-blue-500"
-    iconClass="text-blue-500"
+    iconClass="inline-flex items-center justify-center text-blue-500"
   />
 );
+
+/**
+ * Static SKU code shown where a tracking column is reused (e.g. `SKU:qty`). Yellow / pencil — not carrier tracking.
+ */
+export const SkuScanRefChip = ({ value, display }: { value: string; display: string }) => (
+  <CopyChip
+    value={value}
+    display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
+    icon={<Pencil className="h-4 w-4 shrink-0" />}
+    underlineClass="border-yellow-500"
+    iconClass="inline-flex items-center justify-center text-yellow-600"
+  />
+);
+
+/**
+ * Picks blue carrier {@link TrackingChip} vs yellow {@link SkuScanRefChip} when the value contains `:`.
+ * For SKU-formatted scans (`SKU:ID`), also renders an Ecwid {@link PlatformChip} that opens the
+ * product search page using the base SKU (segment before `:`).
+ * Label is always last 4 characters of the raw value (same for carrier and SKU scans).
+ */
+export function TrackingOrSkuScanChip({ value }: { value: string }) {
+  const raw = normalizeCopyText(value);
+  const display = getLast4(raw);
+  if (isSkuFormattedScanRef(raw)) {
+    const sku = skuScanPrefixBeforeColon(raw);
+    const productUrl = getExternalUrlByItemNumber(sku);
+    return (
+      <>
+        <PlatformChip
+          label="ecwid"
+          underlineClass="border-blue-600"
+          iconClass="text-blue-600"
+          onClick={() => {
+            if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
+          }}
+        />
+        <SourceOrderChip value={sku} display={getLast4(sku)} />
+        <SkuScanRefChip value={raw} display={display} />
+      </>
+    );
+  }
+  return <TrackingChip value={raw} display={display} />;
+}
 
 /** Device / unit serial number. Emerald / Barcode icon. */
 export const SerialChip = ({
   value,
   display,
-  width = 'w-[63px]',
+  width = 'min-w-[63px] w-max max-w-full shrink-0',
 }: {
   value: string;
   display: string;
+  /** Tailwind width utilities on the wrapper; default is min width for short codes + grow with content. */
   width?: string;
 }) => (
   <CopyChip
@@ -197,9 +277,35 @@ export const SerialChip = ({
     display={isEmptyDisplayValue(display) ? 'SERIAL' : getLast6Serial(display)}
     icon={<Barcode className="h-4 w-4 shrink-0" />}
     underlineClass="border-emerald-500"
-    iconClass="text-emerald-500"
-    width="w-[63px] shrink-0"
+    iconClass="inline-flex items-center justify-center text-emerald-500"
+    width={width}
     truncateDisplay={false}
+    fitDisplayWidth
+  />
+);
+
+/**
+ * Serial sourced from the `sku` table (pack SKU rows or tech SKU_PULL). Yellow / pencil icon.
+ * DESIGN SYSTEM RULE: Use only when the row is SKU-driven — not for carrier or FNSKU serials.
+ */
+export const SkuSerialChip = ({
+  value,
+  display,
+  width = 'min-w-[63px] w-max max-w-full shrink-0',
+}: {
+  value: string;
+  display: string;
+  width?: string;
+}) => (
+  <CopyChip
+    value={value}
+    display={isEmptyDisplayValue(display) ? 'SKU' : getLast6Serial(display)}
+    icon={<Pencil className="h-4 w-4 shrink-0" />}
+    underlineClass="border-yellow-500"
+    iconClass="inline-flex items-center justify-center text-yellow-600"
+    width={width}
+    truncateDisplay={false}
+    fitDisplayWidth
   />
 );
 
@@ -285,7 +391,7 @@ export const PlatformChip = ({
   return (
     <div
       ref={chipRef}
-      className="relative px-1.5 w-fit max-w-full"
+      className="relative flex w-fit max-w-full items-center justify-start px-1.5"
       onMouseEnter={openTooltip}
       onMouseLeave={() => tooltipCtx?.scheduleClose(anchorId)}
     >
@@ -295,13 +401,13 @@ export const PlatformChip = ({
           e.stopPropagation();
           onClick(e);
         }}
-        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95"
+        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-white text-left text-black transition-all active:scale-95"
       >
-        <span className={`shrink-0 ${iconClass}`}>
+        <span className={`inline-flex shrink-0 items-center ${iconClass}`}>
           <ExternalLink className="h-4 w-4 shrink-0" />
         </span>
         <span
-          className={`font-dm-sans text-[13px] font-bold tracking-tight leading-none border-b-2 pb-0.5 min-w-[60px] text-center whitespace-nowrap lowercase text-black ${underlineClass}`}
+          className={`min-w-[60px] whitespace-nowrap border-b-2 pb-0.5 text-center font-dm-sans text-[13px] font-bold lowercase leading-none tracking-tight text-black ${underlineClass}`}
         >
           {label}
         </span>

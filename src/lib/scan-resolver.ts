@@ -1,4 +1,5 @@
 import { normalizeTrackingCanonical } from '@/lib/tracking-format';
+import { TRACKING_PATTERNS, type CarrierCode } from '@/utils/carrier-patterns';
 
 /**
  * scan-resolver.ts
@@ -15,28 +16,21 @@ import { normalizeTrackingCanonical } from '@/lib/tracking-format';
  * All patterns are applied against the *normalised* input
  * (upper-cased, non-alphanumeric chars stripped).  This mirrors how
  * barcode scanners emit data and avoids hyphens/spaces causing misses.
+ *
+ * Carrier patterns are imported from utils/carrier-patterns.ts (single
+ * source of truth shared with tracking-format.ts).
  */
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
-export type ScanCarrier =
-  | 'UPS'
-  | 'UPS_MI'
-  | 'FEDEX'
-  | 'USPS'
-  | 'DHL_EXPRESS'
-  | 'DHL_ECOMMERCE'
-  | 'AMAZON'
-  | 'UPU_INTL'
-  | 'ONTRAC'
-  | 'LASERSHIP'
-  | 'GSO';
+/** @deprecated Use CarrierCode from '@/utils/carrier-patterns' instead. */
+export type ScanCarrier = CarrierCode;
 
 export type ClassifiedScanType = 'tracking' | 'serial_full' | 'serial_partial' | 'unknown';
 
 export interface ClassifyResult {
   type: ClassifiedScanType;
-  carrier: ScanCarrier | null;
+  carrier: CarrierCode | null;
   /** Upper-cased, non-alphanumeric-stripped value used for pattern matching. */
   normalized: string;
 }
@@ -46,70 +40,8 @@ export interface SerialMatchResult {
   matches: string[];
 }
 
-// ─── TRACKING NUMBER PATTERNS ────────────────────────────────────────────────
-//
-//  Patterns are tested in order against the normalised (A-Z0-9 only) input.
-//  More-specific patterns are listed first to prevent false positives from
-//  broader numeric rules.
-
-const TRACKING_PATTERNS: ReadonlyArray<{ carrier: ScanCarrier; regex: RegExp }> = [
-  // UPS — 1Z + 16 alphanumeric chars (18 total)
-  { carrier: 'UPS',           regex: /^1Z[A-Z0-9]{16}$/ },
-
-  // UPS Mail Innovations / SurePost — 22-34 digits, often starts with 9274 or MI prefix
-  { carrier: 'UPS_MI',        regex: /^MI\d{20,30}$/ },
-  { carrier: 'UPS_MI',        regex: /^9274\d{22,28}$/ },
-
-  // FedEx Express — 12 digits, commonly prefixed with 3 or 9
-  { carrier: 'FEDEX',         regex: /^[39]\d{11}$/ },
-
-  // FedEx Ground — 15 digits, frequently prefixed with 96 or 7
-  { carrier: 'FEDEX',         regex: /^(96\d{13}|7\d{14})$/ },
-
-  // FedEx Ground Economy (legacy SmartPost) — 20 digits, often prefixed with 92 or 61
-  { carrier: 'FEDEX',         regex: /^(92|61)\d{18}$/ },
-
-  // FedEx Freight — typically 15–25 digits, usually prefixed with 96
-  { carrier: 'FEDEX',         regex: /^96\d{13,23}$/ },
-
-  // FedEx Custom Critical — variable length, often prefixed with 00 or 01
-  { carrier: 'FEDEX',         regex: /^(00|01)\d{10,28}$/ },
-
-  // Extended FedEx long labels seen in station scans (33–34 digits, 9621…)
-  { carrier: 'FEDEX',         regex: /^9621\d{29,30}$/ },
-
-  // FedEx Ground 2D / SSC34 — 34 digits, prefixed with 9261 or 9274 (before USPS to avoid false match)
-  { carrier: 'FEDEX',         regex: /^9261\d{30}$/ },
-
-  // USPS — IMpb with routing prefix: 420 + 5-digit ZIP (+ optional 4-digit ZIP ext) + 20-22 digit tracking
-  { carrier: 'USPS',          regex: /^420\d{5}(\d{4})?(9[2345]\d{18,20}|9\d{15,21}|\d{20,22})$/ },
-  // USPS — IMpb starts 9XXXX (various lengths 16-22) or pure-digit 20-22
-  { carrier: 'USPS',          regex: /^(9[2345][0-9]{18,20}|9[0-9]{15,21}|[0-9]{20,22})$/ },
-
-  // DHL eCommerce — JD + 18 digits (20 total), GM + 14-18 digits, LX + 13 digits, JVGL + 14 digits
-  { carrier: 'DHL_ECOMMERCE', regex: /^JD\d{18}$/ },
-  { carrier: 'DHL_ECOMMERCE', regex: /^GM\d{14,18}$/ },
-  { carrier: 'DHL_ECOMMERCE', regex: /^LX\d{13}$/ },
-  { carrier: 'DHL_ECOMMERCE', regex: /^JVGL\d{14}$/ },
-
-  // DHL Express — 10 or 11 pure digits
-  { carrier: 'DHL_EXPRESS',   regex: /^\d{10,11}$/ },
-
-  // Amazon Logistics — TBA + 12-15 alphanumeric chars (covers newer mixed-format codes)
-  { carrier: 'AMAZON',        regex: /^TBA[A-Z0-9]{12,15}$/ },
-
-  // UPU international postal — 2 letters + 9 digits + 2 letters  (e.g. LZ123456789US)
-  { carrier: 'UPU_INTL',      regex: /^[A-Z]{2}\d{9}[A-Z]{2}$/ },
-
-  // OnTrac — C + 14 digits (15 total)
-  { carrier: 'ONTRAC',        regex: /^C\d{14}$/ },
-
-  // LaserShip — 1LS + 12 digits (15 total)
-  { carrier: 'LASERSHIP',     regex: /^1LS\d{12}$/ },
-
-  // GSO — 2 letters + 14 digits (16 total)
-  { carrier: 'GSO',           regex: /^[A-Z]{2}\d{14}$/ },
-];
+// Re-export TRACKING_PATTERNS for any downstream consumers
+export { TRACKING_PATTERNS } from '@/utils/carrier-patterns';
 
 // ─── SERIAL NUMBER PATTERNS ───────────────────────────────────────────────────
 //

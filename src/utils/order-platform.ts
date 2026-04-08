@@ -1,23 +1,33 @@
-export function getOrderPlatformLabel(orderId: string, accountSource: string | null | undefined): string {
-  if (!orderId || orderId === 'Not available' || orderId === 'N/A') return '';
+export function getOrderPlatformLabel(orderId: string | null | undefined, accountSource: string | null | undefined): string {
+  const oid = String(orderId ?? '').trim();
+  if (oid === 'Not available' || oid === 'N/A') return '';
 
-  if (isFbaOrder(orderId, accountSource)) {
+  /** Pack/tech rows often lack a linked marketplace order id; still show channel from account_source. */
+  if (!oid) {
+    const src = String(accountSource || '').trim().toLowerCase();
+    if (!src) return '';
+    if (src === 'fba') return 'FBA';
+    if (src === 'ecwid') return 'ECWID';
+    return String(accountSource || '').trim();
+  }
+
+  if (isFbaOrder(oid, accountSource)) {
     return 'FBA';
   }
 
-  if (/^\d{3}-\d+-\d+$/.test(orderId)) {
+  if (/^\d{3}-\d+-\d+$/.test(oid)) {
     return 'Amazon';
   }
 
-  if (/^\d{2}-\d+-\d+$/.test(orderId)) {
-    return accountSource ? `ebay - ${accountSource}` : 'ebay';
+  if (/^\d{2}-\d+-\d+$/.test(oid)) {
+    return 'ebay';
   }
 
-  if (/^\d{15}$/.test(orderId)) {
+  if (/^\d{15}$/.test(oid)) {
     return 'Walmart';
   }
 
-  if (/^\d{4}$/.test(orderId)) {
+  if (/^\d{4}$/.test(oid)) {
     return 'ECWID';
   }
 

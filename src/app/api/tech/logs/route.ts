@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
@@ -22,10 +22,10 @@ export async function GET(req: NextRequest) {
 
   const cacheKey = createCacheLookupKey({ techId, weekStart, weekEnd, limit, offset });
   const isCurrentWeek = !weekStart; // no weekStart means current week
-  const cacheTtl = isCurrentWeek ? 30 : 3600; // 30s current week, 1hr historical
+  const cacheTtl = isCurrentWeek ? 60 : 3600; // 30s current week, 1hr historical
 
   try {
-    const cached = await getCachedJson<unknown[]>('api:tech-logs-v2', cacheKey);
+    const cached = await getCachedJson<unknown[]>('api:tech-logs-v3', cacheKey);
     if (cached) {
       return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
     }
@@ -99,7 +99,14 @@ export async function GET(req: NextRequest) {
         to_char(wa_d.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
 
         -- FBA log FK (for lifecycle tracking)
-        fl.id AS fnsku_log_id
+        fl.id AS fnsku_log_id,
+
+        EXISTS (
+          SELECT 1
+          FROM tech_serial_numbers tsn_src
+          WHERE tsn_src.context_station_activity_log_id = sal.id
+            AND tsn_src.source_sku_id IS NOT NULL
+        ) AS has_sku_serial_source
 
       FROM station_activity_logs sal
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
@@ -199,7 +206,7 @@ export async function GET(req: NextRequest) {
     const result = await pool.query(query, params);
     const rows = result.rows;
 
-    await setCachedJson('api:tech-logs-v2', cacheKey, rows, cacheTtl, ['tech-logs']);
+    after(() => setCachedJson('api:tech-logs-v3', cacheKey, rows, cacheTtl, ['tech-logs']));
     return NextResponse.json(rows, { headers: { 'x-cache': 'MISS' } });
   } catch (error: any) {
     console.error('Error fetching tech logs:', error);

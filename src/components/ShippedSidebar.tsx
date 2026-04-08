@@ -62,9 +62,9 @@ function toShippedOrder(order: any): ShippedOrder {
 }
 
 const SHIPPED_FILTER_TABS: { id: ShippedTypeFilter; label: string }[] = [
+    { id: 'sku', label: 'SKU' },
     { id: 'all', label: 'All' },
     { id: 'orders', label: 'Orders' },
-    { id: 'sku', label: 'SKU' },
     { id: 'fba', label: 'FBA' },
 ];
 

@@ -67,8 +67,11 @@ export function useDashboardSearchController() {
   const setSearch = useCallback(async (nextValue: string) => {
     const trimmed = nextValue.trim();
     const current = String(searchParams.get('search') || '').trim();
-    const hasOpenOrder = searchParams.has('openOrderId');
-    if (trimmed === current && !hasOpenOrder) return;
+    // Always no-op when the query is unchanged. A previous version only skipped when
+    // `openOrderId` was absent; re-applying the same search (e.g. ShippedSidebar
+    // handleSearch re-running after a details panel opened) would strip `openOrderId`
+    // and immediately close ShippedDetailsPanel.
+    if (trimmed === current) return;
 
     updateSearch((params) => {
       if (trimmed) params.set('search', trimmed);

@@ -41,9 +41,10 @@
  *   status?   ARRIVED | MATCHED | UNBOXED | ALL  (default: ARRIVED,MATCHED)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
-import { resolveReceivingSchema } from '@/utils/receiving-schema';
+import { getReceivingSchema, getReceivingLineColumns } from '@/lib/receiving-schema-cache';
+import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,20 +64,17 @@ export async function GET(request: NextRequest) {
       filterStatuses = ['ARRIVED', 'MATCHED'];
     }
 
-    const { dateColumn } = await resolveReceivingSchema();
-    const columnsRes = await pool.query(
-      `SELECT column_name
-       FROM information_schema.columns
-       WHERE table_name = 'receiving'`
-    );
-    const availableColumns = new Set<string>(columnsRes.rows.map((r: any) => String(r.column_name)));
+    const cacheLookup = createCacheLookupKey({ limit, status: statusParam || 'ARRIVED_MATCHED' });
+    const cached = await getCachedJson<{ pending: unknown[]; total: number }>('api:pending-unboxing', cacheLookup);
+    if (cached) {
+      return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
+    }
+
+    const [{ columns: availableColumns, dateColumn }, availableLineColumns] = await Promise.all([
+      getReceivingSchema(),
+      getReceivingLineColumns(),
+    ]);
     const hasColumn = (name: string) => availableColumns.has(name);
-    const lineColumnsRes = await pool.query(
-      `SELECT column_name
-       FROM information_schema.columns
-       WHERE table_name = 'receiving_lines'`
-    );
-    const availableLineColumns = new Set<string>(lineColumnsRes.rows.map((r: any) => String(r.column_name)));
     const hasLineColumn = (name: string) => availableLineColumns.has(name);
     const receivedAtSelect = hasColumn('received_at')
       ? "to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at"
@@ -263,7 +261,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ pending, total: pending.length });
+    const responseBody = { pending, total: pending.length };
+    after(() => setCachedJson('api:pending-unboxing', cacheLookup, responseBody, 30, ['pending-unboxing', 'receiving-logs']));
+    return NextResponse.json(responseBody, { headers: { 'x-cache': 'MISS' } });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to fetch pending unboxing';
     console.error('pending-unboxing GET failed:', error);

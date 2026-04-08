@@ -184,6 +184,8 @@ function LineItemsPanel({
   const queryClient = useQueryClient();
   const [activeSerialLineId, setActiveSerialLineId] = useState<number | null>(null);
 
+  const hasCachedLines = cachedLines.length > 0;
+
   const { data, isLoading } = useQuery<{ success: boolean; receiving_lines: ReceivingLine[] }>({
     queryKey: ['receiving-lines', receivingId],
     queryFn: async () => {
@@ -192,7 +194,9 @@ function LineItemsPanel({
       return res.json();
     },
     staleTime: 10_000,
-    placeholderData: cachedLines.length > 0
+    // Skip the fetch entirely when lines are pre-loaded from the parent query
+    enabled: !hasCachedLines,
+    placeholderData: hasCachedLines
       ? { success: true, receiving_lines: cachedLines }
       : undefined,
   });

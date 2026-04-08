@@ -8,8 +8,6 @@ import { Barcode } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ViewDropdown } from '@/components/ui/ViewDropdown';
 import StaffSelector from '@/components/StaffSelector';
-import PendingUnboxingQueue from '@/components/station/PendingUnboxingQueue';
-import { invalidateReceivingCache } from '@/lib/receivingCache';
 import { RECEIVING_CARRIERS } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { ReceivingDetailsLog } from '@/components/station/ReceivingDetailsStack';
@@ -73,38 +71,40 @@ export function ReceivingSidebarPanel() {
   const [bulkTracking, setBulkTracking] = useState('');
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
-  const submitBulkScan = useCallback(async () => {
+  const submitBulkScan = useCallback(() => {
     const trackingNumber = bulkTracking.trim();
     if (!trackingNumber || bulkSubmitting) return;
+
+    // Optimistic: clear input immediately, show brief sending state
+    setBulkTracking('');
     setBulkSubmitting(true);
-    try {
-      const res = await fetch('/api/receiving-entry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trackingNumber,
-          carrier: carrier || undefined,
-          qaStatus: 'PENDING',
-          dispositionCode: 'HOLD',
-          conditionGrade: 'BRAND_NEW',
-          isReturn: false,
-          needsTest: true,
-        }),
-      });
-      if (!res.ok) throw new Error('Failed to add receiving entry');
-      const data = await res.json();
-      setBulkTracking('');
-      invalidateReceivingCache();
-      queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
-      if (data?.record) {
-        window.dispatchEvent(new CustomEvent('receiving-entry-added', { detail: data.record }));
-      }
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-    } catch {
-      window.alert('Failed to add receiving entry.');
-    } finally {
-      setBulkSubmitting(false);
-    }
+
+    fetch('/api/receiving-entry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trackingNumber,
+        carrier: carrier || undefined,
+        qaStatus: 'PENDING',
+        dispositionCode: 'HOLD',
+        conditionGrade: 'BRAND_NEW',
+        isReturn: false,
+        needsTest: true,
+        skipZohoMatch: true,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        // Surgical insert — ReceivingLogs picks this up instantly via setQueryData
+        if (data?.record) {
+          window.dispatchEvent(new CustomEvent('receiving-entry-added', { detail: data.record }));
+        }
+      })
+      .catch(() => {
+        // Silently fail — entry will appear on next refresh if it succeeded server-side
+      })
+      .finally(() => setBulkSubmitting(false));
   }, [bulkTracking, carrier, bulkSubmitting, queryClient]);
 
   const updateMode = (nextMode: ReceivingMode) => {
@@ -118,14 +118,6 @@ export function ReceivingSidebarPanel() {
     nextParams.set('staffId', String(id));
     router.replace(`/receiving?${nextParams.toString()}`);
   };
-
-  const handleSelectReceivingId = useCallback((receivingId: number) => {
-    window.dispatchEvent(
-      new CustomEvent('receiving-select-log', {
-        detail: { id: String(receivingId), timestamp: '' },
-      }),
-    );
-  }, []);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -197,14 +189,6 @@ export function ReceivingSidebarPanel() {
           </div>
         </div>
       )}
-
-      {/* Pending unboxing queue */}
-      <div className="flex-1 overflow-hidden">
-        <PendingUnboxingQueue
-          onSelectReceivingId={handleSelectReceivingId}
-          staffId={Number.parseInt(staffId, 10) || null}
-        />
-      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import {
   FnskuChip,
   OrderIdChip,
   TicketChip,
-  TrackingChip,
+  TrackingOrSkuScanChip,
   getLast4,
 } from '@/components/ui/CopyChip';
 
@@ -19,7 +19,7 @@ export function WorkOrderInfoChips({ row }: { row: WorkOrderRow }) {
       return (
         <>
           <OrderIdChip value={orderValue} display={getLast4(orderValue)} />
-          <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
+          <TrackingOrSkuScanChip value={trackingValue} />
         </>
       );
     }
@@ -54,7 +54,7 @@ export function WorkOrderInfoChips({ row }: { row: WorkOrderRow }) {
       const track = String(row.recordLabel || '').trim();
       return (
         <>
-          <TrackingChip value={track} display={getLast4(track)} />
+          <TrackingOrSkuScanChip value={track} />
           <OrderIdChip value={idStr} display={getLast4(idStr)} />
         </>
       );

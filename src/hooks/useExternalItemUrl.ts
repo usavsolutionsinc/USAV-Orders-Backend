@@ -11,6 +11,13 @@ export function getExternalUrlByItemNumber(itemNumber: string | null | undefined
   return `https://usavshop.com/products/search?keyword=${encodeURIComponent(item)}`;
 }
 
+/** `SKU:qty` scans — substring before `:` (catalog SKU / item keyword for usavshop). */
+export function skuScanPrefixBeforeColon(value: string | null | undefined): string {
+  const s = String(value ?? '').trim();
+  if (!s.includes(':')) return '';
+  return s.split(':')[0]?.trim() ?? '';
+}
+
 export function useExternalItemUrl() {
   const getExternalUrlByItemNumberCb = useCallback((itemNumber: string | null | undefined) => {
     return getExternalUrlByItemNumber(itemNumber);

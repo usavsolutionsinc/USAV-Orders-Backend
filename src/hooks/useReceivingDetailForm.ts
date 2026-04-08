@@ -189,7 +189,10 @@ export function useReceivingDetailForm({
     try {
       const res = await fetch(`/api/receiving-logs?id=${encodeURIComponent(log.id)}`, { method: 'DELETE' });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.error || 'Failed to delete receiving log');
+      // Treat 404 as success — record is already gone, which is the desired outcome
+      if (!res.ok && res.status !== 404) throw new Error(data?.error || 'Failed to delete receiving log');
+      // Surgical removal from ReceivingLogs cache — instant UI update
+      window.dispatchEvent(new CustomEvent('receiving-entry-deleted', { detail: log.id }));
       onDeleted(log.id);
     } catch (error) {
       console.error('Failed to delete receiving log:', error);

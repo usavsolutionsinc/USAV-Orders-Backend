@@ -8,6 +8,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { fetchEcwidTransferRows } from '@/lib/ecwid/fetch-transfer-rows';
 import { desc, eq, inArray } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
@@ -50,6 +51,7 @@ export interface GoogleSheetsTransferOrdersJobResult {
   matchedCustomers: number;
   unmatchedCustomers: number;
   tabName: string;
+  ecwidApiRows?: number;
   skippedRows?: number;
   durationMs: number;
 }
@@ -247,17 +249,30 @@ export async function runGoogleSheetsTransferOrders(
       fail(400, `Missing columns in source: ${missingCols.join(', ')}`);
     }
 
-    const eligibleSourceRows = sourceRows.slice(1).filter((row) => {
+    let eligibleSourceRows = sourceRows.slice(1).filter((row) => {
       const orderId = String(row[colIndices.orderNumber] || '').trim();
       const platform = colIndices.platform >= 0
         ? String(row[colIndices.platform] || '').trim()
         : '';
       if (!orderId) return false;
       if (colIndices.platform >= 0 && !platform) return false;
-      // Accept all marketplace platforms present in the transfer sheet
-      // (Amazon, eBay, Ecwid, etc.) so legacy sheet-driven uploads continue to work.
+      // Ecwid orders are now fetched directly from the Ecwid API — skip them in the sheet.
+      if (platform.toLowerCase() === 'ecwid') return false;
       return true;
     });
+
+    // Fetch Ecwid orders directly from the API and merge into the pipeline
+    let ecwidApiRows = 0;
+    try {
+      const ecwidRows = await fetchEcwidTransferRows(colIndices);
+      ecwidApiRows = ecwidRows.length;
+      if (ecwidRows.length > 0) {
+        eligibleSourceRows = [...eligibleSourceRows, ...ecwidRows];
+      }
+      console.log(`[google-sheets-transfer-orders] Merged ${ecwidApiRows} Ecwid API rows`);
+    } catch (err: any) {
+      console.error('[google-sheets-transfer-orders] Ecwid API fetch failed (non-fatal):', err?.message);
+    }
 
     if (eligibleSourceRows.length === 0) {
       return {
@@ -271,6 +286,7 @@ export async function runGoogleSheetsTransferOrders(
         matchedCustomers: 0,
         unmatchedCustomers: 0,
         tabName: targetTabName,
+        ecwidApiRows,
         skippedRows: sourceRows.length - 1,
         durationMs: Date.now() - startedAt,
       };
@@ -710,6 +726,7 @@ export async function runGoogleSheetsTransferOrders(
       matchedCustomers,
       unmatchedCustomers,
       tabName: targetTabName,
+      ecwidApiRows,
       durationMs: Date.now() - startedAt,
     };
   } catch (error: any) {

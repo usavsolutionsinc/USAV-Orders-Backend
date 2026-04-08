@@ -1,11 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Check, ChevronRight, ClipboardList } from '@/components/Icons';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { sectionLabel, framerPresence, framerTransition, SkeletonList } from '@/design-system';
+import WeekHeader from '@/components/ui/WeekHeader';
+import { getCurrentPSTDateKey } from '@/utils/date';
 import type { StationTheme } from '@/utils/staff-colors';
 import { printQueueTableUi } from '@/utils/staff-colors';
 
@@ -29,6 +31,11 @@ interface FbaBoardTableProps {
   emptyMessage?: string;
   onSelectionChange?: (selected: FbaBoardItem[]) => void;
   onDetailOpen?: (item: FbaBoardItem) => void;
+  weekRange?: { startStr: string; endStr: string };
+  weekOffset?: number;
+  onPrevWeek?: () => void;
+  onNextWeek?: () => void;
+  rightSlot?: ReactNode;
 }
 
 const STATUS_SORT_ORDER: Record<string, number> = {
@@ -59,6 +66,11 @@ export function FbaBoardTable({
   emptyMessage,
   onSelectionChange,
   onDetailOpen,
+  weekRange,
+  weekOffset = 0,
+  onPrevWeek,
+  onNextWeek,
+  rightSlot,
 }: FbaBoardTableProps) {
   const ui = printQueueTableUi[stationTheme];
 
@@ -261,26 +273,47 @@ export function FbaBoardTable({
     };
   }, [sortedItems, emitSelection]);
 
+  const weekHeader = (
+    <WeekHeader
+      stickyDate={getCurrentPSTDateKey()}
+      fallbackDate="FBA Board"
+      count={sortedItems.length}
+      weekRange={weekRange}
+      weekOffset={weekOffset}
+      onPrevWeek={onPrevWeek}
+      onNextWeek={onNextWeek}
+      rightSlot={rightSlot}
+    />
+  );
+
   if (loading) {
     return (
-      <div className="flex-1 overflow-y-auto no-scrollbar">
-        <SkeletonList count={12} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {weekHeader}
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+          <SkeletonList count={12} />
+        </div>
       </div>
     );
   }
 
   if (sortedItems.length === 0) {
     return (
-      <div className="flex items-center justify-center px-4 py-12 text-center">
-        <p className={sectionLabel}>
-          {emptyMessage || 'No items'}
-        </p>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {weekHeader}
+        <div className="flex flex-1 items-center justify-center px-4 py-12 text-center">
+          <p className={sectionLabel}>
+            {emptyMessage || 'No items'}
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {weekHeader}
+      <div className="min-h-0 flex-1 overflow-auto">
       <div className="divide-y divide-gray-200">
         {sortedItems.map((item, index) => {
           const isSelected = selectedIds.has(item.item_id);
@@ -358,6 +391,7 @@ export function FbaBoardTable({
             </motion.div>
           );
         })}
+      </div>
       </div>
     </div>
   );

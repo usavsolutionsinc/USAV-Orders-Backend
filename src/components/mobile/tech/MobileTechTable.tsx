@@ -15,13 +15,14 @@ import { getCurrentPSTDateKey, toPSTDateKey, formatDateWithOrdinal, computeWeekR
 import { type TechRecord } from '@/hooks/useTechLogs';
 import { useTechTableController, hasUsableProductTitle, isFbaTechRecord } from '@/hooks/station/useTechTableController';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import {
   getLast4,
   getLast6Serial,
   FnskuChip,
   OrderIdChip,
-  TrackingChip,
+  OrderIdChipPlaceholder,
+  TrackingOrSkuScanChip,
   SerialChip,
 } from '@/components/ui/CopyChip';
 import { normalizeTrackingKey } from '@/lib/tracking-format';
@@ -215,14 +216,22 @@ export function MobileTechTable({
                       const dotType = getSourceDotType({
                         orderId: record.order_id,
                         accountSource: record.account_source,
+                        trackingType: null,
+                        scanRef: record.shipping_tracking_number,
                       });
+                      const hideOrderIdChip =
+                        isSkuSourceRecord({
+                          orderId: record.order_id,
+                          accountSource: record.account_source,
+                          trackingType: null,
+                          scanRef: record.shipping_tracking_number,
+                        }) || Boolean(record.has_sku_serial_source);
                       const serialValue = String(record.serial_number || '').trim();
                       const serialDisplayText = serialValue
                         ? getLast6Serial(record.serial_number)
                         : record.source_kind === 'fba_scan' || record.source_kind === 'tech_scan'
                           ? 'SERIAL'
                           : '---';
-
                       return (
                         <motion.div
                           key={getRowKey(record)}
@@ -267,14 +276,15 @@ export function MobileTechTable({
                                     <FnskuChip value={fnskuValue} />
                                   ) : (
                                     <>
-                                      <OrderIdChip
-                                        value={record.order_id || ''}
-                                        display={getLast4(record.order_id)}
-                                      />
-                                      <TrackingChip
-                                        value={record.shipping_tracking_number || ''}
-                                        display={getLast4(record.shipping_tracking_number)}
-                                      />
+                                      {!hideOrderIdChip ? (
+                                        <OrderIdChip
+                                          value={record.order_id || ''}
+                                          display={getLast4(record.order_id)}
+                                        />
+                                      ) : (
+                                        <OrderIdChipPlaceholder />
+                                      )}
+                                      <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
                                     </>
                                   )}
                                   <SerialChip

@@ -3,15 +3,24 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { SkeletonList } from '@/design-system';
 import { Loader2 } from './Icons';
-import { FnskuChip, OrderIdChip, TrackingChip, SerialChip, PlatformChip, getLast4, getLast6Serial } from './ui/CopyChip';
+import {
+  FnskuChip,
+  OrderIdChip,
+  OrderIdChipPlaceholder,
+  TrackingOrSkuScanChip,
+  SerialChip,
+  PlatformChip,
+  getLast4,
+  getLast6Serial,
+} from './ui/CopyChip';
 import { DesktopDateGroupHeader } from './ui/DesktopDateGroupHeader';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
-import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import WeekHeader from './ui/WeekHeader';
 import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, computeWeekRange } from '@/utils/date';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
-import { getSourceDotType, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { type TechRecord } from '@/hooks/useTechLogs';
 import { normalizeTrackingKey } from '@/lib/tracking-format';
@@ -254,7 +263,16 @@ export function TechTable({ testedBy }: TechTableProps) {
                         const dotType = getSourceDotType({
                           orderId: record.order_id,
                           accountSource: record.account_source,
+                          trackingType: null,
+                          scanRef: record.shipping_tracking_number,
                         });
+                        const hideOrderIdChip =
+                          isSkuSourceRecord({
+                            orderId: record.order_id,
+                            accountSource: record.account_source,
+                            trackingType: null,
+                            scanRef: record.shipping_tracking_number,
+                          }) || Boolean(record.has_sku_serial_source);
                         return (
                           <div
                             key={getRowKey(record)}
@@ -289,27 +307,31 @@ export function TechTable({ testedBy }: TechTableProps) {
                                 </>
                               ) : (() => {
                                 const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
+                                const productUrl = getExternalUrlByItemNumber(
+                                  String(record.item_number || '').trim() ||
+                                    skuScanPrefixBeforeColon(record.shipping_tracking_number),
+                                );
                                 return (
                                   <>
                                     {plat ? (
                                       <PlatformChip
                                         label={plat}
                                         underlineClass={getOrderPlatformBorderColor(plat)}
-                                        iconClass={record.item_number ? getOrderPlatformColor(plat) : 'text-gray-500'}
+                                        iconClass={productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
                                         onClick={() => {
-                                          const url = getExternalUrlByItemNumber(record.item_number);
-                                          if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                          if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
                                         }}
                                       />
                                     ) : null}
-                                    <OrderIdChip
-                                      value={record.order_id || ''}
-                                      display={getLast4(record.order_id)}
-                                    />
-                                    <TrackingChip
-                                      value={record.shipping_tracking_number || ''}
-                                      display={getLast4(record.shipping_tracking_number)}
-                                    />
+                                    {!hideOrderIdChip ? (
+                                      <OrderIdChip
+                                        value={record.order_id || ''}
+                                        display={getLast4(record.order_id)}
+                                      />
+                                    ) : (
+                                      <OrderIdChipPlaceholder />
+                                    )}
+                                    <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} />
                                     <SerialChip value={record.serial_number || ''} display={serialChipDisplay} />
                                   </>
                                 );

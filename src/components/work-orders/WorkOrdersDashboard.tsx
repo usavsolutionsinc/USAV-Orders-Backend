@@ -168,7 +168,10 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
       .map((m) => ({ id: Number(m.id), name: m.name })),
   };
 
+  const isSelfRefreshing = useRef(false);
+
   const refreshRows = useCallback(async (opts?: { pendingOrderId?: number }) => {
+    isSelfRefreshing.current = true;
     await queryClient.invalidateQueries({ queryKey: ['work-orders', queue, query] });
     window.dispatchEvent(new CustomEvent('usav-refresh-data'));
     const pid = opts?.pendingOrderId;
@@ -177,6 +180,7 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
     } else {
       window.dispatchEvent(new CustomEvent('dashboard-refresh'));
     }
+    isSelfRefreshing.current = false;
   }, [queryClient, queue, query]);
 
   const clearEntitySelectionParams = useCallback(() => {
@@ -299,14 +303,17 @@ export function WorkOrdersDashboard({ basePath = '/work-orders' }: { basePath?: 
 
   // Refresh when external events change order state (tech scan, OOS update, etc.)
   useEffect(() => {
-    const handleExternalRefresh = () => { void refreshRows(); };
+    const handleExternalRefresh = () => {
+      if (isSelfRefreshing.current) return;
+      void queryClient.invalidateQueries({ queryKey: ['work-orders', queue, query] });
+    };
     window.addEventListener('usav-refresh-data', handleExternalRefresh);
     window.addEventListener('dashboard-refresh', handleExternalRefresh);
     return () => {
       window.removeEventListener('usav-refresh-data', handleExternalRefresh);
       window.removeEventListener('dashboard-refresh', handleExternalRefresh);
     };
-  }, [refreshRows]);
+  }, [queryClient, queue, query]);
 
   const unassignedRows = rows.filter((r) => !r.techId && !r.packerId);
   const assignedRows = rows.filter((r) => r.techId != null || r.packerId != null);
