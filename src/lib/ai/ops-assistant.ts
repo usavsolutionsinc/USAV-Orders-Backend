@@ -1,5 +1,5 @@
 import { extractParams } from '@/lib/ai/intent-router';
-import { getAllShippedOrders, type ShippedOrder } from '@/lib/neon/orders-queries';
+import { getPackedOrdersForAi, type ShippedOrder } from '@/lib/neon/orders-queries';
 import { resolveAiTimeframe } from '@/lib/ai/date-range';
 import type {
   AiBreakdownRow,
@@ -140,11 +140,11 @@ function buildReply(args: {
   }
 
   if (total === 0) {
-    return `No shipped orders were recorded for ${timeframe.exactLabel}.${assumption}`;
+    return `No orders were packed or shipped for ${timeframe.exactLabel}.${assumption}`;
   }
 
   const leader = summarizeTop(breakdown);
-  return `${total} shipped orders were recorded for ${timeframe.exactLabel}. Breakdown by ${subject}: ${leader}${assumption}`;
+  return `${total} orders were packed/shipped for ${timeframe.exactLabel}. Breakdown by ${subject}: ${leader}${assumption}`;
 }
 
 function buildAnalysis(args: {
@@ -190,17 +190,17 @@ function buildAnalysis(args: {
   return {
     kind: 'shipping_summary',
     title: kind === 'missing_attribution'
-      ? `Shipped Orders Missing ${dimension === 'packer' ? 'Packer' : 'Tester'}`
+      ? `Orders Missing ${dimension === 'packer' ? 'Packer' : 'Tester'}`
       : dimension === 'packer'
-        ? 'Shipped Orders By Packer'
-        : 'Shipped Orders By Tester',
+        ? 'Packed/Shipped Orders By Packer'
+        : 'Packed/Shipped Orders By Tester',
     summary: kind === 'missing_attribution'
       ? total === 0
-        ? `No shipped orders were missing a ${dimension} for ${timeframe.exactLabel}.`
-        : `${total} shipped orders were missing a ${dimension} for ${timeframe.exactLabel}.`
+        ? `No orders were missing a ${dimension} for ${timeframe.exactLabel}.`
+        : `${total} orders were missing a ${dimension} for ${timeframe.exactLabel}.`
       : total === 0
-        ? `No shipped orders were recorded for ${timeframe.exactLabel}.`
-        : `${total} shipped orders were recorded for ${timeframe.exactLabel}.`,
+        ? `No orders were packed or shipped for ${timeframe.exactLabel}.`
+        : `${total} orders were packed/shipped for ${timeframe.exactLabel}.`,
     confidence: kind === 'missing_attribution'
       ? (explicitRange ? 'high' : 'medium')
       : missingDimensionCount > 0 || !explicitRange ? 'medium' : 'high',
@@ -208,7 +208,7 @@ function buildAnalysis(args: {
     timeframe,
     metrics: [
       {
-        label: kind === 'missing_attribution' ? 'Rows missing attribution' : 'Total shipped',
+        label: kind === 'missing_attribution' ? 'Rows missing attribution' : 'Total packed/shipped',
         value: String(total),
         detail: `Counted from ${timeframe.exactLabel}`,
       },
@@ -274,11 +274,10 @@ export async function resolveLocalAiAnswer(message: string): Promise<LocalAiReso
   const queryKind = detectLocalOpsQueryKind(message) || 'summary';
   const timeframe = resolveAiTimeframe(message);
   const dimension = pickLocalOpsDimension(message);
-  const allRecords = await getAllShippedOrders({
-    limit: 5000,
-    offset: 0,
+  const allRecords = await getPackedOrdersForAi({
     weekStart: timeframe.start,
     weekEnd: timeframe.end,
+    limit: 5000,
   });
   const records = queryKind === 'missing_attribution'
     ? allRecords.filter((record) =>

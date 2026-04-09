@@ -2,6 +2,7 @@
 
 import type { AiStructuredAnswer } from '@/lib/ai/types';
 import { sectionLabel, tableHeader, tableCell, dataValue } from '@/design-system/tokens/typography/presets';
+import MarkdownRenderer from '@/components/ai/MarkdownRenderer';
 
 function confidenceClasses(confidence: AiStructuredAnswer['confidence']) {
   if (confidence === 'high') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
@@ -25,7 +26,7 @@ export default function AiAnswerCard({
   if (!analysis) {
     return (
       <div className="border border-gray-200 bg-white px-4 py-3 text-gray-800">
-        <p className="text-[12px] leading-6 whitespace-pre-wrap">{content}</p>
+        <MarkdownRenderer content={content} />
         <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-2">
           <span className={sectionLabel}>
             {modeLabel || 'Assistant'}
@@ -57,10 +58,10 @@ export default function AiAnswerCard({
       </div>
 
       <div className="space-y-4 px-4 py-4">
-        <p className="text-[12px] leading-6 text-gray-800">{analysis.summary}</p>
+        <MarkdownRenderer content={analysis.summary} />
         {content.trim() && content.trim() !== analysis.summary.trim() ? (
           <div className="border-l border-gray-200 pl-3 text-[11px] leading-6 text-gray-600">
-            {content}
+            <MarkdownRenderer content={content} />
           </div>
         ) : null}
 

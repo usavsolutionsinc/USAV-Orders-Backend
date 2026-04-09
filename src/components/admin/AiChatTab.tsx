@@ -6,7 +6,9 @@ import {
   Check,
   Clock,
   Database,
+  History,
   Loader2,
+  MessageSquare,
   PackageCheck,
   Send,
 } from '@/components/Icons';
@@ -26,7 +28,14 @@ interface ChatMessage {
   error?: boolean;
   analysis?: AiStructuredAnswer | null;
   mode?: AiChatMode;
-  fallback?: boolean;
+}
+
+interface SessionSummary {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
 }
 
 type ConnectionStatus = 'checking' | 'online' | 'offline';
@@ -76,25 +85,61 @@ function BotIcon({ className = 'w-4 h-4' }: { className?: string }) {
   );
 }
 
+function TrashIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
+function SidebarIcon({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+    </svg>
+  );
+}
+
 function statusLabel(status: ConnectionStatus) {
   if (status === 'online') return 'OpenClaw Connected';
-  if (status === 'offline') return 'OpenClaw Offline (Fallback Active)';
+  if (status === 'offline') return 'OpenClaw Offline';
   return 'Checking Gateway';
 }
 
-function modeLabel(mode: AiChatMode | undefined, fallback?: boolean) {
+function modeLabel(mode: AiChatMode | undefined) {
   if (mode === 'local_ops') return 'Local Ops Query';
   if (mode === 'rag') return 'Bose Manual RAG';
-  if (mode === 'hybrid') return fallback ? 'Hybrid (Fallback)' : 'Hybrid';
-  return fallback ? 'Ollama Fallback' : 'OpenClaw';
+  if (mode === 'hybrid') return 'Hybrid';
+  return 'OpenClaw';
+}
+
+function formatRelativeDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export default function AiChatTab() {
-  const [sessionId] = useState<string>(() => `oc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const [sessionId, setSessionId] = useState<string>(() => `oc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
+
+  // Sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -108,16 +153,67 @@ export default function AiChatTab() {
         body: JSON.stringify({ sessionId: 'health-check', message: 'ping' }),
         signal: AbortSignal.timeout(5_000),
       });
-      // If we get any response (even 4xx from bad input), the route is reachable
       setConnectionStatus(res.ok || res.status === 400 ? 'online' : 'offline');
     } catch {
       setConnectionStatus('offline');
     }
   }, []);
 
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await fetch('/api/ai/chat-sessions');
+      if (res.ok) {
+        const data = await res.json();
+        setSessions(data.sessions ?? []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  const loadSessionMessages = useCallback(async (sid: string) => {
+    try {
+      const res = await fetch(`/api/ai/chat-sessions/${encodeURIComponent(sid)}/messages`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const loaded: ChatMessage[] = (data.messages ?? []).map((m: any) => ({
+        id: `db-${m.id}`,
+        role: m.role as MessageRole,
+        content: m.content,
+        ts: new Date(m.createdAt ?? m.created_at).getTime(),
+        error: m.error ?? false,
+        analysis: m.analysis ?? null,
+        mode: m.mode as AiChatMode | undefined,
+      }));
+      setSessionId(sid);
+      setMessages(loaded);
+      setActiveSessionId(sid);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  const deleteSession = useCallback(async (sid: string) => {
+    try {
+      await fetch(`/api/ai/chat-sessions?id=${encodeURIComponent(sid)}`, { method: 'DELETE' });
+      setSessions((prev) => prev.filter((s) => s.id !== sid));
+      if (activeSessionId === sid) {
+        startNewChat();
+      }
+    } catch {
+      // silent
+    }
+  }, [activeSessionId]);
+
   const startNewChat = useCallback(() => {
+    const newId = `oc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setSessionId(newId);
     setMessages([]);
     setInput('');
+    setActiveSessionId(null);
     textareaRef.current?.focus();
   }, []);
 
@@ -140,6 +236,11 @@ export default function AiChatTab() {
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [input]);
 
+  // Load sessions when sidebar opens
+  useEffect(() => {
+    if (sidebarOpen) void loadSessions();
+  }, [sidebarOpen, loadSessions]);
+
   const sendMessage = useCallback(async (rawText?: string) => {
     const text = String(rawText ?? input).trim();
     if (!text || isLoading) return;
@@ -161,7 +262,7 @@ export default function AiChatTab() {
         body: JSON.stringify({ sessionId, message: text }),
       });
 
-      const data = (await res.json()) as Partial<AiChatRouteResponse> & { error?: string; fallback?: boolean };
+      const data = (await res.json()) as Partial<AiChatRouteResponse> & { error?: string };
 
       if (!res.ok) {
         setMessages((prev) => [
@@ -184,7 +285,6 @@ export default function AiChatTab() {
             ts: Date.now(),
             analysis: data.analysis ?? null,
             mode: data.mode,
-            fallback: !!data.fallback,
           },
         ]);
       }
@@ -219,213 +319,284 @@ export default function AiChatTab() {
   const canSend = !!input.trim() && !isLoading;
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-[#fbfbfa] text-gray-900">
-      <div className={`${mainStickyHeaderClass} flex-shrink-0 border-b border-gray-200 bg-[#fbfbfa]/95 backdrop-blur`}>
-        <div className={`${mainStickyHeaderRowClass} px-6`}>
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center border border-gray-300 bg-white text-gray-700">
-              <BotIcon className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className={sectionLabel}>USAV Ops Assistant</p>
-              <p className="truncate text-[13px] font-medium text-gray-700">
-                Powered by OpenClaw Gateway
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="hidden border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-medium text-gray-600 md:block">
-              USAV Scoped
+    <div className="flex h-full min-w-0 overflow-hidden bg-[#fbfbfa] text-gray-900">
+      {/* ── Sidebar ── */}
+      <div
+        className={`flex-shrink-0 border-r border-gray-200 bg-white transition-all duration-200 ${
+          sidebarOpen ? 'w-72' : 'w-0'
+        } overflow-hidden`}
+      >
+        <div className="flex h-full w-72 flex-col">
+          <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-gray-500" />
+              <span className={sectionLabel}>Recent Chats</span>
             </div>
             <button
               type="button"
-              onClick={startNewChat}
-              className={`flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 ${sectionLabel} text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900`}
+              onClick={() => setSidebarOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+              aria-label="Close sidebar"
             >
-              <RefreshIcon className="h-3 w-3" />
-              New Chat
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
-        </div>
 
-        <div className="grid gap-px border-t border-gray-200 bg-gray-200 px-6 py-px md:grid-cols-3">
-          <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
-            {connectionStatus === 'online' ? (
-              <Check className="h-4 w-4 text-emerald-600" />
-            ) : connectionStatus === 'offline' ? (
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-            ) : (
-              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-            )}
-            <span>{statusLabel(connectionStatus)}</span>
-          </div>
-          <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
-            <Database className="h-4 w-4 text-gray-500" />
-            <span>USAV warehouse data only — no personal/finance access</span>
-          </div>
-          <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
-            <Clock className="h-4 w-4 text-gray-500" />
-            <span>
-              {connectionStatus === 'offline'
-                ? 'Falls back to local Ollama when OpenClaw is unreachable'
-                : 'Routes through OpenClaw Gateway with USAV scope'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-5">
-        {messages.length === 0 && !isLoading ? (
-          <div className="mx-auto flex h-full w-full max-w-4xl flex-col justify-center">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-              <section className="space-y-4 border border-gray-200 bg-white p-5">
-                <div className={`flex items-center gap-2 ${sectionLabel}`}>
-                  <PackageCheck className="h-4 w-4 text-gray-500" />
-                  USAV Warehouse Assistant
-                </div>
-                <h1 className="text-[24px] font-semibold tracking-tight text-gray-900">
-                  Ask about orders, shipping, staff, FBA, repairs, inventory, or Bose service manuals.
-                </h1>
-                <p className="max-w-2xl text-[13px] leading-7 text-gray-600">
-                  This assistant routes through the OpenClaw Gateway with strict USAV scope.
-                  Shipped-count summaries resolve locally. Bose manual queries go through
-                  NemoClaw RAG for service manual lookup.
-                </p>
-                <AiPromptChips prompts={STARTER_PROMPTS} onSelect={handlePromptSelect} />
-                <div className="mt-3 border-t border-gray-100 pt-3">
-                  <div className={`mb-2 ${sectionLabel}`}>BOSE SERVICE MANUALS</div>
-                  <AiPromptChips prompts={BOSE_MANUAL_PROMPTS} onSelect={handlePromptSelect} />
-                </div>
-              </section>
-
-              <section className="space-y-3 border border-gray-200 bg-white p-5">
-                <div className={`flex items-center gap-2 ${sectionLabel}`}>
-                  <Database className="h-4 w-4 text-gray-500" />
-                  What This Assistant Can Access
-                </div>
-                <div className="space-y-3 text-[12px] leading-6 text-gray-600">
-                  <div className="border-b border-gray-100 pb-3">
-                    <p className="font-medium text-gray-900">Orders & Shipping</p>
-                    <p>Orders, tracking numbers, packer logs, station activity</p>
-                  </div>
-                  <div className="border-b border-gray-100 pb-3">
-                    <p className="font-medium text-gray-900">Staff & Scheduling</p>
-                    <p>Staff roster, work assignments, weekly schedule</p>
-                  </div>
-                  <div className="border-b border-gray-100 pb-3">
-                    <p className="font-medium text-gray-900">FBA & Inventory</p>
-                    <p>FBA shipments, FNSKUs, items, locations, stock levels</p>
-                  </div>
-                  <div className="border-b border-gray-100 pb-3">
-                    <p className="font-medium text-gray-900">Repairs & Receiving</p>
-                    <p>Repair tickets, receiving logs, exception tracking</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">Bose Service Manuals</p>
-                    <p>480+ product manuals — specs, procedures, parts, troubleshooting</p>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </div>
-        ) : (
-          <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-            {messages.map((msg) => {
-              const timestampLabel = new Date(msg.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-              if (msg.role === 'user') {
-                return (
-                  <div key={msg.id} className="ml-auto w-full max-w-2xl border border-gray-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className={sectionLabel}>Question</span>
-                      <span className="text-[10px] text-gray-500">{timestampLabel}</span>
-                    </div>
-                    <p className="mt-2 text-[13px] leading-6 text-gray-900">{msg.content}</p>
-                  </div>
-                );
-              }
-
-              if (msg.error) {
-                return (
-                  <div key={msg.id} className="w-full max-w-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className={`${sectionLabel} text-red-500`}>Error</span>
-                      <span className="text-[10px] text-red-500">{timestampLabel}</span>
-                    </div>
-                    <p className="mt-2 text-[12px] leading-6 whitespace-pre-wrap">{msg.content}</p>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={msg.id} className="w-full max-w-3xl">
-                  <AiAnswerCard
-                    analysis={msg.analysis}
-                    content={msg.content}
-                    modeLabel={modeLabel(msg.mode, msg.fallback)}
-                    timestampLabel={timestampLabel}
-                    onFollowUp={handlePromptSelect}
-                  />
-                </div>
-              );
-            })}
-
-            {isLoading ? (
-              <div className="w-full max-w-3xl border border-gray-200 bg-white px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                  <div>
-                    <p className={sectionLabel}>Working</p>
-                    <p className="mt-1 text-[12px] text-gray-600">
-                      {connectionStatus === 'offline'
-                        ? 'Running local ops query or using Ollama fallback'
-                        : 'Routing through OpenClaw Gateway'}
-                    </p>
-                  </div>
-                </div>
+          <div className="flex-1 overflow-y-auto">
+            {sessionsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
               </div>
-            ) : null}
-
-            <div ref={messagesEndRef} />
+            ) : sessions.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[11px] text-gray-400">
+                No chat history yet
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {sessions.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`group flex items-start gap-2 px-3 py-2.5 cursor-pointer transition-colors hover:bg-gray-50 ${
+                      activeSessionId === s.id ? 'bg-gray-100' : ''
+                    }`}
+                    onClick={() => void loadSessionMessages(s.id)}
+                  >
+                    <MessageSquare className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-medium text-gray-800">
+                        {s.title || 'Untitled chat'}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-2 text-[10px] text-gray-400">
+                        <span>{formatRelativeDate(s.updatedAt)}</span>
+                        <span>{s.messageCount} msg{s.messageCount !== 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void deleteSession(s.id);
+                      }}
+                      className="mt-0.5 hidden flex-shrink-0 text-gray-300 hover:text-red-500 group-hover:block"
+                      aria-label="Delete session"
+                    >
+                      <TrashIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3">
-        <div className="mx-auto w-full max-w-4xl">
-          <div className="flex items-end gap-2 border border-gray-300 bg-[#fbfbfa] px-3 py-2 focus-within:border-gray-400">
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                connectionStatus === 'offline'
-                  ? 'Ask a warehouse ops question (fallback mode)...'
-                  : 'Ask about orders, shipping, staff, FBA, Bose manuals...'
-              }
-              disabled={isLoading}
-              className="min-h-[24px] flex-1 resize-none bg-transparent text-[13px] leading-6 text-gray-800 placeholder-gray-400 focus:outline-none disabled:cursor-not-allowed"
-              style={{ maxHeight: '160px' }}
-            />
-            <button
-              type="button"
-              onClick={() => void sendMessage()}
-              disabled={!canSend}
-              aria-label="Send message"
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-gray-900 bg-gray-900 text-white transition-colors hover:bg-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-500"
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </button>
+      {/* ── Main Chat Area ── */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className={`${mainStickyHeaderClass} flex-shrink-0 border-b border-gray-200 bg-[#fbfbfa]/95 backdrop-blur`}>
+          <div className={`${mainStickyHeaderRowClass} px-6`}>
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen((o) => !o)}
+                className="flex h-8 w-8 items-center justify-center border border-gray-300 bg-white text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900"
+                aria-label="Toggle chat history"
+              >
+                <SidebarIcon className="h-4 w-4" />
+              </button>
+              <div className="flex h-8 w-8 items-center justify-center border border-gray-300 bg-white text-gray-700">
+                <BotIcon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className={sectionLabel}>USAV Ops Assistant</p>
+                <p className="truncate text-[13px] font-medium text-gray-700">
+                  Powered by OpenClaw Gateway
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="hidden border border-gray-200 bg-white px-3 py-1.5 text-[10px] font-medium text-gray-600 md:block">
+                USAV Scoped
+              </div>
+              <button
+                type="button"
+                onClick={startNewChat}
+                className={`flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 ${sectionLabel} text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900`}
+              >
+                <RefreshIcon className="h-3 w-3" />
+                New Chat
+              </button>
+            </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
-            <span>Shift+Enter for new line. USAV-scoped queries only.</span>
-            <span>
-              {connectionStatus === 'offline' ? 'Fallback: Ollama' : 'Powered by OpenClaw'}
-            </span>
+          <div className="grid gap-px border-t border-gray-200 bg-gray-200 px-6 py-px md:grid-cols-3">
+            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
+              {connectionStatus === 'online' ? (
+                <Check className="h-4 w-4 text-emerald-600" />
+              ) : connectionStatus === 'offline' ? (
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+              ) : (
+                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              )}
+              <span>{statusLabel(connectionStatus)}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
+              <Database className="h-4 w-4 text-gray-500" />
+              <span>USAV warehouse data only — no personal/finance access</span>
+            </div>
+            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-[11px] text-gray-600">
+              <Clock className="h-4 w-4 text-gray-500" />
+              <span>Routes through OpenClaw Gateway with USAV scope</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {messages.length === 0 && !isLoading ? (
+            <div className="mx-auto flex h-full w-full max-w-4xl flex-col justify-center">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+                <section className="space-y-4 border border-gray-200 bg-white p-5">
+                  <div className={`flex items-center gap-2 ${sectionLabel}`}>
+                    <PackageCheck className="h-4 w-4 text-gray-500" />
+                    USAV Warehouse Assistant
+                  </div>
+                  <h1 className="text-[24px] font-semibold tracking-tight text-gray-900">
+                    Ask about orders, shipping, staff, FBA, repairs, inventory, or Bose service manuals.
+                  </h1>
+                  <p className="max-w-2xl text-[13px] leading-7 text-gray-600">
+                    This assistant routes through the OpenClaw Gateway with strict USAV scope.
+                    Shipped-count summaries resolve locally. Bose manual queries go through
+                    NemoClaw RAG for service manual lookup.
+                  </p>
+                  <AiPromptChips prompts={STARTER_PROMPTS} onSelect={handlePromptSelect} />
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    <div className={`mb-2 ${sectionLabel}`}>BOSE SERVICE MANUALS</div>
+                    <AiPromptChips prompts={BOSE_MANUAL_PROMPTS} onSelect={handlePromptSelect} />
+                  </div>
+                </section>
+
+                <section className="space-y-3 border border-gray-200 bg-white p-5">
+                  <div className={`flex items-center gap-2 ${sectionLabel}`}>
+                    <Database className="h-4 w-4 text-gray-500" />
+                    What This Assistant Can Access
+                  </div>
+                  <div className="space-y-3 text-[12px] leading-6 text-gray-600">
+                    <div className="border-b border-gray-100 pb-3">
+                      <p className="font-medium text-gray-900">Orders & Shipping</p>
+                      <p>Orders, tracking numbers, packer logs, station activity</p>
+                    </div>
+                    <div className="border-b border-gray-100 pb-3">
+                      <p className="font-medium text-gray-900">Staff & Scheduling</p>
+                      <p>Staff roster, work assignments, weekly schedule</p>
+                    </div>
+                    <div className="border-b border-gray-100 pb-3">
+                      <p className="font-medium text-gray-900">FBA & Inventory</p>
+                      <p>FBA shipments, FNSKUs, items, locations, stock levels</p>
+                    </div>
+                    <div className="border-b border-gray-100 pb-3">
+                      <p className="font-medium text-gray-900">Repairs & Receiving</p>
+                      <p>Repair tickets, receiving logs, exception tracking</p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Bose Service Manuals</p>
+                      <p>480+ product manuals — specs, procedures, parts, troubleshooting</p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+              {messages.map((msg) => {
+                const timestampLabel = new Date(msg.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                if (msg.role === 'user') {
+                  return (
+                    <div key={msg.id} className="ml-auto w-full max-w-2xl border border-gray-200 bg-white px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={sectionLabel}>Question</span>
+                        <span className="text-[10px] text-gray-500">{timestampLabel}</span>
+                      </div>
+                      <p className="mt-2 text-[13px] leading-6 text-gray-900">{msg.content}</p>
+                    </div>
+                  );
+                }
+
+                if (msg.error) {
+                  return (
+                    <div key={msg.id} className="w-full max-w-3xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`${sectionLabel} text-red-500`}>Error</span>
+                        <span className="text-[10px] text-red-500">{timestampLabel}</span>
+                      </div>
+                      <p className="mt-2 text-[12px] leading-6 whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={msg.id} className="w-full max-w-3xl">
+                    <AiAnswerCard
+                      analysis={msg.analysis}
+                      content={msg.content}
+                      modeLabel={modeLabel(msg.mode)}
+                      timestampLabel={timestampLabel}
+                      onFollowUp={handlePromptSelect}
+                    />
+                  </div>
+                );
+              })}
+
+              {isLoading ? (
+                <div className="w-full max-w-3xl border border-gray-200 bg-white px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                    <div>
+                      <p className={sectionLabel}>Working</p>
+                      <p className="mt-1 text-[12px] text-gray-600">
+                        Routing through OpenClaw Gateway
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3">
+          <div className="mx-auto w-full max-w-4xl">
+            <div className="flex items-end gap-2 border border-gray-300 bg-[#fbfbfa] px-3 py-2 focus-within:border-gray-400">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about orders, shipping, staff, FBA, Bose manuals..."
+                disabled={isLoading}
+                className="min-h-[24px] flex-1 resize-none bg-transparent text-[13px] leading-6 text-gray-800 placeholder-gray-400 focus:outline-none disabled:cursor-not-allowed"
+                style={{ maxHeight: '160px' }}
+              />
+              <button
+                type="button"
+                onClick={() => void sendMessage()}
+                disabled={!canSend}
+                aria-label="Send message"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-gray-900 bg-gray-900 text-white transition-colors hover:bg-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-500"
+              >
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </button>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500">
+              <span>Shift+Enter for new line. USAV-scoped queries only.</span>
+              <span>Powered by OpenClaw</span>
+            </div>
           </div>
         </div>
       </div>

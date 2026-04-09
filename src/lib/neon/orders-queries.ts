@@ -395,6 +395,95 @@ export async function getAllShippedOrders(
 }
 
 /**
+ * AI-focused query: get orders packed within a date range.
+ *
+ * Unlike `getAllShippedOrders` (which requires carrier tracking confirmation),
+ * this counts orders by their **pack date** — what the warehouse team actually
+ * did that week. Includes orders packed but not yet carrier-confirmed.
+ *
+ * Falls back to carrier-shipped orders filtered by tracking update date if
+ * pack data is sparse (covers the case where tracking confirms days later).
+ */
+export async function getPackedOrdersForAi(opts: {
+  weekStart: string;
+  weekEnd: string;
+  limit?: number;
+}): Promise<ShippedOrder[]> {
+  const limit = opts.limit ?? 5000;
+  try {
+    const sql = `
+      SELECT
+        o.id,
+        o.shipment_id,
+        o.order_id,
+        o.product_title,
+        o.quantity,
+        o.sku,
+        o.account_source,
+        to_char(o.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
+        'order'::text AS row_source,
+        pl.packed_by,
+        s_packer.name AS packed_by_name,
+        to_char(pl.packed_at, 'YYYY-MM-DD HH24:MI:SS') AS packed_at,
+        wa_t.assigned_tech_id AS tester_id,
+        s_tester.name AS tester_name,
+        MIN(tsn.tested_by)::int AS tested_by,
+        s_tested.name AS tested_by_name,
+        stn.tracking_number_raw AS tracking_number,
+        COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+          OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
+        stn.latest_status_category AS shipment_status
+      FROM orders o
+      LEFT JOIN LATERAL (
+        SELECT pl2.packed_by, pl2.created_at AS packed_at
+        FROM packer_logs pl2
+        WHERE pl2.shipment_id IS NOT NULL
+          AND pl2.shipment_id = o.shipment_id
+          AND pl2.tracking_type = 'ORDERS'
+        ORDER BY pl2.created_at DESC NULLS LAST LIMIT 1
+      ) pl ON true
+      LEFT JOIN LATERAL (
+        SELECT assigned_tech_id
+        FROM work_assignments
+        WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+          AND status IN ('ASSIGNED','IN_PROGRESS')
+        ORDER BY created_at DESC LIMIT 1
+      ) wa_t ON true
+      LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
+      LEFT JOIN staff s_packer ON s_packer.id = pl.packed_by
+      LEFT JOIN staff s_tester ON s_tester.id = wa_t.assigned_tech_id
+      LEFT JOIN staff s_tested ON s_tested.id = tsn.tested_by
+      WHERE (
+        -- Packed in this date range
+        (pl.packed_at IS NOT NULL AND pl.packed_at::date >= $1::date AND pl.packed_at::date <= $2::date)
+        OR
+        -- OR carrier tracking confirmed in this date range
+        (COALESCE(stn.is_carrier_accepted OR stn.is_in_transit OR stn.is_out_for_delivery OR stn.is_delivered, false)
+         AND stn.updated_at::date >= $1::date AND stn.updated_at::date <= $2::date)
+      )
+      GROUP BY o.id, o.shipment_id, o.order_id, o.product_title, o.quantity, o.sku,
+               o.account_source, o.created_at,
+               pl.packed_by, pl.packed_at, s_packer.name,
+               wa_t.assigned_tech_id, s_tester.name, s_tested.name,
+               stn.tracking_number_raw, stn.is_carrier_accepted, stn.is_in_transit,
+               stn.is_out_for_delivery, stn.is_delivered, stn.latest_status_category, stn.updated_at
+      ORDER BY COALESCE(pl.packed_at, o.created_at) DESC NULLS LAST, o.id DESC
+      LIMIT $3
+    `;
+
+    const result = await queryWithRetry(
+      () => pool.query(sql, [opts.weekStart, opts.weekEnd, limit]),
+      { retries: 3, delayMs: 1000 },
+    );
+    return result.rows;
+  } catch (error: any) {
+    console.error('Error fetching packed orders for AI:', error.message);
+    throw error;
+  }
+}
+
+/**
  * Get a single shipped order by ID (orders table only, no exceptions)
  */
 export async function getShippedOrderById(id: number): Promise<ShippedOrder | null> {

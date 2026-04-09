@@ -5,19 +5,24 @@ export const runtime = 'nodejs';
 
 const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || '';
 const OPENCLAW_USAV_TOKEN = process.env.OPENCLAW_USAV_TOKEN || '';
-const MAC_LM_STUDIO_URL = process.env.MAC_LM_STUDIO_URL || 'http://100.64.38.223:8080';
 
 /**
- * Health check for AI backends: Mac LM Studio → OpenClaw → Ollama.
+ * Health check — pings the single OpenClaw gateway (via Cloudflare tunnel).
  */
 export async function GET() {
   const timestamp = formatPSTTimestamp();
 
-  // 1. Try Mac LM Studio (Qwen3-32B)
+  if (!OPENCLAW_GATEWAY_URL) {
+    return NextResponse.json(
+      { ok: false, backend: null, error: 'OPENCLAW_GATEWAY_URL not configured', timestamp },
+      { status: 503 },
+    );
+  }
+
   try {
-    const res = await fetch(`${MAC_LM_STUDIO_URL}/v1/models`, {
-      headers: { Authorization: 'Bearer lm-studio' },
-      signal: AbortSignal.timeout(5_000),
+    const res = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/models`, {
+      headers: { Authorization: `Bearer ${OPENCLAW_USAV_TOKEN}` },
+      signal: AbortSignal.timeout(8_000),
     });
 
     if (res.ok) {
@@ -25,61 +30,21 @@ export async function GET() {
       const models = data?.data ?? [];
       return NextResponse.json({
         ok: true,
-        backend: 'mac-lm-studio',
-        model: models.find((m: { id?: string }) => m.id?.includes('32b'))?.id ?? models[0]?.id ?? 'unknown',
+        backend: 'openclaw',
+        model: models[0]?.id ?? 'openclaw/usav-ops',
+        models: models.map((m: { id?: string }) => m.id),
         timestamp,
       });
     }
-  } catch {
-    // Fall through
+
+    return NextResponse.json(
+      { ok: false, backend: 'openclaw', error: `Gateway returned ${res.status}`, timestamp },
+      { status: 503 },
+    );
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, backend: null, error: err?.message ?? 'OpenClaw unreachable', timestamp },
+      { status: 503 },
+    );
   }
-
-  // 2. Try OpenClaw gateway
-  if (OPENCLAW_GATEWAY_URL && OPENCLAW_USAV_TOKEN) {
-    try {
-      const res = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/models`, {
-        headers: { Authorization: `Bearer ${OPENCLAW_USAV_TOKEN}` },
-        signal: AbortSignal.timeout(5_000),
-      });
-
-      if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const models = data?.data ?? [];
-        return NextResponse.json({
-          ok: true,
-          backend: 'openclaw',
-          model: models[0]?.id ?? 'qwen3:8b',
-          timestamp,
-        });
-      }
-    } catch {
-      // Fall through
-    }
-  }
-
-  // 3. Fallback: Ollama direct
-  const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-  try {
-    const res = await fetch(`${ollamaUrl}/api/tags`, {
-      signal: AbortSignal.timeout(5_000),
-    });
-
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      const model = data?.models?.[0]?.name ?? process.env.OLLAMA_MODEL ?? 'unknown';
-      return NextResponse.json({
-        ok: true,
-        backend: 'ollama',
-        model,
-        timestamp,
-      });
-    }
-  } catch {
-    // All unavailable
-  }
-
-  return NextResponse.json(
-    { ok: false, backend: null, error: 'No AI backend reachable', timestamp },
-    { status: 503 },
-  );
 }

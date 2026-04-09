@@ -1,4 +1,4 @@
-const NEMOCLAW_RAG_URL = process.env.NEMOCLAW_RAG_URL || 'http://127.0.0.1:8765';
+const NEMOCLAW_RAG_URL = (process.env.NEMOCLAW_RAG_URL || '').replace(/\/$/, '');
 
 export interface RagChunk {
   content: string;
@@ -13,16 +13,20 @@ export interface RagQueryResult {
 }
 
 /**
- * Query the NemoClaw RAG pipeline.
+ * Query the NemoClaw RAG pipeline via Cloudflare tunnel.
  *
- * Sends the query to Qdrant for retrieval, BM25 + RRF re-ranking, then
- * Prometheus Mac Qwen2.5-32B synthesizes the answer. 30s timeout to allow
- * for Mac synthesis latency.
+ * Routes through rag.michaelgarisek.com → WSL NemoClaw (:8765).
+ * Retrieves from Qdrant, re-ranks with BM25 + RRF, then synthesises
+ * via the configured model. 30s timeout for synthesis latency.
  */
 export async function queryNemoClawRag(
   query: string,
   topK = 5,
 ): Promise<RagQueryResult> {
+  if (!NEMOCLAW_RAG_URL) {
+    throw new Error('NEMOCLAW_RAG_URL not configured');
+  }
+
   const res = await fetch(`${NEMOCLAW_RAG_URL}/api/rag/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -37,7 +41,6 @@ export async function queryNemoClawRag(
 
   const data = await res.json();
 
-  // Normalize — NemoClaw may return `results` or `chunks`
   const rawChunks: RagChunk[] = data.chunks || data.results || [];
   const answer: string = data.answer || data.response || '';
 
@@ -48,12 +51,9 @@ export async function queryNemoClawRag(
     })
     .filter((s): s is string => !!s);
 
-  // Deduplicate sources
-  const uniqueSources = [...new Set(sources)];
-
   return {
     answer,
     chunks: rawChunks,
-    sources: uniqueSources,
+    sources: [...new Set(sources)],
   };
 }

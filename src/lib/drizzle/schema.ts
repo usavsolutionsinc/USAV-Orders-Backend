@@ -1271,6 +1271,37 @@ export const techVerifications = pgTable('tech_verifications', {
   notes: text('notes'),
 });
 
+// ──────────────────────────────────────────────
+// AI Chat Sessions & Messages
+// ──────────────────────────────────────────────
+
+export const aiChatSessions = pgTable('ai_chat_sessions', {
+  id: text('id').primaryKey(),                     // client-generated session ID (e.g. "oc-...")
+  title: text('title'),                             // auto-generated from first message
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  updatedIdx: index('ai_chat_sessions_updated_idx').on(table.updatedAt),
+}));
+
+export const aiChatMessages = pgTable('ai_chat_messages', {
+  id: serial('id').primaryKey(),
+  sessionId: text('session_id').notNull().references(() => aiChatSessions.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(),                     // 'user' | 'assistant'
+  content: text('content').notNull(),
+  mode: text('mode'),                               // 'local_ops' | 'rag' | 'hybrid' | 'assistant'
+  analysis: jsonb('analysis'),                      // AiStructuredAnswer JSON
+  error: boolean('error').default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  sessionIdx: index('ai_chat_messages_session_idx').on(table.sessionId),
+}));
+
+export type AiChatSession = typeof aiChatSessions.$inferSelect;
+export type NewAiChatSession = typeof aiChatSessions.$inferInsert;
+export type AiChatMessage = typeof aiChatMessages.$inferSelect;
+export type NewAiChatMessage = typeof aiChatMessages.$inferInsert;
+
 // SKU Catalog type exports
 export type SkuCatalog = typeof skuCatalog.$inferSelect;
 export type NewSkuCatalog = typeof skuCatalog.$inferInsert;
