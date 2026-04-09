@@ -76,6 +76,10 @@ export async function getDueShipments(
     const where: string[] = [
       `is_terminal = false`,
       `(next_check_at IS NULL OR next_check_at <= now())`,
+      // Never try to sync UNKNOWN carrier — no API to call
+      `carrier IN ('UPS','USPS','FEDEX')`,
+      // Stop retrying after 5 consecutive failures (dead tracking numbers)
+      `consecutive_error_count < 5`,
     ];
 
     if (carriers && carriers.length > 0) {
@@ -83,12 +87,17 @@ export async function getDueShipments(
       where.push(`carrier = ANY($${params.length}::text[])`);
     }
 
+    // Prioritize shipments that are actually in-flight over label-only
     params.push(limit);
 
     const result = await client.query<ShipmentRow>(
       `SELECT * FROM shipping_tracking_numbers
        WHERE ${where.join('\n         AND ')}
-       ORDER BY next_check_at ASC NULLS FIRST
+       ORDER BY
+         CASE WHEN is_in_transit OR is_out_for_delivery THEN 0
+              WHEN is_carrier_accepted THEN 1
+              ELSE 2 END,
+         next_check_at ASC NULLS FIRST
        LIMIT $${params.length}`,
       params
     );

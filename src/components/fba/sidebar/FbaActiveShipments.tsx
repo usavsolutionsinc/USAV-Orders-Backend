@@ -223,34 +223,57 @@ function ActiveShipmentCard({
             className="overflow-hidden"
           >
             <div className="mt-3 border-t border-purple-100 pt-0">
-              {(shipment.bundles?.length ?? 0) > 0 ? (
-                shipment.bundles.map((bundle) => (
-                  <TrackingGroup
-                    key={bundle.link_id}
-                    bundle={bundle}
-                    shipmentId={shipment.id}
-                    amazonShipmentId={shipment.amazon_shipment_id}
-                    editable={editable}
-                    stationTheme={stationTheme}
-                    onChanged={onChanged}
-                  />
-                ))
-              ) : (
-                <div className="divide-y divide-gray-50">
-                  {shipment.items.map((item) => (
-                    <FbaSelectedLineRow
-                      key={item.item_id}
-                      displayTitle={item.display_title || 'No title'}
-                      fnsku={String(item.fnsku || '').toUpperCase()}
-                      stationTheme={stationTheme}
-                      checked
-                      checkboxDisabled={!editable}
-                      onCheckedChange={() => handleReturnItem(item)}
-                      rightSlot={<FbaQtyDisplay value={item.expected_qty} />}
-                    />
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const hasBundles = (shipment.bundles?.length ?? 0) > 0;
+                // Compute unallocated items: items not in any tracking bundle
+                const allocatedIds = new Set<number>();
+                if (hasBundles) {
+                  for (const b of shipment.bundles) {
+                    for (const bi of b.items) allocatedIds.add(bi.item_id);
+                  }
+                }
+                const unallocatedItems = hasBundles
+                  ? shipment.items.filter((i) => !allocatedIds.has(i.item_id))
+                  : shipment.items;
+
+                return (
+                  <>
+                    {unallocatedItems.length > 0 && (
+                      <div className="divide-y divide-gray-50">
+                        {hasBundles && (
+                          <p className="px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                            Unallocated
+                          </p>
+                        )}
+                        {unallocatedItems.map((item) => (
+                          <FbaSelectedLineRow
+                            key={item.item_id}
+                            displayTitle={item.display_title || 'No title'}
+                            fnsku={String(item.fnsku || '').toUpperCase()}
+                            stationTheme={stationTheme}
+                            checked
+                            checkboxDisabled={!editable}
+                            onCheckedChange={() => handleReturnItem(item)}
+                            rightSlot={<FbaQtyDisplay value={item.expected_qty} />}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {hasBundles &&
+                      shipment.bundles.map((bundle) => (
+                        <TrackingGroup
+                          key={bundle.link_id}
+                          bundle={bundle}
+                          shipmentId={shipment.id}
+                          amazonShipmentId={shipment.amazon_shipment_id}
+                          editable={editable}
+                          stationTheme={stationTheme}
+                          onChanged={onChanged}
+                        />
+                      ))}
+                  </>
+                );
+              })()}
             </div>
           </motion.div>
         )}

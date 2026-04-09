@@ -393,3 +393,14 @@ export const Smartphone = ({ className = "w-6 h-6" }: { className?: string }) =>
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01" />
     </svg>
 );
+
+export const GripVertical = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <circle cx="9" cy="5" r="1" fill="currentColor" />
+        <circle cx="15" cy="5" r="1" fill="currentColor" />
+        <circle cx="9" cy="12" r="1" fill="currentColor" />
+        <circle cx="15" cy="12" r="1" fill="currentColor" />
+        <circle cx="9" cy="19" r="1" fill="currentColor" />
+        <circle cx="15" cy="19" r="1" fill="currentColor" />
+    </svg>
+);

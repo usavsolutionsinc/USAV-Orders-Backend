@@ -65,6 +65,27 @@ export interface TrackingBundle {
   items: ShipmentCardItem[];
 }
 
+/* ── Paired review bucket allocations ───────────────────────────── */
+
+export interface BucketAllocation {
+  item_id: number;
+  qty: number;
+}
+
+export interface TrackingBucket {
+  /** Client-side temp ID for dnd-kit; becomes tracking_id after save. */
+  bucketId: string;
+  trackingNumber: string;
+  carrier: string;
+  allocations: BucketAllocation[];
+  collapsed: boolean;
+}
+
+export interface PanelAllocations {
+  unallocated: BucketAllocation[];
+  buckets: TrackingBucket[];
+}
+
 /* ── Active shipment (card-level) ────────────────────────────────── */
 
 export interface ActiveShipment {

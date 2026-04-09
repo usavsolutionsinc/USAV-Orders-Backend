@@ -3,9 +3,12 @@
     "scheduleId": "shipping-sync-due-every-2h",
     "cron": "0 */2 * * *",
     "path": "/api/qstash/shipping/sync-due",
-    "body": {},
+    "body": {
+      "limit": 100,
+      "concurrency": 5
+    },
     "retries": 3,
-    "timeout": 120,
+    "timeout": 180,
     "label": "shipping-sync-due"
   },
   {
@@ -88,5 +91,18 @@
     "retries": 3,
     "timeout": 300,
     "label": "replenishment-sync"
+  },
+  {
+    "scheduleId": "shipping-sync-all-carriers-5pm-weekdays-pacific",
+    "cron": "CRON_TZ=America/Los_Angeles 0 17 * * 1-5",
+    "path": "/api/qstash/shipping/sync-due",
+    "body": {
+      "limit": 200,
+      "concurrency": 8,
+      "carriers": ["UPS", "USPS", "FEDEX"]
+    },
+    "retries": 3,
+    "timeout": 300,
+    "label": "shipping-sync-all-carriers-eod"
   }
 ]
