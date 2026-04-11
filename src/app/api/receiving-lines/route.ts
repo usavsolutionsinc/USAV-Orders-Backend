@@ -2,9 +2,55 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import type { SerialUnitRow } from '@/lib/neon/serial-units-queries';
+
+type LineSerial = {
+  id: number;
+  serial_number: string;
+  current_status: string;
+  sku_catalog_id: number | null;
+  condition_grade: string | null;
+  created_at: string;
+};
+
+async function fetchSerialsForLines(lineIds: number[]): Promise<Map<number, LineSerial[]>> {
+  const grouped = new Map<number, LineSerial[]>();
+  if (lineIds.length === 0) return grouped;
+
+  const result = await pool.query<SerialUnitRow>(
+    `SELECT id, serial_number, current_status, sku_catalog_id, condition_grade,
+            origin_receiving_line_id, created_at
+     FROM serial_units
+     WHERE origin_receiving_line_id = ANY($1::int[])
+     ORDER BY created_at ASC, id ASC`,
+    [lineIds],
+  );
+
+  for (const row of result.rows) {
+    const lineId = row.origin_receiving_line_id;
+    if (lineId == null) continue;
+    const slim: LineSerial = {
+      id: Number(row.id),
+      serial_number: row.serial_number,
+      current_status: row.current_status,
+      sku_catalog_id: row.sku_catalog_id,
+      condition_grade: row.condition_grade,
+      created_at: row.created_at,
+    };
+    const bucket = grouped.get(lineId);
+    if (bucket) bucket.push(slim);
+    else grouped.set(lineId, [slim]);
+  }
+
+  return grouped;
+}
 
 const QA_STATUSES  = new Set(['PENDING', 'PASSED', 'FAILED_DAMAGED', 'FAILED_INCOMPLETE', 'FAILED_FUNCTIONAL', 'HOLD']);
 const DISPOSITIONS = new Set(['ACCEPT', 'HOLD', 'RTV', 'SCRAP', 'REWORK']);
+const WORKFLOW_STATUSES = new Set([
+  'EXPECTED', 'ARRIVED', 'MATCHED', 'UNBOXED', 'AWAITING_TEST',
+  'IN_TEST', 'PASSED', 'FAILED', 'RTV', 'SCRAP', 'DONE',
+]);
 const CONDITIONS   = new Set(['BRAND_NEW', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
 
 function parsePositiveTechId(value: unknown): number | null {
@@ -26,6 +72,11 @@ export async function GET(request: NextRequest) {
     const search      = String(searchParams.get('search') || '').trim();
     const qaFilter    = String(searchParams.get('qa_status') || '').trim().toUpperCase();
     const dispFilter  = String(searchParams.get('disposition') || '').trim().toUpperCase();
+    const workflowFilter = String(searchParams.get('workflow_status') || '').trim().toUpperCase();
+    const weekStart = String(searchParams.get('week_start') || '').trim();
+    const weekEnd   = String(searchParams.get('week_end') || '').trim();
+    const include     = String(searchParams.get('include') || '').trim().toLowerCase();
+    const includeSerials = include.split(',').map((s) => s.trim()).includes('serials');
 
     // Single row
     if (Number.isFinite(id) && id > 0) {
@@ -39,7 +90,12 @@ export async function GET(request: NextRequest) {
       if (one.rows.length === 0) {
         return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
       }
-      return NextResponse.json({ success: true, receiving_line: normalizeRow(one.rows[0]) });
+      const normalized = normalizeRow(one.rows[0]);
+      if (includeSerials) {
+        const serialsByLine = await fetchSerialsForLines([normalized.id]);
+        (normalized as Record<string, unknown>).serials = serialsByLine.get(normalized.id) ?? [];
+      }
+      return NextResponse.json({ success: true, receiving_line: normalized });
     }
 
     // All lines for a specific package
@@ -52,7 +108,14 @@ export async function GET(request: NextRequest) {
          ORDER BY rl.id ASC`,
         [receivingId],
       );
-      return NextResponse.json({ success: true, receiving_lines: rows.rows.map(normalizeRow) });
+      const normalizedRows = rows.rows.map(normalizeRow);
+      if (includeSerials) {
+        const serialsByLine = await fetchSerialsForLines(normalizedRows.map((r) => r.id));
+        for (const row of normalizedRows) {
+          (row as Record<string, unknown>).serials = serialsByLine.get(row.id) ?? [];
+        }
+      }
+      return NextResponse.json({ success: true, receiving_lines: normalizedRows });
     }
 
     // Paginated list — all lines, optionally filtered
@@ -74,6 +137,14 @@ export async function GET(request: NextRequest) {
     if (dispFilter && DISPOSITIONS.has(dispFilter)) {
       conditions.push(`rl.disposition_code = $${idx++}`);
       values.push(dispFilter);
+    }
+    if (workflowFilter && WORKFLOW_STATUSES.has(workflowFilter)) {
+      conditions.push(`rl.workflow_status = $${idx++}::inbound_workflow_status_enum`);
+      values.push(workflowFilter);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(weekStart) && /^\d{4}-\d{2}-\d{2}$/.test(weekEnd)) {
+      conditions.push(`rl.created_at >= $${idx++}::date AND rl.created_at < ($${idx++}::date + INTERVAL '1 day')`);
+      values.push(weekStart, weekEnd);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -132,7 +203,7 @@ export async function POST(request: NextRequest) {
 
     const qaStatusRaw  = String(body?.qa_status || 'PENDING').trim().toUpperCase();
     const dispositionRaw = String(body?.disposition_code || 'HOLD').trim().toUpperCase();
-    const conditionRaw   = String(body?.condition_grade || 'BRAND_NEW').trim().toUpperCase();
+    const conditionRaw   = String(body?.condition_grade || 'USED_A').trim().toUpperCase();
     const dispositionAudit = Array.isArray(body?.disposition_audit) ? body.disposition_audit : [];
     const assignedTechId = parsePositiveTechId(body?.assigned_tech_id ?? body?.assignedTechId);
     const needsTest = body?.needs_test === undefined && body?.needsTest === undefined
@@ -349,11 +420,18 @@ export async function DELETE(request: NextRequest) {
 
 // ─── Normalize ────────────────────────────────────────────────────────────────
 function normalizeRow(row: Record<string, unknown>) {
+  // Zoho PO Reference# carries the tracking number per the inbound contract.
+  // Fall back to it when no receiving row is physically linked yet so the UI
+  // shows the PO's tracking instead of "No package linked".
+  const receivingTracking = (row.receiving_tracking_number as string | null) ?? null;
+  const zohoReferenceNumber = (row.zoho_reference_number as string | null) ?? null;
   return {
     id:                       Number(row.id),
     receiving_id:             row.receiving_id != null ? Number(row.receiving_id) : null,
-    // Joined from receiving table when available
-    tracking_number:          (row.receiving_tracking_number as string | null) ?? null,
+    // Joined from receiving table when available; otherwise Zoho PO Reference#
+    tracking_number:          receivingTracking ?? zohoReferenceNumber,
+    tracking_source:          receivingTracking ? 'receiving' : zohoReferenceNumber ? 'zoho_reference' : null,
+    zoho_reference_number:    zohoReferenceNumber,
     carrier:                  (row.carrier as string | null) ?? null,
     zoho_item_id:             (row.zoho_item_id as string | null) ?? null,
     zoho_line_item_id:        (row.zoho_line_item_id as string | null) ?? null,
@@ -366,7 +444,7 @@ function normalizeRow(row: Record<string, unknown>) {
     qa_status:                (row.qa_status as string) ?? 'PENDING',
     workflow_status:          (row.workflow_status as string | null) ?? null,
     disposition_code:         (row.disposition_code as string) ?? 'HOLD',
-    condition_grade:          (row.condition_grade as string) ?? 'BRAND_NEW',
+    condition_grade:          (row.condition_grade as string) ?? 'USED_A',
     disposition_audit:        (row.disposition_audit as unknown[]) ?? [],
     needs_test:               !!row.needs_test,
     assigned_tech_id:         row.assigned_tech_id != null ? Number(row.assigned_tech_id) : null,

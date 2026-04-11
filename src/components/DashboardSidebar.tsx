@@ -9,13 +9,14 @@ import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 import BarcodeSidebar from '@/components/BarcodeSidebar';
+import { SkuStockSidebarPanel } from '@/components/sidebar/SkuStockSidebarPanel';
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
 import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
 import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
-import { ManualsCombinedSidebar } from '@/components/manuals/ManualsCombinedSidebar';
+import { SkuCatalogSidebar } from '@/components/manuals/SkuCatalogSidebar';
 import { SidebarTabSwitchChrome, TabSwitch } from '@/components/ui/TabSwitch';
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
@@ -326,11 +327,11 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'fba') return <FbaSidebarPanel />;
   if (routeKey === 'work-orders') return <WorkOrdersSidebarPanel />;
   if (routeKey === 'replenish') return <ReplenishSidebarPanel />;
-  if (routeKey === 'sku-stock') return <BarcodeSidebar embedded />;
+  if (routeKey === 'sku-stock') return <SkuStockSidebarPanel />;
   if (routeKey === 'walk-in') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'repair') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;
-  if (routeKey === 'manuals') return <ManualsCombinedSidebar />;
+  if (routeKey === 'manuals') return <SkuCatalogSidebar />;
 
   if (routeKey === 'tech') {
     const techId = searchParams.get('staffId') || getPathStaffId(pathname, 'tech') || '1';

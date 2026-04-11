@@ -96,12 +96,16 @@ export function useRealtimeInvalidation({
     'receiving-log.changed',
     () => {
       queryClient.invalidateQueries({ queryKey: ['receiving'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
       // 'receiving-logs' is intentionally omitted: ReceivingLogs handles it
       // surgically via its own useAblyChannel (insert→insertIntoCache,
       // delete→removeFromCache). Invalidating here races with the refetch
       // and can overwrite the cache with stale data, causing new entries
       // to flash and disappear.
       queryClient.invalidateQueries({ queryKey: ['receiving-lines'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-with-serials'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-line-serials'] });
     },
     receiving,
   );

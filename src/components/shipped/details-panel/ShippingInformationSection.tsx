@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, X } from '@/components/Icons';
+import { Check, Clipboard, Copy, ExternalLink, Image as ImageIcon, Pencil, Plus, Trash2, X } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl, getTrackingUrl } from '@/utils/order-links';
 import { formatDateTimePST, getCurrentPSTDateKey, toPSTDateKey, getDaysLateNumber } from '@/utils/date';
@@ -153,6 +153,7 @@ function ShippingEditableRow({
   allowEdit = true,
   className,
   dividerClassName,
+  onPasteReplace,
 }: {
   label: string;
   value: string;
@@ -165,12 +166,24 @@ function ShippingEditableRow({
   allowEdit?: boolean;
   className?: string;
   dividerClassName?: string;
+  onPasteReplace?: () => Promise<void>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const displayValue = String(value || '').trim();
   const iconClassName = 'h-3.5 w-3.5';
   const actions = (
     <div className="flex items-center gap-1.5 text-gray-400">
+      {onPasteReplace ? (
+        <button
+          type="button"
+          onClick={() => { void onPasteReplace(); }}
+          className="transition-colors hover:text-blue-600"
+          aria-label={`Paste & replace ${label}`}
+          title={`Paste & replace ${label}`}
+        >
+          <Clipboard className={iconClassName} />
+        </button>
+      ) : null}
       {externalUrl ? (
         <button
           type="button"
@@ -895,39 +908,40 @@ function ShippingInfoEditModal({
                           title="Paste tracking number"
                         />
                       </div>
-                      {index === 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDraft((current) => ({
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraft((current) => {
+                            const next = current.trackingRows.filter((_, i) => i !== index);
+                            return {
                               ...current,
-                              trackingRows: [...current.trackingRows, { shipmentId: null, tracking: '' }],
-                            }));
-                          }}
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
-                          aria-label="Add tracking number"
-                          title="Add tracking number"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDraft((current) => ({
-                              ...current,
-                              trackingRows: current.trackingRows.filter((_, i) => i !== index),
-                            }));
-                          }}
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-400 transition-colors hover:border-red-300 hover:text-red-600"
-                          aria-label="Remove tracking number"
-                          title="Remove tracking number"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      )}
+                              trackingRows: next.length > 0 ? next : [{ shipmentId: null, tracking: '' }],
+                            };
+                          });
+                        }}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-400 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                        aria-label={`Delete tracking number ${index + 1}`}
+                        title={`Delete tracking number ${index + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraft((current) => ({
+                        ...current,
+                        trackingRows: [...current.trackingRows, { shipmentId: null, tracking: '' }],
+                      }));
+                    }}
+                    className="flex h-8 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 text-xs font-bold text-gray-500 transition-colors hover:border-blue-400 hover:text-blue-600"
+                    aria-label="Add tracking number"
+                    title="Add tracking number"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Tracking Number
+                  </button>
                 </div>
               </div>
 
@@ -1142,28 +1156,40 @@ export function ShippingInformationSection({
   const serialNumberRows = parseSerialRows(shipped.serial_number)
     .map((row) => row.trim())
     .filter(Boolean);
-  const primaryTracking = String(
-    editableShippingFields?.trackingNumber ?? shipped.shipping_tracking_number ?? ''
-  ).trim();
-  const additionalTrackingRows = (() => {
+  // Build a single flat list of ALL tracking numbers for this order.
+  // No primary vs secondary distinction — just Tracking 1, 2, 3, etc.
+  const allTrackingRows: Array<{ tracking: string; shipmentId: number | null }> = (() => {
     const fromRows = normalizeTrackingRows((shipped as any).tracking_number_rows);
-    const fromPayload = fromRows.length > 0
-      ? fromRows.map((row) => row.tracking)
-      : normalizeTrackingList((shipped as any).tracking_numbers);
-    if (fromPayload.length === 0) return [] as Array<{ tracking: string; shipmentId: number | null }>;
-    const primaryKey = normalizeTrackingKey(primaryTracking);
     const seen = new Set<string>();
     const out: Array<{ tracking: string; shipmentId: number | null }> = [];
-    for (const tracking of fromPayload) {
-      const key = normalizeTrackingKey(tracking);
-      if (!key || key === primaryKey || seen.has(key)) continue;
-      seen.add(key);
-      const row = fromRows.find((r) => normalizeTrackingKey(r.tracking) === key);
-      out.push({
-        tracking,
-        shipmentId: row?.shipmentId ?? null,
-      });
+
+    // Start with whatever tracking_number_rows the query returned (already
+    // includes primary + linked + sibling tracking from the UNION query).
+    if (fromRows.length > 0) {
+      for (const row of fromRows) {
+        const key = normalizeTrackingKey(row.tracking);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push({ tracking: row.tracking, shipmentId: row.shipmentId });
+      }
     }
+
+    // If the query didn't return rows, fall back to the primary tracking field.
+    if (out.length === 0) {
+      const primary = String(
+        editableShippingFields?.trackingNumber ?? shipped.shipping_tracking_number ?? ''
+      ).trim();
+      if (primary) {
+        const primaryShipmentId = shipped.shipment_id != null ? Number(shipped.shipment_id) : null;
+        out.push({
+          tracking: primary,
+          shipmentId: primaryShipmentId != null && Number.isFinite(primaryShipmentId) && primaryShipmentId > 0
+            ? primaryShipmentId
+            : null,
+        });
+      }
+    }
+
     return out;
   })();
   const hasRowsAfterItemNumber =
@@ -1174,12 +1200,12 @@ export function ShippingInformationSection({
 
   useEffect(() => {
     const next: Record<string, string> = {};
-    additionalTrackingRows.forEach((row, index) => {
+    allTrackingRows.forEach((row, index) => {
       const key = `${row.shipmentId ?? 'none'}:${index}`;
       next[key] = row.tracking;
     });
     setLinkedTrackingDrafts(next);
-  }, [JSON.stringify(additionalTrackingRows.map((row) => [row.shipmentId, row.tracking]))]);
+  }, [JSON.stringify(allTrackingRows.map((row) => [row.shipmentId, row.tracking]))]);
 
   const saveLinkedTracking = async (shipmentId: number | null, nextTracking: string) => {
     const orderId = Number((shipped as any).id);
@@ -1224,28 +1250,19 @@ export function ShippingInformationSection({
   };
 
   const openEditModal = useCallback(() => {
-    const primaryShipmentId = shipped.shipment_id != null ? Number(shipped.shipment_id) : null;
-    const validPrimaryShipmentId = primaryShipmentId != null && Number.isFinite(primaryShipmentId) && primaryShipmentId > 0
-      ? primaryShipmentId
-      : null;
-
     setEditDraft({
       shipByDate: normalizeShipByDraft(ef.shipByDate),
       orderNumber: ef.orderNumber,
       itemNumber: ef.itemNumber,
-      trackingRows: [
-        { shipmentId: validPrimaryShipmentId, tracking: ef.trackingNumber },
-        ...additionalTrackingRows.map((row) => ({
-          shipmentId: row.shipmentId,
-          tracking: row.tracking,
-        })),
-      ],
+      trackingRows: allTrackingRows.length > 0
+        ? allTrackingRows.map((row) => ({ shipmentId: row.shipmentId, tracking: row.tracking }))
+        : [{ shipmentId: null, tracking: '' }],
       serialRows: serialNumberRows.length > 0 ? serialNumberRows.map((row) => row.toUpperCase()) : [''],
     });
     setEditModalError(null);
     setIsEditModalSaveSuccess(false);
     setIsEditModalOpen(true);
-  }, [additionalTrackingRows, ef.itemNumber, ef.orderNumber, ef.shipByDate, ef.trackingNumber, serialNumberRows, shipped.shipment_id]);
+  }, [allTrackingRows, ef.itemNumber, ef.orderNumber, ef.shipByDate, serialNumberRows]);
 
   const saveSerialRowsFromModal = useCallback(async (serials: string[], trackingOverride?: string) => {
     const trackingNumber = String(trackingOverride || shipped.shipping_tracking_number || '').trim();
@@ -1308,82 +1325,124 @@ export function ShippingInformationSection({
         await internalFieldSave.saveShipByDate(editDraft.shipByDate);
       }
 
-      // ── 2. Diff tracking rows → edits / creates / deletes ────────────────
-      // Build a map of all previously-known shipmentId → tracking from the
-      // original data (primary + additional).
-      const primaryShipmentId = shipped.shipment_id != null ? Number(shipped.shipment_id) : null;
-      const validPrimaryShipmentId =
-        primaryShipmentId != null && Number.isFinite(primaryShipmentId) && primaryShipmentId > 0
-          ? primaryShipmentId
-          : null;
+      // ── 2. Diff tracking rows ────────────────────────────────────────────
+      //
+      // Phase A: Primary tracking (row 0) → always routed through
+      //   `shippingTrackingNumber` which calls `upsertOrderTracking` on the
+      //   API. This correctly handles shipmentId=null (looks up via
+      //   order_shipment_links), updates in place, and creates when needed.
+      //
+      // Phase B: Additional tracking (rows 1+) → diff into edits/creates/
+      //   deletes using shipmentId. Only rows with a valid shipmentId can
+      //   be edited or deleted; new rows go through creates.
 
-      const previousRowsById = new Map<number, string>();
-      if (validPrimaryShipmentId) {
-        previousRowsById.set(validPrimaryShipmentId, String(ef.trackingNumber || '').trim());
-      }
-      for (const row of additionalTrackingRows) {
+      const primaryDraftTracking = String(editDraft.trackingRows[0]?.tracking || '').trim();
+      const originalPrimaryTracking = String(allTrackingRows[0]?.tracking || '').trim();
+      const primaryTrackingChanged = normalizeTrackingKey(primaryDraftTracking) !== normalizeTrackingKey(originalPrimaryTracking);
+
+      // Build map of ALL original rows with valid shipmentIds.
+      // Row 0's primary tracking is routed through shippingTrackingNumber (Phase A),
+      // but its shipmentId still needs cleanup if deleted.
+      const originalById = new Map<number, string>();
+      for (const row of allTrackingRows) {
         const sid = Number(row.shipmentId);
         if (Number.isFinite(sid) && sid > 0) {
-          previousRowsById.set(sid, String(row.tracking || '').trim());
+          originalById.set(sid, String(row.tracking || '').trim());
         }
       }
 
-      const nextSeenShipmentIds = new Set<number>();
+      const nextSeenIds = new Set<number>();
       const trackingLinkDeletes: Array<{ shipmentId: number }> = [];
       const trackingLinkEdits: Array<{ shipmentId: number; shippingTrackingNumber: string }> = [];
       const trackingLinkCreates: Array<{ shippingTrackingNumber: string }> = [];
 
-      for (const nextRow of editDraft.trackingRows) {
-        const shipmentId = Number(nextRow.shipmentId);
+      // Build a set of tracking numbers already owned by this order so we
+      // can detect moves (e.g. STN 2 pasted into slot 1) and skip them
+      // instead of treating them as duplicates.
+      const ownedTrackingKeys = new Set(
+        allTrackingRows.map((r) => normalizeTrackingKey(r.tracking)).filter(Boolean)
+      );
+
+      // Track row 0's shipmentId so the delete loop doesn't double-delete it
+      // (Phase A already handles primary cleanup via upsertOrderTracking)
+      const row0Sid = Number(editDraft.trackingRows[0]?.shipmentId);
+      if (Number.isFinite(row0Sid) && row0Sid > 0) {
+        nextSeenIds.add(row0Sid);
+      }
+
+      // Phase B: Diff additional rows (index 1+)
+      for (let idx = 1; idx < editDraft.trackingRows.length; idx++) {
+        const nextRow = editDraft.trackingRows[idx];
+        const sid = Number(nextRow.shipmentId);
         const nextTracking = String(nextRow.tracking || '').trim();
 
-        if (Number.isFinite(shipmentId) && shipmentId > 0) {
-          nextSeenShipmentIds.add(shipmentId);
+        if (Number.isFinite(sid) && sid > 0) {
+          nextSeenIds.add(sid);
           if (!nextTracking) {
-            trackingLinkDeletes.push({ shipmentId });
+            trackingLinkDeletes.push({ shipmentId: sid });
             continue;
           }
-          const prevTracking = String(previousRowsById.get(shipmentId) || '').trim();
-          if (nextTracking !== prevTracking) {
-            trackingLinkEdits.push({ shipmentId, shippingTrackingNumber: nextTracking });
+          const prev = String(originalById.get(sid) || '').trim();
+          if (nextTracking !== prev) {
+            const nextKey = normalizeTrackingKey(nextTracking);
+            const isOwnedElsewhere = nextKey && ownedTrackingKeys.has(nextKey)
+              && normalizeTrackingKey(prev) !== nextKey;
+            if (!isOwnedElsewhere) {
+              trackingLinkEdits.push({ shipmentId: sid, shippingTrackingNumber: nextTracking });
+            }
           }
           continue;
         }
 
-        // New row without a shipmentId → create
+        // New row — create, unless the tracking already exists on this order
         if (nextTracking) {
-          trackingLinkCreates.push({ shippingTrackingNumber: nextTracking });
+          const nextKey = normalizeTrackingKey(nextTracking);
+          if (!nextKey || !ownedTrackingKeys.has(nextKey)) {
+            trackingLinkCreates.push({ shippingTrackingNumber: nextTracking });
+          }
         }
       }
 
-      // Rows in the original that disappeared from the draft → delete
-      for (const shipmentId of previousRowsById.keys()) {
-        if (!nextSeenShipmentIds.has(shipmentId)) {
-          trackingLinkDeletes.push({ shipmentId });
+      // Original additional rows that disappeared from the draft → delete
+      for (const sid of originalById.keys()) {
+        if (!nextSeenIds.has(sid)) {
+          trackingLinkDeletes.push({ shipmentId: sid });
         }
       }
 
-      // The first row's shipmentId becomes orders.shipment_id (for query join compatibility).
-      const firstRowShipmentId = editDraft.trackingRows[0]?.shipmentId ?? null;
-      const setPrimaryId = Number.isFinite(Number(firstRowShipmentId)) && Number(firstRowShipmentId) > 0
-        ? Number(firstRowShipmentId)
-        : null;
+      // Resolve which shipment should be primary after the save
+      const draftRow0 = editDraft.trackingRows[0];
+      const draftRow0Tracking = normalizeTrackingKey(draftRow0?.tracking);
+      const draftRow0ShipmentId = (() => {
+        const sid = Number(draftRow0?.shipmentId);
+        if (Number.isFinite(sid) && sid > 0) return sid;
+        if (!draftRow0Tracking) return null;
+        const match = allTrackingRows.find(
+          (r) => r.shipmentId != null && normalizeTrackingKey(r.tracking) === draftRow0Tracking
+        );
+        return match ? Number(match.shipmentId) : null;
+      })();
 
       let trackingChanged = false;
-      if (
-        trackingLinkDeletes.length > 0
+      const hasTrackingChanges =
+        primaryTrackingChanged
+        || trackingLinkDeletes.length > 0
         || trackingLinkEdits.length > 0
-        || trackingLinkCreates.length > 0
-      ) {
+        || trackingLinkCreates.length > 0;
+
+      if (hasTrackingChanges) {
         const res = await fetch('/api/orders/assign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orderId: currentOrderId,
+            // Phase A: primary tracking via upsertOrderTracking (handles null shipmentId)
+            ...(primaryTrackingChanged ? { shippingTrackingNumber: primaryDraftTracking || null } : {}),
+            // Phase B: additional tracking via link operations
             trackingLinkDeletes,
             trackingLinkEdits,
             trackingLinkCreates,
-            setPrimaryShipmentId: setPrimaryId,
+            setPrimaryShipmentId: draftRow0ShipmentId,
           }),
         });
 
@@ -1400,9 +1459,9 @@ export function ShippingInformationSection({
         .map((row) => row.trim().toUpperCase())
         .filter(Boolean);
       const currentSerialRows = serialNumberRows.map((row) => row.trim().toUpperCase()).filter(Boolean);
-      const primaryTrackingDraft = editDraft.trackingRows[0]?.tracking || '';
+      const firstDraftTracking = editDraft.trackingRows[0]?.tracking || '';
       if (nextSerialRows.join(', ') !== currentSerialRows.join(', ')) {
-        await saveSerialRowsFromModal(nextSerialRows, primaryTrackingDraft);
+        await saveSerialRowsFromModal(nextSerialRows, firstDraftTracking);
       }
 
       // ── 4. Reflect draft into local component state ───────────────────────
@@ -1412,17 +1471,16 @@ export function ShippingInformationSection({
       if (editDraft.itemNumber !== ef.itemNumber) {
         ef.onItemNumberChange(editDraft.itemNumber);
       }
-      if (primaryTrackingDraft !== ef.trackingNumber) {
-        ef.onTrackingNumberChange(primaryTrackingDraft);
+      if (firstDraftTracking !== ef.trackingNumber) {
+        ef.onTrackingNumberChange(firstDraftTracking);
       }
       if (editDraft.shipByDate !== ef.shipByDate) {
         ef.onShipByDateChange(editDraft.shipByDate);
       }
 
-      setLinkedTrackingDrafts((prev) => {
-        const next = { ...prev };
+      setLinkedTrackingDrafts(() => {
+        const next: Record<string, string> = {};
         editDraft.trackingRows.forEach((row, index) => {
-          if (index === 0) return; // first row syncs via ef.onTrackingNumberChange
           const key = `${row.shipmentId ?? 'none'}:${index}`;
           next[key] = row.tracking;
         });
@@ -1431,16 +1489,18 @@ export function ShippingInformationSection({
 
       setIsEditModalSaveSuccess(true);
 
-      // Bust all cached order views so the details panel, tables, and
-      // dashboard all refetch with the updated tracking numbers.
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
-      queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-table'] });
+      // Bust all cached order views and AWAIT refetch so the parent
+      // passes fresh `shipped` data before we close the modal.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['orders'] }),
+        queryClient.invalidateQueries({ queryKey: ['shipped-table'] }),
+        queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-table'] }),
+      ]);
 
       onUpdate?.();
 
-      await new Promise((resolve) => window.setTimeout(resolve, 650));
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
 
       setIsEditModalOpen(false);
       setIsEditModalSaveSuccess(false);
@@ -1457,7 +1517,7 @@ export function ShippingInformationSection({
       setIsEditModalSaving(false);
     }
   }, [
-    additionalTrackingRows,
+    allTrackingRows,
     editDraft,
     ef,
     internalFieldSave,
@@ -1466,7 +1526,6 @@ export function ShippingInformationSection({
     saveSerialRowsFromModal,
     serialNumberRows,
     shipped.id,
-    shipped.shipment_id,
     syncOrderExceptions,
   ]);
 
@@ -1550,33 +1609,54 @@ export function ShippingInformationSection({
             onBlur={ef.onShipByDateBlur}
             allowEdit={false}
           />
-          <ShippingEditableRow
-            label="Tracking Number"
-            value={ef.trackingNumber}
-            placeholder="Enter tracking number"
-            onChange={ef.onTrackingNumberChange}
-            onBlur={ef.onBlur}
-            externalUrl={getTrackingUrl(ef.trackingNumber)}
-            allowEdit={false}
-          />
-          {additionalTrackingRows.map((row, index) => {
+          {allTrackingRows.length > 0 ? allTrackingRows.map((row, index) => {
             const draftKey = `${row.shipmentId ?? 'none'}:${index}`;
             const draftValue = linkedTrackingDrafts[draftKey] ?? row.tracking;
             return (
+              <ShippingEditableRow
+                key={`tracking-${index}-${row.shipmentId ?? 'none'}`}
+                label={`Tracking Number${allTrackingRows.length > 1 ? ` ${index + 1}` : ''}`}
+                value={draftValue}
+                placeholder="Enter tracking number"
+                onChange={(value) => {
+                  setLinkedTrackingDrafts((prev) => ({ ...prev, [draftKey]: value }));
+                  if (index === 0) ef.onTrackingNumberChange(value);
+                }}
+                onBlur={() => {
+                  if (index === 0) {
+                    void internalFieldSave.saveInlineFields(ef.orderNumber, ef.itemNumber, draftValue);
+                  } else {
+                    void saveLinkedTracking(row.shipmentId, draftValue);
+                  }
+                }}
+                externalUrl={getTrackingUrl(draftValue)}
+                allowEdit={false}
+                onPasteReplace={async () => {
+                  try {
+                    const text = await navigator.clipboard.readText();
+                    const pasted = String(text || '').trim();
+                    if (!pasted) return;
+                    setLinkedTrackingDrafts((prev) => ({ ...prev, [draftKey]: pasted }));
+                    if (index === 0) {
+                      ef.onTrackingNumberChange(pasted);
+                      await internalFieldSave.saveInlineFields(ef.orderNumber, ef.itemNumber, pasted);
+                    } else {
+                      await saveLinkedTracking(row.shipmentId, pasted);
+                    }
+                  } catch {}
+                }}
+              />
+            );
+          }) : (
             <ShippingEditableRow
-              key={`additional-tracking-${index}-${row.shipmentId ?? 'none'}`}
-              label={`Tracking Number ${index + 2}`}
-              value={draftValue}
-              placeholder="Not available"
-              onChange={(value) => {
-                setLinkedTrackingDrafts((prev) => ({ ...prev, [draftKey]: value }));
-              }}
-              onBlur={() => { void saveLinkedTracking(row.shipmentId, draftValue); }}
-              externalUrl={getTrackingUrl(draftValue)}
+              label="Tracking Number"
+              value=""
+              placeholder="No tracking number"
+              onChange={() => {}}
+              onBlur={() => {}}
               allowEdit={false}
             />
-            );
-          })}
+          )}
           <ShippingEditableRow
             label="Order ID"
             value={ef.orderNumber}

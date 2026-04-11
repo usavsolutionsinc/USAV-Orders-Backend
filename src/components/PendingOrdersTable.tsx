@@ -89,7 +89,6 @@ export default function PendingOrdersTable({
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
     placeholderData: (previousData) => previousData,
-    refetchOnWindowFocus: false,
   });
 
   const ordersChannelName = getOrdersChannelName();

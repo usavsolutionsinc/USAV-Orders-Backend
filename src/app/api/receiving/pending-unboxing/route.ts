@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
       : "'PENDING'::text AS qa_status";
     const conditionGradeSelect = hasLineColumn('condition_grade')
       ? 'rl.condition_grade'
-      : "'BRAND_NEW'::text AS condition_grade";
+      : "'USED_A'::text AS condition_grade";
     const needsTestSelect = hasLineColumn('needs_test')
       ? 'COALESCE(rl.needs_test, false) AS needs_test'
       : 'false AS needs_test';

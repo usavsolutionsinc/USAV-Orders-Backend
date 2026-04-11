@@ -14,6 +14,7 @@ import { Loader2 } from '@/components/Icons';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
+import { useAblyReconnectInvalidation } from '@/hooks/useAblyReconnectInvalidation';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
 import { useDashboardSelectedOrder } from '@/hooks/useDashboardSelectedOrder';
 import {
@@ -38,6 +39,7 @@ function DashboardPageContent() {
     useRealtimeInvalidation({ dashboard: true });
     useFbaRealtimeInvalidation();
     useRealtimeToasts('admin');
+    useAblyReconnectInvalidation();
 
     useEffect(() => {
         const STALE = 5 * 60 * 1000;

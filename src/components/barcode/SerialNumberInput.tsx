@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { LocationSelector } from './LocationSelector';
 
 interface SerialNumberInputProps {
     sku: string;
@@ -170,15 +171,11 @@ export function SerialNumberInput({
                     </>
                 )}
 
-                <input
+                <LocationSelector
                     value={location}
-                    onChange={(e) => onLocationChange(e.target.value)}
-                    onKeyDown={(e) => isLocationMode && e.key === 'Enter' && onFinalAction?.()}
-                    className={`w-full px-5 py-4 bg-white focus:outline-none placeholder:text-gray-500 text-gray-900 ${
-                        isLocationMode ? 'text-sm font-mono' : 'text-[10px] font-black uppercase tracking-widest'
-                    }`}
-                    placeholder={isLocationMode ? 'Enter new location…' : 'Location (optional)'}
-                    autoComplete="off"
+                    currentLocation={currentLocation}
+                    onChange={onLocationChange}
+                    compact={!isLocationMode}
                 />
             </div>
 

@@ -5,6 +5,7 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 import { upsertEcwidIncomingRepair } from '@/lib/neon/repair-service-queries';
+import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const DEFAULT_LIMIT = 100;
@@ -139,6 +140,13 @@ async function upsertEcwidOrder(params: {
     }
   }
 
+  const skuCatalogId = await resolveOrCreateSkuCatalogId({
+    sku: sku || null,
+    productTitle: productTitle || null,
+    accountSource: 'ecwid',
+    orderId: orderId || null,
+  });
+
   if (existingRows.length === 0) {
     await pool.query(
       `INSERT INTO orders (
@@ -153,9 +161,10 @@ async function upsertEcwidOrder(params: {
         quantity,
         out_of_stock,
         account_source,
-        order_date
+        order_date,
+        sku_catalog_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12
+        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13
       )`,
       [
         orderId || null,
@@ -170,6 +179,7 @@ async function upsertEcwidOrder(params: {
         '',
         'ecwid',
         orderDate,
+        skuCatalogId,
       ]
     );
 
@@ -186,11 +196,12 @@ async function upsertEcwidOrder(params: {
          quantity = COALESCE(NULLIF(quantity, ''), $5),
          account_source = COALESCE(NULLIF(account_source, ''), 'ecwid'),
          order_date = COALESCE(order_date, $6),
+         sku_catalog_id = COALESCE(sku_catalog_id, $7),
          status = CASE
            WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
            ELSE status
          END
-     WHERE id = $7`,
+     WHERE id = $8`,
     [
       orderId || null,
       productTitle || null,
@@ -198,6 +209,7 @@ async function upsertEcwidOrder(params: {
       sku || null,
       quantity,
       orderDate,
+      skuCatalogId,
       existingId,
     ]
   );

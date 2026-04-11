@@ -178,55 +178,53 @@ async function upsertOrderTracking(
   const unknownCarrierMessage =
     'Carrier detection unavailable for this tracking format; manual tracking only.';
 
-  const currentShipmentIds: number[] = Array.from(
-    new Set<number>(
-      existingOrders.rows
-        .map((row: any) => Number(row.shipment_id))
-        .filter((shipmentId: number) => Number.isFinite(shipmentId) && shipmentId > 0)
-    )
+  // Gather ALL shipment IDs linked to this order — both from orders.shipment_id
+  // and order_shipment_links. This ensures the duplicate check excludes every
+  // shipment already owned by the order (e.g. pasting tracking 2 into slot 1).
+  const shipmentIdSet = new Set<number>(
+    existingOrders.rows
+      .map((row: any) => Number(row.shipment_id))
+      .filter((sid: number) => Number.isFinite(sid) && sid > 0)
   );
 
-  // When orders.shipment_id is NULL the tracking may still be linked via
-  // order_shipment_links (e.g. imported by the Google Sheets job).  Look up
-  // the primary link so we UPDATE that shipment row instead of inserting a
-  // duplicate.
-  if (currentShipmentIds.length === 0) {
-    try {
-      const primaryLink = await client.query(
-        `SELECT shipment_id
-         FROM order_shipment_links
-         WHERE order_row_id = ANY($1::int[]) AND is_primary = true
-         ORDER BY updated_at DESC NULLS LAST
-         LIMIT 1`,
-        [orderIds]
-      );
-      if (primaryLink.rows.length > 0) {
-        const linkShipmentId = Number(primaryLink.rows[0].shipment_id);
-        if (Number.isFinite(linkShipmentId) && linkShipmentId > 0) {
-          currentShipmentIds.push(linkShipmentId);
-        }
-      }
-    } catch (error) {
-      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  try {
+    const allLinks = await client.query(
+      `SELECT DISTINCT shipment_id
+       FROM order_shipment_links
+       WHERE order_row_id = ANY($1::int[])`,
+      [orderIds]
+    );
+    for (const row of allLinks.rows) {
+      const sid = Number(row.shipment_id);
+      if (Number.isFinite(sid) && sid > 0) shipmentIdSet.add(sid);
     }
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
   }
 
-  const duplicateShipment = await client.query(
-    `SELECT id
-     FROM shipping_tracking_numbers
-     WHERE tracking_number_normalized = $1
-       AND ($2::bigint[] IS NULL OR id <> ALL($2::bigint[]))
-     LIMIT 1`,
-    [normalizedTracking, currentShipmentIds.length > 0 ? currentShipmentIds : null]
+  const currentShipmentIds: number[] = Array.from(shipmentIdSet);
+
+  // Check if this tracking number already exists in shipping_tracking_numbers.
+  const existingSTN = await client.query(
+    `SELECT id FROM shipping_tracking_numbers WHERE tracking_number_normalized = $1 LIMIT 1`,
+    [normalizedTracking]
   );
 
-  if ((duplicateShipment.rowCount ?? 0) > 0) {
-    throw new Error('Tracking number already exists on another shipment');
-  }
+  let shipmentId: number | null = null;
 
-  let shipmentId: number | null = currentShipmentIds.length > 0 ? currentShipmentIds[0] : null;
-
-  if (shipmentId) {
+  if ((existingSTN.rowCount ?? 0) > 0) {
+    const existingId = Number(existingSTN.rows[0].id);
+    // Is the existing shipment owned by this order?
+    if (currentShipmentIds.includes(existingId)) {
+      // Already owned — just re-point orders.shipment_id to this shipment.
+      // No need to update the STN row; the tracking number is identical.
+      shipmentId = existingId;
+    } else {
+      throw new Error('Tracking number already exists on another shipment');
+    }
+  } else if (currentShipmentIds.length > 0) {
+    // Tracking doesn't exist yet — update the first owned shipment row
+    shipmentId = currentShipmentIds[0];
     await client.query(
       `UPDATE shipping_tracking_numbers
        SET tracking_number_raw = $1,
@@ -385,13 +383,41 @@ async function updateShipmentTrackingById(
     throw new Error('Shipment is not linked to this order');
   }
 
+  // Gather all shipment IDs owned by this order so the duplicate check
+  // doesn't reject tracking numbers that already belong to the same order
+  // (e.g. consolidating tracking 2 into slot 1).
+  const ownedShipmentIds: number[] = [shipmentId];
+  try {
+    const allLinks = await client.query(
+      `SELECT DISTINCT shipment_id FROM order_shipment_links WHERE order_row_id = ANY($1::int[])`,
+      [orderIds],
+    );
+    for (const row of allLinks.rows) {
+      const sid = Number(row.shipment_id);
+      if (Number.isFinite(sid) && sid > 0 && sid !== shipmentId) ownedShipmentIds.push(sid);
+    }
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  }
+  // Also include orders.shipment_id
+  try {
+    const primaryIds = await client.query(
+      `SELECT DISTINCT shipment_id FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NOT NULL`,
+      [orderIds],
+    );
+    for (const row of primaryIds.rows) {
+      const sid = Number(row.shipment_id);
+      if (Number.isFinite(sid) && sid > 0 && !ownedShipmentIds.includes(sid)) ownedShipmentIds.push(sid);
+    }
+  } catch { /* ok */ }
+
   const duplicateShipment = await client.query(
     `SELECT id
      FROM shipping_tracking_numbers
      WHERE tracking_number_normalized = $1
-       AND id <> $2
+       AND id <> ALL($2::bigint[])
      LIMIT 1`,
-    [normalizedTracking, shipmentId],
+    [normalizedTracking, ownedShipmentIds],
   );
   if ((duplicateShipment.rowCount ?? 0) > 0) {
     throw new Error('Tracking number already exists on another shipment');

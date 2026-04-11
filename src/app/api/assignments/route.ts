@@ -27,13 +27,15 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const assignedTechIdParam = searchParams.get('assigned_tech_id');
     const assignedPackerIdParam = searchParams.get('assigned_packer_id');
-    const assignedTechId = assignedTechIdParam ? parsePositiveInt(assignedTechIdParam) : undefined;
-    const assignedPackerId = assignedPackerIdParam ? parsePositiveInt(assignedPackerIdParam) : undefined;
+    const assignedTechId =
+      assignedTechIdParam && assignedTechIdParam !== '0' ? parsePositiveInt(assignedTechIdParam) : undefined;
+    const assignedPackerId =
+      assignedPackerIdParam && assignedPackerIdParam !== '0' ? parsePositiveInt(assignedPackerIdParam) : undefined;
 
-    if (assignedTechIdParam && assignedTechId == null) {
+    if (assignedTechIdParam && assignedTechIdParam !== '0' && assignedTechId == null) {
       throw ApiError.badRequest('assigned_tech_id must be a positive integer');
     }
-    if (assignedPackerIdParam && assignedPackerId == null) {
+    if (assignedPackerIdParam && assignedPackerIdParam !== '0' && assignedPackerId == null) {
       throw ApiError.badRequest('assigned_packer_id must be a positive integer');
     }
 

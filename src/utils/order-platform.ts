@@ -45,6 +45,7 @@ const PLATFORM_COLORS: Record<string, { text: string; border: string }> = {
   fba: { text: 'text-orange-600', border: 'border-orange-600' },
   ebay: { text: 'text-yellow-400', border: 'border-yellow-400' },
   ecwid: { text: 'text-blue-600', border: 'border-blue-600' },
+  zoho: { text: 'text-red-600', border: 'border-red-600' },
   walmart: { text: 'text-amber-800', border: 'border-amber-800' },
   mercari: { text: 'text-purple-600', border: 'border-purple-600' },
   shopify: { text: 'text-black', border: 'border-black' },

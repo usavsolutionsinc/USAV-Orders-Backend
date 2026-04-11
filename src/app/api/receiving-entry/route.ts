@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         const targetChannelAllowed = new Set(['ORDERS', 'FBA']);
 
         // condition_grade / disposition_code are nullable for Zoho PO-originated entries
-        // (per-item state lives in receiving_lines); for standalone bulk scans they default to BRAND_NEW/HOLD.
+        // (per-item state lives in receiving_lines); for standalone bulk scans they default to USED_A/HOLD.
         const rawConditionGrade = String(body?.conditionGrade || body?.condition_grade || '').trim().toUpperCase();
         const conditionGrade = conditionGradeAllowed.has(rawConditionGrade) ? rawConditionGrade : null;
 

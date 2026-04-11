@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 
 export interface ShippedFormData {
   order_id: string;
@@ -42,12 +43,19 @@ export async function POST(req: NextRequest) {
     // Get current timestamp in MM/DD/YYYY HH:mm:ss format (24-hour) in PST
     const formattedDate = formatPSTTimestamp();
 
+    // Resolve or create sku_catalog entry
+    const skuCatalogId = await resolveOrCreateSkuCatalogId({
+      sku,
+      productTitle: product_title,
+      orderId: order_id,
+    });
+
     // Insert the order row (tracking linked later via shipment_id)
     const insertResult = await pool.query(
-      `INSERT INTO orders (order_id, product_title, condition, sku, status, created_at)
-       VALUES ($1, $2, $3, $4, 'shipped', NOW())
+      `INSERT INTO orders (order_id, product_title, condition, sku, status, created_at, sku_catalog_id)
+       VALUES ($1, $2, $3, $4, 'shipped', NOW(), $5)
        RETURNING id`,
-      [order_id, finalProductTitle, condition, sku?.trim() || null]
+      [order_id, finalProductTitle, condition, sku?.trim() || null, skuCatalogId]
     );
     const insertedId = insertResult.rows[0]?.id ?? null;
 

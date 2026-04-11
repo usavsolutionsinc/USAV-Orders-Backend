@@ -40,7 +40,6 @@ export function useWalkInSales(
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: (prev) => prev,
-    refetchOnWindowFocus: false,
   });
 
   useAblyChannel(WALKIN_CHANNEL, 'sale.completed', () => {

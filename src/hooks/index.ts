@@ -94,3 +94,5 @@ export {
 export { useShippedTableData } from './useShippedTableData';
 export { useTechLogs } from './useTechLogs';
 export { useUpNextData } from './useUpNextData';
+export { useLocations } from './useLocations';
+export type { LocationRecord, CreateLocationPayload, UseLocationsResult } from './useLocations';

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { syncTsnToSerialUnit } from '@/lib/neon/serial-units-queries';
 
 type SerialRow = {
   id: number;
@@ -112,7 +113,11 @@ export async function POST(request: NextRequest) {
       [serialNumber, serialType, testedBy, receivingLineId],
     );
 
-    await invalidateCacheTags(['receiving-lines', 'receiving-logs']);
+    await invalidateCacheTags([
+      'receiving-lines',
+      'receiving-logs',
+      'pending-unboxing',
+    ]);
     if (lineReceivingId != null) {
       await publishReceivingLogChanged({
         action: 'update',
@@ -120,6 +125,20 @@ export async function POST(request: NextRequest) {
         source: 'receiving.serials.create',
       });
     }
+
+    // Register the new TSN row in the serial_units master and stamp the
+    // FK back. Background — the TSN insert has already committed and the
+    // response doesn't need to wait.
+    const tsnRow = inserted.rows[0];
+    after(async () => {
+      await syncTsnToSerialUnit({
+        id: Number(tsnRow.id),
+        serial_number: tsnRow.serial_number,
+        station_source: tsnRow.station_source,
+        tested_by: tsnRow.tested_by,
+        receiving_line_id: tsnRow.receiving_line_id,
+      });
+    });
 
     return NextResponse.json(
       { success: true, serial: normalizeRow(inserted.rows[0]) },
@@ -167,7 +186,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await invalidateCacheTags(['receiving-lines', 'receiving-logs']);
+    await invalidateCacheTags([
+      'receiving-lines',
+      'receiving-logs',
+      'pending-unboxing',
+    ]);
     if (deleted.rows[0]?.receiving_id != null) {
       await publishReceivingLogChanged({
         action: 'update',

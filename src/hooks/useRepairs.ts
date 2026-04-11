@@ -27,7 +27,6 @@ export function useRepairsTable(search?: string | null, tab: RepairTab = 'active
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: (prev) => prev,
-    refetchOnWindowFocus: false,
   });
 
   // Live invalidation via Ably whenever any repair row changes.

@@ -13,6 +13,7 @@ import {
     parseSheetDateTime,
     upsertOpenOrdersException,
 } from '@/lib/sync/sheet-sync-common';
+import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 
 export const maxDuration = 60;
 
@@ -178,16 +179,23 @@ async function syncShippedSheet(params: {
             const parsedShipByDate = rawShipByDate ? new Date(rawShipByDate) : null;
             const shipByDate = parsedShipByDate && !isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
 
+            // Resolve or create sku_catalog entry
+            const skuCatalogId = await resolveOrCreateSkuCatalogId({
+                sku,
+                productTitle,
+                orderId,
+            });
+
             // packer_id and tester_id were removed from orders; assignments go to work_assignments.
             const insertedOrder = await client.query(
                 `INSERT INTO orders (
                     order_id, product_title, quantity, condition,
-                    sku, notes, status
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    sku, notes, status, sku_catalog_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id`,
                 [
                     orderId, productTitle, quantity, condition,
-                    sku, notes, 'shipped',
+                    sku, notes, 'shipped', skuCatalogId,
                 ]
             );
 

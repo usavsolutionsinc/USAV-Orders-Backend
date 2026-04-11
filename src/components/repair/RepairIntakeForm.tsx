@@ -235,16 +235,16 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     /* ── Handlers ── */
 
     const handleUseFavorite = (favorite: FavoriteSkuRecord) => {
-        setSelectedItems([]);
+        const syntheticItem: SelectedItem = {
+            id: `fav-${favorite.id}`,
+            name: favorite.productTitle || favorite.label || favorite.sku,
+            price: favorite.defaultPrice ? parseFloat(favorite.defaultPrice) : null,
+            sku: favorite.sku,
+        };
+        handleSelectedItemsChange([syntheticItem]);
         const notes = favorite.issueTemplate || favorite.label || 'Repair';
         setFormData(prev => ({
             ...prev,
-            product: {
-                type: 'Bose Repair Service',
-                model: favorite.productTitle || favorite.label || favorite.sku,
-                sourceSku: favorite.sku,
-            },
-            price: favorite.defaultPrice || prev.price,
             repairNotes: notes,
         }));
         // Auto-advance to customer step

@@ -10,6 +10,7 @@ import { FormField } from '@/design-system/components';
 import { ExpandableSection } from '@/design-system/primitives';
 import { sectionLabel, fieldLabel, cardTitle, chipText, monoValue, microBadge } from '@/design-system/tokens/typography/presets';
 import { framerTransition, framerPresence } from '@/design-system/foundations/motion-framer';
+import { PrintLabelButton } from '@/components/labels/PrintLabelButton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,6 +115,38 @@ function usePendingEntries() {
         },
         staleTime: 45_000,
         refetchInterval: 60_000,
+    });
+}
+
+interface ReceivingLineWithSerials {
+    id: number;
+    sku: string | null;
+    item_name: string | null;
+    quantity_expected: number | null;
+    quantity_received: number;
+    workflow_status: string | null;
+    zoho_purchaseorder_id: string | null;
+    serials: Array<{
+        id: number;
+        serial_number: string;
+        current_status: string;
+        condition_grade: string | null;
+        created_at: string;
+    }>;
+}
+
+function useReceivingLinesWithSerials(receivingId: string | null, enabled: boolean) {
+    return useQuery<ReceivingLineWithSerials[]>({
+        queryKey: ['receiving-lines-with-serials', receivingId],
+        queryFn: async () => {
+            if (!receivingId) return [];
+            const res = await fetch(`/api/receiving-lines?receiving_id=${receivingId}&include=serials`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return Array.isArray(data.receiving_lines) ? data.receiving_lines : [];
+        },
+        enabled: enabled && !!receivingId,
+        staleTime: 5_000,
     });
 }
 
@@ -222,12 +255,63 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
     const [selectedEntry, setSelectedEntry] = useState<ReceivingLog | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [armedLineId, setArmedLineId] = useState<number | null>(null);
+
+    const {
+        data: poLines = [],
+        refetch: refetchPoLines,
+    } = useReceivingLinesWithSerials(
+        selectedEntry?.id || null,
+        !!selectedEntry,
+    );
+
+    // Broadcast receiving-active so the sidebar hydrates its scan state for
+    // whichever entry the operator just opened. Disarm on close.
+    useEffect(() => {
+        if (!selectedEntry) {
+            setArmedLineId(null);
+            window.dispatchEvent(new CustomEvent('receiving-disarm-line'));
+            return;
+        }
+        window.dispatchEvent(
+            new CustomEvent('receiving-active', {
+                detail: { receiving_id: Number(selectedEntry.id) },
+            }),
+        );
+    }, [selectedEntry?.id]);
+
+    // Serial scans come from the sidebar — refetch lines so progress + serials
+    // reflect the new state without an extra round trip from the scanner.
+    useEffect(() => {
+        const handler = () => {
+            refetchPoLines();
+        };
+        window.addEventListener('receiving-serial-scanned', handler);
+        window.addEventListener('receiving-line-complete', handler);
+        return () => {
+            window.removeEventListener('receiving-serial-scanned', handler);
+            window.removeEventListener('receiving-line-complete', handler);
+        };
+    }, [refetchPoLines]);
+
+    const armLine = useCallback((line: ReceivingLineWithSerials) => {
+        setArmedLineId(line.id);
+        window.dispatchEvent(
+            new CustomEvent('receiving-arm-line', {
+                detail: {
+                    line_id: line.id,
+                    sku: line.sku,
+                    item_name: line.item_name,
+                },
+            }),
+        );
+    }, []);
 
     // Classification form state
     const [isReturn, setIsReturn] = useState(false);
     const [returnPlatform, setReturnPlatform] = useState('');
     const [returnReason, setReturnReason] = useState('');
-    const [conditionGrade, setConditionGrade] = useState('BRAND_NEW');
+    const [conditionGrade, setConditionGrade] = useState('USED_A');
     const [qaStatus, setQaStatus] = useState('PASSED');
     const [dispositionCode, setDispositionCode] = useState('ACCEPT');
     const [needsTest, setNeedsTest] = useState(true);
@@ -244,7 +328,7 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
         setIsReturn(entry.is_return || false);
         setReturnPlatform(entry.return_platform || '');
         setReturnReason(entry.return_reason || '');
-        setConditionGrade(entry.condition_grade || 'BRAND_NEW');
+        setConditionGrade(entry.condition_grade || 'USED_A');
         setQaStatus('PASSED');
         setDispositionCode('ACCEPT');
         setNeedsTest(entry.needs_test !== false);
@@ -418,6 +502,109 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
                             {/* Photos */}
                             <PhotoGrid receivingId={selectedEntry.id} />
+
+                            {/* PO Lines & Serial Capture */}
+                            {poLines.length > 0 && (
+                                <div className="border-t border-gray-100 pt-4 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Package className="h-4 w-4 text-gray-500" />
+                                        <p className={sectionLabel}>PO Lines ({poLines.length})</p>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {poLines.map((line) => {
+                                            const expected = line.quantity_expected ?? 0;
+                                            const received = line.quantity_received ?? 0;
+                                            const progress = expected > 0
+                                                ? Math.min(100, (received / expected) * 100)
+                                                : 0;
+                                            const isComplete = expected > 0 && received >= expected;
+                                            const isArmed = armedLineId === line.id;
+                                            const scannedSerials = line.serials
+                                                .map((s) => s.serial_number)
+                                                .filter((s): s is string => !!s);
+                                            return (
+                                                <div
+                                                    key={line.id}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => armLine(line)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            armLine(line);
+                                                        }
+                                                    }}
+                                                    className={`w-full cursor-pointer rounded-xl border p-3 transition-all ${
+                                                        isArmed
+                                                            ? 'border-blue-400 bg-blue-50 shadow-sm'
+                                                            : isComplete
+                                                            ? 'border-emerald-200 bg-emerald-50/50'
+                                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className={`${monoValue} truncate`}>
+                                                                {line.sku || '—'}
+                                                            </p>
+                                                            {line.item_name && (
+                                                                <p className="mt-0.5 truncate text-[10px] text-gray-500">
+                                                                    {line.item_name}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <span
+                                                            className={`flex-shrink-0 ${chipText} ${
+                                                                isComplete ? 'text-emerald-700' : 'text-gray-500'
+                                                            }`}
+                                                        >
+                                                            {received}/{expected || '?'}
+                                                        </span>
+                                                    </div>
+                                                    {expected > 0 && (
+                                                        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                                                            <div
+                                                                className={`h-full transition-all ${
+                                                                    isComplete ? 'bg-emerald-500' : 'bg-blue-500'
+                                                                }`}
+                                                                style={{ width: `${progress}%` }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    {scannedSerials.length > 0 && (
+                                                        <div className="mt-2 space-y-1.5">
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {scannedSerials.map((sn, i) => (
+                                                                    <span
+                                                                        key={`${line.id}-${i}`}
+                                                                        className="rounded border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[9px] text-gray-700"
+                                                                    >
+                                                                        {sn}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                            {line.sku && (
+                                                                <div
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    onKeyDown={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <PrintLabelButton
+                                                                        sku={line.sku}
+                                                                        title={line.item_name ?? undefined}
+                                                                        serialNumbers={scannedSerials}
+                                                                        variant="ghost"
+                                                                        label={`Print ${scannedSerials.length} label${scannedSerials.length > 1 ? 's' : ''}`}
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="border-t border-gray-100 pt-4 space-y-4">
                                 {/* Package type */}

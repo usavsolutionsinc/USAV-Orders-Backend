@@ -1,397 +1,375 @@
 'use client';
 
-import { Suspense, useEffect, useState, type KeyboardEvent } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { FileText, ExternalLink } from '@/components/Icons';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Package, Loader2, Check, Link2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
-import { formatMediumDate } from '@/utils/_date';
-import { SkuPairingProductTable } from '@/components/manuals/SkuPairingProductTable';
-import { SkuPairingDetail } from '@/components/manuals/SkuPairingPanel';
+import { tableHeader, microBadge } from '@/design-system/tokens/typography/presets';
 
-interface ProductManual {
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface SkuCatalogListItem {
   id: number;
-  sku: string | null;
-  item_number: string | null;
-  product_title: string | null;
+  sku: string;
+  product_title: string;
+  category: string | null;
+  image_url: string | null;
+  platform_count: number;
+  manual_count: number;
+  qc_step_count: number;
+  order_count: number;
+  ecwid_display_name: string | null;
+  ecwid_image_url: string | null;
+  ecwid_sku: string | null;
+}
+
+interface UnpairedEcwidItem {
+  id: number;
+  platform_sku: string | null;
+  platform_item_id: string | null;
   display_name: string | null;
-  google_file_id: string;
-  type: string | null;
-  updated_at: string | null;
+  image_url: string | null;
+  order_count: number;
 }
 
-type ViewMode = 'manuals' | 'sku-pairing';
+type Mode = 'all' | 'pairing' | 'manuals' | 'qc';
 
-function buildManualsHref(pathname: string, params: URLSearchParams) {
-  const query = params.toString();
-  return query ? `${pathname}?${query}` : pathname;
-}
+const MODE_TITLES: Record<Mode, string> = {
+  all: 'Products',
+  pairing: 'SKU Pairing',
+  manuals: 'Manuals',
+  qc: 'QC Checklist',
+};
 
-// ─── Manual Detail Panel ─────────────────────────────────────────────────────
+// ─── Ecwid Pairing Table ────────────────────────────────────────────────────
 
-function ManualDetailPanel({ manual, onClose }: { manual: ProductManual; onClose: () => void }) {
-  const title = manual.display_name || manual.product_title || manual.item_number || `Manual #${manual.id}`;
-  const docUrl = manual.google_file_id
-    ? `https://docs.google.com/document/d/${manual.google_file_id}/preview`
-    : null;
+function EcwidPairingTable() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedEcwidId = searchParams.get('ecwid') ? Number(searchParams.get('ecwid')) : null;
+  const query = searchParams.get('q') || '';
+
+  const [items, setItems] = useState<UnpairedEcwidItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const autoSelected = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    autoSelected.current = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ limit: '200' });
+        if (query.trim()) params.set('q', query.trim());
+        const res = await fetch(`/api/sku-catalog/unpaired-ecwid?${params}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.success) {
+          setItems(data.items || []);
+          setTotal(data.total || 0);
+        }
+      } catch {
+        if (!cancelled) setItems([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [query]);
+
+  const handleSelect = useCallback((item: UnpairedEcwidItem) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('ecwid', String(item.id));
+    params.delete('id');
+    router.replace(`/manuals?${params.toString()}`);
+  }, [router, searchParams]);
+
+  // Auto-select first (most ordered) on load
+  useEffect(() => {
+    if (!loading && items.length > 0 && !selectedEcwidId && !autoSelected.current) {
+      autoSelected.current = true;
+      handleSelect(items[0]);
+    }
+  }, [loading, items, selectedEcwidId, handleSelect]);
+
+  // Listen for pair events to refresh
+  useEffect(() => {
+    const handler = () => { autoSelected.current = false; setItems([]); setLoading(true); };
+    window.addEventListener('ecwid-paired', handler);
+    return () => window.removeEventListener('ecwid-paired', handler);
+  }, []);
+
+  // Re-fetch after pair event
+  useEffect(() => {
+    if (!loading || items.length > 0) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const params = new URLSearchParams({ limit: '200' });
+        if (query.trim()) params.set('q', query.trim());
+        const res = await fetch(`/api/sku-catalog/unpaired-ecwid?${params}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.success) {
+          setItems(data.items || []);
+          setTotal(data.total || 0);
+        }
+      } catch { /* ignore */ }
+      if (!cancelled) setLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [loading, items.length, query]);
 
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className="flex h-full flex-col overflow-hidden bg-white">
       <div className={mainStickyHeaderClass}>
-        <div className={`${mainStickyHeaderShellRowClass} px-4`}>
-          <p className="truncate text-[11px] font-black uppercase tracking-[0.18em] text-gray-900">{title}</p>
-          <div className="inline-flex items-center gap-1.5">
-            {manual.google_file_id && (
-              <a
-                href={`https://docs.google.com/document/d/${manual.google_file_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 border border-gray-900 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Open
-              </a>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex items-center border border-gray-300 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-100"
-            >
-              Close
-            </button>
+        <div className={`${mainStickyHeaderShellRowClass} px-6`}>
+          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">
+            SKU Pairing
+          </p>
+          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+            {loading ? 'Loading...' : `${total} unpaired`}
+          </span>
+        </div>
+      </div>
+
+      <div className="sticky top-0 z-10 flex h-10 items-center gap-2 border-b border-gray-200 bg-white/95 px-6 backdrop-blur-sm">
+        <p className={`min-w-0 flex-1 ${tableHeader}`}>Ecwid Product</p>
+        <p className={`w-16 text-center ${tableHeader}`}>SKU</p>
+        <p className={`w-16 text-right ${tableHeader}`}>Orders</p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
           </div>
-        </div>
-      </div>
-
-      <div className="border-b border-gray-100 px-4 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {manual.item_number && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-gray-100 text-[9px] font-black uppercase tracking-wider text-gray-600">
-              Item: {manual.item_number}
-            </span>
-          )}
-          {manual.type && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 text-[9px] font-black uppercase tracking-wider text-blue-600">
-              {manual.type}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-hidden">
-        {docUrl ? (
-          <iframe
-            src={docUrl}
-            title={title}
-            className="w-full h-full border-0"
-            allow="autoplay"
-          />
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center px-8">
+            <Check className="h-8 w-8 text-emerald-400 mb-2" />
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">
+              {query ? 'No matches' : 'All Ecwid products paired'}
+            </p>
+          </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-center px-8">
-            <div className="h-16 w-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-              <FileText className="h-8 w-8 text-gray-500" />
-            </div>
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">No document linked</p>
-            <p className="mt-1 text-[10px] font-semibold text-gray-500">This manual has no Google Doc attached yet.</p>
-          </div>
+          items.map((item, idx) => {
+            const isSelected = selectedEcwidId === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleSelect(item)}
+                className={`flex w-full items-center gap-3 border-b border-gray-100 px-6 py-3 text-left transition-colors ${
+                  isSelected
+                    ? 'bg-orange-50/60 ring-1 ring-inset ring-orange-200'
+                    : idx % 2 === 0
+                      ? 'bg-white hover:bg-gray-50/50'
+                      : 'bg-gray-50/30 hover:bg-gray-50/70'
+                }`}
+              >
+                {item.image_url ? (
+                  <img src={item.image_url} alt="" className="h-8 w-8 rounded-lg object-cover bg-gray-100 shrink-0" />
+                ) : (
+                  <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                    <Package className="h-4 w-4 text-gray-300" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-bold text-gray-900">
+                    {item.display_name || 'Unnamed Product'}
+                  </p>
+                </div>
+                <div className="w-16 text-center">
+                  <span className="text-[10px] font-mono font-bold text-gray-500">
+                    {item.platform_sku || '—'}
+                  </span>
+                </div>
+                <div className="w-16 text-right">
+                  <span className={`font-mono text-[12px] font-black tabular-nums ${item.order_count > 5 ? 'text-amber-600' : 'text-gray-900'}`}>
+                    {item.order_count}
+                  </span>
+                </div>
+              </button>
+            );
+          })
         )}
       </div>
     </div>
   );
 }
 
-// ─── Manuals Table ───────────────────────────────────────────────────────────
+// ─── Catalog Table (All / Manuals / QC modes) ──────────────────────────────
 
-function ManualsTable({ manuals, selectedId, onSelect }: {
-  manuals: ProductManual[];
-  selectedId: number | null;
-  onSelect: (manual: ProductManual) => void;
-}) {
-  if (manuals.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <div className="h-14 w-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
-          <FileText className="h-6 w-6 text-gray-500" />
-        </div>
-        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">No manuals found</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-gray-100">
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Manual</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Item #</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Type</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Updated</th>
-            <th className="px-4 py-3 text-[9px] font-black uppercase tracking-[0.25em] text-gray-500">Doc</th>
-          </tr>
-        </thead>
-        <tbody>
-          {manuals.map((manual) => {
-            const isSelected = selectedId === manual.id;
-            return (
-              <tr
-                key={manual.id}
-                onClick={() => onSelect(manual)}
-                onKeyDown={(event: KeyboardEvent<HTMLTableRowElement>) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    onSelect(manual);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-pressed={isSelected}
-                aria-label={`Open manual ${manual.display_name || manual.product_title || manual.item_number || `#${manual.id}`}`}
-                className={`border-b border-gray-50 cursor-pointer transition-colors group ${
-                  isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                } focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300`}
-              >
-                <td className="px-4 py-3">
-                  <span className={`text-[11px] font-black tracking-tight ${isSelected ? 'text-blue-900' : 'text-gray-900'}`}>
-                    {manual.display_name || manual.product_title || <span className="text-gray-500 font-semibold">&mdash;</span>}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-[10px] font-bold text-gray-500 font-mono">
-                    {manual.item_number || <span className="text-gray-500">&mdash;</span>}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {manual.type ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-blue-50 text-[9px] font-black uppercase tracking-wider text-blue-600">
-                      {manual.type}
-                    </span>
-                  ) : (
-                    <span className="text-gray-500 text-[10px]">&mdash;</span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-[10px] font-semibold text-gray-500">{formatMediumDate(manual.updated_at)}</span>
-                </td>
-                <td className="px-4 py-3">
-                  {manual.google_file_id ? (
-                    <a
-                      href={`https://docs.google.com/document/d/${manual.google_file_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Open
-                    </a>
-                  ) : (
-                    <span className="text-gray-500 text-[10px]">&mdash;</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ─── Manuals View ────────────────────────────────────────────────────────────
-
-function ManualsView() {
+function CatalogTable() {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const mode = (searchParams.get('mode') || 'all') as Mode;
+  const selectedId = searchParams.get('id') ? Number(searchParams.get('id')) : null;
   const query = searchParams.get('q') || '';
-  const selectedParam = searchParams.get('id');
-  const selectedId = selectedParam && Number.isFinite(Number(selectedParam)) ? Number(selectedParam) : null;
+  const sort = searchParams.get('sort') || 'az';
+  const dir = searchParams.get('dir') || 'asc';
 
-  const [manuals, setManuals] = useState<ProductManual[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [selectedManual, setSelectedManual] = useState<ProductManual | null>(null);
+  const [items, setItems] = useState<SkuCatalogListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const autoSelected = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    autoSelected.current = false;
     const load = async () => {
-      setIsLoading(true);
-      setLoadError(null);
+      setLoading(true);
       try {
-        const params = new URLSearchParams();
+        const params = new URLSearchParams({ limit: '200', sort, dir });
         if (query.trim()) params.set('q', query.trim());
-        params.set('limit', '200');
-        const res = await fetch(`/api/product-manuals/search?${params.toString()}`);
-        if (!res.ok) throw new Error('Failed to load manuals');
-        if (cancelled) return;
+        if (mode === 'manuals' || mode === 'qc') params.set('ecwidOnly', 'true');
+        const res = await fetch(`/api/sku-catalog?${params}`);
         const data = await res.json();
-        if (data.success && Array.isArray(data.manuals) && !cancelled) {
-          setManuals(data.manuals);
-          return;
-        }
-        throw new Error('Failed to load manuals');
-      } catch (_error) {
         if (cancelled) return;
-        setManuals([]);
-        setLoadError('Failed to load manuals.');
+        if (data.success) {
+          setItems(data.items || []);
+          setTotal(data.total || 0);
+        }
+      } catch {
+        if (!cancelled) setItems([]);
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [query, reloadKey]);
+  }, [query, sort, dir, mode]);
+
+  const handleSelect = useCallback((id: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('id', String(id));
+    params.delete('ecwid');
+    router.replace(`/manuals?${params.toString()}`);
+  }, [router, searchParams]);
 
   useEffect(() => {
-    if (selectedId === null) {
-      setSelectedManual(null);
-      return;
+    if (!loading && items.length > 0 && !selectedId && !autoSelected.current) {
+      autoSelected.current = true;
+      handleSelect(items[0].id);
     }
-    const found = manuals.find((manual) => manual.id === selectedId) || null;
-    setSelectedManual(found);
-    if (!isLoading && !found) {
-      const params = new URLSearchParams(searchParams.toString());
-      if (params.has('id')) {
-        params.delete('id');
-        router.replace(buildManualsHref(pathname, params));
-      }
-    }
-  }, [isLoading, manuals, pathname, router, searchParams, selectedId]);
+  }, [loading, items, selectedId, handleSelect]);
 
-  const handleSelect = (manual: ProductManual) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (selectedManual?.id === manual.id) {
-      setSelectedManual(null);
-      params.delete('id');
-      router.replace(buildManualsHref(pathname, params));
-      return;
-    }
-    setSelectedManual(manual);
-    params.set('id', String(manual.id));
-    router.replace(buildManualsHref(pathname, params));
-  };
-
-  const handleCloseDetails = () => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('id');
-    setSelectedManual(null);
-    router.replace(buildManualsHref(pathname, params));
-  };
+  const title = MODE_TITLES[mode];
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
-      <div className={`flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${selectedManual ? 'flex-1' : 'w-full'}`}>
-        <div className={mainStickyHeaderClass}>
-          <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-            <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">Product Manuals</p>
-            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
-              <span>{isLoading ? 'Loading...' : `${manuals.length} result${manuals.length !== 1 ? 's' : ''}`}</span>
-              {query ? (
-                <span className="max-w-[180px] truncate text-blue-600">&ldquo;{query}&rdquo;</span>
-              ) : null}
-            </div>
+    <div className="flex h-full flex-col overflow-hidden bg-white">
+      <div className={mainStickyHeaderClass}>
+        <div className={`${mainStickyHeaderShellRowClass} px-6`}>
+          <p className="truncate text-[11px] font-black uppercase tracking-[0.2em] text-gray-900">{title}</p>
+          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+            {loading ? 'Loading...' : `${total} product${total !== 1 ? 's' : ''}`}
+          </span>
+        </div>
+      </div>
+
+      <div className="sticky top-0 z-10 flex h-10 items-center gap-2 border-b border-gray-200 bg-white/95 px-6 backdrop-blur-sm">
+        <p className={`min-w-0 flex-1 ${tableHeader}`}>Product</p>
+        <p className={`w-20 text-center ${tableHeader}`}>Category</p>
+        <p className={`w-20 text-center ${tableHeader}`}>Platforms</p>
+        <p className={`w-20 text-center ${tableHeader}`}>Manuals</p>
+        <p className={`w-16 text-center ${tableHeader}`}>QC</p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
           </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center space-y-3">
-                <div className="h-10 w-10 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Loading manuals...</p>
-              </div>
-            </div>
-          ) : loadError ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center space-y-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-red-500">{loadError}</p>
-                <button
-                  type="button"
-                  onClick={() => setReloadKey((current) => current + 1)}
-                  className="inline-flex items-center border border-red-300 px-3 py-1 text-[9px] font-black uppercase tracking-wider text-red-700 transition-colors hover:bg-red-50"
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          ) : (
-            <ManualsTable manuals={manuals} selectedId={selectedManual?.id ?? null} onSelect={handleSelect} />
-          )}
-        </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center px-8">
+            <Package className="h-8 w-8 text-gray-300 mb-2" />
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500">
+              {query ? 'No matches' : 'No products'}
+            </p>
+          </div>
+        ) : (
+          items.map((item, idx) => {
+            const isSelected = selectedId === item.id;
+            const showEcwid = mode !== 'all' && item.ecwid_display_name;
+            const displayName = showEcwid ? item.ecwid_display_name! : item.product_title;
+            const displaySku = showEcwid ? item.ecwid_sku || item.sku : item.sku;
+            const displayImage = showEcwid ? item.ecwid_image_url : item.image_url;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleSelect(item.id)}
+                className={`flex w-full items-center gap-3 border-b border-gray-100 px-6 py-3 text-left transition-colors ${
+                  isSelected
+                    ? 'bg-blue-50/60 ring-1 ring-inset ring-blue-200'
+                    : idx % 2 === 0
+                      ? 'bg-white hover:bg-gray-50/50'
+                      : 'bg-gray-50/30 hover:bg-gray-50/70'
+                }`}
+              >
+                {displayImage && (
+                  <img src={displayImage} alt="" className="h-8 w-8 rounded-lg object-cover bg-gray-100 shrink-0" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-bold text-gray-900">{displayName}</p>
+                  <p className="truncate text-[11px] font-bold text-gray-500">{displaySku}</p>
+                </div>
+                <div className="w-20 flex items-center justify-center">
+                  {item.category ? (
+                    <span className={`${microBadge} rounded-full border px-1.5 py-0.5 bg-gray-50 text-gray-600 border-gray-200`}>
+                      {item.category}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 text-[10px]">&mdash;</span>
+                  )}
+                </div>
+                <div className="w-20 flex items-center justify-center">
+                  {item.platform_count > 0 ? (
+                    <span className={`${microBadge} rounded bg-blue-50 text-blue-600 px-1.5 py-0.5`}>{item.platform_count}</span>
+                  ) : (
+                    <span className="text-gray-300 text-[10px]">&mdash;</span>
+                  )}
+                </div>
+                <div className="w-20 flex items-center justify-center">
+                  {item.manual_count > 0 ? (
+                    <span className={`${microBadge} rounded bg-emerald-50 text-emerald-600 px-1.5 py-0.5`}>{item.manual_count}</span>
+                  ) : (
+                    <span className="text-gray-300 text-[10px]">&mdash;</span>
+                  )}
+                </div>
+                <div className="w-16 flex items-center justify-center">
+                  {item.qc_step_count > 0 ? (
+                    <span className={`${microBadge} rounded bg-amber-50 text-amber-600 px-1.5 py-0.5`}>{item.qc_step_count}</span>
+                  ) : (
+                    <span className="text-gray-300 text-[10px]">&mdash;</span>
+                  )}
+                </div>
+              </button>
+            );
+          })
+        )}
       </div>
-      {selectedManual && (
-        <div className="w-[520px] flex-shrink-0 border-l border-gray-200 overflow-hidden">
-          <ManualDetailPanel manual={selectedManual} onClose={handleCloseDetails} />
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── SKU Pairing View ────────────────────────────────────────────────────────
+// ─── Page Content ───────────────────────────────────────────────────────────
 
-interface UnpairedItem {
-  item_number: string;
-  account_source: string | null;
-  product_title: string | null;
-  sku: string | null;
-  order_count: number;
-  first_seen: string | null;
-  last_seen: string | null;
-}
-
-function SkuPairingView() {
-  const [selectedItem, setSelectedItem] = useState<UnpairedItem | null>(null);
-
-  // Listen for sidebar item selection events
-  useEffect(() => {
-    const handleSidebarSelect = (e: CustomEvent<UnpairedItem | null>) => {
-      setSelectedItem(e.detail);
-    };
-    window.addEventListener('sku-pairing-select-item' as any, handleSidebarSelect as any);
-    return () => window.removeEventListener('sku-pairing-select-item' as any, handleSidebarSelect as any);
-  }, []);
-
-  return (
-    <div className="flex h-full w-full overflow-hidden">
-      {/* Main table */}
-      <div className={`flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${selectedItem ? 'flex-1' : 'w-full'}`}>
-        <SkuPairingProductTable selectedItem={selectedItem} />
-      </div>
-
-      {/* Detail panel */}
-      {selectedItem && (
-        <div className="w-[420px] flex-shrink-0 border-l border-gray-200 overflow-hidden">
-          <SkuPairingDetail
-            item={selectedItem}
-            onClose={() => setSelectedItem(null)}
-            onPaired={() => setSelectedItem(null)}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Page Content ────────────────────────────────────────────────────────────
-
-function ManualsPageContent() {
+function PageContent() {
   const searchParams = useSearchParams();
-  const viewMode: ViewMode = searchParams.get('view') === 'sku-pairing' ? 'sku-pairing' : 'manuals';
+  const mode = (searchParams.get('mode') || 'all') as Mode;
 
-  return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-gray-50">
-      <div className="flex-1 overflow-hidden">
-        {viewMode === 'manuals' ? <ManualsView /> : <SkuPairingView />}
-      </div>
-    </div>
-  );
+  if (mode === 'pairing') return <EcwidPairingTable />;
+  return <CatalogTable />;
 }
 
 export default function ManualsPage() {
   return (
     <Suspense>
-      <ManualsPageContent />
+      <PageContent />
     </Suspense>
   );
 }

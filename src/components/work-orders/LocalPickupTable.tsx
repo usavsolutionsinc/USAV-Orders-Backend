@@ -3,15 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
-import { Check, Loader2, RefreshCw } from '@/components/Icons';
+import { Check, Loader2, Plus, RefreshCw, X } from '@/components/Icons';
 import { StatusBadge } from '@/design-system';
 import { formatMediumDateTime } from '@/utils/_date';
+import { LocalPickupIntakeForm } from './LocalPickupIntakeForm';
 
 type LocalPickupRow = {
   receiving_id: number;
   pickup_date: string;
   product_title: string | null;
   sku: string | null;
+  category: string | null;
+  image_url: string | null;
   quantity: number;
   parts_status: string;
   missing_parts_note: string | null;
@@ -71,6 +74,7 @@ export function LocalPickupTable() {
   const pickupDate = searchParams.get('pickupDate') || '';
   const [drafts, setDrafts] = useState<Record<number, EditablePickupRow>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [isIntakeOpen, setIsIntakeOpen] = useState(false);
 
   const queryKey = ['local-pickups', pickupDate, search];
   const { data, isLoading, isFetching, refetch } = useQuery<LocalPickupResponse>({
@@ -85,6 +89,18 @@ export function LocalPickupTable() {
     },
     staleTime: 15_000,
   });
+
+  useEffect(() => {
+    const handler = () => {
+      queryClient.invalidateQueries({ queryKey: ['local-pickups'] });
+    };
+    window.addEventListener('usav-refresh-data', handler);
+    window.addEventListener('dashboard-refresh', handler);
+    return () => {
+      window.removeEventListener('usav-refresh-data', handler);
+      window.removeEventListener('dashboard-refresh', handler);
+    };
+  }, [queryClient]);
 
   useEffect(() => {
     if (!data?.rows) return;
@@ -179,17 +195,50 @@ export function LocalPickupTable() {
               {data?.summary.missing_parts_count ? ` · ${data.summary.missing_parts_count} missing parts` : ''}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="inline-flex items-center gap-2 border-b border-[var(--color-neutral-900)] py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-900)]"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setIsIntakeOpen((open) => !open)}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors ${
+                isIntakeOpen
+                  ? 'bg-gray-100 text-[var(--color-neutral-900)] hover:bg-gray-200'
+                  : 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
+              }`}
+            >
+              {isIntakeOpen ? (
+                <>
+                  <X className="h-3.5 w-3.5" /> Close Intake
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" /> New Pickup
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-2 border-b border-[var(--color-neutral-900)] py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-900)]"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
       </div>
 
+      {isIntakeOpen ? (
+        <div className="min-h-0 flex-1">
+          <LocalPickupIntakeForm
+            variant="overlay"
+            onClose={() => setIsIntakeOpen(false)}
+            onComplete={() => {
+              queryClient.invalidateQueries({ queryKey: ['local-pickups'] });
+            }}
+          />
+        </div>
+      ) : (
+        <>
       <div className="grid grid-cols-[minmax(240px,2fr)_80px_160px_110px_minmax(180px,1.2fr)_120px_120px_90px] border-b border-[var(--color-neutral-200)] px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-neutral-700)]">
         <div>Product</div>
         <div>Qty</div>
@@ -234,6 +283,11 @@ export function LocalPickupTable() {
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     {row.sku ? <span className="text-[11px] font-mono text-[var(--color-brand-primary)]">{row.sku}</span> : null}
+                    {row.category ? (
+                      <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-700">
+                        {row.category}
+                      </span>
+                    ) : null}
                     {row.tracking_number ? <span className="text-[11px] text-[var(--color-neutral-700)]">{row.tracking_number}</span> : null}
                     {row.work_order_status ? <StatusBadge status={row.work_order_status} className="text-[9px]" /> : null}
                   </div>
@@ -331,6 +385,8 @@ export function LocalPickupTable() {
           })
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

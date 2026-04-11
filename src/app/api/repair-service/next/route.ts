@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
     const techId = techIdParam ? parsePositiveInt(techIdParam) : null;
 
     if (techIdParam && techId === null) {
-      return NextResponse.json({ error: 'techId must be a positive integer' }, { status: 400 });
+      console.warn('[repair-service/next] invalid techId param, ignoring:', techIdParam);
+      // Fall through — treat as no-filter (returns all unassigned repairs)
     }
 
     const closedPlaceholders = CLOSED_STATUSES.map((_, i) => `$${i + 1}`).join(', ');

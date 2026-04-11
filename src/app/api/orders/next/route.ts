@@ -32,12 +32,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (!techId) {
-      return NextResponse.json({ error: 'techId is required' }, { status: 400 });
+      console.warn('[orders/next] called without techId');
+      return NextResponse.json({ orders: [], order: null, all_completed: false });
     }
 
     const techIdNum = parsePositiveInt(techId);
     if (techIdNum === null) {
-      return NextResponse.json({ error: 'Invalid techId' }, { status: 400 });
+      console.warn('[orders/next] invalid techId:', techId);
+      return NextResponse.json({ orders: [], order: null, all_completed: false });
     }
 
     // Resolve station number (1–4) to actual staff.id if applicable

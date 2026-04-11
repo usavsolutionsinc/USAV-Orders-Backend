@@ -6,6 +6,8 @@ type LocalPickupRow = {
   pickup_date: string;
   product_title: string | null;
   sku: string | null;
+  category: string | null;
+  image_url: string | null;
   quantity: number;
   parts_status: string;
   missing_parts_note: string | null;
@@ -123,8 +125,10 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
           (r.received_at AT TIME ZONE 'America/Los_Angeles')::date,
           (r.created_at AT TIME ZONE 'America/Los_Angeles')::date
         )::text AS pickup_date,
-        COALESCE(lpi.product_title, r.receiving_tracking_number, 'Local Pickup') AS product_title,
+        COALESCE(sp_ecwid.display_name, sc.product_title, lpi.product_title, r.receiving_tracking_number, 'Local Pickup') AS product_title,
         lpi.sku,
+        sc.category AS category,
+        COALESCE(sp_ecwid.image_url, sc.image_url) AS image_url,
         COALESCE(lpi.quantity, NULLIF(r.quantity, '')::int, 1) AS quantity,
         COALESCE(lpi.parts_status, 'COMPLETE') AS parts_status,
         lpi.missing_parts_note,
@@ -141,6 +145,16 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
         wa.status AS work_order_status
       FROM receiving r
       LEFT JOIN local_pickup_items lpi ON lpi.receiving_id = r.id
+      LEFT JOIN sku_catalog sc ON sc.sku = lpi.sku
+      LEFT JOIN LATERAL (
+        SELECT image_url, display_name
+        FROM sku_platform_ids
+        WHERE sku_catalog_id = sc.id
+          AND platform = 'ECWID'
+          AND is_active = true
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 1
+      ) sp_ecwid ON TRUE
       LEFT JOIN LATERAL (
         SELECT status
         FROM work_assignments wa
@@ -170,6 +184,8 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
     pickup_date: String(row.pickup_date),
     product_title: row.product_title ? String(row.product_title) : null,
     sku: row.sku ? String(row.sku) : null,
+    category: row.category ? String(row.category) : null,
+    image_url: row.image_url ? String(row.image_url) : null,
     quantity: Number(row.quantity || 1),
     parts_status: String(row.parts_status || 'COMPLETE'),
     missing_parts_note: row.missing_parts_note ? String(row.missing_parts_note) : null,

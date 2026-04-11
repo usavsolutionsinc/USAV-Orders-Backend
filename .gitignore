@@ -34,3 +34,7 @@ ts-debug.log*
 next-env.d.ts
 
 certificates
+
+# backfill scripts — local checkpoints and run logs
+.backfill-*.state.json
+/logs/

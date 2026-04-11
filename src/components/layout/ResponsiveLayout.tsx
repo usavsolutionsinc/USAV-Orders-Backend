@@ -7,8 +7,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { CommandBar } from '@/components/CommandBar';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
-import { Menu, X } from '@/components/Icons';
-import { getSidebarRouteKey, isSidebarRouteMobileRestricted } from '@/lib/sidebar-navigation';
+import { X } from '@/components/Icons';
+import { getSidebarRouteKey, isSidebarRouteMobileRestricted, APP_SIDEBAR_NAV } from '@/lib/sidebar-navigation';
+import { MobileDefaultTopBanner } from '@/components/mobile/shared/MobileDefaultTopBanner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,22 @@ const drawerTransition = {
   mass: 0.8,
 };
 
+// ─── Mobile nav helpers ─────────────────────────────────────────────────────
+
+/** Routes that render their own mobile top bar — skip the default banner. */
+const SELF_NAV_PREFIXES = ['/tech', '/packer', '/sku-stock'];
+
+function hasSelfNav(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return SELF_NAV_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function getMobileTitle(pathname: string | null): string {
+  const key = getSidebarRouteKey(pathname);
+  const nav = APP_SIDEBAR_NAV.find((item) => item.id === key);
+  return nav?.label || 'USAV';
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 /**
@@ -51,9 +68,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   const [mounted, setMounted] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
-  /** Tech/packer pages provide their own top bar — hide the floating hamburger only. The same nav drawer as dashboard must still mount so `open-mobile-drawer` works. */
-  const hideGlobalMobileHamburger =
-    (pathname?.startsWith('/tech') || pathname?.startsWith('/packer')) ?? false;
+  // Global floating hamburger removed — each page provides its own back arrow via `open-mobile-drawer` event.
   const routeKey = getSidebarRouteKey(pathname);
   const mobileRouteRestricted = isMobile && isSidebarRouteMobileRestricted(routeKey);
 
@@ -116,18 +131,16 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   }
 
   // ── Mobile layout: full-width content + drawer sidebar ──
+  const showDefaultBanner = !hasSelfNav(pathname);
+
   return (
     <div className="flex flex-col h-full w-full overflow-hidden">
-      {/* Hamburger trigger — hidden on tech/packer (those screens use in-page back / menu). */}
-      {!hideGlobalMobileHamburger && (
-        <button
-          type="button"
-          onClick={openDrawer}
-          aria-label="Open navigation"
-          className="fixed top-[max(0.5rem,env(safe-area-inset-top))] left-3 z-40 h-11 w-11 flex items-center justify-center rounded-xl bg-white/90 backdrop-blur-sm shadow-md border border-gray-100 active:scale-95 transition-transform"
-        >
-          <Menu className="h-5 w-5 text-gray-700" />
-        </button>
+      {/* Default top banner for pages without their own */}
+      {showDefaultBanner && (
+        <MobileDefaultTopBanner
+          title={getMobileTitle(pathname)}
+          onBack={openDrawer}
+        />
       )}
 
       {/* Main content — full width */}

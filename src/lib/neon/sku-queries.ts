@@ -193,7 +193,28 @@ export async function createSkuRecord(data: {
      VALUES ($1, $2, $3, $4, $5) RETURNING *`,
     [data.staticSku, data.serialNumber ?? null, data.shippingTrackingNumber ?? null, data.notes ?? null, data.location ?? null],
   );
-  return result.rows[0];
+
+  const row = result.rows[0];
+
+  // Register in the serial_units master and stamp the FK back.
+  // Fire-and-forget — insert has committed and the caller doesn't need
+  // to wait on master sync. Dynamic import avoids circular dep.
+  if (row?.serial_number) {
+    import('./serial-units-queries')
+      .then(({ syncSkuToSerialUnit }) =>
+        syncSkuToSerialUnit({
+          id: Number(row.id),
+          serial_number: row.serial_number,
+          static_sku: row.static_sku,
+          location: row.location,
+        }),
+      )
+      .catch((err) => {
+        console.warn('createSkuRecord: syncSkuToSerialUnit failed', err);
+      });
+  }
+
+  return row;
 }
 
 /**

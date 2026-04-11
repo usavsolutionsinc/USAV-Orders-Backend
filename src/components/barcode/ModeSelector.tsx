@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Printer, Database, MapPin, RotateCcw } from '../Icons';
+import { Printer, Database, MapPin, RotateCcw, Barcode } from '../Icons';
 
-export type BarcodeMode = 'print' | 'sn-to-sku' | 'change-location' | 'reprint';
+export type BarcodeMode = 'print' | 'sn-to-sku' | 'change-location' | 'reprint' | 'bin-labels';
 
 interface ModeSelectorProps {
     mode: BarcodeMode;
@@ -15,6 +15,7 @@ const MODES: { id: BarcodeMode; label: string; Icon: React.ComponentType<{ class
     { id: 'sn-to-sku',       label: 'Log SN',   Icon: Database  },
     { id: 'change-location', label: 'Location', Icon: MapPin    },
     { id: 'reprint',         label: 'Reprint',  Icon: RotateCcw },
+    { id: 'bin-labels',      label: 'Bins',     Icon: Barcode   },
 ];
 
 export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {

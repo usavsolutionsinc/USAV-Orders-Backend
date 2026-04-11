@@ -93,7 +93,6 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
     staleTime: weekOffset === 0 ? 2 * 60 * 1000 : 30 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
-    refetchOnWindowFocus: false,
   });
 
   // ── Ably: live row-level updates from any session (mobile or web) ─────────

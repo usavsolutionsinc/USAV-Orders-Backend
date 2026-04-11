@@ -336,14 +336,14 @@ export async function GET(req: NextRequest) {
         wa_deadline.deadline_at AS deadline_at,
         to_char(wa_deadline.deadline_at, 'YYYY-MM-DD') AS ship_by_date,
         o.order_id,
-        o.product_title,
+        COALESCE(sc.product_title, o.product_title) AS product_title,
         o.item_number,
         o.quantity,
         o.shipment_id,
         stn.tracking_number_raw AS tracking_number,
         COALESCE(order_trackings.tracking_numbers, '[]'::json) AS tracking_numbers,
         COALESCE(order_trackings.tracking_number_rows, '[]'::json) AS tracking_number_rows,
-        o.sku,
+        COALESCE(sc.sku, o.sku) AS sku,
         o.condition,
         o.out_of_stock,
         o.status,
@@ -372,8 +372,12 @@ export async function GET(req: NextRequest) {
         staff_test_assignee.name AS tested_by_name,
         staff_pack_assignee.name AS packer_name,
         staff_packed_by.name     AS packed_by_name,
-        (COALESCE(sal_scan.scan_count, 0) > 0) AS has_tech_scan
+        (COALESCE(sal_scan.scan_count, 0) > 0) AS has_tech_scan,
+        o.sku_catalog_id,
+        sc.image_url AS catalog_image_url,
+        sc.category AS catalog_category
       FROM orders o
+      LEFT JOIN sku_catalog sc ON sc.id = o.sku_catalog_id
       LEFT JOIN wa_deadline ON wa_deadline.entity_id = o.id
       LEFT JOIN wa_t ON wa_t.entity_id = o.id
       LEFT JOIN wa_p ON wa_p.entity_id = o.id

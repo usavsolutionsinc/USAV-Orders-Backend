@@ -4,6 +4,7 @@ import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { queryWithRetry } from '@/lib/db-retry';
 import { getShippedSearchFieldConfig, type ShippedSearchField } from '@/lib/shipped-search';
 import { buildRankedSearchSql, buildTextSearchVariants, type RankedSearchVariant } from '@/lib/search/sql-ranked-search';
+import { resolveOrCreateSkuCatalogId } from './sku-catalog-queries';
 
 // Order record with shipping information
 export interface ShippedOrder {
@@ -217,36 +218,31 @@ const ORDER_SERIALS_CTE = `
         '[]'::jsonb
       ) AS tracking_number_rows
       FROM (
-        SELECT DISTINCT
-          osl_link.shipment_id,
-          stn_link.tracking_number_raw,
-          COALESCE(osl_link.is_primary, false) AS is_primary,
-          CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
-        FROM order_shipment_links osl_link
-        LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
-        WHERE osl_link.order_row_id = o.id
+        SELECT DISTINCT ON (shipment_id)
+          shipment_id, tracking_number_raw, is_primary, sort_key
+        FROM (
+          SELECT
+            osl_link.shipment_id,
+            stn_link.tracking_number_raw,
+            COALESCE(osl_link.is_primary, false) AS is_primary,
+            CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
+          FROM order_shipment_links osl_link
+          LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
+          WHERE osl_link.order_row_id = o.id
 
-        UNION
+          UNION ALL
 
-        SELECT DISTINCT
-          o_primary.shipment_id,
-          stn_primary.tracking_number_raw,
-          true AS is_primary,
-          0 AS sort_key
-        FROM orders o_primary
-        LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
-        WHERE o_primary.id = o.id
-
-        UNION
-
-        SELECT DISTINCT
-          o_sibling.shipment_id,
-          stn_sibling.tracking_number_raw,
-          false AS is_primary,
-          2 AS sort_key
-        FROM orders o_sibling
-        LEFT JOIN shipping_tracking_numbers stn_sibling ON stn_sibling.id = o_sibling.shipment_id
-        WHERE o_sibling.order_id = o.order_id
+          SELECT
+            o_primary.shipment_id,
+            stn_primary.tracking_number_raw,
+            true AS is_primary,
+            0 AS sort_key
+          FROM orders o_primary
+          LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
+          WHERE o_primary.id = o.id
+        ) all_sources
+        WHERE shipment_id IS NOT NULL
+        ORDER BY shipment_id, sort_key, tracking_number_raw
       ) t
     ) order_trackings ON TRUE
     LEFT JOIN LATERAL (
@@ -562,36 +558,31 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
             '[]'::jsonb
           ) AS tracking_number_rows
           FROM (
-            SELECT DISTINCT
-              osl_link.shipment_id,
-              stn_link.tracking_number_raw,
-              COALESCE(osl_link.is_primary, false) AS is_primary,
-              CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
-            FROM order_shipment_links osl_link
-            LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
-            WHERE osl_link.order_row_id = o.id
+            SELECT DISTINCT ON (shipment_id)
+              shipment_id, tracking_number_raw, is_primary, sort_key
+            FROM (
+              SELECT
+                osl_link.shipment_id,
+                stn_link.tracking_number_raw,
+                COALESCE(osl_link.is_primary, false) AS is_primary,
+                CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
+              FROM order_shipment_links osl_link
+              LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
+              WHERE osl_link.order_row_id = o.id
 
-            UNION
+              UNION ALL
 
-            SELECT DISTINCT
-              o_primary.shipment_id,
-              stn_primary.tracking_number_raw,
-              true AS is_primary,
-              0 AS sort_key
-            FROM orders o_primary
-            LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
-            WHERE o_primary.id = o.id
-
-            UNION
-
-            SELECT DISTINCT
-              o_sibling.shipment_id,
-              stn_sibling.tracking_number_raw,
-              false AS is_primary,
-              2 AS sort_key
-            FROM orders o_sibling
-            LEFT JOIN shipping_tracking_numbers stn_sibling ON stn_sibling.id = o_sibling.shipment_id
-            WHERE o_sibling.order_id = o.order_id
+              SELECT
+                o_primary.shipment_id,
+                stn_primary.tracking_number_raw,
+                true AS is_primary,
+                0 AS sort_key
+              FROM orders o_primary
+              LEFT JOIN shipping_tracking_numbers stn_primary ON stn_primary.id = o_primary.shipment_id
+              WHERE o_primary.id = o.id
+            ) all_sources
+            WHERE shipment_id IS NOT NULL
+            ORDER BY shipment_id, sort_key, tracking_number_raw
           ) t
         ) order_trackings ON TRUE
         LEFT JOIN LATERAL (
@@ -1216,11 +1207,19 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
   try {
     await client.query('BEGIN');
 
+    const skuCatalogId = await resolveOrCreateSkuCatalogId({
+      sku: params.sku,
+      itemNumber: params.itemNumber,
+      productTitle: params.productTitle,
+      accountSource: params.accountSource,
+      orderId: params.orderId,
+    });
+
     const result = await client.query(
       `INSERT INTO orders
          (order_id, product_title, sku, account_source,
-          condition, quantity, item_number, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          condition, quantity, item_number, notes, sku_catalog_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         params.orderId,
@@ -1231,6 +1230,7 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
         params.quantity ?? null,
         params.itemNumber ?? null,
         params.notes ?? null,
+        skuCatalogId,
       ],
     );
 

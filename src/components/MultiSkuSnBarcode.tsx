@@ -7,10 +7,12 @@ import { ModeSelector, BarcodeMode } from './barcode/ModeSelector';
 import { SkuInput } from './barcode/SkuInput';
 import { SerialNumberInput } from './barcode/SerialNumberInput';
 import { BarcodePreview } from './barcode/BarcodePreview';
+import { BinLabelPrinter } from './barcode/BinLabelPrinter';
 
 // Import utilities
 import { normalizeSku, getSerialLast6 } from '@/utils/sku';
 import { loadBarcodeLibrary, renderBarcode } from '@/utils/barcode';
+import { printProductLabels } from '@/lib/print/printProductLabel';
 
 declare global {
     interface Window {
@@ -281,7 +283,7 @@ export default function MultiSkuSnBarcode() {
     const handleFinalAction = async () => {
         if (mode === 'reprint') {
             // Just print, no DB/Sheet updates
-            printLabel(uniqueSku, title, serialNumbers);
+            printProductLabels({ sku: uniqueSku, title, serialNumbers });
             setStep(1);
             setSku("");
             setUniqueSku("");
@@ -324,8 +326,8 @@ export default function MultiSkuSnBarcode() {
                 } catch (e) {
                     console.error("Failed to increment SKU in DB:", e);
                 }
-                
-                printLabel(uniqueSku, title, serialNumbers);
+
+                printProductLabels({ sku: uniqueSku, title, serialNumbers });
             }
             
             setSnInput("");
@@ -347,46 +349,6 @@ export default function MultiSkuSnBarcode() {
         }
     };
 
-    const printLabel = (skuToPrint: string, titleToPrint: string, snList: string[]) => {
-        const printWindow = window.open('', '', 'width=800,height=600');
-        if (printWindow) {
-            const html = `
-                <html>
-                    <head>
-                        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-                        <style>
-                            body { font-family: Arial, sans-serif; padding: 0; margin: 0; text-align: center; }
-                            canvas { margin: 2px 0; }
-                            .sku { font-size: 22px; font-weight: bold; margin: 2px 0; }
-                            .title { font-size: 11px; color: #666; margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; padding: 0 4px; }
-                            .sn { font-size: 10px; color: #999; margin: 2px 0; }
-                        </style>
-                    </head>
-                    <body>
-                        <canvas id="barcode"></canvas>
-                        <div class="sku">${skuToPrint}</div>
-                        <div class="title">${titleToPrint}</div>
-                        ${snList.length > 0 ? `<div class="sn">SN: ${getSerialLast6(snList)}</div>` : ''}
-                        <script>
-                            window.onload = function() {
-                                JsBarcode("#barcode", "${skuToPrint}", {
-                                    format: "CODE128",
-                                    lineColor: "#000",
-                                    width: 2,
-                                    height: 50,
-                                    displayValue: false
-                                });
-                                setTimeout(() => { window.print(); window.close(); }, 500);
-                            };
-                        </script>
-                    </body>
-                </html>
-            `;
-            printWindow.document.write(html);
-            printWindow.document.close();
-        }
-    };
-
     const handleModeChange = (newMode: BarcodeMode) => {
         setMode(newMode);
         setStep(1);
@@ -398,7 +360,8 @@ export default function MultiSkuSnBarcode() {
             <ModeSelector mode={mode} onModeChange={handleModeChange} />
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto">
-                {/* Step 1: SKU */}
+                {/* Step 1: SKU (hidden in bin-labels mode) */}
+                {mode !== 'bin-labels' && (
                 <SkuInput
                     sku={sku}
                     uniqueSku={uniqueSku}
@@ -409,9 +372,10 @@ export default function MultiSkuSnBarcode() {
                     onNext={handleNextStepSku}
                     onFillAndSearch={handleSkuFillAndSearch}
                 />
+                )}
 
                 {/* Step 2: Serial Numbers & Details */}
-                {mode !== 'reprint' && step >= 2 && (
+                {mode !== 'reprint' && mode !== 'bin-labels' && step >= 2 && (
                     <SerialNumberInput
                         sku={sku}
                         mode={mode}
@@ -436,7 +400,7 @@ export default function MultiSkuSnBarcode() {
                 )}
 
                 {/* Step 3: Preview & Print */}
-                {mode !== 'change-location' && step >= 3 && (
+                {mode !== 'change-location' && mode !== 'bin-labels' && step >= 3 && (
                     <BarcodePreview
                         mode={mode}
                         uniqueSku={uniqueSku}
@@ -454,6 +418,11 @@ export default function MultiSkuSnBarcode() {
                         onNotesChange={setNotes}
                         onPrint={handleFinalAction}
                     />
+                )}
+
+                {/* Bin Labels mode: standalone bulk printer */}
+                {mode === 'bin-labels' && (
+                    <BinLabelPrinter isActive={true} />
                 )}
             </div>
 

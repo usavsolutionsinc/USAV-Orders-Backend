@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { toPSTDateKey } from '@/utils/date';
+import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 
 function normalizeHeader(value: unknown) {
   return String(value || '')

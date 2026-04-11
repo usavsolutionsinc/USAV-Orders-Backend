@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const needsTest = body?.needs_test === undefined ? true : !!body.needs_test;
     const defaultCondition = VALID_CONDITIONS.has(String(body?.condition_grade || '').toUpperCase())
       ? String(body.condition_grade).toUpperCase()
-      : 'BRAND_NEW';
+      : 'USED_A';
     const targetChannel = String(body?.target_channel || '')
       .trim()
       .toUpperCase();

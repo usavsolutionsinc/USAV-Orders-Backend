@@ -2,7 +2,19 @@
 
 import { Suspense } from 'react';
 import SkuBrowser from '@/components/sku/SkuBrowser';
+import { MobileSkuStockDashboard } from '@/components/mobile/sku-stock/MobileSkuStockDashboard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useUIMode } from '@/design-system/providers/UIModeProvider';
+
+function SkuStockPageContent() {
+    const { isMobile } = useUIMode();
+
+    if (isMobile) {
+        return <MobileSkuStockDashboard />;
+    }
+
+    return <SkuBrowser />;
+}
 
 export default function SkuStockPage() {
     return (
@@ -11,7 +23,7 @@ export default function SkuStockPage() {
                 <LoadingSpinner size="lg" className="text-blue-600" />
             </div>
         }>
-            <SkuBrowser />
+            <SkuStockPageContent />
         </Suspense>
     );
 }

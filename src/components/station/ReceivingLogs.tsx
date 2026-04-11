@@ -93,7 +93,6 @@ export default function ReceivingLogs({ onSelectLog, selectedLogId }: ReceivingL
         staleTime: weekOffset === 0 ? 30 * 1000 : 30 * 60 * 1000,
         gcTime: 24 * 60 * 60 * 1000,
         placeholderData: (prev) => prev,
-        refetchOnWindowFocus: false,
     });
 
     // ── Surgical cache helpers ──────────────────────────────────────

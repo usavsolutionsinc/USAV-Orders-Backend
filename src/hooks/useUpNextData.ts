@@ -159,6 +159,7 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   };
 
   const refresh = () => {
+    if (parsedTechId === null) return;
     fetchOrders();
     fetchFbaShipments();
     fetchReceivingQueue();

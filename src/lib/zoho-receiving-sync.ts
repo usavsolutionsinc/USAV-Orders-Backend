@@ -135,6 +135,7 @@ async function syncPurchaseOrderLines(
       zoho_item_id: zohoItemId,
       zoho_line_item_id: zohoLineItemId,
       zoho_purchaseorder_id: normalizedPoId,
+      zoho_reference_number: asString(po.reference_number),
       item_name: asString(line.name, line.item_name),
       sku: asString(line.sku),
       quantity_received: 0,
@@ -155,6 +156,7 @@ async function syncPurchaseOrderLines(
       const updatable = [
         'zoho_item_id',
         'zoho_line_item_id',
+        'zoho_reference_number',
         'item_name',
         'sku',
         'quantity_expected',

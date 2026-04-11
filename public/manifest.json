@@ -2,7 +2,7 @@
   "name": "USAV Solutions",
   "short_name": "USAV",
   "description": "USAV Solutions — Station Operations",
-  "theme_color": "#0f1f3d",
+  "theme_color": "#ffffff",
   "background_color": "#ffffff",
   "display": "minimal-ui",
   "orientation": "portrait",
@@ -45,6 +45,12 @@
       "short_name": "Receiving",
       "url": "/receiving",
       "description": "Receive inbound items"
+    },
+    {
+      "name": "SKU Stock",
+      "short_name": "Stock",
+      "url": "/sku-stock",
+      "description": "Scan and manage SKU inventory"
     }
   ]
 }

@@ -26,9 +26,9 @@ export default function RootLayout({
                 <meta name="application-name" content="USAV Solutions" />
                 {/* NOTE: apple-mobile-web-app-capable removed — iOS standalone mode blocks getUserMedia (camera).
                     Using minimal-ui in manifest.json instead so camera/barcode scanning works. */}
-                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+                <meta name="apple-mobile-web-app-status-bar-style" content="default" />
                 <meta name="apple-mobile-web-app-title" content="USAV" />
-                <meta name="theme-color" content="#0f1f3d" />
+                <meta name="theme-color" content="#ffffff" />
                 <meta name="mobile-web-app-capable" content="yes" />
                 {/* Viewport — cover notch, prevent zoom on input focus */}
                 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />

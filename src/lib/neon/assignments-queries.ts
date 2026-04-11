@@ -121,7 +121,7 @@ export async function getAssignmentsWithStaff(filters?: {
      LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
      ${where}
-     ORDER BY wa.priority ASC, wa.assigned_at ASC
+     ORDER BY wa.priority ASC, wa.created_at ASC
      LIMIT $${idx}`,
     params,
   );

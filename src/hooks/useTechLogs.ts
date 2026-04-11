@@ -122,7 +122,6 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
     staleTime: weekOffset === 0 ? 5 * 60 * 1000 : 30 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
-    refetchOnWindowFocus: false,
   });
 
   // ── Ably: live row-level updates from any session (mobile or web) ─────────

@@ -34,6 +34,7 @@ export interface OrderRecord {
   item_number: string | null;
   customer_id: number | null;
   shipment_id: number | null;
+  sku_catalog_id: number | null;
 }
 
 /**
@@ -79,6 +80,7 @@ export const ORDER_COLUMNS = {
   ITEM_NUMBER:    'item_number',
   CUSTOMER_ID:    'customer_id',
   SHIPMENT_ID:    'shipment_id',
+  SKU_CATALOG_ID: 'sku_catalog_id',
 } as const;
 
 /**

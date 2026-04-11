@@ -2,6 +2,7 @@ import { EbayClient } from './client';
 import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { formatApiInstant, normalizePSTTimestamp } from '@/utils/date';
+import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 
 export interface SyncResult {
   accountName: string;
@@ -115,6 +116,16 @@ async function createOrUpdateOrderFromEbayTracking(params: {
     existingId = existingByOrderId.rows[0]?.id ?? null;
   }
 
+  const itemNumber = String(firstItem?.legacyItemId || firstItem?.lineItemId || '').trim() || null;
+
+  const skuCatalogId = await resolveOrCreateSkuCatalogId({
+    sku: sku || null,
+    itemNumber,
+    productTitle,
+    accountSource: params.accountName,
+    orderId,
+  });
+
   if (existingId) {
     await pool.query(
       `UPDATE orders
@@ -125,11 +136,12 @@ async function createOrUpdateOrderFromEbayTracking(params: {
            quantity = COALESCE(NULLIF(quantity, ''), $5),
            account_source = COALESCE(NULLIF(account_source, ''), $6),
            order_date = COALESCE(order_date, $7),
+           sku_catalog_id = COALESCE(sku_catalog_id, $8),
            status = CASE
              WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
              ELSE status
            END
-       WHERE id = $8`,
+       WHERE id = $9`,
       [
         orderId,
         productTitle,
@@ -138,6 +150,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
         quantity,
         params.accountName,
         orderDate,
+        skuCatalogId,
         existingId,
       ]
     );
@@ -157,9 +170,10 @@ async function createOrUpdateOrderFromEbayTracking(params: {
       quantity,
       out_of_stock,
       account_source,
-      order_date
+      order_date,
+      sku_catalog_id
     ) VALUES (
-      $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11
+      $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12
     )
     ON CONFLICT ON CONSTRAINT idx_orders_unique_account_order DO UPDATE
       SET product_title = COALESCE(NULLIF(EXCLUDED.product_title, 'No title'), orders.product_title),
@@ -167,6 +181,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
           sku = COALESCE(NULLIF(orders.sku, ''), EXCLUDED.sku),
           quantity = COALESCE(NULLIF(orders.quantity, ''), EXCLUDED.quantity),
           order_date = COALESCE(orders.order_date, EXCLUDED.order_date),
+          sku_catalog_id = COALESCE(orders.sku_catalog_id, EXCLUDED.sku_catalog_id),
           status = CASE
             WHEN orders.status IS NULL OR orders.status = '' OR orders.status = 'unassigned' THEN 'shipped'
             ELSE orders.status
@@ -183,6 +198,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
       '',
       params.accountName,
       orderDate,
+      skuCatalogId,
     ]
   );
 

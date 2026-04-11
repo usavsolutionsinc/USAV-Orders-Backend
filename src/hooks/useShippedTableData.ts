@@ -110,7 +110,6 @@ export function useShippedTableData(options: UseShippedTableDataOptions = {}) {
     staleTime: weekOffset === 0 ? 2 * 60 * 1000 : 30 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: (prev) => prev,
-    refetchOnWindowFocus: false,
   });
 
   // Live invalidation: orders table changed (assignment, status, is_shipped)

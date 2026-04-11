@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
+import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 
 /**
  * POST /api/orders/add - Add a new order to the system
@@ -42,6 +43,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Resolve or create sku_catalog entry
+    const skuCatalogId = await resolveOrCreateSkuCatalogId({
+      sku,
+      productTitle,
+      accountSource,
+      orderId,
+    });
+
     // Insert the new order (tracking linked later via shipment_id when packer scans)
     const result = await pool.query(
       `INSERT INTO orders (
@@ -50,8 +59,9 @@ export async function POST(req: NextRequest) {
         sku,
         account_source,
         status,
-        created_at
-      ) VALUES ($1, $2, $3, $4, $5, NOW())
+        created_at,
+        sku_catalog_id
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6)
       RETURNING id, order_id, product_title, sku`,
       [
         orderId,
@@ -59,6 +69,7 @@ export async function POST(req: NextRequest) {
         sku || null,
         accountSource,
         status,
+        skuCatalogId,
       ]
     );
 
