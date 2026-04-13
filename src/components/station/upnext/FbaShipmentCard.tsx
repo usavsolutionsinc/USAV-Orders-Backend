@@ -3,16 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fbaPaths } from '@/lib/fba/api-paths';
-import { Loader2, Minus, Package, Plus, X } from '@/components/Icons';
-import { FnskuChip } from '@/components/ui/CopyChip';
-import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
-import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
+import { Loader2, Package, X } from '@/components/Icons';
+import { FbaTrackingGroupDisplay } from '@/components/fba/sidebar/FbaTrackingGroupDisplay';
 import { InlineEditableValue, framerGesture } from '@/design-system';
 import { UndoToast } from '@/components/fba/table/UndoToast';
-import { ChevronToggle, DeferredQtyInput } from '@/design-system/primitives';
+import { ChevronToggle } from '@/design-system/primitives';
 import type { StationTheme } from '@/utils/staff-colors';
-import { emitOpenQuickAddFnsku } from '@/components/fba/FbaQuickAddFnskuModal';
-import type { FbaBoardItem, ActiveShipment, ShipmentCardItem, TrackingBundle } from '@/lib/fba/types';
+import type { ActiveShipment, ShipmentCardItem, TrackingBundle } from '@/lib/fba/types';
 export type { ActiveShipment, ShipmentCardItem, TrackingBundle } from '@/lib/fba/types';
 import { FBA_PAIRED_REVIEW_TOGGLE } from '@/lib/fba/events';
 import { shipmentItemsToBoardItems } from '@/lib/fba/board-item';
@@ -34,97 +31,7 @@ function resolveBundlesForSave(shipment: ActiveShipment, flatItems: ShipmentCard
   ];
 }
 
-/* ── FNSKU row ─────────────────────────────────────────────────────── */
-
-function FnskuRow({
-  item,
-  stationTheme = 'green',
-  checked = true,
-  qty,
-  onCheckedChange,
-  onAdjustQty,
-  onSetQty,
-  editable = false,
-}: {
-  item: ShipmentCardItem;
-  stationTheme?: StationTheme;
-  checked?: boolean;
-  qty: number;
-  onCheckedChange?: (next: boolean) => void;
-  onAdjustQty?: (delta: number) => void;
-  onSetQty?: (qty: number) => void;
-  editable?: boolean;
-}) {
-  if (!editable) {
-    return (
-      <div className="flex items-start gap-2 px-0 py-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <p className="whitespace-normal break-words text-[12px] font-bold leading-snug text-gray-900">
-            {item.display_title}
-          </p>
-          <FnskuChip value={item.fnsku} />
-        </div>
-
-        <div className="flex shrink-0 flex-col items-center text-center">
-          <span className="text-[14px] font-black tabular-nums text-gray-900">{item.expected_qty}</span>
-          <span className="text-[9px] font-bold text-gray-400">qty</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <FbaSelectedLineRow
-      displayTitle={item.display_title}
-      fnsku={String(item.fnsku || '').toUpperCase()}
-      stationTheme={stationTheme}
-      checked={checked}
-      onCheckedChange={(next) => onCheckedChange?.(next)}
-      onEditDetails={() =>
-        emitOpenQuickAddFnsku({
-          fnsku: String(item.fnsku || '').trim(),
-          product_title: item.display_title || null,
-          asin: null,
-          sku: null,
-          condition: null,
-        })
-      }
-      rightSlot={
-        <>
-          <button
-            type="button"
-            onClick={() => onAdjustQty?.(1)}
-            className="flex h-6 w-10 items-center justify-center rounded-t-md border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-            aria-label={`Increase ${item.fnsku} quantity`}
-          >
-            <Plus className="h-3 w-3" />
-          </button>
-          <DeferredQtyInput
-            value={qty}
-            min={0}
-            onChange={(v) => onSetQty?.(Math.max(0, v))}
-            className="h-7 w-10 border-x border-gray-200 bg-white text-center text-[13px] font-black tabular-nums text-gray-900 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-          />
-          <button
-            type="button"
-            onClick={() => onAdjustQty?.(-1)}
-            disabled={qty <= 0}
-            className={`flex h-6 w-10 items-center justify-center rounded-b-md border transition-colors ${
-              qty <= 1
-                ? 'border-red-300 text-red-500 hover:bg-red-50'
-                : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-            } disabled:opacity-40`}
-            aria-label={`Decrease ${item.fnsku} quantity`}
-          >
-            <Minus className="h-3 w-3" />
-          </button>
-        </>
-      }
-    />
-  );
-}
-
-/* ── Tracking section — header with inline edit + items ───────────── */
+/* ── Tracking section — header with inline edit + shared items display ──── */
 
 function TrackingSection({
   bundle,
@@ -135,7 +42,6 @@ function TrackingSection({
   selectedIds,
   getQty,
   onCheckedChange,
-  onAdjustQty,
   onSetQty,
   onChanged,
 }: {
@@ -199,17 +105,28 @@ function TrackingSection({
 
   return (
     <div className="border-b border-gray-100 last:border-b-0">
-      {/* Selection counts — own row so UPS can use full width below */}
-      <div className="flex items-center px-2 py-1 bg-blue-50/25">
+      {/* Selection counts row */}
+      <div className="flex items-center justify-between gap-2 bg-blue-50/25 px-2 py-1">
         <span className="tabular-nums text-[9px] font-bold text-blue-400">
           {selectedCount} · {selectedUnits}
         </span>
+        {editable && (
+          <button
+            type="button"
+            onClick={togglePairedReviewFromShipment}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+            aria-label="Toggle combine review panel"
+            title="Show or hide combine review"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
-      {/* UPS tracking — full-width band; FbaSelectedLineRow (via FnskuRow) starts on the next row */}
-      <div className="w-full min-w-0 border-t border-blue-100/70 bg-blue-50/50 px-2 py-2">
-        <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-blue-400/90">UPS tracking</p>
-        {editable ? (
+      {/* Inline-editable UPS tracking (editor uses TrackingChip; tech card keeps inline edit) */}
+      {editable ? (
+        <div className="w-full min-w-0 border-t border-blue-100/70 bg-blue-50/50 px-2 py-2">
+          <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-blue-400/90">UPS tracking</p>
           <InlineEditableValue
             className="w-full min-w-0"
             value={editVal}
@@ -222,39 +139,21 @@ function TrackingSection({
             editIconPosition="end"
             valueClassName="text-[11px] text-blue-800 break-all !whitespace-normal"
             inputClassName="text-[11px]"
-            accessory={
-              <button
-                type="button"
-                onClick={togglePairedReviewFromShipment}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
-                aria-label="Toggle combine review panel"
-                title="Show or hide combine review; when opening from collapsed with a selection, prefill FBA ID and UPS"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            }
           />
-        ) : (
-          <p className="w-full break-words font-mono text-[11px] font-bold leading-snug text-blue-800">
-            {bundle.tracking_number}
-          </p>
-        )}
-      </div>
+        </div>
+      ) : null}
 
-      {/* Items — each row is FbaSelectedLineRow */}
-      {items.map((item) => (
-        <FnskuRow
-          key={item.item_id}
-          item={item}
-          stationTheme={stationTheme}
-          editable={editable}
-          checked={selectedIds.has(item.item_id)}
-          qty={getQty(item)}
-          onCheckedChange={(next) => onCheckedChange(item.item_id, next)}
-          onAdjustQty={(delta) => onAdjustQty(item, delta)}
-          onSetQty={(nextQty) => onSetQty(item, nextQty)}
-        />
-      ))}
+      {/* Shared items display — same visual as sidebar and editor */}
+      <FbaTrackingGroupDisplay
+        bundle={bundle}
+        items={items}
+        stationTheme={stationTheme}
+        editable={editable}
+        getQty={getQty}
+        selectedIds={selectedIds}
+        onCheckedChange={onCheckedChange}
+        onSetQty={onSetQty}
+      />
     </div>
   );
 }
@@ -689,35 +588,43 @@ export function FbaShipmentCard({
                 ))
               ) : items.length === 0 ? (
                 <p className="py-3 text-center text-[11px] font-bold text-gray-400">No items</p>
+              ) : syntheticBundle ? (
+                <FbaTrackingGroupDisplay
+                  bundle={syntheticBundle}
+                  items={items}
+                  stationTheme={stationTheme}
+                  editable={editable}
+                  getQty={getQty}
+                  selectedIds={selectedIds}
+                  onCheckedChange={(itemId, next) => {
+                    setSelectedIds((prev) => {
+                      const copy = new Set(prev);
+                      if (next) copy.add(itemId);
+                      else copy.delete(itemId);
+                      return copy;
+                    });
+                  }}
+                  onSetQty={(item, raw) => setQtyInBundle(syntheticBundle, item, raw)}
+                />
               ) : (
-                items.map((item) => (
-                  <FnskuRow
-                    key={item.item_id}
-                    item={item}
-                    stationTheme={stationTheme}
-                    editable={editable}
-                    checked={selectedIds.has(item.item_id)}
-                    qty={getQty(item)}
-                    onCheckedChange={(next) => {
-                      setSelectedIds((prev) => {
-                        const copy = new Set(prev);
-                        if (next) copy.add(item.item_id);
-                        else copy.delete(item.item_id);
-                        return copy;
-                      });
-                    }}
-                    onAdjustQty={(delta) =>
-                      syntheticBundle
-                        ? adjustQtyInBundle(syntheticBundle, item, delta)
-                        : adjustQtyLegacy(item, delta)
-                    }
-                    onSetQty={(nextQty) =>
-                      syntheticBundle
-                        ? setQtyInBundle(syntheticBundle, item, nextQty)
-                        : setQtyLegacy(item, nextQty)
-                    }
-                  />
-                ))
+                // Legacy fallback when there's no tracking link — render as an unbundled group
+                <FbaTrackingGroupDisplay
+                  bundle={{ link_id: 0, tracking_number: '', carrier: '', items }}
+                  items={items}
+                  stationTheme={stationTheme}
+                  editable={editable}
+                  getQty={getQty}
+                  selectedIds={selectedIds}
+                  onCheckedChange={(itemId, next) => {
+                    setSelectedIds((prev) => {
+                      const copy = new Set(prev);
+                      if (next) copy.add(itemId);
+                      else copy.delete(itemId);
+                      return copy;
+                    });
+                  }}
+                  onSetQty={(item, raw) => setQtyLegacy(item, raw)}
+                />
               )}
               {editable ? (
                 <div className="space-y-2 px-3 py-2">

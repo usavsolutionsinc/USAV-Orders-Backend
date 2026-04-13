@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fbaPaths } from '@/lib/fba/api-paths';
-import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_ACTIVE_SHIPMENTS_REFRESH, FBA_OPEN_SHIPMENT_EDITOR } from '@/lib/fba/events';
+import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_ACTIVE_SHIPMENTS_REFRESH, FBA_OPEN_SHIPMENT_EDITOR, FBA_SHIPMENT_EDITOR_ACTIVE } from '@/lib/fba/events';
 import { shipmentItemToBoardItem } from '@/lib/fba/board-item';
 import { patchFbaItem } from '@/lib/fba/patch';
 import { useFbaEvent, useFbaEvents } from '@/components/fba/hooks/useFbaEvent';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { Package, MapPin, Pencil } from '@/components/Icons';
+import { Package, Pencil } from '@/components/Icons';
 import { FbaShipmentEditorForm } from '@/components/fba/sidebar/FbaShipmentEditorForm';
-import { FbaQtyStepper, FbaQtyDisplay } from '@/components/fba/sidebar/FbaQtyStepper';
+import { FbaTrackingGroupDisplay } from '@/components/fba/sidebar/FbaTrackingGroupDisplay';
 import {
   ChevronToggle,
   sectionLabel,
@@ -18,6 +18,7 @@ import {
   SkeletonList,
 } from '@/design-system';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
+import { FbaQtyDisplay } from '@/components/fba/sidebar/FbaQtyStepper';
 import type { StationTheme } from '@/utils/staff-colors';
 import type {
   ActiveShipment,
@@ -54,9 +55,7 @@ function TrackingGroup({
         amazon_shipment_id: amazonShipmentId,
       });
       window.dispatchEvent(new CustomEvent(FBA_BOARD_INJECT_ITEM, { detail: boardItem }));
-
       patchFbaItem(shipmentId, item.item_id, { status: 'READY_TO_GO' }).catch(() => {});
-
       setQtyOverrides((prev) => { const c = { ...prev }; delete c[item.item_id]; return c; });
       onChanged?.();
       return;
@@ -65,50 +64,18 @@ function TrackingGroup({
   };
 
   const visibleItems = bundle.items.filter((i) => (qtyOverrides[i.item_id] ?? i.expected_qty) > 0);
-  const totalQty = visibleItems.reduce((s, i) => s + getQty(i), 0);
-
   if (visibleItems.length === 0) return null;
 
   return (
-    <div className="border-b border-gray-100 last:border-b-0">
-      <div className="flex items-center gap-2 bg-blue-50/30 px-3 py-2 border-b border-blue-50">
-        <MapPin className="h-3 w-3 text-blue-500" />
-        <p className="min-w-0 flex-1 truncate font-mono text-[11px] font-black text-blue-800">
-          {bundle.tracking_number}
-        </p>
-        <span className="shrink-0 text-[10px] font-black tabular-nums text-blue-400/80">
-          {visibleItems.length} SKUs · {totalQty} units
-        </span>
-      </div>
-
-      <div className="divide-y divide-gray-50">
-        {visibleItems.map((item) => {
-          const qty = getQty(item);
-          return (
-            <FbaSelectedLineRow
-              key={item.item_id}
-              displayTitle={item.display_title || 'No title'}
-              fnsku={String(item.fnsku || '').toUpperCase()}
-              stationTheme={stationTheme}
-              checked
-              checkboxDisabled={!editable}
-              onCheckedChange={() => void handleQtyChange(item, 0)}
-              rightSlot={
-                editable ? (
-                  <FbaQtyStepper
-                    value={qty}
-                    onChange={(v) => void handleQtyChange(item, v)}
-                    fnsku={item.fnsku}
-                  />
-                ) : (
-                  <FbaQtyDisplay value={qty} />
-                )
-              }
-            />
-          );
-        })}
-      </div>
-    </div>
+    <FbaTrackingGroupDisplay
+      bundle={bundle}
+      items={visibleItems}
+      stationTheme={stationTheme}
+      editable={editable}
+      getQty={getQty}
+      onSetQty={(item, v) => void handleQtyChange(item, v)}
+      onRemoveItem={(item) => void handleQtyChange(item, 0)}
+    />
   );
 }
 
@@ -292,6 +259,14 @@ export function FbaActiveShipments({ stationTheme = 'green' }: { stationTheme?: 
   useFbaEvent<ActiveShipment>(FBA_OPEN_SHIPMENT_EDITOR, (shipment) => {
     setEditingShipment(shipment);
   });
+
+  // Broadcast editing state so the sidebar can hide welcome/scan bar
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(FBA_SHIPMENT_EDITOR_ACTIVE, { detail: !!editingShipment }));
+    return () => {
+      window.dispatchEvent(new CustomEvent(FBA_SHIPMENT_EDITOR_ACTIVE, { detail: false }));
+    };
+  }, [editingShipment]);
 
   const toggleExpand = (id: number) =>
     setExpandedIds((prev) => {

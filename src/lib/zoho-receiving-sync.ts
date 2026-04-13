@@ -135,6 +135,7 @@ async function syncPurchaseOrderLines(
       zoho_item_id: zohoItemId,
       zoho_line_item_id: zohoLineItemId,
       zoho_purchaseorder_id: normalizedPoId,
+      zoho_purchaseorder_number: poNumber,
       zoho_reference_number: asString(po.reference_number),
       item_name: asString(line.name, line.item_name),
       sku: asString(line.sku),
@@ -156,6 +157,7 @@ async function syncPurchaseOrderLines(
       const updatable = [
         'zoho_item_id',
         'zoho_line_item_id',
+        'zoho_purchaseorder_number',
         'zoho_reference_number',
         'item_name',
         'sku',
@@ -414,6 +416,7 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
         zoho_line_item_id: zohoLineItemId,
         zoho_purchase_receive_id: normalizedReceiveId,
         zoho_purchaseorder_id: asString(receive.purchaseorder_id),
+        zoho_purchaseorder_number: asString(receive.purchaseorder_number),
         item_name: asString(line.name, line.item_name),
         sku: asString(line.sku),
         quantity_received: qty,
@@ -432,6 +435,7 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
         const updatable = [
           'zoho_item_id',
           'zoho_purchaseorder_id',
+          'zoho_purchaseorder_number',
           'item_name',
           'sku',
           'quantity_received',

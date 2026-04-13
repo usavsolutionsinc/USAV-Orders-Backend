@@ -129,7 +129,7 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
         lpi.sku,
         sc.category AS category,
         COALESCE(sp_ecwid.image_url, sc.image_url) AS image_url,
-        COALESCE(lpi.quantity, NULLIF(r.quantity, '')::int, 1) AS quantity,
+        COALESCE(lpi.quantity, 1) AS quantity,
         COALESCE(lpi.parts_status, 'COMPLETE') AS parts_status,
         lpi.missing_parts_note,
         lpi.receiving_grade,
@@ -137,7 +137,7 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
         lpi.offer_price::text AS offer_price,
         COALESCE(
           lpi.total,
-          COALESCE(lpi.offer_price, 0) * COALESCE(lpi.quantity, NULLIF(r.quantity, '')::int, 1)
+          COALESCE(lpi.offer_price, 0) * COALESCE(lpi.quantity, 1)
         )::numeric(12,2)::text AS total,
         r.receiving_tracking_number AS tracking_number,
         r.carrier,
@@ -147,12 +147,12 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
       LEFT JOIN local_pickup_items lpi ON lpi.receiving_id = r.id
       LEFT JOIN sku_catalog sc ON sc.sku = lpi.sku
       LEFT JOIN LATERAL (
-        SELECT image_url, display_name
-        FROM sku_platform_ids
-        WHERE sku_catalog_id = sc.id
-          AND platform = 'ECWID'
-          AND is_active = true
-        ORDER BY updated_at DESC NULLS LAST
+        SELECT spe.image_url, spe.display_name
+        FROM sku_platform_ids spe
+        WHERE (spe.sku_catalog_id = sc.id OR spe.platform_sku = sc.sku)
+          AND spe.platform = 'ecwid'
+          AND spe.is_active = true
+        ORDER BY spe.created_at DESC NULLS LAST
         LIMIT 1
       ) sp_ecwid ON TRUE
       LEFT JOIN LATERAL (

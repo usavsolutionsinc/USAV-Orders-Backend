@@ -57,6 +57,8 @@ export const FBA_PRINT_SIDEBAR_READY = 'fba-print-sidebar-ready' as const;
 export const FBA_TRACKING_PATCH = 'fba-print-tracking-patch' as const;
 /** Open the shipment editor form (detail: ActiveShipment) */
 export const FBA_OPEN_SHIPMENT_EDITOR = 'fba-open-shipment-editor' as const;
+/** Shipment editor opened / closed (detail: boolean — true = editing). Sidebar hides scan/welcome while active. */
+export const FBA_SHIPMENT_EDITOR_ACTIVE = 'fba-shipment-editor-active' as const;
 
 // ── FNSKU catalog ───────────────────────────────────────────────────────────
 /** Open the quick-add FNSKU modal */

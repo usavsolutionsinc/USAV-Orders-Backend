@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
             SELECT
                 sal.id,
                 sal.packer_log_id AS packer_log_id,
-                sal.created_at,
+                to_char(sal.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
                 sal.scan_ref,
                 COALESCE(stn.tracking_number_raw, sal.scan_ref, sal.fnsku) AS shipping_tracking_number,
                 sal.staff_id AS packed_by,

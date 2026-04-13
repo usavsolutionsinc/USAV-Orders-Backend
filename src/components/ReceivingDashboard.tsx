@@ -2,92 +2,49 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import ReceivingLogs from './station/ReceivingLogs';
 import ReceivingLinesTable from './station/ReceivingLinesTable';
 import { LocalPickupCatalogPanel } from './work-orders/LocalPickupCatalogPanel';
-import { AnimatePresence } from 'framer-motion';
-import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
-import { useQueryClient } from '@tanstack/react-query';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 
 export default function ReceivingDashboard() {
-    const [selectedLog, setSelectedLog] = useState<ReceivingDetailsLog | null>(null);
-    const queryClient = useQueryClient();
+    const [activeReceivingId, setActiveReceivingId] = useState<number | null>(null);
     useRealtimeInvalidation({ receiving: true });
     useRealtimeToasts('receiving');
     const searchParams = useSearchParams();
-    const mode = searchParams.get('mode') ?? 'bulk';
-    const isUnboxingMode = mode === 'unboxing';
+    const mode = searchParams.get('mode') ?? 'receive';
     const isPickupMode = mode === 'pickup';
 
     useEffect(() => {
-        const handleSelectLog = (e: Event) => {
-            const custom = e as CustomEvent<ReceivingDetailsLog>;
-            if (custom.detail) setSelectedLog(custom.detail);
+        const handlePoLoaded = (e: Event) => {
+            const detail = (e as CustomEvent<{ receiving_id?: number }>).detail;
+            if (detail?.receiving_id) setActiveReceivingId(detail.receiving_id);
         };
-        window.addEventListener('receiving-select-log', handleSelectLog);
-        return () => window.removeEventListener('receiving-select-log', handleSelectLog);
-    }, []);
+        const handleClear = () => setActiveReceivingId(null);
 
-    useEffect(() => {
-        if ((isUnboxingMode || isPickupMode) && selectedLog) {
-            setSelectedLog(null);
-        }
-    }, [isUnboxingMode, isPickupMode, selectedLog]);
+        window.addEventListener('receiving-po-loaded', handlePoLoaded);
+        window.addEventListener('receiving-clear-line', handleClear);
+        return () => {
+            window.removeEventListener('receiving-po-loaded', handlePoLoaded);
+            window.removeEventListener('receiving-clear-line', handleClear);
+        };
+    }, []);
 
     return (
         <div className="flex h-full w-full overflow-hidden bg-[linear-gradient(180deg,#f8fbfb_0%,#ffffff_16%)]">
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 <div className="flex min-h-0 flex-1 overflow-hidden">
-                    {!isUnboxingMode && !isPickupMode && (
-                        <div className="flex flex-1 min-w-0 overflow-hidden">
-                            <ReceivingLogs
-                                onSelectLog={(log) => setSelectedLog(log)}
-                                selectedLogId={selectedLog?.id || null}
-                            />
-                        </div>
-                    )}
-
-                    {isUnboxingMode && (
-                        <div className="flex-1 min-w-0 overflow-hidden">
-                            <ReceivingLinesTable />
-                        </div>
-                    )}
-
-                    {isPickupMode && (
+                    {isPickupMode ? (
                         <div className="flex-1 min-w-0 overflow-hidden">
                             <LocalPickupCatalogPanel />
+                        </div>
+                    ) : (
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                            <ReceivingLinesTable receivingId={activeReceivingId} />
                         </div>
                     )}
                 </div>
             </div>
-
-            <AnimatePresence>
-                {selectedLog && (
-                    <ReceivingDetailsStack
-                        log={selectedLog}
-                        onClose={() => setSelectedLog(null)}
-                        onUpdated={() => {
-                            setSelectedLog(null);
-                            queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
-                            queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
-                            queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
-                            queryClient.invalidateQueries({ queryKey: ['zoho-health'] });
-                            window.dispatchEvent(new CustomEvent('receiving-focus-scan'));
-                        }}
-                        onDeleted={(_id) => {
-                            setSelectedLog(null);
-                            // receiving-logs cache is updated surgically via the
-                            // 'receiving-entry-deleted' event in ReceivingLogs —
-                            // invalidating here races with the refetch and can
-                            // restore the just-deleted row.
-                            queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
-                            queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
-                        }}
-                    />
-                )}
-            </AnimatePresence>
         </div>
     );
 }

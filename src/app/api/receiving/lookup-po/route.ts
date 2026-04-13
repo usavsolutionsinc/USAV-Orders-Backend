@@ -41,15 +41,18 @@ interface ReceivingLineLite {
   quantity_expected: number | null;
   quantity_received: number;
   item_name: string | null;
+  image_url: string | null;
 }
 
 async function fetchLines(receivingId: number): Promise<ReceivingLineLite[]> {
   const result = await pool.query<ReceivingLineLite>(
-    `SELECT id, sku, zoho_item_id, zoho_purchaseorder_id,
-            quantity_expected, quantity_received, item_name
-     FROM receiving_lines
-     WHERE receiving_id = $1
-     ORDER BY id ASC`,
+    `SELECT rl.id, rl.sku, rl.zoho_item_id, rl.zoho_purchaseorder_id,
+            rl.quantity_expected, rl.quantity_received, rl.item_name,
+            sc.image_url
+     FROM receiving_lines rl
+     LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
+     WHERE rl.receiving_id = $1
+     ORDER BY rl.id ASC`,
     [receivingId],
   );
   return result.rows;
@@ -244,6 +247,7 @@ export async function POST(request: NextRequest) {
         id: l.id,
         sku: l.sku,
         item_name: l.item_name,
+        image_url: l.image_url,
         zoho_item_id: l.zoho_item_id,
         zoho_purchaseorder_id: l.zoho_purchaseorder_id,
         quantity_expected: l.quantity_expected,

@@ -2,16 +2,33 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Package, Search, X } from '@/components/Icons';
-import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { useSkuCatalogSearch, type SearchField, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
 import {
   LOCAL_PICKUP_ADD_LINE_EVENT,
+  LOCAL_PICKUP_REMOVE_LINE_EVENT,
   LOCAL_PICKUP_CART_STATE_EVENT,
   type LocalPickupAddLineDetail,
   type LocalPickupCartStateDetail,
 } from './LocalPickupIntakeForm';
 
+const SEARCH_MODE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'title',     label: 'Title',     tone: 'purple' },
+  { id: 'ecwid_sku', label: 'Ecwid SKU', tone: 'emerald' },
+  { id: 'zoho_sku',  label: 'Zoho SKU',  tone: 'orange' },
+];
+
+function detectField(q: string): SearchField {
+  const trimmed = q.trim();
+  if (!trimmed) return 'ecwid_sku';
+  if (/[a-zA-Z]/.test(trimmed)) return 'title';
+  return 'ecwid_sku';
+}
+
 export function LocalPickupCatalogPanel() {
   const [query, setQuery] = useState('');
+  const [searchField, setSearchField] = useState<SearchField>('ecwid_sku');
+  const [userOverride, setUserOverride] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cartQtyBySku, setCartQtyBySku] = useState<Record<string, number>>({});
 
@@ -20,6 +37,7 @@ export function LocalPickupCatalogPanel() {
     allowEmpty: true,
     ecwidOnly: true,
     excludeSkuSuffix: '-RS',
+    searchField,
   });
 
   // Build distinct category list from what the server returned
@@ -51,16 +69,23 @@ export function LocalPickupCatalogPanel() {
     return () => window.removeEventListener(LOCAL_PICKUP_CART_STATE_EVENT, handler);
   }, []);
 
-  const addToCart = (item: SkuCatalogItem) => {
-    const detail: LocalPickupAddLineDetail = {
-      sku: item.sku,
-      product_title: item.product_title,
-      category: item.category,
-      image_url: item.image_url,
-    };
-    window.dispatchEvent(
-      new CustomEvent<LocalPickupAddLineDetail>(LOCAL_PICKUP_ADD_LINE_EVENT, { detail }),
-    );
+  const toggleCart = (item: SkuCatalogItem) => {
+    const inCart = (cartQtyBySku[item.sku] || 0) > 0;
+    if (inCart) {
+      window.dispatchEvent(
+        new CustomEvent<string>(LOCAL_PICKUP_REMOVE_LINE_EVENT, { detail: item.sku }),
+      );
+    } else {
+      const detail: LocalPickupAddLineDetail = {
+        sku: item.sku,
+        product_title: item.product_title,
+        category: item.category,
+        image_url: item.image_url,
+      };
+      window.dispatchEvent(
+        new CustomEvent<LocalPickupAddLineDetail>(LOCAL_PICKUP_ADD_LINE_EVENT, { detail }),
+      );
+    }
   };
 
   return (
@@ -76,12 +101,33 @@ export function LocalPickupCatalogPanel() {
           </h2>
         </div>
 
+        <HorizontalButtonSlider
+          items={SEARCH_MODE_ITEMS}
+          value={searchField}
+          onChange={(id) => {
+            setSearchField(id as SearchField);
+            setUserOverride(true);
+          }}
+          variant="fba"
+          size="md"
+        />
+
         <div className="relative">
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search SKU, product title, or UPC…"
+            onChange={(e) => {
+              const v = e.target.value;
+              setQuery(v);
+              if (!userOverride) setSearchField(detectField(v));
+            }}
+            placeholder={
+              searchField === 'zoho_sku'
+                ? 'Search by Zoho SKU…'
+                : searchField === 'title'
+                  ? 'Search by product title…'
+                  : 'Search by Ecwid SKU…'
+            }
             className="h-12 w-full rounded-2xl border border-gray-200 bg-gray-50 pl-12 pr-12 text-[14px] font-semibold text-gray-900 outline-none transition-all focus:border-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500"
           />
           <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
@@ -90,7 +136,7 @@ export function LocalPickupCatalogPanel() {
           ) : query ? (
             <button
               type="button"
-              onClick={() => setQuery('')}
+              onClick={() => { setQuery(''); setUserOverride(false); setSearchField('ecwid_sku'); }}
               className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
             >
               <X className="h-4 w-4" />
@@ -155,24 +201,19 @@ export function LocalPickupCatalogPanel() {
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {filteredItems.map((item) => {
-              const inCartQty = cartQtyBySku[item.sku] || 0;
+              const inCart = (cartQtyBySku[item.sku] || 0) > 0;
               return (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => addToCart(item)}
-                  className={`group relative flex flex-col rounded-2xl border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
-                    inCartQty > 0
+                  onClick={() => toggleCart(item)}
+                  className={`group relative flex flex-col border p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                    inCart
                       ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200'
                       : 'border-gray-200 bg-white hover:border-emerald-200'
                   }`}
                 >
-                  {inCartQty > 0 && (
-                    <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-black text-white shadow">
-                      {inCartQty}
-                    </div>
-                  )}
-                  <div className="mb-2 flex h-24 w-full items-center justify-center overflow-hidden rounded-xl bg-gray-50">
+                  <div className="mb-3 flex aspect-square w-full items-center justify-center overflow-hidden bg-white" style={{ maxHeight: 360 }}>
                     {item.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -181,20 +222,20 @@ export function LocalPickupCatalogPanel() {
                         className="h-full w-full object-contain"
                       />
                     ) : (
-                      <Package className="h-8 w-8 text-gray-300" />
+                      <Package className="h-14 w-14 text-gray-200" />
                     )}
                   </div>
-                  <p className="line-clamp-2 text-[12px] font-bold leading-tight text-gray-900">
+                  <p className="text-[15px] font-bold leading-snug text-gray-900">
                     {item.product_title}
                   </p>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <span className="truncate text-[9px] font-mono font-black uppercase text-emerald-600">
-                      {item.sku}
-                    </span>
-                    {item.category && (
-                      <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-gray-500">
-                        {item.category}
-                      </span>
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-[10px] font-mono font-black uppercase text-emerald-600">
+                      Ecwid: {item.sku}
+                    </p>
+                    {item.zoho_sku && item.zoho_sku !== item.sku && (
+                      <p className="text-[10px] font-mono font-black uppercase text-orange-500">
+                        Zoho: {item.zoho_sku}
+                      </p>
                     )}
                   </div>
                 </button>

@@ -109,8 +109,8 @@ export function OrderCard({
         <div className="px-3">
           <h4 className={cardTitle}>
             <InlineQtyPrefix quantity={card.quantity} />
-            <span className={getConditionColor(order.condition)}>{order.condition || 'No Condition'}</span>
-            {' '}{stripConditionPrefix(order.product_title, order.condition)}
+            {order.condition && <><span className={getConditionColor(order.condition)}>{order.condition}</span>{' '}</>}
+            {stripConditionPrefix(order.product_title, order.condition)}
           </h4>
         </div>
 

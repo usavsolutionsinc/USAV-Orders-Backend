@@ -2,17 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Loader2, Minus, Package, Plus, Search, ShoppingCart, Trash2, X } from '@/components/Icons';
+import { Check, ChevronDown, ChevronUp, Loader2, Package, Plus, Search, ShoppingCart, X } from '@/components/Icons';
 import {
   getSidebarIntakeInputClass,
   getSidebarIntakeSubmitButtonClass,
 } from '@/design-system/components';
-import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { useSkuCatalogSearch, type SearchField, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
 import { invalidateReceivingCache } from '@/lib/receivingCache';
 
 export type LocalPickupIntakeVariant = 'sidebar' | 'overlay';
 
 export const LOCAL_PICKUP_ADD_LINE_EVENT = 'local-pickup-add-line';
+export const LOCAL_PICKUP_REMOVE_LINE_EVENT = 'local-pickup-remove-line';
 export const LOCAL_PICKUP_CART_STATE_EVENT = 'local-pickup-cart-state';
 
 export type LocalPickupAddLineDetail = {
@@ -48,7 +50,6 @@ interface CartLine {
   partsStatus: PartsStatus;
   missingPartsNote: string;
   conditionNote: string;
-  offerPrice: string;
   total: string;
 }
 
@@ -80,7 +81,6 @@ function makeLineFromCatalog(item: SkuCatalogItem): CartLine {
     partsStatus: 'COMPLETE',
     missingPartsNote: '',
     conditionNote: '',
-    offerPrice: '',
     total: '',
   };
 }
@@ -92,7 +92,10 @@ export function LocalPickupIntakeForm({
   onComplete,
 }: LocalPickupIntakeFormProps) {
   const [productSearch, setProductSearch] = useState('');
+  const [searchField, setSearchField] = useState<SearchField>('ecwid_sku');
+  const [userOverride, setUserOverride] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -100,18 +103,14 @@ export function LocalPickupIntakeForm({
 
   const { data: catalogItems = [], isFetching: loadingCatalog } = useSkuCatalogSearch(
     productSearch,
-    { ecwidOnly: true, excludeSkuSuffix: '-RS' },
+    { ecwidOnly: true, excludeSkuSuffix: '-RS', searchField },
   );
 
   const greenInputClass = getSidebarIntakeInputClass('green');
   const greenSubmitButtonClass = getSidebarIntakeSubmitButtonClass('green');
 
   const cartSubtotal = useMemo(
-    () =>
-      cart.reduce((sum, line) => {
-        if (line.total) return sum + parseMoney(line.total);
-        return sum + parseMoney(line.offerPrice) * line.quantity;
-      }, 0),
+    () => cart.reduce((sum, line) => sum + parseMoney(line.total), 0),
     [cart],
   );
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
@@ -138,13 +137,6 @@ export function LocalPickupIntakeForm({
     setCart((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }, []);
 
-  const adjustQty = useCallback((key: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((l) => (l.key === key ? { ...l, quantity: Math.max(0, l.quantity + delta) } : l))
-        .filter((l) => l.quantity > 0),
-    );
-  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit) return;
@@ -188,10 +180,7 @@ export function LocalPickupIntakeForm({
         }
         createdReceivingIds.push(receivingId);
 
-        const offerPriceNumber = parseMoney(line.offerPrice);
-        const totalNumber = line.total
-          ? parseMoney(line.total)
-          : offerPriceNumber * line.quantity;
+        const totalNumber = parseMoney(line.total);
 
         const detailRes = await fetch('/api/local-pickups', {
           method: 'POST',
@@ -206,7 +195,6 @@ export function LocalPickupIntakeForm({
               line.partsStatus === 'MISSING_PARTS' ? line.missingPartsNote : '',
             receivingGrade: line.conditionGrade,
             conditionNote: line.conditionNote,
-            offerPrice: line.offerPrice || null,
             total: totalNumber ? totalNumber.toFixed(2) : null,
           }),
         });
@@ -257,6 +245,7 @@ export function LocalPickupIntakeForm({
       addToCart({
         id: 0,
         sku: detail.sku,
+        zoho_sku: null,
         product_title: detail.product_title,
         category: detail.category ?? null,
         upc: null,
@@ -267,6 +256,18 @@ export function LocalPickupIntakeForm({
     window.addEventListener(LOCAL_PICKUP_ADD_LINE_EVENT, handler);
     return () => window.removeEventListener(LOCAL_PICKUP_ADD_LINE_EVENT, handler);
   }, [addToCart, variant]);
+
+  // ── External "remove line" bus — catalog panel dispatches on double-click toggle
+  useEffect(() => {
+    if (variant !== 'sidebar') return;
+    const handler = (e: Event) => {
+      const sku = (e as CustomEvent<string>).detail;
+      if (!sku) return;
+      setCart((prev) => prev.filter((l) => l.sku !== sku));
+    };
+    window.addEventListener(LOCAL_PICKUP_REMOVE_LINE_EVENT, handler);
+    return () => window.removeEventListener(LOCAL_PICKUP_REMOVE_LINE_EVENT, handler);
+  }, [variant]);
 
   // ── Broadcast cart state so the catalog panel can show per-card badges ────
   useEffect(() => {
@@ -280,15 +281,41 @@ export function LocalPickupIntakeForm({
   }, [cart, variant]);
 
   // ── Shared: search + results ────────────────────────────────────────────────
+  const searchModeItems: HorizontalSliderItem[] = [
+    { id: 'title',     label: 'Title',     tone: 'purple' },
+    { id: 'ecwid_sku', label: 'Ecwid SKU', tone: 'emerald' },
+    { id: 'zoho_sku',  label: 'Zoho SKU',  tone: 'orange' },
+  ];
+
   const searchBlock = (
     <div className="space-y-2">
+      <HorizontalButtonSlider
+        items={searchModeItems}
+        value={searchField}
+        onChange={(id) => { setSearchField(id as SearchField); setUserOverride(true); }}
+        variant="fba"
+        size="md"
+      />
       <div className="relative">
         <input
           ref={searchRef}
           type="text"
           value={productSearch}
-          onChange={(e) => setProductSearch(e.target.value)}
-          placeholder="Search SKU or product title…"
+          onChange={(e) => {
+            const v = e.target.value;
+            setProductSearch(v);
+            if (!userOverride) {
+              const trimmed = v.trim();
+              setSearchField(!trimmed || !/[a-zA-Z]/.test(trimmed) ? 'ecwid_sku' : 'title');
+            }
+          }}
+          placeholder={
+            searchField === 'zoho_sku'
+              ? 'Search by Zoho SKU…'
+              : searchField === 'title'
+                ? 'Search by product title…'
+                : 'Search by Ecwid SKU…'
+          }
           className={`${greenInputClass} pl-10`}
         />
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -298,7 +325,7 @@ export function LocalPickupIntakeForm({
         {productSearch && !loadingCatalog && (
           <button
             type="button"
-            onClick={() => setProductSearch('')}
+            onClick={() => { setProductSearch(''); setUserOverride(false); setSearchField('ecwid_sku'); }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
           >
             <X className="h-3.5 w-3.5" />
@@ -357,9 +384,66 @@ export function LocalPickupIntakeForm({
     </div>
   );
 
-  // ── Shared: one cart-line editor ────────────────────────────────────────────
-  const renderCartLine = (line: CartLine) => {
+  const toggleExpanded = useCallback((key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const renderCartLine = (line: CartLine, collapsed: boolean) => {
     const isMissing = line.partsStatus === 'MISSING_PARTS';
+    const condLabel = CONDITION_OPTIONS.find((o) => o.value === line.conditionGrade)?.label ?? line.conditionGrade;
+
+    if (collapsed) {
+      return (
+        <motion.div
+          key={line.key}
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.18 }}
+          className="rounded-xl border border-gray-200 bg-white p-2 space-y-1.5"
+        >
+          {/* Row 1: photo + title */}
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden bg-white">
+              {line.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={line.image_url} alt="" className="h-full w-full object-contain" />
+              ) : (
+                <Package className="h-5 w-5 text-gray-200" />
+              )}
+            </div>
+            <p className="min-w-0 flex-1 text-[11px] font-bold text-gray-900 leading-snug">
+              {line.product_title}
+            </p>
+          </div>
+
+          {/* Row 2: price, qty, condition, parts, expand arrow */}
+          <div className="flex items-center gap-2 text-[9px]">
+            <span className="font-black text-emerald-700">
+              {line.total ? `$${line.total}` : '$0'}
+            </span>
+            <span className="font-black text-gray-500">x{line.quantity}</span>
+            <span className="font-black text-gray-500">{condLabel}</span>
+            <span className={`font-black ${isMissing ? 'text-amber-500' : 'text-emerald-600'}`}>
+              {isMissing ? 'Missing' : 'Complete'}
+            </span>
+            <button
+              type="button"
+              onClick={() => toggleExpanded(line.key)}
+              className="ml-auto flex-shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </motion.div>
+      );
+    }
+
     return (
       <motion.div
         key={line.key}
@@ -369,86 +453,65 @@ export function LocalPickupIntakeForm({
         transition={{ duration: 0.18 }}
         className="rounded-xl border border-gray-200 bg-white p-3 space-y-2.5"
       >
-        {/* Header: title + remove */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[11px] font-bold text-gray-900 leading-tight">
-              {line.product_title}
-            </p>
-            <div className="mt-0.5 flex items-center gap-2">
-              <span className="text-[9px] font-mono font-black uppercase text-emerald-600">
-                {line.sku}
-              </span>
-              {line.category && (
-                <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
-                  {line.category}
-                </span>
-              )}
-            </div>
-          </div>
+        {/* Image 360x260 with X button */}
+        <div className="relative flex w-full items-center justify-center overflow-hidden bg-white" style={{ height: 260 }}>
+          {line.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={line.image_url} alt="" className="h-full w-full object-contain" />
+          ) : (
+            <Package className="h-12 w-12 text-gray-200" />
+          )}
           <button
             type="button"
             onClick={() => removeLine(line.key)}
-            className="flex-shrink-0 rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-            title="Remove line"
+            className="absolute right-2 top-2 text-gray-400 hover:text-red-500"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Qty + Condition row */}
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
-              Qty
-            </label>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => adjustQty(line.key, -1)}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              >
-                <Minus className="h-3 w-3" />
-              </button>
-              <input
-                type="number"
-                min={1}
-                value={line.quantity}
-                onChange={(e) =>
-                  patchLine(line.key, { quantity: Math.max(1, Number(e.target.value) || 1) })
-                }
-                className="h-7 w-12 rounded-md border border-gray-200 bg-white text-center text-[11px] font-black text-gray-900 focus:outline-none focus:border-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={() => adjustQty(line.key, 1)}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              >
-                <Plus className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
-              Condition
-            </label>
-            <select
-              value={line.conditionGrade}
-              onChange={(e) =>
-                patchLine(line.key, { conditionGrade: e.target.value as ConditionGrade })
-              }
-              className="h-7 w-full rounded-md border border-gray-200 bg-white px-2 text-[10px] font-bold text-gray-900 focus:outline-none focus:border-emerald-500"
+        {/* Title */}
+        <p className="text-[13px] font-bold text-gray-900 leading-snug">
+          {line.product_title}
+        </p>
+
+        {/* Ecwid SKU + collapse arrow */}
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-mono font-black uppercase text-emerald-600">
+            Ecwid: {line.sku}
+          </p>
+          {variant === 'sidebar' && (
+            <button
+              type="button"
+              onClick={() => toggleExpanded(line.key)}
+              className="flex-shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             >
-              {CONDITION_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
+              <ChevronUp className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
-        {/* Parts status + missing parts note */}
+        {/* Condition Received — full width */}
+        <div>
+          <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
+            Condition Received
+          </label>
+          <select
+            value={line.conditionGrade}
+            onChange={(e) =>
+              patchLine(line.key, { conditionGrade: e.target.value as ConditionGrade })
+            }
+            className="h-7 w-full rounded-md border border-gray-200 bg-white px-2 text-[10px] font-bold text-gray-900 focus:outline-none focus:border-emerald-500"
+          >
+            {CONDITION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Parts status */}
         <div>
           <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
             Parts
@@ -500,38 +563,46 @@ export function LocalPickupIntakeForm({
           />
         </div>
 
-        {/* Offer + Total */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Total Price + Qty — bottom */}
+        <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2.5">
           <div>
             <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
-              Offer $
+              Total Price
             </label>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={line.offerPrice}
-              onChange={(e) => patchLine(line.key, { offerPrice: e.target.value })}
-              placeholder="0.00"
-              className="h-7 w-full rounded-md border border-gray-200 bg-white px-2 text-[11px] font-bold text-gray-900 focus:outline-none focus:border-emerald-500"
-            />
+            <div className="relative">
+              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-700">$</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step="1"
+                value={line.total}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || Number(v) >= 0) patchLine(line.key, { total: v });
+                }}
+                placeholder="0.00"
+                className="h-7 w-full rounded-md border border-gray-200 bg-white pl-5 pr-2 text-[11px] font-bold text-emerald-700 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-[9px] font-black uppercase tracking-wider text-gray-500 mb-1">
-              Total $
+              Qty
             </label>
             <input
               type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={line.total}
-              onChange={(e) => patchLine(line.key, { total: e.target.value })}
-              placeholder={
-                line.offerPrice
-                  ? (parseMoney(line.offerPrice) * line.quantity).toFixed(2)
-                  : '0.00'
-              }
-              className="h-7 w-full rounded-md border border-gray-200 bg-white px-2 text-[11px] font-bold text-emerald-700 focus:outline-none focus:border-emerald-500"
+              min={1}
+              defaultValue={line.quantity}
+              key={`${line.key}-qty-${line.quantity}`}
+              onBlur={(e) => {
+                const v = Number(e.target.value);
+                if (v >= 1) patchLine(line.key, { quantity: Math.floor(v) });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              }}
+              className="h-7 w-full rounded-md border border-gray-200 bg-white px-2 text-center text-[11px] font-black text-gray-900 focus:outline-none focus:border-emerald-500"
             />
           </div>
         </div>
@@ -605,7 +676,7 @@ export function LocalPickupIntakeForm({
           ) : (
             <div className="space-y-2">
               <AnimatePresence initial={false}>
-                {cart.map((line) => renderCartLine(line))}
+                {cart.map((line) => renderCartLine(line, !expandedKeys.has(line.key)))}
               </AnimatePresence>
             </div>
           )}
@@ -675,7 +746,7 @@ export function LocalPickupIntakeForm({
           ) : (
             <div className="mx-auto grid max-w-3xl gap-3 md:grid-cols-2">
               <AnimatePresence initial={false}>
-                {cart.map((line) => renderCartLine(line))}
+                {cart.map((line) => renderCartLine(line, false))}
               </AnimatePresence>
             </div>
           )}

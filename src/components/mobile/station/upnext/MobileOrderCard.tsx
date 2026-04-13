@@ -120,8 +120,8 @@ export function MobileOrderCard({
         <div className="px-3">
           <h4 className="text-[17px] font-black text-gray-900 leading-tight">
             <InlineQtyPrefix quantity={card.quantity} />
-            <span className={getConditionColor(order.condition)}>{order.condition || 'No Condition'}</span>
-            {' '}{order.product_title}
+            {order.condition && <><span className={getConditionColor(order.condition)}>{order.condition}</span>{' '}</>}
+            {order.product_title}
           </h4>
         </div>
 

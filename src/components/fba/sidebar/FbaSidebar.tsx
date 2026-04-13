@@ -27,6 +27,7 @@ import {
   FBA_PAIRED_REVIEW_TOGGLE,
   FBA_SELECTION_ADJUSTED,
   FBA_SEND_SHIPMENT_TO_PAIRED_REVIEW,
+  FBA_SHIPMENT_EDITOR_ACTIVE,
 } from '@/lib/fba/events';
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
@@ -426,6 +427,16 @@ function FbaWorkspaceSidebarInner() {
     };
   }, [loadPendingPlans]);
 
+  // Track whether the shipment editor is open (hides welcome + scan bar + paired review)
+  const [editorActive, setEditorActive] = useState(false);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setEditorActive(!!(e as CustomEvent<boolean>).detail);
+    };
+    window.addEventListener(FBA_SHIPMENT_EDITOR_ACTIVE, handler);
+    return () => window.removeEventListener(FBA_SHIPMENT_EDITOR_ACTIVE, handler);
+  }, []);
+
   const isBoard = activeTab === 'combine';
   const allBoardSelected =
     boardSelectionCount.total > 0 && boardSelectionCount.selected === boardSelectionCount.total;
@@ -468,8 +479,8 @@ function FbaWorkspaceSidebarInner() {
         className="min-h-0 flex-1 overflow-y-auto scrollbar-hide bg-white"
         style={{ ['--fba-sticky-top' as any]: '38px' }}
       >
-        {/* Welcome + goal + scan — hidden in shipped mode */}
-        {isBoard && (
+        {/* Welcome + goal + scan — hidden in shipped mode and when editor is active */}
+        {isBoard && !editorActive && (
           <div className={`${sidebarSubBandClass} px-3 py-2.5`}>
             <FbaWorkspaceScanField
               staffName={staffName}
@@ -496,8 +507,8 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Select all row */}
-        {isBoard && boardSelectionCount.total > 0 && (
+        {/* Select all row — hidden when editor is active */}
+        {isBoard && !editorActive && boardSelectionCount.total > 0 && (
           <div className="sticky top-0 z-20 flex items-center gap-2.5 border-b border-gray-100 bg-white px-3 py-2">
             <PrintTableCheckbox
               checked={allBoardSelected}
@@ -521,8 +532,8 @@ function FbaWorkspaceSidebarInner() {
           </div>
         )}
 
-        {/* Selection review + tracking pairing card */}
-        {isBoard && (
+        {/* Selection review + tracking pairing card — hidden when editor is active */}
+        {isBoard && !editorActive && (
           <FbaPairedReviewPanel
             selectedItems={boardSelection}
             stationTheme={stationTheme}
@@ -542,8 +553,8 @@ function FbaWorkspaceSidebarInner() {
           />
         ) : null}
 
-        {/* Station FNSKU scan toast */}
-        {isBoard && (
+        {/* Station FNSKU scan toast — hidden when editor is active */}
+        {isBoard && !editorActive && (
           <FbaFnskuScanToast pendingPlans={pendingPlans} stationTheme={stationTheme} />
         )}
 

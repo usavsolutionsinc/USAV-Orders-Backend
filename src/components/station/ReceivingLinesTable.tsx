@@ -6,18 +6,8 @@ import { Loader2 } from '@/components/Icons';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
 import { getCurrentPSTDateKey, formatDateWithOrdinal } from '@/utils/date';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
+import { TrackingChip, OrderIdChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 import { COND_LABEL } from './receiving-constants';
-
-const WORKFLOW_FILTERS: HorizontalSliderItem[] = [
-  { id: '',         label: 'All' },
-  { id: 'EXPECTED', label: 'Expected' },
-  { id: 'MATCHED',  label: 'Matched' },
-  { id: 'UNBOXED',  label: 'Unboxed' },
-  { id: 'PASSED',   label: 'Passed' },
-  { id: 'FAILED',   label: 'Failed' },
-];
 
 export interface ReceivingLineRow {
   id: number;
@@ -28,6 +18,7 @@ export interface ReceivingLineRow {
   zoho_line_item_id: string | null;
   zoho_purchase_receive_id: string | null;
   zoho_purchaseorder_id: string | null;
+  zoho_purchaseorder_number: string | null;
   item_name: string | null;
   sku: string | null;
   quantity_received: number;
@@ -42,8 +33,10 @@ export interface ReceivingLineRow {
   zoho_sync_source: string | null;
   zoho_last_modified_time: string | null;
   zoho_synced_at: string | null;
+  receiving_type: string | null;
   notes: string | null;
   created_at: string | null;
+  image_url: string | null;
 }
 
 interface ApiResponse {
@@ -87,7 +80,9 @@ function getStatusDotBg(status: string | null | undefined) {
 }
 
 function getStatusLabel(status: string | null | undefined) {
-  return String(status || 'Unknown').replace(/_/g, ' ');
+  const raw = String(status || 'Unknown').trim().toUpperCase();
+  if (raw === 'MATCHED') return 'RECEIVED';
+  return raw.replace(/_/g, ' ');
 }
 
 function MetaChip({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
@@ -95,6 +90,25 @@ function MetaChip({ label, value, mono = false }: { label: string; value: string
     <div className="min-w-0">
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">{label}</p>
       <p className={`mt-1 truncate text-[13px] font-semibold text-gray-900 ${mono ? 'font-mono' : ''}`}>{value}</p>
+    </div>
+  );
+}
+
+function InlineDetail({ row }: { row: ReceivingLineRow }) {
+  const trackingValue = (row.tracking_number || '').trim();
+
+  return (
+    <div className="px-5 pb-3 pt-2">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+        <MetaChip label="Inbound ID" value={`#${row.id}`} mono />
+        <MetaChip label="Purchase Receive" value={row.zoho_purchase_receive_id || 'Not linked'} mono />
+        <MetaChip label="Tracking" value={trackingValue || 'No package linked'} mono />
+        <MetaChip label="Carrier" value={row.carrier || 'Unmatched'} />
+        <MetaChip label="Created" value={formatExpandedDate(row.created_at)} />
+        <MetaChip label="Testing" value={row.needs_test ? `Required${row.assigned_tech_id ? ` · Tech #${row.assigned_tech_id}` : ''}` : 'Cleared'} />
+        <MetaChip label="Sync Source" value={row.zoho_sync_source || 'Local only'} />
+        <MetaChip label="Zoho Modified" value={formatExpandedDate(row.zoho_last_modified_time)} />
+      </div>
     </div>
   );
 }
@@ -113,10 +127,14 @@ function OrderRow({
   const panelId = `receiving-line-panel-${row.id}`;
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
+  const qtyExpected = row.quantity_expected ?? 0;
   const workflowLabel = getStatusLabel(row.workflow_status || 'EXPECTED');
-  const conditionLabel = (COND_LABEL[row.condition_grade] ?? row.condition_grade ?? '').trim().toUpperCase() || 'NO CONDITION';
+  const condGrade = (row.condition_grade || '').toUpperCase();
+  const conditionLabel = condGrade === 'BRAND_NEW' ? 'NEW' : condGrade === 'PARTS' ? 'PARTS' : condGrade.startsWith('USED') ? 'USED' : condGrade || 'N/A';
+  const conditionColor = condGrade === 'BRAND_NEW' ? 'text-yellow-600' : condGrade === 'PARTS' ? 'text-amber-800' : 'text-gray-500';
   const trackingValue = (row.tracking_number || '').trim();
-  const poValue = (row.zoho_purchaseorder_id || '').trim();
+  const skuValue = (row.sku || '').trim();
+  const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
 
   return (
     <div className="border-b border-gray-50">
@@ -150,13 +168,11 @@ function OrderRow({
           </div>
           <div className="mt-0.5 flex items-center gap-2">
             <div className="text-[11px] font-black text-gray-500 uppercase tracking-widest truncate min-w-0 flex-1 pl-4">
-              <span className={row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-gray-700'}>
+              <span className={qtyExpected > 1 ? 'text-yellow-600' : row.quantity_expected && row.quantity_received >= row.quantity_expected ? 'text-emerald-600' : 'text-gray-700'}>
                 {quantityText}
               </span>
               {' • '}
-              {row.sku || 'NO SKU'}
-              {' • '}
-              {conditionLabel}
+              <span className={conditionColor}>{conditionLabel}</span>
               {' • '}
               {workflowLabel}
               {row.needs_test ? <span className="text-orange-600">{' • NEEDS TEST'}</span> : null}
@@ -166,6 +182,7 @@ function OrderRow({
 
         <div className="flex shrink-0 items-center gap-0.5 pr-2">
           <OrderIdChip value={poValue} display={getLast4(poValue)} />
+          <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} />
           <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
         </div>
       </div>
@@ -177,35 +194,7 @@ function OrderRow({
         style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr', opacity: isExpanded ? 1 : 0 }}
       >
         <div className="overflow-hidden">
-          <div className="grid gap-4 px-5 pb-4 pt-3 md:grid-cols-3">
-            <MetaChip label="Product" value={productTitle} />
-            <MetaChip label="SKU" value={row.sku || 'Not provided'} mono />
-            <MetaChip label="Inbound ID" value={`#${row.id}`} mono />
-            <MetaChip label="Purchase Order" value={poValue || 'Not linked'} mono />
-            <MetaChip label="Purchase Receive" value={row.zoho_purchase_receive_id || 'Not linked'} mono />
-            <MetaChip label="Condition" value={COND_LABEL[row.condition_grade] ?? row.condition_grade} />
-            <MetaChip label="QA Status" value={row.qa_status.replace(/_/g, ' ')} />
-            <MetaChip label="Disposition" value={row.disposition_code.replace(/_/g, ' ')} />
-            <MetaChip label="Created" value={formatExpandedDate(row.created_at)} />
-            <MetaChip label="Tracking" value={trackingValue || 'No package linked'} mono />
-            <MetaChip label="Carrier" value={row.carrier || 'Unmatched'} />
-            <MetaChip label="Testing" value={row.needs_test ? `Required${row.assigned_tech_id ? ` · Tech #${row.assigned_tech_id}` : ''}` : 'Tech cleared'} />
-          </div>
-
-          <div className="border-t border-gray-200 px-5 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Notes & Sync</p>
-            <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <p className="min-h-[3rem] text-[13px] leading-6 text-gray-700">
-                {row.notes || 'No operator notes yet.'}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <MetaChip label="Sync Source" value={row.zoho_sync_source || 'Local only'} />
-                <MetaChip label="Zoho Modified" value={row.zoho_last_modified_time || 'Not available'} mono />
-                <MetaChip label="Synced At" value={formatExpandedDate(row.zoho_synced_at)} />
-                <MetaChip label="Zoho Line" value={row.zoho_line_item_id || 'Not available'} mono />
-              </div>
-            </div>
-          </div>
+          {isExpanded && <InlineDetail row={row} />}
         </div>
       </div>
     </div>
@@ -314,6 +303,15 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
     return () => window.removeEventListener('receiving-clear-line', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const filter = (e as CustomEvent<string>).detail ?? '';
+      setWorkflowFilter(filter);
+    };
+    window.addEventListener('receiving-workflow-filter', handler);
+    return () => window.removeEventListener('receiving-workflow-filter', handler);
+  }, []);
+
   const total = data?.total ?? localRows.length;
 
   const formatDate = useCallback((dateStr: string) => formatDateWithOrdinal(dateStr), []);
@@ -329,6 +327,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
       return next;
     });
   }, []);
+
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden bg-white">
@@ -353,16 +352,6 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
           />
         )}
 
-        <div className="border-b border-gray-200 px-4 py-2">
-          <HorizontalButtonSlider
-            items={WORKFLOW_FILTERS}
-            value={workflowFilter}
-            onChange={setWorkflowFilter}
-            variant="slate"
-            aria-label="Filter by workflow status"
-          />
-        </div>
-
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
           {isLoading && localRows.length === 0 ? (
             <div className="flex h-full items-center justify-center">
@@ -378,6 +367,7 @@ export default function ReceivingLinesTable({ receivingId }: ReceivingLinesTable
                     setWorkflowFilter('');
                     setExpandedId(null);
                     dispatchSelectLine(null);
+                    window.dispatchEvent(new CustomEvent('receiving-workflow-filter-reset'));
                   }}
                   className="border-b border-gray-900 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-900"
                 >

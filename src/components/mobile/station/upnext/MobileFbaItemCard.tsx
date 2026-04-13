@@ -71,8 +71,8 @@ export function MobileFbaItemCard({ item, isExpanded, onToggleExpand }: MobileFb
         <div className="px-3">
           <h4 className="text-[17px] font-black text-gray-900 leading-tight">
             <InlineQtyPrefix quantity={card.qtyLabel} />
-            <span className={card.conditionColor}>{card.conditionLabel}</span>
-            {' '}{item.product_title || `FNSKU • ${card.fnskuLast4}`}
+            {card.conditionLabel && <><span className={card.conditionColor}>{card.conditionLabel}</span>{' '}</>}
+            {item.product_title || `FNSKU • ${card.fnskuLast4}`}
           </h4>
         </div>
 

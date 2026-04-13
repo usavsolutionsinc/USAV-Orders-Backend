@@ -81,9 +81,10 @@ export async function GET(request: NextRequest) {
     // Single row
     if (Number.isFinite(id) && id > 0) {
       const one = await pool.query(
-        `SELECT rl.*, r.receiving_tracking_number, r.carrier
+        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
          FROM receiving_lines rl
          LEFT JOIN receiving r ON r.id = rl.receiving_id
+         LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
          WHERE rl.id = $1`,
         [id],
       );
@@ -101,9 +102,10 @@ export async function GET(request: NextRequest) {
     // All lines for a specific package
     if (Number.isFinite(receivingId) && receivingId > 0) {
       const rows = await pool.query(
-        `SELECT rl.*, r.receiving_tracking_number, r.carrier
+        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
          FROM receiving_lines rl
          LEFT JOIN receiving r ON r.id = rl.receiving_id
+         LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
          WHERE rl.receiving_id = $1
          ORDER BY rl.id ASC`,
         [receivingId],
@@ -152,11 +154,12 @@ export async function GET(request: NextRequest) {
 
     const [rowsRes, countRes] = await Promise.all([
       pool.query(
-        `SELECT rl.*, r.receiving_tracking_number, r.carrier
+        `SELECT rl.*, r.receiving_tracking_number, r.carrier, r.zoho_purchaseorder_number AS receiving_zoho_purchaseorder_number, sc.image_url
          FROM receiving_lines rl
          LEFT JOIN receiving r ON r.id = rl.receiving_id
+         LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
          ${where}
-         ORDER BY rl.id DESC
+         ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC
          LIMIT $${idx} OFFSET $${idx + 1}`,
         values,
       ),
@@ -279,6 +282,8 @@ export async function PATCH(request: NextRequest) {
       ['zoho_purchase_receive_id', String(body?.zoho_purchase_receive_id ?? '').trim() || null],
       ['zoho_purchaseorder_id',    String(body?.zoho_purchaseorder_id ?? '').trim() || null],
       ['notes',                    String(body?.notes ?? '').trim() || null],
+      ['receiving_type',           String(body?.receiving_type ?? '').trim() || null],
+      ['zoho_reference_number',    String(body?.zoho_reference_number ?? '').trim() || null],
     ];
     for (const [col, val] of textFields) {
       if (Object.prototype.hasOwnProperty.call(body, col.replace('zoho_item_id', 'zoho_item_id'))) {
@@ -437,6 +442,7 @@ function normalizeRow(row: Record<string, unknown>) {
     zoho_line_item_id:        (row.zoho_line_item_id as string | null) ?? null,
     zoho_purchase_receive_id: (row.zoho_purchase_receive_id as string | null) ?? null,
     zoho_purchaseorder_id:    (row.zoho_purchaseorder_id as string | null) ?? null,
+    zoho_purchaseorder_number: (row.zoho_purchaseorder_number as string | null) ?? (row.receiving_zoho_purchaseorder_number as string | null) ?? null,
     item_name:                (row.item_name as string | null) ?? null,
     sku:                      (row.sku as string | null) ?? null,
     quantity_received:        Number(row.quantity_received ?? 0),
@@ -452,6 +458,8 @@ function normalizeRow(row: Record<string, unknown>) {
     zoho_last_modified_time:  (row.zoho_last_modified_time as string | null) ?? null,
     zoho_synced_at:           (row.zoho_synced_at as string | null) ?? null,
     notes:                    (row.notes as string | null) ?? null,
+    receiving_type:            (row.receiving_type as string | null) ?? 'PO',
     created_at:               (row.created_at as string | null) ?? null,
+    image_url:                (row.image_url as string | null) ?? null,
   };
 }

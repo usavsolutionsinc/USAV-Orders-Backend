@@ -11,6 +11,7 @@ import {
   paginateZohoList,
   zohoGet,
   zohoPost,
+  zohoPut,
   type ZohoApiError,
   type ZohoCircuitOpenError,
   type ZohoRateLimitError,
@@ -241,4 +242,13 @@ export async function createPurchaseReceive(params: {
       quantity_received: line.quantity_received,
     })),
   });
+}
+
+export async function updatePurchaseOrder(
+  purchaseOrderId: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const safeId = encodeURIComponent(String(purchaseOrderId || '').trim());
+  if (!safeId) throw new Error('purchaseOrderId is required');
+  return zohoPut(`/api/v1/purchaseorders/${safeId}`, body);
 }

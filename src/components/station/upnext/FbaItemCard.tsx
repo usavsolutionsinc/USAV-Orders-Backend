@@ -75,8 +75,8 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
         <div className="px-3">
           <h4 className={cardTitle}>
             <InlineQtyPrefix quantity={card.qtyLabel} />
-            <span className={card.conditionColor}>{card.conditionLabel}</span>
-            {' '}{card.strippedTitle || `FNSKU • ${card.fnskuLast4}`}
+            {card.conditionLabel && <><span className={card.conditionColor}>{card.conditionLabel}</span>{' '}</>}
+            {card.strippedTitle || `FNSKU • ${card.fnskuLast4}`}
           </h4>
         </div>
 

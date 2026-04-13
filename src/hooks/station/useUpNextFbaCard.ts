@@ -22,7 +22,7 @@ function getFbaExternalUrl(asin: string | null | undefined, fnsku: string | null
 function getConditionLabel(value: string | null | undefined) {
   const raw = String(value || '').trim();
   const normalized = raw.toUpperCase().replace(/\s+/g, ' ');
-  if (!raw || normalized === 'FBA SCAN') return 'N/A';
+  if (!raw || normalized === 'FBA SCAN') return null;
   return raw.replaceAll('_', ' ');
 }
 

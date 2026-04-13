@@ -21,6 +21,8 @@ export interface FbaSelectedLineRowProps {
   onEditDetails?: () => void;
   /** Typically qty steppers — rendered in the right column, vertically centered with the title block. */
   rightSlot: ReactNode;
+  /** When provided, replaces the checkbox column with this node (e.g. a drag handle). */
+  leadingSlot?: ReactNode;
 }
 
 /** Optional microcopy + title + FNSKU below, left; optional right column (e.g. qty stepper). */
@@ -35,19 +37,22 @@ export function FbaSelectedLineRow({
   onCheckedChange,
   onEditDetails,
   rightSlot,
+  leadingSlot,
 }: FbaSelectedLineRowProps) {
   const microcopyColor = microcopyTone === 'success' ? 'text-emerald-700' : 'text-gray-500';
 
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2 gap-y-1 border-b border-gray-100 px-2 py-2 last:border-b-0">
       <div className="row-span-2">
-        <PrintTableCheckbox
-          checked={checked}
-          stationTheme={stationTheme}
-          disabled={checkboxDisabled}
-          onChange={(next) => onCheckedChange?.(next)}
-          label={checked ? 'Unselect item' : 'Select item'}
-        />
+        {leadingSlot ?? (
+          <PrintTableCheckbox
+            checked={checked}
+            stationTheme={stationTheme}
+            disabled={checkboxDisabled}
+            onChange={(next) => onCheckedChange?.(next)}
+            label={checked ? 'Unselect item' : 'Select item'}
+          />
+        )}
       </div>
       <div className="col-start-2 row-start-1 flex min-w-0 flex-col items-start gap-0.5 self-start">
         {microcopyAboveTitle ? (
